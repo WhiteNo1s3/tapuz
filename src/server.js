@@ -139,11 +139,28 @@ function layout(content, title = 'Tapuz') {
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+    .toolbox-mode {
+      font-size: 0.75rem;
+      color: #64748b;
+      line-height: 1.45;
+      margin: -4px 0 12px;
+      padding: 8px 10px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px dashed #e2e8f0;
+    }
+    .toolbox.has-selection .toolbox-mode {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: #1e40af;
+    }
     .tool-btn {
-      display: block;
+      display: flex;
+      align-items: center;
+      gap: 10px;
       width: 100%;
       text-align: right;
-      padding: 10px 14px;
+      padding: 10px 12px;
       margin-bottom: 6px;
       border: 1px solid #e2e8f0;
       background: #fff;
@@ -153,10 +170,47 @@ function layout(content, title = 'Tapuz') {
       cursor: pointer;
       transition: all .1s;
     }
+    .tool-btn .tool-ico {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: #475569;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .tool-btn .tool-meta { flex: 1; min-width: 0; }
+    .tool-btn .tool-name { display: block; line-height: 1.2; }
+    .tool-btn .tool-hint {
+      display: block;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      font-weight: 500;
+      margin-top: 2px;
+    }
     .tool-btn:hover {
       border-color: #0a66c2;
       background: #f0f7ff;
       color: #0a66c2;
+    }
+    .tool-btn:hover .tool-ico { background: #dbeafe; color: #0a66c2; }
+    .tool-btn.is-current {
+      border-color: #0a66c2;
+      background: #eff6ff;
+      box-shadow: inset 3px 0 0 #0a66c2;
+    }
+    .toolbox.has-selection .tool-btn.is-replace-mode:not(.is-current):hover {
+      border-color: #7c3aed;
+      background: #f5f3ff;
+      color: #5b21b6;
+    }
+    .toolbox.has-selection .tool-btn.is-replace-mode:not(.is-current):hover .tool-ico {
+      background: #ede9fe;
+      color: #6d28d9;
     }
 
     .canvas {
@@ -247,12 +301,129 @@ function layout(content, title = 'Tapuz') {
     .block-toolbar button:hover { color: white; }
 
     .block-label {
-      font-size: 10px;
+      font-size: 11px;
       color: #64748b;
       font-weight: 600;
       margin-bottom: 4px;
-      text-transform: uppercase;
-      letter-spacing: .5px;
+      letter-spacing: .2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .block-type-icon {
+      display: inline-flex;
+      width: 18px;
+      height: 18px;
+      align-items: center;
+      justify-content: center;
+      background: #f1f5f9;
+      border-radius: 4px;
+      font-size: 10px;
+      color: #475569;
+    }
+    .nest-tag {
+      font-size: 10px;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+    .canvas-header .canvas-hint {
+      opacity: 0;
+      transition: opacity .2s;
+      color: #0a66c2;
+      font-weight: 600;
+      font-size: 0.78rem;
+      margin-inline-start: auto;
+      padding-inline-start: 12px;
+    }
+    .canvas-header .canvas-hint.visible { opacity: 1; }
+    .canvas-header { gap: 8px; flex-wrap: wrap; }
+
+    .prop-type-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .prop-type-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #eff6ff;
+      color: #0a66c2;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .prop-type-name { font-weight: 700; font-size: 1rem; }
+    .prop-type-sub { font-size: 0.75rem; color: #64748b; }
+    .prop-hint {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    .replace-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .replace-chip {
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #334155;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: inherit;
+    }
+    .replace-chip:hover {
+      border-color: #7c3aed;
+      background: #f5f3ff;
+      color: #5b21b6;
+    }
+    .replace-chip.active {
+      border-color: #0a66c2;
+      background: #eff6ff;
+      color: #0a66c2;
+      cursor: default;
+    }
+    .replace-chip .chip-icon { font-size: 0.7rem; opacity: .85; }
+    .props-empty {
+      color: #64748b;
+      font-size: 0.88rem;
+      padding: 18px 6px;
+      text-align: center;
+      line-height: 1.55;
+    }
+    .props-empty-title {
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 12px;
+      font-size: 0.95rem;
+    }
+    .props-empty-line {
+      margin: 6px 0;
+      text-align: right;
+      padding: 6px 8px;
+      background: #f8fafc;
+      border-radius: 8px;
+      font-size: 0.8rem;
+    }
+    .nest-hint {
+      font-size: 0.75rem;
+      color: #0a66c2;
+      background: #eff6ff;
+      border-radius: 6px;
+      padding: 4px 8px;
+      margin-bottom: 10px;
+      display: inline-block;
     }
 
     .properties {
@@ -693,24 +864,49 @@ app.get('/admin/edit/:fullPath', (req, res) => {
     <div class="container">
       <div class="builder">
         <div class="toolbox">
-          <h4>הוסף מודול</h4>
-          <button class="tool-btn" data-type="hero" onclick="TapuzBuilder.addBlock('hero')">⠿ Hero</button>
-          <button class="tool-btn" data-type="heading" onclick="TapuzBuilder.addBlock('heading')">⠿ כותרת</button>
-          <button class="tool-btn" data-type="text" onclick="TapuzBuilder.addBlock('text')">⠿ טקסט</button>
-          <button class="tool-btn" data-type="button" onclick="TapuzBuilder.addBlock('button')">⠿ כפתור</button>
-          <button class="tool-btn" data-type="image" onclick="TapuzBuilder.addBlock('image')">⠿ תמונה</button>
-          <button class="tool-btn" data-type="columns" onclick="TapuzBuilder.addBlock('columns')">⠿ עמודות (2)</button>
-          <button class="tool-btn" data-type="spacer" onclick="TapuzBuilder.addBlock('spacer')">⠿ רווח</button>
-          <button class="tool-btn" data-type="divider" onclick="TapuzBuilder.addBlock('divider')">⠿ קו מפריד</button>
-          <button class="tool-btn" data-type="testimonial" onclick="TapuzBuilder.addBlock('testimonial')">⠿ המלצה</button>
+          <h4>מודולים</h4>
+          <div id="toolbox-mode" class="toolbox-mode">גרור לקנבס · או לחץ להוספה בסוף</div>
+          <button type="button" class="tool-btn" data-type="hero" title="כותרת גדולה בראש">
+            <span class="tool-ico">★</span><span class="tool-meta"><span class="tool-name">Hero</span><span class="tool-hint">כותרת גדולה</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="heading" title="כותרת">
+            <span class="tool-ico">H</span><span class="tool-meta"><span class="tool-name">כותרת</span><span class="tool-hint">H1–H6</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="text" title="טקסט">
+            <span class="tool-ico">¶</span><span class="tool-meta"><span class="tool-name">טקסט</span><span class="tool-hint">פסקה</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="button" title="כפתור">
+            <span class="tool-ico">◉</span><span class="tool-meta"><span class="tool-name">כפתור</span><span class="tool-hint">קישור / CTA</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="image" title="תמונה">
+            <span class="tool-ico">▣</span><span class="tool-meta"><span class="tool-name">תמונה</span><span class="tool-hint">מדיה</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="testimonial" title="המלצה">
+            <span class="tool-ico">❝</span><span class="tool-meta"><span class="tool-name">המלצה</span><span class="tool-hint">ציטוט + שם</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="features" title="תכונות">
+            <span class="tool-ico">▦</span><span class="tool-meta"><span class="tool-name">תכונות</span><span class="tool-hint">כרטיסים</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="columns" title="עמודות">
+            <span class="tool-ico">▥</span><span class="tool-meta"><span class="tool-name">עמודות</span><span class="tool-hint">2–4 טורים</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="spacer" title="רווח">
+            <span class="tool-ico">↕</span><span class="tool-meta"><span class="tool-name">רווח</span><span class="tool-hint">מרווח אנכי</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="divider" title="קו מפריד">
+            <span class="tool-ico">—</span><span class="tool-meta"><span class="tool-name">קו מפריד</span><span class="tool-hint">קו אופקי</span></span>
+          </button>
           <hr style="margin:12px 0;border-color:#e2e8f0">
-          <button class="tool-btn" onclick="TapuzBuilder.openMediaLibrary()" style="border:1px solid #0a66c2;color:#0a66c2">🖼️ מספריית מדיה</button>
+          <button type="button" class="tool-btn" onclick="TapuzBuilder.openMediaLibrary()" style="border:1px solid #0a66c2;color:#0a66c2">
+            <span class="tool-ico">🖼</span><span class="tool-meta"><span class="tool-name">מדיה</span><span class="tool-hint">ספרייה / העלאה</span></span>
+          </button>
         </div>
 
         <div>
           <div class="canvas-header">
-            <span>תצוגה חיה של הדף</span>
+            <span>תצוגה חיה</span>
             <span id="block-count">${(page.blocks || []).length} מודולים</span>
+            <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>
         </div>

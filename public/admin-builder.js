@@ -14,6 +14,31 @@
   var dropHint = null; // { mode:'insert'|'split', ... }
   var dropInProgress = false;
 
+  /** Module catalog — single source for toolbox, labels, replace chips */
+  var MODULES = [
+    { type: 'hero', label: 'Hero', hint: 'כותרת גדולה בראש', icon: '★', group: 'תוכן' },
+    { type: 'heading', label: 'כותרת', hint: 'H1–H6', icon: 'H', group: 'תוכן' },
+    { type: 'text', label: 'טקסט', hint: 'פסקה', icon: '¶', group: 'תוכן' },
+    { type: 'button', label: 'כפתור', hint: 'קישור / CTA', icon: '◉', group: 'תוכן' },
+    { type: 'image', label: 'תמונה', hint: 'מדיה', icon: '▣', group: 'מדיה' },
+    { type: 'testimonial', label: 'המלצה', hint: 'ציטוט + שם', icon: '❝', group: 'תוכן' },
+    { type: 'features', label: 'תכונות', hint: 'רשימת כרטיסים', icon: '▦', group: 'תוכן' },
+    { type: 'columns', label: 'עמודות', hint: '2–4 טורים', icon: '▥', group: 'פריסה' },
+    { type: 'spacer', label: 'רווח', hint: 'מרווח אנכי', icon: '↕', group: 'פריסה' },
+    { type: 'divider', label: 'קו מפריד', hint: 'קו אופקי', icon: '—', group: 'פריסה' }
+  ];
+
+  var MODULE_BY_TYPE = {};
+  MODULES.forEach(function (m) { MODULE_BY_TYPE[m.type] = m; });
+
+  function typeLabel(type) {
+    return (MODULE_BY_TYPE[type] && MODULE_BY_TYPE[type].label) || type || '?';
+  }
+
+  function typeIcon(type) {
+    return (MODULE_BY_TYPE[type] && MODULE_BY_TYPE[type].icon) || '•';
+  }
+
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;')
@@ -147,21 +172,171 @@
     return containsId(incoming, parentId);
   }
 
-  // ---- Block factory ----
+  // ---- Block factory + smart replace ----
+
+  function defaultData(type) {
+    if (type === 'hero') return { title: 'כותרת ראשית', subtitle: '' };
+    if (type === 'heading') return { text: 'כותרת', level: 2 };
+    if (type === 'text') return { content: 'טקסט חדש...' };
+    if (type === 'button') return { text: 'לחץ כאן', url: '#' };
+    if (type === 'spacer') return { height: '40px' };
+    if (type === 'columns') return { columns: [{ blocks: [] }, { blocks: [] }] };
+    if (type === 'image') return { src: '', alt: '' };
+    if (type === 'testimonial') return { quote: '', author: '' };
+    if (type === 'divider') return {};
+    if (type === 'features') return { items: [{ title: 'פריט', description: '' }] };
+    if (type === 'list') return { items: ['פריט'] };
+    if (type === 'embed') return { html: '' };
+    return {};
+  }
 
   function makeBlock(type) {
-    var newBlock = { type: type, id: uid(type), data: {} };
-    if (type === 'hero') newBlock.data = { title: 'כותרת ראשית', subtitle: '' };
-    else if (type === 'heading') newBlock.data = { text: 'כותרת', level: 2 };
-    else if (type === 'text') newBlock.data = { content: 'טקסט חדש...' };
-    else if (type === 'button') newBlock.data = { text: 'לחץ כאן', url: '#' };
-    else if (type === 'spacer') newBlock.data = { height: '40px' };
-    else if (type === 'columns') newBlock.data = { columns: [{ blocks: [] }, { blocks: [] }] };
-    else if (type === 'image') newBlock.data = { src: '', alt: '' };
-    else if (type === 'testimonial') newBlock.data = { quote: '', author: '' };
-    else if (type === 'divider') newBlock.data = {};
-    else if (type === 'features') newBlock.data = { items: [{ title: 'פריט', description: '' }] };
-    return newBlock;
+    return { type: type, id: uid(type), data: defaultData(type) };
+  }
+
+  /** Pull free text / media from any block for soft-migration on replace. */
+  function extractSoftFields(block) {
+    var d = (block && block.data) || {};
+    var text =
+      d.title ||
+      d.text ||
+      d.content ||
+      d.quote ||
+      d.subtitle ||
+      (d.items && d.items[0] && (d.items[0].title || d.items[0].description)) ||
+      '';
+    var secondary =
+      d.subtitle ||
+      d.author ||
+      d.description ||
+      (d.items && d.items[0] && d.items[0].description) ||
+      '';
+    return {
+      text: String(text || '').trim(),
+      secondary: String(secondary || '').trim(),
+      src: d.src || '',
+      alt: d.alt || '',
+      url: d.url || d.buttonUrl || '',
+      className: d.className || '',
+      id: d.id || '',
+      columns: block && block.type === 'columns' ? ensureColumns(block) : null
+    };
+  }
+
+  function applySoftFields(type, soft) {
+    var data = defaultData(type);
+    soft = soft || {};
+    if (soft.className) data.className = soft.className;
+    if (soft.id) data.id = soft.id;
+
+    if (type === 'hero') {
+      if (soft.text) data.title = soft.text;
+      if (soft.secondary) data.subtitle = soft.secondary;
+    } else if (type === 'heading') {
+      if (soft.text) data.text = soft.text;
+    } else if (type === 'text') {
+      if (soft.text) data.content = soft.text;
+      else if (soft.secondary) data.content = soft.secondary;
+    } else if (type === 'button') {
+      if (soft.text) data.text = soft.text.slice(0, 80);
+      if (soft.url) data.url = soft.url;
+    } else if (type === 'image') {
+      if (soft.src) data.src = soft.src;
+      if (soft.alt || soft.text) data.alt = soft.alt || soft.text.slice(0, 120);
+    } else if (type === 'testimonial') {
+      if (soft.text) data.quote = soft.text;
+      if (soft.secondary) data.author = soft.secondary;
+    } else if (type === 'features') {
+      if (soft.text) {
+        data.items = [{ title: soft.text.slice(0, 80), description: soft.secondary || '' }];
+      }
+    } else if (type === 'columns') {
+      // Keep nested structure when replacing columns→columns; otherwise empty 2-col
+      if (soft.columns && soft.columns.length) {
+        data.columns = soft.columns.map(function (col) {
+          return { blocks: (col.blocks || []).slice() };
+        });
+      }
+    }
+    return data;
+  }
+
+  /**
+   * Replace module type in place (same id + tree position).
+   * Soft-migrates text/media/class/id so content isn't wiped blindly.
+   */
+  function replaceBlockType(id, newType) {
+    if (!id || !newType) return false;
+    var node = findNode(id);
+    if (!node) return false;
+    var block = node.block;
+    if (block.type === newType) return true;
+
+    // Protect nested content: columns → non-columns needs confirm if children exist
+    if (block.type === 'columns' && newType !== 'columns') {
+      var childCount = 0;
+      ensureColumns(block).forEach(function (col) {
+        childCount += (col.blocks || []).length;
+      });
+      if (childCount > 0) {
+        var ok = window.confirm(
+          'במודול יש ' + childCount + ' מודולים פנימיים.\n' +
+          'להחליף ל«' + typeLabel(newType) + '»? התוכן הפנימי יימחק.'
+        );
+        if (!ok) return false;
+      }
+    }
+
+    var soft = extractSoftFields(block);
+    // If converting *to* columns from a content block, put old block as left col
+    if (newType === 'columns' && block.type !== 'columns') {
+      var kept = {
+        type: block.type,
+        id: uid(block.type),
+        data: JSON.parse(JSON.stringify(block.data || {}))
+      };
+      block.type = 'columns';
+      block.data = {
+        columns: [{ blocks: [kept] }, { blocks: [] }],
+        className: soft.className || undefined,
+        id: soft.id || undefined
+      };
+      if (!block.data.className) delete block.data.className;
+      if (!block.data.id) delete block.data.id;
+      selectedId = kept.id;
+      renderCanvas();
+      renderProperties();
+      flashCanvasHint('הפך לעמודות — המודול נשמר בטור הימני');
+      return true;
+    }
+
+    block.type = newType;
+    block.data = applySoftFields(newType, soft);
+    // keep stable id so selection/DnD stay sane
+    selectedId = block.id;
+    renderCanvas();
+    renderProperties();
+    flashCanvasHint('הוחלף ל«' + typeLabel(newType) + '»');
+    return true;
+  }
+
+  var hintTimer = null;
+  function flashCanvasHint(msg) {
+    var host = document.getElementById('canvas-hint');
+    if (!host) {
+      var header = document.querySelector('.canvas-header');
+      if (!header) return;
+      host = document.createElement('span');
+      host.id = 'canvas-hint';
+      host.className = 'canvas-hint';
+      header.appendChild(host);
+    }
+    host.textContent = msg || '';
+    host.classList.add('visible');
+    if (hintTimer) clearTimeout(hintTimer);
+    hintTimer = setTimeout(function () {
+      host.classList.remove('visible');
+    }, 2200);
   }
 
   // ---- Init ----
@@ -198,7 +373,11 @@
     if (!blocks.length) {
       var empty = document.createElement('div');
       empty.className = 'empty-canvas';
-      empty.innerHTML = 'הדף ריק.<br><strong>לחץ</strong> מודול משמאל או <strong>גרור</strong> לכאן<br><span style="font-size:0.85rem;opacity:.8">גרור מודול ליד מודול אחר כדי לפצל לשני טורים</span>';
+      empty.innerHTML =
+        '<div style="font-size:1.05rem;font-weight:700;color:#334155;margin-bottom:8px">הדף ריק</div>' +
+        '<div>לחץ מודול משמאל · או גרור לכאן</div>' +
+        '<div style="margin-top:10px;font-size:0.8rem;color:#94a3b8">אחרי בחירה — לחיצה על סוג אחר = החלפה</div>' +
+        '<div style="margin-top:6px;font-size:0.8rem;color:#94a3b8">גרור לצד מודול = פיצול לטורים</div>';
       canvas.appendChild(empty);
       bindListSurface(canvas, null, null);
       updateCount();
@@ -336,7 +515,7 @@
       '<button type="button" data-act="up" title="למעלה">↑</button>' +
       '<button type="button" data-act="down" title="למטה">↓</button>' +
       '<button type="button" data-act="split" title="פצל לשני טורים">⧉</button>' +
-      '<button type="button" data-act="edit" title="ערוך">✎</button>' +
+      '<button type="button" data-act="replace" title="החלף סוג מודול">⇄</button>' +
       '<button type="button" data-act="dup" title="שכפל">⎘</button>' +
       '<button type="button" data-act="del" title="מחק">×</button>';
 
@@ -348,14 +527,24 @@
       if (act === 'up') moveBlock(block.id, -1);
       if (act === 'down') moveBlock(block.id, 1);
       if (act === 'split') splitBlockInPlace(block.id);
-      if (act === 'edit') selectBlock(block.id);
+      if (act === 'replace') {
+        selectBlock(block.id);
+        // focus replace chips in properties
+        setTimeout(function () {
+          var chip = document.querySelector('.replace-chip');
+          if (chip) chip.focus();
+        }, 30);
+      }
       if (act === 'dup') duplicateBlock(block.id);
       if (act === 'del') deleteBlock(block.id);
     });
 
     var label = document.createElement('div');
     label.className = 'block-label';
-    label.textContent = (block.type || '').toUpperCase() + (nested ? ' · בטור' : '');
+    label.innerHTML =
+      '<span class="block-type-icon">' + esc(typeIcon(block.type)) + '</span> ' +
+      esc(typeLabel(block.type)) +
+      (nested ? ' <span class="nest-tag">בטור</span>' : '');
 
     var content = document.createElement('div');
     content.className = 'block-content';
@@ -798,7 +987,25 @@
   function bindToolboxDrag() {
     document.querySelectorAll('.tool-btn[data-type]').forEach(function (btn) {
       btn.setAttribute('draggable', 'true');
+
+      // Click: selection → REPLACE in place; no selection → ADD at end.
+      // Drag always inserts/splits via drop zones (never auto-replaces).
+      btn.addEventListener('click', function (e) {
+        if (btn.dataset.didDrag === '1') {
+          btn.dataset.didDrag = '0';
+          return;
+        }
+        e.preventDefault();
+        var type = btn.dataset.type;
+        if (selectedId && getBlock(selectedId)) {
+          replaceBlockType(selectedId, type);
+        } else {
+          addBlock(type);
+        }
+      });
+
       btn.addEventListener('dragstart', function (e) {
+        btn.dataset.didDrag = '1';
         dragState = { kind: 'toolbox', blockType: btn.dataset.type };
         e.dataTransfer.setData('text/plain', 'toolbox:' + btn.dataset.type);
         e.dataTransfer.effectAllowed = 'copy';
@@ -807,6 +1014,7 @@
       });
       btn.addEventListener('dragend', function () {
         btn.classList.remove('dragging-tool');
+        setTimeout(function () { btn.dataset.didDrag = '0'; }, 0);
         if (dropInProgress) return;
         document.body.classList.remove('is-dragging');
         dragState = null;
@@ -814,6 +1022,7 @@
         clearDropClasses();
       });
     });
+    syncToolboxMode();
   }
 
   // ---- Selection / properties ----
@@ -822,10 +1031,46 @@
     selectedId = id;
     renderCanvas();
     renderProperties();
+    syncToolboxMode();
   }
 
   function field(label, inputHtml) {
     return '<div class="prop-group"><label>' + label + '</label>' + inputHtml + '</div>';
+  }
+
+  function buildReplaceChips(currentType) {
+    var html = '<div class="replace-row">';
+    MODULES.forEach(function (m) {
+      var active = m.type === currentType ? ' active' : '';
+      html +=
+        '<button type="button" class="replace-chip' + active + '" data-replace="' +
+        escAttr(m.type) +
+        '" title="' + escAttr(m.hint) + '">' +
+        '<span class="chip-icon">' + esc(m.icon) + '</span>' +
+        esc(m.label) +
+        '</button>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function syncToolboxMode() {
+    var box = document.querySelector('.toolbox');
+    if (!box) return;
+    var mode = document.getElementById('toolbox-mode');
+    var hasSel = !!(selectedId && getBlock(selectedId));
+    box.classList.toggle('has-selection', hasSel);
+    if (mode) {
+      mode.innerHTML = hasSel
+        ? 'נבחר מודול · <strong>לחיצה = החלפה</strong> · גרירה = הוספה'
+        : 'גרור לקנבס · או לחץ להוספה בסוף';
+    }
+    document.querySelectorAll('.tool-btn[data-type]').forEach(function (btn) {
+      var t = btn.dataset.type;
+      var sel = hasSel ? getBlock(selectedId) : null;
+      btn.classList.toggle('is-current', !!(sel && sel.type === t));
+      btn.classList.toggle('is-replace-mode', hasSel);
+    });
   }
 
   function renderProperties() {
@@ -835,12 +1080,14 @@
     var node = selectedId ? findNode(selectedId) : null;
     if (!node) {
       panel.innerHTML =
-        '<div style="color:#64748b;font-size:0.9rem;padding:24px 10px;text-align:center;line-height:1.6">' +
-        'לחץ על מודול לעריכה<br><br>' +
-        '<strong>סידור:</strong> גרור בין מודולים<br>' +
-        '<strong>פיצול לטורים:</strong> גרור לצד מודול<br>' +
-        '(או כפתור ⧉ בסרגל)' +
+        '<div class="props-empty">' +
+        '<div class="props-empty-title">אין מודול נבחר</div>' +
+        '<div class="props-empty-line"><strong>הוספה</strong> — לחץ או גרור מהסרגל</div>' +
+        '<div class="props-empty-line"><strong>סידור</strong> — גרור ⠿ בין מודולים</div>' +
+        '<div class="props-empty-line"><strong>פיצול</strong> — גרור לצד מודול / ⧉</div>' +
+        '<div class="props-empty-line"><strong>החלפה</strong> — בחר מודול ואז לחץ סוג אחר</div>' +
         '</div>';
+      syncToolboxMode();
       return;
     }
 
@@ -850,7 +1097,19 @@
       ? '<div class="nest-hint">בתוך עמודות · טור ' + ((node.colIndex || 0) + 1) + '</div>'
       : '';
 
-    var html = nestHint + '<div style="margin-bottom:10px"><strong>' + esc(block.type) + '</strong></div>';
+    var html =
+      nestHint +
+      '<div class="prop-type-head">' +
+      '<span class="prop-type-icon">' + esc(typeIcon(block.type)) + '</span>' +
+      '<div>' +
+      '<div class="prop-type-name">' + esc(typeLabel(block.type)) + '</div>' +
+      '<div class="prop-type-sub">' + esc((MODULE_BY_TYPE[block.type] && MODULE_BY_TYPE[block.type].hint) || block.type) + '</div>' +
+      '</div></div>' +
+      '<div class="prop-group">' +
+      '<label>החלף סוג מודול</label>' +
+      buildReplaceChips(block.type) +
+      '<div class="prop-hint">התוכן החשוב (טקסט / תמונה / Class) נשמר כשאפשר</div>' +
+      '</div>';
 
     if (block.type === 'hero') {
       html += field('כותרת', '<input data-key="title" value="' + escAttr(d.title || '') + '">');
@@ -904,6 +1163,12 @@
     }
 
     panel.innerHTML = html;
+
+    panel.querySelectorAll('[data-replace]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        replaceBlockType(block.id, chip.dataset.replace);
+      });
+    });
 
     panel.querySelectorAll('[data-key]').forEach(function (input) {
       var apply = function (reRender) {
@@ -993,6 +1258,8 @@
     selectedId = newBlock.id;
     renderCanvas();
     renderProperties();
+    syncToolboxMode();
+    flashCanvasHint('נוסף: ' + typeLabel(type));
   }
 
   function addChildToColumn(columnsBlockId, columnIndex, type) {
@@ -1015,6 +1282,7 @@
     if (selectedId === id) selectedId = null;
     renderCanvas();
     renderProperties();
+    syncToolboxMode();
   }
 
   function duplicateBlock(id) {
@@ -1215,6 +1483,7 @@
   window.TapuzBuilder = {
     init: init,
     addBlock: addBlock,
+    replaceBlockType: replaceBlockType,
     savePage: savePage,
     saveAndBuild: saveAndBuild,
     openMediaLibrary: openMediaLibrary,
