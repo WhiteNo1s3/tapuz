@@ -21,6 +21,8 @@
     { type: 'text', label: 'טקסט', hint: 'פסקה', icon: '¶', group: 'תוכן' },
     { type: 'button', label: 'כפתור', hint: 'קישור / CTA', icon: '◉', group: 'תוכן' },
     { type: 'image', label: 'תמונה', hint: 'מדיה', icon: '▣', group: 'מדיה' },
+    { type: 'embed', label: 'וידאו', hint: 'YouTube / קישור', icon: '▶', group: 'מדיה' },
+    { type: 'list', label: 'רשימה', hint: 'נקודות / ממוספרת', icon: '≡', group: 'תוכן' },
     { type: 'testimonial', label: 'המלצה', hint: 'ציטוט + שם', icon: '❝', group: 'תוכן' },
     { type: 'features', label: 'תכונות', hint: 'רשימת כרטיסים', icon: '▦', group: 'תוכן' },
     { type: 'columns', label: 'עמודות', hint: '2–4 טורים', icon: '▥', group: 'פריסה' },
@@ -139,6 +141,150 @@
     blocks = snap || [];
   }
 
+  // ---- History / dirty state / autosave ----
+
+  var undoStack = [];
+  var redoStack = [];
+  var MAX_HISTORY = 60;
+  var isDirty = false;
+  var autosaveTimer = null;
+
+  function pushHistorySnapshot(snap) {
+    undoStack.push(snap);
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack = [];
+    markDirty();
+    updateHeaderExtras();
+  }
+
+  function pushHistory() {
+    pushHistorySnapshot(snapshotTree());
+  }
+
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(snapshotTree());
+    restoreTree(undoStack.pop());
+    if (selectedId && !getBlock(selectedId)) selectedId = null;
+    markDirty();
+    renderCanvas();
+    renderProperties();
+    syncToolboxMode();
+    flashCanvasHint('בוטל ↩');
+    updateHeaderExtras();
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(snapshotTree());
+    restoreTree(redoStack.pop());
+    if (selectedId && !getBlock(selectedId)) selectedId = null;
+    markDirty();
+    renderCanvas();
+    renderProperties();
+    syncToolboxMode();
+    flashCanvasHint('בוצע שוב ↪');
+    updateHeaderExtras();
+  }
+
+  function markDirty() {
+    isDirty = true;
+    scheduleAutosave();
+    updateHeaderExtras();
+  }
+
+  function markSaved() {
+    isDirty = false;
+    updateHeaderExtras();
+  }
+
+  function scheduleAutosave() {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(function () {
+      if (isDirty && currentPageFullPath) savePage({ silent: true });
+    }, 2500);
+  }
+
+  function updateHeaderExtras() {
+    var u = document.getElementById('btn-undo');
+    var r = document.getElementById('btn-redo');
+    var d = document.getElementById('dirty-dot');
+    if (u) u.disabled = !undoStack.length;
+    if (r) r.disabled = !redoStack.length;
+    if (d) {
+      d.classList.toggle('on', isDirty);
+      d.title = isDirty ? 'שינויים לא שמורים' : 'הכל שמור';
+    }
+  }
+
+  function ensureUiExtras() {
+    if (document.getElementById('tapuz-toasts')) return;
+
+    var style = document.createElement('style');
+    style.textContent =
+      '#history-controls{display:inline-flex;gap:4px;align-items:center;margin-inline-start:10px}' +
+      '#history-controls button{border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:2px 9px;cursor:pointer;font-size:0.95rem}' +
+      '#history-controls button:disabled{opacity:0.35;cursor:default}' +
+      '#dirty-dot{width:9px;height:9px;border-radius:50%;background:#cbd5e1;display:inline-block;margin-inline-start:6px;transition:background .2s}' +
+      '#dirty-dot.on{background:#f59e0b}' +
+      '#tapuz-toasts{position:fixed;bottom:18px;inset-inline-start:18px;z-index:9999;display:flex;flex-direction:column;gap:8px}' +
+      '.tapuz-toast{background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:0.9rem;box-shadow:0 6px 20px rgba(0,0,0,0.25);opacity:0;transform:translateY(8px);transition:all .25s}' +
+      '.tapuz-toast.show{opacity:1;transform:none}' +
+      '.tapuz-toast.ok{background:#166534}' +
+      '.tapuz-toast.err{background:#b91c1c}' +
+      '.preview-embed{position:relative;display:inline-block}' +
+      '.embed-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2rem;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.6);pointer-events:none}' +
+      '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:#334155}';
+    document.head.appendChild(style);
+
+    var toasts = document.createElement('div');
+    toasts.id = 'tapuz-toasts';
+    document.body.appendChild(toasts);
+
+    var header = document.querySelector('.canvas-header');
+    if (header && !document.getElementById('history-controls')) {
+      var wrap = document.createElement('span');
+      wrap.id = 'history-controls';
+      wrap.innerHTML =
+        '<button type="button" id="btn-undo" title="בטל (Ctrl+Z)">↩</button>' +
+        '<button type="button" id="btn-redo" title="בצע שוב (Ctrl+Shift+Z)">↪</button>' +
+        '<span id="dirty-dot"></span>';
+      header.appendChild(wrap);
+      document.getElementById('btn-undo').addEventListener('click', undo);
+      document.getElementById('btn-redo').addEventListener('click', redo);
+    }
+
+    var titleEl = document.getElementById('page-title');
+    if (titleEl) titleEl.addEventListener('input', markDirty);
+    var statusEl = document.getElementById('page-status');
+    if (statusEl) statusEl.addEventListener('change', markDirty);
+
+    window.addEventListener('beforeunload', function (e) {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
+  }
+
+  function showToast(msg, kind) {
+    var host = document.getElementById('tapuz-toasts');
+    if (!host) return;
+    var t = document.createElement('div');
+    t.className = 'tapuz-toast' + (kind ? ' ' + kind : '');
+    t.textContent = msg;
+    host.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add('show'); });
+    setTimeout(function () {
+      t.classList.remove('show');
+      setTimeout(function () { t.remove(); }, 300);
+    }, 2800);
+  }
+
+  function youtubeId(url) {
+    var m = String(url || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,20})/);
+    return m ? m[1] : null;
+  }
+
   /** Live list only — never trust a list reference captured at render time. */
   function getLiveList(parentId, colIndex) {
     if (!parentId) return blocks;
@@ -185,8 +331,8 @@
     if (type === 'testimonial') return { quote: '', author: '' };
     if (type === 'divider') return {};
     if (type === 'features') return { items: [{ title: 'פריט', description: '' }] };
-    if (type === 'list') return { items: ['פריט'] };
-    if (type === 'embed') return { html: '' };
+    if (type === 'list') return { items: ['פריט ראשון'], ordered: false };
+    if (type === 'embed') return { url: '' };
     return {};
   }
 
@@ -203,7 +349,7 @@
       d.content ||
       d.quote ||
       d.subtitle ||
-      (d.items && d.items[0] && (d.items[0].title || d.items[0].description)) ||
+      (d.items && d.items[0] && (typeof d.items[0] === 'string' ? d.items[0] : (d.items[0].title || d.items[0].description))) ||
       '';
     var secondary =
       d.subtitle ||
@@ -250,6 +396,12 @@
       if (soft.text) {
         data.items = [{ title: soft.text.slice(0, 80), description: soft.secondary || '' }];
       }
+    } else if (type === 'list') {
+      if (soft.text) {
+        data.items = soft.secondary ? [soft.text, soft.secondary] : [soft.text];
+      }
+    } else if (type === 'embed') {
+      if (soft.url) data.url = soft.url;
     } else if (type === 'columns') {
       // Keep nested structure when replacing columns→columns; otherwise empty 2-col
       if (soft.columns && soft.columns.length) {
@@ -287,6 +439,7 @@
       }
     }
 
+    pushHistory();
     var soft = extractSoftFields(block);
     // If converting *to* columns from a content block, put old block as left col
     if (newType === 'columns' && block.type !== 'columns') {
@@ -357,9 +510,14 @@
     currentPageFullPath = config.fullPath || '';
     selectedId = null;
     dropHint = null;
+    undoStack = [];
+    redoStack = [];
+    isDirty = false;
+    ensureUiExtras();
     renderCanvas();
     renderProperties();
     bindToolboxDrag();
+    updateHeaderExtras();
   }
 
   // ---- Canvas ----
@@ -744,6 +902,35 @@
       return wrap;
     }
 
+    if (block.type === 'list') {
+      var listItems = d.items || [];
+      var listTag = d.ordered ? 'ol' : 'ul';
+      wrap.innerHTML =
+        '<' + listTag + ' style="margin:4px 0;padding-inline-start:20px;color:#334155">' +
+        listItems
+          .map(function (it) {
+            return '<li>' + esc(typeof it === 'string' ? it : (it.text || '')) + '</li>';
+          })
+          .join('') +
+        '</' + listTag + '>';
+      return wrap;
+    }
+
+    if (block.type === 'embed') {
+      var vid = youtubeId(d.url || '');
+      if (vid) {
+        wrap.innerHTML =
+          '<div class="preview-embed">' +
+          '<img src="https://img.youtube.com/vi/' + escAttr(vid) + '/hqdefault.jpg" alt="" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0">' +
+          '<span class="embed-play">▶</span></div>';
+      } else if (d.url) {
+        wrap.innerHTML = '<div style="color:#334155;direction:ltr;text-align:left">🔗 ' + esc(d.url) + '</div>';
+      } else {
+        wrap.innerHTML = '<div class="preview-image-empty">הדבק קישור YouTube (לחץ לעריכה)</div>';
+      }
+      return wrap;
+    }
+
     if (block.type === 'columns') {
       return renderColumnsBody(block);
     }
@@ -862,6 +1049,7 @@
       }
 
       if (result.selectedId) selectedId = result.selectedId;
+      pushHistorySnapshot(snap);
       dropInProgress = false;
       finishDrop();
     } catch (err) {
@@ -1144,6 +1332,15 @@
         );
       });
       html += '<button type="button" class="btn secondary" style="margin:6px 0" data-add-feat="1">+ פריט</button>';
+    } else if (block.type === 'list') {
+      var liTexts = (d.items || []).map(function (it) {
+        return typeof it === 'string' ? it : (it.text || '');
+      });
+      html += field('פריטים (שורה לכל פריט)', '<textarea data-list-items="1">' + esc(liTexts.join('\n')) + '</textarea>');
+      html += field('סוג רשימה', '<label class="check-line"><input type="checkbox" data-list-ordered="1"' + (d.ordered ? ' checked' : '') + '> ממוספרת (1, 2, 3…)</label>');
+    } else if (block.type === 'embed') {
+      html += field('קישור (YouTube או כל URL)', '<input data-key="url" dir="ltr" value="' + escAttr(d.url || '') + '" placeholder="https://www.youtube.com/watch?v=...">');
+      html += '<div class="prop-hint">קישור YouTube הופך לנגן מוטמע באתר המפורסם</div>';
     } else if (block.type === 'columns') {
       html += '<div style="font-size:0.85rem;color:#64748b;margin-bottom:8px">גרור מודולים לטורים, או בין מודולים. גרור לצד מודול בתוך טור לפיצול נוסף.</div>';
       html += '<button type="button" class="btn" style="margin:4px" data-col="0">+ הוסף לטור 1</button>';
@@ -1172,6 +1369,7 @@
 
     panel.querySelectorAll('[data-key]').forEach(function (input) {
       var apply = function (reRender) {
+        if (!input._histPushed) { pushHistory(); input._histPushed = true; }
         var val = input.value;
         if (input.dataset.key === 'level') val = parseInt(val, 10) || 2;
         if (!block.data) block.data = {};
@@ -1185,6 +1383,7 @@
 
     panel.querySelectorAll('[data-feat]').forEach(function (input) {
       var apply = function (reRender) {
+        if (!input._histPushed) { pushHistory(); input._histPushed = true; }
         var i = parseInt(input.dataset.feat, 10);
         if (!block.data) block.data = {};
         if (!Array.isArray(block.data.items)) block.data.items = [];
@@ -1197,9 +1396,33 @@
       input.addEventListener('blur', function () { apply(true); });
     });
 
+    var listItemsEl = panel.querySelector('[data-list-items]');
+    if (listItemsEl) {
+      var applyList = function (reRender) {
+        if (!listItemsEl._histPushed) { pushHistory(); listItemsEl._histPushed = true; }
+        if (!block.data) block.data = {};
+        block.data.items = listItemsEl.value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+        if (reRender) renderCanvas();
+      };
+      listItemsEl.addEventListener('input', function () { applyList(false); });
+      listItemsEl.addEventListener('change', function () { applyList(true); });
+      listItemsEl.addEventListener('blur', function () { applyList(true); });
+    }
+
+    var orderedEl = panel.querySelector('[data-list-ordered]');
+    if (orderedEl) {
+      orderedEl.addEventListener('change', function () {
+        pushHistory();
+        if (!block.data) block.data = {};
+        block.data.ordered = orderedEl.checked;
+        renderCanvas();
+      });
+    }
+
     var addFeat = panel.querySelector('[data-add-feat]');
     if (addFeat) {
       addFeat.addEventListener('click', function () {
+        pushHistory();
         if (!block.data) block.data = {};
         if (!Array.isArray(block.data.items)) block.data.items = [];
         block.data.items.push({ title: 'פריט', description: '' });
@@ -1224,7 +1447,9 @@
     if (addCol) {
       addCol.addEventListener('click', function () {
         var cols = ensureColumns(block);
-        if (cols.length < 4) cols.push({ blocks: [] });
+        if (cols.length >= 4) return;
+        pushHistory();
+        cols.push({ blocks: [] });
         renderCanvas();
         renderProperties();
       });
@@ -1240,6 +1465,8 @@
     var unnest = panel.querySelector('[data-unnest]');
     if (unnest) {
       unnest.addEventListener('click', function () {
+        if (!findNode(block.id)) return;
+        pushHistory();
         var moved = removeNode(block.id);
         if (!moved) return;
         blocks.push(moved);
@@ -1253,6 +1480,7 @@
   // ---- CRUD ----
 
   function addBlock(type) {
+    pushHistory();
     var newBlock = makeBlock(type);
     blocks.push(newBlock);
     selectedId = newBlock.id;
@@ -1266,6 +1494,7 @@
     type = type || 'text';
     var parent = getBlock(columnsBlockId);
     if (!parent) return;
+    pushHistory();
     var child = makeBlock(type);
     if (type === 'text') child.data = { content: 'טקסט חדש בטור' };
     if (type === 'heading') child.data = { text: 'כותרת', level: 3 };
@@ -1278,6 +1507,8 @@
   }
 
   function deleteBlock(id) {
+    if (!findNode(id)) return;
+    pushHistory();
     removeNode(id);
     if (selectedId === id) selectedId = null;
     renderCanvas();
@@ -1288,6 +1519,7 @@
   function duplicateBlock(id) {
     var n = findNode(id);
     if (!n) return;
+    pushHistory();
     var copy = JSON.parse(JSON.stringify(n.block));
     (function reId(b) {
       b.id = uid(b.type);
@@ -1308,6 +1540,7 @@
     if (!n) return;
     var newIdx = n.index + direction;
     if (newIdx < 0 || newIdx >= n.list.length) return;
+    pushHistory();
     var moved = n.list.splice(n.index, 1)[0];
     n.list.splice(newIdx, 0, moved);
     renderCanvas();
@@ -1317,6 +1550,7 @@
   function splitBlockInPlace(id) {
     var n = findNode(id);
     if (!n || n.block.type === 'columns') return;
+    pushHistory();
     var target = n.list.splice(n.index, 1)[0];
     var empty = makeBlock('text');
     empty.data = { content: 'טור חדש...' };
@@ -1335,6 +1569,7 @@
   function unwrapColumns(id) {
     var n = findNode(id);
     if (!n || n.block.type !== 'columns') return;
+    pushHistory();
     var cols = ensureColumns(n.block);
     var flat = [];
     cols.forEach(function (col) {
@@ -1348,7 +1583,8 @@
 
   // ---- Save ----
 
-  function savePage() {
+  function savePage(opts) {
+    opts = opts || {};
     var titleEl = document.getElementById('page-title');
     var statusEl = document.getElementById('page-status');
     var title = titleEl ? titleEl.value : '';
@@ -1367,20 +1603,32 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.ok) {
-          var orig = document.title;
-          document.title = 'נשמר ✓';
-          setTimeout(function () { document.title = orig; }, 1200);
+          markSaved();
+          if (opts.silent) flashCanvasHint('נשמר אוטומטית ✓');
+          else showToast('נשמר ✓', 'ok');
+        } else {
+          showToast('שגיאה בשמירה' + (data && data.error ? ': ' + data.error : ''), 'err');
         }
         return data;
       })
-      .catch(function () { alert('שגיאה בשמירה'); });
+      .catch(function () {
+        showToast('שגיאה בשמירה — בדוק שהשרת רץ', 'err');
+      });
   }
 
   function saveAndBuild() {
     savePage()
       .then(function () { return fetch('/admin/build', { method: 'POST' }); })
       .then(function (r) { return r.json(); })
-      .then(function () { window.open('/', '_blank'); });
+      .then(function (data) {
+        if (data && data.ok === false) {
+          showToast('שגיאה בבנייה' + (data.error ? ': ' + data.error : ''), 'err');
+          return;
+        }
+        showToast('נבנה ✓ — נפתח בחלון חדש', 'ok');
+        window.open('/', '_blank');
+      })
+      .catch(function () { showToast('שגיאה בבנייה', 'err'); });
   }
 
   // ---- Media ----
@@ -1428,6 +1676,7 @@
     if (currentMediaTarget) {
       var block = getBlock(currentMediaTarget);
       if (block) {
+        pushHistory();
         if (!block.data) block.data = {};
         block.data.src = url;
         selectedId = block.id;
@@ -1454,11 +1703,11 @@
             if (currentMediaTarget) pickMedia(data.url);
             else openMediaLibrary(currentMediaTarget);
           } else {
-            alert(data.error || 'שגיאה בהעלאה');
+            showToast(data.error || 'שגיאה בהעלאה', 'err');
           }
           input.value = '';
         })
-        .catch(function () { alert('שגיאה בהעלאה'); });
+        .catch(function () { showToast('שגיאה בהעלאה', 'err'); });
     };
     reader.readAsDataURL(file);
   }
@@ -1469,6 +1718,15 @@
     if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       savePage();
+    }
+    var inField = /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '');
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z') && !inField) {
+      e.preventDefault();
+      if (e.shiftKey) redo(); else undo();
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y') && !inField) {
+      e.preventDefault();
+      redo();
     }
     if (
       e.key === 'Delete' &&

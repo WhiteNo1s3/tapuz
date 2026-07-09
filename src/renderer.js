@@ -114,12 +114,13 @@ function renderBlock(block, direction = 'rtl') {
     }
 
     case 'embed': {
-      const url = escapeHtml(block.data.url || '');
-      if (url.includes('youtube') || url.includes('youtu.be')) {
-        const videoId = url.includes('watch?v=') ? url.split('watch?v=')[1] : url.split('/').pop();
-        return `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;"><iframe src="https://www.youtube.com/embed/${videoId}" style="position:absolute;top:0;left:0;width:100%;height:100%;" frameborder="0" allowfullscreen></iframe></div>`;
+      const rawUrl = String(block.data.url || '');
+      const yt = rawUrl.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,20})/);
+      if (yt) {
+        return `<div class="video-embed" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;"><iframe src="https://www.youtube.com/embed/${yt[1]}" style="position:absolute;top:0;left:0;width:100%;height:100%;" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe></div>`;
       }
-      return `<a href="${url}" target="_blank" dir="${direction}">${url}</a>`;
+      const url = escapeHtml(rawUrl);
+      return `<a href="${url}" target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
     }
 
     case 'features': {
@@ -139,11 +140,11 @@ function renderBlock(block, direction = 'rtl') {
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
-    .replace(/'/g, "'");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function renderPage(page, options = {}) {
