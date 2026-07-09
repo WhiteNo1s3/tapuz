@@ -35,3 +35,8 @@ node src/server.js            # פתח את הממשק (http://localhost:3000/ad
 - הוסף בלוקים עם כפתורים (Hero, טקסט, כפתור, המלצה...)
 - שמור
 
+
+## Credits
+
+Built by [WhiteNo1s3](https://github.com/WhiteNo1s3). Released under the MIT License.
+
