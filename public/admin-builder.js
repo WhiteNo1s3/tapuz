@@ -22,6 +22,7 @@
     { type: 'button', label: 'כפתור', hint: 'קישור / CTA', icon: '◉', group: 'תוכן' },
     { type: 'image', label: 'תמונה', hint: 'מדיה', icon: '▣', group: 'מדיה' },
     { type: 'embed', label: 'וידאו', hint: 'YouTube / קישור', icon: '▶', group: 'מדיה' },
+    { type: 'gallery', label: 'גלריה', hint: 'רשת תמונות', icon: '▤', group: 'מדיה' },
     { type: 'list', label: 'רשימה', hint: 'נקודות / ממוספרת', icon: '≡', group: 'תוכן' },
     { type: 'testimonial', label: 'המלצה', hint: 'ציטוט + שם', icon: '❝', group: 'תוכן' },
     { type: 'features', label: 'תכונות', hint: 'רשימת כרטיסים', icon: '▦', group: 'תוכן' },
@@ -234,7 +235,36 @@
       '.tapuz-toast.err{background:#b91c1c}' +
       '.preview-embed{position:relative;display:inline-block}' +
       '.embed-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2rem;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.6);pointer-events:none}' +
-      '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:#334155}';
+      '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:#334155}' +
+      '.media-explorer{display:flex;flex-direction:column;gap:10px}' +
+      '.media-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;padding-bottom:8px}' +
+      '.media-crumbs{font-size:0.9rem;color:#334155}' +
+      '.crumb{cursor:pointer;padding:2px 4px;border-radius:4px}' +
+      '.crumb:hover{background:#eff6ff;color:#0a66c2}' +
+      '.media-actions{display:flex;gap:6px}' +
+      '.mbtn{border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85rem}' +
+      '.mbtn:hover{background:#f8fafc}' +
+      '.mbtn-primary{background:#0a66c2;border-color:#0a66c2;color:#fff}' +
+      '.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;max-height:380px;overflow:auto;padding:2px}' +
+      '.media-tile{border:1px solid #e2e8f0;border-radius:10px;padding:8px;cursor:pointer;text-align:center;background:#fff;user-select:none}' +
+      '.media-tile:hover{border-color:#93c5fd;background:#f8fafc}' +
+      '.media-tile img{width:100%;height:72px;object-fit:cover;border-radius:6px}' +
+      '.media-folder .tile-icon{font-size:2.6rem;line-height:72px;height:72px}' +
+      '.media-name{font-size:0.72rem;color:#475569;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '.tile-selected{outline:3px solid #0a66c2;outline-offset:-1px;background:#eff6ff}' +
+      '.media-empty{grid-column:1/-1;color:#64748b;padding:26px;text-align:center}' +
+      '#tapuz-ctx{position:fixed;z-index:10000;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,0.2);min-width:170px;padding:4px;display:flex;flex-direction:column}' +
+      '.ctx-item{background:none;border:none;text-align:start;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:0.9rem;color:#0f172a}' +
+      '.ctx-item:hover{background:#f1f5f9}' +
+      '.ctx-danger{color:#b91c1c}' +
+      '.ctx-danger:hover{background:#fef2f2}' +
+      '.preview-gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;position:relative}' +
+      '.preview-gallery img{width:100%;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0}' +
+      '.gallery-more{position:absolute;bottom:6px;inset-inline-end:6px;background:rgba(15,23,42,0.75);color:#fff;border-radius:6px;padding:2px 8px;font-size:0.8rem}' +
+      '.gallery-edit{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px}' +
+      '.gallery-thumb{position:relative}' +
+      '.gallery-thumb img{width:100%;height:56px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0}' +
+      '.gallery-thumb button{position:absolute;top:2px;inset-inline-end:2px;border:none;background:rgba(185,28,28,0.9);color:#fff;border-radius:50%;width:18px;height:18px;line-height:1;cursor:pointer;font-size:0.75rem}';
     document.head.appendChild(style);
 
     var toasts = document.createElement('div');
@@ -332,6 +362,7 @@
     if (type === 'divider') return {};
     if (type === 'features') return { items: [{ title: 'פריט', description: '' }] };
     if (type === 'list') return { items: ['פריט ראשון'], ordered: false };
+    if (type === 'gallery') return { images: [] };
     if (type === 'embed') return { url: '' };
     return {};
   }
@@ -360,7 +391,7 @@
     return {
       text: String(text || '').trim(),
       secondary: String(secondary || '').trim(),
-      src: d.src || '',
+      src: d.src || (d.images && d.images[0] && (typeof d.images[0] === 'string' ? d.images[0] : d.images[0].src)) || '',
       alt: d.alt || '',
       url: d.url || d.buttonUrl || '',
       className: d.className || '',
@@ -402,6 +433,8 @@
       }
     } else if (type === 'embed') {
       if (soft.url) data.url = soft.url;
+    } else if (type === 'gallery') {
+      if (soft.src) data.images = [{ src: soft.src, alt: soft.alt || '' }];
     } else if (type === 'columns') {
       // Keep nested structure when replacing columns→columns; otherwise empty 2-col
       if (soft.columns && soft.columns.length) {
@@ -931,6 +964,23 @@
       return wrap;
     }
 
+    if (block.type === 'gallery') {
+      var gImgs = d.images || [];
+      if (!gImgs.length) {
+        wrap.innerHTML = '<div class="preview-image-empty">גלריה ריקה — הוסף תמונות במאפיינים</div>';
+        return wrap;
+      }
+      wrap.innerHTML =
+        '<div class="preview-gallery">' +
+        gImgs.slice(0, 8).map(function (im) {
+          var src = typeof im === 'string' ? im : (im.src || '');
+          return '<img src="' + escAttr(src) + '" alt="" loading="lazy">';
+        }).join('') +
+        (gImgs.length > 8 ? '<span class="gallery-more">+' + (gImgs.length - 8) + '</span>' : '') +
+        '</div>';
+      return wrap;
+    }
+
     if (block.type === 'columns') {
       return renderColumnsBody(block);
     }
@@ -1341,6 +1391,16 @@
     } else if (block.type === 'embed') {
       html += field('קישור (YouTube או כל URL)', '<input data-key="url" dir="ltr" value="' + escAttr(d.url || '') + '" placeholder="https://www.youtube.com/watch?v=...">');
       html += '<div class="prop-hint">קישור YouTube הופך לנגן מוטמע באתר המפורסם</div>';
+    } else if (block.type === 'gallery') {
+      var galImgs = d.images || [];
+      html += '<div class="gallery-edit">' +
+        galImgs.map(function (im, i) {
+          var src = typeof im === 'string' ? im : (im.src || '');
+          return '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-gal-del="' + i + '" title="הסר">×</button></div>';
+        }).join('') +
+        '</div>';
+      html += '<button type="button" class="btn" style="margin:6px 0" data-gal-add="1">+ הוסף תמונות מהספרייה</button>';
+      html += '<div class="prop-hint">' + galImgs.length + ' תמונות בגלריה · לחיצה ימנית בספרייה = אפשרויות</div>';
     } else if (block.type === 'columns') {
       html += '<div style="font-size:0.85rem;color:#64748b;margin-bottom:8px">גרור מודולים לטורים, או בין מודולים. גרור לצד מודול בתוך טור לפיצול נוסף.</div>';
       html += '<button type="button" class="btn" style="margin:4px" data-col="0">+ הוסף לטור 1</button>';
@@ -1395,6 +1455,31 @@
       input.addEventListener('change', function () { apply(true); });
       input.addEventListener('blur', function () { apply(true); });
     });
+
+    panel.querySelectorAll('[data-gal-del]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        pushHistory();
+        if (block.data && Array.isArray(block.data.images)) {
+          block.data.images.splice(parseInt(btn.dataset.galDel, 10), 1);
+        }
+        renderCanvas();
+        renderProperties();
+      });
+    });
+
+    var galAdd = panel.querySelector('[data-gal-add]');
+    if (galAdd) {
+      galAdd.addEventListener('click', function () {
+        openMediaGallery(function (picked) {
+          pushHistory();
+          if (!block.data) block.data = {};
+          if (!Array.isArray(block.data.images)) block.data.images = [];
+          block.data.images = block.data.images.concat(picked);
+          renderCanvas();
+          renderProperties();
+        });
+      });
+    }
 
     var listItemsEl = panel.querySelector('[data-list-items]');
     if (listItemsEl) {
@@ -1633,38 +1718,237 @@
 
   // ---- Media ----
 
+  var mediaState = { folder: '', mode: 'single', selection: [], onPick: null };
+
   function openMediaLibrary(targetBlockId) {
     currentMediaTarget = targetBlockId || selectedId || null;
+    mediaState.mode = currentMediaTarget && getBlock(currentMediaTarget) ? 'single' : 'browse';
+    mediaState.selection = [];
+    mediaState.onPick = null;
+    showMediaModal();
+  }
+
+  /** Multi-select mode for the gallery module. onPick gets [{src, alt}] */
+  function openMediaGallery(onPick) {
+    currentMediaTarget = null;
+    mediaState.mode = 'multi';
+    mediaState.selection = [];
+    mediaState.onPick = onPick;
+    showMediaModal();
+  }
+
+  function showMediaModal() {
     var modal = document.getElementById('media-modal');
-    var list = document.getElementById('media-list');
-    if (!modal || !list) return;
-    list.innerHTML = 'טוען...';
+    if (!modal) return;
     modal.classList.add('show');
+    loadMediaFolder(mediaState.folder || '');
+  }
 
-    fetch('/admin/assets')
+  function loadMediaFolder(folder) {
+    mediaState.folder = folder || '';
+    var list = document.getElementById('media-list');
+    if (!list) return;
+    list.innerHTML = '<div style="color:#64748b;padding:20px">טוען...</div>';
+    fetch('/admin/media?folder=' + encodeURIComponent(mediaState.folder))
       .then(function (r) { return r.json(); })
-      .then(function (files) {
-        if (!files.length) {
-          list.innerHTML = '<div style="color:#64748b">אין תמונות עדיין. העלה אחת.</div>';
-          return;
-        }
-        list.innerHTML = files
-          .map(function (f) {
-            return (
-              '<div class="media-item" data-url="' + escAttr(f.url) + '">' +
-              '<img src="' + escAttr(f.url) + '" alt="">' +
-              '<div class="media-name">' + esc(f.name) + '</div></div>'
-            );
-          })
-          .join('');
-
-        list.querySelectorAll('.media-item').forEach(function (item) {
-          item.addEventListener('click', function () { pickMedia(item.dataset.url); });
-        });
-      })
+      .then(renderMediaExplorer)
       .catch(function () {
-        list.innerHTML = '<div style="color:#b91c1c">שגיאה בטעינת מדיה</div>';
+        list.innerHTML = '<div style="color:#b91c1c;padding:20px">שגיאה בטעינת מדיה</div>';
       });
+  }
+
+  function renderMediaExplorer(data) {
+    var list = document.getElementById('media-list');
+    if (!list) return;
+    list.classList.add('media-explorer');
+
+    var crumbs = '<span class="crumb" data-goto="">🏠 מדיה</span>';
+    var acc = '';
+    (mediaState.folder ? mediaState.folder.split('/') : []).forEach(function (seg) {
+      acc = acc ? acc + '/' + seg : seg;
+      crumbs += ' › <span class="crumb" data-goto="' + escAttr(acc) + '">' + esc(seg) + '</span>';
+    });
+
+    var bar =
+      '<div class="media-bar">' +
+      '<div class="media-crumbs">' + crumbs + '</div>' +
+      '<div class="media-actions">' +
+      (mediaState.folder ? '<button type="button" class="mbtn" data-up="1" title="תיקייה למעלה">⬆</button>' : '') +
+      '<button type="button" class="mbtn" data-newfolder="1">📁+ תיקייה חדשה</button>' +
+      (mediaState.mode === 'multi'
+        ? '<button type="button" class="mbtn mbtn-primary" data-confirm-multi="1">הוסף (<span id="media-sel-count">0</span>)</button>'
+        : '') +
+      '</div></div>';
+
+    var tiles = '';
+    (data.folders || []).forEach(function (f) {
+      tiles +=
+        '<div class="media-tile media-folder" data-folder="' + escAttr(f.path) + '" title="' + escAttr(f.name) + '">' +
+        '<div class="tile-icon">📁</div><div class="media-name">' + esc(f.name) + '</div></div>';
+    });
+    (data.files || []).forEach(function (f) {
+      tiles +=
+        '<div class="media-tile media-item" data-url="' + escAttr(f.url) + '" data-id="' + escAttr(String(f.id)) + '" data-name="' + escAttr(f.name) + '">' +
+        '<img src="' + escAttr(f.url) + '" alt="" loading="lazy">' +
+        '<div class="media-name">' + esc(f.name) + '</div></div>';
+    });
+    if (!tiles) {
+      tiles = '<div class="media-empty">תיקייה ריקה — העלה תמונה או צור תיקייה</div>';
+    }
+
+    list.innerHTML = bar + '<div class="media-grid">' + tiles + '</div>';
+    bindMediaEvents(list);
+  }
+
+  function bindMediaEvents(list) {
+    list.querySelectorAll('.crumb').forEach(function (c) {
+      c.addEventListener('click', function () { loadMediaFolder(c.dataset.goto); });
+    });
+    var up = list.querySelector('[data-up]');
+    if (up) up.addEventListener('click', function () {
+      var parts = mediaState.folder.split('/');
+      parts.pop();
+      loadMediaFolder(parts.join('/'));
+    });
+    var nf = list.querySelector('[data-newfolder]');
+    if (nf) nf.addEventListener('click', function () {
+      var name = window.prompt('שם התיקייה החדשה:');
+      if (!name) return;
+      fetch('/admin/media/folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parent: mediaState.folder, name: name })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.ok) { showToast('תיקייה נוצרה ✓', 'ok'); loadMediaFolder(mediaState.folder); }
+          else showToast(d.error || 'שגיאה', 'err');
+        });
+    });
+    var cm = list.querySelector('[data-confirm-multi]');
+    if (cm) cm.addEventListener('click', function () {
+      if (mediaState.onPick && mediaState.selection.length) {
+        mediaState.onPick(mediaState.selection.map(function (s) { return { src: s.url, alt: s.name }; }));
+      }
+      closeMediaLibrary();
+    });
+
+    list.querySelectorAll('.media-folder').forEach(function (tile) {
+      tile.addEventListener('dblclick', function () { loadMediaFolder(tile.dataset.folder); });
+      tile.addEventListener('click', function () { loadMediaFolder(tile.dataset.folder); });
+      tile.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        showCtxMenu(e.clientX, e.clientY, [
+          { label: '📂 פתח', fn: function () { loadMediaFolder(tile.dataset.folder); } },
+          { label: '🗑 מחק תיקייה', danger: true, fn: function () { deleteMediaFolder(tile.dataset.folder); } }
+        ]);
+      });
+    });
+
+    list.querySelectorAll('.media-item').forEach(function (tile) {
+      tile.addEventListener('click', function () {
+        if (mediaState.mode === 'single') {
+          pickMedia(tile.dataset.url);
+        } else if (mediaState.mode === 'multi') {
+          toggleMediaSelection(tile);
+        } else {
+          tile.classList.toggle('tile-selected');
+        }
+      });
+      tile.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        var items = [];
+        if (mediaState.mode === 'single') {
+          items.push({ label: '✔ בחר תמונה', fn: function () { pickMedia(tile.dataset.url); } });
+        }
+        items.push({
+          label: '🔗 העתק כתובת',
+          fn: function () {
+            if (navigator.clipboard) navigator.clipboard.writeText(tile.dataset.url);
+            showToast('הכתובת הועתקה', 'ok');
+          }
+        });
+        items.push({
+          label: '🗑 מחק קובץ', danger: true,
+          fn: function () { deleteMediaFile(tile.dataset.id, tile.dataset.name); }
+        });
+        showCtxMenu(e.clientX, e.clientY, items);
+      });
+    });
+  }
+
+  function toggleMediaSelection(tile) {
+    var url = tile.dataset.url;
+    var idx = mediaState.selection.findIndex(function (s) { return s.url === url; });
+    if (idx >= 0) {
+      mediaState.selection.splice(idx, 1);
+      tile.classList.remove('tile-selected');
+    } else {
+      mediaState.selection.push({ url: url, name: tile.dataset.name });
+      tile.classList.add('tile-selected');
+    }
+    var count = document.getElementById('media-sel-count');
+    if (count) count.textContent = String(mediaState.selection.length);
+  }
+
+  function deleteMediaFile(id, name) {
+    if (!window.confirm('למחוק את "' + name + '" לצמיתות?')) return;
+    fetch('/admin/media/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: parseInt(id, 10) })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) { showToast('נמחק ✓', 'ok'); loadMediaFolder(mediaState.folder); }
+        else showToast(d.error || 'שגיאה במחיקה', 'err');
+      });
+  }
+
+  function deleteMediaFolder(path) {
+    if (!window.confirm('למחוק את התיקייה "' + path + '"? (חייבת להיות ריקה)')) return;
+    fetch('/admin/media/delete-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: path })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) { showToast('התיקייה נמחקה ✓', 'ok'); loadMediaFolder(mediaState.folder); }
+        else showToast(d.error || 'שגיאה', 'err');
+      });
+  }
+
+  // ---- Context menu (Windows-style) ----
+
+  function showCtxMenu(x, y, items) {
+    hideCtxMenu();
+    var menu = document.createElement('div');
+    menu.id = 'tapuz-ctx';
+    items.forEach(function (it) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'ctx-item' + (it.danger ? ' ctx-danger' : '');
+      row.textContent = it.label;
+      row.addEventListener('click', function () {
+        hideCtxMenu();
+        it.fn();
+      });
+      menu.appendChild(row);
+    });
+    document.body.appendChild(menu);
+    var rect = menu.getBoundingClientRect();
+    menu.style.left = Math.min(x, window.innerWidth - rect.width - 8) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - rect.height - 8) + 'px';
+    setTimeout(function () {
+      document.addEventListener('click', hideCtxMenu, { once: true });
+      document.addEventListener('contextmenu', hideCtxMenu, { once: true });
+    }, 0);
+  }
+
+  function hideCtxMenu() {
+    var m = document.getElementById('tapuz-ctx');
+    if (m) m.remove();
   }
 
   function closeMediaLibrary() {
@@ -1695,13 +1979,14 @@
       fetch('/admin/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, data: reader.result })
+        body: JSON.stringify({ filename: file.name, data: reader.result, folder: mediaState.folder })
       })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.ok && data.url) {
-            if (currentMediaTarget) pickMedia(data.url);
-            else openMediaLibrary(currentMediaTarget);
+            showToast('הועלה ✓', 'ok');
+            if (mediaState.mode === 'single' && currentMediaTarget) pickMedia(data.url);
+            else loadMediaFolder(mediaState.folder);
           } else {
             showToast(data.error || 'שגיאה בהעלאה', 'err');
           }

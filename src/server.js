@@ -20,19 +20,80 @@ const uploadDir = path.join(__dirname, '..', 'public', 'assets');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 app.use('/assets', express.static(uploadDir));
 
-// Media: list + upload (base64 JSON to avoid extra deps)
+// Media library: DB-wired, folder-aware (v0.31)
+const mediaLib = require('./media');
+mediaLib.syncDisk(); // adopt files already on disk
+
+app.get('/admin/media', (req, res) => {
+  try {
+    res.json(mediaLib.listMedia(req.query.folder || ''));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/media/folder', (req, res) => {
+  try {
+    const folder = mediaLib.createFolder(
+      (req.body.parent ? req.body.parent + '/' : '') + (req.body.name || '')
+    );
+    res.json({ ok: true, folder });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/media/delete-folder', (req, res) => {
+  try {
+    mediaLib.deleteFolder(req.body.path);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/media/delete', (req, res) => {
+  try {
+    mediaLib.deleteFile(req.body.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/media/move', (req, res) => {
+  try {
+    const url = mediaLib.moveFile(req.body.id, req.body.folder || '');
+    res.json({ ok: true, url });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// Legacy flat list (kept for compatibility)
 app.get('/admin/assets', (req, res) => {
   try {
-    const files = fs.readdirSync(uploadDir)
-      .filter(f => /\.(png|jpe?g|gif|webp|svg)$/i.test(f))
-      .map(f => ({ name: f, url: '/assets/' + f }));
-    res.json(files);
+    res.json(mediaLib.listMedia('').files);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
 app.post('/admin/upload', (req, res) => {
+  try {
+    const { filename, data, folder } = req.body || {};
+    if (!filename || !data || typeof data !== 'string') {
+      return res.status(400).json({ ok: false, error: 'missing filename/data' });
+    }
+    const saved = mediaLib.saveBase64({ filename, data, folder: folder || '' });
+    return res.json({ ok: true, url: saved.url, name: saved.name, id: saved.id });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+/* legacy upload path (unused after v0.31)
+app.post('/admin/upload-legacy', (req, res) => {
   try {
     const { filename, data } = req.body || {};
     if (!filename || !data || typeof data !== 'string') {
@@ -67,6 +128,7 @@ app.post('/admin/upload', (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+*/
 
 function layout(content, title = 'Tapuz') {
   return `<!DOCTYPE html>
@@ -895,6 +957,15 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           </button>
           <button type="button" class="tool-btn" data-type="divider" title="קו מפריד">
             <span class="tool-ico">—</span><span class="tool-meta"><span class="tool-name">קו מפריד</span><span class="tool-hint">קו אופקי</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="list" title="רשימה">
+            <span class="tool-ico">≡</span><span class="tool-meta"><span class="tool-name">רשימה</span><span class="tool-hint">נקודות / ממוספרת</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="embed" title="וידאו">
+            <span class="tool-ico">▶</span><span class="tool-meta"><span class="tool-name">וידאו</span><span class="tool-hint">YouTube / קישור</span></span>
+          </button>
+          <button type="button" class="tool-btn" data-type="gallery" title="גלריה">
+            <span class="tool-ico">▤</span><span class="tool-meta"><span class="tool-name">גלריה</span><span class="tool-hint">רשת תמונות</span></span>
           </button>
           <hr style="margin:12px 0;border-color:#e2e8f0">
           <button type="button" class="tool-btn" onclick="TapuzBuilder.openMediaLibrary()" style="border:1px solid #0a66c2;color:#0a66c2">
