@@ -8,6 +8,7 @@
   {{head}}
 </head>
 <body>
+  <a class="skip-link" href="#main">דלג לתוכן</a>
   <header class="site-header">
     <div class="container">
       <div class="header-inner">
@@ -15,7 +16,7 @@
           {{logo_html}}
         </a>
         
-        <nav class="main-nav">
+        <nav class="main-nav" aria-label="ניווט ראשי">
           <ul>
             {{menu_html}}
           </ul>
@@ -24,7 +25,7 @@
     </div>
   </header>
 
-  <main class="main-content">
+  <main id="main" class="main-content">
     <div class="container">
       {{content}}
     </div>
@@ -34,7 +35,7 @@
     <div class="container">
       <div class="footer-inner">
         <p>&copy; {{site.title}} — {{currentYear}}</p>
-        <nav class="footer-nav">
+        <nav class="footer-nav" aria-label="ניווט תחתון">
           {{footer_menu_html}}
         </nav>
       </div>

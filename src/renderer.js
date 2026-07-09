@@ -65,9 +65,9 @@ function renderBlock(block, direction = 'rtl') {
       const inner = cols.map((colBlocks, i) => {
         const list = Array.isArray(colBlocks) ? colBlocks : [];
         const colContent = list.map(bb => renderBlock(bb, direction)).join('');
-        return `<div class="col" style="flex:1">${colContent || ''}</div>`;
+        return `<div class="col">${colContent || ''}</div>`;
       }).join('');
-      return `<div${extra} class="columns" dir="${direction}" style="display:flex;gap:1rem">${inner}</div>`;
+      return `<div${extra} class="columns" dir="${direction}">${inner}</div>`;
     }
     case 'list': {
       const items = block.data.items || [];
@@ -87,12 +87,12 @@ function renderBlock(block, direction = 'rtl') {
       const title = escapeHtml(block.data.title || '');
       const subtitle = escapeHtml(block.data.subtitle || '');
       const btnText = block.data.buttonText ? escapeHtml(block.data.buttonText) : '';
-      const btnUrl = block.data.buttonUrl || '#';
-      let html = `<div class="hero" dir="${direction}">`;
+      const btnUrl = escapeHtml(block.data.buttonUrl || '#');
+      let html = `<section class="hero"${extra} dir="${direction}">`;
       html += `<h1>${title}</h1>`;
       if (subtitle) html += `<p class="subtitle">${subtitle}</p>`;
       if (btnText) html += `<a href="${btnUrl}" class="btn btn-primary">${btnText}</a>`;
-      html += `</div>`;
+      html += `</section>`;
       return html;
     }
 
@@ -100,7 +100,7 @@ function renderBlock(block, direction = 'rtl') {
       const quote = escapeHtml(block.data.quote || '');
       const author = escapeHtml(block.data.author || '');
       const role = block.data.role ? `, ${escapeHtml(block.data.role)}` : '';
-      return `<div class="testimonial" dir="${direction}"><p>“${quote}”</p><div class="author">${author}${role}</div></div>`;
+      return `<blockquote class="testimonial"${extra} dir="${direction}"><p>“${quote}”</p><footer class="author">${author}${role}</footer></blockquote>`;
     }
 
     case 'gallery': {
@@ -117,7 +117,7 @@ function renderBlock(block, direction = 'rtl') {
       const rawUrl = String(block.data.url || '');
       const yt = rawUrl.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,20})/);
       if (yt) {
-        return `<div class="video-embed" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;"><iframe src="https://www.youtube.com/embed/${yt[1]}" style="position:absolute;top:0;left:0;width:100%;height:100%;" frameborder="0" allowfullscreen loading="lazy" title="YouTube video"></iframe></div>`;
+        return `<figure class="video-embed"${extra}><iframe src="https://www.youtube.com/embed/${yt[1]}" allowfullscreen loading="lazy" title="YouTube video"></iframe></figure>`;
       }
       const url = escapeHtml(rawUrl);
       return `<a href="${url}" target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
@@ -128,9 +128,9 @@ function renderBlock(block, direction = 'rtl') {
       const list = items.map(item => {
         const title = escapeHtml(item.title || item);
         const desc = item.description ? `<p>${escapeHtml(item.description)}</p>` : '';
-        return `<div class="feature"><strong>${title}</strong>${desc}</div>`;
+        return `<article class="feature"><h3>${title}</h3>${desc}</article>`;
       }).join('');
-      return `<div class="features" dir="${direction}">${list}</div>`;
+      return `<section class="features"${extra} dir="${direction}">${list}</section>`;
     }
 
     default: return `<!-- unknown block: ${block.type} -->`;
