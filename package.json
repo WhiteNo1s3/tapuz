@@ -1,0 +1,30 @@
+{
+  "name": "tapuz",
+  "version": "0.2.0",
+  "description": "A pure-HTML-first, secure, modular CMS — built for Hebrew (RTL-first).",
+  "main": "src/index.js",
+  "bin": {
+    "tapuz": "./bin/tapuz.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "admin": "node src/server.js",
+    "db:init": "node scripts/init-db.js",
+    "build": "node -e 'require(\"./src/export\").exportAll()'"
+  },
+  "keywords": [
+    "cms",
+    "hebrew",
+    "rtl",
+    "static",
+    "node"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.1.1",
+    "body-parser": "^1.20.3",
+    "express": "^4.21.2"
+  }
+}

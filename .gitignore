@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Secrets / local env
+.env
+.env.*
+
+# SQLite runtime
+*.db
+*.sqlite
+*.db-shm
+*.db-wal
+db/*.db
+db/*.db-shm
+db/*.db-wal
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Build / temp
+content/uploads/
+public/build/
+admin/dist/
+fix_*.js
+fix_*.py
+tmp*
+tmp_*.js
+*.log
+
+# Optional local uploads (keep folder, ignore files)
+public/assets/*
+!public/assets/.gitkeep

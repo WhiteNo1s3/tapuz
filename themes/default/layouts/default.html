@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="{{lang}}" dir="{{direction}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <meta name="description" content="{{meta.description}}">
+  {{head}}
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <div class="header-inner">
+        <a href="/" class="site-logo">
+          {{logo_html}}
+        </a>
+        
+        <nav class="main-nav">
+          <ul>
+            {{menu_html}}
+          </ul>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div class="container">
+      {{content}}
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-inner">
+        <p>&copy; {{site.title}} — {{currentYear}}</p>
+        <nav class="footer-nav">
+          {{footer_menu_html}}
+        </nav>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

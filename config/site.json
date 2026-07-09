@@ -1,0 +1,14 @@
+{
+  "title": "WhiteNo1se",
+  "description": "WhiteNo1se — אתר הבית",
+  "baseUrl": "",
+  "defaultTheme": "default",
+  "language": "he",
+  "logo": {
+    "type": "text",
+    "text": "WhiteNo1se",
+    "image": "",
+    "width": 180,
+    "height": 50
+  }
+}

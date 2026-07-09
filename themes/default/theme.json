@@ -1,0 +1,23 @@
+{
+  "name": "Default",
+  "slug": "default",
+  "version": "0.1.0",
+  "author": "Tapuz",
+  "description": "Clean, minimal, RTL-first default theme for Tapuz",
+  "rtl": true,
+  "supports": {
+    "rtl": true,
+    "ltr": true
+  },
+  "slots": {
+    "header": true,
+    "footer": true,
+    "main": true
+  },
+  "breakpoints": {
+    "sm": "640px",
+    "md": "768px",
+    "lg": "1024px"
+  },
+  "defaultBlocks": ["heading", "text", "image", "button"]
+}
