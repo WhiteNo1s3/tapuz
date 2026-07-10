@@ -1,11 +1,18 @@
 {
-  "main": [
-    { "label": "דף הבית", "url": "/" },
-    { "label": "אודות", "url": "/about" },
-    { "label": "פרויקטים", "url": "/projects" },
-    { "label": "צור קשר", "url": "/contact" }
-  ],
   "footer": [
-    { "label": "מדיניות פרטיות", "url": "/privacy-policy" }
+    {
+      "label": "מדיניות פרטיות",
+      "url": "/privacy-policy",
+      "type": "custom",
+      "target": ""
+    }
+  ],
+  "main": [
+    {
+      "label": "דף הבית",
+      "url": "/",
+      "type": "custom",
+      "target": ""
+    }
   ]
 }

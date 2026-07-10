@@ -1,6 +1,6 @@
 {
   "name": "tapuz",
-  "version": "0.32.0-alpha",
+  "version": "0.33.0-alpha",
   "description": "A pure-HTML-first, secure, modular CMS — built for Hebrew (RTL-first).",
   "main": "src/index.js",
   "bin": {

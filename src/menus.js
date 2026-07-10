@@ -44,14 +44,36 @@ function seedIfEmpty() {
   tx(seed);
 }
 
+const ITEM_TYPES = ['page', 'custom', 'tel', 'mailto', 'anchor'];
+
+/** Resolve the final href from a typed menu item. */
+function resolveUrl(type, target, rawUrl) {
+  const t = String(target || '').trim();
+  if (type === 'page') {
+    if (!t) return '#';
+    const clean = t.replace(/^\/+/, '').replace(/\.html$/i, '');
+    return '/' + clean + '.html';
+  }
+  if (type === 'tel') return t ? 'tel:' + t.replace(/[^+\d]/g, '') : '#';
+  if (type === 'mailto') return t ? 'mailto:' + t : '#';
+  if (type === 'anchor') return t ? (t.charAt(0) === '#' ? t : '#' + t) : '#';
+  return String(rawUrl || t || '#').trim() || '#';
+}
+
 function normalizeItems(items) {
   if (!Array.isArray(items)) return [];
-  return items.map((item, i) => ({
-    id: item.id || `mi_${Date.now()}_${i}_${Math.floor(Math.random() * 1000)}`,
-    label: String(item.label || '').trim() || 'פריט',
-    url: String(item.url || '#').trim() || '#',
-    children: normalizeItems(item.children || [])
-  }));
+  return items.map((item, i) => {
+    const type = ITEM_TYPES.indexOf(item.type) >= 0 ? item.type : 'custom';
+    const target = String(item.target || '').trim();
+    return {
+      id: item.id || `mi_${Date.now()}_${i}_${Math.floor(Math.random() * 1000)}`,
+      label: String(item.label || '').trim() || 'פריט',
+      type: type,
+      target: target,
+      url: resolveUrl(type, target, item.url),
+      children: normalizeItems(item.children || [])
+    };
+  });
 }
 
 function loadMenus() {
@@ -95,9 +117,11 @@ function saveMenus(menus) {
     const clean = loadMenus();
     const fileShape = {};
     Object.keys(clean).forEach((k) => {
-      fileShape[k] = clean[k].map(({ label, url, children }) => {
-        const item = { label, url };
-        if (children && children.length) item.children = children.map(c => ({ label: c.label, url: c.url }));
+      fileShape[k] = clean[k].map(({ label, url, type, target, children }) => {
+        const item = { label, url, type, target };
+        if (children && children.length) {
+          item.children = children.map(c => ({ label: c.label, url: c.url, type: c.type, target: c.target }));
+        }
         return item;
       });
     });
@@ -130,5 +154,7 @@ module.exports = {
   getMenu,
   saveMenu,
   listMenuNames,
-  normalizeItems
+  normalizeItems,
+  resolveUrl,
+  ITEM_TYPES
 };

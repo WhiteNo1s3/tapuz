@@ -158,6 +158,16 @@ function renderMenuItems(items) {
 }
 
 function renderPage(page, options = {}) {
+  // Redirect pages: meta.redirect = target URL → tiny instant-redirect document
+  if (page.meta && page.meta.redirect) {
+    const to = escapeHtml(String(page.meta.redirect));
+    return `<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">` +
+      `<meta http-equiv="refresh" content="0;url=${to}"><link rel="canonical" href="${to}">` +
+      `<title>${escapeHtml(page.title || '')}</title></head>` +
+      `<body><p style="font-family:system-ui;text-align:center;margin-top:3rem">` +
+      `<a href="${to}">ממשיכים לדף החדש…</a></p></body></html>`;
+  }
+
   const direction = page.direction || 'rtl';
   const lang = direction === 'rtl' ? 'he' : 'en';
   const theme = loadTheme(page.theme || 'default');
