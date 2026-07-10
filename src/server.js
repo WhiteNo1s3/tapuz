@@ -134,7 +134,7 @@ app.post('/admin/upload-legacy', (req, res) => {
 });
 */
 
-function layout(content, title = 'Tapuz') {
+function layout(content, title = 'Tapuz', accent = '#0a66c2') {
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -143,6 +143,11 @@ function layout(content, title = 'Tapuz') {
   <title>${title} • Tapuz</title>
   <link rel="stylesheet" href="/css/main.css">
   <style>
+    /* section identity: each admin area carries its own accent */
+    :root { --admin-accent: ${accent}; }
+    .topbar { border-top: 4px solid var(--admin-accent); }
+    .topbar-inner span[style*="font-weight:600"] { color: var(--admin-accent); }
+    .btn:not(.secondary) { background: var(--admin-accent); border-color: var(--admin-accent); }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif;
       background: #f8fafc;
@@ -814,7 +819,93 @@ function layout(content, title = 'Tapuz') {
 
 // ======================== ROUTES ========================
 
+function needsSetup() {
+  try {
+    return !loadConfig().setupDone && listPages().length === 0;
+  } catch (e) {
+    return false;
+  }
+}
+
+app.get('/admin/setup', (req, res) => {
+  if (!needsSetup()) return res.redirect('/admin');
+  const html = `
+    <div class="container" style="padding-top:48px;max-width:560px">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:3rem">🍊</div>
+        <h1 style="margin:8px 0 4px">ברוכים הבאים ל־Tapuz</h1>
+        <p style="color:#64748b;margin:0">שלוש שאלות ואתם באוויר. הכל ניתן לשינוי אחר כך.</p>
+      </div>
+      <form method="POST" action="/admin/setup" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:26px;display:flex;flex-direction:column;gap:18px">
+        <div>
+          <label style="font-weight:600;display:block;margin-bottom:6px">1 · איך קוראים לאתר?</label>
+          <input name="title" required maxlength="60" placeholder="השם שיופיע בכותרת" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+          <input name="description" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-top:8px">
+        </div>
+        <div>
+          <label style="font-weight:600;display:block;margin-bottom:6px">2 · צבע ראשי</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="color" name="primary" value="#0a66c2" style="width:52px;height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:2px">
+            <span style="color:#64748b;font-size:0.85rem">אפשר לבחור כל צבע — כפתורים וקישורים יתאימו את עצמם</span>
+          </div>
+        </div>
+        <div>
+          <label style="font-weight:600;display:block;margin-bottom:6px">3 · איפה התפריט?</label>
+          <select name="menuPlacement" style="padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+            <option value="top">למעלה (קלאסי)</option>
+            <option value="side">בצד</option>
+          </select>
+        </div>
+        <button type="submit" class="btn" style="padding:12px;font-size:1rem">צור את האתר שלי ✨</button>
+        <p style="color:#94a3b8;font-size:0.8rem;margin:0;text-align:center">ניצור דף בית ראשון, תפריט, ונבנה את האתר — הכל עריך.</p>
+      </form>
+    </div>
+  `;
+  res.send(layout(html, 'התקנה ראשונית', '#f59e0b'));
+});
+
+app.post('/admin/setup', (req, res) => {
+  try {
+    if (!needsSetup()) return res.redirect('/admin');
+    const { title, description, primary, menuPlacement } = req.body || {};
+    const siteTitle = String(title || '').trim() || 'האתר שלי';
+
+    const config = loadConfig();
+    config.title = siteTitle;
+    config.description = String(description || '').trim();
+    config.setupDone = true;
+    saveConfig(config);
+
+    saveThemeSettings({
+      siteTitle: siteTitle,
+      overrides: {
+        colors: { primary: /^#[0-9a-fA-F]{6}$/.test(primary || '') ? primary : '#0a66c2' },
+        layout: { menuPlacement: menuPlacement === 'side' ? 'side' : 'top' }
+      }
+    });
+
+    if (!getPageByFullPath('home')) {
+      createPage({
+        title: siteTitle,
+        slug: 'home',
+        status: 'published',
+        blocks: [
+          { type: 'hero', data: { title: siteTitle, subtitle: config.description || 'ברוכים הבאים' } },
+          { type: 'text', data: { content: 'זהו דף הבית החדש שלך. לחץ "ערוך" כדי לשנות הכל.' } }
+        ]
+      });
+    }
+    saveMenu('main', [{ label: 'דף הבית', type: 'page', target: 'home' }]);
+    try { exportAll(); } catch (e) {}
+
+    res.redirect('/admin?built=1');
+  } catch (e) {
+    res.status(500).send('שגיאה בהתקנה: ' + e.message);
+  }
+});
+
 app.get('/admin', (req, res) => {
+  if (needsSetup()) return res.redirect('/admin/setup');
   const pages = listPages();
   const msg = req.query.built
     ? `<div style="background:#ecfdf5;border:1px solid #10b981;color:#166534;padding:12px 18px;border-radius:10px;margin-bottom:16px;">האתר נבנה בהצלחה ✓ <a href="/" target="_blank" style="color:#166534;font-weight:600">צפה באתר</a></div>`
@@ -1288,7 +1379,7 @@ app.get('/admin/theme', (req, res) => {
     </div>
     <script src="/admin-theme.js"></script>
   `;
-  res.send(layout(html, 'ערכת נושא'));
+  res.send(layout(html, 'ערכת נושא', '#059669'));
 });
 
 // ======================== MENUS EDITOR ========================
@@ -1381,7 +1472,7 @@ app.get('/admin/sitemap', (req, res) => {
       <section class="sm-card"><h3>דפים שלא בתפריט</h3><ul class="sm-list" style="border:none;padding-inline-start:0">${orphanRows}</ul></section>
     </div>
   `;
-  res.send(layout(html, 'מפת אתר'));
+  res.send(layout(html, 'מפת אתר', '#ea580c'));
 });
 
 app.get('/admin/menus', (req, res) => {
@@ -1425,7 +1516,7 @@ app.get('/admin/menus', (req, res) => {
     </script>
     <script src="/admin-menus.js"></script>
   `;
-  res.send(layout(html, 'תפריטים'));
+  res.send(layout(html, 'תפריטים', '#7c3aed'));
 });
 
 app.listen(PORT, () => {

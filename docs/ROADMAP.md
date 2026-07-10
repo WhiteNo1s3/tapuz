@@ -1,6 +1,6 @@
 # Tapuz — Roadmap & Idea Pool
 
-**Current version: v0.33-alpha**
+**Current version: v0.34-alpha**
 
 ## How versions work
 
@@ -36,15 +36,24 @@
 - Admin + output audited on all resolutions, window-resize safe
 - Mobile/tablet preview toggle in builder
 
-### Later (pre-beta)
-- Security phase: auth, CSRF, rate limits, upload validation
-- Community: CONTRIBUTING.md, plugin/module API for third-party modules
+### Later (pre-beta) — Security phase (Ben: features first, security before beta)
+Deliberately deferred. When we get here, in order:
+1. **Admin auth**: password (bcrypt/argon2) + session cookie; wizard sets it on first run
+2. **Database encryption at rest**: encryption key (env var / key file outside repo) using SQLite cipher (better-sqlite3-multiple-ciphers) — "not let anyone near the database"
+3. **Request hardening**: CSRF tokens on all admin POSTs, rate limiting, JSON body size limits (exists: 12mb — tighten)
+4. **Upload validation**: magic-byte checks (not just mime), SVG sanitization, size caps
+5. **Output**: CSP headers on admin + published site, X-Frame-Options
+6. **Secrets hygiene**: gitleaks in CI; key never committed
+
+### Community (after security)
+- CONTRIBUTING.md, plugin/module API for third-party modules
 
 ## Version Log
 
 | Version | Shipped | Source |
 |---|---|---|
 | v0.32-alpha | Draft/Publish split + automatic revision backups, page navigator modal (search/jump), theme overrides system (colors, fonts, logo, menu placement) with live preview + API, menu entity in DB with editor, publish flow in builder, revisions modal with restore | Ben + Grok |
+| v0.34-alpha | Admin section identity (subtle accent color per area: pages blue, menus purple, theme green, sitemap orange), first-run setup wizard for newcomers (3 questions → site + home page + menu + build), security phase spec'd in roadmap (deferred by design) | Ben + Claude |
 | v0.33-alpha | Typed menu links (existing page picker, custom URL, tel: click-to-call, mailto:, anchor), /admin/sitemap tree derived from menus with published/draft/missing badges + orphan-page detection, redirect pages via meta.redirect, menu editor rewrite with live URL preview | Ben + Claude |
 | v0.32-alpha | Draft/publish separation (save keeps draft, publish snapshots), auto revisions (30/page) with restore, pages navigator with search + unpublished badges, menu entity in DB with nesting, theme overrides (colors/fonts/layout/menu top-side) + theme & menus admin pages. Fixes: db.js circular-dependency (schema silently failing), revision restore loaded published instead of draft, removed leftover patch script | Grok + Ben, review & fixes Claude |
 | v0.31-alpha | DB-wired media library (folders, Explorer UI, right-click delete/copy, create folder), gallery module with multi-select picker, toolbox buttons for list/video/gallery | Ben + Claude |
