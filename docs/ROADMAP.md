@@ -1,6 +1,6 @@
 # Tapuz — Roadmap & Idea Pool
 
-**Current version: v0.31-alpha**
+**Current version: v0.32-alpha**
 
 ## How versions work
 
@@ -44,6 +44,8 @@
 
 | Version | Shipped | Source |
 |---|---|---|
+| v0.32-alpha | Draft/Publish split + automatic revision backups, page navigator modal (search/jump), theme overrides system (colors, fonts, logo, menu placement) with live preview + API, menu entity in DB with editor, publish flow in builder, revisions modal with restore | Ben + Grok |
+| v0.32-alpha | Draft/publish separation (save keeps draft, publish snapshots), auto revisions (30/page) with restore, pages navigator with search + unpublished badges, menu entity in DB with nesting, theme overrides (colors/fonts/layout/menu top-side) + theme & menus admin pages. Fixes: db.js circular-dependency (schema silently failing), revision restore loaded published instead of draft, removed leftover patch script | Grok + Ben, review & fixes Claude |
 | v0.31-alpha | DB-wired media library (folders, Explorer UI, right-click delete/copy, create folder), gallery module with multi-select picker, toolbox buttons for list/video/gallery | Ben + Claude |
 | v0.30-alpha | Undo/redo, autosave + unsaved guard, list & YouTube modules, Hebrew toasts, XSS fix, semantic HTML5 output, skip-link + aria, theme comfort pass | Claude + Ben |
 | v0.2 | Smart module replace, clearer RTL UX | Ben |

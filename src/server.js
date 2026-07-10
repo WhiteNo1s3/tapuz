@@ -4,9 +4,13 @@ const path = require('path');
 const fs = require('fs');
 
 const {
-  createPage, updatePage, listPages, getPageByFullPath, deletePage
+  createPage, updatePage, publishPage, listPages, getPageByFullPath, deletePage,
+  restoreRevision, listRevisions
 } = require('./pages');
 const { exportAll } = require('./export');
+const { loadMenus, saveMenus, saveMenu } = require('./menus');
+const { getThemeSettings, saveThemeSettings, loadOverrides, overridesToCss } = require('./theme');
+const { loadConfig, saveConfig } = require('./config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -818,10 +822,19 @@ app.get('/admin', (req, res) => {
 
   let listHtml = pages.length === 0
     ? `<div style="padding:40px;text-align:center;color:#64748b">אין דפים עדיין</div>`
-    : pages.map(p => `
+    : pages.map(p => {
+      const badge = p.status === 'published'
+        ? '<span style="background:#dcfce7;color:#166534;font-size:0.75rem;padding:2px 8px;border-radius:999px">פורסם</span>'
+        : '<span style="background:#fef3c7;color:#92400e;font-size:0.75rem;padding:2px 8px;border-radius:999px">טיוטה</span>';
+      const dirty = p.has_unpublished
+        ? '<span style="color:#b45309;font-size:0.75rem;margin-inline-start:6px">• שינויים לא פורסמו</span>'
+        : '';
+      return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:white">
         <div>
-          <strong>${p.title}</strong><br>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <strong>${p.title}</strong>${badge}${dirty}
+          </div>
           <span style="font-family:monospace;font-size:0.85rem;color:#64748b">/${p.full_path}</span>
         </div>
         <div style="display:flex;gap:8px">
@@ -831,8 +844,8 @@ app.get('/admin', (req, res) => {
             <button type="submit" class="btn secondary" style="padding:8px 14px">מחק</button>
           </form>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
 
   const html = `
     <div class="topbar">
@@ -842,7 +855,11 @@ app.get('/admin', (req, res) => {
           <span style="color:#94a3b8">•</span>
           <span style="font-weight:600">הדפים</span>
         </div>
-        <a href="/admin/new" class="btn">+ דף חדש</a>
+        <div style="display:flex;gap:8px;align-items:center">
+          <a href="/admin/theme" class="btn secondary">ערכת נושא</a>
+          <a href="/admin/menus" class="btn secondary">תפריטים</a>
+          <a href="/admin/new" class="btn">+ דף חדש</a>
+        </div>
       </div>
     </div>
     <div class="container" style="padding-top:30px">
@@ -851,6 +868,79 @@ app.get('/admin', (req, res) => {
     </div>
   `;
   res.send(layout(html));
+});
+
+// ---- API: pages list (navigator) ----
+app.get('/admin/api/pages', (req, res) => {
+  try {
+    res.json({ ok: true, pages: listPages({ q: req.query.q, status: req.query.status }) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/admin/api/revisions/:fullPath', (req, res) => {
+  try {
+    const fullPath = decodeURIComponent(req.params.fullPath);
+    res.json({ ok: true, revisions: listRevisions(fullPath) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/revisions/restore', (req, res) => {
+  try {
+    const { full_path, revision_id } = req.body || {};
+    const page = restoreRevision(full_path, revision_id);
+    res.json({ ok: true, page: { full_path: page.full_path, title: page.title, status: page.status, blocks: page.draft_blocks } });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// ---- Theme builder API ----
+app.get('/admin/api/theme', (req, res) => {
+  try {
+    res.json({ ok: true, ...getThemeSettings() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/theme', (req, res) => {
+  try {
+    const settings = saveThemeSettings(req.body || {});
+    res.json({ ok: true, ...settings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// ---- Menus API ----
+app.get('/admin/api/menus', (req, res) => {
+  try {
+    res.json({ ok: true, menus: loadMenus() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/menus', (req, res) => {
+  try {
+    const menus = saveMenus(req.body?.menus || req.body || {});
+    res.json({ ok: true, menus });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/menus/:name', (req, res) => {
+  try {
+    const menus = saveMenu(req.params.name, req.body?.items || []);
+    res.json({ ok: true, menus });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
 });
 
 app.get('/admin/new', (req, res) => {
@@ -898,27 +988,39 @@ app.get('/admin/edit/:fullPath', (req, res) => {
   const page = getPageByFullPath(fullPath);
   if (!page) return res.status(404).send('דף לא נמצא');
 
-  const initialBlocks = JSON.stringify(page.blocks || []);
+  // Builder always edits draft_blocks
+  const draft = page.draft_blocks != null ? page.draft_blocks : (page.blocks || []);
+  const initialBlocks = JSON.stringify(draft);
   const safeTitle = String(page.title || '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;');
+    .replace(/&/g, '&')
+    .replace(/"/g, '"')
+    .replace(/</g, '<');
+  const hasUnpublished = JSON.stringify(draft || []) !== JSON.stringify(page.blocks || []);
+  const statusLabel = page.status === 'published' ? 'פורסם' : 'טיוטה';
+  const badgeBg = page.status === 'published' ? '#dcfce7' : '#fef3c7';
+  const badgeFg = page.status === 'published' ? '#166534' : '#92400e';
+  const badgeExtra = hasUnpublished ? ' • טיוטה שונה' : '';
 
   const html = `
     <div class="topbar">
       <div class="container topbar-inner">
         <div class="topbar-left">
           <a href="/admin" style="font-weight:700;font-size:1.35rem;text-decoration:none;color:#0f172a">Tapuz</a>
+          <button type="button" id="btn-pages-nav" class="btn secondary" style="padding:6px 12px" title="ניווט דפים">☰ דפים</button>
           <input id="page-title" class="page-title" value="${safeTitle}" placeholder="כותרת הדף">
-          <select id="page-status" style="padding:4px 10px;border-radius:6px;border:1px solid #cbd5e1">
+          <span id="publish-badge" style="font-size:0.8rem;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeFg}">${statusLabel}${badgeExtra}</span>
+          <select id="page-status" style="display:none">
             <option value="draft" ${page.status === 'draft' ? 'selected' : ''}>טיוטה</option>
             <option value="published" ${page.status === 'published' ? 'selected' : ''}>פורסם</option>
           </select>
         </div>
-        <div style="display:flex;gap:10px;align-items:center">
-          <a href="/" target="_blank" class="btn secondary">צפה באתר</a>
-          <button onclick="TapuzBuilder.savePage()" class="btn">שמור</button>
-          <button onclick="TapuzBuilder.saveAndBuild()" class="btn" style="background:#166534">שמור + בנה</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button type="button" onclick="TapuzBuilder.openRevisions()" class="btn secondary" style="padding:8px 12px">היסטוריה</button>
+          <a href="/admin/theme" class="btn secondary" style="padding:8px 12px">ערכת נושא</a>
+          <a href="/" target="_blank" class="btn secondary" style="padding:8px 12px">צפה באתר</a>
+          <button type="button" onclick="TapuzBuilder.savePage()" class="btn" style="padding:8px 14px">שמור טיוטה</button>
+          <button type="button" onclick="TapuzBuilder.publishPage()" class="btn" style="background:#166534;padding:8px 14px">פרסם</button>
+          <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn" style="background:#14532d;padding:8px 14px">פרסם + בנה</button>
         </div>
       </div>
     </div>
@@ -975,8 +1077,8 @@ app.get('/admin/edit/:fullPath', (req, res) => {
 
         <div>
           <div class="canvas-header">
-            <span>תצוגה חיה</span>
-            <span id="block-count">${(page.blocks || []).length} מודולים</span>
+            <span>תצוגה חיה · טיוטה</span>
+            <span id="block-count">${(draft || []).length} מודולים</span>
             <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>
@@ -995,9 +1097,10 @@ app.get('/admin/edit/:fullPath', (req, res) => {
     </div>
 
     <div class="save-bar">
-      <div class="container" style="display:flex;gap:12px;justify-content:flex-end">
-        <button onclick="TapuzBuilder.savePage()" class="btn">שמור שינויים</button>
-        <button onclick="TapuzBuilder.saveAndBuild()" class="btn" style="background:#166534">שמור + בנה אתר</button>
+      <div class="container" style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap">
+        <button type="button" onclick="TapuzBuilder.savePage()" class="btn">שמור טיוטה</button>
+        <button type="button" onclick="TapuzBuilder.publishPage()" class="btn" style="background:#166534">פרסם</button>
+        <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn" style="background:#14532d">פרסם + בנה אתר</button>
       </div>
     </div>
 
@@ -1014,11 +1117,36 @@ app.get('/admin/edit/:fullPath', (req, res) => {
       </div>
     </div>
 
+    <div id="pages-nav-modal" class="modal" onclick="if (event.target.id === 'pages-nav-modal') TapuzBuilder.closePagesNav()">
+      <div class="modal-content" style="max-width:560px" onclick="event.stopPropagation()">
+        <h3 style="margin-top:0">ניווט דפים</h3>
+        <input id="pages-nav-search" type="search" placeholder="חיפוש לפי כותרת או נתיב..." style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+        <div id="pages-nav-list" style="max-height:420px;overflow:auto"></div>
+        <div style="margin-top:14px;display:flex;justify-content:space-between;gap:10px">
+          <a href="/admin/new" class="btn">+ דף חדש</a>
+          <button type="button" class="btn secondary" onclick="TapuzBuilder.closePagesNav()">סגור</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="revisions-modal" class="modal" onclick="if (event.target.id === 'revisions-modal') TapuzBuilder.closeRevisions()">
+      <div class="modal-content" style="max-width:560px" onclick="event.stopPropagation()">
+        <h3 style="margin-top:0">היסטוריית גרסאות</h3>
+        <p style="color:#64748b;font-size:0.9rem;margin-top:0">שמירה אוטומטית בכל שמירה/פרסום. שחזור מעתיק לטיוטה בלבד.</p>
+        <div id="revisions-list" style="max-height:420px;overflow:auto"></div>
+        <div style="margin-top:14px;text-align:left">
+          <button type="button" class="btn secondary" onclick="TapuzBuilder.closeRevisions()">סגור</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/admin-builder.js"></script>
     <script>
       TapuzBuilder.init({
         fullPath: ${JSON.stringify(page.full_path)},
-        blocks: ${initialBlocks}
+        blocks: ${initialBlocks},
+        status: ${JSON.stringify(page.status || 'draft')},
+        hasUnpublished: ${hasUnpublished ? 'true' : 'false'}
       });
     </script>
   `;
@@ -1027,9 +1155,39 @@ app.get('/admin/edit/:fullPath', (req, res) => {
 
 app.post('/admin/save', (req, res) => {
   try {
-    const { full_path, title, status, blocks } = req.body;
-    updatePage(full_path, { title, status: status || 'draft', blocks });
-    res.json({ ok: true });
+    const { full_path, title, blocks, publish } = req.body || {};
+    const page = updatePage(full_path, {
+      title,
+      blocks,
+      publish: !!publish
+    });
+    const hasUnpublished = JSON.stringify(page.draft_blocks || []) !== JSON.stringify(page.blocks || []);
+    res.json({
+      ok: true,
+      status: page.status,
+      hasUnpublished,
+      full_path: page.full_path
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/publish', (req, res) => {
+  try {
+    const { full_path, title, blocks } = req.body || {};
+    if (blocks) {
+      updatePage(full_path, { title, blocks });
+    } else if (title) {
+      updatePage(full_path, { title });
+    }
+    const page = publishPage(full_path);
+    res.json({
+      ok: true,
+      status: page.status,
+      hasUnpublished: false,
+      full_path: page.full_path
+    });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -1042,6 +1200,138 @@ app.post('/admin/build', (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
+});
+
+// ======================== THEME BUILDER PAGE ========================
+app.get('/admin/theme', (req, res) => {
+  const settings = getThemeSettings();
+  const o = settings.overrides;
+  const logo = settings.logo || {};
+  const escAttr = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&')
+    .replace(/"/g, '"')
+    .replace(/</g, '<');
+  const colorRow = (k, label, val) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">
+      <label style="font-weight:600">${label}</label>
+      <input type="color" id="th-color-${k}" value="${escAttr(val)}" style="width:52px;height:36px;border:none;background:none;cursor:pointer">
+      <input type="text" id="th-color-${k}-hex" value="${escAttr(val)}" style="width:100px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-family:monospace">
+    </div>`;
+
+  const html = `
+    <div class="topbar">
+      <div class="container topbar-inner">
+        <div style="display:flex;align-items:center;gap:12px">
+          <a href="/admin" style="font-size:1.5rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
+          <span style="color:#94a3b8">•</span>
+          <span style="font-weight:600">ערכת נושא</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <a href="/admin/menus" class="btn secondary">תפריטים</a>
+          <a href="/admin" class="btn secondary">חזרה לדפים</a>
+        </div>
+      </div>
+    </div>
+    <div class="container" style="padding-top:28px;max-width:920px">
+      <p style="color:#64748b;margin-top:0">שנה צבעים, פונט, לוגו ופריסת תפריט — בלי לגעת בקוד התמה. נשמר כ-overrides.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">אתר</h3>
+          <label style="display:block;font-weight:600;margin-bottom:4px">כותרת האתר</label>
+          <input id="th-title" value="${escAttr(settings.siteTitle)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label style="display:block;font-weight:600;margin-bottom:4px">תיאור</label>
+          <textarea id="th-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">${escAttr(settings.description)}</textarea>
+          <label style="display:block;font-weight:600;margin-bottom:4px">סוג לוגו</label>
+          <select id="th-logo-type" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="text" ${logo.type !== 'image' ? 'selected' : ''}>טקסט</option>
+            <option value="image" ${logo.type === 'image' ? 'selected' : ''}>תמונה</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">טקסט לוגו</label>
+          <input id="th-logo-text" value="${escAttr(logo.text)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label style="display:block;font-weight:600;margin-bottom:4px">כתובת תמונת לוגו</label>
+          <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="/assets/logo.png" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">צבעים</h3>
+          ${colorRow('primary', 'ראשי', o.colors.primary)}
+          ${colorRow('text', 'טקסט', o.colors.text)}
+          ${colorRow('muted', 'משני', o.colors.muted)}
+          ${colorRow('border', 'מסגרת', o.colors.border)}
+          ${colorRow('bg', 'רקע', o.colors.bg)}
+          ${colorRow('lightBg', 'רקע בהיר', o.colors.lightBg)}
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">טיפוגרפיה ופריסה</h3>
+          <label style="display:block;font-weight:600;margin-bottom:4px">גופן</label>
+          <input id="th-font" value="${escAttr(o.fonts.family)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label style="display:block;font-weight:600;margin-bottom:4px">גודל בסיס</label>
+          <input id="th-font-size" value="${escAttr(o.fonts.baseSize)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label style="display:block;font-weight:600;margin-bottom:4px">רוחב מקסימלי</label>
+          <input id="th-maxw" value="${escAttr(o.layout.maxWidth)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label style="display:block;font-weight:600;margin-bottom:4px">מיקום תפריט</label>
+          <select id="th-menu-place" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+            <option value="top" ${o.layout.menuPlacement !== 'side' ? 'selected' : ''}>עליון (אופקי)</option>
+            <option value="side" ${o.layout.menuPlacement === 'side' ? 'selected' : ''}>צד (אנכי)</option>
+          </select>
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">תצוגה מקדימה</h3>
+          <div id="th-preview" style="border:1px solid #e2e8f0;border-radius:10px;padding:20px"></div>
+        </section>
+      </div>
+      <div style="margin:24px 0 60px;display:flex;gap:10px;justify-content:flex-end">
+        <button type="button" class="btn secondary" id="th-reset">אפס לברירת מחדל</button>
+        <button type="button" class="btn" id="th-save">שמור ערכת נושא</button>
+        <button type="button" class="btn" id="th-save-build" style="background:#166534">שמור + בנה אתר</button>
+      </div>
+    </div>
+    <script src="/admin-theme.js"></script>
+  `;
+  res.send(layout(html, 'ערכת נושא'));
+});
+
+// ======================== MENUS EDITOR ========================
+app.get('/admin/menus', (req, res) => {
+  const menus = loadMenus();
+  const html = `
+    <div class="topbar">
+      <div class="container topbar-inner">
+        <div style="display:flex;align-items:center;gap:12px">
+          <a href="/admin" style="font-size:1.5rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
+          <span style="color:#94a3b8">•</span>
+          <span style="font-weight:600">תפריטים</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <a href="/admin/theme" class="btn secondary">ערכת נושא</a>
+          <a href="/admin" class="btn secondary">חזרה לדפים</a>
+        </div>
+      </div>
+    </div>
+    <div class="container" style="padding-top:28px;max-width:860px">
+      <p style="color:#64748b;margin-top:0">תפריט ראשי (header) ותחתון (footer). ישות DB — לא מודול בדף.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">תפריט ראשי</h3>
+          <div id="menu-main" class="menu-editor"></div>
+          <button type="button" class="btn secondary" style="margin-top:10px" data-add="main">+ פריט</button>
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">תפריט תחתון</h3>
+          <div id="menu-footer" class="menu-editor"></div>
+          <button type="button" class="btn secondary" style="margin-top:10px" data-add="footer">+ פריט</button>
+        </section>
+      </div>
+      <div style="margin:24px 0 60px;display:flex;gap:10px;justify-content:flex-end">
+        <button type="button" class="btn" id="menu-save">שמור תפריטים</button>
+        <button type="button" class="btn" id="menu-save-build" style="background:#166534">שמור + בנה</button>
+      </div>
+    </div>
+    <script>
+      window.__TAPUZ_MENUS__ = ${JSON.stringify(menus)};
+    </script>
+    <script src="/admin-menus.js"></script>
+  `;
+  res.send(layout(html, 'תפריטים'));
 });
 
 app.listen(PORT, () => {

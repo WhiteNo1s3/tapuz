@@ -2023,14 +2023,175 @@
     }
   });
 
+  // ---- Page navigator modal ----
+  function openPagesNav() {
+    var modal = document.getElementById('pages-nav-modal');
+    if (!modal) return;
+    modal.classList.add('show');
+    loadPagesNav('');
+    var search = document.getElementById('pages-nav-search');
+    if (search) {
+      search.value = '';
+      search.oninput = function () { loadPagesNav(search.value); };
+      setTimeout(function () { search.focus(); }, 50);
+    }
+  }
+
+  function closePagesNav() {
+    var modal = document.getElementById('pages-nav-modal');
+    if (modal) modal.classList.remove('show');
+  }
+
+  function loadPagesNav(q) {
+    var list = document.getElementById('pages-nav-list');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:20px;color:#64748b">טוען...</div>';
+    var url = '/admin/api/pages' + (q ? '?q=' + encodeURIComponent(q) : '');
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) { list.innerHTML = '<div style="color:#b91c1c;padding:20px">שגיאה</div>'; return; }
+        var pages = data.pages || [];
+        if (!pages.length) {
+          list.innerHTML = '<div style="padding:20px;color:#64748b">לא נמצאו דפים</div>';
+          return;
+        }
+        list.innerHTML = pages.map(function (p) {
+          var badge = p.status === 'published'
+            ? '<span style="background:#dcfce7;color:#166534;font-size:0.7rem;padding:1px 7px;border-radius:999px;margin-inline-start:6px">פורסם</span>'
+            : '<span style="background:#fef3c7;color:#92400e;font-size:0.7rem;padding:1px 7px;border-radius:999px;margin-inline-start:6px">טיוטה</span>';
+          var dirty = p.has_unpublished ? '<span style="color:#b45309;font-size:0.7rem;margin-inline-start:4px">• שינויים</span>' : '';
+          return '<div class="page-nav-item" data-path="' + escAttr(p.full_path) + '" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;background:#fff;cursor:pointer">' +
+            '<div><strong>' + esc(p.title) + '</strong><br><span style="font-family:monospace;font-size:0.8rem;color:#64748b">/' + esc(p.full_path) + '</span>' + badge + dirty + '</div>' +
+            '<a href="/admin/edit/' + encodeURIComponent(p.full_path) + '" class="btn" style="padding:6px 14px">ערוך</a>' +
+          '</div>';
+        }).join('');
+        list.querySelectorAll('.page-nav-item').forEach(function (row) {
+          row.onclick = function (e) {
+            if (e.target.tagName === 'A') return;
+            window.location.href = '/admin/edit/' + encodeURIComponent(row.dataset.path);
+          };
+        });
+      })
+      .catch(function () { list.innerHTML = '<div style="color:#b91c1c;padding:20px">שגיאה בטעינה</div>'; });
+  }
+
+  // ---- Revisions modal ----
+  function openRevisions() {
+    var modal = document.getElementById('revisions-modal');
+    if (!modal || !currentPageFullPath) return;
+    modal.classList.add('show');
+    loadRevisions();
+  }
+
+  function closeRevisions() {
+    var modal = document.getElementById('revisions-modal');
+    if (modal) modal.classList.remove('show');
+  }
+
+  function loadRevisions() {
+    var list = document.getElementById('revisions-list');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:20px;color:#64748b">טוען...</div>';
+    fetch('/admin/api/revisions/' + encodeURIComponent(currentPageFullPath))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) { list.innerHTML = '<div style="color:#b91c1c;padding:20px">שגיאה</div>'; return; }
+        var revs = data.revisions || [];
+        if (!revs.length) {
+          list.innerHTML = '<div style="padding:20px;color:#64748b">אין היסטוריה עדיין</div>';
+          return;
+        }
+        list.innerHTML = revs.map(function (r) {
+          var kind = r.kind === 'publish' ? 'פרסום' : (r.kind === 'restore' ? 'שחזור' : 'טיוטה');
+          var badgeColor = r.kind === 'publish' ? '#166534' : '#0a66c2';
+          return '<div class="rev-row" data-id="' + r.id + '" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;background:#fff">' +
+            '<div><strong>' + esc(r.title || 'ללא כותרת') + '</strong><br>' +
+            '<span style="font-size:0.75rem;color:#64748b">' + (r.created_at || '').replace('T', ' ').slice(0, 19) + ' · ' + kind + '</span></div>' +
+            '<button type="button" class="btn secondary" data-restore="' + r.id + '" style="padding:6px 12px">שחזר לטיוטה</button>' +
+          '</div>';
+        }).join('');
+        list.querySelectorAll('[data-restore]').forEach(function (btn) {
+          btn.onclick = function () {
+            if (!confirm('לשחזר גרסה זו לטיוטה?')) return;
+            fetch('/admin/api/revisions/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ full_path: currentPageFullPath, revision_id: +btn.dataset.restore })
+            }).then(function (r) { return r.json(); }).then(function (d) {
+              if (d.ok) {
+                closeRevisions();
+                showToast('שוחזר ✓', 'ok');
+                // restored content lives in the DRAFT, not the published snapshot
+                blocks = (d.page.draft_blocks != null ? d.page.draft_blocks : d.page.blocks) || [];
+                renderCanvas();
+                renderProperties();
+                markDirty();
+              } else alert(d.error || 'שגיאה');
+            });
+          };
+        });
+      })
+      .catch(function () { list.innerHTML = '<div style="color:#b91c1c;padding:20px">שגיאה</div>'; });
+  }
+
+  // ---- Publish helpers ----
+  function publishPage() {
+    var titleEl = document.getElementById('page-title');
+    var title = titleEl ? titleEl.value : '';
+    return fetch('/admin/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_path: currentPageFullPath, title: title, blocks: blocks })
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      if (data.ok) {
+        showToast('פורסם ✓', 'ok');
+        markSaved();
+        var badge = document.getElementById('publish-badge');
+        if (badge) {
+          badge.style.background = '#dcfce7';
+          badge.style.color = '#166534';
+          badge.textContent = 'פורסם';
+        }
+      } else {
+        showToast('שגיאה: ' + (data.error || ''), 'err');
+      }
+      return data;
+    }).catch(function () { showToast('שגיאה בפרסום', 'err'); });
+  }
+
+  function publishAndBuild() {
+    publishPage().then(function () {
+      return fetch('/admin/build', { method: 'POST' });
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      if (data && data.ok === false) {
+        showToast('שגיאה בבנייה' + (data.error ? ': ' + data.error : ''), 'err');
+        return;
+      }
+      showToast('נבנה ✓ — נפתח בחלון חדש', 'ok');
+      window.open('/', '_blank');
+    }).catch(function () { showToast('שגיאה בבנייה', 'err'); });
+  }
+
+  // Expose new actions
   window.TapuzBuilder = {
     init: init,
     addBlock: addBlock,
     replaceBlockType: replaceBlockType,
     savePage: savePage,
     saveAndBuild: saveAndBuild,
+    publishPage: publishPage,
+    publishAndBuild: publishAndBuild,
     openMediaLibrary: openMediaLibrary,
     closeMediaLibrary: closeMediaLibrary,
-    uploadMedia: uploadMedia
+    uploadMedia: uploadMedia,
+    openPagesNav: openPagesNav,
+    closePagesNav: closePagesNav,
+    openRevisions: openRevisions,
+    closeRevisions: closeRevisions
   };
+
+  // Wire the pages-nav button if present
+  var navBtn = document.getElementById('btn-pages-nav');
+  if (navBtn) navBtn.onclick = openPagesNav;
 })();

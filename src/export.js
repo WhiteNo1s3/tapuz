@@ -1,6 +1,7 @@
 const { getPageByFullPath, listPages } = require('./pages');
 const { renderPage } = require('./renderer');
 const { loadConfig } = require('./config');
+const { loadOverrides, overridesToCss } = require('./theme');
 const fs = require('fs');
 const path = require('path');
 
@@ -17,7 +18,9 @@ function copyThemeAssets(themeSlug = 'default') {
 
   ensureDir(destDir);
   if (fs.existsSync(themeCss)) {
-    fs.copyFileSync(themeCss, destFile);
+    const base = fs.readFileSync(themeCss, 'utf8');
+    const overrides = overridesToCss(loadOverrides());
+    fs.writeFileSync(destFile, base + '\n\n/* Tapuz theme overrides */\n' + overrides, 'utf8');
   }
 }
 
@@ -49,7 +52,11 @@ function writePageHtml(page, outputDir, isHome) {
   const outputPath = path.join(outputDir, filename);
   const siteConfig = loadConfig();
   let html = renderPage(page, { siteTitle: siteConfig.title });
-  html = html.replace(/<style>[\s\S]*?<\/style>/, '<link rel="stylesheet" href="/css/main.css">');
+  // Externalize all inline styles (theme + overrides already merged into /css/main.css)
+  html = html.replace(/<style[\s\S]*?<\/style>/g, '');
+  if (!html.includes('href="/css/main.css"')) {
+    html = html.replace('</head>', '  <link rel="stylesheet" href="/css/main.css">\n</head>');
+  }
   fs.writeFileSync(outputPath, html, 'utf8');
   return outputPath;
 }
@@ -68,7 +75,8 @@ function exportPage(fullPath, outputDir = PUBLIC_DIR) {
 }
 
 function exportAll(outputDir = PUBLIC_DIR) {
-  const pages = listPages();
+  // Public build renders published snapshot only (blocks), never draft_blocks
+  const pages = listPages().filter(p => p.status === 'published');
   const results = [];
 
   copyThemeAssets('default');
@@ -89,8 +97,10 @@ function exportAll(outputDir = PUBLIC_DIR) {
     try {
       const full = getPageByFullPath(p.full_path);
       if (!full) continue;
+      // Ensure we export published blocks only
+      const exportPageData = { ...full, blocks: full.blocks || [] };
       const isHome = best >= 20 && p.full_path === homePath;
-      const out = writePageHtml(full, outputDir, isHome);
+      const out = writePageHtml(exportPageData, outputDir, isHome);
       results.push({ full_path: p.full_path, output: out, isHome });
     } catch (err) {
       console.error('Failed to export', p.full_path, err.message);

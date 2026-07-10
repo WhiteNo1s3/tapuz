@@ -4,6 +4,7 @@ const path = require('path');
 const THEMES_DIR = path.join(__dirname, '..', 'themes');
 const { loadConfig } = require('./config');
 const { getMenu } = require('./menus');
+const { loadOverrides, overridesToCss } = require('./theme');
 
 function loadTheme(themeSlug = 'default') {
   const themeDir = path.join(THEMES_DIR, themeSlug);
@@ -147,15 +148,33 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+function renderMenuItems(items) {
+  return (items || []).map(item => {
+    const kids = item.children && item.children.length
+      ? `<ul class="sub-menu">${renderMenuItems(item.children)}</ul>`
+      : '';
+    return `<li><a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>${kids}</li>`;
+  }).join('\n');
+}
+
 function renderPage(page, options = {}) {
   const direction = page.direction || 'rtl';
   const lang = direction === 'rtl' ? 'he' : 'en';
   const theme = loadTheme(page.theme || 'default');
+  const useDraft = !!options.useDraft;
 
-  const content = page.blocks.map(b => renderBlock(b, direction)).join('\n');
+  const blockSource = useDraft
+    ? (page.draft_blocks != null ? page.draft_blocks : page.blocks)
+    : page.blocks;
+  const content = (blockSource || []).map(b => renderBlock(b, direction)).join('\n');
 
   const cssPath = path.join(theme.dir, 'css', 'main.css');
-  const head = fs.existsSync(cssPath) ? `<style>\n${fs.readFileSync(cssPath, 'utf8')}\n</style>` : '';
+  const overrides = loadOverrides();
+  const overrideCss = overridesToCss(overrides);
+  let head = fs.existsSync(cssPath)
+    ? `<style>\n${fs.readFileSync(cssPath, 'utf8')}\n</style>`
+    : '';
+  head += `<style id="tapuz-theme-overrides">\n${overrideCss}\n</style>`;
 
   const config = loadConfig();
   const currentYear = new Date().getFullYear();
@@ -174,15 +193,19 @@ function renderPage(page, options = {}) {
   }
 
   // Menus
-  const menuHtml = mainMenu.map(item => 
-    `<li><a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a></li>`
-  ).join('\n');
-
-  const footerMenuHtml = footerMenu.map(item =>
+  const menuHtml = renderMenuItems(mainMenu);
+  const footerMenuHtml = (footerMenu || []).map(item =>
     `<a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>`
   ).join(' &nbsp;|&nbsp; ');
 
   let layout = loadLayout(theme.dir);
+  const bodyClass = overrides.layout?.menuPlacement === 'side' ? 'menu-side' : '';
+  if (bodyClass) {
+    layout = layout.replace(/<body([^>]*)>/, `<body$1 class="${bodyClass}">`);
+    if (!/<body[^>]*class=/.test(layout)) {
+      layout = layout.replace('<body>', `<body class="${bodyClass}">`);
+    }
+  }
 
   const replacements = {
     '{{lang}}': lang,
@@ -192,7 +215,7 @@ function renderPage(page, options = {}) {
     '{{content}}': content,
     '{{site.title}}': escapeHtml(config.title),
     '{{currentYear}}': currentYear,
-    '{{meta.description}}': escapeHtml(page.meta?.description || ''),
+    '{{meta.description}}': escapeHtml(page.meta?.description || config.description || ''),
     '{{logo_html}}': logoHtml,
     '{{menu_html}}': menuHtml,
     '{{footer_menu_html}}': footerMenuHtml
