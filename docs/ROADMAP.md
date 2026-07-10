@@ -36,6 +36,23 @@
 - Admin + output audited on all resolutions, window-resize safe
 - Mobile/tablet preview toggle in builder
 
+### v0.36 — Article system + Wizard v2 (Ben's spec, 2026-07-10)
+- **article-list module**: shows articles as "cubes" (cards) — image + title + teaser
+  - Card image: set manually, OR auto-extracted from the article's first image block
+  - Clicking a cube opens the article page
+- **Wizard v2** — a real guided setup, not 3 questions:
+  1. Site name
+  2. Coloring — walks the user *through the theme creator* (teaches the tool while using it)
+  3. Creates default pages: home, contact, about, articles (articles page uses article-list module)
+  4. Menu step: pick from the pages just created ("the menu's menu") or href to external sites — typed links already support this
+- Theme creator: evolve toward drag & drop
+
+### The long game (Ben)
+1. **CMS** — finish the builder, articles, themes (we are here)
+2. **CRM properties** — contacts, forms that feed them, leads from the published site (Ben's mastery: CMS/CRM)
+3. **Security phase** — see below; "bundle that no one can deny"
+4. **Open source, community-driven** — led by whiteno1se
+
 ### Later (pre-beta) — Security phase (Ben: features first, security before beta)
 Deliberately deferred. When we get here, in order:
 1. **Admin auth**: password (bcrypt/argon2) + session cookie; wizard sets it on first run
