@@ -1,6 +1,6 @@
-# Tapuz — Roadmap & Idea Pool
+# Tapuziel — Roadmap & Idea Pool
 
-**Current version: v0.34-alpha**
+**Current version: v0.35-alpha**
 
 ## How versions work
 
@@ -53,6 +53,7 @@ Deliberately deferred. When we get here, in order:
 | Version | Shipped | Source |
 |---|---|---|
 | v0.32-alpha | Draft/Publish split + automatic revision backups, page navigator modal (search/jump), theme overrides system (colors, fonts, logo, menu placement) with live preview + API, menu entity in DB with editor, publish flow in builder, revisions modal with restore | Ben + Grok |
+| v0.35-alpha | Renamed to **Tapuziel** (Tapuz + Shaltiel's ־יאל — free on npm), npm packaging (bin: tapuziel + tapuz alias, engines, repository, npm pack verified 81 files), full E2E: wizard → published site → static serve all verified. TODO before real npm publish: cwd-based paths refactor (db/config/public should live in the user's project dir, not inside node_modules) | Ben + Claude |
 | v0.34-alpha | Admin section identity (subtle accent color per area: pages blue, menus purple, theme green, sitemap orange), first-run setup wizard for newcomers (3 questions → site + home page + menu + build), security phase spec'd in roadmap (deferred by design) | Ben + Claude |
 | v0.33-alpha | Typed menu links (existing page picker, custom URL, tel: click-to-call, mailto:, anchor), /admin/sitemap tree derived from menus with published/draft/missing badges + orphan-page detection, redirect pages via meta.redirect, menu editor rewrite with live URL preview | Ben + Claude |
 | v0.32-alpha | Draft/publish separation (save keeps draft, publish snapshots), auto revisions (30/page) with restore, pages navigator with search + unpublished badges, menu entity in DB with nesting, theme overrides (colors/fonts/layout/menu top-side) + theme & menus admin pages. Fixes: db.js circular-dependency (schema silently failing), revision restore loaded published instead of draft, removed leftover patch script | Grok + Ben, review & fixes Claude |
