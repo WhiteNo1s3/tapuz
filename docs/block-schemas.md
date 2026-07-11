@@ -115,6 +115,27 @@ Later we can evolve `content` to support inline formatting (bold, links, etc.) u
 }
 ```
 
+### 8. article-list
+
+Shows published pages tagged `tag` as clickable cards ("cubes"): image + title + teaser, newest first.
+
+```json
+{
+  "type": "article-list",
+  "id": "blk_articles",
+  "data": {
+    "tag": "article",      // which pages count as articles
+    "limit": 6,            // max cards (1-48)
+    "columns": 3           // grid columns (1-4)
+  }
+}
+```
+
+Per-article card data comes from the article page itself:
+- Image: `meta.cardImage`, or auto-extracted from the page's first image/gallery block
+- Teaser: `meta.teaser`, or auto-extracted from the page's first text block (truncated)
+- A page becomes an article by carrying the tag (builder: page properties → "דף מאמר")
+
 ---
 
 ## Rules

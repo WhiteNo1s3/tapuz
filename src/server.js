@@ -4,25 +4,304 @@ const path = require('path');
 const fs = require('fs');
 
 const {
-  createPage, updatePage, publishPage, listPages, getPageByFullPath, deletePage,
+  createPage, updatePage, publishPage, listPages, listArticles, getPageByFullPath, deletePage,
   restoreRevision, listRevisions
 } = require('./pages');
 const { exportAll } = require('./export');
+const { runSetup } = require('./setup');
 const { loadMenus, saveMenus, saveMenu } = require('./menus');
 const { getThemeSettings, saveThemeSettings, loadOverrides, overridesToCss } = require('./theme');
 const { loadConfig, saveConfig } = require('./config');
+const blockRegistry = require('./block-registry');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json({ limit: '12mb' }));
-app.use(express.static(path.join(__dirname, '..', 'public')));
+const { PUBLIC_DIR, ASSETS_DIR } = require('./paths');
+const auth = require('./auth');
+const { FixedWindowLimiter, LoginGuard } = require('./ratelimit');
+const analytics = require('./analytics');
+const gaData = require('./ga-data');
+
+// Abuse mitigation (S4). App-level (L7) only — see docs/security.md.
+const adminLimiter = new FixedWindowLimiter({ windowMs: 60 * 1000, max: 300 }); // general admin flood cap
+const loginGuard = new LoginGuard(); // escalating brute-force lockout on login
+// S6 collector flood cap: coarse per-IP bucket. Beacon endpoint is public and
+// unauthenticated, so it gets its own tight limit. TAPUZ_COLLECT_MAX overrides
+// the per-minute cap (used by the smoke test to force a 429 deterministically).
+const collectLimiter = new FixedWindowLimiter({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.TAPUZ_COLLECT_MAX, 10) || 120
+});
+
+// Client IP for rate-limiting / lockout keys. X-Forwarded-For is client-controllable,
+// so trusting it lets an attacker rotate the header to defeat every per-IP limit
+// (red-team finding, 2026). We therefore use the real socket peer by default and only
+// honor XFF when the operator declares they run behind a trusted proxy
+// (TAPUZ_TRUST_PROXY=1). Even then we take the RIGHTMOST hop — the address the trusted
+// proxy actually appended — not the leftmost, which the client can forge.
+const TRUST_PROXY = process.env.TAPUZ_TRUST_PROXY === '1' || process.env.TAPUZ_TRUST_PROXY === 'true';
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const hops = (req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (hops.length) return hops[hops.length - 1];
+  }
+  return req.socket.remoteAddress || 'unknown';
+}
+function wantsJson(req) {
+  return req.path.startsWith('/admin/api') ||
+    (req.headers.accept || '').indexOf('application/json') >= 0 ||
+    (req.headers['content-type'] || '').indexOf('application/json') >= 0;
+}
+function isStateChanging(method) {
+  return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+}
+
+// --- S2: configurable admin base path ------------------------------------
+// Internally EVERY admin route is '/admin/...'. This top-of-stack rewrite maps
+// the user-configured base (config.admin.path / TAPUZ_ADMIN_PATH) onto the
+// internal '/admin', so the whole admin app is reachable at the custom path
+// without touching the ~50 route strings. When a custom base is set, the
+// default '/admin' path is HIDDEN from unauthenticated callers (returns 404),
+// so scanners can't find the login screen — obscurity ON TOP of real auth.
+app.use((req, res, next) => {
+  const base = auth.getAdminBase();
+  if (base === '/admin') return next();
+
+  if (req.url === base || req.url.startsWith(base + '/') || req.url.startsWith(base + '?')) {
+    req.url = '/admin' + req.url.slice(base.length); // custom -> internal
+    req._viaAdminBase = true;
+    return next();
+  }
+  if (req.path === '/admin' || req.path.startsWith('/admin/')) {
+    // Literal default path while a custom base is active. Hide it from anyone
+    // without a valid session; authenticated same-session XHRs keep working so
+    // an already-loaded admin page is not broken.
+    if (!auth.verifySession(req)) return res.status(404).send('Not found');
+  }
+  next();
+});
+
+// =========================================================================
+// S6: first-party analytics collector — POST /_tapuz/collect
+// Registered BEFORE the global 12mb JSON parser so it enforces its OWN tight
+// 2kb limit (an unauthenticated public endpoint must never buffer megabytes).
+// express.static below is GET-only, so this POST route can't collide with a
+// served file. Privacy: the IP + User-Agent are derived HERE, server-side, and
+// only a salted hash is ever stored — the client beacon never sends an IP.
+// =========================================================================
+app.post('/_tapuz/collect', express.json({ limit: '2kb', type: ['application/json', 'text/plain'] }), (req, res) => {
+  try {
+    // Respect Do-Not-Track / Global Privacy Control — record nothing.
+    if (req.headers['dnt'] === '1' || req.headers['sec-gpc'] === '1') return res.status(204).end();
+
+    const ua = req.headers['user-agent'] || '';
+    if (analytics.isBot(ua)) return res.status(204).end(); // keep crawlers out of human stats
+
+    const ip = clientIp(req);
+    if (!collectLimiter.allow('collect:' + ip)) {
+      res.setHeader('Retry-After', String(collectLimiter.retryAfter('collect:' + ip)));
+      return res.status(429).end();
+    }
+
+    const b = (req.body && typeof req.body === 'object') ? req.body : {};
+    let p = typeof b.path === 'string' ? b.path : '';
+    if (!p || p[0] !== '/') return res.status(204).end(); // ignore garbage / cross-site paths
+    if (p.length > 512) p = p.slice(0, 512);
+
+    // Never track the admin surface (default OR custom base). Defense in depth:
+    // admin pages don't emit the beacon, but a forged POST must not slip in.
+    const base = auth.getAdminBase();
+    if (p === '/admin' || p.startsWith('/admin/') || p === base || p.startsWith(base + '/')) {
+      return res.status(204).end();
+    }
+
+    const ref = typeof b.ref === 'string' ? b.ref.slice(0, 1024) : '';
+    analytics.recordPageview({ path: p, referrer: ref, ip, userAgent: ua });
+  } catch (e) {
+    // Never surface collector errors to anonymous callers.
+  }
+  return res.status(204).end();
+});
+
+// Swallow body-parser errors (malformed JSON, oversized 2kb body) for the
+// collector so a bad/hostile beacon gets a quiet 204 instead of a 400 + stack
+// trace. Scoped strictly to the collector path.
+app.use((err, req, res, next) => {
+  if (req.path === '/_tapuz/collect') return res.status(204).end();
+  return next(err);
+});
+
+app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
+app.use(bodyParser.json({ limit: '12mb' })); // 12mb: base64 media uploads. Admin-only, behind auth + rate limit.
+app.use(express.static(PUBLIC_DIR));
+
+// Admin client scripts always ship with the package (site public/ may be elsewhere)
+app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
 
 // Assets
-const uploadDir = path.join(__dirname, '..', 'public', 'assets');
+const uploadDir = ASSETS_DIR;
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 app.use('/assets', express.static(uploadDir));
+
+// =========================================================================
+// S1 AUTH GUARD + S4 RATE LIMITING — the SINGLE place that gates the admin.
+// Inserted after the static middlewares (so root-served admin client JS and
+// public files are untouched) and BEFORE every '/admin/*' route below.
+// Everything under the admin base flows through here exactly once.
+// =========================================================================
+app.use((req, res, next) => {
+  // Gate exactly the admin namespace ('/admin' and '/admin/*'), NOT root-served
+  // admin client assets like '/admin-builder.js'. Public site: untouched.
+  if (req.path !== '/admin' && !req.path.startsWith('/admin/')) return next();
+
+  // Hardening headers on every admin response.
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Cache-Control', 'no-store');
+
+  const base = auth.getAdminBase();
+  const ip = clientIp(req);
+
+  // S4: general per-IP flood cap on the whole admin surface.
+  if (!adminLimiter.allow('admin:' + ip)) {
+    res.setHeader('Retry-After', String(adminLimiter.retryAfter('admin:' + ip)));
+    return res.status(429).send('יותר מדי בקשות. נסה שוב בעוד רגע.');
+  }
+
+  // CSRF (chosen mechanism: SameSite=Lax cookie + strict Origin/Referer check,
+  // see docs/security.md). Reject any state-changing request that is not
+  // provably same-origin.
+  if (isStateChanging(req.method) && !auth.sameOrigin(req)) {
+    if (wantsJson(req)) return res.status(403).json({ ok: false, error: 'CSRF: origin mismatch' });
+    return res.status(403).send('בקשה נדחתה (בדיקת מקור).');
+  }
+
+  const p = req.path;
+  // The auth screens themselves are reachable without a session.
+  if (p === '/admin/login' || p === '/admin/create-account') return next();
+
+  // Everything else under the admin base requires a valid session.
+  const session = auth.verifySession(req);
+  if (!session) {
+    if (wantsJson(req) || isStateChanging(req.method)) {
+      return res.status(401).json({ ok: false, error: 'לא מחובר' });
+    }
+    return res.redirect(base + '/login');
+  }
+  // Slide the idle window while preserving the absolute-cap iat.
+  auth.issueSession(res, session.uid, req, session.iat);
+  req.adminUser = session;
+  next();
+});
+
+// ---- Auth screens (Hebrew / RTL). Exempt from the session requirement. ----
+function authCard(inner) {
+  return `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div style="width:100%;max-width:400px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:30px;box-shadow:0 12px 40px rgba(15,23,42,0.08)">
+        <div style="text-align:center;margin-bottom:18px">
+          <div style="font-size:1.8rem;font-weight:800;color:#0f172a">Tapuz</div>
+        </div>
+        ${inner}
+      </div>
+    </div>`;
+}
+function authErr(msg) {
+  return msg
+    ? `<div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:0.88rem">${escapeAdmin(msg)}</div>`
+    : '';
+}
+const authInput = 'width:100%;padding:11px;border:1.5px solid #cbd5e1;border-radius:9px;margin-bottom:14px;box-sizing:border-box;font-size:1rem';
+
+app.get('/admin/login', (req, res) => {
+  const base = auth.getAdminBase();
+  if (auth.verifySession(req)) return res.redirect(base);
+  if (!auth.hasAdmin()) return res.redirect(base + '/create-account');
+  const err = req.query.err === '1' ? 'שם משתמש או סיסמה שגויים' : '';
+  const inner = `
+    <h1 style="font-size:1.15rem;text-align:center;margin:0 0 18px;color:#334155">כניסת מנהל</h1>
+    ${authErr(err)}
+    <form method="POST" action="${base}/login">
+      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">שם משתמש</label>
+      <input name="username" autocomplete="username" required autofocus style="${authInput}">
+      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">סיסמה</label>
+      <input name="password" type="password" autocomplete="current-password" required style="${authInput}">
+      <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">התחבר</button>
+    </form>`;
+  res.send(layout(authCard(inner), 'כניסה', '#0a66c2'));
+});
+
+app.post('/admin/login', (req, res) => {
+  const base = auth.getAdminBase();
+  const ip = clientIp(req);
+  const username = String((req.body && req.body.username) || '');
+  const ipKey = 'ip:' + ip;
+  const userKey = 'usr:' + ip + '|' + username.toLowerCase();
+
+  const s1 = loginGuard.status(ipKey);
+  const s2 = loginGuard.status(userKey);
+  if (s1.locked || s2.locked) {
+    const ra = Math.max(s1.retryAfter || 0, s2.retryAfter || 0);
+    res.setHeader('Retry-After', String(ra));
+    const inner = authErr(`נחסמת זמנית עקב ניסיונות כושלים. נסה שוב בעוד ${ra} שניות.`) +
+      `<div style="text-align:center"><a href="${base}/login">חזרה לכניסה</a></div>`;
+    return res.status(429).send(layout(authCard(inner), 'נחסם', '#0a66c2'));
+  }
+
+  const user = auth.verifyLogin(username, (req.body && req.body.password) || '');
+  if (!user) {
+    loginGuard.fail(ipKey);
+    loginGuard.fail(userKey);
+    return res.redirect(base + '/login?err=1');
+  }
+  loginGuard.succeed(ipKey);
+  loginGuard.succeed(userKey);
+  auth.issueSession(res, user.id, req); // fresh session
+  res.redirect(base);
+});
+
+app.post('/admin/logout', (req, res) => {
+  auth.clearSession(res);
+  res.redirect(auth.getAdminBase() + '/login');
+});
+
+app.get('/admin/create-account', (req, res) => {
+  const base = auth.getAdminBase();
+  if (auth.hasAdmin()) return res.redirect(base + '/login');
+  const err = req.query.err ? decodeURIComponent(req.query.err) : '';
+  const inner = `
+    <h1 style="font-size:1.15rem;text-align:center;margin:0 0 6px;color:#334155">יצירת חשבון מנהל</h1>
+    <p style="text-align:center;color:#64748b;font-size:0.86rem;margin:0 0 18px">זהו החשבון הראשון באתר. בחר שם משתמש וסיסמה חזקה.</p>
+    ${authErr(err)}
+    <form method="POST" action="${base}/create-account">
+      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">שם משתמש</label>
+      <input name="username" autocomplete="username" required autofocus style="${authInput}">
+      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">סיסמה (8+ תווים)</label>
+      <input name="password" type="password" autocomplete="new-password" required minlength="8" style="${authInput}">
+      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">אימות סיסמה</label>
+      <input name="confirm" type="password" autocomplete="new-password" required minlength="8" style="${authInput}">
+      <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">צור חשבון והתחבר</button>
+    </form>`;
+  res.send(layout(authCard(inner), 'יצירת חשבון', '#166534'));
+});
+
+app.post('/admin/create-account', (req, res) => {
+  const base = auth.getAdminBase();
+  if (auth.hasAdmin()) return res.redirect(base + '/login');
+  const b = req.body || {};
+  if (String(b.password || '') !== String(b.confirm || '')) {
+    return res.redirect(base + '/create-account?err=' + encodeURIComponent('הסיסמאות אינן תואמות'));
+  }
+  try {
+    const u = auth.createAdmin(b.username, b.password);
+    auth.issueSession(res, u.id, req);
+    res.redirect(base);
+  } catch (e) {
+    res.redirect(base + '/create-account?err=' + encodeURIComponent(e.message || 'שגיאה'));
+  }
+});
 
 // Media library: DB-wired, folder-aware (v0.31)
 const mediaLib = require('./media');
@@ -187,11 +466,484 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
 
     .builder {
       display: grid;
-      grid-template-columns: 210px 1fr 300px;
-      gap: 20px;
-      padding-top: 20px;
+      grid-template-columns: 220px 1fr 300px;
+      gap: 16px;
+      padding-top: 12px;
       padding-bottom: 80px;
+      align-items: start;
     }
+    /* Direction-aware settings drawer: the admin chrome is always RTL, but the
+       settings panel follows the direction of the PAGE being edited.
+       Grid tracks flow right-to-left in this RTL document, so track 1 is the
+       physical RIGHT. */
+    /* LTR page: settings panel on the physical LEFT (toolbox right) */
+    .builder.page-ltr {
+      grid-template-columns: 220px 1fr 300px;
+    }
+    .builder.page-ltr .toolbox { order: 1; }
+    .builder.page-ltr .builder-canvas-wrap { order: 2; }
+    .builder.page-ltr .properties { order: 3; }
+    /* RTL page: settings panel on the physical RIGHT (toolbox left) */
+    .builder.page-rtl {
+      grid-template-columns: 300px 1fr 220px;
+    }
+    .builder.page-rtl .properties { order: 1; }
+    .builder.page-rtl .builder-canvas-wrap { order: 2; }
+    .builder.page-rtl .toolbox { order: 3; }
+    .builder.mode-source {
+      grid-template-columns: 1fr;
+    }
+    .builder.mode-source .toolbox,
+    .builder.mode-source .properties { display: none; }
+    .builder.mode-source .builder-pane { order: 1; }
+    .builder.mode-source .builder-canvas-wrap { display: none; }
+
+    .bentml-output-dock {
+      margin-top: 12px;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      background: #0b1220;
+      overflow: hidden;
+    }
+    .bentml-output-dock-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 12px;
+      background: #111827;
+      color: #e2e8f0;
+      font-size: 0.85rem;
+    }
+    .bentml-output-dock-head .dock-sub {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      flex: 1;
+      min-width: 140px;
+    }
+    .bentml-output-dock-head .btn {
+      padding: 4px 10px;
+      font-size: 0.8rem;
+    }
+    #bentml-live-output {
+      width: 100%;
+      min-height: 140px;
+      max-height: 220px;
+      border: 0;
+      resize: vertical;
+      background: #0b1220;
+      color: #86efac;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      padding: 10px 12px;
+      direction: ltr;
+      text-align: left;
+    }
+    .output-explain {
+      margin: 0 0 10px;
+      color: #475569;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    /* Shared CMS navigation (all admin screens) */
+    .admin-nav {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      padding: 8px 20px 0;
+    }
+    .admin-nav a {
+      padding: 6px 12px;
+      border-radius: 8px;
+      color: #475569;
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    .admin-nav a:hover { background: #f1f5f9; color: #0f172a; }
+    .admin-nav a.active { background: var(--admin-accent); color: #fff; }
+
+    /* Toolbox category labels (generated from the block registry) */
+    .tool-group-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 10px 0 6px;
+    }
+
+    /* Dirty-state publish button:
+       neutral/disabled when the page is clean, prominent when modified */
+    .btn.js-publish-btn.is-clean {
+      background: #94a3b8 !important;
+      border-color: #94a3b8 !important;
+      opacity: 0.75;
+      cursor: default;
+    }
+    .btn.js-publish-btn.is-dirty {
+      background: #166534 !important;
+      box-shadow: 0 0 0 3px rgba(22, 101, 52, 0.22);
+    }
+
+    /* Map block canvas preview — iframe must not swallow builder clicks */
+    .preview-map iframe {
+      width: 100%;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    .builder-mode-tabs {
+      display: flex;
+      gap: 6px;
+      margin: 12px 0 0;
+      flex-wrap: wrap;
+    }
+    .builder-mode-tabs button {
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      color: #475569;
+    }
+    .builder-mode-tabs button.active {
+      background: #0f172a;
+      color: #fff;
+      border-color: #0f172a;
+    }
+    .builder-mode-tabs button .tab-sub {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 500;
+      opacity: 0.75;
+      margin-top: 2px;
+    }
+
+    /* Live page feel — less "list of cards" */
+    .builder.live-page .canvas {
+      background: #f1f5f9;
+      padding: 28px 18px 48px;
+    }
+    .builder.live-page .canvas.block-stack {
+      max-width: 920px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 4px;
+      box-shadow: 0 10px 40px rgba(15,23,42,0.08);
+      padding: 28px 32px 48px;
+      min-height: 70vh;
+    }
+    .builder.live-page .block-label {
+      opacity: 0;
+      position: absolute;
+      top: 4px;
+      left: 8px;
+      z-index: 2;
+      font-size: 0.7rem;
+      background: #0f172a;
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      transition: opacity .12s;
+    }
+    .builder.live-page .canvas-block:hover .block-label,
+    .builder.live-page .canvas-block.selected .block-label { opacity: 1; }
+    .builder.live-page .canvas-block {
+      border: 1px solid transparent;
+      margin-bottom: 8px;
+      padding: 2px 24px 2px 4px;
+    }
+    .builder.live-page .canvas-block:hover {
+      border-color: #e2e8f0;
+      background: transparent;
+    }
+    .builder.live-page .canvas-block.selected {
+      border-color: #0a66c2;
+      background: rgba(10,102,194,0.04);
+      box-shadow: none;
+    }
+    .builder.live-page .block-content { padding: 0; }
+
+    /* Interactive builder chrome */
+    .inline-editable {
+      cursor: text;
+      outline: 1px dashed transparent;
+      border-radius: 4px;
+      transition: outline-color .12s, background .12s;
+    }
+    .inline-editable:hover {
+      outline-color: #93c5fd;
+      background: rgba(59,130,246,0.04);
+    }
+    .inline-editing {
+      outline: 2px solid #0a66c2 !important;
+      background: #fffbeb !important;
+      min-width: 2em;
+      cursor: text;
+    }
+    .prop-section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #64748b;
+      margin: 14px 0 8px;
+    }
+    details.style-advanced {
+      margin-top: 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 8px 10px 10px;
+      background: #f8fafc;
+    }
+    details.style-advanced summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: #334155;
+      list-style: none;
+    }
+    details.style-advanced summary::-webkit-details-marker { display: none; }
+    .adv-badge {
+      font-size: 0.65rem;
+      background: #fef3c7;
+      color: #92400e;
+      padding: 2px 6px;
+      border-radius: 999px;
+      margin-inline-start: 6px;
+      font-weight: 700;
+    }
+    details.agent-snip-details {
+      margin-top: 10px;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+    details.agent-snip-details summary { cursor: pointer; }
+    .container-badge {
+      font-size: 0.65rem;
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      margin-inline-end: 4px;
+    }
+    .columns-preview.is-container {
+      border: 2px dashed #bfdbfe;
+      border-radius: 12px;
+      padding: 8px;
+      background: #f8fbff;
+      gap: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .column-pane.is-container {
+      border: 1px dashed #93c5fd;
+      border-radius: 10px;
+      background: #fff;
+      min-height: 80px;
+      padding: 6px;
+    }
+    body.is-dragging .drop-slot {
+      min-height: 28px;
+      opacity: 1;
+    }
+    body.is-dragging .drop-slot-line {
+      background: #0a66c2;
+      height: 3px;
+    }
+
+    .col-resize-handle {
+      width: 10px;
+      cursor: col-resize;
+      z-index: 5;
+      background: transparent;
+    }
+    .col-resize-handle::after {
+      content: '';
+      position: absolute;
+      top: 12%;
+      bottom: 12%;
+      left: 3px;
+      width: 3px;
+      border-radius: 2px;
+      background: #93c5fd;
+      opacity: 0;
+      transition: opacity .12s;
+    }
+    .column-pane:hover .col-resize-handle::after,
+    body.is-col-resizing .col-resize-handle::after {
+      opacity: 1;
+    }
+    body.is-col-resizing {
+      cursor: col-resize !important;
+      user-select: none;
+    }
+    .col-ratio-label {
+      font-size: 0.68rem;
+      color: #64748b;
+      font-weight: 600;
+      margin-inline-start: 4px;
+    }
+
+    .block-kw, .tool-kw {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.72rem;
+      background: #0f172a;
+      color: #fbbf24;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .bentml-lang-box pre.bentml-mini-snip,
+    pre.agent-snip, pre.agent-shape, pre.agent-sheet {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.75rem;
+      background: #0b1220;
+      color: #e2e8f0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      overflow: auto;
+      direction: ltr;
+      text-align: left;
+      white-space: pre-wrap;
+      margin: 6px 0;
+      max-height: 220px;
+    }
+    pre.agent-sheet { max-height: 420px; }
+    pre.agent-shape { max-height: none; border: 1px solid #334155; }
+
+    #bentml-source {
+      width: 100%;
+      min-height: 62vh;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      direction: ltr;
+      text-align: left;
+      background: #0b1220;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 16px;
+      resize: vertical;
+    }
+    .bentml-source-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .bentml-status { font-size: 0.85rem; color: #64748b; }
+    .bentml-status.ok { color: #166534; }
+    .bentml-status.err { color: #b91c1c; }
+    .bentml-status.warn { color: #b45309; }
+
+    .agent-hero h3 { margin: 0 0 6px; }
+    .agent-hero p { color: #64748b; margin: 0 0 12px; }
+    .agent-mod {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      background: #fff;
+    }
+    .agent-mod summary { cursor: pointer; font-weight: 600; }
+    .agent-mod .kw { color: #b45309; }
+    .agent-hint { color: #64748b; font-size: 0.9rem; }
+    .btn-insert-snip { margin-top: 6px; font-size: 0.85rem; }
+
+    .chat-mission-banner {
+      background: linear-gradient(135deg, #eff6ff, #f8fafc 50%, #fff7ed);
+      border: 1px solid #bfdbfe;
+      border-radius: 14px;
+      padding: 1.1rem 1.25rem 1.2rem;
+      margin-bottom: 1rem;
+    }
+    .chat-mission-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 0.65rem;
+    }
+    .chat-mission-steps {
+      margin: 0 0 0.75rem;
+      padding-inline-start: 1.25rem;
+      line-height: 1.65;
+      color: #334155;
+    }
+    .chat-mission-note {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    .chat-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .chat-snippet-preview {
+      width: 100%;
+      min-height: 280px;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.78rem;
+      direction: ltr;
+      text-align: left;
+      background: #0b1220;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 12px;
+      resize: vertical;
+    }
+    .chat-media-list {
+      color: #475569;
+      line-height: 1.7;
+    }
+    .chat-media-list code {
+      font-size: 0.8rem;
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .chat-float-notice {
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin: 12px 0 0;
+      font-size: 0.9rem;
+      color: #78350f;
+      line-height: 1.5;
+    }
+    .text-format-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+    .text-format-bar .fmt-btn { padding: 4px 10px; font-weight: 700; min-width: 36px; }
+    .text-body-field { min-height: 140px; font-family: ui-monospace, Consolas, monospace; font-size: 0.88rem; }
+    .preview-map {
+      border: 1px dashed #94a3b8; border-radius: 12px; padding: 1.25rem; text-align: center;
+      background: linear-gradient(180deg, #f0f9ff, #fff);
+    }
+    .preview-map-pin { font-size: 1.6rem; }
+    .preview-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; background: #f8fafc; }
+    .preview-quote { margin: 0; padding: 0.75rem 1rem; border-inline-start: 4px solid #0a66c2; background: #f8fafc; }
+
+    .builder-pane {
+      grid-column: 1 / -1;
+    }
+    .builder:not(.mode-source):not(.mode-agent) .builder-pane-source,
+    .builder:not(.mode-source):not(.mode-agent) .builder-pane-agent { display: none; }
 
     .toolbox {
       background: #fff;
@@ -708,6 +1460,44 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
       font-size: 0.9rem;
     }
     .preview-feature strong { display: block; margin-bottom: 2px; }
+    .preview-cubes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .preview-cube {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .preview-cube .cube-img {
+      height: 64px;
+      background: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 1.2rem;
+    }
+    .preview-cube .cube-img img { width: 100%; height: 100%; object-fit: cover; }
+    .preview-cube .cube-txt {
+      padding: 6px 8px;
+      font-size: 0.78rem;
+      color: #334155;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .preview-cubes-note {
+      grid-column: 1 / -1;
+      font-size: 0.78rem;
+      color: #64748b;
+      background: #f8fafc;
+      border-radius: 6px;
+      padding: 6px 10px;
+    }
     .preview-hero {
       background: #0a66c2;
       color: white;
@@ -819,6 +1609,50 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
 
 // ======================== ROUTES ========================
 
+/**
+ * Shared CMS shell navigation — rendered on every admin screen so the whole
+ * site is managed from one persistent menu (dashboard / pages / media / menus
+ * / theme / settings / SEO / integrations). The page builder is reached by
+ * editing a page from the pages list.
+ */
+const ADMIN_NAV_ITEMS = [
+  { key: 'dashboard', href: '/admin/dashboard', label: 'דשבורד' },
+  { key: 'pages', href: '/admin', label: 'דפים' },
+  { key: 'media', href: '/admin/media-library', label: 'מדיה' },
+  { key: 'menus', href: '/admin/menus', label: 'תפריטים' },
+  { key: 'sitemap', href: '/admin/sitemap', label: 'מפת אתר' },
+  { key: 'theme', href: '/admin/theme', label: 'ערכת נושא' },
+  { key: 'settings', href: '/admin/settings', label: 'הגדרות אתר' },
+  { key: 'site-chrome', href: '/admin/site-chrome', label: 'כותרת ותחתית' },
+  { key: 'seo', href: '/admin/seo', label: 'SEO' },
+  { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס' },
+  { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' }
+];
+
+function adminNav(active, sectionTitle, actionsHtml = '') {
+  const links = ADMIN_NAV_ITEMS.map(item =>
+    `<a href="${item.href}"${item.key === active ? ' class="active"' : ''}>${item.label}</a>`
+  ).join('');
+  return `
+    <div class="topbar">
+      <div class="container topbar-inner">
+        <div style="display:flex;align-items:center;gap:12px">
+          <a href="/admin" style="font-size:1.6rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
+          <span style="color:#94a3b8">•</span>
+          <span style="font-weight:600">${sectionTitle}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <a href="/" target="_blank" class="btn secondary" style="padding:7px 12px">צפה באתר</a>
+          ${actionsHtml}
+          <form method="POST" action="${auth.getAdminBase()}/logout" style="margin:0">
+            <button type="submit" class="btn secondary" style="padding:7px 12px" title="התנתק">התנתק</button>
+          </form>
+        </div>
+      </div>
+      <div class="container admin-nav">${links}</div>
+    </div>`;
+}
+
 function needsSetup() {
   try {
     return !loadConfig().setupDone && listPages().length === 0;
@@ -830,77 +1664,245 @@ function needsSetup() {
 app.get('/admin/setup', (req, res) => {
   if (!needsSetup()) return res.redirect('/admin');
   const html = `
-    <div class="container" style="padding-top:48px;max-width:560px">
-      <div style="text-align:center;margin-bottom:24px">
+    <style>
+      .wiz-steps { display:flex;justify-content:center;gap:6px;margin-bottom:22px;flex-wrap:wrap }
+      .wiz-step-dot { display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:0.82rem;font-weight:600 }
+      .wiz-step-dot.active { background:#0a66c2;color:#fff }
+      .wiz-step-dot.done { background:#dcfce7;color:#166534 }
+      .wiz-panel { display:none }
+      .wiz-panel.active { display:block }
+      .wiz-card { background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:26px }
+      .wiz-input { width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box }
+      .wiz-nav { display:flex;justify-content:space-between;gap:10px;margin-top:20px }
+      .wiz-teach { background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:10px 14px;font-size:0.85rem;margin-bottom:16px;line-height:1.5 }
+      .wiz-palettes { display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:16px }
+      .wiz-palette { border:2px solid #e2e8f0;border-radius:10px;padding:8px;cursor:pointer;text-align:center;background:#fff }
+      .wiz-palette.selected { border-color:#0a66c2 }
+      .wiz-palette .sw { display:flex;height:22px;border-radius:6px;overflow:hidden;margin-bottom:6px }
+      .wiz-palette .sw span { flex:1 }
+      .wiz-palette small { font-size:0.75rem;color:#475569;font-weight:600 }
+      .wiz-colors { display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px }
+      .wiz-color-row { display:flex;align-items:center;gap:8px;font-size:0.85rem }
+      .wiz-color-row input[type=color] { width:40px;height:32px;border:1px solid #cbd5e1;border-radius:8px;padding:2px;flex-shrink:0 }
+      .wiz-preview { border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-top:8px }
+      .wiz-check { display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;cursor:pointer }
+      .wiz-check input { margin-top:3px }
+      .wiz-check strong { display:block }
+      .wiz-check small { color:#64748b }
+      .wiz-ext-row { display:flex;gap:8px;margin-bottom:8px }
+    </style>
+    <div class="container" style="padding-top:36px;max-width:640px;padding-bottom:60px">
+      <div style="text-align:center;margin-bottom:18px">
         <div style="font-size:3rem">🍊</div>
-        <h1 style="margin:8px 0 4px">ברוכים הבאים ל־Tapuz</h1>
-        <p style="color:#64748b;margin:0">שלוש שאלות ואתם באוויר. הכל ניתן לשינוי אחר כך.</p>
+        <h1 style="margin:8px 0 4px">ברוכים הבאים ל־Tapuziel</h1>
+        <p style="color:#64748b;margin:0">מהרעיון שבראש — לאתר חי. ארבעה צעדים, הכל ניתן לשינוי אחר כך.</p>
       </div>
-      <form method="POST" action="/admin/setup" style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:26px;display:flex;flex-direction:column;gap:18px">
-        <div>
-          <label style="font-weight:600;display:block;margin-bottom:6px">1 · איך קוראים לאתר?</label>
-          <input name="title" required maxlength="60" placeholder="השם שיופיע בכותרת" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
-          <input name="description" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-top:8px">
+      <div class="wiz-steps">
+        <span class="wiz-step-dot" data-dot="0">1 · שם</span>
+        <span class="wiz-step-dot" data-dot="1">2 · צבעים</span>
+        <span class="wiz-step-dot" data-dot="2">3 · דפים</span>
+        <span class="wiz-step-dot" data-dot="3">4 · תפריט</span>
+      </div>
+
+      <div class="wiz-card">
+        <!-- Step 1: name -->
+        <div class="wiz-panel" data-panel="0">
+          <label style="font-weight:600;display:block;margin-bottom:6px">איך קוראים לאתר?</label>
+          <input id="wiz-title" class="wiz-input" required maxlength="60" placeholder="השם שיופיע בכותרת">
+          <input id="wiz-desc" class="wiz-input" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="margin-top:8px">
         </div>
-        <div>
-          <label style="font-weight:600;display:block;margin-bottom:6px">2 · צבע ראשי</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="color" name="primary" value="#0a66c2" style="width:52px;height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:2px">
-            <span style="color:#64748b;font-size:0.85rem">אפשר לבחור כל צבע — כפתורים וקישורים יתאימו את עצמם</span>
+
+        <!-- Step 2: coloring = the theme creator, taught live -->
+        <div class="wiz-panel" data-panel="1">
+          <div class="wiz-teach">🎨 <strong>זהו יוצר ערכת הנושא.</strong> מה שתבחרו כאן הוא בדיוק מה שמחכה לכם אחר כך במסך "ערכת נושא" — אפשר לשנות הכל, מתי שרוצים.</div>
+          <label style="font-weight:600;display:block;margin-bottom:8px">בחרו פלטה — או כווננו כל צבע</label>
+          <div class="wiz-palettes" id="wiz-palettes"></div>
+          <div class="wiz-colors">
+            <label class="wiz-color-row"><input type="color" id="wc-primary" value="#0a66c2"> ראשי (כפתורים וקישורים)</label>
+            <label class="wiz-color-row"><input type="color" id="wc-text" value="#111827"> טקסט</label>
+            <label class="wiz-color-row"><input type="color" id="wc-bg" value="#ffffff"> רקע</label>
+            <label class="wiz-color-row"><input type="color" id="wc-lightBg" value="#f8fafc"> רקע משני</label>
           </div>
-        </div>
-        <div>
-          <label style="font-weight:600;display:block;margin-bottom:6px">3 · איפה התפריט?</label>
-          <select name="menuPlacement" style="padding:10px;border:1px solid #cbd5e1;border-radius:8px">
+          <label style="font-weight:600;display:block;margin-bottom:6px">איפה התפריט?</label>
+          <select id="wiz-menu-placement" class="wiz-input" style="max-width:220px">
             <option value="top">למעלה (קלאסי)</option>
             <option value="side">בצד</option>
           </select>
+          <div class="wiz-preview" id="wiz-preview"></div>
         </div>
-        <button type="submit" class="btn" style="padding:12px;font-size:1rem">צור את האתר שלי ✨</button>
-        <p style="color:#94a3b8;font-size:0.8rem;margin:0;text-align:center">ניצור דף בית ראשון, תפריט, ונבנה את האתר — הכל עריך.</p>
-      </form>
+
+        <!-- Step 3: default pages -->
+        <div class="wiz-panel" data-panel="2">
+          <div class="wiz-teach">📄 ניצור לכם את שלד האתר. כל דף נפתח אחר כך בבונה הדפים — מודולים, גרירה, הכל.</div>
+          <label class="wiz-check"><input type="checkbox" checked disabled data-page="home"><span><strong>דף הבית</strong><small>Hero + פתיח — נבנה אוטומטית מהשם שבחרתם</small></span></label>
+          <label class="wiz-check"><input type="checkbox" checked data-page="about"><span><strong>אודות</strong><small>מי אתם ולמה אתם כאן</small></span></label>
+          <label class="wiz-check"><input type="checkbox" checked data-page="contact"><span><strong>צור קשר</strong><small>דף פנייה — טופס יגיע בשלב ה־CRM</small></span></label>
+          <label class="wiz-check"><input type="checkbox" checked data-page="articles"><span><strong>מאמרים</strong><small>קוביות מאמרים חכמות (מודול article-list) + מאמר ראשון לדוגמה</small></span></label>
+        </div>
+
+        <!-- Step 4: menu -->
+        <div class="wiz-panel" data-panel="3">
+          <div class="wiz-teach">🧭 <strong>התפריט של התפריטים.</strong> בחרו מה ייכנס לתפריט הראשי — מהדפים שיצרנו, או קישור לאתר חיצוני.</div>
+          <div id="wiz-menu-pages"></div>
+          <label style="font-weight:600;display:block;margin:14px 0 6px">קישורים חיצוניים (לא חובה)</label>
+          <div class="wiz-ext-row"><input class="wiz-input" id="ext-label-1" placeholder="שם הקישור"><input class="wiz-input" id="ext-url-1" dir="ltr" placeholder="https://..."></div>
+          <div class="wiz-ext-row"><input class="wiz-input" id="ext-label-2" placeholder="שם הקישור"><input class="wiz-input" id="ext-url-2" dir="ltr" placeholder="https://..."></div>
+        </div>
+
+        <div class="wiz-nav">
+          <button type="button" class="btn secondary" id="wiz-back" style="visibility:hidden">→ הקודם</button>
+          <button type="button" class="btn" id="wiz-next">הבא ←</button>
+        </div>
+        <p id="wiz-err" style="color:#b91c1c;font-size:0.85rem;margin:10px 0 0;display:none"></p>
+      </div>
     </div>
+    <script>
+      (function () {
+        var PAGE_LABELS = { home: 'דף הבית', about: 'אודות', contact: 'צור קשר', articles: 'מאמרים' };
+        var PALETTES = [
+          { name: 'כחול קלאסי', primary: '#0a66c2', text: '#111827', bg: '#ffffff', lightBg: '#f8fafc' },
+          { name: 'ירוק יער', primary: '#166534', text: '#111827', bg: '#ffffff', lightBg: '#f0fdf4' },
+          { name: 'שקיעה חמה', primary: '#ea580c', text: '#1c1917', bg: '#fffbf7', lightBg: '#fff7ed' },
+          { name: 'סגול מלכותי', primary: '#7c3aed', text: '#111827', bg: '#ffffff', lightBg: '#f5f3ff' },
+          { name: 'כהה אלגנטי', primary: '#38bdf8', text: '#e2e8f0', bg: '#0f172a', lightBg: '#1e293b' }
+        ];
+        var step = 0;
+        var TOTAL = 4;
+
+        function q(id) { return document.getElementById(id); }
+        function colors() {
+          return { primary: q('wc-primary').value, text: q('wc-text').value, bg: q('wc-bg').value, lightBg: q('wc-lightBg').value };
+        }
+        function selectedPages() {
+          var out = ['home'];
+          document.querySelectorAll('[data-page]').forEach(function (cb) {
+            if (cb.dataset.page !== 'home' && cb.checked) out.push(cb.dataset.page);
+          });
+          return out;
+        }
+
+        function renderPalettes() {
+          var box = q('wiz-palettes');
+          box.innerHTML = PALETTES.map(function (p, i) {
+            return '<div class="wiz-palette" data-pal="' + i + '">' +
+              '<div class="sw"><span style="background:' + p.primary + '"></span><span style="background:' + p.lightBg + '"></span><span style="background:' + p.bg + ';border:1px solid #e2e8f0"></span><span style="background:' + p.text + '"></span></div>' +
+              '<small>' + p.name + '</small></div>';
+          }).join('');
+          box.querySelectorAll('[data-pal]').forEach(function (el) {
+            el.addEventListener('click', function () {
+              var p = PALETTES[parseInt(el.dataset.pal, 10)];
+              q('wc-primary').value = p.primary; q('wc-text').value = p.text;
+              q('wc-bg').value = p.bg; q('wc-lightBg').value = p.lightBg;
+              box.querySelectorAll('.wiz-palette').forEach(function (x) { x.classList.remove('selected'); });
+              el.classList.add('selected');
+              renderPreview();
+            });
+          });
+        }
+
+        function renderPreview() {
+          var c = colors();
+          var side = q('wiz-menu-placement').value === 'side';
+          var title = (q('wiz-title').value || 'האתר שלי');
+          q('wiz-preview').innerHTML =
+            '<div style="background:' + c.bg + ';color:' + c.text + ';font-size:12px">' +
+            '<div style="display:flex;' + (side ? 'flex-direction:column;align-items:flex-start;gap:4px;' : 'justify-content:space-between;align-items:center;') + 'padding:8px 12px;border-bottom:1px solid ' + c.lightBg + '">' +
+            '<strong>' + title.replace(/</g, '&lt;') + '</strong>' +
+            '<span style="display:flex;' + (side ? 'flex-direction:column;gap:2px;' : 'gap:10px;') + '">' +
+            selectedPages().map(function (p) { return '<span style="color:' + c.primary + '">' + PAGE_LABELS[p] + '</span>'; }).join('') +
+            '</span></div>' +
+            '<div style="text-align:center;padding:18px 12px;background:' + c.lightBg + '"><div style="font-size:16px;font-weight:800">' + title.replace(/</g, '&lt;') + '</div>' +
+            '<span style="display:inline-block;margin-top:8px;background:' + c.primary + ';color:#fff;border-radius:6px;padding:4px 14px">כפתור ראשי</span></div>' +
+            '<div style="display:flex;gap:8px;padding:10px 12px">' +
+            '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
+            '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
+            '</div></div>';
+        }
+
+        function renderMenuStep() {
+          q('wiz-menu-pages').innerHTML = selectedPages().map(function (p) {
+            return '<label class="wiz-check"><input type="checkbox" checked data-menu-page="' + p + '"><span><strong>' + PAGE_LABELS[p] + '</strong></span></label>';
+          }).join('');
+        }
+
+        function show(n) {
+          step = n;
+          document.querySelectorAll('.wiz-panel').forEach(function (el) {
+            el.classList.toggle('active', parseInt(el.dataset.panel, 10) === n);
+          });
+          document.querySelectorAll('.wiz-step-dot').forEach(function (el) {
+            var i = parseInt(el.dataset.dot, 10);
+            el.classList.toggle('active', i === n);
+            el.classList.toggle('done', i < n);
+          });
+          q('wiz-back').style.visibility = n === 0 ? 'hidden' : 'visible';
+          q('wiz-next').textContent = n === TOTAL - 1 ? 'צור את האתר שלי ✨' : 'הבא ←';
+          if (n === 1) renderPreview();
+          if (n === 3) renderMenuStep();
+        }
+
+        function fail(msg) { var e = q('wiz-err'); e.textContent = msg; e.style.display = 'block'; }
+
+        function submit() {
+          var menuPages = [];
+          document.querySelectorAll('[data-menu-page]').forEach(function (cb) {
+            if (cb.checked) menuPages.push(cb.dataset.menuPage);
+          });
+          var external = [];
+          [1, 2].forEach(function (i) {
+            var label = q('ext-label-' + i).value.trim();
+            var url = q('ext-url-' + i).value.trim();
+            if (label && url) external.push({ label: label, url: url });
+          });
+          q('wiz-next').disabled = true;
+          fetch('/admin/setup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: q('wiz-title').value.trim(),
+              description: q('wiz-desc').value.trim(),
+              colors: colors(),
+              menuPlacement: q('wiz-menu-placement').value,
+              pages: selectedPages(),
+              menuPages: menuPages,
+              external: external
+            })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) { window.location.href = '/admin?built=1'; }
+            else { q('wiz-next').disabled = false; fail('שגיאה: ' + (d.error || '')); }
+          }).catch(function () { q('wiz-next').disabled = false; fail('שגיאה בתקשורת עם השרת'); });
+        }
+
+        q('wiz-next').addEventListener('click', function () {
+          q('wiz-err').style.display = 'none';
+          if (step === 0 && !q('wiz-title').value.trim()) return fail('צריך שם לאתר כדי להמשיך');
+          if (step === TOTAL - 1) return submit();
+          show(step + 1);
+        });
+        q('wiz-back').addEventListener('click', function () { if (step > 0) show(step - 1); });
+        ['wc-primary', 'wc-text', 'wc-bg', 'wc-lightBg'].forEach(function (id) {
+          q(id).addEventListener('input', renderPreview);
+        });
+        q('wiz-menu-placement').addEventListener('change', renderPreview);
+        document.querySelectorAll('[data-page]').forEach(function (cb) {
+          cb.addEventListener('change', renderPreview);
+        });
+
+        renderPalettes();
+        show(0);
+      })();
+    </script>
   `;
   res.send(layout(html, 'התקנה ראשונית', '#f59e0b'));
 });
 
 app.post('/admin/setup', (req, res) => {
   try {
-    if (!needsSetup()) return res.redirect('/admin');
-    const { title, description, primary, menuPlacement } = req.body || {};
-    const siteTitle = String(title || '').trim() || 'האתר שלי';
-
-    const config = loadConfig();
-    config.title = siteTitle;
-    config.description = String(description || '').trim();
-    config.setupDone = true;
-    saveConfig(config);
-
-    saveThemeSettings({
-      siteTitle: siteTitle,
-      overrides: {
-        colors: { primary: /^#[0-9a-fA-F]{6}$/.test(primary || '') ? primary : '#0a66c2' },
-        layout: { menuPlacement: menuPlacement === 'side' ? 'side' : 'top' }
-      }
-    });
-
-    if (!getPageByFullPath('home')) {
-      createPage({
-        title: siteTitle,
-        slug: 'home',
-        status: 'published',
-        blocks: [
-          { type: 'hero', data: { title: siteTitle, subtitle: config.description || 'ברוכים הבאים' } },
-          { type: 'text', data: { content: 'זהו דף הבית החדש שלך. לחץ "ערוך" כדי לשנות הכל.' } }
-        ]
-      });
-    }
-    saveMenu('main', [{ label: 'דף הבית', type: 'page', target: 'home' }]);
-    try { exportAll(); } catch (e) {}
-
-    res.redirect('/admin?built=1');
+    if (!needsSetup()) return res.status(409).json({ ok: false, error: 'ההתקנה כבר בוצעה' });
+    const result = runSetup(req.body || {});
+    res.json({ ok: true, ...result });
   } catch (e) {
-    res.status(500).send('שגיאה בהתקנה: ' + e.message);
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
@@ -920,13 +1922,16 @@ app.get('/admin', (req, res) => {
       const dirty = p.has_unpublished
         ? '<span style="color:#b45309;font-size:0.75rem;margin-inline-start:6px">• שינויים לא פורסמו</span>'
         : '';
+      const updated = p.updated_at
+        ? `<span style="font-size:0.78rem;color:#94a3b8;margin-inline-start:10px">עודכן: ${String(p.updated_at).replace('T', ' ').slice(0, 16)}</span>`
+        : '';
       return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:white">
         <div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <strong>${p.title}</strong>${badge}${dirty}
           </div>
-          <span style="font-family:monospace;font-size:0.85rem;color:#64748b">/${p.full_path}</span>
+          <span style="font-family:monospace;font-size:0.85rem;color:#64748b">/${p.full_path}</span>${updated}
         </div>
         <div style="display:flex;gap:8px">
           <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn" style="padding:8px 16px">ערוך</a>
@@ -939,21 +1944,7 @@ app.get('/admin', (req, res) => {
     }).join('');
 
   const html = `
-    <div class="topbar">
-      <div class="container topbar-inner">
-        <div style="display:flex;align-items:center;gap:12px">
-          <a href="/admin" style="font-size:1.6rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
-          <span style="color:#94a3b8">•</span>
-          <span style="font-weight:600">הדפים</span>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <a href="/admin/sitemap" class="btn secondary">מפת אתר</a>
-          <a href="/admin/theme" class="btn secondary">ערכת נושא</a>
-          <a href="/admin/menus" class="btn secondary">תפריטים</a>
-          <a href="/admin/new" class="btn">+ דף חדש</a>
-        </div>
-      </div>
-    </div>
+    ${adminNav('pages', 'דפים', '<a href="/admin/new" class="btn">+ דף חדש</a>')}
     <div class="container" style="padding-top:30px">
       ${msg}
       ${listHtml}
@@ -962,10 +1953,1128 @@ app.get('/admin', (req, res) => {
   res.send(layout(html));
 });
 
+// ---- Block registry API (ask C: schema-generated builder UI) ----
+app.get('/admin/api/registry', (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      blocks: blockRegistry.BLOCK_REGISTRY,
+      categories: blockRegistry.BLOCK_CATEGORIES,
+      universalParams: blockRegistry.UNIVERSAL_PARAMS
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ======================== DASHBOARD ========================
+app.get('/admin/dashboard', (req, res) => {
+  if (needsSetup()) return res.redirect('/admin/setup');
+  const pages = listPages();
+  const published = pages.filter(p => p.status === 'published').length;
+  const drafts = pages.length - published;
+  const pending = pages.filter(p => p.has_unpublished).length;
+  let mediaCount = 0;
+  try {
+    mediaCount = require('./db').db.prepare('SELECT COUNT(*) AS c FROM media').get().c;
+  } catch (e) { /* media table may not exist yet */ }
+
+  const statCard = (num, label, color) => `
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;text-align:center">
+      <div style="font-size:2rem;font-weight:800;color:${color}">${num}</div>
+      <div style="color:#64748b;font-size:0.9rem;margin-top:4px">${label}</div>
+    </div>`;
+
+  const recent = pages.slice(0, 5).map(p => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;background:#fff">
+      <div>
+        <strong>${escapeAdmin(p.title)}</strong>
+        <span style="font-size:0.75rem;color:#94a3b8;margin-inline-start:8px">${String(p.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
+      </div>
+      <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn" style="padding:6px 14px">ערוך</a>
+    </div>`).join('') || '<p style="color:#64748b">אין דפים עדיין</p>';
+
+  const html = `
+    ${adminNav('dashboard', 'דשבורד', '<a href="/admin/new" class="btn">+ דף חדש</a>')}
+    <div class="container" style="padding-top:28px;max-width:960px;padding-bottom:60px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px">
+        ${statCard(pages.length, 'דפים', '#0a66c2')}
+        ${statCard(published, 'פורסמו', '#166534')}
+        ${statCard(drafts, 'טיוטות', '#b45309')}
+        ${statCard(pending, 'שינויים ממתינים לפרסום', '#7c3aed')}
+        ${statCard(mediaCount, 'קבצי מדיה', '#0f766e')}
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
+        <section>
+          <h3 style="margin-top:0">דפים אחרונים</h3>
+          ${recent}
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;height:fit-content">
+          <h3 style="margin-top:0">קיצורי דרך</h3>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <a href="/admin/new" class="btn">+ דף חדש</a>
+            <a href="/admin/media-library" class="btn secondary">ספריית מדיה</a>
+            <a href="/admin/theme" class="btn secondary">ערכת נושא</a>
+            <a href="/admin/integrations" class="btn secondary">אינטגרציות (WhatsApp, מפות)</a>
+            <a href="/admin/seo" class="btn secondary">הגדרות SEO</a>
+            <form method="POST" action="/admin/build-redirect" style="margin:0">
+              <button type="submit" class="btn" style="background:#166534;width:100%">בנה את האתר</button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
+  res.send(layout(html, 'דשבורד', '#0a66c2'));
+});
+
+app.post('/admin/build-redirect', (req, res) => {
+  try {
+    exportAll();
+    res.redirect('/admin/dashboard');
+  } catch (e) {
+    res.status(500).send('שגיאה בבנייה: ' + escapeAdmin(e.message));
+  }
+});
+
+/** Minimal HTML-escape for admin templates (real entities, unlike legacy no-op helpers). */
+function escapeAdmin(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ======================== MEDIA LIBRARY (standalone screen) ========================
+app.get('/admin/media-library', (req, res) => {
+  const html = `
+    ${adminNav('media', 'ספריית מדיה')}
+    <div class="container" style="padding-top:28px;max-width:960px;padding-bottom:60px">
+      <p style="color:#64748b;margin-top:0">כל התמונות והקבצים של האתר — תיקיות, העלאה ומחיקה. אותה ספרייה שמופיעה בבונה הדפים.</p>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+          <div id="ml-crumbs" style="font-size:0.95rem;color:#334155"></div>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="btn secondary" id="ml-new-folder">📁+ תיקייה</button>
+            <label class="btn" style="cursor:pointer">העלה קובץ
+              <input type="file" accept="image/*" id="ml-upload" style="display:none">
+            </label>
+          </div>
+        </div>
+        <div id="ml-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px"></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var folder = '';
+        function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function load(f) {
+          folder = f || '';
+          fetch('/admin/media?folder=' + encodeURIComponent(folder))
+            .then(function (r) { return r.json(); })
+            .then(render)
+            .catch(function () {
+              document.getElementById('ml-grid').innerHTML = '<div style="color:#b91c1c">שגיאה בטעינה</div>';
+            });
+        }
+        function render(data) {
+          var crumbs = '<span class="ml-crumb" data-goto="" style="cursor:pointer;color:#0a66c2">🏠 מדיה</span>';
+          var acc = '';
+          (folder ? folder.split('/') : []).forEach(function (seg) {
+            acc = acc ? acc + '/' + seg : seg;
+            crumbs += ' › <span class="ml-crumb" data-goto="' + esc(acc) + '" style="cursor:pointer;color:#0a66c2">' + esc(seg) + '</span>';
+          });
+          document.getElementById('ml-crumbs').innerHTML = crumbs;
+
+          var tiles = '';
+          (data.folders || []).forEach(function (f) {
+            tiles += '<div class="media-tile" data-folder="' + esc(f.path) + '" style="border:1px solid #e2e8f0;border-radius:10px;padding:10px;cursor:pointer;text-align:center;background:#fff">' +
+              '<div style="font-size:2.4rem;line-height:70px;height:70px">📁</div>' +
+              '<div style="font-size:0.8rem;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.name) + '</div></div>';
+          });
+          (data.files || []).forEach(function (f) {
+            tiles += '<div style="border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;background:#fff">' +
+              '<img src="' + esc(f.url) + '" alt="" loading="lazy" style="width:100%;height:88px;object-fit:cover;border-radius:6px">' +
+              '<div style="font-size:0.75rem;color:#475569;margin:5px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(f.name) + '">' + esc(f.name) + '</div>' +
+              '<div style="display:flex;gap:4px;justify-content:center">' +
+              '<button type="button" data-copy="' + esc(f.url) + '" style="border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:0.75rem">🔗 העתק</button>' +
+              '<button type="button" data-del="' + esc(String(f.id)) + '" data-name="' + esc(f.name) + '" style="border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:0.75rem">🗑</button>' +
+              '</div></div>';
+          });
+          var grid = document.getElementById('ml-grid');
+          grid.innerHTML = tiles || '<div style="grid-column:1/-1;color:#64748b;padding:26px;text-align:center">תיקייה ריקה — העלה קובץ או צור תיקייה</div>';
+
+          document.querySelectorAll('.ml-crumb').forEach(function (c) {
+            c.addEventListener('click', function () { load(c.dataset.goto); });
+          });
+          grid.querySelectorAll('[data-folder]').forEach(function (t) {
+            t.addEventListener('click', function () { load(t.dataset.folder); });
+          });
+          grid.querySelectorAll('[data-copy]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.copy);
+              b.textContent = 'הועתק ✓';
+              setTimeout(function () { b.textContent = '🔗 העתק'; }, 1400);
+            });
+          });
+          grid.querySelectorAll('[data-del]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              if (!confirm('למחוק את "' + b.dataset.name + '" לצמיתות?')) return;
+              fetch('/admin/media/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: parseInt(b.dataset.del, 10) })
+              }).then(function (r) { return r.json(); }).then(function (d) {
+                if (d.ok) load(folder); else alert(d.error || 'שגיאה');
+              });
+            });
+          });
+        }
+        document.getElementById('ml-new-folder').addEventListener('click', function () {
+          var name = prompt('שם התיקייה החדשה:');
+          if (!name) return;
+          fetch('/admin/media/folder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parent: folder, name: name })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) load(folder); else alert(d.error || 'שגיאה');
+          });
+        });
+        document.getElementById('ml-upload').addEventListener('change', function () {
+          var input = this;
+          if (!input.files || !input.files.length) return;
+          var file = input.files[0];
+          var reader = new FileReader();
+          reader.onload = function () {
+            fetch('/admin/upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ filename: file.name, data: reader.result, folder: folder })
+            }).then(function (r) { return r.json(); }).then(function (d) {
+              input.value = '';
+              if (d.ok) load(folder); else alert(d.error || 'שגיאה בהעלאה');
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+        load('');
+      })();
+    </script>
+  `;
+  res.send(layout(html, 'ספריית מדיה', '#0f766e'));
+});
+
+// ======================== SITE SETTINGS ========================
+app.get('/admin/settings', (req, res) => {
+  const config = loadConfig();
+  const html = `
+    ${adminNav('settings', 'הגדרות אתר')}
+    <div class="container" style="padding-top:28px;max-width:620px;padding-bottom:60px">
+      <p style="color:#64748b;margin-top:0">הגדרות כלליות של האתר. לוגו וצבעים נמצאים ב<a href="/admin/theme">ערכת הנושא</a>.</p>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px">
+        <label style="display:block;font-weight:600;margin-bottom:4px">שם האתר</label>
+        <input id="st-title" value="${escapeAdmin(config.title)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
+        <label style="display:block;font-weight:600;margin-bottom:4px">תיאור האתר</label>
+        <textarea id="st-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">${escapeAdmin(config.description)}</textarea>
+        <label style="display:block;font-weight:600;margin-bottom:4px">כתובת בסיס (baseUrl)</label>
+        <input id="st-baseurl" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://example.co.il" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
+        <label style="display:block;font-weight:600;margin-bottom:4px">שפה ראשית</label>
+        <select id="st-lang" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px">
+          <option value="he" ${config.language !== 'en' ? 'selected' : ''}>עברית</option>
+          <option value="en" ${config.language === 'en' ? 'selected' : ''}>English</option>
+        </select>
+        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+          <span id="st-status" style="color:#166534;font-size:0.85rem"></span>
+          <button type="button" class="btn" id="st-save">שמור הגדרות</button>
+        </div>
+      </section>
+    </div>
+    <script>
+      document.getElementById('st-save').addEventListener('click', function () {
+        fetch('/admin/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: document.getElementById('st-title').value,
+            description: document.getElementById('st-desc').value,
+            baseUrl: document.getElementById('st-baseurl').value,
+            language: document.getElementById('st-lang').value
+          })
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          document.getElementById('st-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
+        });
+      });
+    </script>
+  `;
+  res.send(layout(html, 'הגדרות אתר', '#475569'));
+});
+
+app.post('/admin/api/settings', (req, res) => {
+  try {
+    const config = loadConfig();
+    const b = req.body || {};
+    if (b.title !== undefined) config.title = String(b.title || '').trim() || config.title;
+    if (b.description !== undefined) config.description = String(b.description || '');
+    if (b.baseUrl !== undefined) config.baseUrl = String(b.baseUrl || '').trim();
+    if (b.language !== undefined) config.language = b.language === 'en' ? 'en' : 'he';
+    saveConfig(config);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// ======================== SEO SETTINGS ========================
+app.get('/admin/seo', (req, res) => {
+  const config = loadConfig();
+  const seo = config.seo || {};
+  const html = `
+    ${adminNav('seo', 'SEO')}
+    <div class="container" style="padding-top:28px;max-width:620px;padding-bottom:60px">
+      <p style="color:#64748b;margin-top:0">ברירות מחדל לכל האתר. לכל דף יש הגדרות SEO משלו — בבונה הדפים, לחיצה על רקע הקנבס פותחת את מאפייני הדף (כותרת, תיאור, og:image, אינדוקס).</p>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px">
+        <label style="display:block;font-weight:600;margin-bottom:4px">תבנית כותרת (title pattern)</label>
+        <input id="seo-pattern" dir="ltr" value="${escapeAdmin(seo.titlePattern || '')}" placeholder="{page} · {site}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">‎{page}‎ = כותרת הדף · ‎{site}‎ = שם האתר · ריק = כותרת הדף בלבד</div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">תיאור ברירת מחדל (meta description)</label>
+        <textarea id="seo-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">${escapeAdmin(config.description)}</textarea>
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">משמש כשלדף אין תיאור משלו</div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">תמונת שיתוף ברירת מחדל (og:image)</label>
+        <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="/uploads/share.jpg" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו. נתיב מ<a href="/admin/media-library">ספריית המדיה</a>.</div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+          <span id="seo-status" style="color:#166534;font-size:0.85rem"></span>
+          <button type="button" class="btn" id="seo-save">שמור SEO</button>
+        </div>
+      </section>
+    </div>
+    <script>
+      document.getElementById('seo-save').addEventListener('click', function () {
+        fetch('/admin/api/seo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            titlePattern: document.getElementById('seo-pattern').value,
+            description: document.getElementById('seo-desc').value,
+            defaultOgImage: document.getElementById('seo-og').value
+          })
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          document.getElementById('seo-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
+        });
+      });
+    </script>
+  `;
+  res.send(layout(html, 'SEO', '#b45309'));
+});
+
+app.get('/admin/api/seo', (req, res) => {
+  try {
+    const config = loadConfig();
+    res.json({ ok: true, seo: config.seo || {}, description: config.description || '' });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/seo', (req, res) => {
+  try {
+    const config = loadConfig();
+    const b = req.body || {};
+    config.seo = config.seo || {};
+    if (b.titlePattern !== undefined) config.seo.titlePattern = String(b.titlePattern || '');
+    if (b.defaultOgImage !== undefined) config.seo.defaultOgImage = String(b.defaultOgImage || '');
+    if (b.description !== undefined) config.description = String(b.description || '');
+    saveConfig(config);
+    res.json({ ok: true, seo: config.seo });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// ======================== INTEGRATIONS ========================
+app.get('/admin/integrations', (req, res) => {
+  const config = loadConfig();
+  const wa = (config.integrations && config.integrations.whatsapp) || {};
+  const an = config.analytics || {};
+  const ga4 = an.ga4 || {};
+  const fp = an.firstParty || {};
+  const gda = an.gaDataApi || {};
+  const html = `
+    ${adminNav('integrations', 'אינטגרציות')}
+    <div class="container" style="padding-top:28px;max-width:620px;padding-bottom:60px">
+      <p style="color:#64748b;margin-top:0">חיבורים מוכנים — בלי לכתוב HTML. מודול המפה (Google Maps) נמצא בארגז הכלים של בונה הדפים.</p>
+
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+        <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">💬 WhatsApp — כפתור צ׳אט צף</h3>
+        <p style="color:#64748b;font-size:0.9rem;margin-top:0">כפתור ירוק צף שמופיע בכל דפי האתר הציבורי ופותח שיחת WhatsApp. לא מופיע בממשק הניהול.</p>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:14px">
+          <input type="checkbox" id="wa-enabled" ${wa.enabled ? 'checked' : ''}> הפעל את הכפתור באתר
+        </label>
+        <label style="display:block;font-weight:600;margin-bottom:4px">מספר טלפון (בפורמט בינלאומי)</label>
+        <input id="wa-phone" dir="ltr" value="${escapeAdmin(wa.phone || '')}" placeholder="972501234567" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
+        <label style="display:block;font-weight:600;margin-bottom:4px">הודעה פותחת (לא חובה)</label>
+        <input id="wa-message" value="${escapeAdmin(wa.message || '')}" placeholder="היי! הגעתי מהאתר" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
+        <label style="display:block;font-weight:600;margin-bottom:4px">מיקום הכפתור</label>
+        <select id="wa-position" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px">
+          <option value="start" ${wa.position !== 'end' ? 'selected' : ''}>התחלה (ימין בדף עברי)</option>
+          <option value="end" ${wa.position === 'end' ? 'selected' : ''}>סוף (שמאל בדף עברי)</option>
+        </select>
+        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+          <span id="int-status" style="color:#166534;font-size:0.85rem"></span>
+          <button type="button" class="btn" id="int-save">שמור אינטגרציות</button>
+        </div>
+        <div style="font-size:0.8rem;color:#94a3b8;margin-top:10px">השינוי נכנס לתוקף באתר אחרי "בנה אתר" (או פרסום + בנייה מהבונה).</div>
+      </section>
+
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+        <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">📍 Google Maps — מודול מפה</h3>
+        <p style="color:#64748b;font-size:0.9rem;margin:0">זמין בארגז הכלים של בונה הדפים (קטגוריית "שילובים"): כתובת + זום + גובה — בלי מפתח API ובלי קוד. <a href="/admin">פתח דף לעריכה</a> וגרור את מודול "מפה".</p>
+      </section>
+
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+        <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">📊 Google Analytics 4</h3>
+        <p style="color:#64748b;font-size:0.9rem;margin-top:0">מזהה מדידה (Measurement ID) בפורמט <code dir="ltr">G-XXXXXXXXXX</code>. הוא ציבורי (לא סוד), ומוזרק לכל דפי האתר הציבורי — כך Google אוסף נתונים. השינוי נכנס לתוקף אחרי "בנה אתר".</p>
+        <label style="display:block;font-weight:600;margin-bottom:4px">Measurement ID</label>
+        <input id="ga4-id" dir="ltr" value="${escapeAdmin(ga4.measurementId || '')}" placeholder="G-XXXXXXXXXX" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:4px">להשארה ריק — לא מוזרק שום קוד מעקב.</div>
+      </section>
+
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+        <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">🔒 אנליטיקס פנימי (Tapuz)</h3>
+        <p style="color:#64748b;font-size:0.9rem;margin-top:0">איסוף סטטיסטיקות פרטי, ללא צד שלישי, ללא שמירת כתובות IP. הצפייה בנתונים: <a href="/admin/analytics">לוח האנליטיקס</a>.</p>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:14px">
+          <input type="checkbox" id="fp-enabled" ${fp.enabled ? 'checked' : ''}> הפעל איסוף פנימי
+        </label>
+        <label style="display:block;font-weight:600;margin-bottom:4px">כתובת האספן (Collector URL)</label>
+        <input id="fp-url" dir="ltr" value="${escapeAdmin(fp.collectorUrl || '/_tapuz/collect')}" placeholder="/_tapuz/collect" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
+        <div class="chat-float-notice" style="margin-top:6px">שים לב: איסוף פנימי עובד רק כשהאתר מוגש על-ידי שרת Tapuz פעיל. אם ייצאת אתר סטטי ומארח אותו במקום אחר (Netlify / S3 / nginx), חובה להזין כאן כתובת <b>מלאה</b> לשרת Tapuz פעיל — אחרת האיסוף הפנימי לא ירשום דבר (Google Analytics ימשיך לעבוד). פרטים: <code dir="ltr">docs/analytics.md</code>.</div>
+      </section>
+
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px;opacity:0.8">
+        <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">📥 קריאת נתוני GA בחזרה (GA Data API) <span style="font-size:0.7rem;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:999px">לא פעיל</span></h3>
+        <p style="color:#64748b;font-size:0.9rem;margin:0 0 10px">שאיבת הסטטיסטיקות מ-Google אל תוך Tapuz דורשת סוד: קובץ JSON של Service Account, מזהה Property מספרי, והתקנת התלות <code dir="ltr">@google-analytics/data</code>. Tapuz לא מטפל בסוד הזה עבורך — יש להזין נתיב לקובץ ששמור <b>מחוץ</b> לתיקיית האתר/הייצוא. מדריך מלא: <code dir="ltr">docs/analytics.md</code>.</p>
+        <label style="display:block;font-weight:600;margin-bottom:4px">Property ID (מספרי)</label>
+        <input id="gda-prop" dir="ltr" value="${escapeAdmin(gda.propertyId || '')}" placeholder="123456789" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box">
+        <label style="display:block;font-weight:600;margin-bottom:4px">נתיב לקובץ Service Account JSON</label>
+        <input id="gda-path" dir="ltr" value="${escapeAdmin(gda.serviceAccountPath || '')}" placeholder="/secure/ga-service-account.json" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600">
+          <input type="checkbox" id="gda-enabled" ${gda.enabled ? 'checked' : ''}> אפשר קריאה בחזרה (ידרוש התקנת התלות)
+        </label>
+        <div style="font-size:0.8rem;color:#94a3b8;margin-top:8px">גם כשמסומן — אין קוד פעיל שמעביר את הסוד. זהו שלד מתועד בלבד (ראה <code dir="ltr">src/ga-data.js</code>).</div>
+      </section>
+    </div>
+    <script>
+      document.getElementById('int-save').addEventListener('click', function () {
+        fetch('/admin/api/integrations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            whatsapp: {
+              enabled: document.getElementById('wa-enabled').checked,
+              phone: document.getElementById('wa-phone').value,
+              message: document.getElementById('wa-message').value,
+              position: document.getElementById('wa-position').value
+            },
+            analytics: {
+              ga4: { measurementId: document.getElementById('ga4-id').value },
+              firstParty: {
+                enabled: document.getElementById('fp-enabled').checked,
+                collectorUrl: document.getElementById('fp-url').value
+              },
+              gaDataApi: {
+                enabled: document.getElementById('gda-enabled').checked,
+                propertyId: document.getElementById('gda-prop').value,
+                serviceAccountPath: document.getElementById('gda-path').value
+              }
+            }
+          })
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          document.getElementById('int-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
+        });
+      });
+    </script>
+  `;
+  res.send(layout(html, 'אינטגרציות', '#25D366'));
+});
+
+app.get('/admin/api/integrations', (req, res) => {
+  try {
+    res.json({ ok: true, integrations: loadConfig().integrations || {} });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/integrations', (req, res) => {
+  try {
+    const config = loadConfig();
+    const b = req.body || {};
+    config.integrations = config.integrations || {};
+    if (b.whatsapp && typeof b.whatsapp === 'object') {
+      const prev = config.integrations.whatsapp || {};
+      config.integrations.whatsapp = {
+        enabled: !!b.whatsapp.enabled,
+        phone: b.whatsapp.phone !== undefined ? String(b.whatsapp.phone || '').trim() : (prev.phone || ''),
+        message: b.whatsapp.message !== undefined ? String(b.whatsapp.message || '') : (prev.message || ''),
+        position: b.whatsapp.position === 'end' ? 'end' : 'start'
+      };
+    }
+    // Analytics (S5/S6). No secrets are handled here — only public-safe config.
+    // The GA Measurement ID is validated to the strict G-XXXX shape (empty is
+    // allowed = no tracking). The service-account key itself is NEVER accepted
+    // over this endpoint — only a filesystem PATH the user manages out-of-band.
+    if (b.analytics && typeof b.analytics === 'object') {
+      config.analytics = config.analytics || {};
+      const a = b.analytics;
+      if (a.ga4 && typeof a.ga4 === 'object' && a.ga4.measurementId !== undefined) {
+        const raw = String(a.ga4.measurementId || '').trim();
+        // Accept a valid id or clear it; reject malformed input silently (keep prev).
+        config.analytics.ga4 = config.analytics.ga4 || {};
+        if (raw === '' || /^G-[A-Z0-9]+$/.test(raw)) {
+          config.analytics.ga4.measurementId = raw;
+        }
+      }
+      if (a.firstParty && typeof a.firstParty === 'object') {
+        const prev = config.analytics.firstParty || {};
+        config.analytics.firstParty = {
+          enabled: a.firstParty.enabled !== undefined ? !!a.firstParty.enabled : !!prev.enabled,
+          collectorUrl: a.firstParty.collectorUrl !== undefined
+            ? (String(a.firstParty.collectorUrl || '').trim() || '/_tapuz/collect')
+            : (prev.collectorUrl || '/_tapuz/collect')
+        };
+      }
+      if (a.gaDataApi && typeof a.gaDataApi === 'object') {
+        const prev = config.analytics.gaDataApi || {};
+        config.analytics.gaDataApi = {
+          enabled: a.gaDataApi.enabled !== undefined ? !!a.gaDataApi.enabled : !!prev.enabled,
+          propertyId: a.gaDataApi.propertyId !== undefined
+            ? String(a.gaDataApi.propertyId || '').trim()
+            : (prev.propertyId || ''),
+          serviceAccountPath: a.gaDataApi.serviceAccountPath !== undefined
+            ? String(a.gaDataApi.serviceAccountPath || '').trim()
+            : (prev.serviceAccountPath || ''),
+          note: prev.note || 'Disabled. Requires @google-analytics/data + a service-account JSON key. See docs/analytics.md.'
+        };
+      }
+    }
+    saveConfig(config);
+    res.json({ ok: true, integrations: config.integrations, analytics: config.analytics });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// =========================================================================
+// S6: first-party analytics DASHBOARD (Hebrew / RTL, behind the admin auth
+// guard). Pure server-rendered charts — inline SVG bars + CSS meters, no chart
+// library. A ?days=7|30|90 range selector drives every aggregation. Also shows
+// the GA4 injection state and the (disabled) GA Data API read-back status.
+// =========================================================================
+app.get('/admin/analytics', (req, res) => {
+  try {
+    const RANGES = [7, 30, 90];
+    let days = parseInt(req.query.days, 10);
+    if (!RANGES.includes(days)) days = 30;
+    const data = analytics.dashboardData(days);
+    const cfg = loadConfig();
+    const ga4Id = (cfg.analytics && cfg.analytics.ga4 && cfg.analytics.ga4.measurementId) || '';
+    const fpEnabled = !!(cfg.analytics && cfg.analytics.firstParty && cfg.analytics.firstParty.enabled);
+    const gdaStatus = gaData.status();
+
+    const nf = (n) => Number(n || 0).toLocaleString('he-IL');
+    const maxViews = Math.max(1, ...data.byDay.map(d => d.views));
+
+    // --- Per-day bar chart (inline SVG, RTL: newest on the right) ---
+    const W = 720, H = 180, padB = 22, padT = 8;
+    const n = data.byDay.length;
+    const gap = n > 60 ? 1 : 2;
+    const bw = Math.max(2, (W - (n - 1) * gap) / n);
+    const bars = data.byDay.map((d, i) => {
+      const h = Math.round(((H - padB - padT) * d.views) / maxViews);
+      const x = Math.round(i * (bw + gap));
+      const y = H - padB - h;
+      const title = `${d.day}: ${d.views} צפיות, ${d.visitors} מבקרים`;
+      return `<rect x="${x}" y="${y}" width="${bw.toFixed(2)}" height="${Math.max(h, d.views ? 1 : 0)}" rx="1.5" fill="var(--admin-accent)"><title>${escapeAdmin(title)}</title></rect>`;
+    }).join('');
+    const firstDay = data.byDay[0] ? data.byDay[0].day : '';
+    const lastDay = data.byDay[n - 1] ? data.byDay[n - 1].day : '';
+    const chartSvg =
+      `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:200px;direction:ltr">` +
+      `<line x1="0" y1="${H - padB}" x2="${W}" y2="${H - padB}" stroke="#e2e8f0" stroke-width="1"/>` +
+      bars +
+      `</svg>` +
+      `<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#94a3b8;direction:ltr">` +
+      `<span>${escapeAdmin(firstDay)}</span><span>${escapeAdmin(lastDay)}</span></div>`;
+
+    // --- Top pages table ---
+    const topPagesRows = data.topPages.length
+      ? data.topPages.map(p =>
+          `<tr><td style="padding:6px 8px;border-bottom:1px solid #f1f5f9"><a href="${escapeAdmin(p.path)}" dir="ltr" target="_blank" style="color:#0f172a">${escapeAdmin(p.path)}</a></td>` +
+          `<td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:start;font-weight:600">${nf(p.views)}</td></tr>`
+        ).join('')
+      : `<tr><td colspan="2" style="padding:14px;color:#94a3b8;text-align:center">אין נתונים בטווח הזה</td></tr>`;
+
+    // --- Top referrers table ---
+    const refRows = data.topReferrers.length
+      ? data.topReferrers.map(r =>
+          `<tr><td style="padding:6px 8px;border-bottom:1px solid #f1f5f9" dir="ltr">${escapeAdmin(r.host)}</td>` +
+          `<td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-weight:600">${nf(r.views)}</td></tr>`
+        ).join('')
+      : `<tr><td colspan="2" style="padding:14px;color:#94a3b8;text-align:center">אין הפניות חיצוניות מזוהות (רוב התנועה ישירה)</td></tr>`;
+
+    // --- Device breakdown meters ---
+    const deviceTotal = data.devices.reduce((s, d) => s + d.views, 0) || 1;
+    const deviceLabels = { mobile: 'נייד', tablet: 'טאבלט', desktop: 'מחשב', unknown: 'לא ידוע' };
+    const deviceRows = data.devices.length
+      ? data.devices.map(d => {
+          const pct = Math.round((d.views * 100) / deviceTotal);
+          return `<div style="margin-bottom:10px">` +
+            `<div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:3px">` +
+            `<span>${escapeAdmin(deviceLabels[d.device] || d.device)}</span><span style="color:#64748b">${pct}% · ${nf(d.views)}</span></div>` +
+            `<div style="height:8px;background:#f1f5f9;border-radius:999px;overflow:hidden">` +
+            `<div style="height:100%;width:${pct}%;background:var(--admin-accent)"></div></div></div>`;
+        }).join('')
+      : `<p style="color:#94a3b8;text-align:center;margin:14px 0">אין נתונים</p>`;
+
+    const rangeTabs = RANGES.map(r =>
+      `<a href="/admin/analytics?days=${r}" class="btn ${r === days ? '' : 'secondary'}" style="padding:6px 14px">${r} ימים</a>`
+    ).join('');
+
+    const card = 'background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px';
+
+    // GA status strips
+    const ga4Strip = ga4Id
+      ? `<div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;padding:8px 12px;border-radius:8px;font-size:0.85rem">Google Analytics פעיל: <code dir="ltr">${escapeAdmin(ga4Id)}</code> — מוזרק לכל דף ציבורי.</div>`
+      : `<div style="background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;padding:8px 12px;border-radius:8px;font-size:0.85rem">Google Analytics לא מחובר. הוסף Measurement ID ב<a href="/admin/integrations">אינטגרציות</a>.</div>`;
+    const fpStrip = fpEnabled
+      ? ''
+      : `<div style="background:#fffbeb;border:1px solid #fcd34d;color:#78350f;padding:8px 12px;border-radius:8px;font-size:0.85rem;margin-top:8px">האיסוף הפנימי כבוי — הנתונים למטה לא יתעדכנו. הפעל אותו ב<a href="/admin/integrations">אינטגרציות</a>.</div>`;
+
+    const html = `
+      ${adminNav('analytics', 'אנליטיקס')}
+      <div class="container" style="padding-top:24px;padding-bottom:60px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px">
+          <p style="color:#64748b;margin:0">סטטיסטיקות פרטיות שנאספות על-ידי Tapuz — ללא צד שלישי, ללא שמירת כתובות IP.</p>
+          <div style="display:flex;gap:6px">${rangeTabs}</div>
+        </div>
+        ${ga4Strip}${fpStrip}
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:18px 0">
+          <div style="${card}">
+            <div style="font-size:0.8rem;color:#64748b">צפיות בדפים</div>
+            <div style="font-size:2rem;font-weight:800;color:#0f172a">${nf(data.totals.views)}</div>
+          </div>
+          <div style="${card}">
+            <div style="font-size:0.8rem;color:#64748b">מבקרים ייחודיים (מוערך)</div>
+            <div style="font-size:2rem;font-weight:800;color:#0f172a">${nf(data.totals.visitors)}</div>
+          </div>
+          <div style="${card}">
+            <div style="font-size:0.8rem;color:#64748b">טווח</div>
+            <div style="font-size:2rem;font-weight:800;color:#0f172a">${days} <span style="font-size:1rem;font-weight:600;color:#64748b">ימים</span></div>
+          </div>
+        </div>
+
+        <div style="${card};margin-bottom:18px">
+          <h3 style="margin:0 0 12px;font-size:1rem">צפיות לפי יום</h3>
+          ${chartSvg}
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px">
+          <div style="${card}">
+            <h3 style="margin:0 0 12px;font-size:1rem">הדפים המובילים</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:0.88rem"><tbody>${topPagesRows}</tbody></table>
+          </div>
+          <div style="${card}">
+            <h3 style="margin:0 0 12px;font-size:1rem">מקורות הפניה מובילים</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:0.88rem"><tbody>${refRows}</tbody></table>
+          </div>
+          <div style="${card}">
+            <h3 style="margin:0 0 12px;font-size:1rem">סוגי מכשירים</h3>
+            ${deviceRows}
+          </div>
+        </div>
+
+        <div style="${card};margin-top:18px;opacity:0.9">
+          <h3 style="margin:0 0 8px;font-size:1rem">📥 קריאת נתוני Google Analytics בחזרה</h3>
+          <p style="color:#64748b;font-size:0.88rem;margin:0 0 8px">שאיבת הנתונים מ-Google (GA Data API) אינה פעילה. סטטוס: <b>${escapeAdmin(gdaStatus.reason)}</b></p>
+          <p style="color:#94a3b8;font-size:0.82rem;margin:0">להפעלה יש לספק קובץ Service Account ומזהה Property, ולהתקין את התלות. מדריך: <code dir="ltr">docs/analytics.md</code>.</p>
+        </div>
+
+        <p style="color:#94a3b8;font-size:0.8rem;margin-top:18px;line-height:1.6">
+          פרטיות: לכל צפייה נשמרים רק הנתיב, מארח ההפניה (ללא כתובת מלאה), סוג המכשיר, וחתימת מבקר מגובבת (HMAC עם מלח יומי מתחלף). כתובת ה-IP המלאה לעולם לא נשמרת. אתרים סטטיים שיוצאו ומתארחים מחוץ ל-Tapuz רושמים נתונים רק כאשר שרת Tapuz זמין בכתובת האספן.
+        </p>
+      </div>
+    `;
+    res.send(layout(html, 'אנליטיקס', '#0d9488'));
+  } catch (e) {
+    res.status(500).send('שגיאה בטעינת אנליטיקס: ' + escapeAdmin(e.message));
+  }
+});
+
+// =========================================================================
+// S3: CMS-managed static header + footer chrome — settings screen.
+// Edits config.header / config.footer, which renderPage wraps around EVERY
+// public page (serve + static export). Follows the integrations screen pattern
+// (GET page + GET/POST /admin/api/site-chrome), Hebrew/RTL, behind the auth
+// guard like every other /admin route.
+// =========================================================================
+app.get('/admin/site-chrome', (req, res) => {
+  const config = loadConfig();
+  const header = config.header || {};
+  const footer = config.footer || {};
+  // Initial state handed to the client builder as a safe JSON island.
+  const data = {
+    header: {
+      tagline: header.tagline || '',
+      showLogo: header.showLogo !== false,
+      sticky: header.sticky !== false,
+      ctaLabel: header.ctaLabel || '',
+      ctaUrl: header.ctaUrl || ''
+    },
+    footer: {
+      text: footer.text || '',
+      showCredit: footer.showCredit !== false,
+      columns: Array.isArray(footer.columns) ? footer.columns : [],
+      social: Array.isArray(footer.social) ? footer.social : []
+    }
+  };
+  const inputCss = 'width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box';
+  const cardCss = 'background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px';
+  const html = `
+    ${adminNav('site-chrome', 'כותרת ותחתית')}
+    <div class="container" style="padding-top:28px;max-width:720px;padding-bottom:60px">
+      <p style="color:#64748b;margin-top:0">הכותרת והתחתית שייכות לכל האתר — כל דף שנבנה בבונה מופיע בתוכן. השינויים חלים באתר הציבורי אחרי "בנה אתר".</p>
+
+      <section style="${cardCss}">
+        <h3 style="margin-top:0">🔝 כותרת עליונה (Header)</h3>
+        <label style="display:block;font-weight:600;margin-bottom:4px">תת-כותרת ליד הלוגו</label>
+        <input id="h-tagline" value="${escapeAdmin(data.header.tagline)}" placeholder="הבית של המוזיקה" style="${inputCss};margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:12px">
+          <input type="checkbox" id="h-showlogo" ${data.header.showLogo ? 'checked' : ''}> הצג לוגו בכותרת
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:16px">
+          <input type="checkbox" id="h-sticky" ${data.header.sticky ? 'checked' : ''}> כותרת "דביקה" (נשארת למעלה בגלילה)
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="display:block;font-weight:600;margin-bottom:4px">כפתור פעולה — טקסט</label>
+            <input id="h-ctalabel" value="${escapeAdmin(data.header.ctaLabel)}" placeholder="צור קשר" style="${inputCss}">
+          </div>
+          <div>
+            <label style="display:block;font-weight:600;margin-bottom:4px">כפתור פעולה — קישור</label>
+            <input id="h-ctaurl" dir="ltr" value="${escapeAdmin(data.header.ctaUrl)}" placeholder="/contact" style="${inputCss}">
+          </div>
+        </div>
+        <div style="font-size:0.8rem;color:#94a3b8;margin-top:8px">כפתור הפעולה מופיע רק אם מולאו גם טקסט וגם קישור.</div>
+      </section>
+
+      <section style="${cardCss}">
+        <h3 style="margin-top:0">🔻 תחתית (Footer)</h3>
+        <label style="display:block;font-weight:600;margin-bottom:4px">טקסט תחתית חופשי</label>
+        <textarea id="f-text" rows="2" placeholder="רחוב הרצל 1, תל אביב · טל׳ 03-0000000" style="${inputCss};margin-bottom:14px">${escapeAdmin(data.footer.text)}</textarea>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px">
+          <input type="checkbox" id="f-credit" ${data.footer.showCredit ? 'checked' : ''}> הצג קרדיט "נבנה עם Tapuz"
+        </label>
+      </section>
+
+      <section style="${cardCss}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <h3 style="margin:0">🗂️ עמודות קישורים בתחתית</h3>
+          <button type="button" class="btn secondary" id="add-col" style="padding:6px 12px">+ עמודה</button>
+        </div>
+        <p style="color:#64748b;font-size:0.9rem;margin-top:0">כל עמודה = כותרת + רשימת קישורים.</p>
+        <div id="cols-wrap"></div>
+      </section>
+
+      <section style="${cardCss}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <h3 style="margin:0">🔗 רשתות חברתיות</h3>
+          <button type="button" class="btn secondary" id="add-social" style="padding:6px 12px">+ רשת</button>
+        </div>
+        <div id="social-wrap"></div>
+      </section>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+        <span id="chrome-status" style="color:#166534;font-size:0.9rem"></span>
+        <button type="button" class="btn" id="chrome-save">שמור כותרת ותחתית</button>
+      </div>
+      <div style="font-size:0.8rem;color:#94a3b8;margin-top:10px;text-align:end">אחרי השמירה לחצו "בנה אתר" (דשבורד) כדי לפרסם לאתר החי.</div>
+    </div>
+
+    <script type="application/json" id="chrome-data">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>
+    <script>
+      (function () {
+        var DATA = JSON.parse(document.getElementById('chrome-data').textContent);
+        var inputCss = ${JSON.stringify(inputCss)};
+        var colsWrap = document.getElementById('cols-wrap');
+        var socialWrap = document.getElementById('social-wrap');
+
+        function el(tag, attrs, html) {
+          var e = document.createElement(tag);
+          if (attrs) Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+          if (html != null) e.innerHTML = html;
+          return e;
+        }
+        function xrow() {
+          return '<button type="button" class="btn secondary rm" style="padding:6px 10px">✕</button>';
+        }
+
+        // ---- Columns ----
+        function addColumn(col) {
+          col = col || { title: '', links: [] };
+          var box = el('div', { 'class': 'chrome-col', style: 'border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:12px;background:#f8fafc' });
+          var head = el('div', { style: 'display:flex;gap:8px;margin-bottom:10px' });
+          var titleInput = el('input', { placeholder: 'כותרת עמודה', style: inputCss + ';flex:1' });
+          titleInput.className = 'col-title';
+          titleInput.value = col.title || '';
+          var rmCol = el('button', { type: 'button', 'class': 'btn secondary', style: 'padding:6px 10px' }, '✕ עמודה');
+          rmCol.addEventListener('click', function () { box.remove(); });
+          head.appendChild(titleInput); head.appendChild(rmCol);
+          box.appendChild(head);
+          var linksWrap = el('div', { 'class': 'links-wrap' });
+          box.appendChild(linksWrap);
+          var addLink = el('button', { type: 'button', 'class': 'btn secondary', style: 'padding:5px 10px;font-size:0.82rem' }, '+ קישור');
+          addLink.addEventListener('click', function () { addLinkRow(linksWrap, {}); });
+          box.appendChild(addLink);
+          (col.links || []).forEach(function (l) { addLinkRow(linksWrap, l); });
+          if (!(col.links || []).length) addLinkRow(linksWrap, {});
+          colsWrap.appendChild(box);
+        }
+        function addLinkRow(wrap, link) {
+          var row = el('div', { 'class': 'link-row', style: 'display:flex;gap:8px;margin-bottom:8px' });
+          var label = el('input', { placeholder: 'טקסט', style: inputCss + ';flex:1' });
+          label.className = 'link-label'; label.value = link.label || '';
+          var url = el('input', { placeholder: '/page', dir: 'ltr', style: inputCss + ';flex:1' });
+          url.className = 'link-url'; url.value = link.url || '';
+          var rm = el('button', { type: 'button', 'class': 'btn secondary', style: 'padding:6px 10px' }, '✕');
+          rm.addEventListener('click', function () { row.remove(); });
+          row.appendChild(label); row.appendChild(url); row.appendChild(rm);
+          wrap.appendChild(row);
+        }
+
+        // ---- Social ----
+        function addSocial(s) {
+          s = s || { network: '', url: '' };
+          var row = el('div', { 'class': 'social-row', style: 'display:flex;gap:8px;margin-bottom:8px' });
+          var net = el('input', { placeholder: 'Facebook', style: inputCss + ';flex:1' });
+          net.className = 'social-net'; net.value = s.network || '';
+          var url = el('input', { placeholder: 'https://…', dir: 'ltr', style: inputCss + ';flex:2' });
+          url.className = 'social-url'; url.value = s.url || '';
+          var rm = el('button', { type: 'button', 'class': 'btn secondary', style: 'padding:6px 10px' }, '✕');
+          rm.addEventListener('click', function () { row.remove(); });
+          row.appendChild(net); row.appendChild(url); row.appendChild(rm);
+          socialWrap.appendChild(row);
+        }
+
+        document.getElementById('add-col').addEventListener('click', function () { addColumn(); });
+        document.getElementById('add-social').addEventListener('click', function () { addSocial(); });
+        (DATA.footer.columns || []).forEach(addColumn);
+        (DATA.footer.social || []).forEach(addSocial);
+
+        // ---- Save ----
+        function collect() {
+          var columns = [].map.call(colsWrap.querySelectorAll('.chrome-col'), function (box) {
+            var links = [].map.call(box.querySelectorAll('.link-row'), function (r) {
+              return { label: r.querySelector('.link-label').value, url: r.querySelector('.link-url').value };
+            }).filter(function (l) { return l.label || l.url; });
+            return { title: box.querySelector('.col-title').value, links: links };
+          }).filter(function (c) { return c.title || c.links.length; });
+          var social = [].map.call(socialWrap.querySelectorAll('.social-row'), function (r) {
+            return { network: r.querySelector('.social-net').value, url: r.querySelector('.social-url').value };
+          }).filter(function (s) { return s.url; });
+          return {
+            header: {
+              tagline: document.getElementById('h-tagline').value,
+              showLogo: document.getElementById('h-showlogo').checked,
+              sticky: document.getElementById('h-sticky').checked,
+              ctaLabel: document.getElementById('h-ctalabel').value,
+              ctaUrl: document.getElementById('h-ctaurl').value
+            },
+            footer: {
+              text: document.getElementById('f-text').value,
+              showCredit: document.getElementById('f-credit').checked,
+              columns: columns,
+              social: social
+            }
+          };
+        }
+        document.getElementById('chrome-save').addEventListener('click', function () {
+          var status = document.getElementById('chrome-status');
+          status.style.color = '#166534'; status.textContent = 'שומר…';
+          fetch('/admin/api/site-chrome', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(collect())
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) { status.style.color = '#166534'; status.textContent = 'נשמר ✓'; }
+            else { status.style.color = '#b91c1c'; status.textContent = d.error || 'שגיאה'; }
+          }).catch(function () { status.style.color = '#b91c1c'; status.textContent = 'שגיאת רשת'; });
+        });
+      })();
+    </script>
+  `;
+  res.send(layout(html, 'כותרת ותחתית', '#7c3aed'));
+});
+
+app.get('/admin/api/site-chrome', (req, res) => {
+  try {
+    const config = loadConfig();
+    res.json({ ok: true, header: config.header || {}, footer: config.footer || {} });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/site-chrome', (req, res) => {
+  try {
+    const config = loadConfig();
+    const b = req.body || {};
+    const str = (v) => String(v == null ? '' : v);
+
+    if (b.header && typeof b.header === 'object') {
+      const prev = config.header || {};
+      config.header = {
+        tagline: b.header.tagline !== undefined ? str(b.header.tagline).trim() : (prev.tagline || ''),
+        showLogo: b.header.showLogo !== undefined ? !!b.header.showLogo : (prev.showLogo !== false),
+        sticky: b.header.sticky !== undefined ? !!b.header.sticky : (prev.sticky !== false),
+        ctaLabel: b.header.ctaLabel !== undefined ? str(b.header.ctaLabel).trim() : (prev.ctaLabel || ''),
+        ctaUrl: b.header.ctaUrl !== undefined ? str(b.header.ctaUrl).trim() : (prev.ctaUrl || '')
+      };
+    }
+
+    if (b.footer && typeof b.footer === 'object') {
+      const prev = config.footer || {};
+      let columns = prev.columns || [];
+      if (Array.isArray(b.footer.columns)) {
+        columns = b.footer.columns
+          .map(c => ({
+            title: str(c && c.title).trim(),
+            links: (Array.isArray(c && c.links) ? c.links : [])
+              .map(l => ({ label: str(l && l.label).trim(), url: str(l && l.url).trim() }))
+              .filter(l => l.label || l.url)
+          }))
+          .filter(c => c.title || c.links.length);
+      }
+      let social = prev.social || [];
+      if (Array.isArray(b.footer.social)) {
+        social = b.footer.social
+          .map(s => ({ network: str(s && s.network).trim(), url: str(s && s.url).trim() }))
+          .filter(s => s.url);
+      }
+      config.footer = {
+        text: b.footer.text !== undefined ? str(b.footer.text) : (prev.text || ''),
+        showCredit: b.footer.showCredit !== undefined ? !!b.footer.showCredit : (prev.showCredit !== false),
+        columns,
+        social
+      };
+    }
+
+    saveConfig(config);
+    res.json({ ok: true, header: config.header, footer: config.footer });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 // ---- API: pages list (navigator) ----
+// ─── BenTML: source language ↔ JSON blocks (page builder bridge) ───
+const bentml = require('./bentml');
+
+app.get('/admin/api/bentml/modules', (req, res) => {
+  res.json({ modules: bentml.listModules(), version: '0.1' });
+});
+
+/** Syntax dictionary — single source for agents + humans (from block-registry). */
+app.get('/admin/api/syntax-dictionary', (req, res) => {
+  try {
+    const { buildDictionary } = require('./syntax-dictionary');
+    res.json({ ok: true, dictionary: buildDictionary() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/admin/api/syntax-dictionary.md', (req, res) => {
+  try {
+    const { toMarkdown } = require('./syntax-dictionary');
+    res.type('text/markdown; charset=utf-8').send(toMarkdown());
+  } catch (e) {
+    res.status(500).send(e.message);
+  }
+});
+
+/** Full agent primer = cheatsheet (the language, not a block list). */
+app.get('/admin/api/bentml/primer', (req, res) => {
+  try {
+    const sheetPath = path.join(__dirname, '..', 'docs', 'bentml-cheatsheet.md');
+    const packPath = path.join(__dirname, '..', 'docs', 'agent-free-tier-pack.md');
+    const cheatsheet = fs.existsSync(sheetPath)
+      ? fs.readFileSync(sheetPath, 'utf8')
+      : 'See docs/bentml-v0.md';
+    const freeTierPack = fs.existsSync(packPath)
+      ? fs.readFileSync(packPath, 'utf8')
+      : cheatsheet;
+    res.json({
+      ok: true,
+      version: '0.1',
+      language: 'bentml',
+      forAgents: ['grok', 'chatgpt', 'gemini', 'claude', 'free-tier'],
+      shape: {
+        file: 'BENTML 0.1 → META {…} → body keywords',
+        module: 'KEYWORD(params) { body } | KEYWORD(params)',
+        metadata: 'META { key: value } — page level',
+        text: '{ body } on TEXT-BODY keywords',
+        style: 'page-builder Style panel + optional class: — NOT a STYLE{ } block',
+        pipeline: 'agent writes BenTML → compile → page builder modules → publish'
+      },
+      primer: freeTierPack,
+      freeTierPack,
+      cheatsheet
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+/** Paste-into-blank-chat mission (preferred product path). */
+app.get('/admin/api/bentml/chat-snippet', (req, res) => {
+  try {
+    const jsonPath = path.join(__dirname, '..', 'public', 'chat-snippet.json');
+    if (fs.existsSync(jsonPath)) {
+      return res.json(JSON.parse(fs.readFileSync(jsonPath, 'utf8')));
+    }
+    const txtPath = path.join(__dirname, '..', 'public', 'chat-snippet.txt');
+    const pasteBody = fs.existsSync(txtPath) ? fs.readFileSync(txtPath, 'utf8') : '';
+    res.json({ version: '0.1', pasteBody, notApi: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/** Legacy alias */
+app.get('/admin/api/bentml/agent-pack', (req, res) => {
+  res.redirect(302, '/chat-snippet.txt');
+});
+
+app.post('/admin/api/bentml/compile', (req, res) => {
+  try {
+    const source = req.body && req.body.source;
+    if (typeof source !== 'string') {
+      return res.status(400).json({ error: 'source (BenTML string) required' });
+    }
+    const result = bentml.compile(source);
+    res.json({
+      ok: true,
+      page: result.page,
+      blocks: result.blocks,
+      warnings: result.warnings
+    });
+  } catch (e) {
+    res.status(400).json({
+      ok: false,
+      error: e.message,
+      code: e.code || 'E_BENTML',
+      line: e.line,
+      column: e.column,
+      fix: e.fix
+    });
+  }
+});
+
+app.post('/admin/api/bentml/preview', (req, res) => {
+  try {
+    const source = req.body && req.body.source;
+    if (typeof source !== 'string') {
+      return res.status(400).json({ error: 'source (BenTML string) required' });
+    }
+    const result = bentml.preview(source);
+    res.json({
+      ok: true,
+      page: result.page,
+      blocks: result.blocks,
+      warnings: result.warnings,
+      html: result.html
+    });
+  } catch (e) {
+    res.status(400).json({
+      ok: false,
+      error: e.message,
+      code: e.code || 'E_BENTML',
+      line: e.line,
+      fix: e.fix
+    });
+  }
+});
+
+app.post('/admin/api/bentml/decompile', (req, res) => {
+  try {
+    const page = (req.body && req.body.page) || {};
+    const blocks = (req.body && req.body.blocks) || [];
+    const source = bentml.decompile(page, blocks);
+    res.json({ ok: true, source });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/** Apply BenTML source onto a page draft (wires language → page builder storage). */
+app.post('/admin/api/bentml/apply', (req, res) => {
+  try {
+    const { fullPath, source, publish } = req.body || {};
+    if (!fullPath || typeof source !== 'string') {
+      return res.status(400).json({ error: 'fullPath and source required' });
+    }
+    const { updatePage, getPageByFullPath, publishPage } = require('./pages');
+    const existing = getPageByFullPath(fullPath);
+    if (!existing) return res.status(404).json({ error: 'Page not found' });
+
+    const result = bentml.compile(source);
+    const patch = {
+      title: result.page.title,
+      direction: result.page.direction,
+      theme: result.page.theme,
+      tags: result.page.tags,
+      meta: { ...(existing.meta || {}), ...result.page.meta },
+      draft_blocks: result.blocks
+    };
+    updatePage(fullPath, patch);
+    if (publish) {
+      // publishPage copies draft → published when available
+      if (typeof publishPage === 'function') publishPage(fullPath);
+      else updatePage(fullPath, { blocks: result.blocks, status: 'published' });
+    }
+    res.json({
+      ok: true,
+      fullPath,
+      blocks: result.blocks,
+      page: result.page,
+      warnings: result.warnings
+    });
+  } catch (e) {
+    res.status(400).json({
+      ok: false,
+      error: e.message,
+      code: e.code || 'E_BENTML',
+      line: e.line,
+      fix: e.fix
+    });
+  }
+});
+
 app.get('/admin/api/pages', (req, res) => {
   try {
     res.json({ ok: true, pages: listPages({ q: req.query.q, status: req.query.status }) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/admin/api/articles', (req, res) => {
+  try {
+    const { tag, limit } = req.query;
+    res.json({ ok: true, articles: listArticles({ tag: tag || 'article', limit: limit || 12 }) });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -1037,7 +3146,7 @@ app.post('/admin/api/menus/:name', (req, res) => {
 
 app.get('/admin/new', (req, res) => {
   const html = `
-    <div class="topbar"><div class="container"><a href="/admin" style="font-size:1.5rem;font-weight:700;text-decoration:none">Tapuz</a></div></div>
+    ${adminNav('pages', 'דף חדש')}
     <div class="container" style="max-width:520px;padding-top:40px">
       <h2 style="margin-bottom:20px">דף חדש</h2>
       <form method="POST" action="/admin/create">
@@ -1083,15 +3192,25 @@ app.get('/admin/edit/:fullPath', (req, res) => {
   // Builder always edits draft_blocks
   const draft = page.draft_blocks != null ? page.draft_blocks : (page.blocks || []);
   const initialBlocks = JSON.stringify(draft);
-  const safeTitle = String(page.title || '')
-    .replace(/&/g, '&')
-    .replace(/"/g, '"')
-    .replace(/</g, '<');
+  const safeTitle = escapeAdmin(page.title || '');
+  // The settings drawer follows the direction of the PAGE being edited
+  const pageDirection = page.direction === 'ltr' ? 'ltr' : 'rtl';
   const hasUnpublished = JSON.stringify(draft || []) !== JSON.stringify(page.blocks || []);
   const statusLabel = page.status === 'published' ? 'פורסם' : 'טיוטה';
   const badgeBg = page.status === 'published' ? '#dcfce7' : '#fef3c7';
   const badgeFg = page.status === 'published' ? '#166534' : '#92400e';
   const badgeExtra = hasUnpublished ? ' • טיוטה שונה' : '';
+
+  // Toolbox is GENERATED from the block registry (src/block-registry.js),
+  // grouped by category — a new block type appears here automatically.
+  const toolboxHtml = blockRegistry.BLOCK_CATEGORIES.map(cat => {
+    const entries = blockRegistry.BLOCK_REGISTRY.filter(e => e.category === cat && !e.childrenOf);
+    if (!entries.length) return '';
+    return `<div class="tool-group-label">${escapeAdmin(cat)}</div>` + entries.map(e => `
+          <button type="button" class="tool-btn" data-type="${escapeAdmin(e.type)}" title="${escapeAdmin(e.hintHe || e.labelHe)}">
+            <span class="tool-ico">${escapeAdmin(e.icon || '•')}</span><span class="tool-meta"><span class="tool-name">${escapeAdmin(e.labelHe)}</span><span class="tool-hint">${escapeAdmin(e.hintHe || '')}</span></span>
+          </button>`).join('');
+  }).join('');
 
   const html = `
     <div class="topbar">
@@ -1111,79 +3230,84 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           <a href="/admin/theme" class="btn secondary" style="padding:8px 12px">ערכת נושא</a>
           <a href="/" target="_blank" class="btn secondary" style="padding:8px 12px">צפה באתר</a>
           <button type="button" onclick="TapuzBuilder.savePage()" class="btn" style="padding:8px 14px">שמור טיוטה</button>
-          <button type="button" onclick="TapuzBuilder.publishPage()" class="btn" style="background:#166534;padding:8px 14px">פרסם</button>
-          <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn" style="background:#14532d;padding:8px 14px">פרסם + בנה</button>
+          <button type="button" onclick="TapuzBuilder.publishPage()" class="btn js-publish-btn" data-publish-main="1" style="background:#166534;padding:8px 14px">פרסם</button>
+          <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn js-publish-btn" style="background:#14532d;padding:8px 14px">פרסם + בנה</button>
         </div>
       </div>
     </div>
 
     <div class="container">
-      <div class="builder">
-        <div class="toolbox">
+      <div class="builder-mode-tabs" role="tablist">
+        <button type="button" data-builder-mode="page" class="active" role="tab">
+          בונה הדף
+          <span class="tab-sub">ויזואלי · גרירה · הגדרות</span>
+        </button>
+        <button type="button" data-builder-mode="output" role="tab">
+          פלט BenTML
+          <span class="tab-sub">הקוד של הדף · decompile חי</span>
+        </button>
+      </div>
+
+      <div class="builder live-page mode-page page-${pageDirection}">
+        <aside class="toolbox" aria-label="ארגז מודולים">
           <h4>מודולים</h4>
-          <div id="toolbox-mode" class="toolbox-mode">גרור לקנבס · או לחץ להוספה בסוף</div>
-          <button type="button" class="tool-btn" data-type="hero" title="כותרת גדולה בראש">
-            <span class="tool-ico">★</span><span class="tool-meta"><span class="tool-name">Hero</span><span class="tool-hint">כותרת גדולה</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="heading" title="כותרת">
-            <span class="tool-ico">H</span><span class="tool-meta"><span class="tool-name">כותרת</span><span class="tool-hint">H1–H6</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="text" title="טקסט">
-            <span class="tool-ico">¶</span><span class="tool-meta"><span class="tool-name">טקסט</span><span class="tool-hint">פסקה</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="button" title="כפתור">
-            <span class="tool-ico">◉</span><span class="tool-meta"><span class="tool-name">כפתור</span><span class="tool-hint">קישור / CTA</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="image" title="תמונה">
-            <span class="tool-ico">▣</span><span class="tool-meta"><span class="tool-name">תמונה</span><span class="tool-hint">מדיה</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="testimonial" title="המלצה">
-            <span class="tool-ico">❝</span><span class="tool-meta"><span class="tool-name">המלצה</span><span class="tool-hint">ציטוט + שם</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="features" title="תכונות">
-            <span class="tool-ico">▦</span><span class="tool-meta"><span class="tool-name">תכונות</span><span class="tool-hint">כרטיסים</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="columns" title="עמודות">
-            <span class="tool-ico">▥</span><span class="tool-meta"><span class="tool-name">עמודות</span><span class="tool-hint">2–4 טורים</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="spacer" title="רווח">
-            <span class="tool-ico">↕</span><span class="tool-meta"><span class="tool-name">רווח</span><span class="tool-hint">מרווח אנכי</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="divider" title="קו מפריד">
-            <span class="tool-ico">—</span><span class="tool-meta"><span class="tool-name">קו מפריד</span><span class="tool-hint">קו אופקי</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="list" title="רשימה">
-            <span class="tool-ico">≡</span><span class="tool-meta"><span class="tool-name">רשימה</span><span class="tool-hint">נקודות / ממוספרת</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="embed" title="וידאו">
-            <span class="tool-ico">▶</span><span class="tool-meta"><span class="tool-name">וידאו</span><span class="tool-hint">YouTube / קישור</span></span>
-          </button>
-          <button type="button" class="tool-btn" data-type="gallery" title="גלריה">
-            <span class="tool-ico">▤</span><span class="tool-meta"><span class="tool-name">גלריה</span><span class="tool-hint">רשת תמונות</span></span>
-          </button>
+          <div id="toolbox-mode" class="toolbox-mode">גרור לדף · בחר לעריכה בצד</div>
+          ${toolboxHtml}
           <hr style="margin:12px 0;border-color:#e2e8f0">
           <button type="button" class="tool-btn" onclick="TapuzBuilder.openMediaLibrary()" style="border:1px solid #0a66c2;color:#0a66c2">
             <span class="tool-ico">🖼</span><span class="tool-meta"><span class="tool-name">מדיה</span><span class="tool-hint">ספרייה / העלאה</span></span>
           </button>
-        </div>
+          <a class="tool-btn" href="/admin/api/syntax-dictionary.md" target="_blank" rel="noopener" style="text-decoration:none;border-style:dashed">
+            <span class="tool-ico">📖</span><span class="tool-meta"><span class="tool-name">מילון תחביר</span><span class="tool-hint">לשימוש חיצוני</span></span>
+          </a>
+          <a class="tool-btn" href="/chat-snippet.txt" download="tapuz-syntax-snippet.txt" style="text-decoration:none;border-style:dashed">
+            <span class="tool-ico">📋</span><span class="tool-meta"><span class="tool-name">Snippet חיצוני</span><span class="tool-hint">הורדה לצ׳אט שלהם — לא אצלנו</span></span>
+          </a>
+        </aside>
 
-        <div>
+        <div id="builder-pane-page" class="builder-canvas-wrap">
           <div class="canvas-header">
-            <span>תצוגה חיה · טיוטה</span>
+            <span>דף חי · טיוטה</span>
             <span id="block-count">${(draft || []).length} מודולים</span>
             <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>
+          <div id="bentml-output-dock" class="bentml-output-dock">
+            <div class="bentml-output-dock-head">
+              <strong>פלט BenTML חי</strong>
+              <span class="dock-sub">הקוד נבנה מכללי השפה בזמן שאתם גוררים/עורכים</span>
+              <button type="button" class="btn secondary" id="btn-bentml-copy-live">העתק</button>
+              <button type="button" class="btn secondary" id="btn-open-output">מסך מלא</button>
+              <span id="bentml-live-status" class="bentml-status"></span>
+            </div>
+            <textarea id="bentml-live-output" readonly dir="ltr" spellcheck="false" aria-label="Live BenTML output"></textarea>
+          </div>
         </div>
 
-        <div class="properties">
-          <h4>מאפיינים</h4>
+        <aside class="properties" aria-label="הגדרות מודול">
+          <h4>הגדרות</h4>
           <div id="properties-panel">
             <div style="color:#64748b;font-size:0.9rem;padding:30px 10px;text-align:center">
-              לחץ על מודול כדי לערוך<br>
-              או הוסף מודול חדש
+              בחרו מודול בדף · ההגדרות יופיעו כאן<br>
+              <span style="font-size:0.8rem">הפלט למטה = BenTML האמיתי של הדף</span>
             </div>
           </div>
+        </aside>
+
+        <div id="builder-pane-source" class="builder-pane" hidden>
+          <div class="bentml-source-bar">
+            <strong>פלט BenTML (מסך מלא)</strong>
+            <span style="color:#64748b;font-size:0.85rem">decompile ← בונה · compile → בונה</span>
+            <button type="button" class="btn secondary" id="btn-bentml-sync">רענן מהדף</button>
+            <button type="button" class="btn secondary" id="btn-bentml-copy">העתק</button>
+            <button type="button" class="btn" id="btn-bentml-apply">החל פלט → דף</button>
+            <span id="bentml-source-status" class="bentml-status"></span>
+          </div>
+          <p class="output-explain">
+            זה לא ״ייבוא בלבד״. <strong>כל גרירה ועריכה בבונה מייצרת מחדש את הקוד</strong> לפי כללי BenTML.
+            אפשר גם להדביק כאן מסמך שלם ולהחיל לדף.
+          </p>
+          <textarea id="bentml-source" spellcheck="false" dir="ltr" aria-label="BenTML output" placeholder="BENTML 0.1&#10;&#10;META {&#10;  title: &quot;...&quot;&#10;}&#10;&#10;TEXT { ... }"></textarea>
         </div>
       </div>
     </div>
@@ -1191,8 +3315,8 @@ app.get('/admin/edit/:fullPath', (req, res) => {
     <div class="save-bar">
       <div class="container" style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap">
         <button type="button" onclick="TapuzBuilder.savePage()" class="btn">שמור טיוטה</button>
-        <button type="button" onclick="TapuzBuilder.publishPage()" class="btn" style="background:#166534">פרסם</button>
-        <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn" style="background:#14532d">פרסם + בנה אתר</button>
+        <button type="button" onclick="TapuzBuilder.publishPage()" class="btn js-publish-btn" data-publish-main="1" style="background:#166534">פרסם</button>
+        <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn js-publish-btn" style="background:#14532d">פרסם + בנה אתר</button>
       </div>
     </div>
 
@@ -1232,13 +3356,25 @@ app.get('/admin/edit/:fullPath', (req, res) => {
       </div>
     </div>
 
+    <script>
+      // Block registry — the client generates the settings forms from this
+      window.__TAPUZ_REGISTRY__ = ${JSON.stringify({
+        blocks: blockRegistry.BLOCK_REGISTRY,
+        categories: blockRegistry.BLOCK_CATEGORIES,
+        universalParams: blockRegistry.UNIVERSAL_PARAMS
+      })};
+    </script>
     <script src="/admin-builder.js"></script>
+    <script src="/admin-bentml-ui.js"></script>
     <script>
       TapuzBuilder.init({
         fullPath: ${JSON.stringify(page.full_path)},
         blocks: ${initialBlocks},
         status: ${JSON.stringify(page.status || 'draft')},
-        hasUnpublished: ${hasUnpublished ? 'true' : 'false'}
+        hasUnpublished: ${hasUnpublished ? 'true' : 'false'},
+        direction: ${JSON.stringify(pageDirection)},
+        tags: ${JSON.stringify(page.tags || [])},
+        meta: ${JSON.stringify(page.meta || {})}
       });
     </script>
   `;
@@ -1247,12 +3383,11 @@ app.get('/admin/edit/:fullPath', (req, res) => {
 
 app.post('/admin/save', (req, res) => {
   try {
-    const { full_path, title, blocks, publish } = req.body || {};
-    const page = updatePage(full_path, {
-      title,
-      blocks,
-      publish: !!publish
-    });
+    const { full_path, title, blocks, tags, meta, publish } = req.body || {};
+    const updates = { title, blocks, publish: !!publish };
+    if (Array.isArray(tags)) updates.tags = tags;
+    if (meta && typeof meta === 'object') updates.meta = meta;
+    const page = updatePage(full_path, updates);
     const hasUnpublished = JSON.stringify(page.draft_blocks || []) !== JSON.stringify(page.blocks || []);
     res.json({
       ok: true,
@@ -1267,11 +3402,14 @@ app.post('/admin/save', (req, res) => {
 
 app.post('/admin/publish', (req, res) => {
   try {
-    const { full_path, title, blocks } = req.body || {};
-    if (blocks) {
-      updatePage(full_path, { title, blocks });
-    } else if (title) {
-      updatePage(full_path, { title });
+    const { full_path, title, blocks, tags, meta } = req.body || {};
+    const updates = {};
+    if (title) updates.title = title;
+    if (blocks) updates.blocks = blocks;
+    if (Array.isArray(tags)) updates.tags = tags;
+    if (meta && typeof meta === 'object') updates.meta = meta;
+    if (Object.keys(updates).length) {
+      updatePage(full_path, updates);
     }
     const page = publishPage(full_path);
     res.json({
@@ -1299,10 +3437,7 @@ app.get('/admin/theme', (req, res) => {
   const settings = getThemeSettings();
   const o = settings.overrides;
   const logo = settings.logo || {};
-  const escAttr = (s) => String(s == null ? '' : s)
-    .replace(/&/g, '&')
-    .replace(/"/g, '"')
-    .replace(/</g, '<');
+  const escAttr = (s) => escapeAdmin(s);
   const colorRow = (k, label, val) => `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">
       <label style="font-weight:600">${label}</label>
@@ -1311,19 +3446,7 @@ app.get('/admin/theme', (req, res) => {
     </div>`;
 
   const html = `
-    <div class="topbar">
-      <div class="container topbar-inner">
-        <div style="display:flex;align-items:center;gap:12px">
-          <a href="/admin" style="font-size:1.5rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
-          <span style="color:#94a3b8">•</span>
-          <span style="font-weight:600">ערכת נושא</span>
-        </div>
-        <div style="display:flex;gap:8px">
-          <a href="/admin/menus" class="btn secondary">תפריטים</a>
-          <a href="/admin" class="btn secondary">חזרה לדפים</a>
-        </div>
-      </div>
-    </div>
+    ${adminNav('theme', 'ערכת נושא')}
     <div class="container" style="padding-top:28px;max-width:920px">
       <p style="color:#64748b;margin-top:0">שנה צבעים, פונט, לוגו ופריסת תפריט — בלי לגעת בקוד התמה. נשמר כ-overrides.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -1451,21 +3574,7 @@ app.get('/admin/sitemap', (req, res) => {
       .sm-edit{font-size:0.8rem;color:#0a66c2;text-decoration:none}
       .sm-none{color:#64748b}
     </style>
-    <div class="topbar">
-      <div class="container topbar-inner">
-        <div style="display:flex;align-items:center;gap:12px">
-          <a href="/admin" style="font-size:1.5rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
-          <span style="color:#94a3b8">•</span>
-          <span style="font-weight:600">מפת אתר</span>
-        </div>
-        <div style="display:flex;gap:8px">
-          <a href="/admin/menus" class="btn secondary">תפריטים</a>
-          <a href="/admin/sitemap" class="btn secondary">מפת אתר</a>
-          <a href="/admin/theme" class="btn secondary">ערכת נושא</a>
-          <a href="/admin" class="btn secondary">חזרה לדפים</a>
-        </div>
-      </div>
-    </div>
+    ${adminNav('sitemap', 'מפת אתר')}
     <div class="container" style="padding-top:28px;max-width:860px">
       <p style="color:#64748b;margin-top:0">המבנה נגזר מהתפריטים. דפים שלא מקושרים מופיעים למטה כיתומים.</p>
       ${menuSections}
@@ -1478,20 +3587,7 @@ app.get('/admin/sitemap', (req, res) => {
 app.get('/admin/menus', (req, res) => {
   const menus = loadMenus();
   const html = `
-    <div class="topbar">
-      <div class="container topbar-inner">
-        <div style="display:flex;align-items:center;gap:12px">
-          <a href="/admin" style="font-size:1.5rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
-          <span style="color:#94a3b8">•</span>
-          <span style="font-weight:600">תפריטים</span>
-        </div>
-        <div style="display:flex;gap:8px">
-          <a href="/admin/sitemap" class="btn secondary">מפת אתר</a>
-          <a href="/admin/theme" class="btn secondary">ערכת נושא</a>
-          <a href="/admin" class="btn secondary">חזרה לדפים</a>
-        </div>
-      </div>
-    </div>
+    ${adminNav('menus', 'תפריטים')}
     <div class="container" style="padding-top:28px;max-width:860px">
       <p style="color:#64748b;margin-top:0">תפריט ראשי (header) ותחתון (footer). ישות DB — לא מודול בדף.</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -1519,6 +3615,18 @@ app.get('/admin/menus', (req, res) => {
   res.send(layout(html, 'תפריטים', '#7c3aed'));
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Tapuz Visual Builder: http://localhost:${PORT}/admin`);
+const server = app.listen(PORT, () => {
+  const base = auth.getAdminBase();
+  console.log(`✅ Tapuz Visual Builder: http://localhost:${PORT}${base}`);
+  if (!auth.hasAdmin()) {
+    console.log(`   ↳ אין עדיין חשבון מנהל — היכנס ל־${base} כדי ליצור אותו.`);
+  }
 });
+
+// S4: slow-loris / slow-request mitigation. Cap how long a client may take to
+// send headers/body and how long an idle socket stays open. True volumetric
+// DDoS still needs a CDN/reverse proxy in front — see docs/security.md.
+server.setTimeout(30 * 1000);          // drop sockets idle/slow for 30s
+server.headersTimeout = 20 * 1000;     // headers must arrive within 20s
+server.requestTimeout = 60 * 1000;     // whole request within 60s
+server.keepAliveTimeout = 15 * 1000;   // keep-alive idle window

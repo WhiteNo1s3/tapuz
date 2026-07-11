@@ -5,22 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{title}}</title>
   <meta name="description" content="{{meta.description}}">
+  <meta name="robots" content="{{meta.robots}}">
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{meta.description}}">
+  <meta property="og:image" content="{{meta.ogImage}}">
+  <meta property="og:type" content="website">
   {{head}}
 </head>
 <body>
   <a class="skip-link" href="#main">דלג לתוכן</a>
-  <header class="site-header">
+  <header class="site-header {{header_class}}">
     <div class="container">
       <div class="header-inner">
-        <a href="/" class="site-logo">
-          {{logo_html}}
-        </a>
-        
+        <div class="header-brand">
+          <a href="/" class="site-logo">
+            {{logo_html}}
+          </a>
+          {{header_tagline}}
+        </div>
+
         <nav class="main-nav" aria-label="ניווט ראשי">
           <ul>
             {{menu_html}}
           </ul>
         </nav>
+        {{header_cta}}
       </div>
     </div>
   </header>
@@ -33,13 +42,22 @@
 
   <footer class="site-footer">
     <div class="container">
+      {{footer_columns_html}}
       <div class="footer-inner">
-        <p>&copy; {{site.title}} — {{currentYear}}</p>
-        <nav class="footer-nav" aria-label="ניווט תחתון">
-          {{footer_menu_html}}
-        </nav>
+        <div class="footer-copy">
+          <p>&copy; {{site.title}} — {{currentYear}}</p>
+          {{footer_text_html}}
+          {{footer_credit_html}}
+        </div>
+        <div class="footer-end">
+          <nav class="footer-nav" aria-label="ניווט תחתון">
+            {{footer_menu_html}}
+          </nav>
+          {{footer_social_html}}
+        </div>
       </div>
     </div>
   </footer>
+  {{site_extras}}
 </body>
 </html>

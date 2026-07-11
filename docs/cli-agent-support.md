@@ -23,23 +23,37 @@ We want Tapuz to be **great to work with from the command line and from AI agent
 5. **Separate concerns** — The renderer should be callable from scripts too
 6. **Minimal magic** — Avoid things that only live inside the web admin
 
-## Planned Capabilities (future but design for them now)
+## Current Capabilities (v0.37-alpha)
 
-- `tapuz create-page --title "..." --slug "..." --content '...'`
-- `tapuz edit-page <slug>`
-- `tapuz build` (generate static version)
-- Direct database access for power users
-- Simple REST endpoints or just direct DB for agents (with auth)
-- Ability to import/export pages as clean JSON
+### CLI — `bin/tapuz.js` (npm bins: `tapuziel`, `tapuz`)
 
-## Current Implications (MVP)
+- `create-page <title> [slug]`, `delete-page <slug>`, `list-pages`, `show <slug>`, `preview <slug>`
+- `add-block <slug> <type>` — block types in docs/block-schemas.md
+- `set-menu <name> '<json>'`, `set-logo`
+- `import-wp <export.xml>` — WordPress/Elementor import
+- `build` (static export), `serve`, `init-db`
 
-- Store page content as structured JSON (blocks array) — easy to generate from agents
-- Use slugs as the primary key for humans + scripts
-- Make the public renderer work from command line too (for static builds)
-- Keep block types simple and well-documented
+### Programmatic (require from `src/`)
 
-We will design the block system with "easy to generate programmatically" in mind.
+- `pages.js`: createPage / updatePage / publishPage / listPages / listArticles / restoreRevision
+- `setup.js`: **runSetup(answers)** — the whole wizard as one call (site name, colors,
+  pages, menu → live site). Agents can bootstrap a full site skeleton with it.
+- `renderer.js` / `export.js`: render + static build callable from any script
+- `TAPUZ_ROOT` env var: point all data (db/, config/, public/) at any directory
+
+### Admin HTTP API (no auth yet — Security phase pre-beta)
+
+- `GET /admin/api/pages`, `GET /admin/api/articles?tag=&limit=`
+- `POST /admin/save`, `POST /admin/publish` (blocks + tags + meta), `POST /admin/build`
+- `GET/POST /admin/api/theme`, `GET/POST /admin/api/menus`, `GET /admin/api/sitemap`
+- `POST /admin/setup` — Wizard v2 payload (see src/setup.js JSDoc)
+
+## The direction (North Star in ROADMAP.md)
+
+This grows into the **agent mini-API**: agents recognize page-builder modules and edit
+them safely, an in-admin copilot chatbot rides the same API, and a syntax primer +
+translator lets a user's own AI subscription (ChatGPT/Claude/Grok) operate the system
+with zero API keys.
 
 ---
 This is a first-class requirement, not a nice-to-have.

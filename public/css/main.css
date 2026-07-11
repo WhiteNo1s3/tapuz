@@ -194,6 +194,74 @@ p { margin-bottom: 1.1rem; }
   margin-bottom: 0.35rem;
 }
 
+/* ===== Article cubes (article-list module) ===== */
+.article-cubes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.article-cubes.cols-1 { grid-template-columns: 1fr; }
+.article-cubes.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.article-cubes.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 900px) {
+  .article-cubes,
+  .article-cubes.cols-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .article-cubes,
+  .article-cubes.cols-2,
+  .article-cubes.cols-4 { grid-template-columns: 1fr; }
+}
+
+.article-cube {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  text-decoration: none;
+  color: var(--color-text);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.article-cube:hover {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  transform: translateY(-2px);
+}
+
+.article-cube .cube-media {
+  background: var(--color-light-bg);
+  aspect-ratio: 16 / 9;
+}
+
+.article-cube .cube-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+
+.article-cube .cube-body {
+  padding: 1rem 1.1rem 1.2rem;
+}
+
+.article-cube .cube-body h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.1rem;
+}
+
+.article-cube .cube-body p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--color-muted);
+  line-height: 1.55;
+}
+
 /* ===== Images & Figures ===== */
 figure {
   margin: 1.75rem 0;
@@ -371,6 +439,88 @@ button:focus-visible,
   border: 0;
 }
 
+/* Map embed block (MAP) */
+.map-embed {
+  margin: 1.75rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--color-light-bg, #f1f5f9);
+}
+.map-embed iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 360px;
+  border: 0;
+}
+.map-embed.map-sm iframe { height: 220px; }
+.map-embed.map-md iframe { height: 360px; }
+.map-embed.map-lg iframe { height: 520px; }
+
+/* Text container (advanced module) */
+.bent-text { max-width: 100%; }
+.bent-text.text-size-sm { font-size: 0.92em; }
+.bent-text.text-size-lg { font-size: 1.12em; line-height: 1.75; }
+.bent-text.text-lead p:first-child { font-size: 1.2em; color: var(--color-muted, #4b5563); }
+.bent-text.text-dropcap p:first-child::first-letter {
+  float: inline-start;
+  font-size: 3.2em;
+  line-height: 0.85;
+  padding-inline-end: 0.12em;
+  font-weight: 700;
+  color: var(--color-primary, #0a66c2);
+}
+.bent-text.text-max-sm { max-width: 28rem; }
+.bent-text.text-max-md { max-width: 36rem; }
+.bent-text.text-max-lg { max-width: 48rem; }
+.bent-image.img-w-sm { max-width: 240px; }
+.bent-image.img-w-md { max-width: 420px; }
+.bent-image.img-w-lg { max-width: 640px; }
+.bent-image { margin: 1rem auto; }
+.hero-sm { padding: 1.5rem 1.25rem; min-height: 8rem; }
+.hero-lg { padding: 3.5rem 1.5rem; min-height: 18rem; }
+.hero-full { min-height: 70vh; display: flex; flex-direction: column; justify-content: center; }
+.hero[style*="background-image"] { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.45); }
+.map-embed { margin: 1rem 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--color-border, #e5e7eb); }
+.map-embed iframe { width: 100%; border: 0; display: block; min-height: 220px; }
+.map-embed.map-h-sm iframe { min-height: 180px; }
+.map-embed.map-h-lg iframe { min-height: 420px; }
+.gallery.cols-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.gallery.cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.gallery.cols-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.gallery img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; }
+.card, .bent-card {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  background: var(--color-surface, #f8fafc);
+}
+
+/* WhatsApp click-to-chat floating button (site integration) */
+.whatsapp-float {
+  position: fixed;
+  bottom: 1.25rem;
+  z-index: 950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #25D366;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.whatsapp-float:hover {
+  transform: scale(1.07);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+.whatsapp-float svg { width: 30px; height: 30px; fill: currentColor; }
+.whatsapp-float.pos-start { inset-inline-start: 1.25rem; }
+.whatsapp-float.pos-end { inset-inline-end: 1.25rem; }
+
 article.feature h3 {
   margin: 0 0 0.35rem;
   font-size: 1.1rem;
@@ -389,5 +539,19 @@ p, li { max-width: 70ch; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .card, .feature, .main-nav a::after, .skip-link { transition: none; }
+  .card, .feature, .main-nav a::after, .skip-link, .whatsapp-float { transition: none; }
 }
+
+
+/* Tapuz theme overrides */
+:root {
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Hebrew", sans-serif;
+  --max-width: 900px;
+  --color-text: #111827;
+  --color-muted: #6b7280;
+  --color-primary: #0a66c2;
+  --color-border: #e5e7eb;
+  --color-bg: #ffffff;
+  --color-light-bg: #f8fafc;
+}
+html { font-size: 17px; }

@@ -1,0 +1,66 @@
+BENTML 0.1
+
+META {
+  title: "המתכונים של סבתא"
+  slug: "מתכונים"
+  description: "כל המתכונים המשפחתיים, מדור לדור."
+  tags: ["בישול", "משפחה"]
+  status: draft
+}
+
+HEADING(level: 1) { המתכונים של סבתא }
+
+TEXT {
+  כל המתכונים כאן עוברים מדור לדור. יש לנו גם ערוץ יוטיוב עם סרטונים.
+
+  פסקה חדשה מתחילה אחרי שורה ריקה — בדיוק כמו כאן.
+}
+
+IMAGE(src: "/uploads/soup.jpg", alt: "קערת מרק עוף", caption: "המרק של יום שישי")
+
+ROW {
+  COL {
+    HEADING(level: 2) { מנות חמות }
+    TEXT { המרקים והתבשילים שמחזיקים חורף שלם. }
+  }
+  COL {
+    HEADING(level: 2) { מאפים }
+    TEXT { החלה של שבת, העוגיות של החגים. }
+  }
+}
+
+BUTTON(url: "/contact") { שלחו לנו מתכון }
+
+HERO {
+  HEADING(level: 1) { ברוכים הבאים למטבח }
+  TEXT { מתכונים אמיתיים, בלי קיצורי דרך. }
+  BUTTON(url: "/מתכונים") { לכל המתכונים }
+}
+
+LIST {
+  ITEM { - עציץ גדול }
+  ITEM { - אדמה איכותית }
+  ITEM { - סבלנות }
+}
+
+QUOTE(author: "סבתא רחל") { מרק טוב לא ממהרים. }
+
+TESTIMONIAL(author: "דוד", role: "נכד") { הכי טעים בשכונה. }
+
+GALLERY(columns: 3) {
+  IMAGE(src: "/uploads/1.jpg", alt: "1")
+  IMAGE(src: "/uploads/2.jpg", alt: "2")
+  IMAGE(src: "/uploads/3.jpg", alt: "3")
+}
+
+FEATURES(columns: 2) {
+  FEATURE(title: "טרי", icon: "🌿") { חומרי גלם מהשוק. }
+  FEATURE(title: "פשוט", icon: "✨") { הוראות ברורות. }
+}
+
+EMBED(url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+ARTICLES(tag: "article", limit: 6, columns: 3)
+
+SPACE(size: lg)
+DIVIDER

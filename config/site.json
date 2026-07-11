@@ -4,6 +4,18 @@
   "baseUrl": "",
   "defaultTheme": "default",
   "language": "he",
+  "integrations": {
+    "whatsapp": {
+      "enabled": false,
+      "phone": "",
+      "message": "",
+      "position": "start"
+    }
+  },
+  "seo": {
+    "titlePattern": "",
+    "defaultOgImage": ""
+  },
   "logo": {
     "type": "text",
     "text": "WhiteNo1se",

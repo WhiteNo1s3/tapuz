@@ -203,6 +203,83 @@ function listPages({ q, status } = {}) {
   return db.prepare(sql).all(...params);
 }
 
+// ---- Articles (pages tagged as articles, served as cubes by the article-list module) ----
+
+function publicUrlFor(full_path) {
+  // Must match export.js filename sanitization
+  return '/' + String(full_path || 'page').replace(/\s+/g, '-').replace(/[\/:*?"<>|]/g, '') + '.html';
+}
+
+/** First image src anywhere in a block tree (image, gallery, nested columns/card). */
+function firstImageSrc(list) {
+  for (const b of (list || [])) {
+    if (!b || !b.data) continue;
+    if (b.type === 'image' && b.data.src) return b.data.src;
+    if (b.type === 'gallery' && Array.isArray(b.data.images) && b.data.images.length) {
+      const im = b.data.images[0];
+      const src = typeof im === 'string' ? im : (im && im.src);
+      if (src) return src;
+    }
+    if (b.type === 'columns' && Array.isArray(b.data.columns)) {
+      for (const col of b.data.columns) {
+        const found = firstImageSrc((col && col.blocks) || []);
+        if (found) return found;
+      }
+    }
+    if (b.type === 'card' && Array.isArray(b.data.blocks)) {
+      const found = firstImageSrc(b.data.blocks);
+      if (found) return found;
+    }
+  }
+  return '';
+}
+
+/** First text content in a block tree, trimmed to teaser length. */
+function firstTeaser(list, maxLen = 160) {
+  for (const b of (list || [])) {
+    if (!b || !b.data) continue;
+    if (b.type === 'text' && b.data.content) {
+      const t = String(b.data.content).replace(/\s+/g, ' ').trim();
+      if (t) return t.length > maxLen ? t.slice(0, maxLen).trim() + '…' : t;
+    }
+    if (b.type === 'columns' && Array.isArray(b.data.columns)) {
+      for (const col of b.data.columns) {
+        const found = firstTeaser((col && col.blocks) || [], maxLen);
+        if (found) return found;
+      }
+    }
+  }
+  return '';
+}
+
+/**
+ * Published pages carrying the given tag, newest first, as article cards.
+ * Card image: meta.cardImage or auto from first image block.
+ * Teaser: meta.teaser or auto from first text block.
+ */
+function listArticles({ tag = 'article', limit = 12 } = {}) {
+  const max = Math.min(Math.max(parseInt(limit, 10) || 12, 1), 48);
+  const rows = db.prepare(
+    `SELECT * FROM pages WHERE status = 'published' ORDER BY updated_at DESC, id DESC`
+  ).all();
+
+  const articles = [];
+  for (const row of rows) {
+    const page = parsePageRow(row);
+    if (!page.tags.includes(tag)) continue;
+    articles.push({
+      title: page.title,
+      full_path: page.full_path,
+      url: publicUrlFor(page.full_path),
+      image: (page.meta && page.meta.cardImage) || firstImageSrc(page.blocks),
+      teaser: (page.meta && page.meta.teaser) || firstTeaser(page.blocks),
+      updated_at: page.updated_at
+    });
+    if (articles.length >= max) break;
+  }
+  return articles;
+}
+
 function deletePage(full_path) {
   const result = db.prepare('DELETE FROM pages WHERE full_path = ?').run(full_path);
   db.prepare('DELETE FROM page_revisions WHERE full_path = ?').run(full_path);
@@ -227,6 +304,8 @@ module.exports = {
   publishPage,
   getPageByFullPath,
   listPages,
+  listArticles,
+  publicUrlFor,
   deletePage,
   restoreRevision,
   listRevisions,

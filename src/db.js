@@ -2,7 +2,8 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const dbDir = path.join(__dirname, '..', 'db');
+const { DB_DIR } = require('./paths');
+const dbDir = DB_DIR;
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
 const dbPath = path.join(dbDir, 'tapuz.db');
@@ -88,6 +89,34 @@ function initialize() {
       name TEXT UNIQUE NOT NULL,
       items TEXT NOT NULL DEFAULT '[]',
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // First-party analytics (S6). Privacy-safe by design: NO raw IP and NO full
+  // User-Agent are ever stored — only a path, the referrer HOST, a coarse
+  // device class, and a DAILY-SALTED HMAC visitor hash. Insert/query helpers
+  // live in src/analytics.js (which requires ./db); db.js owns only the DDL and
+  // must NOT require sibling modules here (circular-init deadlock).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pageviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      path TEXT NOT NULL,
+      referrer_host TEXT,
+      device_class TEXT,
+      visitor_hash TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pageviews_created ON pageviews(created_at DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pageviews_path ON pageviews(path, created_at DESC)');
+
+  // Holds the current UTC-day salt so a server restart does not re-randomize
+  // the visitor hash mid-day. Prior days' salts are discarded (see
+  // analytics.getDailySalt) so yesterday's hashes cannot be recomputed.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS analytics_salt (
+      day TEXT PRIMARY KEY,
+      salt TEXT NOT NULL
     )
   `);
 

@@ -5,14 +5,14 @@ const { loadOverrides, overridesToCss } = require('./theme');
 const fs = require('fs');
 const path = require('path');
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const { PUBLIC_DIR, THEMES_DIR } = require('./paths');
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 function copyThemeAssets(themeSlug = 'default') {
-  const themeCss = path.join(__dirname, '..', 'themes', themeSlug, 'css', 'main.css');
+  const themeCss = path.join(THEMES_DIR, themeSlug, 'css', 'main.css');
   const destDir = path.join(PUBLIC_DIR, 'css');
   const destFile = path.join(destDir, 'main.css');
 
@@ -45,9 +45,7 @@ function writePageHtml(page, outputDir, isHome) {
   ensureDir(outputDir);
   copyThemeAssets(page.theme || 'default');
 
-  const filename = isHome
-    ? 'index.html'
-    : (page.full_path || 'page').replace(/\s+/g, '-').replace(/[\/:*?"<>|]/g, '') + '.html';
+  const filename = (page.full_path || 'page').replace(/\s+/g, '-').replace(/[\/:*?"<>|]/g, '') + '.html';
 
   const outputPath = path.join(outputDir, filename);
   const siteConfig = loadConfig();
@@ -58,6 +56,13 @@ function writePageHtml(page, outputDir, isHome) {
     html = html.replace('</head>', '  <link rel="stylesheet" href="/css/main.css">\n</head>');
   }
   fs.writeFileSync(outputPath, html, 'utf8');
+  // Home also becomes index.html — but keep its named file so menu links
+  // (/<full_path>.html) never 404
+  if (isHome) {
+    const indexPath = path.join(outputDir, 'index.html');
+    fs.writeFileSync(indexPath, html, 'utf8');
+    return indexPath;
+  }
   return outputPath;
 }
 

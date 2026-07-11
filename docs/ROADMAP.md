@@ -1,6 +1,6 @@
 # Tapuziel — Roadmap & Idea Pool
 
-**Current version: v0.35-alpha**
+**Current version: v0.37-alpha**
 
 ## How versions work
 
@@ -9,6 +9,22 @@
 - Ideas from three brains: **Ben**, **Claude**, **Grok** — all land in this file, best ones win
 - When builder + media + pages + theme builder feel complete → v1.0-beta
 - Long game: a real open-source CMS competitor, community-driven once Ben sets the direction. Security hardening gets its own phase before beta.
+
+## North Star (Ben, 2026-07-10)
+
+**Become the Red Hat of CMSs.** Fully open source, community-driven, no DRM, no vendor lock-in — the business is the ecosystem and the mastery, not gatekeeping. Competition is absurd, so we plan big and hard; the edge is knowing what people actually want in their sites and how they want them made (Ben = CMS master), plus being **more AI-friendly than any other CMS**.
+
+Pillars:
+1. **Ideas flow from mind to website.** The wizard + page builder turn intent into a live site with minimal friction. We advise building in *our language* (page-builder blocks), but never trap anyone — overrides (classes, custom CSS) always possible in the editor, like every serious CMS.
+2. **Import as a first-class citizen.** Elementor / WordPress export imports feed the wizard; an import can *skip* wizard steps it already answers (e.g. homepage creation — our generic homepage scheme with page-builder cuts/sections is only for from-scratch sites). Test-drive on an existing server or a fresh one.
+3. **Theme & plugin ecosystem.** Theme *maker* (colors, gradients, palette-from-image) + theme *import type* so people build and share themes. Selling is allowed but not our advice; we take zero liability for piracy of sold themes and will never add DRM — it's open source, it's all gitted, +0.01 versioning is our method. Plugin install support.
+4. **`.pzn` file format** — one portable container for imports/exports (sites, themes, plugins), same pipeline as the WordPress/Elementor import. This is a NEW packing/file system of ours and the first step of making a mark — same as Red Hat, whose mark was **RPM**, their own package format. `.pzn` is our RPM.
+5. **Agents are users too.** Mini-API so agents recognize page-builder parts and know what they're editing (see docs/cli-agent-support.md). The human face of that same API is an in-admin **chatbot that looks and feels like ChatGPT** — see "Module language & AI copilot" below.
+6. **Your AI subscription, not our tokens (the ace).** The *brain* of the copilot is the user's own subscription — no middleman charging tokens and reselling API. Already made with Grokin. How it works without API keys (the Grokin trick):
+   - The LLM runs where the user's subscription lives — the **web browser environment**, where LLMs are confident to work — or we use conversation tricks: the bot acts from a chat by emitting instructions.
+   - We set up **a chat with our syntax, `.pzn`-ready**: the user gets a primer (instructions to paste) that teaches *their* bot (ChatGPT / Claude / Grok…) Tapuziel syntax and `.pzn` syntax.
+   - A **translator inside Tapuziel** parses what the bot says in our syntax and executes it through the agent mini-API. The conversation *is* the protocol.
+   - API keys stay an option (already proven with ChatGPT + keys), but the goal is universal across providers. `C:\Dev\Grokin-V2` (WordPress bot + Chrome extension) is the sophisticated prior art to port in.
 
 ## The Plan (Ben's vision, phased)
 
@@ -36,22 +52,34 @@
 - Admin + output audited on all resolutions, window-resize safe
 - Mobile/tablet preview toggle in builder
 
-### v0.36 — Article system + Wizard v2 (Ben's spec, 2026-07-10)
-- **article-list module**: shows articles as "cubes" (cards) — image + title + teaser
-  - Card image: set manually, OR auto-extracted from the article's first image block
-  - Clicking a cube opens the article page
-- **Wizard v2** — a real guided setup, not 3 questions:
+### v0.36 — Article system ✅ (shipped) + Wizard v2 (next)
+- **article-list module** ✅: shows articles as "cubes" (cards) — image + title + teaser
+  - Card image: set manually (page properties), OR auto-extracted from the article's first image block
+  - Teaser: manual or auto from first text block; clicking a cube opens the article page
+  - A page becomes an article via the new **page properties** panel (deselect → side panel): article checkbox + teaser + card image
+- **Wizard v2** ✅ (shipped v0.37) — a real guided setup, not 3 questions:
   1. Site name
   2. Coloring — walks the user *through the theme creator* (teaches the tool while using it)
   3. Creates default pages: home, contact, about, articles (articles page uses article-list module)
   4. Menu step: pick from the pages just created ("the menu's menu") or href to external sites — typed links already support this
 - Theme creator: evolve toward drag & drop
 
+### Module language & AI copilot (Ben's spec, 2026-07-10)
+
+**Modules are the type system of the page.** Each module is its own class — primitive like `int`: text, heading, image, button, youtube (paste a URL — already the pattern since v0.30), gallery, list… Containers (sections, columns) get *filled* with modules. Goal: as many modules/tools as possible — the vocabulary of our language.
+
+- **Side options panel**: selecting a module already placed on the page opens its options in a panel at the side of the screen (not inline clutter). Every module declares its own options — one panel, schema-driven, so a new module gets its UI for free.
+- **The language must be sound for agents**: an agent should be able to place a text block, take an article it co-wrote with the user and *make it real* on the page, or write into the page in real time. Structured blocks (docs/block-schemas.md) are already this — the mini-API exposes read/insert/update/move per module.
+- **AI text operations**: correct, expand, shrink, rewrite. Could be offered as select-text → AI menu (keep as secondary option), **but the chosen direction is a chatbot**:
+- **The copilot chatbot**: an in-admin chat that *resembles the LLM UIs people already trust*. The user who is "so confident with their ChatGPT" has a blast — the bot they "know so much about" is operational here: it understands the builder and takes real actions — halving the page into columns, making a hero, coloring text inside a text block, filling a section with the article you wrote together. Chat is the human skin over the same agent mini-API; every chatbot ability is an API ability first.
+
 ### The long game (Ben)
 1. **CMS** — finish the builder, articles, themes (we are here)
 2. **CRM properties** — contacts, forms that feed them, leads from the published site (Ben's mastery: CMS/CRM)
 3. **Security phase** — see below; "bundle that no one can deny"
 4. **Open source, community-driven** — led by whiteno1se
+5. **Ecosystem** — `.pzn` import/export format, theme sharing, plugin installs, agent mini-API
+6. **BYO AI subscription** — Grokin-V2 functions ported in, agents talk directly to the system (the Red Hat endgame)
 
 ### Later (pre-beta) — Security phase (Ben: features first, security before beta)
 Deliberately deferred. When we get here, in order:
@@ -69,6 +97,8 @@ Deliberately deferred. When we get here, in order:
 
 | Version | Shipped | Source |
 |---|---|---|
+| v0.37-alpha | **Wizard v2**: 4 guided steps (name → coloring that *teaches the theme creator* with palettes + live mini-preview → default pages home/about/contact/articles with article-list + sample article → menu step with page picks + external links). Setup engine extracted to src/setup.js (runSetup — agents/CLI can bootstrap a site in one call). **TAPUZ_ROOT** env var via new src/paths.js — all data (db/config/public) can live in any directory (npm-publish blocker step 1). Fix: home exported only as index.html so menu links to /home.html 404'd — now writes both. Docs ecosystem aligned to version (README, next-steps, mvp-scope, implementation-plan, cli-agent-support, package.json 0.37.0-alpha). smoke-wizard E2E (32 checks, runs on throwaway root) | Ben (spec) + Claude |
+| v0.36-alpha | **article-list module** (cubes: image + title + teaser, tag-driven, 1-4 columns, newest first), page properties in side panel (article toggle, manual teaser + card image with auto-extraction fallback), live article preview in builder canvas via new /admin/api/articles, canvas background click = deselect → page properties, tags/meta flow through save/publish, article-cubes theme CSS (responsive grid), smoke-articles E2E (15 checks), block-schemas.md documents article-list for agents | Ben (spec) + Claude |
 | v0.32-alpha | Draft/Publish split + automatic revision backups, page navigator modal (search/jump), theme overrides system (colors, fonts, logo, menu placement) with live preview + API, menu entity in DB with editor, publish flow in builder, revisions modal with restore | Ben + Grok |
 | v0.35-alpha | Renamed to **Tapuziel** (Tapuz + Shaltiel's ־יאל — free on npm), npm packaging (bin: tapuziel + tapuz alias, engines, repository, npm pack verified 81 files), full E2E: wizard → published site → static serve all verified. TODO before real npm publish: cwd-based paths refactor (db/config/public should live in the user's project dir, not inside node_modules) | Ben + Claude |
 | v0.34-alpha | Admin section identity (subtle accent color per area: pages blue, menus purple, theme green, sitemap orange), first-run setup wizard for newcomers (3 questions → site + home page + menu + build), security phase spec'd in roadmap (deferred by design) | Ben + Claude |
@@ -95,7 +125,19 @@ Deliberately deferred. When we get here, in order:
 - Media: alt-text editing, image resize on upload, drag file into folder
 
 ### Ben's ideas
-- (add here)
+- **Palette from image**: in the theme maker, drop in images that *feel like the color you want* — extract a palette (+ gradients) from them
+- **Gradient support** in theme coloring, not just flat colors
+- **`.pzn` format**: single-file import/export container (site / theme / plugin), shares the import pipeline with WordPress/Elementor exports
+- **Theme import type**: anyone can package a theme as an import and share it; selling allowed, no DRM, no piracy liability on us
+- **Plugin install**: install plugins from a file (`.pzn`) — third-party module API is the foundation (see Community section)
+- **Import skips wizard steps**: importing a site auto-answers wizard questions it can (homepage, pages, menu) — wizard only asks what's still missing
+- **Generic homepage scheme**: from-scratch sites get a homepage pre-cut into page-builder sections (hero / content / CTA…) so there's never a blank page
+- **Agent mini-API**: endpoint/spec that lets agents identify page-builder blocks and edit them safely — make Tapuziel the most AI-friendly CMS
+- **Copilot chatbot in admin**: ChatGPT-style chat that operates the builder for real (halve page, make hero, color text, place the co-written article) — human skin over the agent mini-API
+- **Select-text AI actions**: correct / expand / shrink / rewrite on selected text — secondary entry point alongside the chatbot
+- **Side options panel**: module options appear in a side panel when a placed module is selected; schema-driven so every new module gets its panel for free
+- **BYO AI subscription**: user's own AI subscription powers the in-CMS assistant (no token middleman); port the Grokin-V2 bot + Chrome extension functions (`C:\Dev\Grokin-V2`), universal across providers
+- **Syntax primer + translator**: user pastes a primer into their own bot to teach it Tapuziel/`.pzn` syntax; the bot replies in our syntax and a translator in Tapuziel parses + executes via the mini-API — BYO subscription with zero API keys (the Grokin trick)
 
 ### Grok's ideas
 - (add here)

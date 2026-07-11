@@ -3,7 +3,7 @@ const path = require('path');
 const { db } = require('./db');
 
 // Media lives in public/assets/<folder>/, tracked in the DB.
-const ASSETS_DIR = path.join(__dirname, '..', 'public', 'assets');
+const { ASSETS_DIR } = require('./paths');
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|avif)$/i;
 

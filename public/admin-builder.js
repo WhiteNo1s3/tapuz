@@ -10,26 +10,95 @@
   var selectedId = null;
   var currentPageFullPath = '';
   var currentMediaTarget = null;
+  var pageTags = [];
+  var pageMeta = {};
+  var pageDirection = 'rtl'; // direction of the PAGE being edited (not the admin)
   var dragState = null; // { kind:'toolbox'|'block', blockType?, blockId? }
   var dropHint = null; // { mode:'insert'|'split', ... }
   var dropInProgress = false;
 
-  /** Module catalog — single source for toolbox, labels, replace chips */
+  /**
+   * Module catalog — mirrors src/block-registry.js (syntax dictionary).
+   * TEXT is the only advanced body container; others stay sharp + featureful.
+   */
   var MODULES = [
-    { type: 'hero', label: 'Hero', hint: 'כותרת גדולה בראש', icon: '★', group: 'תוכן' },
-    { type: 'heading', label: 'כותרת', hint: 'H1–H6', icon: 'H', group: 'תוכן' },
-    { type: 'text', label: 'טקסט', hint: 'פסקה', icon: '¶', group: 'תוכן' },
-    { type: 'button', label: 'כפתור', hint: 'קישור / CTA', icon: '◉', group: 'תוכן' },
-    { type: 'image', label: 'תמונה', hint: 'מדיה', icon: '▣', group: 'מדיה' },
-    { type: 'embed', label: 'וידאו', hint: 'YouTube / קישור', icon: '▶', group: 'מדיה' },
-    { type: 'gallery', label: 'גלריה', hint: 'רשת תמונות', icon: '▤', group: 'מדיה' },
-    { type: 'list', label: 'רשימה', hint: 'נקודות / ממוספרת', icon: '≡', group: 'תוכן' },
-    { type: 'testimonial', label: 'המלצה', hint: 'ציטוט + שם', icon: '❝', group: 'תוכן' },
-    { type: 'features', label: 'תכונות', hint: 'רשימת כרטיסים', icon: '▦', group: 'תוכן' },
-    { type: 'columns', label: 'עמודות', hint: '2–4 טורים', icon: '▥', group: 'פריסה' },
-    { type: 'spacer', label: 'רווח', hint: 'מרווח אנכי', icon: '↕', group: 'פריסה' },
-    { type: 'divider', label: 'קו מפריד', hint: 'קו אופקי', icon: '—', group: 'פריסה' }
+    { type: 'hero', label: 'Hero', hint: 'פתיח עם רקע', icon: '★', group: 'תוכן', keyword: 'HERO' },
+    { type: 'heading', label: 'כותרת', hint: 'H1–H6', icon: 'H', group: 'תוכן', keyword: 'HEADING' },
+    { type: 'text', label: 'טקסט', hint: 'מיכל מתקדם · @B @LINK', icon: '¶', group: 'תוכן', keyword: 'TEXT', advanced: true },
+    { type: 'button', label: 'כפתור', hint: 'CTA', icon: '◉', group: 'תוכן', keyword: 'BUTTON' },
+    { type: 'quote', label: 'ציטוט', hint: 'ציטוט מובלט', icon: '❞', group: 'תוכן', keyword: 'QUOTE' },
+    { type: 'testimonial', label: 'המלצה', hint: 'ציטוט + שם', icon: '❝', group: 'תוכן', keyword: 'TESTIMONIAL' },
+    { type: 'list', label: 'רשימה', hint: 'נקודות / מספרים', icon: '≡', group: 'תוכן', keyword: 'LIST' },
+    { type: 'features', label: 'תכונות', hint: 'כרטיסי יתרונות', icon: '▦', group: 'תוכן', keyword: 'FEATURES' },
+    { type: 'article-list', label: 'מאמרים', hint: 'קוביות דינמיות', icon: '⊞', group: 'תוכן', keyword: 'ARTICLES' },
+    { type: 'image', label: 'תמונה', hint: 'מדיה + כיתוב', icon: '▣', group: 'מדיה', keyword: 'IMAGE' },
+    { type: 'gallery', label: 'גלריה', hint: 'רשת תמונות', icon: '▤', group: 'מדיה', keyword: 'GALLERY' },
+    { type: 'embed', label: 'וידאו', hint: 'YouTube', icon: '▶', group: 'מדיה', keyword: 'EMBED' },
+    { type: 'map', label: 'מפה', hint: 'Google Maps', icon: '📍', group: 'מדיה', keyword: 'MAP' },
+    { type: 'cta', label: 'CTA', hint: 'קריאה לפעולה', icon: '➤', group: 'תוכן', keyword: 'CTA' },
+    { type: 'stats', label: 'מדדים', hint: 'מספרים', icon: '＃', group: 'תוכן', keyword: 'STATS' },
+    { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
+    { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
+    { type: 'columns', label: 'עמודות', hint: 'מכולות + resize', icon: '▥', group: 'מבנה', keyword: 'ROW' },
+    { type: 'card', label: 'כרטיס', hint: 'קופסת מודולים', icon: '▢', group: 'מבנה', keyword: 'CARD' },
+    { type: 'spacer', label: 'רווח', hint: 'sm–xl', icon: '↕', group: 'מבנה', keyword: 'SPACE' },
+    { type: 'divider', label: 'קו מפריד', hint: 'line/dots', icon: '—', group: 'מבנה', keyword: 'DIVIDER' },
+    { type: 'logos', label: 'לוגואים', hint: 'לקוחות', icon: '▣▣', group: 'מדיה', keyword: 'LOGOS' },
+    { type: 'contact-info', label: 'קשר', hint: 'טלפון/מייל', icon: '☎', group: 'מדיה', keyword: 'CONTACT' }
   ];
+
+  /**
+   * Block registry (ask C) — injected by the server from src/block-registry.js
+   * (window.__TAPUZ_REGISTRY__, also served at GET /admin/api/registry).
+   * When present it becomes the single source of truth: the MODULES catalog,
+   * BenTML keywords, defaults and the settings forms are all GENERATED from
+   * it. The hardcoded MODULES above is only a fallback for older servers.
+   */
+  var REG = (window.__TAPUZ_REGISTRY__ && Array.isArray(window.__TAPUZ_REGISTRY__.blocks))
+    ? window.__TAPUZ_REGISTRY__
+    : null;
+  var REG_BY_TYPE = {};
+  if (REG) {
+    REG.blocks.forEach(function (e) { REG_BY_TYPE[e.type] = e; });
+    MODULES = REG.blocks.map(function (e) {
+      return {
+        type: e.type,
+        label: e.labelHe || e.type,
+        hint: e.hintHe || '',
+        icon: e.icon || '•',
+        group: e.category || 'תוכן',
+        keyword: e.keyword || String(e.type).toUpperCase(),
+        advanced: e.type === 'text'
+      };
+    });
+  }
+
+  function registryDef(type) {
+    return REG_BY_TYPE[type] || null;
+  }
+
+  function paramDefFor(type, key) {
+    var def = registryDef(type);
+    if (!def) return null;
+    var ps = def.params || [];
+    for (var i = 0; i < ps.length; i++) {
+      if (ps[i].name === key) return ps[i];
+    }
+    return null;
+  }
+
+  /** Hebrew labels for common enum values in generated selects. */
+  var ENUM_LABELS = {
+    start: 'התחלה', center: 'מרכז', end: 'סוף',
+    sm: 'קטן', md: 'בינוני', lg: 'גדול', xl: 'ענק', full: 'מלא / מסך מלא',
+    primary: 'ראשי', secondary: 'משני', outline: 'מתאר',
+    line: 'קו', dots: 'נקודות', thick: 'עבה',
+    none: 'ללא', never: 'אף פעם',
+    top: 'למעלה', bottom: 'למטה', stretch: 'מתיחה (גובה אחיד)'
+  };
+  function enumLabel(v) { return ENUM_LABELS[v] || String(v); }
+
+  var SPACER_HEIGHTS = { sm: '0.75rem', md: '1.5rem', lg: '2.5rem', xl: '4rem' };
 
   var MODULE_BY_TYPE = {};
   MODULES.forEach(function (m) { MODULE_BY_TYPE[m.type] = m; });
@@ -51,6 +120,11 @@
 
   function escAttr(s) {
     return esc(s).replace(/"/g, '&quot;');
+  }
+
+  function cssEsc(s) {
+    if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(String(s));
+    return String(s).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
   }
 
   function uid(type) {
@@ -96,6 +170,12 @@
           if (found) return found;
         }
       }
+      if (b.type === 'card') {
+        if (!b.data) b.data = {};
+        if (!Array.isArray(b.data.blocks)) b.data.blocks = [];
+        var foundCard = findNode(id, b.data.blocks, b, 'card');
+        if (foundCard) return foundCard;
+      }
     }
     return null;
   }
@@ -114,6 +194,9 @@
         ensureColumns(b).forEach(function (col) {
           n += countAllBlocks(col.blocks);
         });
+      }
+      if (b.type === 'card' && b.data && Array.isArray(b.data.blocks)) {
+        n += countAllBlocks(b.data.blocks);
       }
     });
     return n;
@@ -192,6 +275,10 @@
     isDirty = true;
     scheduleAutosave();
     updateHeaderExtras();
+    // Live BenTML output (closed-loop language) — not just import
+    if (window.BentmlUI && typeof window.BentmlUI.onBuilderChange === 'function') {
+      window.BentmlUI.onBuilderChange();
+    }
   }
 
   function markSaved() {
@@ -206,6 +293,14 @@
     }, 2500);
   }
 
+  /**
+   * Dirty-state publish (ask E): draft ≠ published is the real "needs publish"
+   * signal — autosave clears isDirty within seconds, so the publish buttons key
+   * off hasUnpublishedState (kept in sync from every /admin/save response)
+   * OR isDirty (edits not yet autosaved).
+   */
+  var hasUnpublishedState = false;
+
   function updateHeaderExtras() {
     var u = document.getElementById('btn-undo');
     var r = document.getElementById('btn-redo');
@@ -216,6 +311,16 @@
       d.classList.toggle('on', isDirty);
       d.title = isDirty ? 'שינויים לא שמורים' : 'הכל שמור';
     }
+    var pending = isDirty || hasUnpublishedState;
+    document.querySelectorAll('.js-publish-btn').forEach(function (btn) {
+      btn.classList.toggle('is-dirty', pending);
+      btn.classList.toggle('is-clean', !pending);
+      btn.disabled = !pending;
+      btn.title = pending ? 'יש שינויים שלא פורסמו' : 'אין שינויים לפרסום';
+      if (btn.hasAttribute('data-publish-main')) {
+        btn.textContent = pending ? 'פרסם שינויים' : 'פרסם';
+      }
+    });
   }
 
   function ensureUiExtras() {
@@ -310,6 +415,22 @@
     }, 2800);
   }
 
+  /** Cached article fetch for the article-list canvas preview. */
+  var articlesPreviewCache = {}; // key -> { at, articles }
+  function fetchArticlesPreview(tag, limit, cb) {
+    var key = tag + '|' + limit;
+    var hit = articlesPreviewCache[key];
+    if (hit && Date.now() - hit.at < 15000) { cb(hit.articles); return; }
+    fetch('/admin/api/articles?tag=' + encodeURIComponent(tag) + '&limit=' + encodeURIComponent(limit))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var articles = (data && data.articles) || [];
+        articlesPreviewCache[key] = { at: Date.now(), articles: articles };
+        cb(articles);
+      })
+      .catch(function () { cb(hit ? hit.articles : []); });
+  }
+
   function youtubeId(url) {
     var m = String(url || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,20})/);
     return m ? m[1] : null;
@@ -319,9 +440,15 @@
   function getLiveList(parentId, colIndex) {
     if (!parentId) return blocks;
     var parent = getBlock(parentId);
-    if (!parent || parent.type !== 'columns') return null;
+    if (!parent) return null;
+    if (parent.type === 'card') {
+      if (!parent.data) parent.data = {};
+      if (!Array.isArray(parent.data.blocks)) parent.data.blocks = [];
+      return parent.data.blocks;
+    }
+    if (parent.type !== 'columns') return null;
     var cols = ensureColumns(parent);
-    var ci = colIndex == null ? 0 : colIndex;
+    var ci = colIndex == null ? 0 : parseInt(colIndex, 10) || 0;
     while (cols.length <= ci) cols.push({ blocks: [] });
     if (!Array.isArray(cols[ci].blocks)) cols[ci].blocks = [];
     return cols[ci].blocks;
@@ -330,6 +457,11 @@
   function containsId(rootBlock, id) {
     if (!rootBlock) return false;
     if (rootBlock.id === id) return true;
+    if (rootBlock.type === 'card' && rootBlock.data && rootBlock.data.blocks) {
+      for (var j = 0; j < rootBlock.data.blocks.length; j++) {
+        if (containsId(rootBlock.data.blocks[j], id)) return true;
+      }
+    }
     if (rootBlock.type !== 'columns') return false;
     var cols = ensureColumns(rootBlock);
     for (var c = 0; c < cols.length; c++) {
@@ -351,19 +483,45 @@
   // ---- Block factory + smart replace ----
 
   function defaultData(type) {
-    if (type === 'hero') return { title: 'כותרת ראשית', subtitle: '' };
+    if (type === 'hero') return { title: 'כותרת ראשית', subtitle: '', buttonText: '', buttonUrl: '', height: 'md' };
     if (type === 'heading') return { text: 'כותרת', level: 2 };
-    if (type === 'text') return { content: 'טקסט חדש...' };
-    if (type === 'button') return { text: 'לחץ כאן', url: '#' };
-    if (type === 'spacer') return { height: '40px' };
-    if (type === 'columns') return { columns: [{ blocks: [] }, { blocks: [] }] };
-    if (type === 'image') return { src: '', alt: '' };
-    if (type === 'testimonial') return { quote: '', author: '' };
-    if (type === 'divider') return {};
-    if (type === 'features') return { items: [{ title: 'פריט', description: '' }] };
-    if (type === 'list') return { items: ['פריט ראשון'], ordered: false };
-    if (type === 'gallery') return { images: [] };
+    if (type === 'text') {
+      return {
+        content: 'טקסט חדש...\n\nשורה ריקה = פסקה. אפשר @B{הדגשה} ו-@LINK(url: "/x"){קישור}.',
+        size: 'md'
+      };
+    }
+    if (type === 'button') return { text: 'לחץ כאן', url: '#', variant: 'primary' };
+    if (type === 'spacer') return { size: 'md', height: '1.5rem' };
+    if (type === 'columns') return { columns: [{ blocks: [] }, { blocks: [] }], gap: 'md' };
+    if (type === 'image') return { src: '', alt: '', caption: '', width: 'full' };
+    if (type === 'testimonial') return { quote: '', author: '', role: '' };
+    if (type === 'quote') return { text: '', author: '' };
+    if (type === 'divider') return { style: 'solid', bentStyle: 'line' };
+    if (type === 'features') return { items: [{ title: 'פריט', description: '', icon: '' }], columns: 3 };
+    if (type === 'list') return { items: [{ text: 'פריט ראשון' }], ordered: false };
+    if (type === 'gallery') return { images: [], columns: 3 };
     if (type === 'embed') return { url: '' };
+    if (type === 'article-list') return { tag: 'article', limit: 6, columns: 3 };
+    if (type === 'card') return { blocks: [] };
+    if (type === 'map') return { address: '', zoom: 15, height: 'md' };
+    // NEW types that exist only in the registry: derive defaults from schema
+    // (param defaults minus omitDefault, merged with the Hebrew seed) — adding
+    // a block type = adding one registry entry, no client edits needed.
+    var def = registryDef(type);
+    if (def) {
+      var data = {};
+      (def.params || []).forEach(function (p) {
+        if (p.omitDefault) return;
+        if (p.default !== undefined) data[p.name] = JSON.parse(JSON.stringify(p.default));
+      });
+      if (def.seed) {
+        Object.keys(def.seed).forEach(function (k) {
+          data[k] = JSON.parse(JSON.stringify(def.seed[k]));
+        });
+      }
+      return data;
+    }
     return {};
   }
 
@@ -541,11 +699,22 @@
     })(blocks);
 
     currentPageFullPath = config.fullPath || '';
+    pageTags = Array.isArray(config.tags) ? config.tags.slice() : [];
+    pageMeta = (config.meta && typeof config.meta === 'object') ? config.meta : {};
     selectedId = null;
     dropHint = null;
     undoStack = [];
     redoStack = [];
     isDirty = false;
+    hasUnpublishedState = !!config.hasUnpublished;
+    // Direction of the PAGE being edited (ask B): the settings drawer side
+    // follows it — RTL page → panel on the right, LTR page → panel on the left.
+    pageDirection = config.direction === 'ltr' ? 'ltr' : 'rtl';
+    var builderEl = document.querySelector('.builder');
+    if (builderEl) {
+      builderEl.classList.toggle('page-rtl', pageDirection === 'rtl');
+      builderEl.classList.toggle('page-ltr', pageDirection === 'ltr');
+    }
     ensureUiExtras();
     renderCanvas();
     renderProperties();
@@ -561,14 +730,26 @@
     canvas.innerHTML = '';
     canvas.classList.add('block-stack');
 
+    // Click on the canvas background (not a block) = deselect → page properties
+    if (!canvas._deselectBound) {
+      canvas._deselectBound = true;
+      canvas.addEventListener('click', function (e) {
+        if (e.target !== canvas) return;
+        if (selectedId == null) return;
+        selectedId = null;
+        renderCanvas();
+        renderProperties();
+      });
+    }
+
     if (!blocks.length) {
       var empty = document.createElement('div');
       empty.className = 'empty-canvas';
       empty.innerHTML =
-        '<div style="font-size:1.05rem;font-weight:700;color:#334155;margin-bottom:8px">הדף ריק</div>' +
-        '<div>לחץ מודול משמאל · או גרור לכאן</div>' +
-        '<div style="margin-top:10px;font-size:0.8rem;color:#94a3b8">אחרי בחירה — לחיצה על סוג אחר = החלפה</div>' +
-        '<div style="margin-top:6px;font-size:0.8rem;color:#94a3b8">גרור לצד מודול = פיצול לטורים</div>';
+        '<div style="font-size:1.05rem;font-weight:700;color:#334155;margin-bottom:8px">בנו את הדף כאן</div>' +
+        '<div>גררו מודולים מהסרגל · הזיזו מכולות · לחצו לבחירה</div>' +
+        '<div style="margin-top:10px;font-size:0.8rem;color:#94a3b8">לחיצה כפולה על טקסט = כתיבה ישירה במכולה</div>' +
+        '<div style="margin-top:6px;font-size:0.8rem;color:#94a3b8">בצד — הגדרות המודול + עיצוב מתקדם</div>';
       canvas.appendChild(empty);
       bindListSurface(canvas, null, null);
       updateCount();
@@ -732,7 +913,10 @@
 
     var label = document.createElement('div');
     label.className = 'block-label';
+    // Language keyword first — agents/humans see BenTML, not a mystery list label
+    var kw = bentmlKeywordFor(block.type);
     label.innerHTML =
+      '<code class="block-kw">' + esc(kw) + '</code> ' +
       '<span class="block-type-icon">' + esc(typeIcon(block.type)) + '</span> ' +
       esc(typeLabel(block.type)) +
       (nested ? ' <span class="nest-tag">בטור</span>' : '');
@@ -740,6 +924,17 @@
     var content = document.createElement('div');
     content.className = 'block-content';
     content.appendChild(renderBlockBody(block));
+    // apply module style to visual host
+    (function applyStyleNow() {
+      var d = block.data || {};
+      var s = d.style || {};
+      content.style.textAlign = d.align === 'center' ? 'center' : d.align === 'end' ? 'end' : '';
+      content.style.color = s.color || '';
+      content.style.background = s.background || '';
+      content.style.fontSize = s.fontSize === 'sm' ? '0.9em' : s.fontSize === 'lg' ? '1.2em' : '';
+      content.style.padding = s.padding === 'sm' ? '0.35rem 0.5rem' : s.padding === 'md' ? '0.75rem 1rem' : s.padding === 'lg' ? '1.25rem 1.5rem' : '';
+      content.style.borderRadius = s.radius === 'sm' ? '6px' : s.radius === 'md' ? '12px' : s.radius === 'lg' ? '20px' : '';
+    })();
 
     // side split zones (not for columns container itself — drop between/into cols instead)
     if (block.type !== 'columns') {
@@ -772,10 +967,12 @@
     });
 
     el.addEventListener('dblclick', function (e) {
+      // Inline text fields handle their own dblclick; otherwise focus settings
+      if (e.target.closest('[data-inline-key]')) return;
       e.stopPropagation();
       selectBlock(block.id);
       var panel = document.getElementById('properties-panel');
-      if (panel) panel.scrollIntoView({ behavior: 'smooth' });
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
 
     handle.addEventListener('dragstart', function (e) {
@@ -855,33 +1052,44 @@
   function renderBlockBody(block) {
     var d = block.data || {};
     var wrap = document.createElement('div');
+    wrap.className = 'module-visual';
+    if (d.className) wrap.className += ' ' + d.className;
 
     if (block.type === 'hero') {
       wrap.innerHTML =
         '<div class="preview-hero">' +
-        '<h1>' + esc(d.title || 'כותרת ראשית') + '</h1>' +
-        (d.subtitle ? '<p>' + esc(d.subtitle) + '</p>' : '') +
+        '<h1 data-inline-key="title">' + esc(d.title || 'כותרת ראשית') + '</h1>' +
+        '<p data-inline-key="subtitle">' + esc(d.subtitle || 'תת כותרת — לחיצה כפולה לעריכה') + '</p>' +
         '</div>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
     if (block.type === 'heading') {
       var level = Math.min(Math.max(d.level || 2, 1), 6);
-      wrap.innerHTML = '<h' + level + ' style="margin:4px 0">' + esc(d.text || 'כותרת') + '</h' + level + '>';
+      wrap.innerHTML =
+        '<h' + level + ' data-inline-key="text" style="margin:4px 0">' +
+        esc(d.text || 'כותרת') +
+        '</h' + level + '>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
     if (block.type === 'text') {
       wrap.innerHTML =
-        '<div style="line-height:1.6;color:#334155">' +
-        esc(d.content || '').replace(/\n/g, '<br>') +
+        '<div data-inline-key="content" class="inline-text" style="line-height:1.6;color:#334155;min-height:1.4em">' +
+        esc(d.content || 'טקסט — לחיצה כפולה לכתיבה ישירה').replace(/\n/g, '<br>') +
         '</div>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
     if (block.type === 'button') {
       wrap.innerHTML =
-        '<div><span class="preview-btn">' + esc(d.text || 'לחץ כאן') + '</span></div>';
+        '<div><span class="preview-btn" data-inline-key="text">' +
+        esc(d.text || 'לחץ כאן') +
+        '</span></div>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -891,7 +1099,7 @@
           '<img src="' + escAttr(d.src) + '" alt="" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0">';
       } else {
         wrap.innerHTML =
-          '<div class="preview-image-empty">תמונה (לחץ לעריכה)</div>';
+          '<div class="preview-image-empty">תמונה (לחץ לעריכה במאפיינים / מדיה)</div>';
       }
       return wrap;
     }
@@ -910,9 +1118,12 @@
     if (block.type === 'testimonial') {
       wrap.innerHTML =
         '<div class="preview-testimonial">' +
-        '<div style="font-style:italic">' + esc(d.quote || 'ציטוט...') + '</div>' +
-        '<div style="margin-top:8px;font-size:0.9rem;font-weight:600">' + esc(d.author || '') + '</div>' +
+        '<div data-inline-key="quote" style="font-style:italic">' + esc(d.quote || 'ציטוט...') + '</div>' +
+        '<div data-inline-key="author" style="margin-top:8px;font-size:0.9rem;font-weight:600">' +
+        esc(d.author || 'שם') +
+        '</div>' +
         '</div>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -964,6 +1175,38 @@
       return wrap;
     }
 
+    if (block.type === 'article-list') {
+      var alCols = Math.min(Math.max(parseInt(d.columns, 10) || 3, 1), 4);
+      var alLimit = Math.min(Math.max(parseInt(d.limit, 10) || 6, 1), 48);
+      var alTag = d.tag || 'article';
+      var grid = document.createElement('div');
+      grid.className = 'preview-cubes';
+      grid.style.gridTemplateColumns = 'repeat(' + alCols + ', 1fr)';
+      var placeholders = Math.min(alLimit, alCols);
+      var ph = '';
+      for (var pi = 0; pi < placeholders; pi++) {
+        ph += '<div class="preview-cube"><div class="cube-img">⊞</div><div class="cube-txt">מאמר…</div></div>';
+      }
+      grid.innerHTML = ph;
+      wrap.appendChild(grid);
+      fetchArticlesPreview(alTag, alLimit, function (articles) {
+        if (!document.body.contains(grid)) return; // canvas re-rendered meanwhile
+        if (!articles.length) {
+          grid.innerHTML = '<div class="preview-cubes-note">אין עדיין דפים מפורסמים עם תגית "' + esc(alTag) +
+            '" — סמן דף כמאמר במאפייני הדף (לחץ על רקע הקנבס)</div>';
+          return;
+        }
+        grid.innerHTML = articles.map(function (a) {
+          var img = a.image
+            ? '<img src="' + escAttr(a.image) + '" alt="">'
+            : '⊞';
+          return '<div class="preview-cube"><div class="cube-img">' + img + '</div>' +
+            '<div class="cube-txt">' + esc(a.title || '') + '</div></div>';
+        }).join('');
+      });
+      return wrap;
+    }
+
     if (block.type === 'gallery') {
       var gImgs = d.images || [];
       if (!gImgs.length) {
@@ -985,29 +1228,119 @@
       return renderColumnsBody(block);
     }
 
+    if (block.type === 'quote') {
+      wrap.innerHTML =
+        '<blockquote class="preview-quote">' +
+        '<p data-inline-key="text">' + esc(d.text || 'ציטוט…') + '</p>' +
+        (d.author ? '<footer data-inline-key="author">— ' + esc(d.author) + '</footer>' : '<footer data-inline-key="author">— מקור</footer>') +
+        '</blockquote>';
+      wireInlineEditable(wrap, block);
+      return wrap;
+    }
+
+    if (block.type === 'card') {
+      var cardInner = document.createElement('div');
+      cardInner.className = 'preview-card is-container';
+      cardInner.innerHTML = '<div class="column-head"><span class="container-badge">כרטיס</span> מכולה</div>';
+      var cardList = document.createElement('div');
+      cardList.className = 'column-list';
+      if (!Array.isArray(d.blocks)) d.blocks = [];
+      if (!block.data) block.data = d;
+      if (!block.data.blocks) block.data.blocks = [];
+      renderListInto(cardList, block.data.blocks, block, 'card');
+      cardInner.appendChild(cardList);
+      wrap.appendChild(cardInner);
+      return wrap;
+    }
+
+    if (block.type === 'map') {
+      wrap.innerHTML =
+        '<div class="preview-map">' +
+        '<div class="preview-map-pin">📍</div>' +
+        '<div><strong>מפה</strong></div>' +
+        '<div style="color:#64748b;font-size:0.9rem">' +
+        esc(d.address || 'הזן כתובת במאפיינים') +
+        '</div></div>';
+      return wrap;
+    }
+
+    // Generic preview for registry-only types (no hand-written case needed)
+    var genDef = registryDef(block.type);
+    if (genDef) {
+      var bodyTxt = genDef.textField ? (d[genDef.textField] || '') : '';
+      wrap.innerHTML =
+        '<div style="padding:12px;border:1px dashed #cbd5e1;border-radius:8px;color:#334155;background:#f8fafc">' +
+        '<strong>' + esc(genDef.icon || '') + ' ' + esc(genDef.labelHe || block.type) + '</strong>' +
+        (bodyTxt ? '<div style="margin-top:4px">' + esc(bodyTxt) + '</div>' : '') +
+        '<div class="prop-hint">ערוך במאפיינים ←</div>' +
+        '</div>';
+      return wrap;
+    }
+
     wrap.textContent = block.type || '?';
     return wrap;
   }
 
+  /** Column width ratios — "2:1" or [2,1]. Edge: user drags halves, agent can set ratio: "2:1". */
+  function parseColumnRatios(block) {
+    var cols = ensureColumns(block);
+    var n = cols.length;
+    var r = block.data && block.data.ratio;
+    var parts = null;
+    if (Array.isArray(r) && r.length === n) {
+      parts = r.map(function (x) { return Math.max(0.2, Number(x) || 1); });
+    } else if (typeof r === 'string' && r.indexOf(':') !== -1) {
+      parts = r.split(':').map(function (x) { return Math.max(0.2, parseFloat(x) || 1); });
+      if (parts.length !== n) parts = null;
+    }
+    if (!parts) {
+      parts = [];
+      for (var i = 0; i < n; i++) parts.push(1);
+    }
+    return parts;
+  }
+
+  function setColumnRatios(block, ratios) {
+    if (!block.data) block.data = {};
+    // store as "2:1" style for BenTML decompile
+    block.data.ratio = ratios
+      .map(function (x) {
+        var v = Math.round(x * 10) / 10;
+        return v % 1 === 0 ? String(Math.round(v)) : String(v);
+      })
+      .join(':');
+  }
+
   function renderColumnsBody(block) {
     var cols = ensureColumns(block);
+    var ratios = parseColumnRatios(block);
     var row = document.createElement('div');
-    row.className = 'columns-preview';
+    row.className = 'columns-preview is-container';
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = ratios.map(function (r) { return r + 'fr'; }).join(' ');
+    row.style.gap = '0';
+    row.dataset.columnsId = block.id;
 
     cols.forEach(function (col, colIndex) {
       var colEl = document.createElement('div');
-      colEl.className = 'column-pane';
+      colEl.className = 'column-pane is-container';
       colEl.dataset.parentId = block.id;
       colEl.dataset.colIndex = String(colIndex);
+      colEl.style.minWidth = '0';
 
       var head = document.createElement('div');
       head.className = 'column-head';
-      head.textContent = 'טור ' + (colIndex + 1);
+      var pct = Math.round((ratios[colIndex] / ratios.reduce(function (a, b) { return a + b; }, 0)) * 100);
+      head.innerHTML =
+        '<span class="container-badge">מכולה</span> טור ' +
+        (colIndex + 1) +
+        ' <span class="col-ratio-label">' +
+        pct +
+        '%</span>';
       colEl.appendChild(head);
 
       var listWrap = document.createElement('div');
       listWrap.className = 'column-list';
-      // Always use the real col.blocks array via renderListInto (empty = one insert slot).
       if (!Array.isArray(col.blocks)) col.blocks = [];
       if (!col.blocks.length) {
         var empty = document.createElement('div');
@@ -1029,9 +1362,81 @@
       colEl.appendChild(addBtn);
 
       row.appendChild(colEl);
+
+      // Resize handle between this column and the next (move the halves)
+      if (colIndex < cols.length - 1) {
+        var handle = document.createElement('div');
+        handle.className = 'col-resize-handle';
+        handle.title = 'גרור לשינוי רוחב הטורים';
+        handle.setAttribute('role', 'separator');
+        handle.setAttribute('aria-orientation', 'vertical');
+        bindColumnResize(handle, block, colIndex, row);
+        // grid: place handle as a narrow track — use absolute overlay between panes instead
+        colEl.style.position = 'relative';
+        handle.style.position = 'absolute';
+        handle.style.top = '0';
+        handle.style.bottom = '0';
+        handle.style.left = isRtl() ? 'auto' : '100%';
+        handle.style.right = isRtl() ? '100%' : 'auto';
+        handle.style.marginInlineStart = isRtl() ? '0' : '-5px';
+        handle.style.marginInlineEnd = isRtl() ? '-5px' : '0';
+        colEl.appendChild(handle);
+      }
     });
 
     return row;
+  }
+
+  function bindColumnResize(handle, block, leftIndex, rowEl) {
+    handle.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var startX = e.clientX;
+      var startRatios = parseColumnRatios(block).slice();
+      var total = startRatios.reduce(function (a, b) { return a + b; }, 0);
+      var rowRect = rowEl.getBoundingClientRect();
+      var rowW = Math.max(rowRect.width, 1);
+      var rtl = isRtl();
+
+      function onMove(ev) {
+        var dx = ev.clientX - startX;
+        if (rtl) dx = -dx;
+        // convert pixel drag to fraction of total ratio units
+        var dUnits = (dx / rowW) * total;
+        var left = startRatios[leftIndex];
+        var right = startRatios[leftIndex + 1];
+        var pair = left + right;
+        var newLeft = Math.min(pair - 0.25, Math.max(0.25, left + dUnits));
+        var newRight = pair - newLeft;
+        var next = startRatios.slice();
+        next[leftIndex] = newLeft;
+        next[leftIndex + 1] = newRight;
+        rowEl.style.gridTemplateColumns = next.map(function (r) { return r + 'fr'; }).join(' ');
+        // live % labels
+        var sum = next.reduce(function (a, b) { return a + b; }, 0);
+        rowEl.querySelectorAll('.col-ratio-label').forEach(function (lab, i) {
+          if (next[i] != null) lab.textContent = Math.round((next[i] / sum) * 100) + '%';
+        });
+        handle._liveRatios = next;
+      }
+
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.classList.remove('is-col-resizing');
+        if (handle._liveRatios) {
+          pushHistory();
+          setColumnRatios(block, handle._liveRatios);
+          markDirty();
+          // refresh side panel if this columns block is selected
+          if (selectedId === block.id) renderProperties();
+        }
+      }
+
+      document.body.classList.add('is-col-resizing');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
   }
 
   // ---- Drop commit (never lose a block) ----
@@ -1265,11 +1670,158 @@
 
   // ---- Selection / properties ----
 
-  function selectBlock(id) {
+  function selectBlock(id, opts) {
+    opts = opts || {};
     selectedId = id;
+    if (!opts.skipCanvas) renderCanvas();
+    if (!opts.skipProps) renderProperties();
+    syncToolboxMode();
+  }
+
+  /** Live-update canvas text from side panel without destroying the tree. */
+  function liveUpdatePreview(id, key, val) {
+    var nodes = document.querySelectorAll(
+      '[data-inline-id="' + cssEsc(id) + '"][data-inline-key="' + cssEsc(key) + '"]'
+    );
+    nodes.forEach(function (target) {
+      if (target.isContentEditable) return;
+      if (key === 'content') {
+        target.innerHTML = esc(val || '').replace(/\n/g, '<br>');
+      } else {
+        target.textContent = val || '';
+      }
+    });
+    applyPreviewStyle(id);
+  }
+
+  function applyPreviewStyle(id) {
+    var block = getBlock(id);
+    if (!block) return;
+    var host = document.querySelector('.canvas-block[data-id="' + cssEsc(id) + '"] .block-content');
+    if (!host) return;
+    var d = block.data || {};
+    var s = d.style || {};
+    host.style.textAlign = d.align === 'center' ? 'center' : d.align === 'end' ? 'end' : '';
+    host.style.color = s.color || '';
+    host.style.background = s.background || '';
+    host.style.fontSize = s.fontSize === 'sm' ? '0.9em' : s.fontSize === 'lg' ? '1.2em' : '';
+    host.style.padding = s.padding === 'sm' ? '0.35rem 0.5rem' : s.padding === 'md' ? '0.75rem 1rem' : s.padding === 'lg' ? '1.25rem 1.5rem' : '';
+    host.style.borderRadius = s.radius === 'sm' ? '6px' : s.radius === 'md' ? '12px' : s.radius === 'lg' ? '20px' : '';
+  }
+
+  /**
+   * Double-click to write directly in the container.
+   * Commits to block.data and refreshes the side settings text.
+   */
+  function startInlineEdit(blockId, key) {
+    var block = getBlock(blockId);
+    if (!block) return;
+    selectedId = blockId;
     renderCanvas();
     renderProperties();
-    syncToolboxMode();
+
+    var el = document.querySelector(
+      '[data-inline-id="' + cssEsc(blockId) + '"][data-inline-key="' + cssEsc(key) + '"]'
+    );
+    if (!el) return;
+
+    var original =
+      key === 'content'
+        ? block.data.content || ''
+        : key === 'quote'
+          ? block.data.quote || ''
+          : key === 'title'
+            ? block.data.title || ''
+            : key === 'subtitle'
+              ? block.data.subtitle || ''
+              : key === 'author'
+                ? block.data.author || ''
+                : block.data.text || '';
+
+    el.contentEditable = 'true';
+    el.classList.add('inline-editing');
+    el.focus();
+    try {
+      var range = document.createRange();
+      range.selectNodeContents(el);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {}
+
+    var done = false;
+    function commit(save) {
+      if (done) return;
+      done = true;
+      el.contentEditable = 'false';
+      el.classList.remove('inline-editing');
+      if (save) {
+        pushHistory();
+        if (!block.data) block.data = {};
+        var text = (el.innerText || '').replace(/\u00a0/g, ' ');
+        if (key === 'content') block.data.content = text;
+        else if (key === 'quote') block.data.quote = text;
+        else if (key === 'title') block.data.title = text;
+        else if (key === 'subtitle') block.data.subtitle = text;
+        else if (key === 'author') block.data.author = text;
+        else block.data.text = text;
+        markDirty();
+        renderProperties();
+        // keep canvas text as committed (no full re-render needed)
+        if (key === 'content') el.innerHTML = esc(text).replace(/\n/g, '<br>');
+        else el.textContent = text;
+      } else {
+        if (key === 'content') el.innerHTML = esc(original).replace(/\n/g, '<br>');
+        else el.textContent = original;
+      }
+    }
+
+    el.onblur = function () {
+      commit(true);
+    };
+    el.onkeydown = function (e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        commit(false);
+        el.blur();
+      }
+      // single-line fields: Enter commits
+      if (e.key === 'Enter' && key !== 'content' && key !== 'quote') {
+        e.preventDefault();
+        el.blur();
+      }
+      // live mirror to side panel while typing
+      if (e.key !== 'Escape') {
+        setTimeout(function () {
+          var panelInput = document.querySelector(
+            '#properties-panel [data-key="' + key + '"], #properties-panel [data-key="' +
+              (key === 'text' ? 'text' : key) +
+              '"]'
+          );
+          // map keys: text module uses content, heading uses text
+          var sel =
+            document.querySelector('#properties-panel [data-key="' + key + '"]') ||
+            (key === 'text' ? document.querySelector('#properties-panel [data-key="text"]') : null);
+          if (sel && document.activeElement !== sel) {
+            sel.value = (el.innerText || '').replace(/\u00a0/g, ' ');
+          }
+        }, 0);
+      }
+    };
+  }
+
+  function wireInlineEditable(root, block) {
+    if (!root) return;
+    root.querySelectorAll('[data-inline-key]').forEach(function (el) {
+      el.setAttribute('data-inline-id', block.id);
+      el.classList.add('inline-editable');
+      el.title = 'לחיצה כפולה — כתוב ישירות בתוך המודול';
+      el.addEventListener('dblclick', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        startInlineEdit(block.id, el.getAttribute('data-inline-key'));
+      });
+    });
   }
 
   function field(label, inputHtml) {
@@ -1311,13 +1863,181 @@
     });
   }
 
+  function bentmlKeywordFor(type) {
+    // Registry-backed (MODULES carries keyword from src/block-registry.js)
+    var m = MODULE_BY_TYPE[type];
+    if (m && m.keyword) return m.keyword;
+    var map = {
+      hero: 'HERO', heading: 'HEADING', text: 'TEXT', button: 'BUTTON', image: 'IMAGE',
+      embed: 'EMBED', gallery: 'GALLERY', 'article-list': 'ARTICLES', list: 'LIST',
+      testimonial: 'TESTIMONIAL', features: 'FEATURES', columns: 'ROW', spacer: 'SPACE',
+      divider: 'DIVIDER', quote: 'QUOTE', card: 'CARD', map: 'MAP'
+    };
+    return map[type] || String(type || '').toUpperCase();
+  }
+
+  // ─── Registry-generated settings forms (ask C) ───
+  // The per-type settings UI is GENERATED from getBlockDef(type).params:
+  // enum → select, boolean → toggle, integer → number (min/max),
+  // media → input + library picker, url/string → input, textarea → textarea,
+  // ratio → "2:1" input, list → item editor from itemFields.
+
+  function renderParamControl(p, block) {
+    var d = block.data || {};
+    var cur = d[p.name] !== undefined ? d[p.name] : p.default;
+    var label = esc(p.labelHe || p.name) + (p.required ? ' *' : '');
+    var hint = p.hint ? '<div class="prop-hint">' + esc(p.hint) + '</div>' : '';
+    var t = p.type;
+
+    if (t === 'enum') {
+      var opts = (p.enum || []).map(function (v) {
+        return '<option value="' + escAttr(v) + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + esc(enumLabel(v)) + '</option>';
+      }).join('');
+      return field(label, '<select data-key="' + escAttr(p.name) + '">' + opts + '</select>') + hint;
+    }
+    if (t === 'boolean') {
+      return '<div class="prop-group"><label class="check-line"><input type="checkbox" data-key="' + escAttr(p.name) + '"' +
+        (cur ? ' checked' : '') + '> ' + esc(p.labelHe || p.name) + '</label></div>' + hint;
+    }
+    if (t === 'integer') {
+      return field(label,
+        '<input type="number" data-key="' + escAttr(p.name) + '"' +
+        (p.min != null ? ' min="' + p.min + '"' : '') +
+        (p.max != null ? ' max="' + p.max + '"' : '') +
+        ' value="' + escAttr(cur != null ? cur : '') + '">') + hint;
+    }
+    if (t === 'media') {
+      return field(label, '<input data-key="' + escAttr(p.name) + '" dir="ltr" value="' + escAttr(cur || '') + '" placeholder="/uploads/...">') +
+        '<button type="button" class="btn" style="margin:2px 0 10px" data-media-param="' + escAttr(p.name) + '">בחר מהספרייה</button>' + hint;
+    }
+    if (t === 'url') {
+      return field(label, '<input data-key="' + escAttr(p.name) + '" dir="ltr" value="' + escAttr(cur || '') + '">') + hint;
+    }
+    if (t === 'textarea') {
+      return field(label, '<textarea data-key="' + escAttr(p.name) + '">' + esc(cur || '') + '</textarea>') + hint;
+    }
+    if (t === 'ratio') {
+      return field(label, '<input data-key="' + escAttr(p.name) + '" dir="ltr" value="' + escAttr(cur || '') + '" placeholder="2:1">') + hint;
+    }
+    if (t === 'list') {
+      return renderListParam(p, block) + hint;
+    }
+    // default: string
+    return field(label, '<input data-key="' + escAttr(p.name) + '" value="' + escAttr(cur || '') + '">') + hint;
+  }
+
+  function renderListParam(p, block) {
+    var d = block.data || {};
+    var items = Array.isArray(d[p.name]) ? d[p.name] : [];
+    var fields = p.itemFields || [{ name: 'text', labelHe: 'טקסט', type: 'string' }];
+    var hasMedia = fields.some(function (f) { return f.type === 'media'; });
+    var html = '<div class="prop-section-label">' + esc(p.labelHe || p.name) + '</div>';
+
+    if (hasMedia) {
+      // gallery-style thumbs + multi picker from the media library
+      html += '<div class="gallery-edit">' + items.map(function (im, i) {
+        var src = typeof im === 'string' ? im : (im && im.src) || '';
+        return '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-lp-del="' + i + '" data-lp="' + escAttr(p.name) + '" title="הסר">×</button></div>';
+      }).join('') + '</div>';
+      html += '<button type="button" class="btn" style="margin:6px 0" data-lp-media-add="' + escAttr(p.name) + '">+ הוסף תמונות מהספרייה</button>';
+      html += '<div class="prop-hint">' + items.length + ' פריטים</div>';
+      return html;
+    }
+
+    if (fields.length === 1) {
+      // compact editor: one line per item
+      var fname = fields[0].name;
+      var lines = items.map(function (it) {
+        return typeof it === 'string' ? it : ((it && it[fname]) || '');
+      });
+      html += field('שורה לכל פריט', '<textarea data-lp-lines="' + escAttr(p.name) + '" data-lp-field="' + escAttr(fname) + '">' + esc(lines.join('\n')) + '</textarea>');
+      return html;
+    }
+
+    items.forEach(function (it, i) {
+      fields.forEach(function (f) {
+        var v = (it && typeof it === 'object') ? (it[f.name] || '') : (f.name === fields[0].name ? (it || '') : '');
+        var flabel = 'פריט ' + (i + 1) + ' — ' + esc(f.labelHe || f.name);
+        if (f.type === 'textarea') {
+          html += field(flabel, '<textarea data-lp="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '">' + esc(v) + '</textarea>');
+        } else {
+          html += field(flabel, '<input data-lp="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '" value="' + escAttr(v) + '">');
+        }
+      });
+      html += '<button type="button" class="btn secondary" style="margin:0 0 12px;font-size:0.8rem;padding:4px 10px" data-lp-del="' + i + '" data-lp="' + escAttr(p.name) + '">− הסר פריט ' + (i + 1) + '</button>';
+    });
+    html += '<button type="button" class="btn secondary" style="margin:6px 0" data-lp-add="' + escAttr(p.name) + '">+ פריט</button>';
+    return html;
+  }
+
+  function defaultListItem(p) {
+    var fields = p.itemFields || [];
+    if (fields.length <= 1) return '';
+    var item = {};
+    fields.forEach(function (f) { item[f.name] = ''; });
+    return item;
+  }
+
+  /** Full generated form for a registry entry: body text field + all params. */
+  function renderSchemaForm(def, block) {
+    var d = block.data || {};
+    var html = '';
+    if (def.textField) {
+      var tv = d[def.textField] || '';
+      var tlabel = esc(def.textFieldLabelHe || 'טקסט');
+      if (def.textFieldType === 'textarea') {
+        html += field(tlabel, '<textarea data-key="' + escAttr(def.textField) + '">' + esc(tv) + '</textarea>');
+      } else {
+        html += field(tlabel, '<input data-key="' + escAttr(def.textField) + '" value="' + escAttr(tv) + '">');
+      }
+    }
+    (def.params || []).forEach(function (p) {
+      // align is rendered once in the shared "module style" section below
+      if (p.name === 'align') return;
+      html += renderParamControl(p, block);
+    });
+    return html;
+  }
+
   function renderProperties() {
     var panel = document.getElementById('properties-panel');
     if (!panel) return;
 
     var node = selectedId ? findNode(selectedId) : null;
     if (!node) {
-      panel.innerHTML =
+      var isArticle = pageTags.indexOf('article') !== -1;
+      var pageHtml =
+        '<div class="prop-type-head">' +
+        '<span class="prop-type-icon">📄</span>' +
+        '<div><div class="prop-type-name">מאפייני דף</div>' +
+        '<div class="prop-type-sub">כל-ב-אחד · SEO · מאמרים · בלי תוספים</div></div></div>' +
+        '<div class="prop-section-label">תוכן / מבנה</div>' +
+        '<div class="prop-group">' +
+        '<label class="check-line"><input type="checkbox" data-page-article="1"' + (isArticle ? ' checked' : '') + '> דף מאמר (יופיע בקוביות מאמרים)</label>' +
+        '</div>';
+      if (isArticle) {
+        pageHtml += field('תקציר לקובייה', '<textarea data-page-meta="teaser" placeholder="ריק = נלקח אוטומטית מהטקסט הראשון">' + esc(pageMeta.teaser || '') + '</textarea>');
+        pageHtml += field('תמונת קובייה (URL)', '<input data-page-meta="cardImage" dir="ltr" value="' + escAttr(pageMeta.cardImage || '') + '" placeholder="ריק = התמונה הראשונה בדף">');
+        pageHtml += '<button type="button" class="btn" style="margin:6px 0 12px" data-page-card-media="1">בחר תמונה מהספרייה</button>';
+      }
+      pageHtml +=
+        '<div class="prop-section-label">SEO (נקודת פתיחה ברמה של CMS גדול)</div>' +
+        field('כותרת SEO / Title', '<input data-page-meta="seoTitle" value="' + escAttr(pageMeta.seoTitle || '') + '" placeholder="ריק = כותרת הדף">') +
+        field('תיאור (meta description)', '<textarea data-page-meta="description" placeholder="תיאור לגוגל — עד ~160 תווים">' + esc(pageMeta.description || '') + '</textarea>') +
+        field('תמונת שיתוף (og:image)', '<input data-page-meta="ogImage" dir="ltr" value="' + escAttr(pageMeta.ogImage || pageMeta.ogimage || '') + '" placeholder="/uploads/...">') +
+        '<button type="button" class="btn" style="margin:2px 0 12px" data-page-og-media="1">בחר תמונת שיתוף מהספרייה</button>' +
+        field(
+          'אינדוקס',
+          '<select data-page-meta="robots">' +
+            '<option value=""' + (!pageMeta.robots ? ' selected' : '') + '>index, follow (ברירת מחדל)</option>' +
+            '<option value="noindex"' + (pageMeta.robots === 'noindex' ? ' selected' : '') + '>noindex</option>' +
+            '<option value="nofollow"' + (pageMeta.robots === 'nofollow' ? ' selected' : '') + '>nofollow</option>' +
+            '<option value="noindex,nofollow"' + (pageMeta.robots === 'noindex,nofollow' ? ' selected' : '') + '>noindex, nofollow</option>' +
+          '</select>'
+        ) +
+        '<div class="prop-hint">SEO מובנה בחבילה — לא תוסף. סוכנים כותבים description ב־META BenTML.</div>';
+      pageHtml +=
+        '<hr style="margin:14px 0;border-color:#f1f5f9">' +
         '<div class="props-empty">' +
         '<div class="props-empty-title">אין מודול נבחר</div>' +
         '<div class="props-empty-line"><strong>הוספה</strong> — לחץ או גרור מהסרגל</div>' +
@@ -1325,6 +2045,50 @@
         '<div class="props-empty-line"><strong>פיצול</strong> — גרור לצד מודול / ⧉</div>' +
         '<div class="props-empty-line"><strong>החלפה</strong> — בחר מודול ואז לחץ סוג אחר</div>' +
         '</div>';
+      panel.innerHTML = pageHtml;
+
+      var artToggle = panel.querySelector('[data-page-article]');
+      if (artToggle) {
+        artToggle.addEventListener('change', function () {
+          var i = pageTags.indexOf('article');
+          if (artToggle.checked && i === -1) pageTags.push('article');
+          if (!artToggle.checked && i !== -1) pageTags.splice(i, 1);
+          markDirty();
+          renderProperties();
+        });
+      }
+      panel.querySelectorAll('[data-page-meta]').forEach(function (input) {
+        var applyMeta = function () {
+          var v = input.value.trim();
+          if (v) pageMeta[input.dataset.pageMeta] = v;
+          else delete pageMeta[input.dataset.pageMeta];
+          markDirty();
+        };
+        input.addEventListener('input', applyMeta);
+        input.addEventListener('blur', applyMeta);
+      });
+      var cardMedia = panel.querySelector('[data-page-card-media]');
+      if (cardMedia) {
+        cardMedia.addEventListener('click', function () {
+          openMediaGallery(function (picked) {
+            if (picked && picked.length) {
+              pageMeta.cardImage = typeof picked[0] === 'string' ? picked[0] : (picked[0].src || '');
+              markDirty();
+              renderProperties();
+            }
+          });
+        });
+      }
+      var ogMedia = panel.querySelector('[data-page-og-media]');
+      if (ogMedia) {
+        ogMedia.addEventListener('click', function () {
+          openMediaSingle(function (url) {
+            pageMeta.ogImage = url;
+            markDirty();
+            renderProperties();
+          });
+        });
+      }
       syncToolboxMode();
       return;
     }
@@ -1335,40 +2099,216 @@
       ? '<div class="nest-hint">בתוך עמודות · טור ' + ((node.colIndex || 0) + 1) + '</div>'
       : '';
 
+    var kw = bentmlKeywordFor(block.type);
+    var snips = (window.BentmlUI && window.BentmlUI.AGENT_SNIPPETS) || {};
+    var snip = snips[kw] || (kw + ' { … }');
+    var st = d.style || {};
     var html =
       nestHint +
       '<div class="prop-type-head">' +
       '<span class="prop-type-icon">' + esc(typeIcon(block.type)) + '</span>' +
       '<div>' +
       '<div class="prop-type-name">' + esc(typeLabel(block.type)) + '</div>' +
-      '<div class="prop-type-sub">' + esc((MODULE_BY_TYPE[block.type] && MODULE_BY_TYPE[block.type].hint) || block.type) + '</div>' +
+      '<div class="prop-type-sub">בחרת מכולה · ערוך כאן או לחיצה כפולה על הטקסט בדף</div>' +
       '</div></div>' +
       '<div class="prop-group">' +
       '<label>החלף סוג מודול</label>' +
       buildReplaceChips(block.type) +
-      '<div class="prop-hint">התוכן החשוב (טקסט / תמונה / Class) נשמר כשאפשר</div>' +
-      '</div>';
+      '</div>' +
+      '<div class="prop-section-label">תוכן</div>';
 
-    if (block.type === 'hero') {
+    // Ask C: for every type the registry describes, the settings form is
+    // GENERATED from the schema. Only genuinely bespoke editors remain
+    // hand-written: text (advanced container), card + columns (nesting
+    // containers). The chain below the first branch is a legacy fallback for
+    // servers that don't inject the registry.
+    var regDef = registryDef(block.type);
+    var HAND_WRITTEN = { text: 1, card: 1, columns: 1 };
+    if (regDef && !HAND_WRITTEN[block.type]) {
+      html += renderSchemaForm(regDef, block);
+    } else if (block.type === 'hero') {
       html += field('כותרת', '<input data-key="title" value="' + escAttr(d.title || '') + '">');
       html += field('תת כותרת', '<input data-key="subtitle" value="' + escAttr(d.subtitle || '') + '">');
+      html += field('טקסט כפתור', '<input data-key="buttonText" value="' + escAttr(d.buttonText || '') + '">');
+      html += field('קישור כפתור', '<input data-key="buttonUrl" value="' + escAttr(d.buttonUrl || '') + '">');
+      html += field('תמונת רקע', '<input data-key="image" value="' + escAttr(d.image || '') + '" dir="ltr" placeholder="/uploads/...">');
+      html += '<button type="button" class="btn" style="margin:6px 0 12px" data-media-hero="' + escAttr(block.id) + '">בחר רקע ממדיה</button>';
+      html += field(
+        'גובה',
+        '<select data-key="height">' +
+          '<option value="sm"' + (d.height === 'sm' ? ' selected' : '') + '>קטן</option>' +
+          '<option value="md"' + (!d.height || d.height === 'md' ? ' selected' : '') + '>רגיל</option>' +
+          '<option value="lg"' + (d.height === 'lg' ? ' selected' : '') + '>גדול</option>' +
+          '<option value="full"' + (d.height === 'full' ? ' selected' : '') + '>מסך מלא</option>' +
+        '</select>'
+      );
     } else if (block.type === 'heading') {
       html += field('טקסט', '<input data-key="text" value="' + escAttr(d.text || '') + '">');
       html += field('רמה (1-6)', '<input type="number" min="1" max="6" data-key="level" value="' + (d.level || 2) + '">');
     } else if (block.type === 'text') {
-      html += field('תוכן', '<textarea data-key="content">' + esc(d.content || '') + '</textarea>');
+      html +=
+        '<div class="text-format-bar">' +
+        '<span class="prop-hint">מיכל מתקדם — סימון בתוך הטקסט:</span> ' +
+        '<button type="button" class="btn secondary fmt-btn" data-fmt="B" title="מודגש">B</button>' +
+        '<button type="button" class="btn secondary fmt-btn" data-fmt="I" title="נטוי"><em>I</em></button>' +
+        '<button type="button" class="btn secondary fmt-btn" data-fmt="LINK" title="קישור">🔗</button>' +
+        '</div>';
+      html += field(
+        'תוכן',
+        '<textarea data-key="content" class="text-body-field" rows="8">' +
+          esc(d.content || '') +
+          '</textarea>'
+      );
+      html +=
+        '<div class="prop-hint">@B{מודגש} · @I{נטוי} · @LINK(url: "/x"){טקסט} · שורה ריקה = פסקה</div>';
+      html += field(
+        'גודל',
+        '<select data-key="size">' +
+          '<option value="sm"' + (d.size === 'sm' ? ' selected' : '') + '>קטן</option>' +
+          '<option value="md"' + (!d.size || d.size === 'md' ? ' selected' : '') + '>רגיל</option>' +
+          '<option value="lg"' + (d.size === 'lg' ? ' selected' : '') + '>גדול</option>' +
+        '</select>'
+      );
+      html += field(
+        'רוחב מקסימלי',
+        '<select data-key="maxWidth">' +
+          '<option value="full"' + (!d.maxWidth || d.maxWidth === 'full' ? ' selected' : '') + '>מלא</option>' +
+          '<option value="lg"' + (d.maxWidth === 'lg' ? ' selected' : '') + '>רחב</option>' +
+          '<option value="md"' + (d.maxWidth === 'md' ? ' selected' : '') + '>בינוני</option>' +
+          '<option value="sm"' + (d.maxWidth === 'sm' ? ' selected' : '') + '>צר (קריא)</option>' +
+        '</select>'
+      );
+      html +=
+        '<div class="prop-group"><label class="check-line"><input type="checkbox" data-bool="lead"' +
+        (d.lead ? ' checked' : '') +
+        '> פסקת פתיח (lead)</label></div>';
+      html +=
+        '<div class="prop-group"><label class="check-line"><input type="checkbox" data-bool="dropcap"' +
+        (d.dropcap ? ' checked' : '') +
+        '> אות פתיחה גדולה</label></div>';
     } else if (block.type === 'button') {
       html += field('טקסט', '<input data-key="text" value="' + escAttr(d.text || '') + '">');
       html += field('קישור', '<input data-key="url" value="' + escAttr(d.url || '') + '">');
+      html += field(
+        'סגנון',
+        '<select data-key="variant">' +
+          '<option value="primary"' + (d.variant === 'primary' || !d.variant ? ' selected' : '') + '>ראשי</option>' +
+          '<option value="secondary"' + (d.variant === 'secondary' ? ' selected' : '') + '>משני</option>' +
+          '<option value="outline"' + (d.variant === 'outline' ? ' selected' : '') + '>מתאר</option>' +
+        '</select>'
+      );
     } else if (block.type === 'image') {
       html += field('כתובת תמונה (URL)', '<input data-key="src" value="' + escAttr(d.src || '') + '">');
       html += '<button type="button" class="btn" style="margin:6px 0 12px" data-media="' + escAttr(block.id) + '">בחר מספריית מדיה</button>';
       html += field('Alt (SEO)', '<input data-key="alt" value="' + escAttr(d.alt || '') + '">');
+      html += field('כיתוב', '<input data-key="caption" value="' + escAttr(d.caption || '') + '">');
+      html += field(
+        'רוחב',
+        '<select data-key="width">' +
+          '<option value="full"' + (!d.width || d.width === 'full' ? ' selected' : '') + '>מלא</option>' +
+          '<option value="lg"' + (d.width === 'lg' ? ' selected' : '') + '>גדול</option>' +
+          '<option value="md"' + (d.width === 'md' ? ' selected' : '') + '>בינוני</option>' +
+          '<option value="sm"' + (d.width === 'sm' ? ' selected' : '') + '>קטן</option>' +
+        '</select>'
+      );
+    } else if (block.type === 'quote') {
+      html += field('ציטוט', '<textarea data-key="text">' + esc(d.text || '') + '</textarea>');
+      html += field('מקור', '<input data-key="author" value="' + escAttr(d.author || '') + '">');
+    } else if (block.type === 'map') {
+      html += field('כתובת', '<input data-key="address" value="' + escAttr(d.address || '') + '" placeholder="תל אביב">');
+      html += field('זום (1–20)', '<input type="number" min="1" max="20" data-key="zoom" value="' + (d.zoom || 15) + '">');
+      html += field(
+        'גובה',
+        '<select data-key="height">' +
+          '<option value="sm"' + (d.height === 'sm' ? ' selected' : '') + '>קטן</option>' +
+          '<option value="md"' + (!d.height || d.height === 'md' ? ' selected' : '') + '>רגיל</option>' +
+          '<option value="lg"' + (d.height === 'lg' ? ' selected' : '') + '>גדול</option>' +
+        '</select>'
+      );
+    } else if (block.type === 'cta') {
+      html += field('כותרת', '<input data-key="title" value="' + escAttr(d.title || '') + '">');
+      html += field('טקסט', '<textarea data-key="text">' + esc(d.text || '') + '</textarea>');
+      html += field('טקסט כפתור', '<input data-key="buttonText" value="' + escAttr(d.buttonText || '') + '">');
+      html += field('קישור', '<input data-key="url" value="' + escAttr(d.url || '#') + '">');
+      html += field(
+        'סגנון כפתור',
+        '<select data-key="variant">' +
+          '<option value="primary"' + (d.variant !== 'secondary' && d.variant !== 'outline' ? ' selected' : '') + '>ראשי</option>' +
+          '<option value="secondary"' + (d.variant === 'secondary' ? ' selected' : '') + '>משני</option>' +
+          '<option value="outline"' + (d.variant === 'outline' ? ' selected' : '') + '>מתאר</option>' +
+        '</select>'
+      );
+      html += field(
+        'רקע הפס',
+        '<select data-key="tone">' +
+          '<option value="brand"' + (!d.tone || d.tone === 'brand' ? ' selected' : '') + '>מותג</option>' +
+          '<option value="dark"' + (d.tone === 'dark' ? ' selected' : '') + '>כהה</option>' +
+          '<option value="light"' + (d.tone === 'light' ? ' selected' : '') + '>בהיר</option>' +
+        '</select>'
+      );
+    } else if (block.type === 'stats') {
+      html += field('עמודות', '<input type="number" min="2" max="4" data-key="columns" value="' + (d.columns || 3) + '">');
+      var stItems = d.items || [];
+      stItems.forEach(function (it, i) {
+        html += field('ערך ' + (i + 1), '<input data-stat="' + i + '" data-skey="value" value="' + escAttr(it.value || '') + '">');
+        html += field('תווית ' + (i + 1), '<input data-stat="' + i + '" data-skey="label" value="' + escAttr(it.label || '') + '">');
+      });
+      html += '<button type="button" class="btn secondary" data-add-stat="1">+ מדד</button>';
+    } else if (block.type === 'faq') {
+      var fq = d.items || [];
+      fq.forEach(function (it, i) {
+        html += field('שאלה ' + (i + 1), '<input data-faq="' + i + '" data-fkey="question" value="' + escAttr(it.question || '') + '">');
+        html += field('תשובה ' + (i + 1), '<textarea data-faq="' + i + '" data-fkey="answer">' + esc(it.answer || '') + '</textarea>');
+      });
+      html += '<button type="button" class="btn secondary" data-add-faq="1">+ שאלה</button>';
+    } else if (block.type === 'logos') {
+      html += '<div class="prop-hint">לוגואים — PLACEHOLDER עד העלאה. ניתן לערוך URL לכל לוגו.</div>';
+      (d.items || []).forEach(function (it, i) {
+        html += field('לוגו ' + (i + 1) + ' src', '<input data-logo="' + i + '" data-lkey="src" dir="ltr" value="' + escAttr(it.src || '') + '">');
+        html += field('לוגו ' + (i + 1) + ' alt', '<input data-logo="' + i + '" data-lkey="alt" value="' + escAttr(it.alt || '') + '">');
+      });
+      html += '<button type="button" class="btn secondary" data-add-logo="1">+ לוגו</button>';
+    } else if (block.type === 'contact-info') {
+      html += field('טלפון', '<input data-key="phone" value="' + escAttr(d.phone || '') + '">');
+      html += field('אימייל', '<input data-key="email" value="' + escAttr(d.email || '') + '">');
+      html += field('כתובת', '<input data-key="address" value="' + escAttr(d.address || '') + '">');
+      html += field('שעות', '<input data-key="hours" value="' + escAttr(d.hours || '') + '">');
+    } else if (block.type === 'banner') {
+      html += field('הודעה', '<input data-key="text" value="' + escAttr(d.text || '') + '">');
+      html += field(
+        'סגנון',
+        '<select data-key="tone">' +
+          '<option value="brand"' + (!d.tone || d.tone === 'brand' ? ' selected' : '') + '>מותג</option>' +
+          '<option value="dark"' + (d.tone === 'dark' ? ' selected' : '') + '>כהה</option>' +
+          '<option value="light"' + (d.tone === 'light' ? ' selected' : '') + '>בהיר</option>' +
+          '<option value="warn"' + (d.tone === 'warn' ? ' selected' : '') + '>אזהרה</option>' +
+        '</select>'
+      );
+    } else if (block.type === 'card') {
+      html += '<div class="prop-hint">כרטיס = מכולה. גררו מודולים פנימה מהסרגל (או הוסיפו טקסט למטה).</div>';
+      html += '<button type="button" class="btn" data-card-add-text="1">+ טקסט בכרטיס</button>';
     } else if (block.type === 'testimonial') {
       html += field('ציטוט', '<textarea data-key="quote">' + esc(d.quote || '') + '</textarea>');
       html += field('שם', '<input data-key="author" value="' + escAttr(d.author || '') + '">');
     } else if (block.type === 'spacer') {
-      html += field('גובה', '<input data-key="height" value="' + escAttr(d.height || '30px') + '">');
+      html += field(
+        'גודל',
+        '<select data-key="size" data-spacer-size="1">' +
+          '<option value="sm"' + (d.size === 'sm' ? ' selected' : '') + '>קטן</option>' +
+          '<option value="md"' + (!d.size || d.size === 'md' ? ' selected' : '') + '>בינוני</option>' +
+          '<option value="lg"' + (d.size === 'lg' ? ' selected' : '') + '>גדול</option>' +
+          '<option value="xl"' + (d.size === 'xl' ? ' selected' : '') + '>ענק</option>' +
+        '</select>'
+      );
+    } else if (block.type === 'divider') {
+      html += field(
+        'סגנון',
+        '<select data-key="bentStyle">' +
+          '<option value="line"' + (!d.bentStyle || d.bentStyle === 'line' ? ' selected' : '') + '>קו</option>' +
+          '<option value="dots"' + (d.bentStyle === 'dots' ? ' selected' : '') + '>נקודות</option>' +
+          '<option value="thick"' + (d.bentStyle === 'thick' ? ' selected' : '') + '>עבה</option>' +
+        '</select>'
+      );
     } else if (block.type === 'features') {
       var items = d.items || [{ title: '', description: '' }];
       items.forEach(function (it, i) {
@@ -1401,8 +2341,24 @@
         '</div>';
       html += '<button type="button" class="btn" style="margin:6px 0" data-gal-add="1">+ הוסף תמונות מהספרייה</button>';
       html += '<div class="prop-hint">' + galImgs.length + ' תמונות בגלריה · לחיצה ימנית בספרייה = אפשרויות</div>';
+    } else if (block.type === 'article-list') {
+      html += field('תגית (אילו דפים להציג)', '<input data-key="tag" value="' + escAttr(d.tag || 'article') + '" placeholder="article">');
+      html += field('כמות מקסימלית', '<input type="number" min="1" max="48" data-key="limit" value="' + (parseInt(d.limit, 10) || 6) + '">');
+      html += field('עמודות (1-4)', '<input type="number" min="1" max="4" data-key="columns" value="' + (parseInt(d.columns, 10) || 3) + '">');
+      html += '<div class="prop-hint">מציג דפים מפורסמים עם התגית, מהחדש לישן. תמונה ותקציר לכל קובייה נלקחים ממאפייני הדף של המאמר — או אוטומטית מהתמונה והטקסט הראשונים שלו.</div>';
     } else if (block.type === 'columns') {
-      html += '<div style="font-size:0.85rem;color:#64748b;margin-bottom:8px">גרור מודולים לטורים, או בין מודולים. גרור לצד מודול בתוך טור לפיצול נוסף.</div>';
+      var ratiosNow = parseColumnRatios(block);
+      html +=
+        '<div class="prop-hint" style="margin-bottom:8px">' +
+        'מכולת טורים · גררו מודולים פנימה · <strong>גררו את הידית בין הטורים</strong> לשינוי רוחב (חצאים וכו׳)' +
+        '</div>';
+      html += field(
+        'יחס רוחב (לסוכן: ratio)',
+        '<input data-key="ratio" dir="ltr" value="' +
+          escAttr(d.ratio || ratiosNow.join(':')) +
+          '" placeholder="1:1 או 2:1">'
+      );
+      html += '<div class="prop-hint">דוגמאות: 1:1 · 2:1 · 1:2:1 — גם BenTML: ROW(ratio: "2:1")</div>';
       html += '<button type="button" class="btn" style="margin:4px" data-col="0">+ הוסף לטור 1</button>';
       html += '<button type="button" class="btn" style="margin:4px" data-col="1">+ הוסף לטור 2</button>';
       if (ensureColumns(block).length < 4) {
@@ -1411,9 +2367,58 @@
       html += '<button type="button" class="btn secondary" style="margin:4px;width:100%" data-unwrap="1">פרק עמודות (השטח הכל)</button>';
     }
 
-    html += '<hr style="margin:18px 0;border-color:#f1f5f9">';
-    html += field('Class', '<input data-key="className" value="' + escAttr(d.className || '') + '" placeholder="custom-class">');
-    html += field('ID', '<input data-key="id" value="' + escAttr(d.id || '') + '">');
+    // ── Style (first advanced module surface) ──
+    html +=
+      '<details class="style-advanced" open>' +
+      '<summary>עיצוב מודול <span class="adv-badge">מתקדם</span></summary>' +
+      '<div class="prop-hint" style="margin-bottom:8px">בלי HTML — בחר ערכים. המפתח לא צריך לחשוב על CSS.</div>' +
+      field(
+        'יישור',
+        '<select data-key="align">' +
+          '<option value="start"' + (!d.align || d.align === 'start' ? ' selected' : '') + '>התחלה</option>' +
+          '<option value="center"' + (d.align === 'center' ? ' selected' : '') + '>מרכז</option>' +
+          '<option value="end"' + (d.align === 'end' ? ' selected' : '') + '>סוף</option>' +
+        '</select>'
+      ) +
+      field(
+        'גודל טקסט',
+        '<select data-style="fontSize">' +
+          '<option value=""' + (!st.fontSize ? ' selected' : '') + '>רגיל</option>' +
+          '<option value="sm"' + (st.fontSize === 'sm' ? ' selected' : '') + '>קטן</option>' +
+          '<option value="lg"' + (st.fontSize === 'lg' ? ' selected' : '') + '>גדול</option>' +
+        '</select>'
+      ) +
+      field('צבע טקסט', '<input type="color" data-style="color" value="' + escAttr(st.color || '#334155') + '">') +
+      field('רקע', '<input type="color" data-style="background" value="' + escAttr(st.background || '#ffffff') + '">') +
+      '<button type="button" class="btn secondary" data-clear-bg="1" style="margin-bottom:8px;width:100%">נקה רקע</button>' +
+      field(
+        'ריפוד פנימי',
+        '<select data-style="padding">' +
+          '<option value=""' + (!st.padding ? ' selected' : '') + '>ללא</option>' +
+          '<option value="sm"' + (st.padding === 'sm' ? ' selected' : '') + '>קטן</option>' +
+          '<option value="md"' + (st.padding === 'md' ? ' selected' : '') + '>בינוני</option>' +
+          '<option value="lg"' + (st.padding === 'lg' ? ' selected' : '') + '>גדול</option>' +
+        '</select>'
+      ) +
+      field(
+        'עיגול פינות',
+        '<select data-style="radius">' +
+          '<option value=""' + (!st.radius ? ' selected' : '') + '>ללא</option>' +
+          '<option value="sm"' + (st.radius === 'sm' ? ' selected' : '') + '>קטן</option>' +
+          '<option value="md"' + (st.radius === 'md' ? ' selected' : '') + '>בינוני</option>' +
+          '<option value="lg"' + (st.radius === 'lg' ? ' selected' : '') + '>גדול</option>' +
+        '</select>'
+      ) +
+      field('מחלקת CSS (מתקדם מאוד)', '<input data-key="className" value="' + escAttr(d.className || '') + '" placeholder="my-class" dir="ltr">') +
+      field('מזהה ID', '<input data-key="id" value="' + escAttr(d.id || '') + '" dir="ltr">') +
+      '</details>';
+
+    html +=
+      '<details class="agent-snip-details">' +
+      '<summary>לסוכנים · BenTML</summary>' +
+      '<pre class="bentml-mini-snip">' + esc(snip) + '</pre>' +
+      '<div class="prop-hint">השפה לסוכנים — לא חובה למעצבים. טאב ״שפה לסוכן״ לגיליון המלא.</div>' +
+      '</details>';
 
     if (node.parent) {
       html += '<button type="button" class="btn secondary" style="margin-top:8px;width:100%" data-unnest="1">הוצא משורת עמודות</button>';
@@ -1430,15 +2435,203 @@
     panel.querySelectorAll('[data-key]').forEach(function (input) {
       var apply = function (reRender) {
         if (!input._histPushed) { pushHistory(); input._histPushed = true; }
-        var val = input.value;
-        if (input.dataset.key === 'level') val = parseInt(val, 10) || 2;
+        var val;
+        if (input.type === 'checkbox') {
+          val = input.checked; // registry boolean params
+        } else {
+          val = input.value;
+          // Registry-driven coercion: integer params get parsed + clamped
+          var pd = paramDefFor(block.type, input.dataset.key);
+          if (pd && pd.type === 'integer') {
+            val = parseInt(val, 10);
+            if (isNaN(val)) val = pd.default != null ? pd.default : 0;
+            if (pd.min != null) val = Math.max(pd.min, val);
+            if (pd.max != null) val = Math.min(pd.max, val);
+          } else if (input.dataset.key === 'level') val = parseInt(val, 10) || 2;
+          else if (input.dataset.key === 'limit') val = parseInt(val, 10) || 6;
+          else if (input.dataset.key === 'columns' && block.type === 'article-list') val = Math.min(Math.max(parseInt(val, 10) || 3, 1), 4);
+        }
         if (!block.data) block.data = {};
         block.data[input.dataset.key] = val;
-        if (reRender) renderCanvas();
+        // Registry side-effects for legacy renderer fields:
+        if (block.type === 'spacer' && input.dataset.key === 'size') {
+          block.data.height = SPACER_HEIGHTS[val] || '1.5rem';
+        }
+        if (block.type === 'divider' && input.dataset.key === 'bentStyle' && typeof block.data.style !== 'object') {
+          block.data.style = val === 'dots' ? 'dashed' : 'solid';
+        }
+        markDirty();
+        // mirror text fields live into the page visualizer
+        var k = input.dataset.key;
+        if (k === 'text' || k === 'content' || k === 'title' || k === 'subtitle' || k === 'quote' || k === 'author') {
+          liveUpdatePreview(block.id, k === 'text' ? 'text' : k, String(val));
+        }
+        if (k === 'ratio' && block.type === 'columns') {
+          if (reRender) renderCanvas();
+        } else if (k === 'align' || k === 'className') {
+          applyPreviewStyle(block.id);
+          if (reRender) renderCanvas();
+        } else if (reRender && k !== 'text' && k !== 'content' && k !== 'title' && k !== 'subtitle' && k !== 'quote' && k !== 'author') {
+          renderCanvas();
+        }
       };
       input.addEventListener('input', function () { apply(false); });
       input.addEventListener('change', function () { apply(true); });
-      input.addEventListener('blur', function () { apply(true); });
+      input.addEventListener('blur', function () { apply(false); });
+    });
+
+    // Style object (advanced module styling)
+    panel.querySelectorAll('[data-style]').forEach(function (input) {
+      var applyStyle = function () {
+        if (!input._histPushed) { pushHistory(); input._histPushed = true; }
+        if (!block.data) block.data = {};
+        if (!block.data.style || typeof block.data.style !== 'object') block.data.style = {};
+        var key = input.dataset.style;
+        var val = input.value;
+        if (val === '' || val === '#ffffff' && key === 'background' && input.type === 'color' && !input._touched) {
+          // keep default color inputs from forcing white bg until user touches
+        }
+        if (input.type === 'color') input._touched = true;
+        if (!val) delete block.data.style[key];
+        else block.data.style[key] = val;
+        if (!Object.keys(block.data.style).length) delete block.data.style;
+        markDirty();
+        applyPreviewStyle(block.id);
+      };
+      input.addEventListener('input', applyStyle);
+      input.addEventListener('change', applyStyle);
+    });
+
+    var clearBg = panel.querySelector('[data-clear-bg]');
+    if (clearBg) {
+      clearBg.addEventListener('click', function () {
+        pushHistory();
+        if (block.data && block.data.style) {
+          delete block.data.style.background;
+          if (!Object.keys(block.data.style).length) delete block.data.style;
+        }
+        markDirty();
+        renderProperties();
+        applyPreviewStyle(block.id);
+      });
+    }
+
+    // TEXT format chips → insert BenTML marks into content field
+    panel.querySelectorAll('[data-fmt]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var ta = panel.querySelector('textarea[data-key="content"]');
+        if (!ta) return;
+        pushHistory();
+        var start = ta.selectionStart || 0;
+        var end = ta.selectionEnd || 0;
+        var val = ta.value;
+        var selected = val.slice(start, end) || 'טקסט';
+        var ins = '';
+        if (btn.dataset.fmt === 'B') ins = '@B{' + selected + '}';
+        else if (btn.dataset.fmt === 'I') ins = '@I{' + selected + '}';
+        else if (btn.dataset.fmt === 'LINK') ins = '@LINK(url: "https://"){' + selected + '}';
+        ta.value = val.slice(0, start) + ins + val.slice(end);
+        if (!block.data) block.data = {};
+        block.data.content = ta.value;
+        markDirty();
+        liveUpdatePreview(block.id, 'content', ta.value);
+        ta.focus();
+      });
+    });
+
+    panel.querySelectorAll('[data-bool]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        pushHistory();
+        if (!block.data) block.data = {};
+        var key = input.dataset.bool;
+        if (input.checked) block.data[key] = true;
+        else delete block.data[key];
+        markDirty();
+        renderCanvas();
+      });
+    });
+
+    var spacerSize = panel.querySelector('[data-spacer-size]');
+    if (spacerSize) {
+      spacerSize.addEventListener('change', function () {
+        var map = { sm: '0.75rem', md: '1.5rem', lg: '2.5rem', xl: '4rem' };
+        if (!block.data) block.data = {};
+        block.data.size = spacerSize.value;
+        block.data.height = map[spacerSize.value] || '1.5rem';
+        markDirty();
+        renderCanvas();
+      });
+    }
+
+    var heroMedia = panel.querySelector('[data-media-hero]');
+    if (heroMedia) {
+      heroMedia.addEventListener('click', function () {
+        openMediaLibrary(block.id);
+        // reuse: after pick, also set image — openMediaLibrary sets src; for hero we need image key
+        var prev = currentMediaTarget;
+        currentMediaTarget = null;
+        openMediaGallery(function (picked) {
+          if (picked && picked.length) {
+            pushHistory();
+            if (!block.data) block.data = {};
+            block.data.image = typeof picked[0] === 'string' ? picked[0] : picked[0].src;
+            markDirty();
+            renderCanvas();
+            renderProperties();
+          }
+        });
+      });
+    }
+
+    var cardAdd = panel.querySelector('[data-card-add-text]');
+    if (cardAdd) {
+      cardAdd.addEventListener('click', function () {
+        pushHistory();
+        if (!block.data) block.data = {};
+        if (!Array.isArray(block.data.blocks)) block.data.blocks = [];
+        block.data.blocks.push(makeBlock('text'));
+        markDirty();
+        renderCanvas();
+        renderProperties();
+      });
+    }
+
+    function wireListEditor(attr, keys, addSel, newItem) {
+      panel.querySelectorAll('[' + attr + ']').forEach(function (input) {
+        var apply = function () {
+          if (!input._histPushed) { pushHistory(); input._histPushed = true; }
+          var i = parseInt(input.getAttribute(attr), 10);
+          var k = input.dataset.skey || input.dataset.fkey || input.dataset.lkey;
+          if (!block.data) block.data = {};
+          if (!Array.isArray(block.data.items)) block.data.items = [];
+          while (block.data.items.length <= i) block.data.items.push(newItem());
+          block.data.items[i][k] = input.value;
+          markDirty();
+        };
+        input.addEventListener('input', apply);
+        input.addEventListener('change', function () { apply(); renderCanvas(); });
+      });
+      var addBtn = panel.querySelector(addSel);
+      if (addBtn) {
+        addBtn.addEventListener('click', function () {
+          pushHistory();
+          if (!block.data) block.data = {};
+          if (!Array.isArray(block.data.items)) block.data.items = [];
+          block.data.items.push(newItem());
+          markDirty();
+          renderCanvas();
+          renderProperties();
+        });
+      }
+    }
+    wireListEditor('data-stat', ['value', 'label'], '[data-add-stat]', function () {
+      return { value: '0', label: 'מדד' };
+    });
+    wireListEditor('data-faq', ['question', 'answer'], '[data-add-faq]', function () {
+      return { question: 'שאלה?', answer: 'תשובה.' };
+    });
+    wireListEditor('data-logo', ['src', 'alt'], '[data-add-logo]', function () {
+      return { src: '/uploads/PLACEHOLDER-logo.svg', alt: 'לוגו' };
     });
 
     panel.querySelectorAll('[data-feat]').forEach(function (input) {
@@ -1519,6 +2712,109 @@
     panel.querySelectorAll('[data-media]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openMediaLibrary(btn.dataset.media);
+      });
+    });
+
+    // ── Binders for registry-GENERATED controls ──
+
+    // media param → single pick from the library into data[param]
+    panel.querySelectorAll('[data-media-param]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.mediaParam;
+        openMediaSingle(function (url) {
+          pushHistory();
+          if (!block.data) block.data = {};
+          block.data[key] = url;
+          markDirty();
+          renderCanvas();
+          renderProperties();
+        });
+      });
+    });
+
+    // list param, compact editor (single itemField): one line per item
+    panel.querySelectorAll('[data-lp-lines]').forEach(function (ta) {
+      var applyLines = function (reRender) {
+        if (!ta._histPushed) { pushHistory(); ta._histPushed = true; }
+        var key = ta.dataset.lpLines;
+        var fname = ta.dataset.lpField || 'text';
+        if (!block.data) block.data = {};
+        block.data[key] = ta.value.split('\n')
+          .map(function (s) { return s.trim(); })
+          .filter(Boolean)
+          .map(function (s) { var it = {}; it[fname] = s; return it; });
+        markDirty();
+        if (reRender) renderCanvas();
+      };
+      ta.addEventListener('input', function () { applyLines(false); });
+      ta.addEventListener('change', function () { applyLines(true); });
+      ta.addEventListener('blur', function () { applyLines(true); });
+    });
+
+    // list param, per-item field inputs
+    panel.querySelectorAll('[data-lp][data-lp-i]').forEach(function (input) {
+      var applyItem = function (reRender) {
+        if (!input._histPushed) { pushHistory(); input._histPushed = true; }
+        var key = input.dataset.lp;
+        var i = parseInt(input.dataset.lpI, 10);
+        var f = input.dataset.lpF;
+        if (!block.data) block.data = {};
+        if (!Array.isArray(block.data[key])) block.data[key] = [];
+        while (block.data[key].length <= i) block.data[key].push({});
+        if (typeof block.data[key][i] !== 'object' || block.data[key][i] == null) {
+          block.data[key][i] = {};
+        }
+        block.data[key][i][f] = input.value;
+        markDirty();
+        if (reRender) renderCanvas();
+      };
+      input.addEventListener('input', function () { applyItem(false); });
+      input.addEventListener('change', function () { applyItem(true); });
+      input.addEventListener('blur', function () { applyItem(true); });
+    });
+
+    // list param: remove item
+    panel.querySelectorAll('button[data-lp-del]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.lp;
+        pushHistory();
+        if (block.data && Array.isArray(block.data[key])) {
+          block.data[key].splice(parseInt(btn.dataset.lpDel, 10), 1);
+        }
+        markDirty();
+        renderCanvas();
+        renderProperties();
+      });
+    });
+
+    // list param: add item
+    panel.querySelectorAll('[data-lp-add]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.lpAdd;
+        var pdList = paramDefFor(block.type, key);
+        pushHistory();
+        if (!block.data) block.data = {};
+        if (!Array.isArray(block.data[key])) block.data[key] = [];
+        block.data[key].push(pdList ? defaultListItem(pdList) : {});
+        markDirty();
+        renderCanvas();
+        renderProperties();
+      });
+    });
+
+    // list param with media items (e.g. gallery): multi-pick from the library
+    panel.querySelectorAll('[data-lp-media-add]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.lpMediaAdd;
+        openMediaGallery(function (picked) {
+          pushHistory();
+          if (!block.data) block.data = {};
+          if (!Array.isArray(block.data[key])) block.data[key] = [];
+          block.data[key] = block.data[key].concat(picked);
+          markDirty();
+          renderCanvas();
+          renderProperties();
+        });
       });
     });
 
@@ -1682,13 +2978,20 @@
         full_path: currentPageFullPath,
         title: title,
         status: status,
-        blocks: blocks
+        blocks: blocks,
+        tags: pageTags,
+        meta: pageMeta
       })
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.ok) {
+          // draft ≠ published — the true "needs publish" signal (ask E)
+          if (typeof data.hasUnpublished === 'boolean') {
+            hasUnpublishedState = data.hasUnpublished;
+          }
           markSaved();
+          updatePublishBadge();
           if (opts.silent) flashCanvasHint('נשמר אוטומטית ✓');
           else showToast('נשמר ✓', 'ok');
         } else {
@@ -1718,13 +3021,14 @@
 
   // ---- Media ----
 
-  var mediaState = { folder: '', mode: 'single', selection: [], onPick: null };
+  var mediaState = { folder: '', mode: 'single', selection: [], onPick: null, onPickSingle: null };
 
   function openMediaLibrary(targetBlockId) {
     currentMediaTarget = targetBlockId || selectedId || null;
     mediaState.mode = currentMediaTarget && getBlock(currentMediaTarget) ? 'single' : 'browse';
     mediaState.selection = [];
     mediaState.onPick = null;
+    mediaState.onPickSingle = null;
     showMediaModal();
   }
 
@@ -1734,6 +3038,17 @@
     mediaState.mode = 'multi';
     mediaState.selection = [];
     mediaState.onPick = onPick;
+    mediaState.onPickSingle = null;
+    showMediaModal();
+  }
+
+  /** Single-pick mode with a callback — used by registry media params and page og:image. */
+  function openMediaSingle(onPick) {
+    currentMediaTarget = null;
+    mediaState.mode = 'single';
+    mediaState.selection = [];
+    mediaState.onPick = null;
+    mediaState.onPickSingle = onPick;
     showMediaModal();
   }
 
@@ -1957,6 +3272,13 @@
   }
 
   function pickMedia(url) {
+    if (mediaState.onPickSingle) {
+      var cb = mediaState.onPickSingle;
+      mediaState.onPickSingle = null;
+      closeMediaLibrary();
+      cb(url);
+      return;
+    }
     if (currentMediaTarget) {
       var block = getBlock(currentMediaTarget);
       if (block) {
@@ -1985,7 +3307,7 @@
         .then(function (data) {
           if (data.ok && data.url) {
             showToast('הועלה ✓', 'ok');
-            if (mediaState.mode === 'single' && currentMediaTarget) pickMedia(data.url);
+            if (mediaState.mode === 'single' && (currentMediaTarget || mediaState.onPickSingle)) pickMedia(data.url);
             else loadMediaFolder(mediaState.folder);
           } else {
             showToast(data.error || 'שגיאה בהעלאה', 'err');
@@ -2142,10 +3464,11 @@
     return fetch('/admin/publish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_path: currentPageFullPath, title: title, blocks: blocks })
+      body: JSON.stringify({ full_path: currentPageFullPath, title: title, blocks: blocks, tags: pageTags, meta: pageMeta })
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (data.ok) {
         showToast('פורסם ✓', 'ok');
+        hasUnpublishedState = false;
         markSaved();
         var badge = document.getElementById('publish-badge');
         if (badge) {
@@ -2158,6 +3481,16 @@
       }
       return data;
     }).catch(function () { showToast('שגיאה בפרסום', 'err'); });
+  }
+
+  /** Refresh the topbar badge to reflect draft-vs-published state. */
+  function updatePublishBadge() {
+    var badge = document.getElementById('publish-badge');
+    if (!badge) return;
+    var published = badge.textContent.indexOf('פורסם') === 0;
+    if (published) {
+      badge.textContent = hasUnpublishedState ? 'פורסם • טיוטה שונה' : 'פורסם';
+    }
   }
 
   function publishAndBuild() {
@@ -2188,7 +3521,21 @@
     openPagesNav: openPagesNav,
     closePagesNav: closePagesNav,
     openRevisions: openRevisions,
-    closeRevisions: closeRevisions
+    closeRevisions: closeRevisions,
+    // BenTML language bridge (used by admin-bentml-ui.js)
+    _getBlocks: function () { return blocks; },
+    _setBlocks: function (next) {
+      blocks = Array.isArray(next) ? next : [];
+      selectedId = null;
+      renderCanvas();
+      renderProperties();
+      syncToolboxMode();
+    },
+    _getTags: function () { return pageTags; },
+    _getMeta: function () { return pageMeta; },
+    _markDirty: markDirty,
+    get _fullPath() { return currentPageFullPath; },
+    get _direction() { return pageDirection; }
   };
 
   // Wire the pages-nav button if present

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { loadConfig, saveConfig } = require('./config');
 
-const OVERRIDES_PATH = path.join(__dirname, '..', 'config', 'theme-overrides.json');
+const OVERRIDES_PATH = path.join(require('./paths').CONFIG_DIR, 'theme-overrides.json');
 
 const DEFAULT_OVERRIDES = {
   colors: {

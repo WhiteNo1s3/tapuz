@@ -32,6 +32,12 @@ Build & Preview:
   export [full_path]
   serve [port]               # Quick local preview (default 8080)
 
+BenTML (page language — docs/bentml-v0.md):
+  bentml-compile <file.btml> [--json]
+  bentml-decompile <full_path>
+  bentml-preview <file.btml>   # compile → renderer HTML to stdout
+  bentml-modules               # keyword ↔ JSON block map
+
 Migration:
   import-wp <file.xml>       # Import WordPress WXR export
 
@@ -139,6 +145,97 @@ if (command === 'build') {
   const results = exportAll();
   console.log(`✅ Built ${results.length} pages to public/`);
   results.forEach(r => console.log('  ' + r.full_path));
+  process.exit(0);
+}
+
+// ─── BenTML ─────────────────────────────────────────────────────────
+if (command === 'bentml-compile' || command === 'bentml_compile') {
+  const file = args[1];
+  if (!file) {
+    console.error('Usage: tapuz bentml-compile <file.btml> [--json]');
+    process.exit(1);
+  }
+  const { compile, BentmlError } = require('../src/bentml');
+  try {
+    const source = fs.readFileSync(file, 'utf8');
+    const result = compile(source);
+    if (args.includes('--json')) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`title: ${result.page.title}`);
+      console.log(`slug:  ${result.page.slug}`);
+      console.log(`blocks (${result.blocks.length}):`);
+      result.blocks.forEach((b, i) => console.log(`  ${i + 1}. ${b.type} ${b.id}`));
+      if (result.warnings.length) {
+        console.log('warnings:');
+        result.warnings.forEach((w) => console.log(`  ${w.code}: ${w.message}`));
+      }
+    }
+  } catch (e) {
+    console.error(e instanceof BentmlError ? e.toString() : e.message);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+if (command === 'bentml-decompile' || command === 'bentml_decompile') {
+  const fullPath = args[1];
+  if (!fullPath) {
+    console.error('Usage: tapuz bentml-decompile <full_path>');
+    process.exit(1);
+  }
+  const { decompile } = require('../src/bentml');
+  const page = getPageByFullPath(fullPath);
+  if (!page) {
+    console.error('Page not found');
+    process.exit(1);
+  }
+  const blocks = page.draft_blocks != null ? page.draft_blocks : page.blocks;
+  process.stdout.write(
+    decompile(
+      {
+        title: page.title,
+        slug: page.slug || page.full_path,
+        direction: page.direction,
+        theme: page.theme,
+        status: page.status,
+        tags: page.tags,
+        meta: page.meta || {}
+      },
+      blocks || []
+    )
+  );
+  process.exit(0);
+}
+
+if (command === 'bentml-preview' || command === 'bentml_preview') {
+  const file = args[1];
+  if (!file) {
+    console.error('Usage: tapuz bentml-preview <file.btml>');
+    process.exit(1);
+  }
+  const { preview, BentmlError } = require('../src/bentml');
+  try {
+    const source = fs.readFileSync(file, 'utf8');
+    const result = preview(source);
+    process.stdout.write(result.html);
+  } catch (e) {
+    console.error(e instanceof BentmlError ? e.toString() : e.message);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+if (command === 'bentml-modules' || command === 'bentml_modules') {
+  const { listModules } = require('../src/bentml');
+  console.table(
+    listModules().map((m) => ({
+      keyword: m.keyword,
+      body: m.body,
+      jsonType: m.jsonType || (m.childOnly ? `(child of ${m.parent})` : '—'),
+      childOnly: m.childOnly || false
+    }))
+  );
   process.exit(0);
 }
 

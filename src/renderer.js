@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const THEMES_DIR = path.join(__dirname, '..', 'themes');
+const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
 const { getMenu } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
@@ -24,29 +24,92 @@ function loadLayout(themeDir, layoutName = 'default') {
   return `<!DOCTYPE html><html lang="{{lang}}" dir="{{direction}}"><head><title>{{title}}</title></head><body><main>{{content}}</main></body></html>`;
 }
 
+function styleAttr(data) {
+  const s = data?.style || {};
+  const parts = [];
+  if (data?.align === 'center') parts.push('text-align:center');
+  else if (data?.align === 'end') parts.push('text-align:end');
+  else if (data?.align === 'start') parts.push('text-align:start');
+  if (s.color) parts.push(`color:${escapeHtml(s.color)}`);
+  if (s.background) parts.push(`background:${escapeHtml(s.background)}`);
+  if (s.fontSize === 'sm') parts.push('font-size:0.9em');
+  if (s.fontSize === 'lg') parts.push('font-size:1.15em');
+  if (s.padding === 'sm') parts.push('padding:0.35rem 0.5rem');
+  if (s.padding === 'md') parts.push('padding:0.75rem 1rem');
+  if (s.padding === 'lg') parts.push('padding:1.25rem 1.5rem');
+  if (s.radius === 'sm') parts.push('border-radius:6px');
+  if (s.radius === 'md') parts.push('border-radius:12px');
+  if (s.radius === 'lg') parts.push('border-radius:20px');
+  return parts.length ? ` style="${parts.join(';')}"` : '';
+}
+
+/**
+ * Expand BenTML inline marks inside already-escaped? No — work on raw, escape segments.
+ * @B{…} @I{…} @LINK(url: "…"){…} @CODE{…} @BREAK
+ */
+function renderInlineMarks(raw) {
+  let s = String(raw ?? '');
+  const tokens = [];
+  const hold = (html) => {
+    const i = tokens.length;
+    tokens.push(html);
+    return `§§TAPUZ${i}§§`;
+  };
+  s = s.replace(/@BREAK\b/gi, () => hold('<br>'));
+  s = s.replace(/@B\{([^{}]*)\}/gi, (_, inner) => hold(`<strong>${escapeHtml(inner)}</strong>`));
+  s = s.replace(/@I\{([^{}]*)\}/gi, (_, inner) => hold(`<em>${escapeHtml(inner)}</em>`));
+  s = s.replace(/@CODE\{([^{}]*)\}/gi, (_, inner) => hold(`<code>${escapeHtml(inner)}</code>`));
+  s = s.replace(
+    /@LINK\s*\(\s*url\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi,
+    (_, url, label) =>
+      hold(`<a href="${escapeHtml(url)}" rel="noopener">${escapeHtml(label)}</a>`)
+  );
+  let out = escapeHtml(s);
+  out = out.replace(/§§TAPUZ(\d+)§§/g, (_, i) => tokens[Number(i)] || '');
+  return out;
+}
+
 function renderBlock(block, direction = 'rtl') {
   const extraClass = block.data?.className ? ` ${escapeHtml(block.data.className)}` : '';
   const extraId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
-  const extra = extraClass + extraId;
+  const style = styleAttr(block.data);
+  const extra = extraClass + extraId + style;
 
   switch (block.type) {
     case 'heading': {
       const level = Math.min(Math.max(block.data.level || 2, 1), 6);
-      return `<h${level}${extra} dir="${direction}">${escapeHtml(block.data.text || '')}</h${level}>`;
+      return `<h${level}${extra} dir="${direction}">${renderInlineMarks(block.data.text || '')}</h${level}>`;
     }
     case 'text': {
-      let c = escapeHtml(block.data.content || '').replace(/\n\n/g, '</p><p dir="' + direction + '">');
-      return `<p${extra} dir="${direction}">${c}</p>`;
+      const d = block.data || {};
+      const classes = ['bent-text'];
+      if (d.size && d.size !== 'md') classes.push(`text-size-${d.size}`);
+      if (d.lead) classes.push('text-lead');
+      if (d.dropcap) classes.push('text-dropcap');
+      if (d.maxWidth && d.maxWidth !== 'full') classes.push(`text-max-${d.maxWidth}`);
+      if (d.className) classes.push(d.className);
+      const classAttr = ` class="${escapeHtml(classes.join(' '))}"`;
+      const idAttr = d.id ? ` id="${escapeHtml(d.id)}"` : '';
+      const paras = String(d.content || '').split(/\n\n+/);
+      const inner = paras
+        .map((p) => `<p dir="${direction}">${renderInlineMarks(p).replace(/\n/g, '<br>')}</p>`)
+        .join('');
+      return `<div${idAttr}${classAttr}${style} dir="${direction}">${inner}</div>`;
     }
     case 'image': {
-      const { src = '', alt = '', caption = '' } = block.data;
+      const { src = '', alt = '', caption = '', width = 'full' } = block.data || {};
+      const wClass = width && width !== 'full' ? ` img-w-${escapeHtml(width)}` : '';
+      const figClass = ` class="bent-image${wClass}${extraClass}"`;
+      const figId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
       let h = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy">`;
       if (caption) h += `<figcaption>${escapeHtml(caption)}</figcaption>`;
-      return `<figure${extra} dir="${direction}">${h}</figure>`;
+      return `<figure${figId}${figClass}${style} dir="${direction}">${h}</figure>`;
     }
     case 'button': {
       const { text = '', url = '#', variant = 'primary' } = block.data;
-      return `<a${extra} href="${escapeHtml(url)}" class="btn btn-${variant}" dir="${direction}">${escapeHtml(text)}</a>`;
+      const btnClass = ` class="btn btn-${escapeHtml(variant)}${extraClass}"`;
+      const btnId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
+      return `<a${btnId}${btnClass}${style} href="${escapeHtml(url)}" dir="${direction}">${escapeHtml(text)}</a>`;
     }
     case 'spacer': return `<div${extra} class="spacer" style="height:${escapeHtml(block.data.height || '2rem')}"></div>`;
     case 'divider': return `<hr${extra} dir="${direction}">`;
@@ -63,12 +126,33 @@ function renderBlock(block, direction = 'rtl') {
         const count = block.data?.count || 2;
         cols = Array.from({ length: count }, () => []);
       }
-      const inner = cols.map((colBlocks, i) => {
+      const n = cols.length || 1;
+      let ratios = null;
+      const rawRatio = block.data?.ratio;
+      if (Array.isArray(rawRatio) && rawRatio.length === n) {
+        ratios = rawRatio.map((x) => Math.max(0.2, Number(x) || 1));
+      } else if (typeof rawRatio === 'string' && rawRatio.includes(':')) {
+        const parts = rawRatio.split(':').map((x) => Math.max(0.2, parseFloat(x) || 1));
+        if (parts.length === n) ratios = parts;
+      }
+      const gridCss = ratios
+        ? `display:grid;grid-template-columns:${ratios.map((r) => r + 'fr').join(' ')};gap:var(--col-gap,1.15rem)`
+        : '';
+      // merge with module style attr (avoid two style= attributes)
+      let colExtra = extra;
+      if (gridCss) {
+        if (colExtra.includes(' style="')) {
+          colExtra = colExtra.replace(' style="', ` style="${gridCss};`);
+        } else {
+          colExtra += ` style="${gridCss}"`;
+        }
+      }
+      const inner = cols.map((colBlocks) => {
         const list = Array.isArray(colBlocks) ? colBlocks : [];
         const colContent = list.map(bb => renderBlock(bb, direction)).join('');
         return `<div class="col">${colContent || ''}</div>`;
       }).join('');
-      return `<div${extra} class="columns" dir="${direction}">${inner}</div>`;
+      return `<div${colExtra} class="columns" dir="${direction}">${inner}</div>`;
     }
     case 'list': {
       const items = block.data.items || [];
@@ -76,20 +160,35 @@ function renderBlock(block, direction = 'rtl') {
       return `<${tag} dir="${direction}">${items.map(i => `<li dir="${direction}">${escapeHtml(i.text || i)}</li>`).join('')}</${tag}>`;
     }
     case 'quote': {
-      const t = escapeHtml(block.data.text || '');
+      const t = renderInlineMarks(block.data.text || '');
       const a = block.data.author ? `<footer>— ${escapeHtml(block.data.author)}</footer>` : '';
-      return `<blockquote dir="${direction}"><p>${t}</p>${a}</blockquote>`;
+      return `<blockquote class="bent-quote"${extra} dir="${direction}"><p>${t}</p>${a}</blockquote>`;
     }
     case 'card': {
       const inner = (block.data.blocks || []).map(b => renderBlock(b, direction)).join('');
-      return `<div class="card" dir="${direction}">${inner}</div>`;
+      return `<div class="card bent-card"${extra} dir="${direction}">${inner}</div>`;
     }
     case 'hero': {
-      const title = escapeHtml(block.data.title || '');
-      const subtitle = escapeHtml(block.data.subtitle || '');
-      const btnText = block.data.buttonText ? escapeHtml(block.data.buttonText) : '';
-      const btnUrl = escapeHtml(block.data.buttonUrl || '#');
-      let html = `<section class="hero"${extra} dir="${direction}">`;
+      const d = block.data || {};
+      const title = renderInlineMarks(d.title || '');
+      const subtitle = renderInlineMarks(d.subtitle || '');
+      const btnText = d.buttonText ? escapeHtml(d.buttonText) : '';
+      const btnUrl = escapeHtml(d.buttonUrl || '#');
+      const hClass = d.height && d.height !== 'md' ? ` hero-${escapeHtml(d.height)}` : '';
+      const bg = d.image
+        ? ` style="background-image:url('${escapeHtml(d.image)}');background-size:cover;background-position:center"`
+        : '';
+      // merge styleAttr carefully
+      let heroOpen = `<section class="hero${hClass}${extraClass}"${extraId}`;
+      if (bg && style) {
+        heroOpen += style.replace(' style="', ` style="background-image:url('${escapeHtml(d.image)}');background-size:cover;background-position:center;`);
+      } else if (bg) {
+        heroOpen += bg;
+      } else {
+        heroOpen += style;
+      }
+      heroOpen += ` dir="${direction}">`;
+      let html = heroOpen;
       html += `<h1>${title}</h1>`;
       if (subtitle) html += `<p class="subtitle">${subtitle}</p>`;
       if (btnText) html += `<a href="${btnUrl}" class="btn btn-primary">${btnText}</a>`;
@@ -98,7 +197,7 @@ function renderBlock(block, direction = 'rtl') {
     }
 
     case 'testimonial': {
-      const quote = escapeHtml(block.data.quote || '');
+      const quote = renderInlineMarks(block.data.quote || '');
       const author = escapeHtml(block.data.author || '');
       const role = block.data.role ? `, ${escapeHtml(block.data.role)}` : '';
       return `<blockquote class="testimonial"${extra} dir="${direction}"><p>“${quote}”</p><footer class="author">${author}${role}</footer></blockquote>`;
@@ -106,12 +205,13 @@ function renderBlock(block, direction = 'rtl') {
 
     case 'gallery': {
       const images = block.data.images || [];
+      const cols = Math.min(Math.max(parseInt(block.data.columns, 10) || 3, 1), 4);
       const imgs = images.map(img => {
         const src = escapeHtml(img.src || img);
         const alt = escapeHtml(img.alt || '');
         return `<img src="${src}" alt="${alt}">`;
       }).join('');
-      return `<div class="gallery" dir="${direction}">${imgs}</div>`;
+      return `<div class="gallery cols-${cols}"${extra} dir="${direction}">${imgs}</div>`;
     }
 
     case 'embed': {
@@ -124,14 +224,140 @@ function renderBlock(block, direction = 'rtl') {
       return `<a href="${url}" target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
     }
 
+    case 'article-list': {
+      const { listArticles } = require('./pages'); // lazy: avoids require cycle via export.js
+      const tag = block.data?.tag || 'article';
+      const limit = block.data?.limit || 6;
+      const cols = Math.min(Math.max(parseInt(block.data?.columns, 10) || 3, 1), 4);
+      let articles = [];
+      try { articles = listArticles({ tag, limit }); } catch (e) { /* empty DB in static contexts */ }
+      if (!articles.length) {
+        return `<!-- article-list: no published pages tagged "${escapeHtml(tag)}" -->`;
+      }
+      const cards = articles.map(a => {
+        const media = a.image
+          ? `<img src="${escapeHtml(a.image)}" alt="" loading="lazy">`
+          : '';
+        const teaser = a.teaser ? `<p>${escapeHtml(a.teaser)}</p>` : '';
+        return `<a class="article-cube" href="${escapeHtml(a.url)}">` +
+          `<div class="cube-media">${media}</div>` +
+          `<div class="cube-body"><h3>${escapeHtml(a.title)}</h3>${teaser}</div></a>`;
+      }).join('');
+      return `<section${extra} class="article-cubes cols-${cols}" dir="${direction}">${cards}</section>`;
+    }
+
+    case 'map': {
+      const address = String(block.data?.address || '');
+      const zoom = Math.min(Math.max(parseInt(block.data?.zoom, 10) || 15, 1), 20);
+      const height = ['sm', 'md', 'lg'].includes(block.data?.height) ? block.data.height : 'md';
+      const src = `https://www.google.com/maps?q=${encodeURIComponent(address)}&z=${zoom}&output=embed&hl=he`;
+      return `<figure class="map-embed map-${height}${extraClass}"${extraId}${style}>` +
+        `<iframe src="${escapeHtml(src)}" loading="lazy" title="מפה: ${escapeHtml(address)}" allowfullscreen></iframe>` +
+        `</figure>`;
+    }
+
     case 'features': {
       const items = block.data.items || [];
       const list = items.map(item => {
         const title = escapeHtml(item.title || item);
+        const icon = item.icon ? `<span class="feature-icon">${escapeHtml(item.icon)}</span>` : '';
         const desc = item.description ? `<p>${escapeHtml(item.description)}</p>` : '';
-        return `<article class="feature"><h3>${title}</h3>${desc}</article>`;
+        return `<article class="feature">${icon}<h3>${title}</h3>${desc}</article>`;
       }).join('');
-      return `<section class="features"${extra} dir="${direction}">${list}</section>`;
+      const cols = Math.min(Math.max(parseInt(block.data.columns, 10) || 3, 1), 4);
+      return `<section class="features cols-${cols}"${extra} dir="${direction}">${list}</section>`;
+    }
+
+    case 'cta': {
+      const d = block.data || {};
+      const tone = ['brand', 'dark', 'light'].includes(d.tone) ? d.tone : 'brand';
+      const variant = d.variant || 'primary';
+      const btn = d.buttonText
+        ? `<a class="btn btn-${escapeHtml(variant)}" href="${escapeHtml(d.url || '#')}">${escapeHtml(d.buttonText)}</a>`
+        : '';
+      return (
+        `<section class="cta-strip tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +
+        `<div class="cta-inner">` +
+        (d.title ? `<h2>${escapeHtml(d.title)}</h2>` : '') +
+        (d.text ? `<p>${escapeHtml(d.text)}</p>` : '') +
+        btn +
+        `</div></section>`
+      );
+    }
+
+    case 'stats': {
+      const items = block.data.items || [];
+      const cols = Math.min(Math.max(parseInt(block.data.columns, 10) || 3, 2), 4);
+      const cells = items
+        .map(
+          (it) =>
+            `<div class="stat-cell"><div class="stat-value">${escapeHtml(it.value || '')}</div>` +
+            `<div class="stat-label">${escapeHtml(it.label || '')}</div></div>`
+        )
+        .join('');
+      return `<section class="stats-row cols-${cols}"${extra} dir="${direction}">${cells}</section>`;
+    }
+
+    case 'logos': {
+      const items = block.data.items || [];
+      const cells = items
+        .map((it) => {
+          const img = `<img src="${escapeHtml(it.src || '')}" alt="${escapeHtml(it.alt || '')}" loading="lazy">`;
+          return it.url
+            ? `<a class="logo-cell" href="${escapeHtml(it.url)}">${img}</a>`
+            : `<div class="logo-cell">${img}</div>`;
+        })
+        .join('');
+      return `<section class="logos-strip"${extra} dir="${direction}">${cells}</section>`;
+    }
+
+    case 'faq': {
+      const items = block.data.items || [];
+      const rows = items
+        .map(
+          (it) =>
+            `<details class="faq-item"><summary>${escapeHtml(it.question || '')}</summary>` +
+            `<div class="faq-answer">${escapeHtml(it.answer || '')}</div></details>`
+        )
+        .join('');
+      return `<section class="faq-list"${extra} dir="${direction}">${rows}</section>`;
+    }
+
+    case 'contact-info': {
+      const d = block.data || {};
+      const lines = [];
+      if (d.phone) {
+        lines.push(
+          `<div class="contact-line"><span class="contact-k">טלפון</span> ` +
+            `<a href="tel:${escapeHtml(String(d.phone).replace(/\s/g, ''))}">${escapeHtml(d.phone)}</a></div>`
+        );
+      }
+      if (d.email) {
+        lines.push(
+          `<div class="contact-line"><span class="contact-k">אימייל</span> ` +
+            `<a href="mailto:${escapeHtml(d.email)}">${escapeHtml(d.email)}</a></div>`
+        );
+      }
+      if (d.address) {
+        lines.push(
+          `<div class="contact-line"><span class="contact-k">כתובת</span> ${escapeHtml(d.address)}</div>`
+        );
+      }
+      if (d.hours) {
+        lines.push(
+          `<div class="contact-line"><span class="contact-k">שעות</span> ${escapeHtml(d.hours)}</div>`
+        );
+      }
+      return `<section class="contact-info"${extra} dir="${direction}">${lines.join('')}</section>`;
+    }
+
+    case 'banner': {
+      const d = block.data || {};
+      const tone = ['brand', 'dark', 'light', 'warn'].includes(d.tone) ? d.tone : 'brand';
+      return (
+        `<div class="site-banner tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +
+        `<p>${escapeHtml(d.text || '')}</p></div>`
+      );
     }
 
     default: return `<!-- unknown block: ${block.type} -->`;
@@ -155,6 +381,139 @@ function renderMenuItems(items) {
       : '';
     return `<li><a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>${kids}</li>`;
   }).join('\n');
+}
+
+/**
+ * Site-wide WhatsApp click-to-chat floating button.
+ * Driven by config.integrations.whatsapp { enabled, phone, message, position }.
+ * Returns '' when disabled or when no phone digits are configured.
+ * Styling lives in the theme CSS (.whatsapp-float) so it survives static
+ * export, which strips inline <style> blocks.
+ */
+function renderWhatsappFloat(config) {
+  const wa = config && config.integrations && config.integrations.whatsapp;
+  if (!wa || !wa.enabled) return '';
+  const phone = String(wa.phone || '').replace(/\D+/g, '');
+  if (!phone) return '';
+  const message = String(wa.message || '').trim();
+  const href = `https://wa.me/${phone}` + (message ? `?text=${encodeURIComponent(message)}` : '');
+  const posClass = wa.position === 'end' ? 'pos-end' : 'pos-start';
+  const icon = '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" focusable="false">' +
+    '<path fill="currentColor" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>' +
+    '</svg>';
+  return `<a class="whatsapp-float ${posClass}" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="WhatsApp">${icon}</a>`;
+}
+
+/**
+ * S5a — Google Analytics 4 (gtag) snippet for public pages.
+ * The Measurement ID (G-XXXX) is PUBLIC, not a secret. Returns '' unless a
+ * well-formed id is configured, so a site without GA renders exactly as today.
+ * Appended into `head` (renders inside <head> via {{head}}) as high as we can,
+ * and it survives static export (export.js strips only <style>, never <script>).
+ */
+function renderGa4Snippet(config) {
+  const a = config && config.analytics;
+  const id = a && a.ga4 && a.ga4.measurementId;
+  if (!id || !/^G-[A-Z0-9]+$/.test(String(id))) return '';
+  const safe = String(id); // already validated to a strict charset above
+  return (
+    `<script async src="https://www.googletagmanager.com/gtag/js?id=${safe}"></script>` +
+    `<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}` +
+    `gtag('js',new Date());gtag('config','${safe}');</script>`
+  );
+}
+
+/**
+ * S6 — first-party pageview beacon for public pages.
+ * A tiny inline <script> (no external asset, so it survives static export) that
+ * POSTs { path, ref } to the configured collector on page load. It respects
+ * Do-Not-Track / Global Privacy Control and never sends an IP — the server
+ * derives the IP + device class + salted visitor hash. Returns '' when
+ * first-party analytics are disabled.
+ *
+ * NOTE (documented in docs/analytics.md): the beacon only records while a Tapuz
+ * server is reachable at collectorUrl. A relative '/_tapuz/collect' works when
+ * the site is served BY Tapuz; an exported site hosted elsewhere needs an
+ * ABSOLUTE collector URL to a live instance or first-party stats silently stop.
+ */
+function renderAnalyticsBeacon(config) {
+  const a = config && config.analytics;
+  const fp = a && a.firstParty;
+  if (!fp || !fp.enabled) return '';
+  const url = String(fp.collectorUrl || '/_tapuz/collect');
+  const urlLit = JSON.stringify(url); // safe JS string literal
+  return (
+    `<script>(function(){try{` +
+    `if(navigator.doNotTrack=='1'||window.doNotTrack=='1'||navigator.msDoNotTrack=='1')return;` +
+    `var u=${urlLit};` +
+    `var b=JSON.stringify({path:location.pathname,ref:document.referrer});` +
+    `if(navigator.sendBeacon){navigator.sendBeacon(u,new Blob([b],{type:'application/json'}));}` +
+    `else{fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:b,keepalive:true}).catch(function(){});}` +
+    `}catch(e){}})();</script>`
+  );
+}
+
+/**
+ * CMS-managed static header + footer chrome (S3).
+ * Builds the HTML fragments that the theme layout slots wrap EVERY public page
+ * in — on both live serve and static export (export.js calls this same
+ * renderPage). Every fragment is EMPTY when its config value is empty, so a
+ * site with no chrome configured renders exactly like today (no regression).
+ * Styling lives in the theme CSS so it survives export (which strips <style>).
+ */
+function renderSiteChrome(config, direction) {
+  const header = (config && config.header) || {};
+  const footer = (config && config.footer) || {};
+
+  // --- Header: tagline, sticky, CTA ---
+  const headerTagline = header.tagline
+    ? `<span class="site-tagline">${escapeHtml(header.tagline)}</span>`
+    : '';
+  const headerClass = header.sticky === false ? 'site-header--nosticky' : '';
+  const headerCta = (header.ctaLabel && header.ctaUrl)
+    ? `<a class="header-cta btn btn-primary" href="${escapeHtml(header.ctaUrl)}">${escapeHtml(header.ctaLabel)}</a>`
+    : '';
+
+  // --- Footer: link columns ---
+  let footerColumns = '';
+  if (Array.isArray(footer.columns) && footer.columns.length) {
+    const cols = footer.columns
+      .filter(c => c && (c.title || (Array.isArray(c.links) && c.links.length)))
+      .map(col => {
+        const title = col.title ? `<h4 class="footer-col-title">${escapeHtml(col.title)}</h4>` : '';
+        const links = (Array.isArray(col.links) ? col.links : [])
+          .filter(l => l && (l.label || l.url))
+          .map(l => `<li><a href="${escapeHtml(l.url || '#')}">${escapeHtml(l.label || l.url || '')}</a></li>`)
+          .join('');
+        return `<div class="footer-col">${title}<ul>${links}</ul></div>`;
+      }).join('');
+    if (cols) footerColumns = `<div class="footer-columns" dir="${direction}">${cols}</div>`;
+  }
+
+  // --- Footer: free text ---
+  const footerText = footer.text
+    ? `<p class="footer-text">${escapeHtml(footer.text).replace(/\n/g, '<br>')}</p>`
+    : '';
+
+  // --- Footer: social links ---
+  let footerSocial = '';
+  if (Array.isArray(footer.social) && footer.social.length) {
+    const items = footer.social
+      .filter(s => s && s.url)
+      .map(s => {
+        const net = String(s.network || 'link');
+        return `<a class="social-link social-${escapeHtml(net.toLowerCase())}" href="${escapeHtml(s.url)}" ` +
+          `target="_blank" rel="noopener" aria-label="${escapeHtml(net)}">${escapeHtml(net)}</a>`;
+      }).join('');
+    if (items) footerSocial = `<div class="footer-social">${items}</div>`;
+  }
+
+  // --- Footer: CMS credit (on by default; a toggle turns it off) ---
+  const footerCredit = footer.showCredit === false
+    ? ''
+    : `<p class="footer-credit">נבנה עם Tapuz</p>`;
+
+  return { headerTagline, headerClass, headerCta, footerColumns, footerText, footerSocial, footerCredit };
 }
 
 function renderPage(page, options = {}) {
@@ -187,14 +546,21 @@ function renderPage(page, options = {}) {
   head += `<style id="tapuz-theme-overrides">\n${overrideCss}\n</style>`;
 
   const config = loadConfig();
+  // S5a: GA4 gtag as high in <head> as our {{head}} slot allows. Public + export.
+  head += renderGa4Snippet(config);
   const currentYear = new Date().getFullYear();
 
   const mainMenu = getMenu('main');
   const footerMenu = getMenu('footer');
 
-  // Logo rendering
+  // CMS-managed static chrome (S3): header tagline/CTA + footer columns/social/credit
+  const chrome = renderSiteChrome(config, direction);
+
+  // Logo rendering (config.header.showLogo === false hides it entirely)
   let logoHtml = '';
-  if (config.logo && config.logo.type === 'image' && config.logo.image) {
+  if (config.header && config.header.showLogo === false) {
+    logoHtml = '';
+  } else if (config.logo && config.logo.type === 'image' && config.logo.image) {
     const w = config.logo.width || 160;
     const h = config.logo.height || 50;
     logoHtml = `<img src="${escapeHtml(config.logo.image)}" alt="${escapeHtml(config.title)}" width="${w}" height="${h}" style="max-height:60px;width:auto;display:block;">`;
@@ -217,23 +583,58 @@ function renderPage(page, options = {}) {
     }
   }
 
+  // Site-wide extras (WhatsApp click-to-chat float) — injected into the shared
+  // layout path so both live serve and static export emit them.
+  // WhatsApp float (S-integrations) + first-party analytics beacon (S6), both
+  // injected at body-end via {{site_extras}} so serve and static export match.
+  const siteExtras = renderWhatsappFloat(config) + renderAnalyticsBeacon(config);
+  const hasExtrasSlot = layout.includes('{{site_extras}}');
+
+  let pageTitle = page.meta?.seoTitle || page.title || '';
+  // Site-level SEO defaults (config.seo): title pattern "{page} · {site}" + og:image fallback
+  const titlePattern = (config.seo && config.seo.titlePattern) || '';
+  if (titlePattern && titlePattern.includes('{page}')) {
+    pageTitle = titlePattern
+      .split('{page}').join(pageTitle)
+      .split('{site}').join(config.title || '');
+  }
+  const pageDesc = page.meta?.description || config.description || '';
+  const pageOg = page.meta?.ogImage || page.meta?.ogimage || (config.seo && config.seo.defaultOgImage) || '';
+  const pageRobots = page.meta?.robots || 'index, follow';
+
   const replacements = {
     '{{lang}}': lang,
     '{{direction}}': direction,
-    '{{title}}': escapeHtml(page.title),
+    '{{title}}': escapeHtml(pageTitle),
     '{{head}}': head,
     '{{content}}': content,
     '{{site.title}}': escapeHtml(config.title),
     '{{currentYear}}': currentYear,
-    '{{meta.description}}': escapeHtml(page.meta?.description || config.description || ''),
+    '{{meta.description}}': escapeHtml(pageDesc),
+    '{{meta.ogImage}}': escapeHtml(pageOg),
+    '{{meta.robots}}': escapeHtml(pageRobots),
     '{{logo_html}}': logoHtml,
     '{{menu_html}}': menuHtml,
-    '{{footer_menu_html}}': footerMenuHtml
+    '{{footer_menu_html}}': footerMenuHtml,
+    '{{site_extras}}': siteExtras,
+    // S3 site chrome slots
+    '{{header_class}}': chrome.headerClass,
+    '{{header_tagline}}': chrome.headerTagline,
+    '{{header_cta}}': chrome.headerCta,
+    '{{footer_columns_html}}': chrome.footerColumns,
+    '{{footer_text_html}}': chrome.footerText,
+    '{{footer_social_html}}': chrome.footerSocial,
+    '{{footer_credit_html}}': chrome.footerCredit
   };
 
   Object.keys(replacements).forEach(key => {
     layout = layout.split(key).join(replacements[key]);
   });
+
+  // Fallback for theme layouts without a {{site_extras}} slot
+  if (siteExtras && !hasExtrasSlot) {
+    layout = layout.replace('</body>', `${siteExtras}\n</body>`);
+  }
 
   return layout;
 }
@@ -243,4 +644,4 @@ function renderPageToFile(page, outputPath) {
   return outputPath;
 }
 
-module.exports = { renderPage, renderBlock, renderPageToFile };
+module.exports = { renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderGa4Snippet, renderAnalyticsBeacon };

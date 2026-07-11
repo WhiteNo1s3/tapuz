@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { db } = require('./db');
 
-const MENUS_PATH = path.join(__dirname, '..', 'config', 'menus.json');
+const MENUS_PATH = path.join(require('./paths').CONFIG_DIR, 'menus.json');
 
 const DEFAULT_MENUS = {
   main: [{ label: 'דף הבית', url: '/' }],
