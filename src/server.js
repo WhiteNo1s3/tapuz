@@ -135,16 +135,69 @@ app.use((err, req, res, next) => {
 });
 
 app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
+// Agent bridge payloads (intent / .pzn source) are small — cap them tight,
+// BEFORE the 12mb global parser (which then skips an already-parsed body).
+app.use('/agent', bodyParser.json({ limit: '512kb' }));
 app.use(bodyParser.json({ limit: '12mb' })); // 12mb: base64 media uploads. Admin-only, behind auth + rate limit.
-app.use(express.static(PUBLIC_DIR));
+
+// CSP + security headers for the PUBLIC site — authored content renders here,
+// so this is defense-in-depth over the source-level escaping. Admin/agent keep
+// their own headers; assets (extension .css/.js/img) are untouched.
+app.use((req, res, next) => {
+  const p = req.path;
+  // boundary-aware exclusion — '/admin-guide.html' is a PUBLIC page and must
+  // still get the CSP; only the real admin/agent namespaces are exempt.
+  const exempt = p === '/admin' || p.startsWith('/admin/') ||
+    p === '/agent' || p.startsWith('/agent/') || p.startsWith('/_tapuz');
+  if (exempt) return next();
+  const isPage = req.method === 'GET' && (p === '/' || p.endsWith('.html') || !path.extname(p));
+  if (isPage) {
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'self'",
+      // 'unsafe-inline' scripts: the first-party analytics beacon + optional
+      // gtag init are inline and must survive static export. Authored content
+      // cannot inject <script> (raw HTML in body is forbidden; values escaped),
+      // so residual risk is low; hashing these is a tracked follow-up.
+      "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https:",
+      "font-src 'self' data:",
+      "frame-src 'self' https://www.youtube.com https://www.google.com",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'"
+    ].join('; '));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  }
+  next();
+});
+
+// Security headers applied AT SERVE TIME (setHeaders runs for the file actually
+// sent — so it can't be shadowed by mount order, the bug that made the earlier
+// /assets middleware dead code). This is the LOAD-BEARING SVG protection: an
+// uploaded SVG that slips past sanitization still cannot run script, because it
+// is served under `sandbox` CSP AND `Content-Disposition: attachment` (forces
+// download on direct navigation; still usable as <img src>, which never scripts).
+function staticSecurityHeaders(res, filePath) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (/\.svg$/i.test(filePath)) {
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    res.setHeader('Content-Disposition', 'attachment');
+  }
+}
+
+app.use(express.static(PUBLIC_DIR, { setHeaders: staticSecurityHeaders }));
 
 // Admin client scripts always ship with the package (site public/ may be elsewhere)
-app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
+app.use(express.static(path.join(__dirname, '..', 'public'), { index: false, setHeaders: staticSecurityHeaders }));
 
 // Assets
 const uploadDir = ASSETS_DIR;
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-app.use('/assets', express.static(uploadDir));
+app.use('/assets', express.static(uploadDir, { setHeaders: staticSecurityHeaders }));
 
 // =========================================================================
 // S1 AUTH GUARD + S4 RATE LIMITING — the SINGLE place that gates the admin.
@@ -249,6 +302,15 @@ function requireAgent(scope) {
 
 app.get('/agent/v1/ping', requireAgent('read'), (req, res) => {
   res.json({ ok: true, agent: req.agent.name, scopes: req.agent.scopes, version: '0.45' });
+});
+
+// The .pzn standard is PUBLIC (unauthenticated) — anyone may implement it.
+// Served live from the registry so it can never drift. CORS-open, read-only.
+app.get('/pzn-schema.json', (req, res) => {
+  const { buildCatalog } = require('./pzn/spec');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.json(buildCatalog(require('../package.json').version));
 });
 
 app.get('/agent/v1/primer', requireAgent('read'), (req, res) => {
@@ -4060,6 +4122,23 @@ app.get('/admin/menus', (req, res) => {
     <script src="/admin-menus.js"></script>
   `;
   res.send(layout(html, 'תפריטים', '#7c3aed'));
+});
+
+// Terminal error handler — NEVER leak a stack trace to a client. Without this,
+// a body-parser error (e.g. an oversized/malformed body on the public /agent
+// surface) is handled by Express's default finalhandler, which in a non-prod
+// env writes err.stack (absolute paths + framework internals) into the body.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err.status || err.statusCode || 500;
+  const msg = status === 413 ? 'payload too large'
+    : status === 400 ? 'bad request'
+      : status === 403 ? 'forbidden'
+        : status === 404 ? 'not found'
+          : 'server error';
+  res.status(status);
+  if (wantsJson(req)) res.json({ ok: false, error: msg });
+  else res.type('text/plain').send(msg);
 });
 
 const server = app.listen(PORT, () => {

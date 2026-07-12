@@ -1,0 +1,949 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tapuziel .pzn page language",
+  "description": "Constrained-HTML page format (benTML dialect). Body may contain only registered bent-* module tags.",
+  "specVersion": "0.1",
+  "generatedFrom": "tapuziel@0.47.0-alpha",
+  "modules": {
+    "heading": {
+      "tag": "bent-heading",
+      "label": {
+        "he": "כותרת",
+        "en": "Heading"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "level": {
+          "type": "integer",
+          "min": 1,
+          "max": 6,
+          "default": 2
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "default": "start",
+          "optional": true
+        },
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "כותרת חדשה",
+          "content": true
+        }
+      }
+    },
+    "text": {
+      "tag": "bent-text",
+      "label": {
+        "he": "טקסט",
+        "en": "Text"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "text": {
+          "type": "text",
+          "default": "פסקה חדשה",
+          "content": true
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "default": "start",
+          "optional": true
+        },
+        "size": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg"
+          ],
+          "default": "md",
+          "optional": true
+        },
+        "lead": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        },
+        "dropcap": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        },
+        "maxwidth": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "full"
+          ],
+          "default": "full",
+          "optional": true
+        },
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "image": {
+      "tag": "bent-image",
+      "label": {
+        "he": "תמונה",
+        "en": "Image"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "src": {
+          "type": "url",
+          "default": ""
+        },
+        "alt": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "caption": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ],
+          "default": "center",
+          "optional": true
+        },
+        "width": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "full"
+          ],
+          "default": "full",
+          "optional": true
+        }
+      }
+    },
+    "button": {
+      "tag": "bent-button",
+      "label": {
+        "he": "כפתור",
+        "en": "Button"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "href": {
+          "type": "url",
+          "default": "#"
+        },
+        "variant": {
+          "type": "enum",
+          "enum": [
+            "primary",
+            "secondary",
+            "outline"
+          ],
+          "default": "primary"
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "default": "start",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "לחץ כאן",
+          "content": true
+        }
+      }
+    },
+    "item": {
+      "tag": "bent-item",
+      "label": {
+        "he": "פריט רשימה",
+        "en": "List item"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "text": {
+          "type": "text",
+          "default": "פריט",
+          "content": true
+        }
+      }
+    },
+    "list": {
+      "tag": "bent-list",
+      "label": {
+        "he": "רשימה",
+        "en": "List"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "item"
+      ],
+      "props": {
+        "ordered": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        }
+      }
+    },
+    "quote": {
+      "tag": "bent-quote",
+      "label": {
+        "he": "ציטוט",
+        "en": "Quote"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "author": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "ציטוט",
+          "content": true
+        }
+      }
+    },
+    "spacer": {
+      "tag": "bent-spacer",
+      "label": {
+        "he": "רווח",
+        "en": "Spacer"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "height": {
+          "type": "string",
+          "default": "2rem"
+        },
+        "size": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "xl"
+          ],
+          "default": "md",
+          "optional": true
+        }
+      }
+    },
+    "divider": {
+      "tag": "bent-divider",
+      "label": {
+        "he": "קו מפריד",
+        "en": "Divider"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "style": {
+          "type": "enum",
+          "enum": [
+            "solid",
+            "dashed",
+            "none"
+          ],
+          "default": "solid",
+          "optional": true
+        },
+        "bentstyle": {
+          "type": "enum",
+          "enum": [
+            "line",
+            "dots",
+            "thick"
+          ],
+          "default": "line",
+          "optional": true
+        }
+      }
+    },
+    "embed": {
+      "tag": "bent-embed",
+      "label": {
+        "he": "הטמעה",
+        "en": "Embed"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "url": {
+          "type": "url",
+          "default": ""
+        }
+      }
+    },
+    "section": {
+      "tag": "bent-section",
+      "label": {
+        "he": "סקשן",
+        "en": "Section"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [],
+      "props": {
+        "kind": {
+          "type": "string",
+          "default": "content",
+          "optional": true
+        }
+      }
+    },
+    "col": {
+      "tag": "bent-col",
+      "label": {
+        "he": "עמודה",
+        "en": "Column"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [],
+      "props": {
+        "width": {
+          "type": "enum",
+          "enum": [
+            "1/1",
+            "1/2",
+            "1/3",
+            "2/3",
+            "1/4",
+            "3/4"
+          ],
+          "default": "1/2"
+        }
+      }
+    },
+    "columns": {
+      "tag": "bent-columns",
+      "label": {
+        "he": "עמודות",
+        "en": "Columns"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "col"
+      ],
+      "props": {
+        "gap": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "sm",
+            "md",
+            "lg",
+            "small",
+            "medium",
+            "large"
+          ],
+          "default": "medium",
+          "optional": true
+        },
+        "ratio": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "collapse": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "never"
+          ],
+          "default": "md",
+          "optional": true
+        },
+        "valign": {
+          "type": "enum",
+          "enum": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ],
+          "default": "top",
+          "optional": true
+        }
+      }
+    },
+    "hero": {
+      "tag": "bent-hero",
+      "label": {
+        "he": "הירו",
+        "en": "Hero"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [],
+      "props": {
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "height": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "full"
+          ],
+          "default": "md",
+          "optional": true
+        },
+        "overlay": {
+          "type": "integer",
+          "min": 0,
+          "max": 80,
+          "default": 0,
+          "optional": true
+        },
+        "parallax": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        }
+      }
+    },
+    "gallery": {
+      "tag": "bent-gallery",
+      "label": {
+        "he": "גלריה",
+        "en": "Gallery"
+      },
+      "category": "data",
+      "container": true,
+      "accept": [
+        "image"
+      ],
+      "props": {
+        "columns": {
+          "type": "integer",
+          "min": 1,
+          "max": 4,
+          "default": 3,
+          "optional": true
+        }
+      }
+    },
+    "article-list": {
+      "tag": "bent-article-list",
+      "label": {
+        "he": "רשימת מאמרים",
+        "en": "Article list"
+      },
+      "category": "data",
+      "container": false,
+      "accept": [],
+      "props": {
+        "tag": {
+          "type": "string",
+          "default": "article"
+        },
+        "limit": {
+          "type": "integer",
+          "min": 1,
+          "max": 48,
+          "default": 6
+        },
+        "columns": {
+          "type": "integer",
+          "min": 1,
+          "max": 4,
+          "default": 3
+        }
+      }
+    },
+    "testimonial": {
+      "tag": "bent-testimonial",
+      "label": {
+        "he": "המלצה",
+        "en": "Testimonial"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "author": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "role": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "feature": {
+      "tag": "bent-feature",
+      "label": {
+        "he": "תכונה",
+        "en": "Feature"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "icon": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "features": {
+      "tag": "bent-features",
+      "label": {
+        "he": "תכונות",
+        "en": "Features"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "feature"
+      ],
+      "props": {
+        "columns": {
+          "type": "integer",
+          "min": 1,
+          "max": 4,
+          "default": 3,
+          "optional": true
+        }
+      }
+    },
+    "card": {
+      "tag": "bent-card",
+      "label": {
+        "he": "כרטיס",
+        "en": "Card"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [],
+      "props": {}
+    },
+    "map": {
+      "tag": "bent-map",
+      "label": {
+        "he": "מפה",
+        "en": "Map"
+      },
+      "category": "data",
+      "container": false,
+      "accept": [],
+      "props": {
+        "address": {
+          "type": "string",
+          "default": ""
+        },
+        "zoom": {
+          "type": "integer",
+          "min": 1,
+          "max": 20,
+          "default": 15,
+          "optional": true
+        },
+        "height": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg"
+          ],
+          "default": "md",
+          "optional": true
+        }
+      }
+    },
+    "cta": {
+      "tag": "bent-cta",
+      "label": {
+        "he": "קריאה לפעולה",
+        "en": "CTA"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "buttontext": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "#",
+          "optional": true
+        },
+        "variant": {
+          "type": "enum",
+          "enum": [
+            "primary",
+            "secondary",
+            "outline"
+          ],
+          "default": "primary",
+          "optional": true
+        },
+        "tone": {
+          "type": "enum",
+          "enum": [
+            "brand",
+            "dark",
+            "light"
+          ],
+          "default": "brand",
+          "optional": true
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "default": "start",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "stat": {
+      "tag": "bent-stat",
+      "label": {
+        "he": "מדד",
+        "en": "Stat"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "value": {
+          "type": "string",
+          "default": ""
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "stats": {
+      "tag": "bent-stats",
+      "label": {
+        "he": "מספרים / מדדים",
+        "en": "Stats"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "stat"
+      ],
+      "props": {
+        "columns": {
+          "type": "integer",
+          "min": 2,
+          "max": 4,
+          "default": 3,
+          "optional": true
+        }
+      }
+    },
+    "logo": {
+      "tag": "bent-logo",
+      "label": {
+        "he": "לוגו",
+        "en": "Logo"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "src": {
+          "type": "url",
+          "default": ""
+        },
+        "alt": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "logos": {
+      "tag": "bent-logos",
+      "label": {
+        "he": "לוגואים / לקוחות",
+        "en": "Logos"
+      },
+      "category": "media",
+      "container": true,
+      "accept": [
+        "logo"
+      ],
+      "props": {}
+    },
+    "qa": {
+      "tag": "bent-qa",
+      "label": {
+        "he": "שאלה ותשובה",
+        "en": "Q&A"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "question": {
+          "type": "string",
+          "default": ""
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "faq": {
+      "tag": "bent-faq",
+      "label": {
+        "he": "שאלות נפוצות",
+        "en": "FAQ"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "qa"
+      ],
+      "props": {}
+    },
+    "contact-info": {
+      "tag": "bent-contact-info",
+      "label": {
+        "he": "פרטי קשר",
+        "en": "Contact info"
+      },
+      "category": "data",
+      "container": false,
+      "accept": [],
+      "props": {
+        "phone": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "email": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "address": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "hours": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "banner": {
+      "tag": "bent-banner",
+      "label": {
+        "he": "באנר הודעה",
+        "en": "Banner"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "tone": {
+          "type": "enum",
+          "enum": [
+            "brand",
+            "dark",
+            "light",
+            "warn"
+          ],
+          "default": "brand",
+          "optional": true
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "default": "start",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "marquee": {
+      "tag": "bent-marquee",
+      "label": {
+        "he": "טקסט נע",
+        "en": "Marquee"
+      },
+      "category": "effects",
+      "container": false,
+      "accept": [],
+      "props": {
+        "speed": {
+          "type": "enum",
+          "enum": [
+            "slow",
+            "md",
+            "fast"
+          ],
+          "default": "md",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "ברוכים הבאים ✦",
+          "content": true
+        }
+      }
+    },
+    "parallax": {
+      "tag": "bent-parallax",
+      "label": {
+        "he": "רקע קבוע (פרלקסה)",
+        "en": "Parallax"
+      },
+      "category": "effects",
+      "container": true,
+      "accept": [],
+      "props": {
+        "image": {
+          "type": "url",
+          "default": ""
+        },
+        "overlay": {
+          "type": "integer",
+          "min": 0,
+          "max": 80,
+          "default": 0,
+          "optional": true
+        },
+        "height": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "full"
+          ],
+          "default": "md",
+          "optional": true
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { db } = require('./db');
+const { validateUpload } = require('./upload-validate');
 
 // Media lives in public/assets/<folder>/, tracked in the DB.
 const { ASSETS_DIR } = require('./paths');
@@ -153,11 +154,13 @@ function saveBase64({ filename, data, folder }) {
   const match = String(data || '').match(/^data:([^;]+);base64,(.+)$/);
   if (!match) throw new Error('invalid data url');
 
-  const mime = match[1];
-  const ext = MIME_EXT[mime] || path.extname(safe) || '.png';
+  // SECURITY: the type/extension come from MAGIC BYTES, never from the client's
+  // mime or filename. Only images pass; SVGs are sanitized; oversized rejected.
+  // (Closes the .html/.js upload → stored-XSS vector and SVG script injection.)
+  const rawBuf = Buffer.from(match[2], 'base64');
+  const { ext, mime, buf } = validateUpload(rawBuf); // throws E_UPLOAD_* on bad input
   const base = path.basename(safe, path.extname(safe)) || 'image';
   const finalName = base + '-' + Date.now() + ext;
-  const buf = Buffer.from(match[2], 'base64');
 
   fs.writeFileSync(path.join(folderDiskPath(folder), finalName), buf);
   const url = '/assets/' + (folder ? folder + '/' : '') + finalName;

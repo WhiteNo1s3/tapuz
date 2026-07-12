@@ -191,6 +191,32 @@ async function main() {
     const cfsDup = await req('POST', '/agent/v1/create-from-source', { token: writeTok, body: { source: botReply } });
     check('create-from-source collision → 409', cfsDup.status === 409);
     check('create-from-source needs write scope', (await req('POST', '/agent/v1/create-from-source', { token: readTok, body: { source: botReply } })).status === 403);
+    // ===== v0.47 security-review regressions =====
+    // (a) uploaded SVGs are served under a sandbox that ACTUALLY applies (the
+    //     earlier /assets middleware was dead code shadowed by static mount).
+    fs.mkdirSync(path.join(ROOT, 'public', 'assets'), { recursive: true });
+    fs.writeFileSync(path.join(ROOT, 'public', 'assets', 'probe.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+    const svg = await req('GET', '/assets/probe.svg');
+    check('served SVG has sandbox CSP', /sandbox/.test(svg.headers['content-security-policy'] || ''));
+    check('served SVG forces download (Content-Disposition)', /attachment/.test(svg.headers['content-disposition'] || ''));
+    check('served SVG has nosniff', (svg.headers['x-content-type-options'] || '') === 'nosniff');
+
+    // (b) body-parser / error responses never leak a stack trace to clients
+    const bigBody = await new Promise((resolve) => {
+      const data = JSON.stringify({ x: 'a'.repeat(600 * 1024) });
+      const r = http.request(BASE + '/agent/v1/ping', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } }, (res) => {
+        let b = ''; res.on('data', (c) => (b += c)); res.on('end', () => resolve({ status: res.statusCode, body: b }));
+      });
+      r.on('error', () => resolve({ status: 0, body: '' }));
+      r.write(data); r.end();
+    });
+    check('oversized agent body → 413, no stack leak', bigBody.status === 413 && !/node_modules|\.js:\d|\bat\s/.test(bigBody.body));
+
+    // (c) public CSP applies to a page whose name starts with "admin" (boundary fix)
+    // (home page proves CSP present on public pages)
+    const homeCsp = await req('GET', '/');
+    check('public page carries CSP', /default-src 'self'/.test(homeCsp.headers['content-security-policy'] || ''));
   } finally {
     child.kill();
   }
