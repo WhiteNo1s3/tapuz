@@ -47,6 +47,7 @@ function decompileBlock(block, indent) {
       const params = [];
       if (d.level != null && d.level !== 2) params.push(`level: ${d.level}`);
       if (d.align && d.align !== 'start') params.push(`align: ${d.align}`);
+      if (d.animate && d.animate !== 'none') params.push(`animate: ${d.animate}`);
       return `${pad}HEADING${paramList(params)} { ${esc(d.text || '')} }`;
     }
     case 'text': {
@@ -59,6 +60,7 @@ function decompileBlock(block, indent) {
       if (d.lead) params.push('lead: true');
       if (d.dropcap) params.push('dropcap: true');
       if (d.maxWidth && d.maxWidth !== 'full') params.push(`maxwidth: ${d.maxWidth}`);
+      if (d.animate && d.animate !== 'none') params.push(`animate: ${d.animate}`);
       const body = String(d.content || '');
       if (!body.includes('\n')) {
         return `${pad}TEXT${paramList(params)} { ${esc(body)} }`;
@@ -140,6 +142,8 @@ function decompileBlock(block, indent) {
       const params = [];
       if (d.image) params.push(`image: ${q(d.image)}`);
       if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);
+      if (d.overlay != null && Number(d.overlay) > 0) params.push(`overlay: ${d.overlay}`);
+      if (d.parallax) params.push('parallax: true');
       const kids = [];
       if (d.title) kids.push(`${pad}  HEADING(level: 1) { ${esc(d.title)} }`);
       if (d.subtitle) kids.push(`${pad}  TEXT { ${esc(d.subtitle)} }`);
@@ -153,6 +157,18 @@ function decompileBlock(block, indent) {
       if (d.author) params.push(`author: ${q(d.author)}`);
       if (d.role) params.push(`role: ${q(d.role)}`);
       return `${pad}TESTIMONIAL${paramList(params)} { ${esc(d.quote || d.text || '')} }`;
+    }
+    case 'marquee': {
+      const params = [];
+      if (d.speed && d.speed !== 'md') params.push(`speed: ${d.speed}`);
+      return `${pad}MARQUEE${paramList(params)} { ${esc(d.text || '')} }`;
+    }
+    case 'parallax': {
+      const params = [`image: ${q(d.image || '')}`];
+      if (d.overlay != null && Number(d.overlay) > 0) params.push(`overlay: ${d.overlay}`);
+      if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);
+      const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
+      return `${pad}PARALLAX${paramList(params)} {\n${kids}\n${pad}}`;
     }
     case 'gallery': {
       const params = [];

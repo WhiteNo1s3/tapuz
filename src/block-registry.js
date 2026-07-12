@@ -19,10 +19,9 @@
  *   HEADING child, gallery images = IMAGE children).
  * - `valueAliases` maps JSON enum values to their BenTML spelling when they
  *   differ (e.g. button variant `outline` ⇄ BenTML style `ghost`).
- * - Types/defaults align EXACTLY with src/bentml/keywords.js. Spec params
- *   that are parsed but never stored in JSON today (HERO overlay/parallax)
- *   are intentionally omitted — a form control that writes a field nothing
- *   renders or round-trips would silently lose data.
+ * - Types/defaults align EXACTLY with src/bentml/keywords.js. As of v0.44
+ *   every spec param is stored and rendered — HERO overlay/parallax (spec
+ *   §11.1) included; the old "parsed but never stored" drift is closed.
  *
  * Entry shape
  * -----------
@@ -109,9 +108,17 @@ const BLOCK_REGISTRY = [
         name: 'height', labelHe: 'גובה', type: 'enum',
         enum: ['sm', 'md', 'lg', 'full'], default: 'md', omitDefault: true,
         hint: 'full = מסך מלא'
+      },
+      {
+        name: 'overlay', labelHe: 'כהות שכבת רקע', type: 'integer',
+        min: 0, max: 80, default: 0, omitDefault: true,
+        hint: '0–80 — מכהה את תמונת הרקע כדי שהטקסט יבלוט'
+      },
+      {
+        name: 'parallax', labelHe: 'רקע קבוע (פרלקסה)', type: 'boolean',
+        default: false, omitDefault: true,
+        hint: 'הרקע נשאר קבוע והתוכן גולל מעליו'
       }
-      // spec §11.1 overlay/parallax are intentionally omitted: parsed by the
-      // compiler but never stored in JSON, rendered, or decompiled today.
     ],
     textField: null,
     seed: { title: 'כותרת ראשית', subtitle: '', buttonText: '', buttonUrl: '' }
@@ -130,7 +137,12 @@ const BLOCK_REGISTRY = [
         name: 'level', labelHe: 'רמה', type: 'integer',
         min: 1, max: 6, default: 2, hint: 'H1 עד H6 — H2 לרוב הכותרות'
       },
-      ALIGN_PARAM
+      ALIGN_PARAM,
+      {
+        name: 'animate', labelHe: 'אנימציית כניסה', type: 'enum',
+        enum: ['none', 'fade', 'rise'], default: 'none', omitDefault: true,
+        hint: 'fade = הופעה הדרגתית, rise = עולה תוך כדי גלילה'
+      }
     ],
     textField: 'text',
     textFieldLabelHe: 'טקסט',
@@ -169,6 +181,11 @@ const BLOCK_REGISTRY = [
         name: 'maxWidth', bentmlParam: 'maxwidth', labelHe: 'רוחב מקסימלי', type: 'enum',
         enum: ['sm', 'md', 'lg', 'full'], default: 'full', omitDefault: true,
         hint: 'מגביל רוחב קריאות לטקסט ארוך'
+      },
+      {
+        name: 'animate', labelHe: 'אנימציית כניסה', type: 'enum',
+        enum: ['none', 'fade', 'rise'], default: 'none', omitDefault: true,
+        hint: 'fade = הופעה הדרגתית, rise = עולה תוך כדי גלילה'
       }
     ],
     textField: 'content',
@@ -526,6 +543,58 @@ const BLOCK_REGISTRY = [
     ],
     textField: null,
     seed: { address: '' }
+  },
+
+  // ─────────────────────────── אפקטים ───────────────────────────
+  {
+    type: 'marquee',
+    keyword: 'MARQUEE',
+    labelHe: 'טקסט נע',
+    icon: '〰',
+    category: 'אפקטים',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'שורת טקסט שנעה לרוחב המסך',
+    params: [
+      {
+        name: 'speed', labelHe: 'מהירות', type: 'enum',
+        enum: ['slow', 'md', 'fast'], default: 'md', omitDefault: true,
+        hint: 'slow = איטי ומכובד, fast = אנרגטי'
+      }
+    ],
+    textField: 'text',
+    textFieldLabelHe: 'הטקסט הנע',
+    textFieldType: 'input',
+    seed: { text: 'ברוכים הבאים ✦ ברוכים הבאים ✦' }
+  },
+  {
+    type: 'parallax',
+    keyword: 'PARALLAX',
+    labelHe: 'רקע קבוע (פרלקסה)',
+    icon: '🏔',
+    category: 'אפקטים',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'תמונה קבועה — התוכן גולל מעליה',
+    childrenKey: 'blocks',
+    params: [
+      {
+        name: 'image', labelHe: 'תמונת רקע', type: 'media',
+        hint: 'התמונה שנשארת קבועה בזמן הגלילה — מומלץ מאוד'
+      },
+      {
+        name: 'overlay', labelHe: 'כהות שכבת רקע', type: 'integer',
+        min: 0, max: 80, default: 0, omitDefault: true,
+        hint: '0–80 — מכהה את התמונה כדי שהטקסט יבלוט'
+      },
+      {
+        name: 'height', labelHe: 'גובה', type: 'enum',
+        enum: ['sm', 'md', 'lg', 'full'], default: 'md', omitDefault: true,
+        hint: 'full = מסך מלא'
+      }
+    ],
+    textField: null,
+    seed: { image: '', blocks: [] }
   },
 
   // ─────────────────── enterprise / company pages ───────────────────

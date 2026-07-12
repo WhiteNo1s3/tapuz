@@ -24,7 +24,8 @@ function loadLayout(themeDir, layoutName = 'default') {
   return `<!DOCTYPE html><html lang="{{lang}}" dir="{{direction}}"><head><title>{{title}}</title></head><body><main>{{content}}</main></body></html>`;
 }
 
-function styleAttr(data) {
+/** Raw inline-style declarations (no `style="…"` wrapper), or '' when none. */
+function styleDecls(data) {
   const s = data?.style || {};
   const parts = [];
   if (data?.align === 'center') parts.push('text-align:center');
@@ -40,7 +41,34 @@ function styleAttr(data) {
   if (s.radius === 'sm') parts.push('border-radius:6px');
   if (s.radius === 'md') parts.push('border-radius:12px');
   if (s.radius === 'lg') parts.push('border-radius:20px');
-  return parts.length ? ` style="${parts.join(';')}"` : '';
+  return parts.join(';');
+}
+
+function styleAttr(data) {
+  const decls = styleDecls(data);
+  return decls ? ` style="${decls}"` : '';
+}
+
+/**
+ * Escape a URL for a CSS url('…') string that lives inside an HTML style="…"
+ * attribute. HTML-entity escaping is WRONG here: the HTML parser decodes it
+ * back before the CSS parser runs, so a single quote would still break out of
+ * url('…'). We escape the CSS-dangerous characters as CSS hex escapes instead,
+ * which neutralizes breakout while keeping legitimate URLs working.
+ */
+function cssUrl(value) {
+  return String(value == null ? '' : value)
+    .replace(/[\r\n\f]/g, '')
+    .replace(/[\\'"()<>]/g, (c) => '\\' + c.charCodeAt(0).toString(16) + ' ');
+}
+
+const ANIMATE_VALUES = new Set(['fade', 'rise']);
+
+/** Neutralize executable URL schemes on any clickable link (public render). */
+function safeHref(url) {
+  const s = String(url == null ? '' : url).trim();
+  if (/^(?:javascript|data|vbscript):/i.test(s)) return '#';
+  return s || '#';
 }
 
 /**
@@ -62,7 +90,7 @@ function renderInlineMarks(raw) {
   s = s.replace(
     /@LINK\s*\(\s*url\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi,
     (_, url, label) =>
-      hold(`<a href="${escapeHtml(url)}" rel="noopener">${escapeHtml(label)}</a>`)
+      hold(`<a href="${escapeHtml(safeHref(url))}" rel="noopener">${escapeHtml(label)}</a>`)
   );
   let out = escapeHtml(s);
   out = out.replace(/§§TAPUZ(\d+)§§/g, (_, i) => tokens[Number(i)] || '');
@@ -78,7 +106,12 @@ function renderBlock(block, direction = 'rtl') {
   switch (block.type) {
     case 'heading': {
       const level = Math.min(Math.max(block.data.level || 2, 1), 6);
-      return `<h${level}${extra} dir="${direction}">${renderInlineMarks(block.data.text || '')}</h${level}>`;
+      const clsList = [];
+      if (ANIMATE_VALUES.has(block.data.animate)) clsList.push(`anim-${block.data.animate}`);
+      if (block.data.className) clsList.push(escapeHtml(block.data.className));
+      const clsAttr = clsList.length ? ` class="${clsList.join(' ')}"` : '';
+      const hId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
+      return `<h${level}${hId}${clsAttr}${style} dir="${direction}">${renderInlineMarks(block.data.text || '')}</h${level}>`;
     }
     case 'text': {
       const d = block.data || {};
@@ -86,8 +119,9 @@ function renderBlock(block, direction = 'rtl') {
       if (d.size && d.size !== 'md') classes.push(`text-size-${d.size}`);
       if (d.lead) classes.push('text-lead');
       if (d.dropcap) classes.push('text-dropcap');
-      if (d.maxWidth && d.maxWidth !== 'full') classes.push(`text-max-${d.maxWidth}`);
-      if (d.className) classes.push(d.className);
+      if (d.maxWidth && d.maxWidth !== 'full') classes.push(`text-max-${escapeHtml(d.maxWidth)}`);
+      if (ANIMATE_VALUES.has(d.animate)) classes.push(`anim-${d.animate}`);
+      if (d.className) classes.push(escapeHtml(d.className));
       const classAttr = ` class="${escapeHtml(classes.join(' '))}"`;
       const idAttr = d.id ? ` id="${escapeHtml(d.id)}"` : '';
       const paras = String(d.content || '').split(/\n\n+/);
@@ -109,7 +143,7 @@ function renderBlock(block, direction = 'rtl') {
       const { text = '', url = '#', variant = 'primary' } = block.data;
       const btnClass = ` class="btn btn-${escapeHtml(variant)}${extraClass}"`;
       const btnId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
-      return `<a${btnId}${btnClass}${style} href="${escapeHtml(url)}" dir="${direction}">${escapeHtml(text)}</a>`;
+      return `<a${btnId}${btnClass}${style} href="${escapeHtml(safeHref(url))}" dir="${direction}">${escapeHtml(text)}</a>`;
     }
     case 'spacer': return `<div${extra} class="spacer" style="height:${escapeHtml(block.data.height || '2rem')}"></div>`;
     case 'divider': return `<hr${extra} dir="${direction}">`;
@@ -173,22 +207,24 @@ function renderBlock(block, direction = 'rtl') {
       const title = renderInlineMarks(d.title || '');
       const subtitle = renderInlineMarks(d.subtitle || '');
       const btnText = d.buttonText ? escapeHtml(d.buttonText) : '';
-      const btnUrl = escapeHtml(d.buttonUrl || '#');
+      const btnUrl = escapeHtml(safeHref(d.buttonUrl || '#'));
       const hClass = d.height && d.height !== 'md' ? ` hero-${escapeHtml(d.height)}` : '';
-      const bg = d.image
-        ? ` style="background-image:url('${escapeHtml(d.image)}');background-size:cover;background-position:center"`
-        : '';
-      // merge styleAttr carefully
-      let heroOpen = `<section class="hero${hClass}${extraClass}"${extraId}`;
-      if (bg && style) {
-        heroOpen += style.replace(' style="', ` style="background-image:url('${escapeHtml(d.image)}');background-size:cover;background-position:center;`);
-      } else if (bg) {
-        heroOpen += bg;
-      } else {
-        heroOpen += style;
+      const overlayVal = Math.min(Math.max(parseInt(d.overlay, 10) || 0, 0), 80);
+      const overlayCls = overlayVal > 0 ? ' hero-overlaid' : '';
+      const parallaxCls = (d.parallax === true || d.parallax === 'true') ? ' hero-parallax' : '';
+      // assemble ONE style attribute from parts — no more string-splicing that
+      // injected background-image:url('') when overlay was set but image wasn't
+      const heroStyle = [];
+      if (overlayVal > 0) heroStyle.push(`--hero-overlay:${(overlayVal / 100).toFixed(2)}`);
+      if (d.image) {
+        heroStyle.push(`background-image:url('${cssUrl(d.image)}')`);
+        heroStyle.push('background-size:cover');
+        heroStyle.push('background-position:center');
       }
-      heroOpen += ` dir="${direction}">`;
-      let html = heroOpen;
+      const userDecls = styleDecls(d);
+      if (userDecls) heroStyle.push(userDecls);
+      const heroStyleAttr = heroStyle.length ? ` style="${heroStyle.join(';')}"` : '';
+      let html = `<section class="hero${hClass}${overlayCls}${parallaxCls}${extraClass}"${extraId}${heroStyleAttr} dir="${direction}">`;
       html += `<h1>${title}</h1>`;
       if (subtitle) html += `<p class="subtitle">${subtitle}</p>`;
       if (btnText) html += `<a href="${btnUrl}" class="btn btn-primary">${btnText}</a>`;
@@ -220,7 +256,7 @@ function renderBlock(block, direction = 'rtl') {
       if (yt) {
         return `<figure class="video-embed"${extra}><iframe src="https://www.youtube.com/embed/${yt[1]}" allowfullscreen loading="lazy" title="YouTube video"></iframe></figure>`;
       }
-      const url = escapeHtml(rawUrl);
+      const url = escapeHtml(safeHref(rawUrl));
       return `<a href="${url}" target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
     }
 
@@ -273,7 +309,7 @@ function renderBlock(block, direction = 'rtl') {
       const tone = ['brand', 'dark', 'light'].includes(d.tone) ? d.tone : 'brand';
       const variant = d.variant || 'primary';
       const btn = d.buttonText
-        ? `<a class="btn btn-${escapeHtml(variant)}" href="${escapeHtml(d.url || '#')}">${escapeHtml(d.buttonText)}</a>`
+        ? `<a class="btn btn-${escapeHtml(variant)}" href="${escapeHtml(safeHref(d.url || '#'))}">${escapeHtml(d.buttonText)}</a>`
         : '';
       return (
         `<section class="cta-strip tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +
@@ -357,6 +393,39 @@ function renderBlock(block, direction = 'rtl') {
       return (
         `<div class="site-banner tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +
         `<p>${escapeHtml(d.text || '')}</p></div>`
+      );
+    }
+
+    case 'marquee': {
+      const d = block.data || {};
+      const speed = ['slow', 'md', 'fast'].includes(d.speed) ? d.speed : 'md';
+      const t = escapeHtml(d.text || '');
+      const cls = `marquee marquee-${speed}${extraClass}`;
+      // two full-width tracks side by side → seamless loop for any text length
+      const trackInner = `<span class="marquee-item">${t}</span>`;
+      return (
+        `<div class="${cls}"${extraId}${style} dir="${direction}">` +
+        `<div class="marquee-track">${trackInner}</div>` +
+        `<div class="marquee-track" aria-hidden="true">${trackInner}</div></div>`
+      );
+    }
+
+    case 'parallax': {
+      const d = block.data || {};
+      const height = ['sm', 'md', 'lg', 'full'].includes(d.height) ? d.height : 'md';
+      const overlayVal = Math.min(Math.max(parseInt(d.overlay, 10) || 0, 0), 80);
+      const overlaidCls = overlayVal > 0 ? ' parallax-overlaid' : '';
+      const pxStyle = [];
+      if (overlayVal > 0) pxStyle.push(`--px-overlay:${(overlayVal / 100).toFixed(2)}`);
+      if (d.image) pxStyle.push(`background-image:url('${cssUrl(d.image)}')`);
+      const userDecls = styleDecls(d);
+      if (userDecls) pxStyle.push(userDecls);
+      const pxStyleAttr = pxStyle.length ? ` style="${pxStyle.join(';')}"` : '';
+      const inner = (d.blocks || []).map((b) => renderBlock(b, direction)).join('');
+      return (
+        `<section class="parallax-section parallax-${height}${overlaidCls}${extraClass}"${extraId}` +
+        `${pxStyleAttr} dir="${direction}">` +
+        `<div class="parallax-inner">${inner}</div></section>`
       );
     }
 

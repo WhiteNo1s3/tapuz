@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+<head>
+  <meta charset="utf-8" />
+  <title>מאמר לדוגמה</title>
+  <meta name="bent-slug" content="hello-bentml" />
+  <meta name="bent-tags" content="article" />
+  <meta name="bent-teaser" content="איך benTML הופך בונה עמודים לשפת קוד." />
+  <meta name="bent-card-image" content="/uploads/article-card.jpg" />
+</head>
+<body>
+  <bent-heading id="title" level="1">שלום, benTML</bent-heading>
+  <bent-text id="lead">הבונה לא ממלא טפסים בלבד — הוא כותב שפה.</bent-text>
+  <bent-image id="hero-img" src="/uploads/article-card.jpg" alt="כותרת המאמר" align="center" />
+  <bent-text id="body-1">כל מודול הוא טיפוס. כל טיפוס מממש HTML. הסוכן, ה־CLI והאדם רואים את אותו מסמך.</bent-text>
+  <bent-embed id="vid" url="https://www.youtube.com/watch?v=dQw4w9WgXcQ" />
+</body>
+</html>

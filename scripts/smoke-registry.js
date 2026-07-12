@@ -44,8 +44,10 @@ const KEYWORD_TYPE_OF = {
   integer: 'integer', enum: 'enum', boolean: 'boolean'
 };
 // keyword params deliberately not surfaced in the registry (parsed by the
-// compiler but never stored in JSON / rendered / decompiled today)
-const KNOWN_UNCOVERED = { HERO: ['overlay', 'parallax'] };
+// compiler but never stored in JSON / rendered / decompiled today).
+// v0.44 closed the last entries (HERO overlay/parallax) — keep this EMPTY;
+// any new gap here is drift and must fail the smoke.
+const KNOWN_UNCOVERED = {};
 // registry types whose renderer / keywords wiring lands in the next phase
 const PENDING_TYPES = ['map'];
 

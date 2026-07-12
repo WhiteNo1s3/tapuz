@@ -45,7 +45,13 @@ function writePageHtml(page, outputDir, isHome) {
   ensureDir(outputDir);
   copyThemeAssets(page.theme || 'default');
 
-  const filename = (page.full_path || 'page').replace(/\s+/g, '-').replace(/[\/:*?"<>|]/g, '') + '.html';
+  // Harden filename so a crafted full_path can never write outside outputDir
+  // (backslash + '..' stripped — matches pages.sanitizeFullPath / pzn-store).
+  const filename = (page.full_path || 'page')
+    .replace(/\s+/g, '-')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\.\.+/g, '.')
+    .replace(/^\.+/, '') + '.html';
 
   const outputPath = path.join(outputDir, filename);
   const siteConfig = loadConfig();

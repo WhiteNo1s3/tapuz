@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tapuziel Demo</title>
+    <meta name="bent-slug" content="home" />
+  </head>
+  <body>
+    <bent-hero id="hero_1783729929555_736">
+      <bent-heading level="1">Tapuziel Demo</bent-heading>
+      <bent-text>CMS in Hebrew</bent-text>
+    </bent-hero>
+    <bent-text id="text_1783729929555_406">זהו דף הבית החדש שלך. לחץ &quot;ערוך&quot; כדי לשנות הכל.</bent-text>
+  </body>
+</html>

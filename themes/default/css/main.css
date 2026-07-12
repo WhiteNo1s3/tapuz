@@ -697,3 +697,106 @@ p, li { max-width: 70ch; }
   html { scroll-behavior: auto; }
   .card, .feature, .main-nav a::after, .skip-link, .whatsapp-float { transition: none; }
 }
+
+/* ── Signature visuals (v0.44) — heroes with fixed backgrounds, text
+   scrolling over them with opacity, moving text (the vision's namesakes) ── */
+
+/* hero overlay + parallax */
+.hero { position: relative; }
+.hero.hero-overlaid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit; /* follow the hero's rounded corners, no dark square bleed */
+  background: rgba(0, 0, 0, var(--hero-overlay, 0.35));
+  pointer-events: none;
+}
+.hero.hero-overlaid > * { position: relative; z-index: 1; }
+.hero.hero-overlaid { color: #fff; }
+.hero.hero-parallax { background-attachment: fixed; }
+
+/* parallax section — fixed image, content scrolls over it */
+.parallax-section {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.25rem;
+}
+.parallax-sm { min-height: 30vh; }
+.parallax-md { min-height: 50vh; }
+.parallax-lg { min-height: 70vh; }
+.parallax-full { min-height: 100vh; }
+.parallax-section.parallax-overlaid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, var(--px-overlay, 0.3));
+}
+.parallax-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 860px;
+  text-align: center;
+  color: #fff;
+}
+
+/* marquee — two full-width tracks scrolling in lockstep = seamless at any
+   text length (no "pop" for short strings) */
+.marquee {
+  display: flex;
+  overflow: hidden;
+  white-space: nowrap;
+  padding-block: 0.6rem;
+}
+.marquee-track {
+  flex-shrink: 0;
+  min-width: 100%;
+  display: flex;
+  justify-content: space-around;
+  gap: 3rem;
+  animation: tapuz-marquee var(--marquee-duration, 18s) linear infinite;
+  will-change: transform;
+}
+.marquee-slow .marquee-track { --marquee-duration: 32s; }
+.marquee-fast .marquee-track { --marquee-duration: 9s; }
+.marquee-item { display: inline-block; font-size: 1.15rem; }
+@keyframes tapuz-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+[dir="rtl"] .marquee-track { animation-name: tapuz-marquee-rtl; }
+@keyframes tapuz-marquee-rtl {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+/* entrance animations — scroll-driven where supported, one-shot elsewhere */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .anim-fade { animation: tapuz-fade both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
+    .anim-rise { animation: tapuz-rise both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
+  }
+  @supports not (animation-timeline: view()) {
+    .anim-fade { animation: tapuz-fade 0.8s ease-out both; }
+    .anim-rise { animation: tapuz-rise 0.8s ease-out both; }
+  }
+}
+@keyframes tapuz-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tapuz-rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
+/* fixed backgrounds are janky on touch devices (any size — tablets, big
+   phones, landscape) — key on the input type, not just a width breakpoint */
+@media (hover: none) and (pointer: coarse) {
+  .hero.hero-parallax, .parallax-section { background-attachment: scroll; }
+}
+@media (max-width: 768px) {
+  .hero.hero-parallax, .parallax-section { background-attachment: scroll; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+  .anim-fade, .anim-rise { animation: none; }
+}

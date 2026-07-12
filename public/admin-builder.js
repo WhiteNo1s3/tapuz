@@ -77,6 +77,40 @@
     return REG_BY_TYPE[type] || null;
   }
 
+  /**
+   * Container classification — registry-driven off `childrenKey`
+   * (src/block-registry.js). Two container shapes exist:
+   *   - 'blocks'  → data.blocks is a flat block list   (card, parallax)
+   *   - 'columns' → data.columns is [{blocks:[]}]       (ROW)
+   * Adding a new nesting block = one registry entry with childrenKey; no
+   * per-type client edits. FALLBACK_CHILDREN_KEY keeps the known containers
+   * working on older servers that don't inject window.__TAPUZ_REGISTRY__.
+   */
+  var FALLBACK_CHILDREN_KEY = { card: 'blocks', parallax: 'blocks', columns: 'columns' };
+
+  function childrenKeyFor(type) {
+    var def = registryDef(type);
+    if (def && def.childrenKey) return def.childrenKey;
+    return FALLBACK_CHILDREN_KEY[type] || null;
+  }
+
+  /** True for containers whose children live in a single data.blocks list. */
+  function isBlocksContainer(type) {
+    return childrenKeyFor(type) === 'blocks';
+  }
+
+  /** True for the columns container (data.columns = [{blocks:[]}]). */
+  function isColumnsContainer(type) {
+    return childrenKeyFor(type) === 'columns';
+  }
+
+  /** Ensure a blocks-container has a live data.blocks array and return it. */
+  function ensureBlocks(block) {
+    if (!block.data) block.data = {};
+    if (!Array.isArray(block.data.blocks)) block.data.blocks = [];
+    return block.data.blocks;
+  }
+
   function paramDefFor(type, key) {
     var def = registryDef(type);
     if (!def) return null;
@@ -163,18 +197,16 @@
           colIndex: colIndex == null ? null : colIndex
         };
       }
-      if (b.type === 'columns') {
+      if (isColumnsContainer(b.type)) {
         var cols = ensureColumns(b);
         for (var c = 0; c < cols.length; c++) {
           var found = findNode(id, cols[c].blocks, b, c);
           if (found) return found;
         }
       }
-      if (b.type === 'card') {
-        if (!b.data) b.data = {};
-        if (!Array.isArray(b.data.blocks)) b.data.blocks = [];
-        var foundCard = findNode(id, b.data.blocks, b, 'card');
-        if (foundCard) return foundCard;
+      if (isBlocksContainer(b.type)) {
+        var foundInner = findNode(id, ensureBlocks(b), b, 'blocks');
+        if (foundInner) return foundInner;
       }
     }
     return null;
@@ -190,13 +222,13 @@
     var n = 0;
     list.forEach(function (b) {
       n += 1;
-      if (b.type === 'columns') {
+      if (isColumnsContainer(b.type)) {
         ensureColumns(b).forEach(function (col) {
           n += countAllBlocks(col.blocks);
         });
       }
-      if (b.type === 'card' && b.data && Array.isArray(b.data.blocks)) {
-        n += countAllBlocks(b.data.blocks);
+      if (isBlocksContainer(b.type)) {
+        n += countAllBlocks(ensureBlocks(b));
       }
     });
     return n;
@@ -441,12 +473,10 @@
     if (!parentId) return blocks;
     var parent = getBlock(parentId);
     if (!parent) return null;
-    if (parent.type === 'card') {
-      if (!parent.data) parent.data = {};
-      if (!Array.isArray(parent.data.blocks)) parent.data.blocks = [];
-      return parent.data.blocks;
+    if (isBlocksContainer(parent.type)) {
+      return ensureBlocks(parent);
     }
-    if (parent.type !== 'columns') return null;
+    if (!isColumnsContainer(parent.type)) return null;
     var cols = ensureColumns(parent);
     var ci = colIndex == null ? 0 : parseInt(colIndex, 10) || 0;
     while (cols.length <= ci) cols.push({ blocks: [] });
@@ -457,12 +487,12 @@
   function containsId(rootBlock, id) {
     if (!rootBlock) return false;
     if (rootBlock.id === id) return true;
-    if (rootBlock.type === 'card' && rootBlock.data && rootBlock.data.blocks) {
+    if (isBlocksContainer(rootBlock.type) && rootBlock.data && Array.isArray(rootBlock.data.blocks)) {
       for (var j = 0; j < rootBlock.data.blocks.length; j++) {
         if (containsId(rootBlock.data.blocks[j], id)) return true;
       }
     }
-    if (rootBlock.type !== 'columns') return false;
+    if (!isColumnsContainer(rootBlock.type)) return false;
     var cols = ensureColumns(rootBlock);
     for (var c = 0; c < cols.length; c++) {
       var kids = cols[c].blocks || [];
@@ -690,10 +720,12 @@
     (function walk(list) {
       list.forEach(function (b) {
         if (!b.id) b.id = uid(b.type || 'block');
-        if (b.type === 'columns') {
+        if (isColumnsContainer(b.type)) {
           ensureColumns(b).forEach(function (col) {
             walk(col.blocks || []);
           });
+        } else if (isBlocksContainer(b.type)) {
+          walk(ensureBlocks(b));
         }
       });
     })(blocks);
@@ -915,11 +947,20 @@
     label.className = 'block-label';
     // Language keyword first — agents/humans see BenTML, not a mystery list label
     var kw = bentmlKeywordFor(block.type);
+    // Nested tag names the container: "בטור" for columns, "ב<שם המכולה>"
+    // for card / parallax / any blocks-container.
+    var nestTag = '';
+    if (nested) {
+      var nestLabel = (opts.parent && !isColumnsContainer(opts.parent.type))
+        ? 'ב' + typeLabel(opts.parent.type)
+        : 'בטור';
+      nestTag = ' <span class="nest-tag">' + esc(nestLabel) + '</span>';
+    }
     label.innerHTML =
       '<code class="block-kw">' + esc(kw) + '</code> ' +
       '<span class="block-type-icon">' + esc(typeIcon(block.type)) + '</span> ' +
       esc(typeLabel(block.type)) +
-      (nested ? ' <span class="nest-tag">בטור</span>' : '');
+      nestTag;
 
     var content = document.createElement('div');
     content.className = 'block-content';
@@ -937,7 +978,7 @@
     })();
 
     // side split zones (not for columns container itself — drop between/into cols instead)
-    if (block.type !== 'columns') {
+    if (!isColumnsContainer(block.type)) {
       var leftZ = document.createElement('div');
       leftZ.className = 'split-zone split-left';
       leftZ.innerHTML = '<span>◂ פצל</span>';
@@ -1224,7 +1265,7 @@
       return wrap;
     }
 
-    if (block.type === 'columns') {
+    if (isColumnsContainer(block.type)) {
       return renderColumnsBody(block);
     }
 
@@ -1238,18 +1279,27 @@
       return wrap;
     }
 
-    if (block.type === 'card') {
-      var cardInner = document.createElement('div');
-      cardInner.className = 'preview-card is-container';
-      cardInner.innerHTML = '<div class="column-head"><span class="container-badge">כרטיס</span> מכולה</div>';
-      var cardList = document.createElement('div');
-      cardList.className = 'column-list';
-      if (!Array.isArray(d.blocks)) d.blocks = [];
-      if (!block.data) block.data = d;
-      if (!block.data.blocks) block.data.blocks = [];
-      renderListInto(cardList, block.data.blocks, block, 'card');
-      cardInner.appendChild(cardList);
-      wrap.appendChild(cardInner);
+    // Any container whose children live in a flat data.blocks list
+    // (card, parallax, …) — registry-driven off childrenKey:'blocks'.
+    if (isBlocksContainer(block.type)) {
+      var contDef = registryDef(block.type);
+      var contInner = document.createElement('div');
+      contInner.className = 'preview-card is-container';
+      var contBadge = esc((contDef && contDef.labelHe) || typeLabel(block.type));
+      contInner.innerHTML =
+        '<div class="column-head"><span class="container-badge">' + contBadge + '</span> מכולה</div>';
+      var contList = document.createElement('div');
+      contList.className = 'column-list';
+      var contKids = ensureBlocks(block);
+      if (!contKids.length) {
+        var contEmpty = document.createElement('div');
+        contEmpty.className = 'column-empty';
+        contEmpty.textContent = 'גרור לכאן';
+        contList.appendChild(contEmpty);
+      }
+      renderListInto(contList, contKids, block, 'blocks');
+      contInner.appendChild(contList);
+      wrap.appendChild(contInner);
       return wrap;
     }
 
@@ -1599,7 +1649,7 @@
       return { ok: false, mutated: true, reason: 'target-missing' };
     }
 
-    if (targetNode.block.type === 'columns') {
+    if (isColumnsContainer(targetNode.block.type)) {
       if (state.kind === 'block') blocks.push(incoming);
       return { ok: false, mutated: true, reason: 'split-columns-container' };
     }
@@ -2095,9 +2145,14 @@
 
     var block = node.block;
     var d = block.data || {};
-    var nestHint = node.parent
-      ? '<div class="nest-hint">בתוך עמודות · טור ' + ((node.colIndex || 0) + 1) + '</div>'
-      : '';
+    var nestHint = '';
+    if (node.parent) {
+      if (isColumnsContainer(node.parent.type)) {
+        nestHint = '<div class="nest-hint">בתוך עמודות · טור ' + ((parseInt(node.colIndex, 10) || 0) + 1) + '</div>';
+      } else {
+        nestHint = '<div class="nest-hint">בתוך ' + esc(typeLabel(node.parent.type)) + '</div>';
+      }
+    }
 
     var kw = bentmlKeywordFor(block.type);
     var snips = (window.BentmlUI && window.BentmlUI.AGENT_SNIPPETS) || {};
@@ -2123,8 +2178,19 @@
     // containers). The chain below the first branch is a legacy fallback for
     // servers that don't inject the registry.
     var regDef = registryDef(block.type);
-    var HAND_WRITTEN = { text: 1, card: 1, columns: 1 };
-    if (regDef && !HAND_WRITTEN[block.type]) {
+    var HAND_WRITTEN = { text: 1, columns: 1 };
+    if (isBlocksContainer(block.type)) {
+      // Container (card, parallax, …): render its own schema params (image /
+      // overlay / height for parallax; none for card) then the nesting
+      // affordance — drag modules in, or add one here.
+      if (regDef) html += renderSchemaForm(regDef, block);
+      var innerCount = (block.data && Array.isArray(block.data.blocks)) ? block.data.blocks.length : 0;
+      html +=
+        '<div class="prop-hint">' + esc(typeLabel(block.type)) +
+        ' = מכולה. גררו מודולים פנימה מהסרגל (או הוסיפו למטה). ' +
+        innerCount + ' מודולים בפנים.</div>';
+      html += '<button type="button" class="btn" data-container-add-text="1">+ טקסט במכולה</button>';
+    } else if (regDef && !HAND_WRITTEN[block.type]) {
       html += renderSchemaForm(regDef, block);
     } else if (block.type === 'hero') {
       html += field('כותרת', '<input data-key="title" value="' + escAttr(d.title || '') + '">');
@@ -2284,9 +2350,6 @@
           '<option value="warn"' + (d.tone === 'warn' ? ' selected' : '') + '>אזהרה</option>' +
         '</select>'
       );
-    } else if (block.type === 'card') {
-      html += '<div class="prop-hint">כרטיס = מכולה. גררו מודולים פנימה מהסרגל (או הוסיפו טקסט למטה).</div>';
-      html += '<button type="button" class="btn" data-card-add-text="1">+ טקסט בכרטיס</button>';
     } else if (block.type === 'testimonial') {
       html += field('ציטוט', '<textarea data-key="quote">' + esc(d.quote || '') + '</textarea>');
       html += field('שם', '<input data-key="author" value="' + escAttr(d.author || '') + '">');
@@ -2583,13 +2646,11 @@
       });
     }
 
-    var cardAdd = panel.querySelector('[data-card-add-text]');
-    if (cardAdd) {
-      cardAdd.addEventListener('click', function () {
+    var containerAdd = panel.querySelector('[data-container-add-text]');
+    if (containerAdd) {
+      containerAdd.addEventListener('click', function () {
         pushHistory();
-        if (!block.data) block.data = {};
-        if (!Array.isArray(block.data.blocks)) block.data.blocks = [];
-        block.data.blocks.push(makeBlock('text'));
+        ensureBlocks(block).push(makeBlock('text'));
         markDirty();
         renderCanvas();
         renderProperties();
@@ -2904,10 +2965,12 @@
     var copy = JSON.parse(JSON.stringify(n.block));
     (function reId(b) {
       b.id = uid(b.type);
-      if (b.type === 'columns') {
+      if (isColumnsContainer(b.type)) {
         ensureColumns(b).forEach(function (col) {
           (col.blocks || []).forEach(reId);
         });
+      } else if (isBlocksContainer(b.type)) {
+        ensureBlocks(b).forEach(reId);
       }
     })(copy);
     n.list.splice(n.index + 1, 0, copy);
@@ -2930,7 +2993,7 @@
   /** Toolbar: turn one block into 2-col with empty sibling */
   function splitBlockInPlace(id) {
     var n = findNode(id);
-    if (!n || n.block.type === 'columns') return;
+    if (!n || isColumnsContainer(n.block.type)) return;
     pushHistory();
     var target = n.list.splice(n.index, 1)[0];
     var empty = makeBlock('text');
@@ -2949,7 +3012,7 @@
 
   function unwrapColumns(id) {
     var n = findNode(id);
-    if (!n || n.block.type !== 'columns') return;
+    if (!n || !isColumnsContainer(n.block.type)) return;
     pushHistory();
     var cols = ensureColumns(n.block);
     var flat = [];

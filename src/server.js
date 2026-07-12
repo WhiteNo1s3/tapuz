@@ -26,6 +26,8 @@ const gaData = require('./ga-data');
 // Abuse mitigation (S4). App-level (L7) only — see docs/security.md.
 const adminLimiter = new FixedWindowLimiter({ windowMs: 60 * 1000, max: 300 }); // general admin flood cap
 const loginGuard = new LoginGuard(); // escalating brute-force lockout on login
+const agentLimiter = new FixedWindowLimiter({ windowMs: 60 * 1000, max: 120 }); // agent bridge (per token/IP)
+const agentTokens = require('./agent-tokens');
 // S6 collector flood cap: coarse per-IP bucket. Beacon endpoint is public and
 // unauthenticated, so it gets its own tight limit. TAPUZ_COLLECT_MAX overrides
 // the per-minute cap (used by the smoke test to force a 429 deterministically).
@@ -194,6 +196,187 @@ app.use((req, res, next) => {
   auth.issueSession(res, session.uid, req, session.iat);
   req.adminUser = session;
   next();
+});
+
+// =========================================================================
+// AGENT BRIDGE (v0.45) — /agent/v1/* — bearer-token API for external agents
+// (the Grokin browser extension). Deliberately OUTSIDE /admin: token auth,
+// NOT session cookies. A browser never auto-sends a bearer token, so there is
+// no CSRF risk — which is exactly why CORS can use Allow-Origin:* WITHOUT
+// credentials: a hostile page may call the endpoint but cannot supply a valid
+// token, and no cookie rides along. See docs/security.md.
+// =========================================================================
+function agentCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Max-Age', '600');
+  res.setHeader('Vary', 'Origin');
+  // NOTE: intentionally NO Access-Control-Allow-Credentials — bearer only.
+}
+
+app.use('/agent', (req, res, next) => {
+  agentCors(res);
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (req.method === 'OPTIONS') return res.status(204).end(); // CORS preflight
+  next();
+});
+
+/** Bearer-token guard for /agent/v1/*. `scope` = 'read' | 'write' | null. */
+function requireAgent(scope) {
+  return (req, res, next) => {
+    const ip = clientIp(req);
+    const raw = /^Bearer\s+(.+)$/i.exec(String(req.headers['authorization'] || '').trim());
+    const rawToken = raw ? raw[1].trim() : '';
+    // Flood cap keyed by SOURCE IP, never by the attacker-supplied token
+    // prefix — a bad-token flood must not exhaust a victim token's quota.
+    const key = 'agent:' + ip;
+    if (!agentLimiter.allow(key)) {
+      res.setHeader('Retry-After', String(agentLimiter.retryAfter(key)));
+      return res.status(429).json({ ok: false, error: 'rate limited' });
+    }
+    if (!rawToken) return res.status(401).json({ ok: false, error: 'missing bearer token' });
+    const id = agentTokens.verifyAgentToken(rawToken);
+    if (!id) return res.status(401).json({ ok: false, error: 'invalid token' });
+    if (scope && !id.scopes.includes(scope)) {
+      return res.status(403).json({ ok: false, error: `token lacks '${scope}' scope` });
+    }
+    req.agent = id;
+    next();
+  };
+}
+
+app.get('/agent/v1/ping', requireAgent('read'), (req, res) => {
+  res.json({ ok: true, agent: req.agent.name, scopes: req.agent.scopes, version: '0.45' });
+});
+
+app.get('/agent/v1/primer', requireAgent('read'), (req, res) => {
+  const { buildPznPrimer } = require('./pzn/agent-primer');
+  res.type('text/markdown; charset=utf-8').send(buildPznPrimer());
+});
+
+app.get('/agent/v1/toolbox', requireAgent('read'), (req, res) => {
+  const pznApi = require('./pzn/index');
+  res.json({ ok: true, toolbox: pznApi.getToolbox(), schemas: pznApi.getAllSchemas() });
+});
+
+app.get('/agent/v1/pages', requireAgent('read'), (req, res) => {
+  const { listPages } = require('./pages');
+  res.json({ ok: true, pages: listPages() });
+});
+
+app.get('/agent/v1/source', requireAgent('read'), (req, res) => {
+  try {
+    const fullPath = String(req.query.fullPath || '');
+    const kind = req.query.kind === 'published' ? 'published' : 'draft';
+    if (!fullPath) return res.status(400).json({ ok: false, error: 'fullPath required' });
+    const { getPageSource } = require('./pages');
+    const source = getPageSource(fullPath, kind);
+    if (source == null) return res.status(404).json({ ok: false, error: 'Page not found' });
+    res.json({ ok: true, fullPath, kind, source });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/agent/v1/source', requireAgent('write'), (req, res) => {
+  try {
+    const { fullPath, publish, loose } = req.body || {};
+    let { source } = req.body || {};
+    if (!fullPath || typeof source !== 'string') {
+      return res.status(400).json({ ok: false, error: 'fullPath and source required' });
+    }
+    if (loose) {
+      const { extractPzn } = require('./pzn-extract');
+      source = extractPzn(source);
+    }
+    const { savePageSource } = require('./pages');
+    const result = savePageSource(fullPath, source, { publish: !!publish });
+    if (publish) exportAll();
+    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
+  }
+});
+
+app.post('/agent/v1/ops', requireAgent('write'), (req, res) => {
+  try {
+    const { fullPath, ops, publish } = req.body || {};
+    if (!fullPath || !Array.isArray(ops)) {
+      return res.status(400).json({ ok: false, error: 'fullPath and ops[] required' });
+    }
+    const { applyPageOps } = require('./pages');
+    const result = applyPageOps(fullPath, ops, { publish: !!publish });
+    if (publish) exportAll();
+    res.json({ ok: true, fullPath, blocks: result.blocks, source: result.source, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_OPS' });
+  }
+});
+
+/** Create a new page from a bot's raw .pzn reply (the extension's main path). */
+app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
+  try {
+    const { publish } = req.body || {};
+    let { source } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    const { extractPzn } = require('./pzn-extract');
+    source = extractPzn(source);
+    const pznApi = require('./pzn/index');
+    const doc = pznApi.parse(source);
+    const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: errors.map((e) => `${e.code}: ${e.message}`).join('; '), issues: errors });
+    }
+    const title = doc.title || 'דף חדש';
+    const { deriveSlug } = require('./pzn/intent');
+    const slug = deriveSlug((doc.slug || '').trim() || title);
+    const { createPage, getPageByFullPath, savePageSource } = require('./pages');
+    if (getPageByFullPath(slug) && !(req.body && req.body.update)) {
+      return res.status(409).json({ ok: false, error: `page "${slug}" already exists — pass update:true`, fullPath: slug });
+    }
+    const existed = !!getPageByFullPath(slug);
+    if (!existed) createPage({ title, slug, blocks: [] });
+    const result = savePageSource(slug, source, { publish: !!publish });
+    if (publish) exportAll();
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
+  }
+});
+
+/** The Grokin trick: model emits INTENT, server owns the .pzn. */
+app.post('/agent/v1/build', requireAgent('write'), (req, res) => {
+  try {
+    const { intent, publish } = req.body || {};
+    const { intentToPzn, deriveSlug } = require('./pzn/intent');
+    const source = intentToPzn(intent); // throws on invalid intent
+    const pznApi = require('./pzn/index');
+    const doc = pznApi.parse(source);
+    const title = doc.title || 'דף חדש';
+    // deriveSlug hardens against path traversal; run BOTH the bot-supplied
+    // bent-slug and the title through it so lookup/create/save agree.
+    const slug = deriveSlug((doc.slug || '').trim() || title);
+    const { createPage, getPageByFullPath, savePageSource } = require('./pages');
+    const existed = !!getPageByFullPath(slug);
+    // Don't silently clobber a DIFFERENT existing page — require explicit intent.
+    if (existed && !(req.body && req.body.update)) {
+      return res.status(409).json({
+        ok: false,
+        error: `page "${slug}" already exists — pass update:true to overwrite it`,
+        fullPath: slug
+      });
+    }
+    if (!existed) createPage({ title, slug, blocks: [] });
+    const result = savePageSource(slug, source, { publish: !!publish });
+    if (publish) exportAll();
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, source, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_BUILD', issues: e.issues });
+  }
 });
 
 // ---- Auth screens (Hebrew / RTL). Exempt from the session requirement. ----
@@ -1626,7 +1809,9 @@ const ADMIN_NAV_ITEMS = [
   { key: 'site-chrome', href: '/admin/site-chrome', label: 'כותרת ותחתית' },
   { key: 'seo', href: '/admin/seo', label: 'SEO' },
   { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס' },
-  { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' }
+  { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' },
+  { key: 'ai', href: '/admin/ai', label: 'AI ✨' },
+  { key: 'agent', href: '/admin/agent', label: 'גשר סוכן' }
 ];
 
 function adminNav(active, sectionTitle, actionsHtml = '') {
@@ -3063,6 +3248,191 @@ app.post('/admin/api/bentml/apply', (req, res) => {
   }
 });
 
+// ─── .pzn canonical editing API (v0.42) ─────────────────────────────
+// The page's .pzn source and builder-standard AST ops are the canonical
+// editing path — for agents, tools, and the page-builder standard.
+
+/** Read a page's canonical .pzn source. ?kind=draft|published (default draft). */
+app.get('/admin/api/pzn/source', (req, res) => {
+  try {
+    const fullPath = String(req.query.fullPath || '');
+    const kind = req.query.kind === 'published' ? 'published' : 'draft';
+    if (!fullPath) return res.status(400).json({ ok: false, error: 'fullPath required' });
+    const { getPageSource } = require('./pages');
+    const source = getPageSource(fullPath, kind);
+    if (source == null) return res.status(404).json({ ok: false, error: 'Page not found' });
+    res.json({ ok: true, fullPath, kind, source });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/**
+ * Save raw .pzn source as the page draft (publish: true also publishes).
+ * loose: true — the source is a raw pasted AI reply; extract the .pzn
+ * document out of prose/code fences first (the paste flow).
+ */
+app.post('/admin/api/pzn/source', (req, res) => {
+  try {
+    const { fullPath, publish, loose } = req.body || {};
+    let { source } = req.body || {};
+    if (!fullPath || typeof source !== 'string') {
+      return res.status(400).json({ ok: false, error: 'fullPath and source required' });
+    }
+    if (loose) {
+      const { extractPzn } = require('./pzn-extract');
+      source = extractPzn(source);
+    }
+    const { savePageSource } = require('./pages');
+    const result = savePageSource(fullPath, source, { publish: !!publish });
+    if (publish) exportAll(); // publish from the paste flow means LIVE now
+    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({
+      ok: false,
+      error: e.message,
+      code: e.code || 'E_PZN',
+      line: e.line,
+      column: e.column,
+      issues: e.issues
+    });
+  }
+});
+
+/** Apply builder-standard AST ops to the page draft. */
+app.post('/admin/api/pzn/ops', (req, res) => {
+  try {
+    const { fullPath, ops, publish } = req.body || {};
+    if (!fullPath || !Array.isArray(ops)) {
+      return res.status(400).json({ ok: false, error: 'fullPath and ops[] required' });
+    }
+    const { applyPageOps } = require('./pages');
+    const result = applyPageOps(fullPath, ops, { publish: !!publish });
+    res.json({ ok: true, fullPath, blocks: result.blocks, source: result.source, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_OPS' });
+  }
+});
+
+// ─── Agent token management (session-authed; secrets shown once) ────
+app.get('/admin/api/agent-tokens', (req, res) => {
+  res.json({ ok: true, tokens: agentTokens.listTokens() });
+});
+
+app.post('/admin/api/agent-tokens', (req, res) => {
+  try {
+    const { name, scopes } = req.body || {};
+    const { token, record } = agentTokens.mintToken({ name, scopes });
+    res.json({ ok: true, token, record }); // `token` is returned exactly once
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.delete('/admin/api/agent-tokens/:id', (req, res) => {
+  const removed = agentTokens.revokeToken(req.params.id);
+  res.json({ ok: removed });
+});
+
+/** Module toolbox + schemas — what agents need to write valid .pzn. */
+app.get('/admin/api/pzn/toolbox', (req, res) => {
+  try {
+    const pznApi = require('./pzn/index');
+    res.json({ ok: true, toolbox: pznApi.getToolbox(), schemas: pznApi.getAllSchemas() });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/** The paste-into-any-AI primer, generated live from the registry. */
+app.get('/admin/api/pzn/primer', (req, res) => {
+  try {
+    const { buildPznPrimer } = require('./pzn/agent-primer');
+    res.type('text/markdown; charset=utf-8').send(buildPznPrimer());
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/**
+ * Create a brand-new page from pasted .pzn (the "bot invented a page" flow):
+ * extract → validate → slug from bent-slug (or title) → create → save source.
+ */
+app.post('/admin/api/pzn/create-from-source', (req, res) => {
+  try {
+    const { publish } = req.body || {};
+    let { source } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    const { extractPzn } = require('./pzn-extract');
+    source = extractPzn(source);
+    const pznApi = require('./pzn/index');
+    const doc = pznApi.parse(source);
+    const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+    if (errors.length) {
+      return res.status(400).json({
+        ok: false,
+        error: errors.map((e) => `${e.code}: ${e.message}`).join('; '),
+        issues: errors
+      });
+    }
+    const title = doc.title || 'דף חדש';
+    // deriveSlug hardens against path traversal (backslash / '..').
+    const { deriveSlug } = require('./pzn/intent');
+    const slug = deriveSlug((doc.slug || '').trim() || title);
+    const { createPage, getPageByFullPath, savePageSource } = require('./pages');
+    if (getPageByFullPath(slug)) {
+      return res.status(409).json({ ok: false, error: `דף בשם "${slug}" כבר קיים — בחר אותו ברשימה או שנה את ה-slug במקור` });
+    }
+    createPage({ title, slug, blocks: [] });
+    const result = savePageSource(slug, source, { publish: !!publish });
+    if (publish) exportAll(); // publish from the paste flow means LIVE now
+    res.json({ ok: true, fullPath: slug, created: true, blocks: result.blocks, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column });
+  }
+});
+
+/** Compile pasted source to preview HTML without saving. loose extracts first. */
+app.post('/admin/api/pzn/preview', (req, res) => {
+  try {
+    const { loose } = req.body || {};
+    let { source } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    if (loose !== false) {
+      const { extractPzn } = require('./pzn-extract');
+      source = extractPzn(source);
+    }
+    const pznApi = require('./pzn/index');
+    const doc = pznApi.parse(source);
+    const issues = pznApi.validate(doc, { strict: false });
+    const errors = issues.filter((i) => i.severity === 'error');
+    if (errors.length) {
+      return res.status(400).json({
+        ok: false,
+        error: errors.map((e) => `${e.code}: ${e.message}`).join('; '),
+        issues: errors
+      });
+    }
+    const { listArticles } = require('./pages');
+    let articles = [];
+    try { articles = listArticles({ limit: 12 }); } catch (e) { /* fresh DB */ }
+    const html = pznApi.buildPreviewHtml(doc, { articles });
+    res.json({
+      ok: true,
+      html,
+      source,
+      title: doc.title,
+      warnings: issues.filter((i) => i.severity === 'warning')
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column });
+  }
+});
+
 app.get('/admin/api/pages', (req, res) => {
   try {
     res.json({ ok: true, pages: listPages({ q: req.query.q, status: req.query.status }) });
@@ -3582,6 +3952,83 @@ app.get('/admin/sitemap', (req, res) => {
     </div>
   `;
   res.send(layout(html, 'מפת אתר', '#ea580c'));
+});
+
+// ─── /admin/agent — pair the browser bridge (agent tokens) ──────────
+app.get('/admin/agent', (req, res) => {
+  const origin = `${req.protocol}://${req.headers.host}`;
+  const html = `
+    ${adminNav('agent', 'גשר סוכן — Grokin')}
+    <div class="container" style="padding-top:28px;max-width:900px">
+      <p style="color:#64748b;margin-top:0">
+        טוקנים מאובטחים שמחברים סוכן חיצוני (תוסף הדפדפן) ל‑API של תפוזיאל —
+        בלי סיסמה ובלי קובץ Cookie. הטוקן מוצג <b>פעם אחת בלבד</b> ביצירה.
+        נקודת הקצה: <code dir="ltr">${escapeAdmin(origin)}/agent/v1</code>
+      </p>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:18px">
+        <h3 style="margin-top:0">צור טוקן חדש</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input id="tok-name" placeholder="שם (למשל: Chrome של בן)" style="flex:1;min-width:200px;padding:9px;border:1px solid #e2e8f0;border-radius:8px">
+          <label style="font-size:.9rem"><input type="checkbox" id="tok-write" checked> הרשאת כתיבה (יצירת דפים)</label>
+          <button type="button" id="tok-create" class="btn">צור טוקן</button>
+        </div>
+        <div id="tok-new" style="display:none;margin-top:14px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0">
+          <div style="color:#166534;font-size:.9rem;margin-bottom:6px">העתק עכשיו — לא יוצג שוב:</div>
+          <code id="tok-secret" dir="ltr" style="display:block;word-break:break-all;background:#fff;padding:8px;border-radius:6px;border:1px solid #bbf7d0"></code>
+        </div>
+      </section>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <h3 style="margin-top:0">טוקנים פעילים</h3>
+        <div id="tok-list" style="color:#64748b">טוען…</div>
+      </section>
+    </div>
+    <script src="/admin-agent.js"></script>
+  `;
+  res.send(layout(html, 'גשר סוכן', '#7c3aed'));
+});
+
+// ─── /admin/ai — the paste flow (BYO AI subscription, zero keys) ────
+app.get('/admin/ai', (req, res) => {
+  const html = `
+    ${adminNav('ai', 'AI — הדבק ובנה')}
+    <div class="container" style="padding-top:28px;max-width:1180px">
+      <p style="color:#64748b;margin-top:0">
+        משוחחים עם ה‑AI שכבר יש לכם (ChatGPT / Claude / Grok) — בלי מפתחות API ובלי עלות נוספת.
+        מעתיקים את המדריך, מבקשים דף, מדביקים את התשובה — והדף קם.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">1 · למדו את הבוט שלכם</h3>
+          <p style="color:#64748b;font-size:.92rem">העתיקו את המדריך והדביקו בצ'אט של ה‑AI שלכם. הוא ילמד לכתוב דפי תפוזיאל.</p>
+          <button type="button" id="copy-primer" class="btn">📋 העתק את המדריך</button>
+          <span id="primer-status" style="margin-inline-start:10px;color:#16a34a;font-size:.9rem"></span>
+
+          <h3 style="margin-top:26px">2 · הדביקו את התשובה</h3>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+            <label style="font-size:.92rem;color:#475569">לאיזה דף?</label>
+            <select id="page-pick" style="flex:1;padding:8px;border:1px solid #e2e8f0;border-radius:8px">
+              <option value="__new__">✨ דף חדש (לפי הכותרת וה-slug שהבוט כתב)</option>
+            </select>
+          </div>
+          <textarea id="paste-box" placeholder="הדביקו כאן את כל תשובת הבוט — אפשר עם הטקסט מסביב, אנחנו נחלץ את הקוד"
+            style="width:100%;min-height:260px;box-sizing:border-box;padding:12px;border:1px solid #e2e8f0;border-radius:8px;font-family:ui-monospace,monospace;font-size:.85rem;direction:ltr;text-align:left"></textarea>
+          <div id="issue-panel" style="display:none;margin-top:10px;padding:12px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.9rem;white-space:pre-wrap"></div>
+          <div style="display:flex;gap:10px;margin-top:14px">
+            <button type="button" id="apply-draft" class="btn" disabled>שמור כטיוטה</button>
+            <button type="button" id="apply-publish" class="btn" disabled>שמור ופרסם</button>
+          </div>
+          <div id="apply-result" style="display:none;margin-top:12px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:.95rem"></div>
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">3 · תצוגה מקדימה חיה</h3>
+          <iframe id="preview-frame" title="תצוגה מקדימה"
+            style="width:100%;height:520px;border:1px solid #e2e8f0;border-radius:8px;background:#fff"></iframe>
+        </section>
+      </div>
+    </div>
+    <script src="/admin-ai.js"></script>
+  `;
+  res.send(layout(html, 'AI', '#0891b2'));
 });
 
 app.get('/admin/menus', (req, res) => {

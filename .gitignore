@@ -9,6 +9,8 @@ node_modules/
 # NEVER commit this: it is generated at runtime and lives outside the
 # web-served config. Supply via config/auth.json or the TAPUZ_ADMIN_SECRET env.
 config/auth.json
+# Agent bridge tokens — scrypt hashes of bearer credentials (v0.45).
+config/agent-tokens.json
 
 # SQLite runtime
 *.db

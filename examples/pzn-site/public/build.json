@@ -1,0 +1,39 @@
+{
+  "builtAt": "2026-07-10T21:48:00.792Z",
+  "site": "Tapuziel Demo",
+  "pzn": "0.1",
+  "runtime": {
+    "manifestVersion": "0.1",
+    "language": "bentml",
+    "fileExtension": ".pzn",
+    "moduleRegistry": "builtin",
+    "moduleNames": [
+      "heading",
+      "text",
+      "image",
+      "button",
+      "item",
+      "list",
+      "quote",
+      "spacer",
+      "divider",
+      "embed",
+      "section",
+      "col",
+      "columns",
+      "hero",
+      "gallery",
+      "article-list"
+    ],
+    "pagesDir": "pages",
+    "home": "home",
+    "themeCss": "theme/main.css",
+    "buildOut": "public"
+  },
+  "files": [
+    "articles.html",
+    "hello-bentml.html",
+    "index.html"
+  ],
+  "articles": 1
+}

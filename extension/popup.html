@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font: 14px system-ui, sans-serif; width: 320px; margin: 0; padding: 14px; color: #0f172a; background: #fff; }
+    h1 { font-size: 1.05rem; margin: 0 0 4px; }
+    .sub { color: #64748b; font-size: .82rem; margin: 0 0 12px; }
+    label { display: block; font-size: .82rem; color: #475569; margin: 10px 0 4px; }
+    input, select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: .9rem; }
+    input[dir=ltr] { direction: ltr; text-align: left; }
+    button { margin-top: 12px; padding: 9px 12px; border: none; border-radius: 8px; background: #0891b2; color: #fff; font-weight: 600; cursor: pointer; }
+    button.sec { background: #e2e8f0; color: #0f172a; }
+    .row { display: flex; gap: 8px; }
+    .row button { flex: 1; margin-top: 0; }
+    #status { margin-top: 10px; font-size: .85rem; padding: 8px; border-radius: 8px; display: none; }
+    .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <h1>🍊 גשר תפוזיאל</h1>
+  <p class="sub">ה‑AI שלכם, הדפדפן שלכם, ה‑CMS שלכם. בלי מפתחות.</p>
+
+  <label>כתובת ה‑CMS</label>
+  <input id="url" dir="ltr" placeholder="http://localhost:3000" />
+
+  <label>טוקן סוכן (מ‑/admin/agent)</label>
+  <input id="token" dir="ltr" type="password" placeholder="tzk_…" />
+
+  <div class="row" style="margin-top:12px">
+    <button id="save">שמור</button>
+    <button id="ping" class="sec">בדוק חיבור</button>
+  </div>
+
+  <label>יעד הפרסום</label>
+  <select id="target"><option value="__new__">✨ דף חדש (לפי הכותרת שהבוט כתב)</option></select>
+
+  <button id="primer" class="sec" style="width:100%">📋 העתק מדריך ל‑AI</button>
+
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

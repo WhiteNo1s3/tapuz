@@ -52,6 +52,7 @@ function blockToJson(node, warnings) {
       const level = clampInt(p.level, 1, 6, 2);
       const data = { level, text: collapseSingleParagraph(text) };
       if (p.align && p.align !== 'start') data.align = p.align;
+      if (p.animate && p.animate !== 'none') data.animate = p.animate;
       if (p.class) data.className = p.class;
       if (p.id) data.id = p.id;
       return createBlock('heading', data);
@@ -63,6 +64,7 @@ function blockToJson(node, warnings) {
       if (p.lead === true || p.lead === 'true') data.lead = true;
       if (p.dropcap === true || p.dropcap === 'true') data.dropcap = true;
       if (p.maxwidth && p.maxwidth !== 'full') data.maxWidth = p.maxwidth;
+      if (p.animate && p.animate !== 'none') data.animate = p.animate;
       if (p.class) data.className = p.class;
       return createBlock('text', data);
     }
@@ -150,7 +152,28 @@ function blockToJson(node, warnings) {
       const data = { title, subtitle, buttonText, buttonUrl };
       if (p.image) data.image = p.image;
       if (p.height) data.height = p.height;
+      // spec §11.1 overlay/parallax — stored since v0.44 (the drift is closed)
+      if (p.overlay != null && Number(p.overlay) > 0) data.overlay = clampInt(p.overlay, 0, 80, 0);
+      if (p.parallax === true || p.parallax === 'true') data.parallax = true;
       return createBlock('hero', data);
+    }
+    case 'MARQUEE': {
+      const data = { text: collapseSingleParagraph(text) };
+      if (p.speed && p.speed !== 'md') data.speed = p.speed;
+      if (p.class) data.className = p.class;
+      if (p.id) data.id = p.id;
+      return createBlock('marquee', data);
+    }
+    case 'PARALLAX': {
+      const data = {
+        image: p.image || '',
+        blocks: (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean)
+      };
+      if (p.overlay != null && Number(p.overlay) > 0) data.overlay = clampInt(p.overlay, 0, 80, 0);
+      if (p.height && p.height !== 'md') data.height = p.height;
+      if (p.class) data.className = p.class;
+      if (p.id) data.id = p.id;
+      return createBlock('parallax', data);
     }
     case 'TESTIMONIAL': {
       return createBlock('testimonial', {

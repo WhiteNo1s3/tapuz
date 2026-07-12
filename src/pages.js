@@ -1,14 +1,35 @@
 const { db } = require('./db');
 const { addRevision, listRevisions, getRevision } = require('./revisions');
+const store = require('./pzn-store');
+
+/** Strip path-dangerous chars so a full_path can never traverse directories. */
+function sanitizeFullPath(fp) {
+  return String(fp || 'page')
+    .replace(/\s+/g, '-')
+    .replace(/[\\/:*?"<>|#]/g, '')
+    .replace(/\.\.+/g, '.')
+    .replace(/^\.+/, '')
+    || 'page';
+}
 
 function generateFullPath(pathPrefix, slug) {
   const prefix = pathPrefix ? pathPrefix.replace(/-$/, '') + '-' : '';
-  return prefix + slug;
+  return sanitizeFullPath(prefix + slug);
 }
 
+/**
+ * v0.41 storage flip: the .pzn file is the canonical source of a page's
+ * CONTENT. When pages/drafts|published/<full_path>.pzn exists it overrides
+ * the DB's JSON columns (which remain as index/fallback for legacy sites).
+ */
 function parsePageRow(row) {
   if (!row) return null;
-  const publishedBlocks = JSON.parse(row.blocks || '[]');
+  let publishedBlocks;
+  try {
+    publishedBlocks = JSON.parse(row.blocks || '[]');
+  } catch (e) {
+    publishedBlocks = [];
+  }
   let draftBlocks;
   try {
     draftBlocks = row.draft_blocks != null
@@ -17,6 +38,12 @@ function parsePageRow(row) {
   } catch (e) {
     draftBlocks = publishedBlocks;
   }
+
+  // file-first overlay — the .pzn file wins when present
+  const fileDraft = store.readPageBlocks(row.full_path, 'draft');
+  if (fileDraft) draftBlocks = fileDraft;
+  const filePublished = store.readPageBlocks(row.full_path, 'published');
+  if (filePublished) publishedBlocks = filePublished;
 
   return {
     ...row,
@@ -61,13 +88,19 @@ function createPage({
     status || 'draft'
   );
 
+  // canonical .pzn files (v0.41 storage flip)
+  const pageLike = { title, full_path, direction, tags, meta };
+  store.writePagePzn(pageLike, blocks, 'draft');
+  if (status === 'published') store.writePagePzn(pageLike, blocks, 'published');
+
   addRevision({
     pageId: result.lastInsertRowid,
     fullPath: full_path,
     title,
     status: status || 'draft',
     kind: status === 'published' ? 'publish' : 'draft',
-    blocks: blocks
+    blocks: blocks,
+    pzn: store.pageToPzn(pageLike, blocks)
   });
 
   return {
@@ -156,6 +189,18 @@ function updatePage(full_path, updates = {}) {
     full_path
   );
 
+  // canonical .pzn files (v0.41 storage flip)
+  if (newData.full_path !== full_path) store.renamePagePzn(full_path, newData.full_path);
+  const pageLike = {
+    title: newData.title,
+    full_path: newData.full_path,
+    direction: newData.direction || 'rtl',
+    tags: newData.tags || [],
+    meta: newData.meta || {}
+  };
+  store.writePagePzn(pageLike, draftBlocks || [], 'draft');
+  if (publish) store.writePagePzn(pageLike, publishedBlocks || [], 'published');
+
   const saved = getPageByFullPath(newData.full_path);
 
   addRevision({
@@ -164,7 +209,8 @@ function updatePage(full_path, updates = {}) {
     title: saved.title,
     status: saved.status,
     kind,
-    blocks: draftBlocks
+    blocks: draftBlocks,
+    pzn: store.pageToPzn(pageLike, draftBlocks || [])
   });
 
   return saved;
@@ -207,7 +253,7 @@ function listPages({ q, status } = {}) {
 
 function publicUrlFor(full_path) {
   // Must match export.js filename sanitization
-  return '/' + String(full_path || 'page').replace(/\s+/g, '-').replace(/[\/:*?"<>|]/g, '') + '.html';
+  return '/' + sanitizeFullPath(full_path) + '.html';
 }
 
 /** First image src anywhere in a block tree (image, gallery, nested columns/card). */
@@ -283,6 +329,7 @@ function listArticles({ tag = 'article', limit = 12 } = {}) {
 function deletePage(full_path) {
   const result = db.prepare('DELETE FROM pages WHERE full_path = ?').run(full_path);
   db.prepare('DELETE FROM page_revisions WHERE full_path = ?').run(full_path);
+  store.removePagePzn(full_path);
   return result.changes > 0;
 }
 
@@ -298,6 +345,131 @@ function restoreRevision(full_path, revisionId) {
   });
 }
 
+// ─── v0.42: the .pzn source and AST ops ARE the editing path ────────
+// The visual canvas's JSON is a lossless projection (v0.40 bridge) of the
+// canonical file (v0.41 store); these functions edit the canonical form
+// directly — for agents, tools, and the builder standard.
+
+const pzn = require('./pzn/index');
+const pznOps = require('./pzn/builder/ops');
+const fs = require('fs');
+
+/**
+ * The page's canonical .pzn source. Falls back to serializing the current
+ * blocks for legacy pages that predate the store.
+ * @param {string} full_path
+ * @param {'draft'|'published'} kind
+ * @returns {string|null} null when the page does not exist
+ */
+function getPageSource(full_path, kind = 'draft') {
+  const page = getPageByFullPath(full_path);
+  if (!page) return null;
+  const src = store.readPageSource(full_path, kind);
+  if (src != null) return src;
+  return store.pageToPzn(page, kind === 'published' ? page.blocks : page.draft_blocks);
+}
+
+/**
+ * Save raw .pzn source as the page's draft (optionally publish).
+ * Validates first; the author's exact formatting is preserved in the file.
+ * The head's title/tags/teaser/cardImage/direction sync into the DB index.
+ * Page identity (full_path) comes from the argument — bent-slug is not a rename.
+ * @returns {{ page: object, blocks: object[], warnings: object[] }}
+ */
+function savePageSource(full_path, source, { publish = false } = {}) {
+  const existing = getPageByFullPath(full_path);
+  if (!existing) throw new Error('Page not found');
+  if (typeof source !== 'string' || !source.trim()) throw new Error('Source required');
+
+  const doc = pzn.parse(source); // throws BentError with line/column
+  const issues = pzn.validate(doc, { strict: false });
+  const errors = issues.filter((i) => i.severity === 'error');
+  if (errors.length) {
+    const err = new Error(errors.map((e) => `${e.code}: ${e.message}`).join('; '));
+    err.code = errors[0].code;
+    err.issues = errors;
+    throw err;
+  }
+
+  const view = pzn.toTapuzPage(doc);
+  const saved = updatePage(full_path, {
+    title: view.title || existing.title,
+    direction: view.direction || existing.direction,
+    tags: view.tags,
+    meta: { ...(existing.meta || {}), ...(view.meta || {}) },
+    draft_blocks: view.blocks,
+    publish
+  });
+
+  // keep the author's exact source as the canonical file (updatePage wrote a
+  // re-serialized form; the raw text wins — formatting is content too)
+  fs.writeFileSync(store.pznPathFor(saved.full_path, 'draft'), source, 'utf8');
+  if (publish) fs.writeFileSync(store.pznPathFor(saved.full_path, 'published'), source, 'utf8');
+
+  return {
+    page: saved,
+    blocks: view.blocks,
+    warnings: issues.filter((i) => i.severity === 'warning')
+  };
+}
+
+/**
+ * Apply builder-standard AST ops to the page's draft document.
+ * ops = [{ op: 'insert'|'remove'|'move'|'update'|'replace'|'duplicate'|'document', ... }]
+ *   insert:    { type, parentId?, index?, overrides? }
+ *   remove:    { id }
+ *   move:      { id, parentId?, index? }
+ *   update:    { id, props }           (props may include text/class/id)
+ *   replace:   { id, type }
+ *   duplicate: { id }
+ *   document:  { patch }               (title/dir/lang/tags/meta)
+ * @returns {{ page: object, blocks: object[], warnings: object[], source: string }}
+ */
+function applyPageOps(full_path, opsList, { publish = false } = {}) {
+  const existing = getPageByFullPath(full_path);
+  if (!existing) throw new Error('Page not found');
+  if (!Array.isArray(opsList) || !opsList.length) throw new Error('ops array required');
+
+  let doc = pzn.parse(getPageSource(full_path, 'draft'));
+
+  for (const op of opsList) {
+    const kind = op && op.op;
+    switch (kind) {
+      case 'insert': {
+        const node = pznOps.createFromType(op.type, op.overrides || {});
+        doc = pznOps.insert(doc, op.parentId || null, op.index != null ? op.index : Number.MAX_SAFE_INTEGER, node);
+        break;
+      }
+      case 'remove':
+        doc = pznOps.remove(doc, op.id);
+        break;
+      case 'move':
+        doc = pznOps.move(doc, op.id, op.parentId || null, op.index != null ? op.index : 0);
+        break;
+      case 'update':
+      case 'updateProps':
+        doc = pznOps.updateProps(doc, op.id, op.props || {});
+        break;
+      case 'replace':
+        doc = pznOps.replace(doc, op.id, op.type);
+        break;
+      case 'duplicate':
+        doc = pznOps.duplicate(doc, op.id);
+        break;
+      case 'document':
+      case 'updateDocument':
+        doc = pznOps.updateDocument(doc, op.patch || {});
+        break;
+      default:
+        throw new Error(`Unknown op: ${kind}`);
+    }
+  }
+
+  const source = pzn.serialize(doc);
+  const result = savePageSource(full_path, source, { publish });
+  return { ...result, source };
+}
+
 module.exports = {
   createPage,
   updatePage,
@@ -310,5 +482,9 @@ module.exports = {
   restoreRevision,
   listRevisions,
   getRevision,
-  generateFullPath
+  generateFullPath,
+  // v0.42 — canonical editing path (.pzn source + AST ops)
+  getPageSource,
+  savePageSource,
+  applyPageOps
 };
