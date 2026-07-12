@@ -1,6 +1,6 @@
 {
   "name": "tapuziel",
-  "version": "0.37.0-alpha",
+  "version": "0.39.0-alpha",
   "description": "Tapuziel — a Hebrew-first (RTL) modular CMS with a visual builder. תפוזיאל: הטפוז עם הכנפיים.",
   "main": "src/server.js",
   "bin": {
@@ -21,6 +21,7 @@
     "db:init": "node scripts/init-db.js",
     "build": "node -e 'require(\"./src/export\").exportAll()'",
     "test:bentml": "node scripts/smoke-bentml.js",
+    "test:pzn": "node --test test/pzn/*.test.js",
     "gen:snippet": "node scripts/gen-chat-snippet.js",
     "gen:dictionary": "node scripts/gen-syntax-dictionary.js",
     "test:smoke": "node scripts/smoke-render.js && node scripts/smoke-drafts.js && node scripts/smoke-articles.js && node scripts/smoke-bentml.js && node scripts/smoke-map.js && node scripts/smoke-analytics.js"

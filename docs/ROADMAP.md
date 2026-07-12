@@ -1,6 +1,6 @@
 # Tapuziel — Roadmap & Idea Pool
 
-**Current version: v0.37-alpha**
+**Current version: v0.39-alpha**
 
 ## How versions work
 
@@ -97,6 +97,8 @@ Deliberately deferred. When we get here, in order:
 
 | Version | Shipped | Source |
 |---|---|---|
+| v0.39-alpha | **The merge begins — Grok language core lands in Tapuz** (Phase 1 step 1 of the unification plan). `C:\Dev\grokTapuziel`'s `.pzn`/benTML implementation ported wholesale into `src/pzn/` (language: tokenizer/AST/parse/compile/validate/serialize; modules registry with i18n labels + prop schemas; immutable builder ops; site build/publish; tapuz-json bridge; loader). All 61 node:test tests ported to `test/pzn/` and green inside Tapuz (`npm run test:pzn`); example fixtures at `examples/pzn/` + demo site at `examples/pzn-site/`. Full existing smoke suite still green (registry 1138 checks, wizard, render, drafts, articles, bentml, map, analytics). Nothing wired into the CMS yet by design — v0.40 unifies the 23-block registry with the module defs and round-trips real pages via the bridge; v0.41 flips canonical storage to the page file; v0.42 points the visual builder at the AST ops. Grounding decision: `.pzn` (constrained-HTML benTML) is the canonical standard — one data model, Red Hat play, `.pzn` is our RPM | Ben (vision) + Grok (implementation) + Claude (port & verification) |
+| v0.38-alpha | BenTML v0.1 spec (`docs/bentml-v0.md`, multi-agent designed + blind-verified), registry-driven builder, admin auth, site chrome, analytics | Ben + Claude |
 | v0.37-alpha | **Wizard v2**: 4 guided steps (name → coloring that *teaches the theme creator* with palettes + live mini-preview → default pages home/about/contact/articles with article-list + sample article → menu step with page picks + external links). Setup engine extracted to src/setup.js (runSetup — agents/CLI can bootstrap a site in one call). **TAPUZ_ROOT** env var via new src/paths.js — all data (db/config/public) can live in any directory (npm-publish blocker step 1). Fix: home exported only as index.html so menu links to /home.html 404'd — now writes both. Docs ecosystem aligned to version (README, next-steps, mvp-scope, implementation-plan, cli-agent-support, package.json 0.37.0-alpha). smoke-wizard E2E (32 checks, runs on throwaway root) | Ben (spec) + Claude |
 | v0.36-alpha | **article-list module** (cubes: image + title + teaser, tag-driven, 1-4 columns, newest first), page properties in side panel (article toggle, manual teaser + card image with auto-extraction fallback), live article preview in builder canvas via new /admin/api/articles, canvas background click = deselect → page properties, tags/meta flow through save/publish, article-cubes theme CSS (responsive grid), smoke-articles E2E (15 checks), block-schemas.md documents article-list for agents | Ben (spec) + Claude |
 | v0.32-alpha | Draft/Publish split + automatic revision backups, page navigator modal (search/jump), theme overrides system (colors, fonts, logo, menu placement) with live preview + API, menu entity in DB with editor, publish flow in builder, revisions modal with restore | Ben + Grok |

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+<head>
+  <meta charset="utf-8" />
+  <title>בית — benTML</title>
+  <meta name="bent-slug" content="home" />
+</head>
+<body>
+  <bent-hero id="hero-main">
+    <bent-heading id="h-welcome" level="1">בונים חלומות ב־benTML</bent-heading>
+    <bent-text id="t-sub">שפת עמודים שמממשת HTML — והיא כולה HTML.</bent-text>
+    <bent-button id="btn-cta" href="/contact" variant="primary">צרו קשר</bent-button>
+  </bent-hero>
+
+  <bent-section id="sec-about" kind="content">
+    <bent-heading id="h-about" level="2">למה invent the wheel?</bent-heading>
+    <bent-text id="t-about">כי הגלגל צריך להיות שלנו: מודולים כמערכת טיפוסים, בונה עמודים שכותב קוד, וסוכנים שמדברים את אותה שפה.</bent-text>
+  </bent-section>
+
+  <bent-columns id="split" gap="medium">
+    <bent-col id="col-a" width="1/2">
+      <bent-heading id="h-a" level="3">כלי בונה</bent-heading>
+      <bent-list id="list-tools" ordered="false">
+        <bent-item id="li-1">Toolbox לפי סכמה</bent-item>
+        <bent-item id="li-2">פאנל אפשרויות בצד</bent-item>
+        <bent-item id="li-3">שמירה = קובץ .pzn</bent-item>
+      </bent-list>
+    </bent-col>
+    <bent-col id="col-b" width="1/2">
+      <bent-heading id="h-b" level="3">פלט נקי</bent-heading>
+      <bent-text id="t-b">compile מייצר HTML5 סמנטי, נגיש, RTL-first — בלי תגי bent-* באתר הציבורי.</bent-text>
+      <bent-image id="img-demo" src="/uploads/demo.jpg" alt="תצוגה" caption="תמונת דמו" align="center" />
+    </bent-col>
+  </bent-columns>
+
+  <bent-divider id="div-1" style="solid" />
+  <bent-quote id="q-1" author="Ben">אנחנו מממשים HTML, לא משתמשים ב־HTML כדי לממש שפה אחרת.</bent-quote>
+  <bent-spacer id="sp-1" height="2rem" />
+</body>
+</html>

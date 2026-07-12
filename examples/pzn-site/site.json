@@ -1,0 +1,22 @@
+{
+  "pzn": "0.1",
+  "name": "Tapuziel Demo",
+  "lang": "he",
+  "dir": "rtl",
+  "home": "home",
+  "pagesDir": "pages",
+  "theme": {
+    "css": "theme/main.css"
+  },
+  "menu": [
+    { "label": "בית", "slug": "home" },
+    { "label": "מאמרים", "slug": "articles" },
+    { "label": "מאמר", "slug": "hello-bentml" }
+  ],
+  "modules": {
+    "registry": "builtin"
+  },
+  "build": {
+    "out": "public"
+  }
+}

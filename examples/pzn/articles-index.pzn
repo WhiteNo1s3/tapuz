@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+<head>
+  <meta charset="utf-8" />
+  <title>מאמרים</title>
+  <meta name="bent-slug" content="articles" />
+</head>
+<body>
+  <bent-heading id="h" level="1">מאמרים</bent-heading>
+  <bent-text id="intro">כרטיסים (קוביות) מהקונטקסט בזמן compile.</bent-text>
+  <bent-article-list id="cubes" tag="article" limit="6" columns="3" />
+</body>
+</html>
