@@ -37,8 +37,28 @@
     }
   })();
 
+  // localhost is already in host_permissions; any other CMS origin needs a
+  // runtime grant (covered by optional_host_permissions). Requested here, on
+  // the user's click, so the background worker can fetch that origin.
+  async function ensureHostPermission(url) {
+    try {
+      const u = new URL(url);
+      if (/^(localhost|127\.0\.0\.1)$/.test(u.hostname)) return true;
+      const origins = [u.origin + '/*'];
+      if (await chrome.permissions.contains({ origins })) return true;
+      return await chrome.permissions.request({ origins });
+    } catch (e) {
+      return false;
+    }
+  }
+
   $('save').addEventListener('click', async () => {
-    const patch = { type: 'setConfig', url: $('url').value, target: $('target').value };
+    const url = $('url').value.trim();
+    if (url && !(await ensureHostPermission(url))) {
+      status('צריך אישור גישה לכתובת ה-CMS כדי להתחבר', false);
+      return;
+    }
+    const patch = { type: 'setConfig', url, target: $('target').value };
     if ($('token').value) patch.token = $('token').value;
     const r = await send(patch);
     if (r && r.ok) { status('נשמר', true); $('token').value = ''; }
@@ -49,8 +69,13 @@
 
   $('ping').addEventListener('click', async () => {
     const r = await send({ type: 'ping' });
-    if (r && r.ok) status(`מחובר — ${r.agent} [${(r.scopes || []).join(', ')}] · v${r.version}`, true);
-    else status('אין חיבור: ' + ((r && r.error) || '?'), false);
+    if (r && r.ok) { status(`מחובר — ${r.agent} [${(r.scopes || []).join(', ')}] · v${r.version}`, true); return; }
+    const err = (r && r.error) || '?';
+    // a network failure usually means the CMS server isn't running / wrong URL
+    const hint = /failed to fetch|networkerror|load failed/i.test(err)
+      ? ' — האם שרת ה-CMS רץ בכתובת הזו? (node src/server.js)'
+      : '';
+    status('אין חיבור: ' + err + hint, false);
   });
 
   $('primer').addEventListener('click', async () => {

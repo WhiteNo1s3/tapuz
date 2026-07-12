@@ -19,15 +19,32 @@ subscription, the extension carries only the reply to your CMS.
 The server still validates every reply (path/URL/scheme hardening) — not
 distrust of you, but because an LLM's output can be steered by content it reads.
 
-## Setup
+## Test it locally in 5 steps (no Apache/nginx — Tapuziel IS the server)
 
-1. In Tapuziel admin → **גשר סוכן** (`/admin/agent`), mint a token (write scope).
-2. `chrome://extensions` → enable Developer mode → **Load unpacked** → pick this
-   `extension/` folder. (Add a 128×128 `icon.png` first, or remove the `icons`
-   key from `manifest.json`.)
-3. Click the extension icon: enter your CMS URL (e.g. `http://localhost:3000`)
-   and paste the token → **שמור** → **בדוק חיבור** (should say "מחובר").
-4. Click **📋 העתק מדריך ל‑AI** and paste the primer into your LLM chat.
+Tapuziel is a Node app; it serves itself. You do **not** need a separate web
+server.
+
+1. **Start the CMS** — from the repo root:
+   ```bash
+   npm run seed:admin          # optional: instant  admin / admin  login (dev only)
+   node src/server.js          # → http://localhost:3000/admin
+   ```
+   First run drops you into the setup wizard — or run `seed:admin` first to skip
+   it and log in with `admin` / `admin` (local, gitignored, dev-only).
+2. **Mint an agent token** — in admin go to **גשר סוכן** (`/admin/agent`),
+   create a token with **write** scope, and copy it (shown once).
+3. **Load the extension** — `chrome://extensions` → enable *Developer mode* →
+   **Load unpacked** → pick this `extension/` folder. (Icons ship in the repo;
+   if you ever see "could not load icon", run `node scripts/gen-extension-icons.js`.)
+4. **Connect** — click the extension icon: CMS URL `http://localhost:3000`,
+   paste the token → **שמור** → **בדוק חיבור** (should say "מחובר …").
+   *If it says "failed to fetch", the server isn't running at that URL.*
+5. **Use it** — click **📋 העתק מדריך ל‑AI**, paste the primer into your
+   ChatGPT/Claude chat, ask for a page, then on that chat tab click the floating
+   **🍊 → תפוזיאל** button. The page publishes to your CMS.
+
+Using a real domain instead of localhost? Just enter it as the CMS URL — the
+popup will ask Chrome for permission to reach that origin when you click **שמור**.
 
 ## Use
 
