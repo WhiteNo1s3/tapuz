@@ -45,6 +45,11 @@ check('manifest content script lists providers before bridge',
   manifest.content_scripts && manifest.content_scripts[0].js[0] === 'providers.js' && manifest.content_scripts[0].js.includes('content-bridge.js'));
 check('manifest targets claude.ai', JSON.stringify(manifest.host_permissions).includes('claude.ai'));
 check('manifest requests storage permission', (manifest.permissions || []).includes('storage'));
+// localhost must be a granted host so a local `node src/server.js` CMS is
+// fetchable with zero permission dance; other origins use optional_host_permissions.
+check('manifest grants localhost host permission', JSON.stringify(manifest.host_permissions).includes('localhost'));
+check('manifest declares optional_host_permissions for other CMS origins',
+  Array.isArray(manifest.optional_host_permissions) && manifest.optional_host_permissions.length > 0);
 
 // EVERY file the manifest references must exist on disk — a missing icon or
 // script silently breaks "Load unpacked" in Chrome (this is why v0.46 wouldn't

@@ -301,7 +301,7 @@ function requireAgent(scope) {
 }
 
 app.get('/agent/v1/ping', requireAgent('read'), (req, res) => {
-  res.json({ ok: true, agent: req.agent.name, scopes: req.agent.scopes, version: '0.45' });
+  res.json({ ok: true, agent: req.agent.name, scopes: req.agent.scopes, version: require('../package.json').version });
 });
 
 // The .pzn standard is PUBLIC (unauthenticated) — anyone may implement it.
