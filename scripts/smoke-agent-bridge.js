@@ -181,6 +181,16 @@ async function main() {
     for (let i = 0; i < 12; i++) { const n = { type: 'parallax', image: '/x.jpg', sections: [] }; cur.sections = [n]; cur = n; }
     const deepR = await req('POST', '/agent/v1/build', { token: writeTok, body: { intent: { title: 'd', slug: 'deep', sections: [deep] } } });
     check('deep-nesting rejected', deepR.status === 400 && deepR.json.code === 'E_INTENT_TOO_DEEP');
+
+    // create-from-source (the extension's main path): bot .pzn reply → new page
+    const botReply = 'בשמחה!\n\n```html\n<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/><title>מהתוסף</title><meta name="bent-slug" content="from-ext"/></head>\n<body><bent-hero id="h"><bent-heading id="hh" level="1">נבנה מהתוסף</bent-heading></bent-hero></body>\n</html>\n```';
+    const cfs = await req('POST', '/agent/v1/create-from-source', { token: writeTok, body: { source: botReply, publish: true } });
+    check('create-from-source builds page from bot reply', cfs.status === 200 && cfs.json.ok && cfs.json.fullPath === 'from-ext' && cfs.json.created);
+    const cfsLive = await req('GET', '/from-ext.html');
+    check('create-from-source page is live', cfsLive.status === 200 && /נבנה מהתוסף/.test(cfsLive.text));
+    const cfsDup = await req('POST', '/agent/v1/create-from-source', { token: writeTok, body: { source: botReply } });
+    check('create-from-source collision → 409', cfsDup.status === 409);
+    check('create-from-source needs write scope', (await req('POST', '/agent/v1/create-from-source', { token: readTok, body: { source: botReply } })).status === 403);
   } finally {
     child.kill();
   }

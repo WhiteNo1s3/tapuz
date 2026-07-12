@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Tapuziel Bridge",
+  "version": "0.1.0",
+  "description": "Turn your own ChatGPT / Claude / Grok / Gemini session into a Tapuziel page builder — no API keys, nothing leaves your browser.",
+  "permissions": ["storage", "activeTab"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "host_permissions": [
+    "https://claude.ai/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://grok.com/*",
+    "https://*.grok.com/*",
+    "https://x.com/*",
+    "https://gemini.google.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Tapuziel Bridge" },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://grok.com/*",
+        "https://*.grok.com/*",
+        "https://x.com/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": ["providers.js", "content-bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": { "128": "icon.png" }
+}

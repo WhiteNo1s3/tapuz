@@ -315,6 +315,39 @@ app.post('/agent/v1/ops', requireAgent('write'), (req, res) => {
   }
 });
 
+/** Create a new page from a bot's raw .pzn reply (the extension's main path). */
+app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
+  try {
+    const { publish } = req.body || {};
+    let { source } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    const { extractPzn } = require('./pzn-extract');
+    source = extractPzn(source);
+    const pznApi = require('./pzn/index');
+    const doc = pznApi.parse(source);
+    const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: errors.map((e) => `${e.code}: ${e.message}`).join('; '), issues: errors });
+    }
+    const title = doc.title || 'דף חדש';
+    const { deriveSlug } = require('./pzn/intent');
+    const slug = deriveSlug((doc.slug || '').trim() || title);
+    const { createPage, getPageByFullPath, savePageSource } = require('./pages');
+    if (getPageByFullPath(slug) && !(req.body && req.body.update)) {
+      return res.status(409).json({ ok: false, error: `page "${slug}" already exists — pass update:true`, fullPath: slug });
+    }
+    const existed = !!getPageByFullPath(slug);
+    if (!existed) createPage({ title, slug, blocks: [] });
+    const result = savePageSource(slug, source, { publish: !!publish });
+    if (publish) exportAll();
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
+  }
+});
+
 /** The Grokin trick: model emits INTENT, server owns the .pzn. */
 app.post('/agent/v1/build', requireAgent('write'), (req, res) => {
   try {
