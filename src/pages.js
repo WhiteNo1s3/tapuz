@@ -1,14 +1,25 @@
 const { db } = require('./db');
 const { addRevision, listRevisions, getRevision } = require('./revisions');
+const store = require('./pzn-store');
 
 function generateFullPath(pathPrefix, slug) {
   const prefix = pathPrefix ? pathPrefix.replace(/-$/, '') + '-' : '';
   return prefix + slug;
 }
 
+/**
+ * v0.41 storage flip: the .pzn file is the canonical source of a page's
+ * CONTENT. When pages/drafts|published/<full_path>.pzn exists it overrides
+ * the DB's JSON columns (which remain as index/fallback for legacy sites).
+ */
 function parsePageRow(row) {
   if (!row) return null;
-  const publishedBlocks = JSON.parse(row.blocks || '[]');
+  let publishedBlocks;
+  try {
+    publishedBlocks = JSON.parse(row.blocks || '[]');
+  } catch (e) {
+    publishedBlocks = [];
+  }
   let draftBlocks;
   try {
     draftBlocks = row.draft_blocks != null
@@ -17,6 +28,12 @@ function parsePageRow(row) {
   } catch (e) {
     draftBlocks = publishedBlocks;
   }
+
+  // file-first overlay — the .pzn file wins when present
+  const fileDraft = store.readPageBlocks(row.full_path, 'draft');
+  if (fileDraft) draftBlocks = fileDraft;
+  const filePublished = store.readPageBlocks(row.full_path, 'published');
+  if (filePublished) publishedBlocks = filePublished;
 
   return {
     ...row,
@@ -61,13 +78,19 @@ function createPage({
     status || 'draft'
   );
 
+  // canonical .pzn files (v0.41 storage flip)
+  const pageLike = { title, full_path, direction, tags, meta };
+  store.writePagePzn(pageLike, blocks, 'draft');
+  if (status === 'published') store.writePagePzn(pageLike, blocks, 'published');
+
   addRevision({
     pageId: result.lastInsertRowid,
     fullPath: full_path,
     title,
     status: status || 'draft',
     kind: status === 'published' ? 'publish' : 'draft',
-    blocks: blocks
+    blocks: blocks,
+    pzn: store.pageToPzn(pageLike, blocks)
   });
 
   return {
@@ -156,6 +179,18 @@ function updatePage(full_path, updates = {}) {
     full_path
   );
 
+  // canonical .pzn files (v0.41 storage flip)
+  if (newData.full_path !== full_path) store.renamePagePzn(full_path, newData.full_path);
+  const pageLike = {
+    title: newData.title,
+    full_path: newData.full_path,
+    direction: newData.direction || 'rtl',
+    tags: newData.tags || [],
+    meta: newData.meta || {}
+  };
+  store.writePagePzn(pageLike, draftBlocks || [], 'draft');
+  if (publish) store.writePagePzn(pageLike, publishedBlocks || [], 'published');
+
   const saved = getPageByFullPath(newData.full_path);
 
   addRevision({
@@ -164,7 +199,8 @@ function updatePage(full_path, updates = {}) {
     title: saved.title,
     status: saved.status,
     kind,
-    blocks: draftBlocks
+    blocks: draftBlocks,
+    pzn: store.pageToPzn(pageLike, draftBlocks || [])
   });
 
   return saved;
@@ -283,6 +319,7 @@ function listArticles({ tag = 'article', limit = 12 } = {}) {
 function deletePage(full_path) {
   const result = db.prepare('DELETE FROM pages WHERE full_path = ?').run(full_path);
   db.prepare('DELETE FROM page_revisions WHERE full_path = ?').run(full_path);
+  store.removePagePzn(full_path);
   return result.changes > 0;
 }
 

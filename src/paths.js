@@ -26,5 +26,6 @@ module.exports = {
   CONFIG_DIR: path.join(SITE_ROOT, 'config'),
   PUBLIC_DIR: path.join(SITE_ROOT, 'public'),
   ASSETS_DIR: path.join(SITE_ROOT, 'public', 'assets'),
+  PAGES_DIR: path.join(SITE_ROOT, 'pages'),
   THEMES_DIR
 };

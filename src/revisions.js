@@ -19,19 +19,27 @@ function ensureSchema() {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_revisions_path ON page_revisions(full_path, created_at DESC)`);
 }
 
-function addRevision({ pageId, fullPath, title, status, kind, blocks }) {
+/**
+ * v0.41 storage flip: when `pzn` source text is provided, the revision is
+ * stored as canonical .pzn (detectable by its leading '<'). Legacy JSON
+ * revisions remain readable — getRevision() handles both formats.
+ */
+function addRevision({ pageId, fullPath, title, status, kind, blocks, pzn }) {
   ensureSchema();
   const stmt = db.prepare(`
     INSERT INTO page_revisions (page_id, full_path, title, status, kind, blocks)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
+  const content = typeof pzn === 'string' && pzn.trim().startsWith('<')
+    ? pzn
+    : (typeof blocks === 'string' ? blocks : JSON.stringify(blocks || []));
   const result = stmt.run(
     pageId || null,
     fullPath,
     title || '',
     status || 'draft',
     kind === 'publish' || kind === 'restore' ? kind : 'draft',
-    typeof blocks === 'string' ? blocks : JSON.stringify(blocks || [])
+    content
   );
 
   pruneOld(fullPath);
@@ -70,9 +78,32 @@ function getRevision(id) {
   ensureSchema();
   const row = db.prepare('SELECT * FROM page_revisions WHERE id = ?').get(id);
   if (!row) return null;
+
+  const raw = row.blocks || '[]';
+  let blocks;
+  let pzn = null;
+  if (raw.trim().startsWith('<')) {
+    // canonical .pzn revision (v0.41+)
+    pzn = raw;
+    try {
+      const { parse, toTapuzPage } = require('./pzn/index');
+      blocks = toTapuzPage(parse(raw)).blocks;
+    } catch (e) {
+      console.warn(`revisions: cannot parse .pzn revision ${id} (${e.message})`);
+      blocks = [];
+    }
+  } else {
+    // legacy JSON revision
+    try {
+      blocks = JSON.parse(raw);
+    } catch (e) {
+      blocks = [];
+    }
+  }
   return {
     ...row,
-    blocks: JSON.parse(row.blocks || '[]')
+    blocks,
+    pzn
   };
 }
 
