@@ -46,6 +46,28 @@ check('manifest content script lists providers before bridge',
 check('manifest targets claude.ai', JSON.stringify(manifest.host_permissions).includes('claude.ai'));
 check('manifest requests storage permission', (manifest.permissions || []).includes('storage'));
 
+// EVERY file the manifest references must exist on disk — a missing icon or
+// script silently breaks "Load unpacked" in Chrome (this is why v0.46 wouldn't
+// load). Collect all referenced paths and assert each is present.
+const referenced = new Set();
+if (manifest.background && manifest.background.service_worker) referenced.add(manifest.background.service_worker);
+if (manifest.action) {
+  if (manifest.action.default_popup) referenced.add(manifest.action.default_popup);
+  for (const p of Object.values(manifest.action.default_icon || {})) referenced.add(p);
+}
+for (const p of Object.values(manifest.icons || {})) referenced.add(p);
+for (const cs of manifest.content_scripts || []) for (const j of cs.js || []) referenced.add(j);
+let allPresent = true;
+for (const rel of referenced) {
+  if (!fs.existsSync(path.join(EXT, rel))) { allPresent = false; console.log('     MISSING: ' + rel); }
+}
+check(`every manifest-referenced file exists (${referenced.size} files)`, allPresent);
+// referenced HTML (popup) must in turn reference only present scripts
+const popupHtml = fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8');
+for (const m of popupHtml.matchAll(/<script src="([^"]+)"/g)) {
+  check(`popup.html script exists: ${m[1]}`, fs.existsSync(path.join(EXT, m[1])));
+}
+
 // ── SECURITY INVARIANT: token only in background, never in content/popup ─
 const bg = fs.readFileSync(path.join(EXT, 'background.js'), 'utf8');
 const content = fs.readFileSync(path.join(EXT, 'content-bridge.js'), 'utf8');

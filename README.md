@@ -2,7 +2,7 @@
 
 **תפוזיאל** — CMS פשוט, יפה, ובעברית. (Tapuz + שאלתיאל = התפוז עם הכנפיים)
 
-**גרסה נוכחית: v0.46-alpha** · המפה המלאה: [docs/ROADMAP.md](docs/ROADMAP.md)
+**גרסה נוכחית: v0.47-alpha** · המפה המלאה: [docs/ROADMAP.md](docs/ROADMAP.md)
 
 - פלט HTML נקי וסמנטי, RTL מלא
 - **אשף התקנה מודרך** — מהרעיון לאתר חי בארבעה צעדים (שם → צבעים → דפים → תפריט)
@@ -12,6 +12,8 @@
 - טיוטה ≠ פרסום, היסטוריית גרסאות עם שחזור, ספריית מדיה עם תיקיות
 - ייבוא מ-WordPress + Elementor, בנייה סטטית
 - **ידידותי לסוכני AI** — בלוקים כ-JSON מובנה, CLI מלא, סכמות מתועדות ([docs/block-schemas.md](docs/block-schemas.md))
+- **פורמט `.pzn` פתוח** — תקן מתועד ([docs/pzn-spec.md](docs/pzn-spec.md)) + סכמה מכונתית ([docs/pzn-schema.json](docs/pzn-schema.json), גם ב-`GET /pzn-schema.json`). ה-RPM שלנו — כל אחד יכול לממש קורא/כותב
+- **גשר AI (BYO)** — הדביקו את התשובה של ה-ChatGPT/Claude שלכם, או תוסף כרום ([extension/](extension/)) — בלי מפתחות
 
 ## התחלה מהירה
 

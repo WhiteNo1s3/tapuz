@@ -1,0 +1,25 @@
+# gitleaks config for Tapuziel — keep secrets out of git (v0.47 security phase).
+# Runs in CI (.github/workflows/security.yml). Locally: gitleaks detect --config .gitleaks.toml
+
+title = "Tapuziel gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures, hashes, and generated files that look secret-ish but aren't."
+paths = [
+  '''node_modules/.*''',
+  '''.*\.db$''',
+  # Agent-token / auth stores are gitignored; scan should never see them, but be explicit.
+  '''config/auth\.json''',
+  '''config/agent-tokens\.json''',
+  # generated icons / schema (no secrets)
+  '''extension/icon.*\.png''',
+  '''docs/pzn-schema\.json'''
+]
+regexes = [
+  # our fixture bearer tokens in smoke tests are minted at runtime, not committed,
+  # but the "tzk_" prefix is not itself a secret pattern — ignore bare prefixes.
+  '''tzk_\.\.\.''',
+]
