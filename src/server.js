@@ -3063,6 +3063,72 @@ app.post('/admin/api/bentml/apply', (req, res) => {
   }
 });
 
+// ─── .pzn canonical editing API (v0.42) ─────────────────────────────
+// The page's .pzn source and builder-standard AST ops are the canonical
+// editing path — for agents, tools, and the page-builder standard.
+
+/** Read a page's canonical .pzn source. ?kind=draft|published (default draft). */
+app.get('/admin/api/pzn/source', (req, res) => {
+  try {
+    const fullPath = String(req.query.fullPath || '');
+    const kind = req.query.kind === 'published' ? 'published' : 'draft';
+    if (!fullPath) return res.status(400).json({ ok: false, error: 'fullPath required' });
+    const { getPageSource } = require('./pages');
+    const source = getPageSource(fullPath, kind);
+    if (source == null) return res.status(404).json({ ok: false, error: 'Page not found' });
+    res.json({ ok: true, fullPath, kind, source });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/** Save raw .pzn source as the page draft (publish: true also publishes). */
+app.post('/admin/api/pzn/source', (req, res) => {
+  try {
+    const { fullPath, source, publish } = req.body || {};
+    if (!fullPath || typeof source !== 'string') {
+      return res.status(400).json({ ok: false, error: 'fullPath and source required' });
+    }
+    const { savePageSource } = require('./pages');
+    const result = savePageSource(fullPath, source, { publish: !!publish });
+    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({
+      ok: false,
+      error: e.message,
+      code: e.code || 'E_PZN',
+      line: e.line,
+      column: e.column,
+      issues: e.issues
+    });
+  }
+});
+
+/** Apply builder-standard AST ops to the page draft. */
+app.post('/admin/api/pzn/ops', (req, res) => {
+  try {
+    const { fullPath, ops, publish } = req.body || {};
+    if (!fullPath || !Array.isArray(ops)) {
+      return res.status(400).json({ ok: false, error: 'fullPath and ops[] required' });
+    }
+    const { applyPageOps } = require('./pages');
+    const result = applyPageOps(fullPath, ops, { publish: !!publish });
+    res.json({ ok: true, fullPath, blocks: result.blocks, source: result.source, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_OPS' });
+  }
+});
+
+/** Module toolbox + schemas — what agents need to write valid .pzn. */
+app.get('/admin/api/pzn/toolbox', (req, res) => {
+  try {
+    const pznApi = require('./pzn/index');
+    res.json({ ok: true, toolbox: pznApi.getToolbox(), schemas: pznApi.getAllSchemas() });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/admin/api/pages', (req, res) => {
   try {
     res.json({ ok: true, pages: listPages({ q: req.query.q, status: req.query.status }) });
