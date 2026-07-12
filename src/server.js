@@ -1626,7 +1626,8 @@ const ADMIN_NAV_ITEMS = [
   { key: 'site-chrome', href: '/admin/site-chrome', label: 'כותרת ותחתית' },
   { key: 'seo', href: '/admin/seo', label: 'SEO' },
   { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס' },
-  { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' }
+  { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' },
+  { key: 'ai', href: '/admin/ai', label: 'AI ✨' }
 ];
 
 function adminNav(active, sectionTitle, actionsHtml = '') {
@@ -3082,15 +3083,25 @@ app.get('/admin/api/pzn/source', (req, res) => {
   }
 });
 
-/** Save raw .pzn source as the page draft (publish: true also publishes). */
+/**
+ * Save raw .pzn source as the page draft (publish: true also publishes).
+ * loose: true — the source is a raw pasted AI reply; extract the .pzn
+ * document out of prose/code fences first (the paste flow).
+ */
 app.post('/admin/api/pzn/source', (req, res) => {
   try {
-    const { fullPath, source, publish } = req.body || {};
+    const { fullPath, publish, loose } = req.body || {};
+    let { source } = req.body || {};
     if (!fullPath || typeof source !== 'string') {
       return res.status(400).json({ ok: false, error: 'fullPath and source required' });
     }
+    if (loose) {
+      const { extractPzn } = require('./pzn-extract');
+      source = extractPzn(source);
+    }
     const { savePageSource } = require('./pages');
     const result = savePageSource(fullPath, source, { publish: !!publish });
+    if (publish) exportAll(); // publish from the paste flow means LIVE now
     res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
   } catch (e) {
     res.status(400).json({
@@ -3126,6 +3137,93 @@ app.get('/admin/api/pzn/toolbox', (req, res) => {
     res.json({ ok: true, toolbox: pznApi.getToolbox(), schemas: pznApi.getAllSchemas() });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/** The paste-into-any-AI primer, generated live from the registry. */
+app.get('/admin/api/pzn/primer', (req, res) => {
+  try {
+    const { buildPznPrimer } = require('./pzn/agent-primer');
+    res.type('text/markdown; charset=utf-8').send(buildPznPrimer());
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/**
+ * Create a brand-new page from pasted .pzn (the "bot invented a page" flow):
+ * extract → validate → slug from bent-slug (or title) → create → save source.
+ */
+app.post('/admin/api/pzn/create-from-source', (req, res) => {
+  try {
+    const { publish } = req.body || {};
+    let { source } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    const { extractPzn } = require('./pzn-extract');
+    source = extractPzn(source);
+    const pznApi = require('./pzn/index');
+    const doc = pznApi.parse(source);
+    const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+    if (errors.length) {
+      return res.status(400).json({
+        ok: false,
+        error: errors.map((e) => `${e.code}: ${e.message}`).join('; '),
+        issues: errors
+      });
+    }
+    const title = doc.title || 'דף חדש';
+    let slug = (doc.slug || '').trim() || String(title).trim().replace(/\s+/g, '-').replace(/[\/:*?"<>|#]/g, '');
+    const { createPage, getPageByFullPath, savePageSource } = require('./pages');
+    if (getPageByFullPath(slug)) {
+      return res.status(409).json({ ok: false, error: `דף בשם "${slug}" כבר קיים — בחר אותו ברשימה או שנה את ה-slug במקור` });
+    }
+    createPage({ title, slug, blocks: [] });
+    const result = savePageSource(slug, source, { publish: !!publish });
+    if (publish) exportAll(); // publish from the paste flow means LIVE now
+    res.json({ ok: true, fullPath: slug, created: true, blocks: result.blocks, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column });
+  }
+});
+
+/** Compile pasted source to preview HTML without saving. loose extracts first. */
+app.post('/admin/api/pzn/preview', (req, res) => {
+  try {
+    const { loose } = req.body || {};
+    let { source } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    if (loose !== false) {
+      const { extractPzn } = require('./pzn-extract');
+      source = extractPzn(source);
+    }
+    const pznApi = require('./pzn/index');
+    const doc = pznApi.parse(source);
+    const issues = pznApi.validate(doc, { strict: false });
+    const errors = issues.filter((i) => i.severity === 'error');
+    if (errors.length) {
+      return res.status(400).json({
+        ok: false,
+        error: errors.map((e) => `${e.code}: ${e.message}`).join('; '),
+        issues: errors
+      });
+    }
+    const { listArticles } = require('./pages');
+    let articles = [];
+    try { articles = listArticles({ limit: 12 }); } catch (e) { /* fresh DB */ }
+    const html = pznApi.buildPreviewHtml(doc, { articles });
+    res.json({
+      ok: true,
+      html,
+      source,
+      title: doc.title,
+      warnings: issues.filter((i) => i.severity === 'warning')
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column });
   }
 });
 
@@ -3648,6 +3746,50 @@ app.get('/admin/sitemap', (req, res) => {
     </div>
   `;
   res.send(layout(html, 'מפת אתר', '#ea580c'));
+});
+
+// ─── /admin/ai — the paste flow (BYO AI subscription, zero keys) ────
+app.get('/admin/ai', (req, res) => {
+  const html = `
+    ${adminNav('ai', 'AI — הדבק ובנה')}
+    <div class="container" style="padding-top:28px;max-width:1180px">
+      <p style="color:#64748b;margin-top:0">
+        משוחחים עם ה‑AI שכבר יש לכם (ChatGPT / Claude / Grok) — בלי מפתחות API ובלי עלות נוספת.
+        מעתיקים את המדריך, מבקשים דף, מדביקים את התשובה — והדף קם.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">1 · למדו את הבוט שלכם</h3>
+          <p style="color:#64748b;font-size:.92rem">העתיקו את המדריך והדביקו בצ'אט של ה‑AI שלכם. הוא ילמד לכתוב דפי תפוזיאל.</p>
+          <button type="button" id="copy-primer" class="btn">📋 העתק את המדריך</button>
+          <span id="primer-status" style="margin-inline-start:10px;color:#16a34a;font-size:.9rem"></span>
+
+          <h3 style="margin-top:26px">2 · הדביקו את התשובה</h3>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+            <label style="font-size:.92rem;color:#475569">לאיזה דף?</label>
+            <select id="page-pick" style="flex:1;padding:8px;border:1px solid #e2e8f0;border-radius:8px">
+              <option value="__new__">✨ דף חדש (לפי הכותרת וה-slug שהבוט כתב)</option>
+            </select>
+          </div>
+          <textarea id="paste-box" placeholder="הדביקו כאן את כל תשובת הבוט — אפשר עם הטקסט מסביב, אנחנו נחלץ את הקוד"
+            style="width:100%;min-height:260px;box-sizing:border-box;padding:12px;border:1px solid #e2e8f0;border-radius:8px;font-family:ui-monospace,monospace;font-size:.85rem;direction:ltr;text-align:left"></textarea>
+          <div id="issue-panel" style="display:none;margin-top:10px;padding:12px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.9rem;white-space:pre-wrap"></div>
+          <div style="display:flex;gap:10px;margin-top:14px">
+            <button type="button" id="apply-draft" class="btn" disabled>שמור כטיוטה</button>
+            <button type="button" id="apply-publish" class="btn" disabled>שמור ופרסם</button>
+          </div>
+          <div id="apply-result" style="display:none;margin-top:12px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:.95rem"></div>
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">3 · תצוגה מקדימה חיה</h3>
+          <iframe id="preview-frame" title="תצוגה מקדימה"
+            style="width:100%;height:520px;border:1px solid #e2e8f0;border-radius:8px;background:#fff"></iframe>
+        </section>
+      </div>
+    </div>
+    <script src="/admin-ai.js"></script>
+  `;
+  res.send(layout(html, 'AI', '#0891b2'));
 });
 
 app.get('/admin/menus', (req, res) => {
