@@ -186,7 +186,15 @@ const CASES = {
   banner: { type: 'banner', id: 'bn1', data: { text: 'מבצע השקה — חודש ראשון חינם', tone: 'warn', align: 'center' } },
   hero: {
     type: 'hero', id: 'hr1',
-    data: { title: 'תפוזיאל', subtitle: 'ה-CMS שסוכנים אוהבים', buttonText: 'התחילו עכשיו', buttonUrl: '/wizard', image: '/uploads/bg.jpg', height: 'full' }
+    data: { title: 'תפוזיאל', subtitle: 'ה-CMS שסוכנים אוהבים', buttonText: 'התחילו עכשיו', buttonUrl: '/wizard', image: '/uploads/bg.jpg', height: 'full', overlay: 35, parallax: true }
+  },
+  marquee: { type: 'marquee', id: 'mq1', data: { text: 'ברוכים הבאים ✦ מבצע השקה ✦', speed: 'slow' } },
+  parallax: {
+    type: 'parallax', id: 'px1',
+    data: { image: '/uploads/mountain.jpg', overlay: 40, height: 'lg', blocks: [
+      { type: 'heading', data: { level: 2, text: 'גוללים מעל ההר', animate: 'rise' } },
+      { type: 'text', data: { content: 'הטקסט עולה בזמן שהרקע קבוע.', animate: 'fade' } }
+    ] }
   }
 };
 

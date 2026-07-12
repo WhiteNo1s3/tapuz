@@ -59,12 +59,12 @@ function blockToModule(block) {
 
   switch (type) {
     case 'heading':
-      return createModule('heading', baseOpts(block, pickProps(data, ['level', 'align']), {
+      return createModule('heading', baseOpts(block, pickProps(data, ['level', 'align', 'animate']), {
         text: data.text || ''
       }));
 
     case 'text': {
-      const props = pickProps(data, ['align', 'size', 'lead', 'dropcap']);
+      const props = pickProps(data, ['align', 'size', 'lead', 'dropcap', 'animate']);
       if (data.maxWidth !== undefined) props.maxwidth = data.maxWidth;
       return createModule('text', baseOpts(block, props, { text: data.content || '' }));
     }
@@ -204,8 +204,18 @@ function blockToModule(block) {
         text: data.text || ''
       }));
 
+    case 'marquee':
+      return createModule('marquee', baseOpts(block, pickProps(data, ['speed']), {
+        text: data.text || ''
+      }));
+
+    case 'parallax':
+      return createModule('parallax', baseOpts(block, pickProps(data, ['image', 'overlay', 'height']), {
+        children: (data.blocks || []).map(blockToModule).filter(Boolean)
+      }));
+
     case 'hero': {
-      const props = pickProps(data, ['image', 'height']);
+      const props = pickProps(data, ['image', 'height', 'overlay', 'parallax']);
       const children = [];
       if (data.title) {
         children.push(createModule('heading', { props: { level: 1 }, text: data.title }));
@@ -274,13 +284,13 @@ function moduleToBlock(node) {
 
   switch (node.name) {
     case 'heading': {
-      const data = pickData(props, ['level', 'align']);
+      const data = pickData(props, ['level', 'align', 'animate']);
       if (node.text) data.text = node.text;
       return finishBlock(node, 'heading', data);
     }
 
     case 'text': {
-      const data = pickData(props, ['align', 'size', 'lead', 'dropcap']);
+      const data = pickData(props, ['align', 'size', 'lead', 'dropcap', 'animate']);
       if (props.maxwidth !== undefined) data.maxWidth = props.maxwidth;
       if (node.text) data.content = node.text;
       return finishBlock(node, 'text', data);
@@ -426,8 +436,20 @@ function moduleToBlock(node) {
       return finishBlock(node, 'banner', data);
     }
 
+    case 'marquee': {
+      const data = pickData(props, ['speed']);
+      if (node.text) data.text = node.text;
+      return finishBlock(node, 'marquee', data);
+    }
+
+    case 'parallax': {
+      const data = pickData(props, ['image', 'overlay', 'height']);
+      data.blocks = (node.children || []).map(moduleToBlock).filter(Boolean);
+      return finishBlock(node, 'parallax', data);
+    }
+
     case 'hero': {
-      const data = pickData(props, ['image', 'height']);
+      const data = pickData(props, ['image', 'height', 'overlay', 'parallax']);
       for (const child of node.children || []) {
         if (child.name === 'heading' && data.title === undefined) {
           data.title = child.text || '';

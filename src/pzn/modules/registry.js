@@ -1,6 +1,6 @@
 'use strict';
 
-const { escapeHtml, escapeAttr } = require('../language/escape');
+const { escapeHtml, escapeAttr, escapeCssUrl } = require('../language/escape');
 
 /**
  * Module registry = type system of the page.
@@ -89,6 +89,10 @@ register({
       type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
       label: { he: 'יישור', en: 'Align' }
     },
+    animate: {
+      type: 'enum', values: ['none', 'fade', 'rise'], default: 'none', optional: true,
+      label: { he: 'אנימציית כניסה', en: 'Entrance animation' }
+    },
     text: {
       type: 'text', content: true, default: 'כותרת חדשה',
       label: { he: 'טקסט', en: 'Text' }
@@ -101,7 +105,8 @@ register({
     const level = Math.min(Math.max(parseInt(node.props.level, 10) || 2, 1), 6);
     const { id, cls } = attrsExtra(node);
     const alignCls = node.props.align && node.props.align !== 'start' ? ` align-${escapeAttr(node.props.align)}` : '';
-    return `<h${level}${id} class="bent-heading${alignCls}${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</h${level}>`;
+    const animCls = node.props.animate && node.props.animate !== 'none' ? ` anim-${escapeAttr(node.props.animate)}` : '';
+    return `<h${level}${id} class="bent-heading${alignCls}${animCls}${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</h${level}>`;
   }
 });
 
@@ -137,6 +142,10 @@ register({
       type: 'enum', values: ['sm', 'md', 'lg', 'full'], default: 'full', optional: true,
       label: { he: 'רוחב מקסימלי', en: 'Max width' }
     },
+    animate: {
+      type: 'enum', values: ['none', 'fade', 'rise'], default: 'none', optional: true,
+      label: { he: 'אנימציית כניסה', en: 'Entrance animation' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -150,6 +159,7 @@ register({
     if (p.lead === true || p.lead === 'true') extraCls += ' lead';
     if (p.dropcap === true || p.dropcap === 'true') extraCls += ' dropcap';
     if (p.maxwidth && p.maxwidth !== 'full') extraCls += ` maxw-${escapeAttr(p.maxwidth)}`;
+    if (p.animate && p.animate !== 'none') extraCls += ` anim-${escapeAttr(p.animate)}`;
     const parts = String(node.text || '').split(/\n\n+/);
     const d = dirAttr(ctx);
     return parts
@@ -515,6 +525,14 @@ register({
       type: 'enum', values: ['sm', 'md', 'lg', 'full'], default: 'md', optional: true,
       label: { he: 'גובה', en: 'Height' }
     },
+    overlay: {
+      type: 'integer', min: 0, max: 80, default: 0, optional: true,
+      label: { he: 'כהות שכבת רקע', en: 'Overlay' }
+    },
+    parallax: {
+      type: 'boolean', default: false, optional: true,
+      label: { he: 'רקע קבוע', en: 'Parallax' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -522,11 +540,16 @@ register({
   compile(node, ctx, compileChild) {
     const { id, cls } = attrsExtra(node);
     const hCls = node.props.height && node.props.height !== 'md' ? ` hero-${escapeAttr(node.props.height)}` : '';
-    const bg = node.props.image
-      ? ` style="background-image:url('${escapeAttr(node.props.image)}');background-size:cover;background-position:center"`
-      : '';
+    const overlayVal = Math.min(Math.max(parseInt(node.props.overlay, 10) || 0, 0), 80);
+    const overlayCls = overlayVal > 0 ? ' hero-overlaid' : '';
+    const overlayVar = overlayVal > 0 ? `--hero-overlay:${(overlayVal / 100).toFixed(2)};` : '';
+    const parallaxCls = node.props.parallax === true || node.props.parallax === 'true' ? ' hero-parallax' : '';
+    const styleParts = overlayVar + (node.props.image
+      ? `background-image:url('${escapeCssUrl(node.props.image)}');background-size:cover;background-position:center`
+      : '');
+    const bg = styleParts ? ` style="${styleParts}"` : '';
     const inner = node.children.map((c) => compileChild(c, ctx)).join('');
-    return `<section${id} class="hero bent-hero${hCls}${cls}"${bg}${dirAttr(ctx)}>${inner}</section>`;
+    return `<section${id} class="hero bent-hero${hCls}${overlayCls}${parallaxCls}${cls}"${bg}${dirAttr(ctx)}>${inner}</section>`;
   }
 });
 
@@ -980,6 +1003,72 @@ register({
     const { id, cls } = attrsExtra(node);
     const tone = ['brand', 'dark', 'light', 'warn'].includes(node.props.tone) ? node.props.tone : 'brand';
     return `<div${id} class="site-banner tone-${escapeAttr(tone)} bent-banner${cls}"${dirAttr(ctx)}><p>${escapeHtml(node.text)}</p></div>`;
+  }
+});
+
+// ─── Signature visuals (v0.44) — the patterns the vision was named for ──
+
+register({
+  name: 'marquee',
+  tag: 'bent-marquee',
+  category: 'effects',
+  label: { he: 'טקסט נע', en: 'Marquee' },
+  icon: 'marquee',
+  container: false,
+  props: {
+    speed: {
+      type: 'enum', values: ['slow', 'md', 'fast'], default: 'md', optional: true,
+      label: { he: 'מהירות', en: 'Speed' }
+    },
+    text: { type: 'text', content: true, default: 'ברוכים הבאים ✦', label: { he: 'הטקסט הנע', en: 'Text' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const speed = ['slow', 'md', 'fast'].includes(node.props.speed) ? node.props.speed : 'md';
+    const t = escapeHtml(node.text);
+    const track = `<span class="marquee-item">${t}</span>`;
+    return `<div${id} class="marquee marquee-${speed} bent-marquee${cls}"${dirAttr(ctx)}>` +
+      `<div class="marquee-track">${track}</div>` +
+      `<div class="marquee-track" aria-hidden="true">${track}</div></div>`;
+  }
+});
+
+register({
+  name: 'parallax',
+  tag: 'bent-parallax',
+  category: 'effects',
+  label: { he: 'רקע קבוע (פרלקסה)', en: 'Parallax' },
+  icon: 'parallax',
+  container: true,
+  accept: [],
+  props: {
+    image: { type: 'url', default: '', label: { he: 'תמונת רקע', en: 'Background image' } },
+    overlay: {
+      type: 'integer', min: 0, max: 80, default: 0, optional: true,
+      label: { he: 'כהות שכבת רקע', en: 'Overlay' }
+    },
+    height: {
+      type: 'enum', values: ['sm', 'md', 'lg', 'full'], default: 'md', optional: true,
+      label: { he: 'גובה', en: 'Height' }
+    },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const height = ['sm', 'md', 'lg', 'full'].includes(node.props.height) ? node.props.height : 'md';
+    const overlayVal = Math.min(Math.max(parseInt(node.props.overlay, 10) || 0, 0), 80);
+    const vars = [`background-image:url('${escapeCssUrl(node.props.image || '')}')`];
+    if (overlayVal > 0) vars.unshift(`--px-overlay:${(overlayVal / 100).toFixed(2)}`);
+    const overlaidCls = overlayVal > 0 ? ' parallax-overlaid' : '';
+    const inner = node.children.map((c) => compileChild(c, ctx)).join('');
+    return `<section${id} class="parallax-section parallax-${height}${overlaidCls} bent-parallax${cls}"` +
+      ` style="${vars.join(';')}"${dirAttr(ctx)}>` +
+      `<div class="parallax-inner">${inner}</div></section>`;
   }
 });
 

@@ -25,7 +25,8 @@ const KEYWORDS = {
     jsonType: 'heading',
     params: {
       level: { type: 'integer', default: 2 },
-      align: { type: 'enum', default: 'start', values: ['start', 'center', 'end'] }
+      align: { type: 'enum', default: 'start', values: ['start', 'center', 'end'] },
+      animate: { type: 'enum', default: 'none', values: ['none', 'fade', 'rise'] }
     }
   },
   TEXT: {
@@ -36,7 +37,8 @@ const KEYWORDS = {
       size: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg'] },
       lead: { type: 'boolean', default: false },
       dropcap: { type: 'boolean', default: false },
-      maxwidth: { type: 'enum', default: 'full', values: ['sm', 'md', 'lg', 'full'] }
+      maxwidth: { type: 'enum', default: 'full', values: ['sm', 'md', 'lg', 'full'] },
+      animate: { type: 'enum', default: 'none', values: ['none', 'fade', 'rise'] }
     }
   },
   IMAGE: {
@@ -120,6 +122,25 @@ const KEYWORDS = {
       height: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'full'] },
       overlay: { type: 'integer', default: 0 },
       parallax: { type: 'boolean', default: false }
+    }
+  },
+  MARQUEE: {
+    body: 'TEXT-BODY',
+    jsonType: 'marquee',
+    params: {
+      speed: { type: 'enum', default: 'md', values: ['slow', 'md', 'fast'] }
+    }
+  },
+  PARALLAX: {
+    body: 'BLOCK-BODY',
+    jsonType: 'parallax',
+    params: {
+      // image is not `required` at the language level so an empty-image block
+      // round-trips (decompile → compile) without throwing E306; the block
+      // registry marks it required for the admin form instead.
+      image: { type: 'string' },
+      overlay: { type: 'integer', default: 0 },
+      height: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'full'] }
     }
   },
   TESTIMONIAL: {

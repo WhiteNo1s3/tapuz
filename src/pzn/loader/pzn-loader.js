@@ -137,6 +137,50 @@ main#main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
     grid-template-columns: 1fr;
   }
 }
+
+/* signature visuals (v0.44) */
+.hero { position: relative; }
+.hero.hero-overlaid::before {
+  content: ""; position: absolute; inset: 0;
+  background: rgba(0, 0, 0, var(--hero-overlay, 0.35)); pointer-events: none;
+}
+.hero.hero-overlaid > * { position: relative; z-index: 1; }
+.hero.hero-overlaid { color: #fff; }
+.hero.hero-overlaid::before { border-radius: inherit; }
+.hero.hero-parallax { background-attachment: fixed; }
+.parallax-section {
+  position: relative; background-size: cover; background-position: center;
+  background-attachment: fixed; display: flex; align-items: center;
+  justify-content: center; padding: 3rem 1.25rem;
+}
+.parallax-sm { min-height: 30vh; } .parallax-md { min-height: 50vh; }
+.parallax-lg { min-height: 70vh; } .parallax-full { min-height: 100vh; }
+.parallax-section.parallax-overlaid::before {
+  content: ""; position: absolute; inset: 0;
+  background: rgba(0, 0, 0, var(--px-overlay, 0.3));
+}
+.parallax-inner { position: relative; z-index: 1; max-width: 860px; text-align: center; color: #fff; }
+.marquee { display: flex; overflow: hidden; white-space: nowrap; padding-block: 0.6rem; }
+.marquee-track {
+  flex-shrink: 0; min-width: 100%; display: flex; justify-content: space-around; gap: 3rem;
+  animation: pzn-marquee var(--marquee-duration, 18s) linear infinite;
+}
+.marquee-slow .marquee-track { --marquee-duration: 32s; }
+.marquee-fast .marquee-track { --marquee-duration: 9s; }
+.marquee-item { display: inline-block; font-size: 1.15rem; }
+@keyframes pzn-marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+[dir="rtl"] .marquee-track { animation-name: pzn-marquee-rtl; }
+@keyframes pzn-marquee-rtl { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: no-preference) {
+  .anim-fade { animation: pzn-fade 0.8s ease-out both; }
+  .anim-rise { animation: pzn-rise 0.8s ease-out both; }
+}
+@keyframes pzn-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pzn-rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@media (hover: none) and (pointer: coarse) {
+  .hero.hero-parallax, .parallax-section { background-attachment: scroll; }
+}
+@media (prefers-reduced-motion: reduce) { .marquee-track { animation: none; } }
 `.trim();
 
 /**
