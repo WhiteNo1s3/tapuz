@@ -85,6 +85,10 @@ register({
       type: 'integer', min: 1, max: 6, default: 2,
       label: { he: 'רמה', en: 'Level' }
     },
+    align: {
+      type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
+      label: { he: 'יישור', en: 'Align' }
+    },
     text: {
       type: 'text', content: true, default: 'כותרת חדשה',
       label: { he: 'טקסט', en: 'Text' }
@@ -96,7 +100,8 @@ register({
   compile(node, ctx) {
     const level = Math.min(Math.max(parseInt(node.props.level, 10) || 2, 1), 6);
     const { id, cls } = attrsExtra(node);
-    return `<h${level}${id} class="bent-heading${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</h${level}>`;
+    const alignCls = node.props.align && node.props.align !== 'start' ? ` align-${escapeAttr(node.props.align)}` : '';
+    return `<h${level}${id} class="bent-heading${alignCls}${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</h${level}>`;
   }
 });
 
@@ -112,16 +117,43 @@ register({
       type: 'text', content: true, default: 'פסקה חדשה',
       label: { he: 'תוכן', en: 'Content' }
     },
+    align: {
+      type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
+      label: { he: 'יישור', en: 'Align' }
+    },
+    size: {
+      type: 'enum', values: ['sm', 'md', 'lg'], default: 'md', optional: true,
+      label: { he: 'גודל', en: 'Size' }
+    },
+    lead: {
+      type: 'boolean', default: false, optional: true,
+      label: { he: 'פסקת פתיח', en: 'Lead' }
+    },
+    dropcap: {
+      type: 'boolean', default: false, optional: true,
+      label: { he: 'אות פתיחה', en: 'Drop cap' }
+    },
+    maxwidth: {
+      type: 'enum', values: ['sm', 'md', 'lg', 'full'], default: 'full', optional: true,
+      label: { he: 'רוחב מקסימלי', en: 'Max width' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
   defaults: { text: 'פסקה חדשה' },
   compile(node, ctx) {
     const { id, cls } = attrsExtra(node);
+    const p = node.props;
+    let extraCls = '';
+    if (p.align && p.align !== 'start') extraCls += ` align-${escapeAttr(p.align)}`;
+    if (p.size && p.size !== 'md') extraCls += ` size-${escapeAttr(p.size)}`;
+    if (p.lead === true || p.lead === 'true') extraCls += ' lead';
+    if (p.dropcap === true || p.dropcap === 'true') extraCls += ' dropcap';
+    if (p.maxwidth && p.maxwidth !== 'full') extraCls += ` maxw-${escapeAttr(p.maxwidth)}`;
     const parts = String(node.text || '').split(/\n\n+/);
     const d = dirAttr(ctx);
     return parts
-      .map((p) => `<p${id} class="bent-text${cls}"${d}>${escapeHtml(p)}</p>`)
+      .map((pt) => `<p${id} class="bent-text${extraCls}${cls}"${d}>${escapeHtml(pt)}</p>`)
       .join('');
   }
 });
@@ -141,6 +173,10 @@ register({
       type: 'enum', values: ['left', 'center', 'right'], default: 'center', optional: true,
       label: { he: 'יישור', en: 'Align' }
     },
+    width: {
+      type: 'enum', values: ['sm', 'md', 'lg', 'full'], default: 'full', optional: true,
+      label: { he: 'רוחב', en: 'Width' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -150,7 +186,8 @@ register({
     const { id, cls } = attrsExtra(node);
     let inner = `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" loading="lazy">`;
     if (caption) inner += `<figcaption>${escapeHtml(caption)}</figcaption>`;
-    return `<figure${id} class="bent-image align-${escapeAttr(align)}${cls}"${dirAttr(ctx)}>${inner}</figure>`;
+    const widthCls = node.props.width && node.props.width !== 'full' ? ` width-${escapeAttr(node.props.width)}` : '';
+    return `<figure${id} class="bent-image align-${escapeAttr(align)}${widthCls}${cls}"${dirAttr(ctx)}>${inner}</figure>`;
   }
 });
 
@@ -166,6 +203,10 @@ register({
     variant: {
       type: 'enum', values: ['primary', 'secondary', 'outline'], default: 'primary',
       label: { he: 'סגנון', en: 'Variant' }
+    },
+    align: {
+      type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
+      label: { he: 'יישור', en: 'Align' }
     },
     text: {
       type: 'text', content: true, default: 'לחץ כאן',
@@ -283,12 +324,17 @@ register({
       type: 'string', default: '2rem',
       label: { he: 'גובה', en: 'Height' }
     },
+    size: {
+      type: 'enum', values: ['sm', 'md', 'lg', 'xl'], default: 'md', optional: true,
+      label: { he: 'גודל', en: 'Size' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
   defaults: { height: '2rem' },
   compile(node) {
-    const height = node.props.height || '2rem';
+    const SIZE_HEIGHTS = { sm: '0.75rem', md: '1.5rem', lg: '2.5rem', xl: '4rem' };
+    const height = node.props.height || SIZE_HEIGHTS[node.props.size] || '2rem';
     const { id, cls } = attrsExtra(node);
     return `<div${id} class="bent-spacer spacer${cls}" style="height:${escapeAttr(height)}" aria-hidden="true"></div>`;
   }
@@ -306,14 +352,22 @@ register({
       type: 'enum', values: ['solid', 'dashed', 'none'], default: 'solid', optional: true,
       label: { he: 'סגנון', en: 'Style' }
     },
+    bentstyle: {
+      type: 'enum', values: ['line', 'dots', 'thick'], default: 'line', optional: true,
+      label: { he: 'סגנון BenTML', en: 'BenTML style' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
   defaults: { style: 'solid' },
   compile(node, ctx) {
-    const style = node.props.style || 'solid';
+    const BENT_TO_LEGACY = { line: 'solid', dots: 'dashed', thick: 'solid' };
+    const style = node.props.bentstyle
+      ? BENT_TO_LEGACY[node.props.bentstyle] || 'solid'
+      : node.props.style || 'solid';
+    const thickCls = node.props.bentstyle === 'thick' ? ' thick' : '';
     const { id, cls } = attrsExtra(node);
-    return `<hr${id} class="bent-divider style-${escapeAttr(style)}${cls}"${dirAttr(ctx)}>`;
+    return `<hr${id} class="bent-divider style-${escapeAttr(style)}${thickCls}${cls}"${dirAttr(ctx)}>`;
   }
 });
 
@@ -408,8 +462,21 @@ register({
   accept: ['col'],
   props: {
     gap: {
-      type: 'enum', values: ['small', 'medium', 'large'], default: 'medium', optional: true,
+      type: 'enum', values: ['none', 'sm', 'md', 'lg', 'small', 'medium', 'large'],
+      default: 'medium', optional: true,
       label: { he: 'מרווח', en: 'Gap' }
+    },
+    ratio: {
+      type: 'string', default: '', optional: true,
+      label: { he: 'יחס רוחב', en: 'Ratio' }
+    },
+    collapse: {
+      type: 'enum', values: ['sm', 'md', 'lg', 'never'], default: 'md', optional: true,
+      label: { he: 'קריסה במובייל', en: 'Collapse' }
+    },
+    valign: {
+      type: 'enum', values: ['top', 'center', 'bottom', 'stretch'], default: 'top', optional: true,
+      label: { he: 'יישור אנכי', en: 'Vertical align' }
     },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
@@ -418,8 +485,19 @@ register({
   compile(node, ctx, compileChild) {
     const gap = node.props.gap || 'medium';
     const { id, cls } = attrsExtra(node);
+    let extraCls = '';
+    if (node.props.collapse && node.props.collapse !== 'md') extraCls += ` collapse-${escapeAttr(node.props.collapse)}`;
+    if (node.props.valign && node.props.valign !== 'top') extraCls += ` valign-${escapeAttr(node.props.valign)}`;
+    let gridStyle = '';
+    const ratio = String(node.props.ratio || '');
+    if (ratio.includes(':')) {
+      const parts = ratio.split(':').map((x) => Math.max(0.2, parseFloat(x) || 1));
+      if (parts.length === node.children.length) {
+        gridStyle = ` style="display:grid;grid-template-columns:${parts.map((r) => r + 'fr').join(' ')};gap:var(--col-gap,1.15rem)"`;
+      }
+    }
     const inner = node.children.map((c) => compileChild(c, ctx)).join('');
-    return `<div${id} class="columns gap-${escapeAttr(gap)} bent-columns${cls}"${dirAttr(ctx)}>${inner}</div>`;
+    return `<div${id} class="columns gap-${escapeAttr(gap)}${extraCls} bent-columns${cls}"${gridStyle}${dirAttr(ctx)}>${inner}</div>`;
   }
 });
 
@@ -432,14 +510,23 @@ register({
   container: true,
   accept: [],
   props: {
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונת רקע', en: 'Background image' } },
+    height: {
+      type: 'enum', values: ['sm', 'md', 'lg', 'full'], default: 'md', optional: true,
+      label: { he: 'גובה', en: 'Height' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
   defaults: {},
   compile(node, ctx, compileChild) {
     const { id, cls } = attrsExtra(node);
+    const hCls = node.props.height && node.props.height !== 'md' ? ` hero-${escapeAttr(node.props.height)}` : '';
+    const bg = node.props.image
+      ? ` style="background-image:url('${escapeAttr(node.props.image)}');background-size:cover;background-position:center"`
+      : '';
     const inner = node.children.map((c) => compileChild(c, ctx)).join('');
-    return `<section${id} class="hero bent-hero${cls}"${dirAttr(ctx)}>${inner}</section>`;
+    return `<section${id} class="hero bent-hero${hCls}${cls}"${bg}${dirAttr(ctx)}>${inner}</section>`;
   }
 });
 
@@ -454,14 +541,19 @@ register({
   container: true,
   accept: ['image'],
   props: {
+    columns: {
+      type: 'integer', min: 1, max: 4, default: 3, optional: true,
+      label: { he: 'עמודות', en: 'Columns' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
   defaults: {},
   compile(node, ctx, compileChild) {
     const { id, cls } = attrsExtra(node);
+    const cols = Math.min(Math.max(parseInt(node.props.columns, 10) || 3, 1), 4);
     const inner = node.children.map((c) => compileChild(c, ctx)).join('');
-    return `<div${id} class="gallery bent-gallery${cls}"${dirAttr(ctx)}>${inner}</div>`;
+    return `<div${id} class="gallery cols-${cols} bent-gallery${cls}"${dirAttr(ctx)}>${inner}</div>`;
   }
 });
 
@@ -514,6 +606,380 @@ register({
       })
       .join('');
     return `<section${id} class="article-cubes cols-${cols} bent-article-list${cls}"${dirAttr(ctx)}>${cards}</section>`;
+  }
+});
+
+// ─── Tapuz parity modules (v0.40 registry unification) ─────────────
+// HTML contracts mirror src/renderer.js so existing theme CSS applies.
+
+register({
+  name: 'testimonial',
+  tag: 'bent-testimonial',
+  category: 'content',
+  label: { he: 'המלצה', en: 'Testimonial' },
+  icon: 'testimonial',
+  container: false,
+  props: {
+    author: { type: 'string', default: '', optional: true, label: { he: 'שם הממליץ', en: 'Author' } },
+    role: { type: 'string', default: '', optional: true, label: { he: 'תפקיד', en: 'Role' } },
+    text: { type: 'text', content: true, default: '', label: { he: 'ציטוט', en: 'Quote' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const author = escapeHtml(node.props.author || '');
+    const role = node.props.role ? `, ${escapeHtml(node.props.role)}` : '';
+    return `<blockquote${id} class="testimonial bent-testimonial${cls}"${dirAttr(ctx)}><p>“${escapeHtml(node.text)}”</p><footer class="author">${author}${role}</footer></blockquote>`;
+  }
+});
+
+register({
+  name: 'feature',
+  tag: 'bent-feature',
+  category: 'content',
+  label: { he: 'תכונה', en: 'Feature' },
+  icon: 'feature',
+  container: false,
+  props: {
+    title: { type: 'string', default: '', label: { he: 'כותרת', en: 'Title' } },
+    icon: { type: 'string', default: '', optional: true, label: { he: 'אייקון', en: 'Icon' } },
+    text: { type: 'text', content: true, default: '', label: { he: 'תיאור', en: 'Description' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const { id, cls } = attrsExtra(node);
+    const icon = node.props.icon ? `<span class="feature-icon">${escapeHtml(node.props.icon)}</span>` : '';
+    const desc = node.text ? `<p>${escapeHtml(node.text)}</p>` : '';
+    return `<article${id} class="feature bent-feature${cls}">${icon}<h3>${escapeHtml(node.props.title || '')}</h3>${desc}</article>`;
+  }
+});
+
+register({
+  name: 'features',
+  tag: 'bent-features',
+  category: 'content',
+  label: { he: 'תכונות', en: 'Features' },
+  icon: 'features',
+  container: true,
+  accept: ['feature'],
+  props: {
+    columns: {
+      type: 'integer', min: 1, max: 4, default: 3, optional: true,
+      label: { he: 'עמודות', en: 'Columns' }
+    },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { columns: 3 },
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const cols = Math.min(Math.max(parseInt(node.props.columns, 10) || 3, 1), 4);
+    const inner = node.children.map((c) => compileChild(c, ctx)).join('');
+    return `<section${id} class="features cols-${cols} bent-features${cls}"${dirAttr(ctx)}>${inner}</section>`;
+  }
+});
+
+register({
+  name: 'card',
+  tag: 'bent-card',
+  category: 'layout',
+  label: { he: 'כרטיס', en: 'Card' },
+  icon: 'card',
+  container: true,
+  accept: [],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = node.children.map((c) => compileChild(c, ctx)).join('');
+    return `<div${id} class="card bent-card${cls}"${dirAttr(ctx)}>${inner}</div>`;
+  }
+});
+
+register({
+  name: 'map',
+  tag: 'bent-map',
+  category: 'data',
+  label: { he: 'מפה', en: 'Map' },
+  icon: 'map',
+  container: false,
+  props: {
+    address: { type: 'string', default: '', label: { he: 'כתובת', en: 'Address' } },
+    zoom: {
+      type: 'integer', min: 1, max: 20, default: 15, optional: true,
+      label: { he: 'זום', en: 'Zoom' }
+    },
+    height: {
+      type: 'enum', values: ['sm', 'md', 'lg'], default: 'md', optional: true,
+      label: { he: 'גובה', en: 'Height' }
+    },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { zoom: 15, height: 'md' },
+  compile(node) {
+    const { id, cls } = attrsExtra(node);
+    const address = String(node.props.address || '');
+    const zoom = Math.min(Math.max(parseInt(node.props.zoom, 10) || 15, 1), 20);
+    const height = ['sm', 'md', 'lg'].includes(node.props.height) ? node.props.height : 'md';
+    const src = `https://www.google.com/maps?q=${encodeURIComponent(address)}&z=${zoom}&output=embed&hl=he`;
+    return `<figure${id} class="map-embed map-${height} bent-map${cls}">` +
+      `<iframe src="${escapeAttr(src)}" loading="lazy" title="מפה: ${escapeAttr(address)}" allowfullscreen></iframe>` +
+      `</figure>`;
+  }
+});
+
+register({
+  name: 'cta',
+  tag: 'bent-cta',
+  category: 'content',
+  label: { he: 'קריאה לפעולה', en: 'CTA' },
+  icon: 'cta',
+  container: false,
+  props: {
+    title: { type: 'string', default: '', label: { he: 'כותרת', en: 'Title' } },
+    buttontext: { type: 'string', default: '', optional: true, label: { he: 'טקסט כפתור', en: 'Button text' } },
+    url: { type: 'url', default: '#', optional: true, label: { he: 'קישור', en: 'URL' } },
+    variant: {
+      type: 'enum', values: ['primary', 'secondary', 'outline'], default: 'primary', optional: true,
+      label: { he: 'סגנון כפתור', en: 'Button variant' }
+    },
+    tone: {
+      type: 'enum', values: ['brand', 'dark', 'light'], default: 'brand', optional: true,
+      label: { he: 'רקע', en: 'Tone' }
+    },
+    align: {
+      type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
+      label: { he: 'יישור', en: 'Align' }
+    },
+    text: { type: 'text', content: true, default: '', label: { he: 'טקסט', en: 'Text' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const p = node.props;
+    const tone = ['brand', 'dark', 'light'].includes(p.tone) ? p.tone : 'brand';
+    const btn = p.buttontext
+      ? `<a class="btn btn-${escapeAttr(p.variant || 'primary')}" href="${escapeAttr(p.url || '#')}">${escapeHtml(p.buttontext)}</a>`
+      : '';
+    return (
+      `<section${id} class="cta-strip tone-${escapeAttr(tone)} bent-cta${cls}"${dirAttr(ctx)}>` +
+      `<div class="cta-inner">` +
+      (p.title ? `<h2>${escapeHtml(p.title)}</h2>` : '') +
+      (node.text ? `<p>${escapeHtml(node.text)}</p>` : '') +
+      btn +
+      `</div></section>`
+    );
+  }
+});
+
+register({
+  name: 'stat',
+  tag: 'bent-stat',
+  category: 'content',
+  label: { he: 'מדד', en: 'Stat' },
+  icon: 'stat',
+  container: false,
+  props: {
+    value: { type: 'string', default: '', label: { he: 'ערך', en: 'Value' } },
+    label: { type: 'string', default: '', label: { he: 'תווית', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const { id, cls } = attrsExtra(node);
+    return `<div${id} class="stat-cell bent-stat${cls}"><div class="stat-value">${escapeHtml(node.props.value || '')}</div>` +
+      `<div class="stat-label">${escapeHtml(node.props.label || '')}</div></div>`;
+  }
+});
+
+register({
+  name: 'stats',
+  tag: 'bent-stats',
+  category: 'content',
+  label: { he: 'מספרים / מדדים', en: 'Stats' },
+  icon: 'stats',
+  container: true,
+  accept: ['stat'],
+  props: {
+    columns: {
+      type: 'integer', min: 2, max: 4, default: 3, optional: true,
+      label: { he: 'עמודות', en: 'Columns' }
+    },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { columns: 3 },
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const cols = Math.min(Math.max(parseInt(node.props.columns, 10) || 3, 2), 4);
+    const inner = node.children.map((c) => compileChild(c, ctx)).join('');
+    return `<section${id} class="stats-row cols-${cols} bent-stats${cls}"${dirAttr(ctx)}>${inner}</section>`;
+  }
+});
+
+register({
+  name: 'logo',
+  tag: 'bent-logo',
+  category: 'media',
+  label: { he: 'לוגו', en: 'Logo' },
+  icon: 'logo',
+  container: false,
+  props: {
+    src: { type: 'url', default: '', label: { he: 'תמונה', en: 'Image' } },
+    alt: { type: 'string', default: '', optional: true, label: { he: 'שם', en: 'Alt' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'URL' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const { id, cls } = attrsExtra(node);
+    const img = `<img src="${escapeAttr(node.props.src || '')}" alt="${escapeAttr(node.props.alt || '')}" loading="lazy">`;
+    return node.props.url
+      ? `<a${id} class="logo-cell bent-logo${cls}" href="${escapeAttr(node.props.url)}">${img}</a>`
+      : `<div${id} class="logo-cell bent-logo${cls}">${img}</div>`;
+  }
+});
+
+register({
+  name: 'logos',
+  tag: 'bent-logos',
+  category: 'media',
+  label: { he: 'לוגואים / לקוחות', en: 'Logos' },
+  icon: 'logos',
+  container: true,
+  accept: ['logo'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = node.children.map((c) => compileChild(c, ctx)).join('');
+    return `<section${id} class="logos-strip bent-logos${cls}"${dirAttr(ctx)}>${inner}</section>`;
+  }
+});
+
+register({
+  name: 'qa',
+  tag: 'bent-qa',
+  category: 'content',
+  label: { he: 'שאלה ותשובה', en: 'Q&A' },
+  icon: 'qa',
+  container: false,
+  props: {
+    question: { type: 'string', default: '', label: { he: 'שאלה', en: 'Question' } },
+    text: { type: 'text', content: true, default: '', label: { he: 'תשובה', en: 'Answer' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const { id, cls } = attrsExtra(node);
+    return `<details${id} class="faq-item bent-qa${cls}"><summary>${escapeHtml(node.props.question || '')}</summary>` +
+      `<div class="faq-answer">${escapeHtml(node.text)}</div></details>`;
+  }
+});
+
+register({
+  name: 'faq',
+  tag: 'bent-faq',
+  category: 'content',
+  label: { he: 'שאלות נפוצות', en: 'FAQ' },
+  icon: 'faq',
+  container: true,
+  accept: ['qa'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = node.children.map((c) => compileChild(c, ctx)).join('');
+    return `<section${id} class="faq-list bent-faq${cls}"${dirAttr(ctx)}>${inner}</section>`;
+  }
+});
+
+register({
+  name: 'contact-info',
+  tag: 'bent-contact-info',
+  category: 'data',
+  label: { he: 'פרטי קשר', en: 'Contact info' },
+  icon: 'contact',
+  container: false,
+  props: {
+    phone: { type: 'string', default: '', optional: true, label: { he: 'טלפון', en: 'Phone' } },
+    email: { type: 'string', default: '', optional: true, label: { he: 'אימייל', en: 'Email' } },
+    address: { type: 'string', default: '', optional: true, label: { he: 'כתובת', en: 'Address' } },
+    hours: { type: 'string', default: '', optional: true, label: { he: 'שעות פעילות', en: 'Hours' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const p = node.props;
+    const lines = [];
+    if (p.phone) {
+      lines.push(
+        `<div class="contact-line"><span class="contact-k">טלפון</span> ` +
+          `<a href="tel:${escapeAttr(String(p.phone).replace(/\s/g, ''))}">${escapeHtml(p.phone)}</a></div>`
+      );
+    }
+    if (p.email) {
+      lines.push(
+        `<div class="contact-line"><span class="contact-k">אימייל</span> ` +
+          `<a href="mailto:${escapeAttr(p.email)}">${escapeHtml(p.email)}</a></div>`
+      );
+    }
+    if (p.address) {
+      lines.push(`<div class="contact-line"><span class="contact-k">כתובת</span> ${escapeHtml(p.address)}</div>`);
+    }
+    if (p.hours) {
+      lines.push(`<div class="contact-line"><span class="contact-k">שעות</span> ${escapeHtml(p.hours)}</div>`);
+    }
+    return `<section${id} class="contact-info bent-contact-info${cls}"${dirAttr(ctx)}>${lines.join('')}</section>`;
+  }
+});
+
+register({
+  name: 'banner',
+  tag: 'bent-banner',
+  category: 'content',
+  label: { he: 'באנר הודעה', en: 'Banner' },
+  icon: 'banner',
+  container: false,
+  props: {
+    tone: {
+      type: 'enum', values: ['brand', 'dark', 'light', 'warn'], default: 'brand', optional: true,
+      label: { he: 'סגנון', en: 'Tone' }
+    },
+    align: {
+      type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
+      label: { he: 'יישור', en: 'Align' }
+    },
+    text: { type: 'text', content: true, default: '', label: { he: 'הודעה', en: 'Message' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const tone = ['brand', 'dark', 'light', 'warn'].includes(node.props.tone) ? node.props.tone : 'brand';
+    return `<div${id} class="site-banner tone-${escapeAttr(tone)} bent-banner${cls}"${dirAttr(ctx)}><p>${escapeHtml(node.text)}</p></div>`;
   }
 });
 

@@ -85,7 +85,9 @@ module.exports = {
   defaultManifest: siteManifest.defaultManifest,
   manifestRuntimeInfo: siteManifest.manifestRuntimeInfo,
 
-  // bridge from Tapuz JSON era
+  // bridge from/to the Tapuz JSON era (v0.40: lossless both ways)
   fromTapuzPage: bridge.fromTapuzPage,
-  blockToModule: bridge.blockToModule
+  blockToModule: bridge.blockToModule,
+  toTapuzPage: bridge.toTapuzPage,
+  moduleToBlock: bridge.moduleToBlock
 };
