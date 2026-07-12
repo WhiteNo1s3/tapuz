@@ -25,9 +25,19 @@ const { fromTapuzPage, toTapuzPage, serialize, parse } = require('./pzn/index');
 const DRAFTS_DIR = path.join(PAGES_DIR, 'drafts');
 const PUBLISHED_DIR = path.join(PAGES_DIR, 'published');
 
-/** Same sanitization as publicUrlFor / export.js so names line up everywhere. */
+/**
+ * Sanitize a full_path into a single safe filename component. Strips path
+ * separators (incl. BACKSLASH — critical on Windows), collapses '..', and
+ * drops leading dots so a crafted slug can never escape the pages directory.
+ * (v0.45 hardening — the agent bridge accepts bot-authored slugs.)
+ */
 function safeName(full_path) {
-  return String(full_path || 'page').replace(/\s+/g, '-').replace(/[\/:*?"<>|]/g, '');
+  return String(full_path || 'page')
+    .replace(/\s+/g, '-')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\.\.+/g, '.')
+    .replace(/^\.+/, '')
+    || 'page';
 }
 
 /**
@@ -36,7 +46,13 @@ function safeName(full_path) {
  */
 function pznPathFor(full_path, kind = 'draft') {
   const dir = kind === 'published' ? PUBLISHED_DIR : DRAFTS_DIR;
-  return path.join(dir, safeName(full_path) + '.pzn');
+  const file = path.resolve(dir, safeName(full_path) + '.pzn');
+  // defense in depth: the resolved path MUST stay inside its pages dir
+  const root = path.resolve(dir) + path.sep;
+  if (file !== path.resolve(dir) && !file.startsWith(root)) {
+    throw new Error('pzn-store: refusing path outside pages dir: ' + full_path);
+  }
+  return file;
 }
 
 /**

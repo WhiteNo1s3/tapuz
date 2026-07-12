@@ -26,6 +26,8 @@ const gaData = require('./ga-data');
 // Abuse mitigation (S4). App-level (L7) only — see docs/security.md.
 const adminLimiter = new FixedWindowLimiter({ windowMs: 60 * 1000, max: 300 }); // general admin flood cap
 const loginGuard = new LoginGuard(); // escalating brute-force lockout on login
+const agentLimiter = new FixedWindowLimiter({ windowMs: 60 * 1000, max: 120 }); // agent bridge (per token/IP)
+const agentTokens = require('./agent-tokens');
 // S6 collector flood cap: coarse per-IP bucket. Beacon endpoint is public and
 // unauthenticated, so it gets its own tight limit. TAPUZ_COLLECT_MAX overrides
 // the per-minute cap (used by the smoke test to force a 429 deterministically).
@@ -194,6 +196,154 @@ app.use((req, res, next) => {
   auth.issueSession(res, session.uid, req, session.iat);
   req.adminUser = session;
   next();
+});
+
+// =========================================================================
+// AGENT BRIDGE (v0.45) — /agent/v1/* — bearer-token API for external agents
+// (the Grokin browser extension). Deliberately OUTSIDE /admin: token auth,
+// NOT session cookies. A browser never auto-sends a bearer token, so there is
+// no CSRF risk — which is exactly why CORS can use Allow-Origin:* WITHOUT
+// credentials: a hostile page may call the endpoint but cannot supply a valid
+// token, and no cookie rides along. See docs/security.md.
+// =========================================================================
+function agentCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Max-Age', '600');
+  res.setHeader('Vary', 'Origin');
+  // NOTE: intentionally NO Access-Control-Allow-Credentials — bearer only.
+}
+
+app.use('/agent', (req, res, next) => {
+  agentCors(res);
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (req.method === 'OPTIONS') return res.status(204).end(); // CORS preflight
+  next();
+});
+
+/** Bearer-token guard for /agent/v1/*. `scope` = 'read' | 'write' | null. */
+function requireAgent(scope) {
+  return (req, res, next) => {
+    const ip = clientIp(req);
+    const raw = /^Bearer\s+(.+)$/i.exec(String(req.headers['authorization'] || '').trim());
+    const rawToken = raw ? raw[1].trim() : '';
+    // Flood cap keyed by SOURCE IP, never by the attacker-supplied token
+    // prefix — a bad-token flood must not exhaust a victim token's quota.
+    const key = 'agent:' + ip;
+    if (!agentLimiter.allow(key)) {
+      res.setHeader('Retry-After', String(agentLimiter.retryAfter(key)));
+      return res.status(429).json({ ok: false, error: 'rate limited' });
+    }
+    if (!rawToken) return res.status(401).json({ ok: false, error: 'missing bearer token' });
+    const id = agentTokens.verifyAgentToken(rawToken);
+    if (!id) return res.status(401).json({ ok: false, error: 'invalid token' });
+    if (scope && !id.scopes.includes(scope)) {
+      return res.status(403).json({ ok: false, error: `token lacks '${scope}' scope` });
+    }
+    req.agent = id;
+    next();
+  };
+}
+
+app.get('/agent/v1/ping', requireAgent('read'), (req, res) => {
+  res.json({ ok: true, agent: req.agent.name, scopes: req.agent.scopes, version: '0.45' });
+});
+
+app.get('/agent/v1/primer', requireAgent('read'), (req, res) => {
+  const { buildPznPrimer } = require('./pzn/agent-primer');
+  res.type('text/markdown; charset=utf-8').send(buildPznPrimer());
+});
+
+app.get('/agent/v1/toolbox', requireAgent('read'), (req, res) => {
+  const pznApi = require('./pzn/index');
+  res.json({ ok: true, toolbox: pznApi.getToolbox(), schemas: pznApi.getAllSchemas() });
+});
+
+app.get('/agent/v1/pages', requireAgent('read'), (req, res) => {
+  const { listPages } = require('./pages');
+  res.json({ ok: true, pages: listPages() });
+});
+
+app.get('/agent/v1/source', requireAgent('read'), (req, res) => {
+  try {
+    const fullPath = String(req.query.fullPath || '');
+    const kind = req.query.kind === 'published' ? 'published' : 'draft';
+    if (!fullPath) return res.status(400).json({ ok: false, error: 'fullPath required' });
+    const { getPageSource } = require('./pages');
+    const source = getPageSource(fullPath, kind);
+    if (source == null) return res.status(404).json({ ok: false, error: 'Page not found' });
+    res.json({ ok: true, fullPath, kind, source });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/agent/v1/source', requireAgent('write'), (req, res) => {
+  try {
+    const { fullPath, publish, loose } = req.body || {};
+    let { source } = req.body || {};
+    if (!fullPath || typeof source !== 'string') {
+      return res.status(400).json({ ok: false, error: 'fullPath and source required' });
+    }
+    if (loose) {
+      const { extractPzn } = require('./pzn-extract');
+      source = extractPzn(source);
+    }
+    const { savePageSource } = require('./pages');
+    const result = savePageSource(fullPath, source, { publish: !!publish });
+    if (publish) exportAll();
+    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
+  }
+});
+
+app.post('/agent/v1/ops', requireAgent('write'), (req, res) => {
+  try {
+    const { fullPath, ops, publish } = req.body || {};
+    if (!fullPath || !Array.isArray(ops)) {
+      return res.status(400).json({ ok: false, error: 'fullPath and ops[] required' });
+    }
+    const { applyPageOps } = require('./pages');
+    const result = applyPageOps(fullPath, ops, { publish: !!publish });
+    if (publish) exportAll();
+    res.json({ ok: true, fullPath, blocks: result.blocks, source: result.source, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_OPS' });
+  }
+});
+
+/** The Grokin trick: model emits INTENT, server owns the .pzn. */
+app.post('/agent/v1/build', requireAgent('write'), (req, res) => {
+  try {
+    const { intent, publish } = req.body || {};
+    const { intentToPzn, deriveSlug } = require('./pzn/intent');
+    const source = intentToPzn(intent); // throws on invalid intent
+    const pznApi = require('./pzn/index');
+    const doc = pznApi.parse(source);
+    const title = doc.title || 'דף חדש';
+    // deriveSlug hardens against path traversal; run BOTH the bot-supplied
+    // bent-slug and the title through it so lookup/create/save agree.
+    const slug = deriveSlug((doc.slug || '').trim() || title);
+    const { createPage, getPageByFullPath, savePageSource } = require('./pages');
+    const existed = !!getPageByFullPath(slug);
+    // Don't silently clobber a DIFFERENT existing page — require explicit intent.
+    if (existed && !(req.body && req.body.update)) {
+      return res.status(409).json({
+        ok: false,
+        error: `page "${slug}" already exists — pass update:true to overwrite it`,
+        fullPath: slug
+      });
+    }
+    if (!existed) createPage({ title, slug, blocks: [] });
+    const result = savePageSource(slug, source, { publish: !!publish });
+    if (publish) exportAll();
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, source, warnings: result.warnings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_BUILD', issues: e.issues });
+  }
 });
 
 // ---- Auth screens (Hebrew / RTL). Exempt from the session requirement. ----
@@ -1627,7 +1777,8 @@ const ADMIN_NAV_ITEMS = [
   { key: 'seo', href: '/admin/seo', label: 'SEO' },
   { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס' },
   { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' },
-  { key: 'ai', href: '/admin/ai', label: 'AI ✨' }
+  { key: 'ai', href: '/admin/ai', label: 'AI ✨' },
+  { key: 'agent', href: '/admin/agent', label: 'גשר סוכן' }
 ];
 
 function adminNav(active, sectionTitle, actionsHtml = '') {
@@ -3130,6 +3281,26 @@ app.post('/admin/api/pzn/ops', (req, res) => {
   }
 });
 
+// ─── Agent token management (session-authed; secrets shown once) ────
+app.get('/admin/api/agent-tokens', (req, res) => {
+  res.json({ ok: true, tokens: agentTokens.listTokens() });
+});
+
+app.post('/admin/api/agent-tokens', (req, res) => {
+  try {
+    const { name, scopes } = req.body || {};
+    const { token, record } = agentTokens.mintToken({ name, scopes });
+    res.json({ ok: true, token, record }); // `token` is returned exactly once
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.delete('/admin/api/agent-tokens/:id', (req, res) => {
+  const removed = agentTokens.revokeToken(req.params.id);
+  res.json({ ok: removed });
+});
+
 /** Module toolbox + schemas — what agents need to write valid .pzn. */
 app.get('/admin/api/pzn/toolbox', (req, res) => {
   try {
@@ -3174,7 +3345,9 @@ app.post('/admin/api/pzn/create-from-source', (req, res) => {
       });
     }
     const title = doc.title || 'דף חדש';
-    let slug = (doc.slug || '').trim() || String(title).trim().replace(/\s+/g, '-').replace(/[\/:*?"<>|#]/g, '');
+    // deriveSlug hardens against path traversal (backslash / '..').
+    const { deriveSlug } = require('./pzn/intent');
+    const slug = deriveSlug((doc.slug || '').trim() || title);
     const { createPage, getPageByFullPath, savePageSource } = require('./pages');
     if (getPageByFullPath(slug)) {
       return res.status(409).json({ ok: false, error: `דף בשם "${slug}" כבר קיים — בחר אותו ברשימה או שנה את ה-slug במקור` });
@@ -3746,6 +3919,39 @@ app.get('/admin/sitemap', (req, res) => {
     </div>
   `;
   res.send(layout(html, 'מפת אתר', '#ea580c'));
+});
+
+// ─── /admin/agent — pair the browser bridge (agent tokens) ──────────
+app.get('/admin/agent', (req, res) => {
+  const origin = `${req.protocol}://${req.headers.host}`;
+  const html = `
+    ${adminNav('agent', 'גשר סוכן — Grokin')}
+    <div class="container" style="padding-top:28px;max-width:900px">
+      <p style="color:#64748b;margin-top:0">
+        טוקנים מאובטחים שמחברים סוכן חיצוני (תוסף הדפדפן) ל‑API של תפוזיאל —
+        בלי סיסמה ובלי קובץ Cookie. הטוקן מוצג <b>פעם אחת בלבד</b> ביצירה.
+        נקודת הקצה: <code dir="ltr">${escapeAdmin(origin)}/agent/v1</code>
+      </p>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:18px">
+        <h3 style="margin-top:0">צור טוקן חדש</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input id="tok-name" placeholder="שם (למשל: Chrome של בן)" style="flex:1;min-width:200px;padding:9px;border:1px solid #e2e8f0;border-radius:8px">
+          <label style="font-size:.9rem"><input type="checkbox" id="tok-write" checked> הרשאת כתיבה (יצירת דפים)</label>
+          <button type="button" id="tok-create" class="btn">צור טוקן</button>
+        </div>
+        <div id="tok-new" style="display:none;margin-top:14px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0">
+          <div style="color:#166534;font-size:.9rem;margin-bottom:6px">העתק עכשיו — לא יוצג שוב:</div>
+          <code id="tok-secret" dir="ltr" style="display:block;word-break:break-all;background:#fff;padding:8px;border-radius:6px;border:1px solid #bbf7d0"></code>
+        </div>
+      </section>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <h3 style="margin-top:0">טוקנים פעילים</h3>
+        <div id="tok-list" style="color:#64748b">טוען…</div>
+      </section>
+    </div>
+    <script src="/admin-agent.js"></script>
+  `;
+  res.send(layout(html, 'גשר סוכן', '#7c3aed'));
 });
 
 // ─── /admin/ai — the paste flow (BYO AI subscription, zero keys) ────

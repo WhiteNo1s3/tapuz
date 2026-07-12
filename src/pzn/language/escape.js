@@ -37,4 +37,11 @@ function unescapeHtml(str) {
     .replace(/&amp;/g, '&');
 }
 
-module.exports = { escapeHtml, escapeAttr, escapeCssUrl, unescapeHtml };
+/** Neutralize executable URL schemes on clickable links. */
+function safeHref(url) {
+  const s = String(url == null ? '' : url).trim();
+  if (/^(?:javascript|data|vbscript):/i.test(s)) return '#';
+  return s || '#';
+}
+
+module.exports = { escapeHtml, escapeAttr, escapeCssUrl, safeHref, unescapeHtml };

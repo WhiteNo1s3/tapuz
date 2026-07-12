@@ -1,6 +1,6 @@
 'use strict';
 
-const { escapeHtml, escapeAttr, escapeCssUrl } = require('../language/escape');
+const { escapeHtml, escapeAttr, escapeCssUrl, safeHref } = require('../language/escape');
 
 /**
  * Module registry = type system of the page.
@@ -227,7 +227,7 @@ register({
   },
   defaults: { href: '#', variant: 'primary', text: 'לחץ כאן' },
   compile(node, ctx) {
-    const href = node.props.href || '#';
+    const href = safeHref(node.props.href || '#');
     const variant = node.props.variant || 'primary';
     const { id, cls } = attrsExtra(node);
     return `<a${id} href="${escapeAttr(href)}" class="btn btn-${escapeAttr(variant)} bent-button${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</a>`;
@@ -403,7 +403,7 @@ register({
     if (yt) {
       return `<figure${id} class="bent-embed video-embed${cls}"><iframe src="https://www.youtube.com/embed/${yt[1]}" allowfullscreen loading="lazy" title="YouTube video"></iframe></figure>`;
     }
-    const url = escapeAttr(rawUrl);
+    const url = escapeAttr(safeHref(rawUrl));
     return `<a${id} href="${url}" class="bent-embed${cls}" target="_blank" rel="noopener">${escapeHtml(rawUrl)}</a>`;
   }
 });
@@ -792,7 +792,7 @@ register({
     const p = node.props;
     const tone = ['brand', 'dark', 'light'].includes(p.tone) ? p.tone : 'brand';
     const btn = p.buttontext
-      ? `<a class="btn btn-${escapeAttr(p.variant || 'primary')}" href="${escapeAttr(p.url || '#')}">${escapeHtml(p.buttontext)}</a>`
+      ? `<a class="btn btn-${escapeAttr(p.variant || 'primary')}" href="${escapeAttr(safeHref(p.url || '#'))}">${escapeHtml(p.buttontext)}</a>`
       : '';
     return (
       `<section${id} class="cta-strip tone-${escapeAttr(tone)} bent-cta${cls}"${dirAttr(ctx)}>` +
@@ -870,7 +870,7 @@ register({
     const { id, cls } = attrsExtra(node);
     const img = `<img src="${escapeAttr(node.props.src || '')}" alt="${escapeAttr(node.props.alt || '')}" loading="lazy">`;
     return node.props.url
-      ? `<a${id} class="logo-cell bent-logo${cls}" href="${escapeAttr(node.props.url)}">${img}</a>`
+      ? `<a${id} class="logo-cell bent-logo${cls}" href="${escapeAttr(safeHref(node.props.url))}">${img}</a>`
       : `<div${id} class="logo-cell bent-logo${cls}">${img}</div>`;
   }
 });

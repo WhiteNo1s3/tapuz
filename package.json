@@ -1,6 +1,6 @@
 {
   "name": "tapuziel",
-  "version": "0.44.0-alpha",
+  "version": "0.45.0-alpha",
   "description": "Tapuziel — a Hebrew-first (RTL) modular CMS with a visual builder. תפוזיאל: הטפוז עם הכנפיים.",
   "main": "src/server.js",
   "bin": {
@@ -26,10 +26,11 @@
     "test:pzn-store": "node scripts/smoke-pzn-store.js",
     "test:pzn-ops": "node scripts/smoke-pzn-ops.js",
     "test:pzn-paste": "node scripts/smoke-pzn-paste.js",
+    "test:agent": "node scripts/smoke-agent-bridge.js",
     "migrate:pzn": "node scripts/migrate-pzn-store.js",
     "gen:snippet": "node scripts/gen-chat-snippet.js",
     "gen:dictionary": "node scripts/gen-syntax-dictionary.js",
-    "test:smoke": "node scripts/smoke-render.js && node scripts/smoke-drafts.js && node scripts/smoke-articles.js && node scripts/smoke-bentml.js && node scripts/smoke-map.js && node scripts/smoke-analytics.js && node scripts/smoke-pzn-roundtrip.js && node scripts/smoke-pzn-store.js && node scripts/smoke-pzn-ops.js && node scripts/smoke-pzn-paste.js"
+    "test:smoke": "node scripts/smoke-render.js && node scripts/smoke-drafts.js && node scripts/smoke-articles.js && node scripts/smoke-bentml.js && node scripts/smoke-map.js && node scripts/smoke-analytics.js && node scripts/smoke-pzn-roundtrip.js && node scripts/smoke-pzn-store.js && node scripts/smoke-pzn-ops.js && node scripts/smoke-pzn-paste.js && node scripts/smoke-agent-bridge.js"
   },
   "keywords": [
     "cms",

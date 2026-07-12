@@ -2,9 +2,19 @@ const { db } = require('./db');
 const { addRevision, listRevisions, getRevision } = require('./revisions');
 const store = require('./pzn-store');
 
+/** Strip path-dangerous chars so a full_path can never traverse directories. */
+function sanitizeFullPath(fp) {
+  return String(fp || 'page')
+    .replace(/\s+/g, '-')
+    .replace(/[\\/:*?"<>|#]/g, '')
+    .replace(/\.\.+/g, '.')
+    .replace(/^\.+/, '')
+    || 'page';
+}
+
 function generateFullPath(pathPrefix, slug) {
   const prefix = pathPrefix ? pathPrefix.replace(/-$/, '') + '-' : '';
-  return prefix + slug;
+  return sanitizeFullPath(prefix + slug);
 }
 
 /**
@@ -243,7 +253,7 @@ function listPages({ q, status } = {}) {
 
 function publicUrlFor(full_path) {
   // Must match export.js filename sanitization
-  return '/' + String(full_path || 'page').replace(/\s+/g, '-').replace(/[\/:*?"<>|]/g, '') + '.html';
+  return '/' + sanitizeFullPath(full_path) + '.html';
 }
 
 /** First image src anywhere in a block tree (image, gallery, nested columns/card). */

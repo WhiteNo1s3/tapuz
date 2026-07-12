@@ -64,6 +64,13 @@ function cssUrl(value) {
 
 const ANIMATE_VALUES = new Set(['fade', 'rise']);
 
+/** Neutralize executable URL schemes on any clickable link (public render). */
+function safeHref(url) {
+  const s = String(url == null ? '' : url).trim();
+  if (/^(?:javascript|data|vbscript):/i.test(s)) return '#';
+  return s || '#';
+}
+
 /**
  * Expand BenTML inline marks inside already-escaped? No — work on raw, escape segments.
  * @B{…} @I{…} @LINK(url: "…"){…} @CODE{…} @BREAK
@@ -83,7 +90,7 @@ function renderInlineMarks(raw) {
   s = s.replace(
     /@LINK\s*\(\s*url\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi,
     (_, url, label) =>
-      hold(`<a href="${escapeHtml(url)}" rel="noopener">${escapeHtml(label)}</a>`)
+      hold(`<a href="${escapeHtml(safeHref(url))}" rel="noopener">${escapeHtml(label)}</a>`)
   );
   let out = escapeHtml(s);
   out = out.replace(/§§TAPUZ(\d+)§§/g, (_, i) => tokens[Number(i)] || '');
@@ -136,7 +143,7 @@ function renderBlock(block, direction = 'rtl') {
       const { text = '', url = '#', variant = 'primary' } = block.data;
       const btnClass = ` class="btn btn-${escapeHtml(variant)}${extraClass}"`;
       const btnId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
-      return `<a${btnId}${btnClass}${style} href="${escapeHtml(url)}" dir="${direction}">${escapeHtml(text)}</a>`;
+      return `<a${btnId}${btnClass}${style} href="${escapeHtml(safeHref(url))}" dir="${direction}">${escapeHtml(text)}</a>`;
     }
     case 'spacer': return `<div${extra} class="spacer" style="height:${escapeHtml(block.data.height || '2rem')}"></div>`;
     case 'divider': return `<hr${extra} dir="${direction}">`;
@@ -200,7 +207,7 @@ function renderBlock(block, direction = 'rtl') {
       const title = renderInlineMarks(d.title || '');
       const subtitle = renderInlineMarks(d.subtitle || '');
       const btnText = d.buttonText ? escapeHtml(d.buttonText) : '';
-      const btnUrl = escapeHtml(d.buttonUrl || '#');
+      const btnUrl = escapeHtml(safeHref(d.buttonUrl || '#'));
       const hClass = d.height && d.height !== 'md' ? ` hero-${escapeHtml(d.height)}` : '';
       const overlayVal = Math.min(Math.max(parseInt(d.overlay, 10) || 0, 0), 80);
       const overlayCls = overlayVal > 0 ? ' hero-overlaid' : '';
@@ -249,7 +256,7 @@ function renderBlock(block, direction = 'rtl') {
       if (yt) {
         return `<figure class="video-embed"${extra}><iframe src="https://www.youtube.com/embed/${yt[1]}" allowfullscreen loading="lazy" title="YouTube video"></iframe></figure>`;
       }
-      const url = escapeHtml(rawUrl);
+      const url = escapeHtml(safeHref(rawUrl));
       return `<a href="${url}" target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
     }
 
@@ -302,7 +309,7 @@ function renderBlock(block, direction = 'rtl') {
       const tone = ['brand', 'dark', 'light'].includes(d.tone) ? d.tone : 'brand';
       const variant = d.variant || 'primary';
       const btn = d.buttonText
-        ? `<a class="btn btn-${escapeHtml(variant)}" href="${escapeHtml(d.url || '#')}">${escapeHtml(d.buttonText)}</a>`
+        ? `<a class="btn btn-${escapeHtml(variant)}" href="${escapeHtml(safeHref(d.url || '#'))}">${escapeHtml(d.buttonText)}</a>`
         : '';
       return (
         `<section class="cta-strip tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +
