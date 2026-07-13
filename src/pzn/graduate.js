@@ -76,7 +76,22 @@ const INLINE = new Set(['strong', 'b', 'em', 'i', 'u', 'small', 'span', 'code', 
  */
 function htmlToBlocks(html) {
   uid = 0;
-  const tokens = tokenize(String(html == null ? '' : html));
+  let tokens;
+  try {
+    tokens = tokenize(String(html == null ? '' : html));
+  } catch (e) {
+    // Real-world HTML (yahoo.com, etc.) can break the tokenizer on malformed
+    // attributes. NEVER hard-fail — keep the whole fragment as one sanitized
+    // provisional block so nothing is lost and the admin can graduate/edit it.
+    const { sanitizeHtmlFragment } = require('../html-sanitize');
+    return {
+      blocks: [{
+        type: 'html', id: nid('html'),
+        data: { content: sanitizeHtmlFragment(String(html || '')).slice(0, 20000), provisional: true, note: 'לא ניתן היה לפרק אוטומטית — נשמר כ‑HTML גולמי' }
+      }],
+      mapped: 0, leftover: 1, suggestedTools: []
+    };
+  }
   const out = [];
   let mapped = 0;
   let leftover = 0;

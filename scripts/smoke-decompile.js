@@ -78,6 +78,12 @@ async function checkRejects(name, fn) {
   const empty = decompileHtml('<html><body><script>app()</script></body></html>');
   check('script-only page yields a placeholder page', empty.blocks.length >= 1 && /<\/html>/i.test(empty.source));
 
+  // malformed HTML (a bare / between attributes) throws the tokenizer — the
+  // decompiler must DEGRADE, never crash. Real sites (yahoo.com) hit this.
+  const malformed = decompileHtml('<html><body><main><h1>ok</h1><div a=b / c>x</div></main></body></html>');
+  check('malformed HTML degrades to a page instead of throwing',
+    malformed.blocks.length >= 1 && /<\/html>/i.test(malformed.source));
+
   // ── SSRF guard ─────────────────────────────────────────────────────
   check('private IPv4 ranges detected', ['127.0.0.1', '10.0.0.5', '192.168.1.1', '172.16.0.9', '169.254.169.254', '0.0.0.0', '100.64.0.1'].every(isPrivateIp));
   check('public IPv4 allowed', !isPrivateIp('93.184.216.34') && !isPrivateIp('8.8.8.8'));
