@@ -1100,7 +1100,7 @@
       wrap.innerHTML =
         '<div class="preview-hero">' +
         '<h1 data-inline-key="title">' + esc(d.title || 'כותרת ראשית') + '</h1>' +
-        '<p data-inline-key="subtitle">' + esc(d.subtitle || 'תת כותרת — לחיצה כפולה לעריכה') + '</p>' +
+        '<p data-inline-key="subtitle">' + esc(d.subtitle || 'תת כותרת — לחצו לעריכה') + '</p>' +
         '</div>';
       wireInlineEditable(wrap, block);
       return wrap;
@@ -1119,7 +1119,7 @@
     if (block.type === 'text') {
       wrap.innerHTML =
         '<div data-inline-key="content" class="inline-text" style="line-height:1.6;color:#334155;min-height:1.4em">' +
-        esc(d.content || 'טקסט — לחיצה כפולה לכתיבה ישירה').replace(/\n/g, '<br>') +
+        esc(d.content || 'טקסט — לחצו לכתיבה ישירה').replace(/\n/g, '<br>') +
         '</div>';
       wireInlineEditable(wrap, block);
       return wrap;
@@ -1314,16 +1314,23 @@
       return wrap;
     }
 
-    // Generic preview for registry-only types (no hand-written case needed)
+    // Generic preview for registry-only types (no hand-written case needed).
+    // The main text field is inline-editable too — so cta/banner/marquee/etc.
+    // are all editable directly on the canvas, not only in the side panel.
     var genDef = registryDef(block.type);
     if (genDef) {
-      var bodyTxt = genDef.textField ? (d[genDef.textField] || '') : '';
+      var tf = genDef.textField;
+      var bodyTxt = tf ? (d[tf] || '') : '';
       wrap.innerHTML =
         '<div style="padding:12px;border:1px dashed #cbd5e1;border-radius:8px;color:#334155;background:#f8fafc">' +
         '<strong>' + esc(genDef.icon || '') + ' ' + esc(genDef.labelHe || block.type) + '</strong>' +
-        (bodyTxt ? '<div style="margin-top:4px">' + esc(bodyTxt) + '</div>' : '') +
-        '<div class="prop-hint">ערוך במאפיינים ←</div>' +
+        (tf
+          ? '<div data-inline-key="' + escAttr(tf) + '" class="inline-text" style="margin-top:4px;min-height:1.2em">' +
+            esc(bodyTxt || 'טקסט — לחצו לעריכה') + '</div>'
+          : '') +
+        '<div class="prop-hint">שדות נוספים במאפיינים ←</div>' +
         '</div>';
+      if (tf) wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -1766,27 +1773,25 @@
   function startInlineEdit(blockId, key) {
     var block = getBlock(blockId);
     if (!block) return;
+    if (!block.data) block.data = {};
+    var wasSelected = selectedId === blockId;
     selectedId = blockId;
-    renderCanvas();
+    // Only rebuild the canvas when the SELECTION actually changed \u2014 clicking to
+    // edit an already-selected block edits in place (no flicker, no lost caret).
+    if (!wasSelected) renderCanvas();
     renderProperties();
+    syncToolboxMode();
 
     var el = document.querySelector(
       '[data-inline-id="' + cssEsc(blockId) + '"][data-inline-key="' + cssEsc(key) + '"]'
     );
     if (!el) return;
 
-    var original =
-      key === 'content'
-        ? block.data.content || ''
-        : key === 'quote'
-          ? block.data.quote || ''
-          : key === 'title'
-            ? block.data.title || ''
-            : key === 'subtitle'
-              ? block.data.subtitle || ''
-              : key === 'author'
-                ? block.data.author || ''
-                : block.data.text || '';
+    // The inline key IS the data field for every editable module \u2014 one path for
+    // hero/heading/text/quote/testimonial AND the generic registry textFields
+    // (cta/banner/marquee/\u2026). Only 'content' is multi-line.
+    var multiline = key === 'content';
+    var original = block.data[key] != null ? String(block.data[key]) : '';
 
     el.contentEditable = 'true';
     el.classList.add('inline-editing');
@@ -1806,22 +1811,17 @@
       el.contentEditable = 'false';
       el.classList.remove('inline-editing');
       if (save) {
-        pushHistory();
-        if (!block.data) block.data = {};
         var text = (el.innerText || '').replace(/\u00a0/g, ' ');
-        if (key === 'content') block.data.content = text;
-        else if (key === 'quote') block.data.quote = text;
-        else if (key === 'title') block.data.title = text;
-        else if (key === 'subtitle') block.data.subtitle = text;
-        else if (key === 'author') block.data.author = text;
-        else block.data.text = text;
-        markDirty();
+        if (text !== original) {
+          pushHistory();
+          block.data[key] = text;
+          markDirty();
+        }
         renderProperties();
-        // keep canvas text as committed (no full re-render needed)
-        if (key === 'content') el.innerHTML = esc(text).replace(/\n/g, '<br>');
+        if (multiline) el.innerHTML = esc(text).replace(/\n/g, '<br>');
         else el.textContent = text;
       } else {
-        if (key === 'content') el.innerHTML = esc(original).replace(/\n/g, '<br>');
+        if (multiline) el.innerHTML = esc(original).replace(/\n/g, '<br>');
         else el.textContent = original;
       }
     }
@@ -1836,24 +1836,16 @@
         el.blur();
       }
       // single-line fields: Enter commits
-      if (e.key === 'Enter' && key !== 'content' && key !== 'quote') {
+      if (e.key === 'Enter' && !multiline) {
         e.preventDefault();
         el.blur();
       }
-      // live mirror to side panel while typing
+      // live mirror to the side panel field while typing
       if (e.key !== 'Escape') {
         setTimeout(function () {
-          var panelInput = document.querySelector(
-            '#properties-panel [data-key="' + key + '"], #properties-panel [data-key="' +
-              (key === 'text' ? 'text' : key) +
-              '"]'
-          );
-          // map keys: text module uses content, heading uses text
-          var sel =
-            document.querySelector('#properties-panel [data-key="' + key + '"]') ||
-            (key === 'text' ? document.querySelector('#properties-panel [data-key="text"]') : null);
-          if (sel && document.activeElement !== sel) {
-            sel.value = (el.innerText || '').replace(/\u00a0/g, ' ');
+          var panelInput = document.querySelector('#properties-panel [data-key="' + key + '"]');
+          if (panelInput && document.activeElement !== panelInput) {
+            panelInput.value = (el.innerText || '').replace(/\u00a0/g, ' ');
           }
         }, 0);
       }
@@ -1865,12 +1857,18 @@
     root.querySelectorAll('[data-inline-key]').forEach(function (el) {
       el.setAttribute('data-inline-id', block.id);
       el.classList.add('inline-editable');
-      el.title = 'לחיצה כפולה — כתוב ישירות בתוך המודול';
-      el.addEventListener('dblclick', function (e) {
+      el.title = 'לחצו כדי לכתוב — עריכה ישירה על הדף';
+      var key = el.getAttribute('data-inline-key');
+      // Foolproof: a SINGLE click starts editing (double-click kept for habit).
+      // Once editing, clicks fall through so the caret can be placed normally.
+      var start = function (e) {
+        if (el.isContentEditable) return;
         e.preventDefault();
         e.stopPropagation();
-        startInlineEdit(block.id, el.getAttribute('data-inline-key'));
-      });
+        startInlineEdit(block.id, key);
+      };
+      el.addEventListener('click', start);
+      el.addEventListener('dblclick', start);
     });
   }
 

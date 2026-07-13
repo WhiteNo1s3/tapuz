@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const {
   createPage, updatePage, publishPage, listPages, listArticles, getPageByFullPath, deletePage,
-  restoreRevision, listRevisions
+  restoreRevision, listRevisions, generateFullPath
 } = require('./pages');
 const { exportAll } = require('./export');
 const { runSetup } = require('./setup');
@@ -951,19 +951,24 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
     .builder.live-page .block-content { padding: 0; }
 
     /* Interactive builder chrome */
+    /* Foolproof inline editing: a persistent faint underline signals "this text
+       is editable — just click", so no one has to discover double-click. */
     .inline-editable {
       cursor: text;
       outline: 1px dashed transparent;
       border-radius: 4px;
-      transition: outline-color .12s, background .12s;
+      transition: outline-color .12s, background .12s, box-shadow .12s;
+      box-shadow: inset 0 -1px 0 rgba(148,163,184,0.4);
     }
     .inline-editable:hover {
       outline-color: #93c5fd;
-      background: rgba(59,130,246,0.04);
+      background: rgba(59,130,246,0.07);
+      box-shadow: inset 0 -1.5px 0 rgba(59,130,246,0.55);
     }
     .inline-editing {
       outline: 2px solid #0a66c2 !important;
       background: #fffbeb !important;
+      box-shadow: none !important;
       min-width: 2em;
       cursor: text;
     }
@@ -3656,24 +3661,52 @@ app.get('/admin/new', (req, res) => {
       <form method="POST" action="/admin/create">
         <div style="margin-bottom:14px">
           <label style="display:block;margin-bottom:4px;font-weight:600">כותרת</label>
-          <input name="title" required style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <input id="np-title" name="title" required autofocus style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
         </div>
         <div style="margin-bottom:20px">
-          <label style="display:block;margin-bottom:4px;font-weight:600">כתובת (slug)</label>
-          <input name="slug" required style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <label style="display:block;margin-bottom:4px;font-weight:600">כתובת הדף (slug)</label>
+          <input id="np-slug" name="slug" placeholder="נוצר אוטומטית מהכותרת" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <div style="font-size:0.8rem;color:#64748b;margin-top:4px">נוצר אוטומטית מהכותרת — אפשר לשנות, לא חובה להבין ב-slug</div>
         </div>
         <button type="submit" class="btn">צור דף והתחל לערוך</button>
       </form>
     </div>
+    <script>
+      (function () {
+        // Auto-slug for people unfamiliar with sites: derive from the title as
+        // you type, but stop the moment the user edits the slug themselves.
+        var t = document.getElementById('np-title');
+        var s = document.getElementById('np-slug');
+        if (!t || !s) return;
+        var touched = false;
+        s.addEventListener('input', function () { touched = s.value.trim().length > 0; });
+        function slugify(v) {
+          return String(v || '').trim().replace(/\\s+/g, '-')
+            .replace(/[\\\\/:*?"<>|#]/g, '').replace(/\\.\\.+/g, '.').replace(/^\\.+/, '').slice(0, 80);
+        }
+        t.addEventListener('input', function () { if (!touched) s.value = slugify(t.value); });
+      })();
+    </script>
   `;
   res.send(layout(html));
 });
 
 app.post('/admin/create', (req, res) => {
-  const { title, slug } = req.body;
+  const title = (req.body.title || '').trim() || 'דף חדש';
+  let slug = (req.body.slug || '').trim();
+  // Auto-slug when the user left it blank (they may not know what a slug is).
+  if (!slug) {
+    const { deriveSlug } = require('./pzn/intent');
+    slug = deriveSlug(title);
+  }
+  // Never clobber an existing page — suffix until the full_path is free.
+  let candidate = slug;
+  for (let n = 2; getPageByFullPath(generateFullPath('', candidate)); n++) {
+    candidate = slug + '-' + n;
+  }
   const result = createPage({
     title,
-    slug,
+    slug: candidate,
     direction: 'rtl',
     blocks: [
       { type: 'hero', id: 'h_' + Date.now(), data: { title, subtitle: '' } }
