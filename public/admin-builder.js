@@ -9,9 +9,22 @@
   var blocks = [];
   var selectedId = null;
   var currentPageFullPath = '';
+  var currentSlug = '';        // page address; auto-follows the title until edited
+  var slugTouched = false;     // true once the user edits the slug by hand
   var currentMediaTarget = null;
   var pageTags = [];
   var pageMeta = {};
+
+  /** Slugify a title into a URL address: spaces → dashes, drop path-dangerous
+   *  chars, keep Hebrew. Mirrors the server's deriveSlug so both agree. */
+  function slugify(v) {
+    return String(v || '').trim()
+      .replace(/\s+/g, '-')
+      .replace(/[\\/:*?"<>|#]/g, '')
+      .replace(/\.\.+/g, '.')
+      .replace(/^\.+/, '')
+      .slice(0, 80);
+  }
   var pageDirection = 'rtl'; // direction of the PAGE being edited (not the admin)
   var dragState = null; // { kind:'toolbox'|'block', blockType?, blockId? }
   var dropHint = null; // { mode:'insert'|'split', ... }
@@ -731,6 +744,11 @@
     })(blocks);
 
     currentPageFullPath = config.fullPath || '';
+    currentSlug = config.slug || config.fullPath || '';
+    // The slug auto-follows the title ONLY while it's still title-derived; a
+    // customized slug (≠ slugify(title)) is treated as chosen and left alone.
+    var loadedTitle = (document.getElementById('page-title') || {}).value || config.title || '';
+    slugTouched = currentSlug !== slugify(loadedTitle);
     pageTags = Array.isArray(config.tags) ? config.tags.slice() : [];
     pageMeta = (config.meta && typeof config.meta === 'object') ? config.meta : {};
     selectedId = null;
@@ -752,6 +770,22 @@
     renderProperties();
     bindToolboxDrag();
     updateHeaderExtras();
+
+    // Title → slug auto-sync (bound once). While the slug is still title-derived,
+    // typing a new title rewrites the address (spaces → dashes) so newcomers
+    // never touch the slug; a hand-edited slug detaches and is left alone.
+    var titleInput = document.getElementById('page-title');
+    if (titleInput && !titleInput._slugBound) {
+      titleInput._slugBound = true;
+      titleInput.addEventListener('input', function () {
+        if (!slugTouched) {
+          currentSlug = slugify(titleInput.value);
+          var sf = document.querySelector('[data-page-slug]');
+          if (sf && document.activeElement !== sf) sf.value = currentSlug;
+        }
+        markDirty();
+      });
+    }
   }
 
   // ---- Canvas ----
@@ -1311,6 +1345,33 @@
         '<div style="color:#64748b;font-size:0.9rem">' +
         esc(d.address || 'הזן כתובת במאפיינים') +
         '</div></div>';
+      return wrap;
+    }
+
+    // Provisional raw-HTML block (the escape hatch) — show it clearly and offer
+    // to graduate it into real modules. Content is shown ESCAPED (never injected
+    // into the admin DOM) so an LLM-steered fragment can't run here.
+    if (block.type === 'html') {
+      var rawContent = d.content || '';
+      var isProv = d.provisional !== false && d.provisional !== 'false';
+      var escaped = esc(rawContent);
+      wrap.innerHTML =
+        '<div class="bent-html-card' + (isProv ? ' is-provisional' : '') + '">' +
+        '<div class="bent-html-badge">' + (isProv ? '⚠ HTML גולמי — זמני' : 'HTML') + '</div>' +
+        (d.note ? '<div class="bent-html-note">' + esc(d.note) + '</div>' : '') +
+        '<pre class="bent-html-raw" dir="ltr">' + (escaped.length > 600 ? escaped.slice(0, 600) + '\n…' : (escaped || '(ריק)')) + '</pre>' +
+        '<div class="bent-html-actions">' +
+        '<button type="button" class="btn" data-graduate="' + escAttr(block.id) + '">✨ המר למודולים</button>' +
+        '<span class="bent-html-hint">הופך את הקוד למודולים שאפשר לערוך בלחיצה</span>' +
+        '</div></div>';
+      var gradBtn = wrap.querySelector('[data-graduate]');
+      if (gradBtn) {
+        gradBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          graduateHtmlBlock(block.id);
+        });
+      }
       return wrap;
     }
 
@@ -2060,6 +2121,9 @@
         '<div><div class="prop-type-name">מאפייני דף</div>' +
         '<div class="prop-type-sub">כל-ב-אחד · SEO · מאמרים · בלי תוספים</div></div></div>' +
         '<div class="prop-section-label">תוכן / מבנה</div>' +
+        field('כתובת הדף (slug)',
+          '<input data-page-slug dir="ltr" value="' + escAttr(currentSlug) + '" placeholder="נוצרת מהכותרת">') +
+        '<div class="prop-hint" style="margin:-6px 0 12px">משתנה אוטומטית לפי הכותרת. עריכה ידנית קובעת כתובת קבועה (מחיקה = חזרה לאוטומטי).</div>' +
         '<div class="prop-group">' +
         '<label class="check-line"><input type="checkbox" data-page-article="1"' + (isArticle ? ' checked' : '') + '> דף מאמר (יופיע בקוביות מאמרים)</label>' +
         '</div>';
@@ -2115,6 +2179,22 @@
         input.addEventListener('input', applyMeta);
         input.addEventListener('blur', applyMeta);
       });
+      var slugField = panel.querySelector('[data-page-slug]');
+      if (slugField) {
+        slugField.addEventListener('input', function () { slugTouched = true; markDirty(); });
+        slugField.addEventListener('blur', function () {
+          var v = slugify(slugField.value);
+          if (!v) {
+            // cleared → re-enable auto-follow from the title
+            slugTouched = false;
+            var t = document.getElementById('page-title');
+            currentSlug = slugify(t ? t.value : '');
+          } else {
+            currentSlug = v;
+          }
+          slugField.value = currentSlug;
+        });
+      }
       var cardMedia = panel.querySelector('[data-page-card-media]');
       if (cardMedia) {
         cardMedia.addEventListener('click', function () {
@@ -2956,6 +3036,40 @@
     syncToolboxMode();
   }
 
+  /** Graduation (v0.51): convert a provisional bent-html block's raw HTML into
+   *  real modules in place. The server does the best-effort mapping; leftover
+   *  bits stay as a smaller html block so nothing is lost. */
+  function graduateHtmlBlock(id) {
+    var n = findNode(id);
+    if (!n || n.block.type !== 'html') return;
+    var content = (n.block.data && n.block.data.content) || '';
+    if (!content.trim()) { showToast('אין תוכן להמרה', 'warn'); return; }
+    fetch('/admin/api/pzn/graduate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok || !Array.isArray(data.blocks) || !data.blocks.length) {
+          showToast('לא הצלחתי להמיר למודולים', 'err');
+          return;
+        }
+        var n2 = findNode(id);
+        if (!n2) return;
+        pushHistory();
+        data.blocks.forEach(function (b) { if (!b.id) b.id = uid(b.type); });
+        n2.list.splice.apply(n2.list, [n2.index, 1].concat(data.blocks));
+        selectedId = null;
+        markDirty();
+        renderCanvas();
+        renderProperties();
+        var note = data.leftover ? (' · ' + data.leftover + ' חלקים נשארו כ‑HTML') : '';
+        showToast('הומר ל‑' + data.mapped + ' מודולים' + note + ' ✓', 'ok');
+      })
+      .catch(function () { showToast('שגיאת רשת בהמרה', 'err'); });
+  }
+
   function duplicateBlock(id) {
     var n = findNode(id);
     if (!n) return;
@@ -3041,7 +3155,8 @@
         status: status,
         blocks: blocks,
         tags: pageTags,
-        meta: pageMeta
+        meta: pageMeta,
+        slug: currentSlug
       })
     })
       .then(function (r) { return r.json(); })
@@ -3050,6 +3165,17 @@
           // draft ≠ published — the true "needs publish" signal (ask E)
           if (typeof data.hasUnpublished === 'boolean') {
             hasUnpublishedState = data.hasUnpublished;
+          }
+          // Slug rename: the address changed — follow it in-place (no reload)
+          // so the URL bar and future saves point at the new page.
+          if (data.full_path && data.full_path !== currentPageFullPath) {
+            currentPageFullPath = data.full_path;
+            currentSlug = data.full_path;
+            try { history.replaceState(null, '', '/admin/edit/' + encodeURIComponent(data.full_path)); } catch (e) {}
+            updateHeaderExtras();
+          }
+          if (data.slugRejected && !opts.silent) {
+            showToast('הכתובת תפוסה — נשמר בכתובת הקודמת', 'warn');
           }
           markSaved();
           updatePublishBadge();

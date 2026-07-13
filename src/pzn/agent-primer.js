@@ -2,7 +2,7 @@
 
 /**
  * Agent primer — the paste-into-any-AI document that teaches a bot to write
- * Tapuziel pages in .pzn (benTML dialect).
+ * Tapuziel pages in BenTML (the language; files are .pzn).
  *
  * Generated from the live module registry + command catalog so it can never
  * drift from what the validator accepts. Hebrew-first (the user audience),
@@ -27,9 +27,9 @@ function buildPznPrimer() {
   const catalog = getCommandCatalog();
   const lines = [];
 
-  lines.push('# Tapuziel .pzn primer — teach your AI to build pages');
+  lines.push('# Tapuziel BenTML primer — teach your AI to build pages');
   lines.push('');
-  lines.push('אתם עוזרים לבנות דפים ב‑CMS תפוזיאל. הדפים נכתבים בשפת **‎.pzn** — HTML מוגבל שבו כל רכיב הוא תג `bent-*` רשום. אין HTML חופשי.');
+  lines.push('אתם עוזרים לבנות דפים ב‑CMS תפוזיאל. הדפים נכתבים ב‑**BenTML** (השפה; הקבצים הם ‎.pzn) — HTML מוגבל שבו כל רכיב הוא תג `bent-*` רשום. אין HTML חופשי.');
   lines.push('');
   lines.push('## Contract (follow exactly)');
   lines.push('');
