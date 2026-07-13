@@ -84,6 +84,20 @@ function listMedia(folder) {
   return { folder: folder, folders: folders, files: files };
 }
 
+/**
+ * Flat list of every image across all folders, newest first — so an AI agent
+ * can reference media that ACTUALLY EXISTS instead of inventing paths (v0.56,
+ * the no-key "media in reach of agents" win). Read-only.
+ * @param {number} [limit] cap the count (0/undefined = all)
+ * @returns {Array<{ url: string, alt: string, name: string }>}
+ */
+function listAllMedia(limit) {
+  ensureSchema();
+  const rows = db.prepare('SELECT filename, path, alt FROM media ORDER BY created_at DESC').all();
+  const mapped = rows.map((r) => ({ url: r.path, alt: r.alt || '', name: r.filename }));
+  return limit && limit > 0 ? mapped.slice(0, limit) : mapped;
+}
+
 function createFolder(p) {
   ensureSchema();
   const folder = cleanFolder(p);
@@ -174,6 +188,7 @@ module.exports = {
   ensureSchema,
   syncDisk,
   listMedia,
+  listAllMedia,
   createFolder,
   deleteFolder,
   deleteFile,

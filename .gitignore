@@ -11,6 +11,8 @@ node_modules/
 config/auth.json
 # Agent bridge tokens — scrypt hashes of bearer credentials (v0.45).
 config/agent-tokens.json
+# Copilot build missions — ephemeral BYOT packets the extension pulls (v0.55).
+config/missions.json
 
 # SQLite runtime
 *.db

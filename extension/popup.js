@@ -89,10 +89,12 @@
   });
 
   $('primer').addEventListener('click', async () => {
-    const r = await send({ type: 'primer' });
-    if (r && r.ok) {
-      try { await navigator.clipboard.writeText(r.primer); status('המדריך הועתק — הדביקו בצ׳אט', true); }
-      catch (e) { status('העתקה נכשלה', false); }
+    const r = await send({ type: 'roleplay', locale: 'he' });
+    if (r && r.ok && r.roleplay) {
+      try {
+        await navigator.clipboard.writeText(r.roleplay);
+        status('משחק בונה-האתרים הועתק — הדביקו בצ׳אט חדש של ה‑AI', true);
+      } catch (e) { status('העתקה נכשלה', false); }
     } else status('שגיאה: ' + ((r && r.error) || '?'), false);
   });
 })();
