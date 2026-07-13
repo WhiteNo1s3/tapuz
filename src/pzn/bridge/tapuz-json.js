@@ -216,6 +216,15 @@ function blockToModule(block) {
       return createModule('accordion', baseOpts(block, {}, { children }));
     }
 
+    case 'form': {
+      const children = (data.fields || []).map((f) =>
+        createModule('field', {
+          props: pickProps(f || {}, ['label', 'name', 'type', 'placeholder', 'required', 'options'])
+        })
+      );
+      return createModule('form', baseOpts(block, pickProps(data, ['action', 'method', 'submit']), { children }));
+    }
+
     case 'contact-info':
       return createModule('contact-info', baseOpts(block, pickProps(data, ['phone', 'email', 'address', 'hours'])));
 
@@ -472,6 +481,14 @@ function moduleToBlock(node) {
           return item;
         });
       return finishBlock(node, 'accordion', data);
+    }
+
+    case 'form': {
+      const data = pickData(props, ['action', 'method', 'submit']);
+      data.fields = (node.children || [])
+        .filter((c) => c.name === 'field')
+        .map((c) => pickData(c.props || {}, ['label', 'name', 'type', 'placeholder', 'required', 'options']));
+      return finishBlock(node, 'form', data);
     }
 
     case 'contact-info':

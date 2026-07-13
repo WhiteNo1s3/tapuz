@@ -767,6 +767,42 @@ const BLOCK_REGISTRY = [
     seed: { items: [{ title: 'מגירה 1', content: '' }, { title: 'מגירה 2', content: '' }] }
   },
   {
+    type: 'form',
+    keyword: 'FORM',
+    labelHe: 'טופס',
+    icon: '✉',
+    category: 'שילובים',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'טופס יצירת קשר / הרשמה (מודול #1 שהמפרק ביקש)',
+    params: [
+      { name: 'action', bentmlParam: 'action', labelHe: 'יעד שליחה (URL)', type: 'url', default: '' },
+      { name: 'method', bentmlParam: 'method', labelHe: 'שיטה', type: 'enum', enum: ['post', 'get'], default: 'post' },
+      { name: 'submit', bentmlParam: 'submit', labelHe: 'כפתור שליחה', type: 'string', default: 'שליחה' },
+      {
+        name: 'fields', bentmlParam: null, labelHe: 'שדות', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'תווית', type: 'string', required: true },
+          { name: 'name', labelHe: 'שם השדה', type: 'string' },
+          { name: 'type', labelHe: 'סוג', type: 'enum', enum: ['text', 'email', 'tel', 'textarea', 'select', 'checkbox'], default: 'text' },
+          { name: 'placeholder', labelHe: 'רמז', type: 'string' },
+          { name: 'required', labelHe: 'חובה', type: 'boolean', default: false },
+          { name: 'options', labelHe: 'אפשרויות (מופרד בפסיק)', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי FIELD (label/name/type/placeholder/required/options)'
+      }
+    ],
+    textField: null,
+    seed: {
+      action: '', method: 'post', submit: 'שליחה',
+      fields: [
+        { label: 'שם', name: 'name', type: 'text', required: true },
+        { label: 'אימייל', name: 'email', type: 'email', required: true },
+        { label: 'הודעה', name: 'message', type: 'textarea', required: false }
+      ]
+    }
+  },
+  {
     type: 'contact-info',
     keyword: 'CONTACT',
     labelHe: 'פרטי קשר',

@@ -37,11 +37,13 @@ async function checkRejects(name, fn) {
   check('youtube link → embed block', g.blocks.filter((b) => b.type === 'embed').length >= 2);
   check('whatsapp link stays a button + suggests a whatsapp tool',
     g.blocks.some((b) => b.type === 'button' && /wa\.me/.test(b.data.url)) && g.suggestedTools.includes('whatsapp'));
-  check('form/table/nav reported as toolGap',
-    ['form', 'table', 'nav'].every((t) => g.suggestedTools.includes(t)));
+  check('form decompiles to a real form block (v0.58 closed this gap)',
+    g.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 1) && !g.suggestedTools.includes('form'));
+  check('table/nav still reported as toolGap',
+    ['table', 'nav'].every((t) => g.suggestedTools.includes(t)));
   check('grid wrapper with children suggests columns', g.suggestedTools.includes('columns'));
-  check('unmapped patterns preserved as provisional html (nothing lost)',
-    g.blocks.some((b) => b.type === 'html' && /form|table/.test(b.data.content)));
+  check('remaining unmapped patterns preserved as provisional html (nothing lost)',
+    g.blocks.some((b) => b.type === 'html' && /table/.test(b.data.content)));
 
   // ── whole-page decompile → valid .pzn ──────────────────────────────
   const page = `<!DOCTYPE html>

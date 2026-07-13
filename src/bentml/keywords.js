@@ -267,6 +267,15 @@ const KEYWORDS = {
     jsonType: 'accordion',
     params: {}
   },
+  FORM: {
+    body: 'NO-BODY',
+    jsonType: 'form',
+    params: {
+      action: { type: 'string' },
+      method: { type: 'enum', values: ['post', 'get'], default: 'post' },
+      submit: { type: 'string', default: 'שליחה' }
+    }
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',
@@ -288,7 +297,9 @@ const KEYWORDS = {
 };
 
 const RESERVED = new Set([
-  'SECTION', 'FORM', 'INPUT', 'NAV', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
+  // FORM graduated in v0.58 (the decompiler's #1 tool gap). INPUT stays a
+  // placeholder — form fields are the child `field` module, not a keyword.
+  'SECTION', 'INPUT', 'NAV', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
   'VIDEO', 'AUDIO', 'SLIDER'
 ]);
 
