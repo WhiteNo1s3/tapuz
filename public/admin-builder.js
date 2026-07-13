@@ -1377,6 +1377,22 @@
       return wrap;
     }
 
+    if (block.type === 'cards') {
+      var cItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-cards">' +
+        (cItems.length ? cItems : [{ title: 'כרטיס 1' }, { title: 'כרטיס 2' }, { title: 'כרטיס 3' }]).map(function (it) {
+          return '<div class="preview-card">' +
+            '<div class="preview-card-media"></div>' +
+            (it.tag ? '<span class="preview-card-tag">' + esc(it.tag) + '</span>' : '') +
+            '<div class="preview-card-title">' + esc(it.title || 'כותרת') + '</div>' +
+            (it.excerpt ? '<div class="preview-card-excerpt">' + esc(it.excerpt) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
     if (block.type === 'form') {
       var fFields = d.fields || [];
       wrap.innerHTML =

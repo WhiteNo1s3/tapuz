@@ -276,6 +276,11 @@ const KEYWORDS = {
       submit: { type: 'string', default: 'שליחה' }
     }
   },
+  CARDS: {
+    body: 'NO-BODY',
+    jsonType: 'cards',
+    params: {}
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',

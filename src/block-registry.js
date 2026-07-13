@@ -803,6 +803,36 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'cards',
+    keyword: 'CARDS',
+    labelHe: 'רשת כרטיסים',
+    icon: '▦',
+    category: 'מדיה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'רשת כרטיסי תוכן (תמונה + כותרת + קישור) — היחידה של אתר תוכן',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'כרטיסים', type: 'list',
+        itemFields: [
+          { name: 'image', labelHe: 'תמונה', type: 'media' },
+          { name: 'tag', labelHe: 'תגית', type: 'string' },
+          { name: 'title', labelHe: 'כותרת', type: 'string', required: true },
+          { name: 'excerpt', labelHe: 'תקציר', type: 'string' },
+          { name: 'href', labelHe: 'קישור', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי MEDIACARD'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { image: '', tag: 'חדשות', title: 'כותרת הכתבה', excerpt: 'תקציר קצר של הכתבה.', href: '#' },
+        { image: '', tag: 'ספורט', title: 'כותרת שנייה', excerpt: 'תקציר קצר נוסף.', href: '#' }
+      ]
+    }
+  },
+  {
     type: 'contact-info',
     keyword: 'CONTACT',
     labelHe: 'פרטי קשר',
