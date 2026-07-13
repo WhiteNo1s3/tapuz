@@ -18,6 +18,9 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
+          # gitleaks-action v2 requires the auto-provided token to scan PRs
+          # (breaking change; without it the job hard-stops before scanning).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   smoke:
     name: test suite
