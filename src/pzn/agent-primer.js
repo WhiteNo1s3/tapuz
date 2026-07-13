@@ -42,6 +42,17 @@ function buildPznPrimer() {
   lines.push('7. Styling comes from module props; `class="..."` is an advanced escape hatch — never invent inline styles.');
   lines.push('8. If you are correcting a previous attempt, return the full corrected document again.');
   lines.push('');
+  lines.push('## You do not have to be perfect — the server repairs');
+  lines.push('');
+  lines.push('The CMS auto-corrects near-misses when it saves, and shows the admin the changes to approve:');
+  lines.push('- A wrong tag name close to a real one is aliased (e.g. `<bent-paragraph>`→`<bent-text>`, `<bent-h1>`→`<bent-heading level="1">`).');
+  lines.push('- Out-of-range or invalid prop values are snapped/clamped to a legal value; missing required props are filled.');
+  lines.push('- Duplicate ids are renamed. So: aim for the vocabulary below, but if you are unsure, get close — you will not lose the page.');
+  lines.push('');
+  lines.push('## When the vocabulary is not enough — fall back to plain HTML');
+  lines.push('');
+  lines.push('If a design genuinely needs something no `bent-*` module can express, **just write normal HTML in the body**. The server wraps it into a sanitized, *provisional* `<bent-html>` block (scripts/handlers are stripped) that the admin can later graduate into real modules. Prefer real modules; use raw HTML only when you must.');
+  lines.push('');
   lines.push('## Page template');
   lines.push('');
   lines.push('```html');

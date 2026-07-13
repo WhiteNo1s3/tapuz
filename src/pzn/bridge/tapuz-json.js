@@ -231,6 +231,9 @@ function blockToModule(block) {
       return createModule('hero', baseOpts(block, props, { children }));
     }
 
+    case 'html':
+      return createModule('html', baseOpts(block, pickProps(data, ['content', 'provisional', 'note'])));
+
     default:
       // unknown block type — stash losslessly inside a section
       return createModule('section', baseOpts(block, { kind: type }, {
@@ -481,6 +484,9 @@ function moduleToBlock(node) {
         blocks: (node.children || []).map(moduleToBlock).filter(Boolean)
       });
     }
+
+    case 'html':
+      return finishBlock(node, 'html', pickData(props, ['content', 'provisional', 'note']));
 
     default:
       // module with no Tapuz equivalent yet — preserve as unknown type

@@ -54,13 +54,19 @@ async function publishReply(text, opts = {}) {
       method: 'POST', cfg,
       body: { fullPath: cfg.target, source, loose: true, publish }
     });
-    return { ok: true, fullPath: cfg.target, created: false, url: pagePath(cfg.url, cfg.target) };
+    return {
+      ok: true, fullPath: cfg.target, created: false, url: pagePath(cfg.url, cfg.target),
+      repaired: !!r.repaired, changes: (r.changes || []).length, published: !!r.published
+    };
   }
   const r = await cms('/agent/v1/create-from-source', {
     method: 'POST', cfg,
     body: { source, publish, update: !!opts.update }
   });
-  return { ok: true, fullPath: r.fullPath, created: r.created, url: pagePath(cfg.url, r.fullPath) };
+  return {
+    ok: true, fullPath: r.fullPath, created: r.created, url: pagePath(cfg.url, r.fullPath),
+    repaired: !!r.repaired, changes: (r.changes || []).length, published: !!r.published
+  };
 }
 
 function pagePath(base, fullPath) {

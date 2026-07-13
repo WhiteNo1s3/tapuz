@@ -354,9 +354,26 @@ app.post('/agent/v1/source', requireAgent('write'), (req, res) => {
       source = extractPzn(source);
     }
     const { savePageSource } = require('./pages');
-    const result = savePageSource(fullPath, source, { publish: !!publish });
-    if (publish) exportAll();
-    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
+    let result;
+    let repaired = false;
+    try {
+      result = savePageSource(fullPath, source, { publish: !!publish });
+      if (publish) exportAll();
+    } catch (strictErr) {
+      // forgiving retry (v0.49): auto-repair and save as a DRAFT — never
+      // publish an auto-corrected page; the admin reviews it in the builder.
+      result = savePageSource(fullPath, source, { publish: false, repair: true });
+      repaired = true;
+    }
+    res.json({
+      ok: true,
+      fullPath,
+      blocks: result.blocks,
+      warnings: result.warnings,
+      repaired,
+      changes: result.changes || [],
+      published: !!publish && !repaired
+    });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
   }
@@ -388,10 +405,26 @@ app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
     const { extractPzn } = require('./pzn-extract');
     source = extractPzn(source);
     const pznApi = require('./pzn/index');
-    const doc = pznApi.parse(source);
-    const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
-    if (errors.length) {
-      return res.status(400).json({ ok: false, error: errors.map((e) => `${e.code}: ${e.message}`).join('; '), issues: errors });
+    let doc;
+    let repaired = false;
+    let changes = [];
+    try {
+      doc = pznApi.parse(source);
+      const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+      if (errors.length) { const err = new Error('invalid'); err.issues = errors; throw err; }
+    } catch (parseErr) {
+      // repair-first (v0.49): an imperfect reply becomes a clean DRAFT the admin
+      // reviews, rather than a hard failure. Needed here because slug derivation
+      // itself requires a parseable document.
+      const { repair } = require('./pzn/repair');
+      const r = repair(source);
+      if (!r.ok || r.remaining.length) {
+        return res.status(400).json({ ok: false, error: r.error || 'could not build a valid page from the reply', issues: r.remaining || parseErr.issues });
+      }
+      source = r.source;
+      doc = pznApi.parse(source);
+      repaired = true;
+      changes = r.changes;
     }
     const title = doc.title || 'דף חדש';
     const { deriveSlug } = require('./pzn/intent');
@@ -402,9 +435,10 @@ app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
     }
     const existed = !!getPageByFullPath(slug);
     if (!existed) createPage({ title, slug, blocks: [] });
-    const result = savePageSource(slug, source, { publish: !!publish });
-    if (publish) exportAll();
-    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings });
+    const doPublish = !!publish && !repaired; // never auto-publish a repaired page
+    const result = savePageSource(slug, source, { publish: doPublish });
+    if (doPublish) exportAll();
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings, repaired, changes, published: doPublish });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
   }
@@ -3350,14 +3384,52 @@ app.post('/admin/api/pzn/source', (req, res) => {
     if (publish) exportAll(); // publish from the paste flow means LIVE now
     res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
   } catch (e) {
+    // Strict save failed — compute an auto-correction the user can apply with
+    // one click (v0.49 "auto-correct, then you apply"). No save happens here.
+    let repairInfo = {};
+    try {
+      let src = (req.body || {}).source;
+      if ((req.body || {}).loose) { const { extractPzn } = require('./pzn-extract'); src = extractPzn(src); }
+      const { repair } = require('./pzn/repair');
+      const r = repair(src);
+      if (r.ok && !r.remaining.length && r.changes.length) {
+        repairInfo = { repairable: true, repairedSource: r.source, changes: r.changes };
+      }
+    } catch (_) { /* repair is best-effort */ }
     res.status(400).json({
       ok: false,
       error: e.message,
       code: e.code || 'E_PZN',
       line: e.line,
       column: e.column,
-      issues: e.issues
+      issues: e.issues,
+      ...repairInfo
     });
+  }
+});
+
+/**
+ * Dry-run repair — return a corrected .pzn + the change list WITHOUT saving.
+ * The admin UI calls this to preview "apply the fix" (v0.49).
+ */
+app.post('/admin/api/pzn/repair', (req, res) => {
+  try {
+    let { source, loose } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    if (loose) { const { extractPzn } = require('./pzn-extract'); source = extractPzn(source); }
+    const { repair } = require('./pzn/repair');
+    const r = repair(source);
+    res.json({
+      ok: r.ok,
+      repairedSource: r.source || '',
+      changes: r.changes,
+      remaining: r.remaining,
+      error: r.error
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 

@@ -5,6 +5,7 @@ const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
 const { getMenu } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
+const { sanitizeHtmlFragment } = require('./html-sanitize');
 
 function loadTheme(themeSlug = 'default') {
   const themeDir = path.join(THEMES_DIR, themeSlug);
@@ -427,6 +428,15 @@ function renderBlock(block, direction = 'rtl') {
         `${pxStyleAttr} dir="${direction}">` +
         `<div class="parallax-inner">${inner}</div></section>`
       );
+    }
+
+    case 'html': {
+      // Escape hatch (v0.49). Sanitizer is the guarantee (CSP allows inline
+      // script on the published site) — see src/html-sanitize.js.
+      const d = block.data || {};
+      const safe = sanitizeHtmlFragment(d.content || '');
+      const prov = (d.provisional !== false && d.provisional !== 'false') ? ' data-bent-provisional="true"' : '';
+      return `<div class="bent-html${extraClass}"${extraId}${style}${prov} dir="${direction}">${safe}</div>`;
     }
 
     default: return `<!-- unknown block: ${block.type} -->`;

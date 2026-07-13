@@ -3,7 +3,7 @@
   "title": "Tapuziel .pzn page language",
   "description": "Constrained-HTML page format (benTML dialect). Body may contain only registered bent-* module tags.",
   "specVersion": "0.1",
-  "generatedFrom": "tapuziel@0.48.0-alpha",
+  "generatedFrom": "tapuziel@0.49.0-alpha",
   "modules": {
     "heading": {
       "tag": "bent-heading",
@@ -941,6 +941,32 @@
             "full"
           ],
           "default": "md",
+          "optional": true
+        }
+      }
+    },
+    "html": {
+      "tag": "bent-html",
+      "label": {
+        "he": "HTML גולמי (זמני)",
+        "en": "Raw HTML (provisional)"
+      },
+      "category": "advanced",
+      "container": false,
+      "accept": [],
+      "props": {
+        "content": {
+          "type": "text",
+          "default": ""
+        },
+        "provisional": {
+          "type": "boolean",
+          "default": true,
+          "optional": true
+        },
+        "note": {
+          "type": "string",
+          "default": "",
           "optional": true
         }
       }

@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (23)
+## Modules (25)
 
 ### תוכן
 
@@ -46,6 +46,8 @@ Shape: `HERO(params) { nested modules }`
 | `buttonUrl` | `—` | url |  |  |
 | `image` | `image` | media |  |  |
 | `height` | `height` | enum sm\|md\|lg\|full |  | "md" |
+| `overlay` | `overlay` | integer |  | 0 |
+| `parallax` | `parallax` | boolean |  | false |
 
 ```bentml
 HERO {
@@ -65,6 +67,7 @@ Shape: `HEADING(params) { text body }`
 |---|---|---|---|---|
 | `level` | `level` | integer |  | 2 |
 | `align` | `align` | enum start\|center\|end |  | "start" |
+| `animate` | `animate` | enum none\|fade\|rise |  | "none" |
 
 ```bentml
 HEADING(level: 2) {
@@ -85,6 +88,7 @@ Shape: `TEXT(params) { text body }`
 | `lead` | `lead` | boolean |  | false |
 | `dropcap` | `dropcap` | boolean |  | false |
 | `maxWidth` | `maxwidth` | enum sm\|md\|lg\|full |  | "full" |
+| `animate` | `animate` | enum none\|fade\|rise |  | "none" |
 
 ```bentml
 TEXT(size: md) {
@@ -329,6 +333,42 @@ Shape: `MAP(params)`
 
 ```bentml
 MAP(address: "תל אביב", zoom: 14)
+```
+
+### אפקטים
+
+#### `MARQUEE` → `marquee`
+
+〰 **טקסט נע** — שורת טקסט שנעה לרוחב המסך
+
+Shape: `MARQUEE(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `speed` | `speed` | enum slow\|md\|fast |  | "md" |
+
+```bentml
+MARQUEE {
+  …
+}
+```
+
+#### `PARALLAX` → `parallax`
+
+🏔 **רקע קבוע (פרלקסה)** — תמונה קבועה — התוכן גולל מעליה
+
+Shape: `PARALLAX(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `image` | `image` | media |  |  |
+| `overlay` | `overlay` | integer |  | 0 |
+| `height` | `height` | enum sm\|md\|lg\|full |  | "md" |
+
+```bentml
+PARALLAX {
+  …
+}
 ```
 
 ### תוכן
