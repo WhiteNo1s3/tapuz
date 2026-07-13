@@ -323,6 +323,47 @@ app.get('/agent/v1/toolbox', requireAgent('read'), (req, res) => {
   res.json({ ok: true, toolbox: pznApi.getToolbox(), schemas: pznApi.getAllSchemas() });
 });
 
+// Live syntax dictionary (the tool inventory) — md or json.
+app.get('/agent/v1/dictionary', requireAgent('read'), (req, res) => {
+  const { buildDictionary, toMarkdown, toAgentTools } = require('./pzn/syntax-dictionary');
+  const format = String(req.query.format || 'json');
+  if (format === 'md' || format === 'markdown') {
+    return res.type('text/markdown; charset=utf-8').send(toMarkdown(buildDictionary()));
+  }
+  res.json({ ok: true, dictionary: buildDictionary(), tools: toAgentTools() });
+});
+
+// The BYOT "injection" (v0.55): ONE pack that primes any chat to roleplay
+// BenTML — role + tool inventory + completion contract + full dictionary.
+// The extension injects this into the user's own logged-in LLM composer.
+app.get('/agent/v1/roleplay', requireAgent('read'), (req, res) => {
+  const { buildRoleplayPack, buildInjectBundle } = require('./pzn/agent-roleplay');
+  const brief = req.query.brief ? String(req.query.brief) : '';
+  const locale = req.query.locale === 'en' ? 'en' : 'he';
+  if (String(req.query.format || '') === 'json') {
+    return res.json({ ok: true, ...buildInjectBundle({ playerBrief: brief, locale }) });
+  }
+  res.type('text/markdown; charset=utf-8').send(buildRoleplayPack({ playerBrief: brief, locale }).text);
+});
+
+// Copilot missions — the extension pulls the latest pending one (bearer token),
+// then reports progress back as it injects/publishes.
+app.get('/agent/v1/mission', requireAgent('read'), (req, res) => {
+  const missionStore = require('./mission-store');
+  res.json({ ok: true, mission: missionStore.getLatestPending() });
+});
+
+app.post('/agent/v1/mission/:id/step', requireAgent('write'), (req, res) => {
+  const missionStore = require('./mission-store');
+  const m = missionStore.updateMission(req.params.id, {
+    step: req.body && req.body.step,
+    status: (req.body && req.body.status) || undefined,
+    fullPath: (req.body && req.body.fullPath) || undefined
+  });
+  if (!m) return res.status(404).json({ ok: false, error: 'not found' });
+  res.json({ ok: true, mission: m });
+});
+
 app.get('/agent/v1/pages', requireAgent('read'), (req, res) => {
   const { listPages } = require('./pages');
   res.json({ ok: true, pages: listPages() });
@@ -1957,6 +1998,8 @@ const ADMIN_NAV_ITEMS = [
   { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס' },
   { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' },
   { key: 'ai', href: '/admin/ai', label: 'AI ✨' },
+  { key: 'chat', href: '/admin/chat', label: 'צ׳אט סוכן' },
+  { key: 'inject', href: '/admin/inject', label: 'מילון · משחק' },
   { key: 'agent', href: '/admin/agent', label: 'גשר סוכן' }
 ];
 
@@ -4372,6 +4415,246 @@ app.get('/admin/menus', (req, res) => {
     <script src="/admin-menus.js"></script>
   `;
   res.send(layout(html, 'תפריטים', '#7c3aed'));
+});
+
+// =========================================================================
+// LANGUAGE INJECTION (v0.55) — /admin/inject + /admin/chat
+// The "banger": one button hands any AI the BenTML dictionary as a roleplay
+// game pack, so the user's own chat becomes a Site Builder agent (BYOT).
+// /admin/inject = copy the pack; /admin/chat = copilot that mints a mission
+// the extension injects into the user's logged-in LLM tab and auto-publishes.
+// All handlers below inherit the global /admin session + Origin-CSRF gate.
+// =========================================================================
+app.get('/admin/inject', (req, res) => {
+  const html = `
+    ${adminNav('inject', 'מילון השפה · משחק בונה האתרים')}
+    <style>
+      .inj-grid { display:grid; grid-template-columns:1.1fr .9fr; gap:18px; max-width:1100px; margin:0 auto; padding:18px; }
+      @media(max-width:860px){ .inj-grid{ grid-template-columns:1fr; } }
+      .inj-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:18px; }
+      .inj-card h3 { margin-top:0; }
+      .inj-card textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:.92rem; margin-top:6px; }
+      .tool-list { list-style:none; padding:0; margin:0; max-height:340px; overflow:auto; }
+      .tool-list li { padding:6px 0; border-bottom:1px solid #f1f5f9; font-size:.9rem; }
+      .tool-list code { background:#f1f5f9; padding:1px 6px; border-radius:4px; }
+      .tag { font-size:.7rem; background:#fef3c7; color:#92400e; padding:1px 7px; border-radius:99px; margin-inline-start:4px; }
+      .muted { color:#64748b; font-size:.88rem; }
+      #preview { background:#0f172a; color:#e2e8f0; border-radius:10px; padding:12px; font:12px/1.45 ui-monospace,monospace;
+        max-height:280px; overflow:auto; white-space:pre-wrap; direction:ltr; text-align:left; }
+      .ok-msg { color:#166534; } .err-msg { color:#b91c1c; }
+      .inj-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    </style>
+    <div class="inj-grid">
+      <div>
+        <div class="inj-card">
+          <h3>🎮 הזרקת שפה לסוכן (BYOT)</h3>
+          <p class="muted">
+            מדביקים חבילת <strong>תפקיד + מילון + כלים</strong> בצ׳אט של ה‑AI שלכם.
+            הסוכן משחק <em>בונה אתרים</em> — רק עם כלי ה‑BenTML מהמילון — ומוציא ‎.pzn מלא.
+            <br/>אפשר גם בלחיצה אחת מתוך התוסף (הכפתור «① הזרק משחק + מילון»).
+          </p>
+          <label class="muted">תיאור דף (אופציונלי — נכנס למשחק כמשימה)</label>
+          <textarea id="brief" rows="3" placeholder="למשל: דף נחיתה לסטודיו צילום עם הירו, שתי עמודות ו‑CTA"></textarea>
+          <div class="inj-actions">
+            <button type="button" class="btn" id="btn-roleplay">📋 העתק משחק מלא (תפקיד+כלים+מילון)</button>
+            <button type="button" class="btn secondary" id="btn-card">🃏 כרטיס תפקיד קצר</button>
+            <button type="button" class="btn secondary" id="btn-dict">📖 מילון בלבד</button>
+            <button type="button" class="btn secondary" id="btn-preview">👁 תצוגה</button>
+          </div>
+          <p id="status" style="margin:10px 0 0;min-height:1.2em"></p>
+        </div>
+        <div class="inj-card" style="margin-top:14px">
+          <h3>תצוגת החבילה</h3>
+          <pre id="preview">לחצו «תצוגה»…</pre>
+        </div>
+      </div>
+      <div>
+        <div class="inj-card">
+          <h3>🧰 מלאי הכלים · <span id="mod-count">—</span></h3>
+          <p class="muted">כל מודול = כלי במשחק. נבנה חי מה‑registry.</p>
+          <ul class="tool-list" id="tool-list"><li class="muted">טוען…</li></ul>
+        </div>
+        <div class="inj-card" style="margin-top:14px">
+          <h3>הזרימה</h3>
+          <ol class="muted" style="line-height:1.65;padding-inline-start:18px">
+            <li>העתק משחק מלא → הדבק ב‑AI (או ① בתוסף)</li>
+            <li>הסוכן מאשר תפקיד + כלים</li>
+            <li>תארו את האתר / הדף (חוקי המשחק)</li>
+            <li>קבלו ‎.pzn מלא → תוסף מפרסם / הדביקו ב‑AI</li>
+          </ol>
+          <p class="muted" style="margin-bottom:0">
+            <a href="/admin/chat">צ׳אט סוכן (משימות + תוסף) →</a>
+          </p>
+        </div>
+      </div>
+    </div>
+    <script src="/admin-inject.js"></script>
+  `;
+  res.send(layout(html, 'מילון · משחק', '#ea580c'));
+});
+
+app.get('/admin/api/syntax-dictionary', (req, res) => {
+  const { buildDictionary, toAgentTools } = require('./pzn/syntax-dictionary');
+  res.json({ ok: true, dictionary: buildDictionary(), tools: toAgentTools() });
+});
+
+app.get('/admin/api/syntax-dictionary.md', (req, res) => {
+  const { buildDictionary, toMarkdown } = require('./pzn/syntax-dictionary');
+  res.type('text/markdown; charset=utf-8').send(toMarkdown(buildDictionary()));
+});
+
+app.get('/admin/api/inject-pack', (req, res) => {
+  const { buildRoleplayPack, buildRoleCard, buildInjectBundle } = require('./pzn/agent-roleplay');
+  const { buildDictionary, toMarkdown } = require('./pzn/syntax-dictionary');
+  const brief = req.query.brief ? String(req.query.brief) : '';
+  const locale = req.query.locale === 'en' ? 'en' : 'he';
+  const format = String(req.query.format || 'json');
+  const opts = { playerBrief: brief, locale };
+  if (format === 'roleplay') {
+    return res.type('text/markdown; charset=utf-8').send(buildRoleplayPack(opts).text);
+  }
+  if (format === 'card') {
+    return res.type('text/plain; charset=utf-8').send(buildRoleCard(opts));
+  }
+  if (format === 'dictionary' || format === 'dict') {
+    return res.type('text/markdown; charset=utf-8').send(toMarkdown(buildDictionary()));
+  }
+  res.json(buildInjectBundle(opts));
+});
+
+app.get('/admin/chat', (req, res) => {
+  const html = `
+    ${adminNav('chat', 'צ׳אט סוכן — תיאור → BenTML → דף')}
+    <style>
+      .chat-wrap { display:grid; grid-template-columns:1fr 320px; gap:18px; max-width:1120px; margin:0 auto; padding:18px; align-items:start; }
+      @media(max-width:900px){ .chat-wrap{ grid-template-columns:1fr; } }
+      .chat-main { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:16px; display:flex; flex-direction:column; min-height:520px; }
+      #chat-log { flex:1; overflow:auto; display:flex; flex-direction:column; gap:10px; padding-bottom:12px; }
+      .bubble { padding:11px 14px; border-radius:12px; max-width:92%; line-height:1.5; font-size:.92rem; }
+      .bubble.system { background:#f1f5f9; color:#334155; align-self:center; text-align:center; font-size:.86rem; }
+      .bubble.user { background:#0a66c2; color:#fff; align-self:flex-start; }
+      .bubble.assistant { background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; align-self:flex-end; }
+      .bubble .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+      .bubble .act { border:none; border-radius:8px; padding:7px 10px; cursor:pointer; font:600 12px system-ui; background:#e2e8f0; color:#0f172a; }
+      .bubble .act.primary { background:#7c3aed; color:#fff; }
+      .bubble .code { background:#0f172a; color:#e2e8f0; border-radius:8px; padding:8px; font:11px/1.4 ui-monospace,monospace; direction:ltr; text-align:left; white-space:pre-wrap; max-height:220px; overflow:auto; }
+      .chat-compose { border-top:1px solid #e2e8f0; padding-top:12px; }
+      .chat-compose textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:8px; min-height:70px; font-size:.92rem; }
+      .chat-compose .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+      .chat-side .card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:16px; margin-bottom:14px; }
+      .chat-side .field { margin-bottom:10px; }
+      .chat-side label { display:block; font-size:.82rem; color:#475569; margin-bottom:4px; }
+      .chat-side input, .chat-side select { width:100%; box-sizing:border-box; padding:8px; border:1px solid #cbd5e1; border-radius:8px; }
+      .muted { color:#64748b; }
+    </style>
+    <div class="chat-wrap">
+      <div class="chat-main">
+        <div id="chat-log"></div>
+        <div class="chat-compose">
+          <textarea id="chat-input" placeholder="תארו את הדף שאתם רוצים… (Ctrl+Enter לשליחה)"></textarea>
+          <div class="row">
+            <button type="button" class="btn" id="btn-send">שלח תיאור · בנה משימה</button>
+            <button type="button" class="btn secondary" id="btn-teach">📚 העתק לימוד BenTML</button>
+          </div>
+        </div>
+      </div>
+      <aside class="chat-side">
+        <div class="card">
+          <h3 style="margin-top:0">סוכן</h3>
+          <div class="field"><label>בחרו מודל (בדפדפן שלכם)</label>
+            <select id="provider"></select>
+          </div>
+          <p class="muted" style="font-size:.85rem;margin:0">השרת לא מחזיק cookies של LLM. התוסף מזריק לצ׳אט שאתם כבר מחוברים אליו.</p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">יעד דף</h3>
+          <div class="field"><label>כותרת (אופציונלי)</label><input id="page-title" /></div>
+          <div class="field"><label>סלאג</label><input id="page-slug" dir="ltr" /></div>
+          <div class="field"><label>יעד</label>
+            <select id="page-target"><option value="__new__">דף חדש</option></select>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">הזרקת שפה</h3>
+          <p class="muted" style="font-size:.88rem;margin-top:0">
+            מילון + משחק בונה-אתרים להדבקה ב‑AI: <a href="/admin/inject">מילון · משחק →</a>
+          </p>
+        </div>
+      </aside>
+    </div>
+    <script src="/admin-chat.js"></script>
+  `;
+  res.send(layout(html, 'צ׳אט סוכן', '#7c3aed'));
+});
+
+app.get('/admin/api/mission/providers', (req, res) => {
+  const agentMission = require('./pzn/agent-mission');
+  res.json({ ok: true, providers: agentMission.listProviders() });
+});
+
+app.post('/admin/api/mission/teach', (req, res) => {
+  const { buildRoleplayPack } = require('./pzn/agent-roleplay');
+  const agentMission = require('./pzn/agent-mission');
+  const provider = (req.body && req.body.provider) || 'generic';
+  // The full roleplay game pack = exactly what the extension ① injects.
+  const pack = buildRoleplayPack({ locale: 'he', includeFullDictionary: true });
+  const meta = agentMission.PROVIDERS[provider] || agentMission.PROVIDERS.generic;
+  res.json({
+    ok: true,
+    message: pack.text,
+    kind: 'site-builder-roleplay',
+    provider,
+    providerLabel: meta.label,
+    moduleCount: pack.moduleCount
+  });
+});
+
+app.post('/admin/api/mission/create', (req, res) => {
+  try {
+    const { buildRoleplayPack } = require('./pzn/agent-roleplay');
+    const agentMission = require('./pzn/agent-mission');
+    const missionStore = require('./mission-store');
+    const { description, provider, title, slug, targetPage } = req.body || {};
+    if (!description || !String(description).trim()) {
+      return res.status(400).json({ ok: false, error: 'description required' });
+    }
+    const p = provider || 'generic';
+    // ① TEACH = full roleplay game + dictionary (the tool inventory).
+    const teachPack = buildRoleplayPack({ locale: 'he', includeFullDictionary: true });
+    // ② BUILD = the quest with the completion contract (agent already in character).
+    const buildMessage = agentMission.buildBuildMessage({ description, title, slug, provider: p });
+    // one-shot = the roleplay that already bakes the player brief in as the quest.
+    const oneShot = buildRoleplayPack({
+      locale: 'he',
+      includeFullDictionary: true,
+      playerBrief: [description, title && `title: ${title}`, slug && `slug: ${slug}`]
+        .filter(Boolean)
+        .join('\n')
+    }).text;
+    const mission = missionStore.createMission({
+      description,
+      title,
+      slug,
+      provider: p,
+      teachMessage: teachPack.text,
+      buildMessage,
+      oneShot,
+      targetPage: targetPage || '__new__'
+    });
+    const meta = agentMission.PROVIDERS[p] || agentMission.PROVIDERS.generic;
+    mission.providerUrl = meta.url;
+    mission.kind = 'site-builder-roleplay';
+    res.json({ ok: true, mission, providerLabel: meta.label, moduleCount: teachPack.moduleCount });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/mission/activate/:id', (req, res) => {
+  const missionStore = require('./mission-store');
+  const m = missionStore.updateMission(req.params.id, { status: 'pending', step: 'teach' });
+  if (!m) return res.status(404).json({ ok: false, error: 'not found' });
+  res.json({ ok: true, mission: m });
 });
 
 // Terminal error handler — NEVER leak a stack trace to a client. Without this,

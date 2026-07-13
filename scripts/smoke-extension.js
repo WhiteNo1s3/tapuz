@@ -17,7 +17,7 @@ function check(name, cond) {
 }
 
 // ── extract.js (UMD → Node) ──────────────────────────────────────────
-const { extractPzn, looksLikePzn } = require(path.join(EXT, 'extract.js'));
+const { extractPzn, looksLikePzn, isCompletePzn, analyzeReply } = require(path.join(EXT, 'extract.js'));
 const doc = `<!DOCTYPE html>
 <html lang="he" dir="rtl" bent-version="0.1">
   <head><meta charset="utf-8" /><title>מהבוט</title><meta name="bent-slug" content="p" /></head>
@@ -29,9 +29,19 @@ check('extract identity on clean source', extractPzn(doc).trim() === doc.trim())
 check('looksLikePzn true for doc', looksLikePzn(doc) === true);
 check('looksLikePzn false for prose', looksLikePzn('just a normal answer') === false);
 
+// ── completion detector (v0.55 — the auto-publish safety gate) ────────
+check('isCompletePzn true for a full document', isCompletePzn(doc) === true);
+check('isCompletePzn false for a truncated stream', isCompletePzn('<!DOCTYPE html><html><body><bent-he') === false);
+check('analyzeReply complete on a closed fence + PZN_READY', analyzeReply('```html\n' + doc + '\n```\nPZN_READY').complete === true);
+check('analyzeReply reason=pzn_ready with the marker', analyzeReply('```html\n' + doc + '\n```\nPZN_READY').reason === 'pzn_ready');
+check('analyzeReply open-fence mid-stream is NOT complete', analyzeReply('בונה…\n```html\n<!DOCTYPE html><html><body><bent-hero id="h">').complete === false);
+check('analyzeReply reason=stream_open_fence mid-stream', analyzeReply('```html\n<!DOCTYPE html><html><body><bent-hero id="h">').reason === 'stream_open_fence');
+check('analyzeReply flags a missing </html>', analyzeReply('<!DOCTYPE html><html><body><bent-text id="t">hi</bent-text></body>').reason === 'missing_close_html');
+
 // ── providers.js (UMD → Node) ────────────────────────────────────────
 const { PROVIDERS, forHost } = require(path.join(EXT, 'providers.js'));
 check('providers table has all four', PROVIDERS.length === 4 && PROVIDERS.every((p) => p.id && p.label && typeof p.match === 'function' && p.assistant));
+check('every provider has inject selectors (composer/send/streaming)', PROVIDERS.every((p) => p.composer && p.send && p.streaming));
 check('claude.ai maps to claude', forHost('claude.ai') && forHost('claude.ai').id === 'claude');
 check('chatgpt.com maps to chatgpt', forHost('chatgpt.com') && forHost('chatgpt.com').id === 'chatgpt');
 check('gemini maps', forHost('gemini.google.com') && forHost('gemini.google.com').id === 'gemini');
@@ -41,8 +51,10 @@ check('unknown host → null', forHost('evil.example.com') === null);
 const manifest = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
 check('manifest is MV3', manifest.manifest_version === 3);
 check('manifest has background worker', !!(manifest.background && manifest.background.service_worker));
-check('manifest content script lists providers before bridge',
-  manifest.content_scripts && manifest.content_scripts[0].js[0] === 'providers.js' && manifest.content_scripts[0].js.includes('content-bridge.js'));
+check('manifest content script loads providers → extract → bridge', (() => {
+  const js = (manifest.content_scripts && manifest.content_scripts[0].js) || [];
+  return js[0] === 'providers.js' && js.includes('extract.js') && js.indexOf('extract.js') < js.indexOf('content-bridge.js');
+})());
 check('manifest targets claude.ai', JSON.stringify(manifest.host_permissions).includes('claude.ai'));
 check('manifest requests storage permission', (manifest.permissions || []).includes('storage'));
 // localhost must be a granted host so a local `node src/server.js` CMS is
@@ -86,6 +98,12 @@ check('content script does NOT fetch the CMS directly', !/\bfetch\s*\(/.test(con
 // popup writes the token (setConfig) but never reads it back from any response.
 check('popup never reads a token from a response', !/\b(?:c|r|res|resp|data)\.token\b/.test(popup));
 check('background getConfig response omits the raw token', /hasToken:\s*!!/.test(bg) && !/sendResponse\([^)]*token:\s*c\.token/.test(bg));
+
+// ── BYOT roleplay + mission handlers wired (v0.55) ───────────────────
+check('background handles the roleplay game pack', /case 'roleplay'/.test(bg) && /\/agent\/v1\/roleplay/.test(bg));
+check('background handles mission pull + step report', /case 'mission'/.test(bg) && /case 'missionStep'/.test(bg) && /\/agent\/v1\/mission/.test(bg));
+check('background publish gates on completeness', /requireComplete/.test(bg) && /analyzeReply/.test(bg));
+check('content panel injects into the composer + asks worker to publish', /findComposer|setComposerText/.test(content) && /type: 'publish'/.test(content));
 
 // ── all JS files parse ───────────────────────────────────────────────
 for (const f of ['extract.js', 'providers.js', 'background.js', 'content-bridge.js', 'popup.js']) {

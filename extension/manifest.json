@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tapuziel Bridge",
-  "version": "0.1.0",
-  "description": "Turn your own ChatGPT / Claude / Grok / Gemini session into a Tapuziel page builder — no API keys, nothing leaves your browser.",
+  "version": "0.2.0",
+  "description": "One button turns your own ChatGPT / Claude / Grok / Gemini chat into a Tapuziel Site Builder — inject the BenTML game, describe the page, auto-publish. No API keys, nothing leaves your browser.",
   "permissions": ["storage", "activeTab"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "host_permissions": [
@@ -33,7 +33,7 @@
         "https://x.com/*",
         "https://gemini.google.com/*"
       ],
-      "js": ["providers.js", "content-bridge.js"],
+      "js": ["providers.js", "extract.js", "content-bridge.js"],
       "run_at": "document_idle"
     }
   ],
