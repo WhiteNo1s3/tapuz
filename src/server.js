@@ -3492,6 +3492,46 @@ app.post('/admin/api/pzn/graduate', (req, res) => {
   }
 });
 
+/**
+ * Import BenTML → blocks (v0.53): the in-builder bridge. Takes an LLM's reply
+ * (BenTML, possibly wrapped in prose/fences), extracts + FORGIVINGLY compiles
+ * it to Tapuz blocks WITHOUT saving — the builder applies them (replace/append)
+ * and the admin publishes when ready. Reuses the repair pipeline so imperfect
+ * agent output still lands.
+ */
+app.post('/admin/api/pzn/to-blocks', (req, res) => {
+  try {
+    let { source } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    const { extractPzn } = require('./pzn-extract');
+    source = extractPzn(source);
+    const pznApi = require('./pzn/index');
+    let doc;
+    let repaired = false;
+    let changes = [];
+    try {
+      doc = pznApi.parse(source);
+      const errs = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+      if (errs.length) { const e = new Error('invalid'); e.issues = errs; throw e; }
+    } catch (parseErr) {
+      const { repair } = require('./pzn/repair');
+      const r = repair(source);
+      if (!r.ok || r.remaining.length) {
+        return res.status(400).json({ ok: false, error: r.error || 'לא הצלחתי לקרוא את ה‑BenTML', issues: r.remaining || parseErr.issues });
+      }
+      doc = pznApi.parse(r.source);
+      repaired = true;
+      changes = r.changes;
+    }
+    const view = pznApi.toTapuzPage(doc);
+    res.json({ ok: true, blocks: view.blocks, title: view.title, repaired, changes });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 /** Apply builder-standard AST ops to the page draft. */
 app.post('/admin/api/pzn/ops', (req, res) => {
   try {
@@ -3817,6 +3857,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           </select>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button type="button" onclick="TapuzBuilder.openImportAi()" class="btn secondary" style="padding:8px 12px;border-color:#c7d2fe;color:#4338ca">🤖 ייבא מ‑AI</button>
           <button type="button" onclick="TapuzBuilder.openRevisions()" class="btn secondary" style="padding:8px 12px">היסטוריה</button>
           <a href="/admin/theme" class="btn secondary" style="padding:8px 12px">ערכת נושא</a>
           <a href="/" target="_blank" class="btn secondary" style="padding:8px 12px">צפה באתר</a>

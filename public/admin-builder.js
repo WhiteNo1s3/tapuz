@@ -3754,6 +3754,76 @@
     }).catch(function () { showToast('שגיאה בבנייה', 'err'); });
   }
 
+  /**
+   * Import BenTML from any AI (v0.53) — the in-builder bridge. One-time: hand
+   * the AI the BenTML dictionary; then paste its reply and it becomes modules
+   * (forgivingly — the server repairs imperfect output). BYOT: the AI runs on
+   * the customer's own subscription; we only carry the reply.
+   */
+  function openImportAi() {
+    var old = document.getElementById('import-ai-modal');
+    if (old) old.remove();
+    var ov = document.createElement('div');
+    ov.id = 'import-ai-modal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML =
+      '<div dir="rtl" style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<h3 style="margin:0;font-size:1.15rem">🤖 ייבא מ‑AI</h3>' +
+      '<button type="button" id="imp-close" style="border:none;background:#f1f5f9;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1rem">✕</button></div>' +
+      '<p style="color:#64748b;font-size:.86rem;margin:0 0 14px;line-height:1.5">ה‑AI שלכם, על המנוי שלכם. פעם אחת — תנו ל‑AI את מילון BenTML, ואז שוחחו איתו והדביקו את התשובה כאן.</p>' +
+      '<button type="button" id="imp-primer" class="btn secondary" style="width:100%;margin-bottom:14px">📋 העתק מילון BenTML ל‑AI (פעם אחת)</button>' +
+      '<label style="display:block;font-size:.82rem;color:#475569;margin-bottom:4px">הדביקו כאן את תשובת ה‑AI (אפשר עם טקסט מסביב — נחלץ את הקוד)</label>' +
+      '<textarea id="imp-src" dir="ltr" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:.82rem" placeholder="<!DOCTYPE html> …"></textarea>' +
+      '<div style="display:flex;gap:16px;margin:12px 0">' +
+      '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="replace" checked> החלף את הדף</label>' +
+      '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="append"> הוסף לסוף</label></div>' +
+      '<div id="imp-status" style="display:none;font-size:.85rem;padding:8px 10px;border-radius:8px;margin-bottom:10px"></div>' +
+      '<button type="button" id="imp-go" class="btn" style="width:100%;padding:11px">ייבא לדף ←</button></div>';
+    document.body.appendChild(ov);
+    var close = function () { ov.remove(); };
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    ov.querySelector('#imp-close').addEventListener('click', close);
+    var statusEl = ov.querySelector('#imp-status');
+    function setStatus(msg, kind) {
+      statusEl.style.display = 'block';
+      statusEl.textContent = msg;
+      statusEl.style.background = kind === 'err' ? '#fef2f2' : (kind === 'ok' ? '#f0fdf4' : '#fffbeb');
+      statusEl.style.color = kind === 'err' ? '#b91c1c' : (kind === 'ok' ? '#166534' : '#92400e');
+    }
+    ov.querySelector('#imp-primer').addEventListener('click', function () {
+      fetch('/admin/api/pzn/primer').then(function (r) { return r.text(); }).then(function (t) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(t).then(function () { setStatus('מילון BenTML הועתק — הדביקו בצ׳אט של ה‑AI', 'ok'); }, function () { setStatus('העתקה נכשלה', 'err'); });
+        } else { setStatus('העתקה לא נתמכת בדפדפן', 'err'); }
+      }).catch(function () { setStatus('שגיאה בטעינת המילון', 'err'); });
+    });
+    ov.querySelector('#imp-go').addEventListener('click', function () {
+      var src = ov.querySelector('#imp-src').value;
+      if (!src.trim()) { setStatus('הדביקו קודם את תשובת ה‑AI', 'err'); return; }
+      var mode = (ov.querySelector('input[name="imp-mode"]:checked') || {}).value || 'replace';
+      setStatus('מייבא…', '');
+      fetch('/admin/api/pzn/to-blocks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: src }) })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) { setStatus(data.error || 'ייבוא נכשל', 'err'); return; }
+          pushHistory();
+          if (mode === 'append') blocks = blocks.concat(data.blocks || []);
+          else blocks = data.blocks || [];
+          selectedId = null;
+          markDirty();
+          renderCanvas();
+          renderProperties();
+          syncToolboxMode();
+          applyCanvasPageBg();
+          close();
+          var note = data.repaired ? (' · תוקן אוטומטית (' + (data.changes || []).length + ')') : '';
+          showToast('יובאו ' + (data.blocks || []).length + ' מודולים' + note + ' ✓', 'ok');
+        })
+        .catch(function () { setStatus('שגיאת רשת בייבוא', 'err'); });
+    });
+  }
+
   // Expose new actions
   window.TapuzBuilder = {
     init: init,
@@ -3770,6 +3840,7 @@
     closePagesNav: closePagesNav,
     openRevisions: openRevisions,
     closeRevisions: closeRevisions,
+    openImportAi: openImportAi,
     // BenTML language bridge (used by admin-bentml-ui.js)
     _getBlocks: function () { return blocks; },
     _setBlocks: function (next) {

@@ -3,7 +3,7 @@
   "title": "Tapuziel .pzn page language",
   "description": "Constrained-HTML page format (benTML dialect). Body may contain only registered bent-* module tags.",
   "specVersion": "0.1",
-  "generatedFrom": "tapuziel@0.52.0-alpha",
+  "generatedFrom": "tapuziel@0.53.0-alpha",
   "modules": {
     "heading": {
       "tag": "bent-heading",
