@@ -10,6 +10,11 @@ jobs:
   secrets:
     name: gitleaks (secret scan)
     runs-on: ubuntu-latest
+    # gitleaks-action lists PR commits via the API — needs pull-requests read
+    # (the default token lacks it, causing a 403 "not accessible by integration").
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
