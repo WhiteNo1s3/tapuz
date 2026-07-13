@@ -1,6 +1,7 @@
 'use strict';
 
 const { escapeHtml, escapeAttr, escapeCssUrl, safeHref } = require('../language/escape');
+const { sanitizeHtmlFragment } = require('../../html-sanitize');
 
 /**
  * Module registry = type system of the page.
@@ -1069,6 +1070,49 @@ register({
     return `<section${id} class="parallax-section parallax-${height}${overlaidCls} bent-parallax${cls}"` +
       ` style="${vars.join(';')}"${dirAttr(ctx)}>` +
       `<div class="parallax-inner">${inner}</div></section>`;
+  }
+});
+
+// ─── Escape hatch (v0.49) — the pressure valve for off-vocabulary designs ──
+// A registered tag whose PAYLOAD is arbitrary HTML. The standard stays a
+// registry (this IS a registered module); the payload is unconstrained but
+// sanitized at compile time (src/html-sanitize.js is the guarantee — the
+// published CSP allows inline script, so it is NOT a backstop here).
+//
+// `provisional` marks it as "not yet a real module" — the builder flags it and
+// the repair engine mints it when quarantining raw HTML. The raw markup lives
+// HTML-escaped in the `content` ATTRIBUTE (never the body: raw tags in a body
+// are a parse error by design), so it round-trips through the plain serializer.
+register({
+  name: 'html',
+  tag: 'bent-html',
+  category: 'advanced',
+  label: { he: 'HTML גולמי (זמני)', en: 'Raw HTML (provisional)' },
+  icon: 'code',
+  container: false,
+  props: {
+    content: {
+      type: 'text', default: '',
+      label: { he: 'קוד HTML', en: 'HTML code' }
+    },
+    provisional: {
+      type: 'boolean', default: true, optional: true,
+      label: { he: 'זמני (להמרה למודולים)', en: 'Provisional (convert to modules)' }
+    },
+    note: {
+      type: 'string', default: '', optional: true,
+      label: { he: 'הערה / מה להמיר', en: 'Note / what to convert' }
+    },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { content: '', provisional: true },
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const safe = sanitizeHtmlFragment(node.props.content || '');
+    const isProvisional = node.props.provisional !== false && node.props.provisional !== 'false';
+    const prov = isProvisional ? ' data-bent-provisional="true"' : '';
+    return `<div${id} class="bent-html${cls}"${prov}${dirAttr(ctx)}>${safe}</div>`;
   }
 });
 

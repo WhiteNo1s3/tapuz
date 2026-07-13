@@ -2,7 +2,7 @@
 
 /**
  * Agent primer — the paste-into-any-AI document that teaches a bot to write
- * Tapuziel pages in .pzn (benTML dialect).
+ * Tapuziel pages in BenTML (the language; files are .pzn).
  *
  * Generated from the live module registry + command catalog so it can never
  * drift from what the validator accepts. Hebrew-first (the user audience),
@@ -27,9 +27,9 @@ function buildPznPrimer() {
   const catalog = getCommandCatalog();
   const lines = [];
 
-  lines.push('# Tapuziel .pzn primer — teach your AI to build pages');
+  lines.push('# Tapuziel BenTML primer — teach your AI to build pages');
   lines.push('');
-  lines.push('אתם עוזרים לבנות דפים ב‑CMS תפוזיאל. הדפים נכתבים בשפת **‎.pzn** — HTML מוגבל שבו כל רכיב הוא תג `bent-*` רשום. אין HTML חופשי.');
+  lines.push('אתם עוזרים לבנות דפים ב‑CMS תפוזיאל. הדפים נכתבים ב‑**BenTML** (השפה; הקבצים הם ‎.pzn) — HTML מוגבל שבו כל רכיב הוא תג `bent-*` רשום. אין HTML חופשי.');
   lines.push('');
   lines.push('## Contract (follow exactly)');
   lines.push('');
@@ -41,6 +41,17 @@ function buildPznPrimer() {
   lines.push('6. Tags/teaser/card image (for article cubes): `<meta name="bent-tags|bent-teaser|bent-card-image" content="...">`.');
   lines.push('7. Styling comes from module props; `class="..."` is an advanced escape hatch — never invent inline styles.');
   lines.push('8. If you are correcting a previous attempt, return the full corrected document again.');
+  lines.push('');
+  lines.push('## You do not have to be perfect — the server repairs');
+  lines.push('');
+  lines.push('The CMS auto-corrects near-misses when it saves, and shows the admin the changes to approve:');
+  lines.push('- A wrong tag name close to a real one is aliased (e.g. `<bent-paragraph>`→`<bent-text>`, `<bent-h1>`→`<bent-heading level="1">`).');
+  lines.push('- Out-of-range or invalid prop values are snapped/clamped to a legal value; missing required props are filled.');
+  lines.push('- Duplicate ids are renamed. So: aim for the vocabulary below, but if you are unsure, get close — you will not lose the page.');
+  lines.push('');
+  lines.push('## When the vocabulary is not enough — fall back to plain HTML');
+  lines.push('');
+  lines.push('If a design genuinely needs something no `bent-*` module can express, **just write normal HTML in the body**. The server wraps it into a sanitized, *provisional* `<bent-html>` block (scripts/handlers are stripped) that the admin can later graduate into real modules. Prefer real modules; use raw HTML only when you must.');
   lines.push('');
   lines.push('## Page template');
   lines.push('');

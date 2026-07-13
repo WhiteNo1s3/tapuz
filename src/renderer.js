@@ -5,6 +5,7 @@ const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
 const { getMenu } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
+const { sanitizeHtmlFragment } = require('./html-sanitize');
 
 function loadTheme(themeSlug = 'default') {
   const themeDir = path.join(THEMES_DIR, themeSlug);
@@ -102,6 +103,17 @@ function renderBlock(block, direction = 'rtl') {
   const extraId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
   const style = styleAttr(block.data);
   const extra = extraClass + extraId + style;
+
+  // bent-html escape hatch (v0.49): a pzn-level PROVISIONAL raw-HTML block, not
+  // a Tapuz toolbox block — handled here (not a switch case) so it stays out of
+  // the block registry / keyword language. The sanitizer is the guarantee (the
+  // published CSP allows inline script) — see src/html-sanitize.js.
+  if (block.type === 'html') {
+    const safe = sanitizeHtmlFragment((block.data && block.data.content) || '');
+    const prov = (block.data && block.data.provisional !== false && block.data.provisional !== 'false')
+      ? ' data-bent-provisional="true"' : '';
+    return `<div class="bent-html${extraClass}"${extraId}${style}${prov} dir="${direction}">${safe}</div>`;
+  }
 
   switch (block.type) {
     case 'heading': {
@@ -585,6 +597,42 @@ function renderSiteChrome(config, direction) {
   return { headerTagline, headerClass, headerCta, footerColumns, footerText, footerSocial, footerCredit };
 }
 
+/** Keep a CSS color value safe to interpolate (no breakout chars). */
+function safeCssColor(v) {
+  return String(v == null ? '' : v).replace(/[^#\w(),.%\s-]/g, '').slice(0, 40);
+}
+
+/**
+ * Page-level "splash" background (v0.52) — a full-page photo/colour set in page
+ * properties. When parallax is on it's a FIXED layer the content scrolls over
+ * (the one-page "splash photo on scroll" feel); a fixed <div>-style layer is
+ * smoother on mobile than background-attachment:fixed. Returns the <style> to
+ * drop in <head> and the body class that switches it on.
+ * @returns {{ css: string, bodyClass: string }}
+ */
+function pageBackgroundStyle(bg) {
+  if (!bg || typeof bg !== 'object' || (!bg.image && !bg.color)) return { css: '', bodyClass: '' };
+  const overlay = Math.min(Math.max(parseInt(bg.overlay, 10) || 0, 0), 85);
+  const parallax = bg.image && (bg.parallax === true || bg.parallax === 'true');
+  const pos = parallax ? 'fixed' : 'absolute';
+  const rules = ['body.tapuz-page-bg{position:relative;min-height:100vh;}'];
+  if (bg.color) rules.push(`body.tapuz-page-bg{background-color:${safeCssColor(bg.color)};}`);
+  if (bg.image) {
+    rules.push(
+      `body.tapuz-page-bg::before{content:"";position:${pos};inset:0;z-index:-2;` +
+      `background-image:url('${cssUrl(bg.image)}');background-size:cover;background-position:center;background-repeat:no-repeat;}`
+    );
+  }
+  if (overlay > 0 && bg.image) {
+    rules.push(`body.tapuz-page-bg::after{content:"";position:${pos};inset:0;z-index:-1;background:rgba(0,0,0,${(overlay / 100).toFixed(2)});pointer-events:none;}`);
+  }
+  // touch devices: a fixed layer can jitter with the URL bar — pin to the page
+  if (parallax) {
+    rules.push('@media (hover:none) and (pointer:coarse){body.tapuz-page-bg::before,body.tapuz-page-bg::after{position:absolute;}}');
+  }
+  return { css: `<style id="tapuz-page-bg">${rules.join('')}</style>`, bodyClass: 'tapuz-page-bg' };
+}
+
 function renderPage(page, options = {}) {
   // Redirect pages: meta.redirect = target URL → tiny instant-redirect document
   if (page.meta && page.meta.redirect) {
@@ -644,7 +692,14 @@ function renderPage(page, options = {}) {
   ).join(' &nbsp;|&nbsp; ');
 
   let layout = loadLayout(theme.dir);
-  const bodyClass = overrides.layout?.menuPlacement === 'side' ? 'menu-side' : '';
+  // Page splash background (v0.52) — inject its <style> into <head> and switch
+  // it on with a body class.
+  const pageBg = pageBackgroundStyle(page.meta && page.meta.background);
+  if (pageBg.css) head += pageBg.css;
+  const bodyClass = [
+    overrides.layout?.menuPlacement === 'side' ? 'menu-side' : '',
+    pageBg.bodyClass
+  ].filter(Boolean).join(' ');
   if (bodyClass) {
     layout = layout.replace(/<body([^>]*)>/, `<body$1 class="${bodyClass}">`);
     if (!/<body[^>]*class=/.test(layout)) {
@@ -713,4 +768,4 @@ function renderPageToFile(page, outputPath) {
   return outputPath;
 }
 
-module.exports = { renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderGa4Snippet, renderAnalyticsBeacon };
+module.exports = { renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderGa4Snippet, renderAnalyticsBeacon, pageBackgroundStyle };

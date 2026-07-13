@@ -30,11 +30,16 @@
 
   (async function init() {
     const c = await send({ type: 'getConfig' });
+    const configured = !!(c && c.ok && c.url && c.hasToken);
     if (c && c.ok) {
       $('url').value = c.url || '';
       if (c.hasToken) $('token').placeholder = '•••••• (שמור כדי להחליף)';
-      if (c.url && c.hasToken) loadTargets(c.target);
+      if (configured) loadTargets(c.target);
     }
+    // First run: the extension GIVES tools (the primer is the hero button), so
+    // the token setup is tucked into a fold — open it only until it's set.
+    const setup = document.getElementById('setup');
+    if (setup && !configured) setup.open = true;
   })();
 
   // localhost is already in host_permissions; any other CMS origin needs a
@@ -61,8 +66,13 @@
     const patch = { type: 'setConfig', url, target: $('target').value };
     if ($('token').value) patch.token = $('token').value;
     const r = await send(patch);
-    if (r && r.ok) { status('נשמר', true); $('token').value = ''; }
-    else status('שגיאה בשמירה', false);
+    if (r && r.ok) {
+      status('נשמר', true);
+      $('token').value = '';
+      const setup = document.getElementById('setup');
+      if (setup && url) setup.open = false; // connected — fold setup away
+      loadTargets($('target').value);
+    } else status('שגיאה בשמירה', false);
   });
 
   $('target').addEventListener('change', () => send({ type: 'setConfig', target: $('target').value }));

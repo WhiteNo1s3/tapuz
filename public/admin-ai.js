@@ -60,15 +60,60 @@
     applyPublish.disabled = !enabled;
   }
 
-  function showIssues(err) {
+  function showIssues(err, repair) {
+    issuePanel.innerHTML = '';
     const lines = [];
     if (err.error) lines.push(err.error);
     if (err.line) lines.push(`שורה ${err.line}${err.column ? ', עמודה ' + err.column : ''}`);
     if (Array.isArray(err.issues)) {
       for (const i of err.issues.slice(0, 6)) lines.push(`${i.code}: ${i.message}${i.path ? ' (' + i.path + ')' : ''}`);
     }
-    issuePanel.textContent = lines.join('\n');
+    const pre = document.createElement('div');
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.textContent = lines.join('\n');
+    issuePanel.appendChild(pre);
+
+    // v0.49 — "auto-correct, then you apply": if the server can repair the
+    // reply into a clean document, offer a one-click fix that flows back into
+    // the preview→apply pipeline. Nothing is saved until the admin applies.
+    if (repair && repair.ok && Array.isArray(repair.changes) && repair.changes.length &&
+        (!repair.remaining || !repair.remaining.length) && repair.repairedSource) {
+      const box = document.createElement('div');
+      box.style.cssText = 'margin-top:12px;padding:12px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;color:#78350f';
+      const h = document.createElement('div');
+      h.style.cssText = 'font-weight:700;margin-bottom:8px';
+      h.textContent = `🔧 אפשר לתקן אוטומטית (${repair.changes.length} תיקונים):`;
+      box.appendChild(h);
+      const ul = document.createElement('ul');
+      ul.style.cssText = 'margin:0 0 10px;padding-inline-start:18px;font-size:0.85rem;line-height:1.5';
+      for (const c of repair.changes.slice(0, 10)) {
+        const li = document.createElement('li');
+        li.textContent = c.message;
+        ul.appendChild(li);
+      }
+      box.appendChild(ul);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'תקן והחלף בתיבה ←';
+      btn.style.cssText = 'font:600 0.9rem system-ui;padding:8px 14px;border:none;border-radius:8px;background:#b45309;color:#fff;cursor:pointer';
+      btn.addEventListener('click', () => {
+        pasteBox.value = repair.repairedSource;
+        refreshPreview();
+      });
+      box.appendChild(btn);
+      issuePanel.appendChild(box);
+    }
     issuePanel.style.display = 'block';
+  }
+
+  /** Ask the server for a dry-run repair of the current paste (never saves). */
+  async function fetchRepair(source) {
+    try {
+      return await api('/admin/api/pzn/repair', {
+        method: 'POST',
+        body: JSON.stringify({ source, loose: true })
+      });
+    } catch (_) { return null; }
   }
 
   async function refreshPreview() {
@@ -89,7 +134,8 @@
       previewFrame.srcdoc = r.html;
       setButtons(true);
     } catch (err) {
-      showIssues(err);
+      const repair = await fetchRepair(source);
+      showIssues(err, repair);
       setButtons(false);
     }
   }
@@ -120,10 +166,14 @@
       }
       const fp = encodeURIComponent(r.fullPath);
       const publicPath = '/' + r.fullPath.replace(/\s+/g, '-') + '.html';
+      // A repaired page is forced to draft (never auto-published) so the admin
+      // reviews the auto-corrections before it goes live.
+      const wentLive = publish && !r.repaired;
       applyResult.innerHTML =
         (r.created ? 'הדף נוצר! ' : 'נשמר! ') +
+        (r.repaired ? `<strong>תוקן אוטומטית (${(r.changes || []).length} שינויים)</strong> ונשמר כטיוטה. ` : '') +
         `<a href="/admin/edit/${fp}">פתח בבונה הדפים</a>` +
-        (publish ? ` · <a href="${publicPath}" target="_blank">צפה בדף החי</a>` : ' (טיוטה — פרסמו מהבונה כשמוכן)');
+        (wentLive ? ` · <a href="${publicPath}" target="_blank">צפה בדף החי</a>` : ' (טיוטה — פרסמו מהבונה כשמוכן)');
       applyResult.style.display = 'block';
       if (r.created) {
         const opt = document.createElement('option');
@@ -133,7 +183,11 @@
         pagePick.value = r.fullPath;
       }
     } catch (err) {
-      showIssues(err);
+      // the save endpoint may return a ready-to-apply repair in the error body
+      const repair = err.repairable
+        ? { ok: true, changes: err.changes, repairedSource: err.repairedSource, remaining: [] }
+        : await fetchRepair(source);
+      showIssues(err, repair);
     } finally {
       setButtons(lastGood);
     }

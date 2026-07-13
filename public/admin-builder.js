@@ -9,9 +9,22 @@
   var blocks = [];
   var selectedId = null;
   var currentPageFullPath = '';
+  var currentSlug = '';        // page address; auto-follows the title until edited
+  var slugTouched = false;     // true once the user edits the slug by hand
   var currentMediaTarget = null;
   var pageTags = [];
   var pageMeta = {};
+
+  /** Slugify a title into a URL address: spaces → dashes, drop path-dangerous
+   *  chars, keep Hebrew. Mirrors the server's deriveSlug so both agree. */
+  function slugify(v) {
+    return String(v || '').trim()
+      .replace(/\s+/g, '-')
+      .replace(/[\\/:*?"<>|#]/g, '')
+      .replace(/\.\.+/g, '.')
+      .replace(/^\.+/, '')
+      .slice(0, 80);
+  }
   var pageDirection = 'rtl'; // direction of the PAGE being edited (not the admin)
   var dragState = null; // { kind:'toolbox'|'block', blockType?, blockId? }
   var dropHint = null; // { mode:'insert'|'split', ... }
@@ -731,6 +744,11 @@
     })(blocks);
 
     currentPageFullPath = config.fullPath || '';
+    currentSlug = config.slug || config.fullPath || '';
+    // The slug auto-follows the title ONLY while it's still title-derived; a
+    // customized slug (≠ slugify(title)) is treated as chosen and left alone.
+    var loadedTitle = (document.getElementById('page-title') || {}).value || config.title || '';
+    slugTouched = currentSlug !== slugify(loadedTitle);
     pageTags = Array.isArray(config.tags) ? config.tags.slice() : [];
     pageMeta = (config.meta && typeof config.meta === 'object') ? config.meta : {};
     selectedId = null;
@@ -750,8 +768,25 @@
     ensureUiExtras();
     renderCanvas();
     renderProperties();
+    applyCanvasPageBg();
     bindToolboxDrag();
     updateHeaderExtras();
+
+    // Title → slug auto-sync (bound once). While the slug is still title-derived,
+    // typing a new title rewrites the address (spaces → dashes) so newcomers
+    // never touch the slug; a hand-edited slug detaches and is left alone.
+    var titleInput = document.getElementById('page-title');
+    if (titleInput && !titleInput._slugBound) {
+      titleInput._slugBound = true;
+      titleInput.addEventListener('input', function () {
+        if (!slugTouched) {
+          currentSlug = slugify(titleInput.value);
+          var sf = document.querySelector('[data-page-slug]');
+          if (sf && document.activeElement !== sf) sf.value = currentSlug;
+        }
+        markDirty();
+      });
+    }
   }
 
   // ---- Canvas ----
@@ -1100,7 +1135,7 @@
       wrap.innerHTML =
         '<div class="preview-hero">' +
         '<h1 data-inline-key="title">' + esc(d.title || 'כותרת ראשית') + '</h1>' +
-        '<p data-inline-key="subtitle">' + esc(d.subtitle || 'תת כותרת — לחיצה כפולה לעריכה') + '</p>' +
+        '<p data-inline-key="subtitle">' + esc(d.subtitle || 'תת כותרת — לחצו לעריכה') + '</p>' +
         '</div>';
       wireInlineEditable(wrap, block);
       return wrap;
@@ -1119,7 +1154,7 @@
     if (block.type === 'text') {
       wrap.innerHTML =
         '<div data-inline-key="content" class="inline-text" style="line-height:1.6;color:#334155;min-height:1.4em">' +
-        esc(d.content || 'טקסט — לחיצה כפולה לכתיבה ישירה').replace(/\n/g, '<br>') +
+        esc(d.content || 'טקסט — לחצו לכתיבה ישירה').replace(/\n/g, '<br>') +
         '</div>';
       wireInlineEditable(wrap, block);
       return wrap;
@@ -1314,16 +1349,50 @@
       return wrap;
     }
 
-    // Generic preview for registry-only types (no hand-written case needed)
+    // Provisional raw-HTML block (the escape hatch) — show it clearly and offer
+    // to graduate it into real modules. Content is shown ESCAPED (never injected
+    // into the admin DOM) so an LLM-steered fragment can't run here.
+    if (block.type === 'html') {
+      var rawContent = d.content || '';
+      var isProv = d.provisional !== false && d.provisional !== 'false';
+      var escaped = esc(rawContent);
+      wrap.innerHTML =
+        '<div class="bent-html-card' + (isProv ? ' is-provisional' : '') + '">' +
+        '<div class="bent-html-badge">' + (isProv ? '⚠ HTML גולמי — זמני' : 'HTML') + '</div>' +
+        (d.note ? '<div class="bent-html-note">' + esc(d.note) + '</div>' : '') +
+        '<pre class="bent-html-raw" dir="ltr">' + (escaped.length > 600 ? escaped.slice(0, 600) + '\n…' : (escaped || '(ריק)')) + '</pre>' +
+        '<div class="bent-html-actions">' +
+        '<button type="button" class="btn" data-graduate="' + escAttr(block.id) + '">✨ המר למודולים</button>' +
+        '<span class="bent-html-hint">הופך את הקוד למודולים שאפשר לערוך בלחיצה</span>' +
+        '</div></div>';
+      var gradBtn = wrap.querySelector('[data-graduate]');
+      if (gradBtn) {
+        gradBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          graduateHtmlBlock(block.id);
+        });
+      }
+      return wrap;
+    }
+
+    // Generic preview for registry-only types (no hand-written case needed).
+    // The main text field is inline-editable too — so cta/banner/marquee/etc.
+    // are all editable directly on the canvas, not only in the side panel.
     var genDef = registryDef(block.type);
     if (genDef) {
-      var bodyTxt = genDef.textField ? (d[genDef.textField] || '') : '';
+      var tf = genDef.textField;
+      var bodyTxt = tf ? (d[tf] || '') : '';
       wrap.innerHTML =
         '<div style="padding:12px;border:1px dashed #cbd5e1;border-radius:8px;color:#334155;background:#f8fafc">' +
         '<strong>' + esc(genDef.icon || '') + ' ' + esc(genDef.labelHe || block.type) + '</strong>' +
-        (bodyTxt ? '<div style="margin-top:4px">' + esc(bodyTxt) + '</div>' : '') +
-        '<div class="prop-hint">ערוך במאפיינים ←</div>' +
+        (tf
+          ? '<div data-inline-key="' + escAttr(tf) + '" class="inline-text" style="margin-top:4px;min-height:1.2em">' +
+            esc(bodyTxt || 'טקסט — לחצו לעריכה') + '</div>'
+          : '') +
+        '<div class="prop-hint">שדות נוספים במאפיינים ←</div>' +
         '</div>';
+      if (tf) wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -1766,27 +1835,25 @@
   function startInlineEdit(blockId, key) {
     var block = getBlock(blockId);
     if (!block) return;
+    if (!block.data) block.data = {};
+    var wasSelected = selectedId === blockId;
     selectedId = blockId;
-    renderCanvas();
+    // Only rebuild the canvas when the SELECTION actually changed \u2014 clicking to
+    // edit an already-selected block edits in place (no flicker, no lost caret).
+    if (!wasSelected) renderCanvas();
     renderProperties();
+    syncToolboxMode();
 
     var el = document.querySelector(
       '[data-inline-id="' + cssEsc(blockId) + '"][data-inline-key="' + cssEsc(key) + '"]'
     );
     if (!el) return;
 
-    var original =
-      key === 'content'
-        ? block.data.content || ''
-        : key === 'quote'
-          ? block.data.quote || ''
-          : key === 'title'
-            ? block.data.title || ''
-            : key === 'subtitle'
-              ? block.data.subtitle || ''
-              : key === 'author'
-                ? block.data.author || ''
-                : block.data.text || '';
+    // The inline key IS the data field for every editable module \u2014 one path for
+    // hero/heading/text/quote/testimonial AND the generic registry textFields
+    // (cta/banner/marquee/\u2026). Only 'content' is multi-line.
+    var multiline = key === 'content';
+    var original = block.data[key] != null ? String(block.data[key]) : '';
 
     el.contentEditable = 'true';
     el.classList.add('inline-editing');
@@ -1806,22 +1873,17 @@
       el.contentEditable = 'false';
       el.classList.remove('inline-editing');
       if (save) {
-        pushHistory();
-        if (!block.data) block.data = {};
         var text = (el.innerText || '').replace(/\u00a0/g, ' ');
-        if (key === 'content') block.data.content = text;
-        else if (key === 'quote') block.data.quote = text;
-        else if (key === 'title') block.data.title = text;
-        else if (key === 'subtitle') block.data.subtitle = text;
-        else if (key === 'author') block.data.author = text;
-        else block.data.text = text;
-        markDirty();
+        if (text !== original) {
+          pushHistory();
+          block.data[key] = text;
+          markDirty();
+        }
         renderProperties();
-        // keep canvas text as committed (no full re-render needed)
-        if (key === 'content') el.innerHTML = esc(text).replace(/\n/g, '<br>');
+        if (multiline) el.innerHTML = esc(text).replace(/\n/g, '<br>');
         else el.textContent = text;
       } else {
-        if (key === 'content') el.innerHTML = esc(original).replace(/\n/g, '<br>');
+        if (multiline) el.innerHTML = esc(original).replace(/\n/g, '<br>');
         else el.textContent = original;
       }
     }
@@ -1836,24 +1898,16 @@
         el.blur();
       }
       // single-line fields: Enter commits
-      if (e.key === 'Enter' && key !== 'content' && key !== 'quote') {
+      if (e.key === 'Enter' && !multiline) {
         e.preventDefault();
         el.blur();
       }
-      // live mirror to side panel while typing
+      // live mirror to the side panel field while typing
       if (e.key !== 'Escape') {
         setTimeout(function () {
-          var panelInput = document.querySelector(
-            '#properties-panel [data-key="' + key + '"], #properties-panel [data-key="' +
-              (key === 'text' ? 'text' : key) +
-              '"]'
-          );
-          // map keys: text module uses content, heading uses text
-          var sel =
-            document.querySelector('#properties-panel [data-key="' + key + '"]') ||
-            (key === 'text' ? document.querySelector('#properties-panel [data-key="text"]') : null);
-          if (sel && document.activeElement !== sel) {
-            sel.value = (el.innerText || '').replace(/\u00a0/g, ' ');
+          var panelInput = document.querySelector('#properties-panel [data-key="' + key + '"]');
+          if (panelInput && document.activeElement !== panelInput) {
+            panelInput.value = (el.innerText || '').replace(/\u00a0/g, ' ');
           }
         }, 0);
       }
@@ -1865,12 +1919,18 @@
     root.querySelectorAll('[data-inline-key]').forEach(function (el) {
       el.setAttribute('data-inline-id', block.id);
       el.classList.add('inline-editable');
-      el.title = 'לחיצה כפולה — כתוב ישירות בתוך המודול';
-      el.addEventListener('dblclick', function (e) {
+      el.title = 'לחצו כדי לכתוב — עריכה ישירה על הדף';
+      var key = el.getAttribute('data-inline-key');
+      // Foolproof: a SINGLE click starts editing (double-click kept for habit).
+      // Once editing, clicks fall through so the caret can be placed normally.
+      var start = function (e) {
+        if (el.isContentEditable) return;
         e.preventDefault();
         e.stopPropagation();
-        startInlineEdit(block.id, el.getAttribute('data-inline-key'));
-      });
+        startInlineEdit(block.id, key);
+      };
+      el.addEventListener('click', start);
+      el.addEventListener('dblclick', start);
     });
   }
 
@@ -2049,6 +2109,32 @@
     return html;
   }
 
+  /** Live-preview the page splash background on the builder canvas. */
+  function applyCanvasPageBg() {
+    var wrap = document.querySelector('.builder-canvas-wrap');
+    if (!wrap) return;
+    var b = (pageMeta.background && typeof pageMeta.background === 'object') ? pageMeta.background : {};
+    if (b.image) {
+      var ov = Math.min(Math.max(parseInt(b.overlay, 10) || 0, 0), 85) / 100;
+      var grad = ov > 0 ? 'linear-gradient(rgba(0,0,0,' + ov + '),rgba(0,0,0,' + ov + ')),' : '';
+      wrap.style.backgroundImage = grad + "url('" + String(b.image).replace(/['"\\]/g, '') + "')";
+      wrap.style.backgroundSize = 'cover';
+      wrap.style.backgroundPosition = 'center';
+      wrap.style.backgroundAttachment = b.parallax ? 'fixed' : 'scroll';
+      wrap.style.padding = '18px';
+      wrap.style.borderRadius = '14px';
+    } else if (b.color) {
+      wrap.style.background = String(b.color).replace(/[^#\w(),.%\s-]/g, '');
+      wrap.style.backgroundImage = '';
+      wrap.style.padding = '18px';
+      wrap.style.borderRadius = '14px';
+    } else {
+      wrap.style.backgroundImage = '';
+      wrap.style.background = '';
+      wrap.style.padding = '';
+    }
+  }
+
   function renderProperties() {
     var panel = document.getElementById('properties-panel');
     if (!panel) return;
@@ -2062,6 +2148,9 @@
         '<div><div class="prop-type-name">מאפייני דף</div>' +
         '<div class="prop-type-sub">כל-ב-אחד · SEO · מאמרים · בלי תוספים</div></div></div>' +
         '<div class="prop-section-label">תוכן / מבנה</div>' +
+        field('כתובת הדף (slug)',
+          '<input data-page-slug dir="ltr" value="' + escAttr(currentSlug) + '" placeholder="נוצרת מהכותרת">') +
+        '<div class="prop-hint" style="margin:-6px 0 12px">משתנה אוטומטית לפי הכותרת. עריכה ידנית קובעת כתובת קבועה (מחיקה = חזרה לאוטומטי).</div>' +
         '<div class="prop-group">' +
         '<label class="check-line"><input type="checkbox" data-page-article="1"' + (isArticle ? ' checked' : '') + '> דף מאמר (יופיע בקוביות מאמרים)</label>' +
         '</div>';
@@ -2070,6 +2159,15 @@
         pageHtml += field('תמונת קובייה (URL)', '<input data-page-meta="cardImage" dir="ltr" value="' + escAttr(pageMeta.cardImage || '') + '" placeholder="ריק = התמונה הראשונה בדף">');
         pageHtml += '<button type="button" class="btn" style="margin:6px 0 12px" data-page-card-media="1">בחר תמונה מהספרייה</button>';
       }
+      var pbg = (pageMeta.background && typeof pageMeta.background === 'object') ? pageMeta.background : {};
+      pageHtml +=
+        '<div class="prop-section-label">רקע הדף · splash</div>' +
+        field('תמונת רקע לכל הדף', '<input data-page-bg="image" dir="ltr" value="' + escAttr(pbg.image || '') + '" placeholder="/uploads/… או ריק">') +
+        '<button type="button" class="btn" style="margin:2px 0 10px" data-page-bg-media="1">בחר תמונת רקע מהספרייה</button>' +
+        field('כהות שכבה כהה · ' + (parseInt(pbg.overlay, 10) || 0) + '%', '<input type="range" min="0" max="85" step="5" data-page-bg="overlay" value="' + (parseInt(pbg.overlay, 10) || 0) + '">') +
+        '<label class="check-line" style="margin:2px 0 8px"><input type="checkbox" data-page-bg="parallax"' + (pbg.parallax ? ' checked' : '') + '> תמונה נעה בגלילה (parallax כמו onepage)</label>' +
+        field('צבע רקע (אם אין תמונה)', '<input type="color" data-page-bg="color" value="' + escAttr(pbg.color || '#ffffff') + '">') +
+        '<div class="prop-hint" style="margin-bottom:12px">התמונה מופיעה מאחורי הדף. הפעילו parallax ל"תמונת שער נעה" בזמן גלילה.</div>';
       pageHtml +=
         '<div class="prop-section-label">SEO (נקודת פתיחה ברמה של CMS גדול)</div>' +
         field('כותרת SEO / Title', '<input data-page-meta="seoTitle" value="' + escAttr(pageMeta.seoTitle || '') + '" placeholder="ריק = כותרת הדף">') +
@@ -2117,6 +2215,22 @@
         input.addEventListener('input', applyMeta);
         input.addEventListener('blur', applyMeta);
       });
+      var slugField = panel.querySelector('[data-page-slug]');
+      if (slugField) {
+        slugField.addEventListener('input', function () { slugTouched = true; markDirty(); });
+        slugField.addEventListener('blur', function () {
+          var v = slugify(slugField.value);
+          if (!v) {
+            // cleared → re-enable auto-follow from the title
+            slugTouched = false;
+            var t = document.getElementById('page-title');
+            currentSlug = slugify(t ? t.value : '');
+          } else {
+            currentSlug = v;
+          }
+          slugField.value = currentSlug;
+        });
+      }
       var cardMedia = panel.querySelector('[data-page-card-media]');
       if (cardMedia) {
         cardMedia.addEventListener('click', function () {
@@ -2139,6 +2253,31 @@
           });
         });
       }
+      // Page splash background (v0.52) — write to pageMeta.background, live-preview on canvas.
+      function ensureBg() {
+        if (!pageMeta.background || typeof pageMeta.background !== 'object') pageMeta.background = {};
+        return pageMeta.background;
+      }
+      panel.querySelectorAll('[data-page-bg]').forEach(function (input) {
+        var apply = function () {
+          var b = ensureBg();
+          var k = input.getAttribute('data-page-bg');
+          if (input.type === 'checkbox') b[k] = input.checked;
+          else if (input.type === 'range') { b[k] = parseInt(input.value, 10) || 0; var lab = input.closest('.prop-group'); if (lab) { var l = lab.querySelector('label'); if (l) l.textContent = 'כהות שכבה כהה · ' + b[k] + '%'; } }
+          else { var v = input.value.trim(); if (v) b[k] = v; else delete b[k]; }
+          markDirty();
+          applyCanvasPageBg();
+        };
+        input.addEventListener('input', apply);
+        input.addEventListener('change', apply);
+      });
+      var bgMedia = panel.querySelector('[data-page-bg-media]');
+      if (bgMedia) {
+        bgMedia.addEventListener('click', function () {
+          openMediaSingle(function (url) { ensureBg().image = url; markDirty(); renderProperties(); applyCanvasPageBg(); });
+        });
+      }
+      applyCanvasPageBg();
       syncToolboxMode();
       return;
     }
@@ -2958,6 +3097,40 @@
     syncToolboxMode();
   }
 
+  /** Graduation (v0.51): convert a provisional bent-html block's raw HTML into
+   *  real modules in place. The server does the best-effort mapping; leftover
+   *  bits stay as a smaller html block so nothing is lost. */
+  function graduateHtmlBlock(id) {
+    var n = findNode(id);
+    if (!n || n.block.type !== 'html') return;
+    var content = (n.block.data && n.block.data.content) || '';
+    if (!content.trim()) { showToast('אין תוכן להמרה', 'warn'); return; }
+    fetch('/admin/api/pzn/graduate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok || !Array.isArray(data.blocks) || !data.blocks.length) {
+          showToast('לא הצלחתי להמיר למודולים', 'err');
+          return;
+        }
+        var n2 = findNode(id);
+        if (!n2) return;
+        pushHistory();
+        data.blocks.forEach(function (b) { if (!b.id) b.id = uid(b.type); });
+        n2.list.splice.apply(n2.list, [n2.index, 1].concat(data.blocks));
+        selectedId = null;
+        markDirty();
+        renderCanvas();
+        renderProperties();
+        var note = data.leftover ? (' · ' + data.leftover + ' חלקים נשארו כ‑HTML') : '';
+        showToast('הומר ל‑' + data.mapped + ' מודולים' + note + ' ✓', 'ok');
+      })
+      .catch(function () { showToast('שגיאת רשת בהמרה', 'err'); });
+  }
+
   function duplicateBlock(id) {
     var n = findNode(id);
     if (!n) return;
@@ -3043,7 +3216,8 @@
         status: status,
         blocks: blocks,
         tags: pageTags,
-        meta: pageMeta
+        meta: pageMeta,
+        slug: currentSlug
       })
     })
       .then(function (r) { return r.json(); })
@@ -3052,6 +3226,17 @@
           // draft ≠ published — the true "needs publish" signal (ask E)
           if (typeof data.hasUnpublished === 'boolean') {
             hasUnpublishedState = data.hasUnpublished;
+          }
+          // Slug rename: the address changed — follow it in-place (no reload)
+          // so the URL bar and future saves point at the new page.
+          if (data.full_path && data.full_path !== currentPageFullPath) {
+            currentPageFullPath = data.full_path;
+            currentSlug = data.full_path;
+            try { history.replaceState(null, '', '/admin/edit/' + encodeURIComponent(data.full_path)); } catch (e) {}
+            updateHeaderExtras();
+          }
+          if (data.slugRejected && !opts.silent) {
+            showToast('הכתובת תפוסה — נשמר בכתובת הקודמת', 'warn');
           }
           markSaved();
           updatePublishBadge();
@@ -3569,6 +3754,76 @@
     }).catch(function () { showToast('שגיאה בבנייה', 'err'); });
   }
 
+  /**
+   * Import BenTML from any AI (v0.53) — the in-builder bridge. One-time: hand
+   * the AI the BenTML dictionary; then paste its reply and it becomes modules
+   * (forgivingly — the server repairs imperfect output). BYOT: the AI runs on
+   * the customer's own subscription; we only carry the reply.
+   */
+  function openImportAi() {
+    var old = document.getElementById('import-ai-modal');
+    if (old) old.remove();
+    var ov = document.createElement('div');
+    ov.id = 'import-ai-modal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML =
+      '<div dir="rtl" style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+      '<h3 style="margin:0;font-size:1.15rem">🤖 ייבא מ‑AI</h3>' +
+      '<button type="button" id="imp-close" style="border:none;background:#f1f5f9;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1rem">✕</button></div>' +
+      '<p style="color:#64748b;font-size:.86rem;margin:0 0 14px;line-height:1.5">ה‑AI שלכם, על המנוי שלכם. פעם אחת — תנו ל‑AI את מילון BenTML, ואז שוחחו איתו והדביקו את התשובה כאן.</p>' +
+      '<button type="button" id="imp-primer" class="btn secondary" style="width:100%;margin-bottom:14px">📋 העתק מילון BenTML ל‑AI (פעם אחת)</button>' +
+      '<label style="display:block;font-size:.82rem;color:#475569;margin-bottom:4px">הדביקו כאן את תשובת ה‑AI (אפשר עם טקסט מסביב — נחלץ את הקוד)</label>' +
+      '<textarea id="imp-src" dir="ltr" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:.82rem" placeholder="<!DOCTYPE html> …"></textarea>' +
+      '<div style="display:flex;gap:16px;margin:12px 0">' +
+      '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="replace" checked> החלף את הדף</label>' +
+      '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="append"> הוסף לסוף</label></div>' +
+      '<div id="imp-status" style="display:none;font-size:.85rem;padding:8px 10px;border-radius:8px;margin-bottom:10px"></div>' +
+      '<button type="button" id="imp-go" class="btn" style="width:100%;padding:11px">ייבא לדף ←</button></div>';
+    document.body.appendChild(ov);
+    var close = function () { ov.remove(); };
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    ov.querySelector('#imp-close').addEventListener('click', close);
+    var statusEl = ov.querySelector('#imp-status');
+    function setStatus(msg, kind) {
+      statusEl.style.display = 'block';
+      statusEl.textContent = msg;
+      statusEl.style.background = kind === 'err' ? '#fef2f2' : (kind === 'ok' ? '#f0fdf4' : '#fffbeb');
+      statusEl.style.color = kind === 'err' ? '#b91c1c' : (kind === 'ok' ? '#166534' : '#92400e');
+    }
+    ov.querySelector('#imp-primer').addEventListener('click', function () {
+      fetch('/admin/api/pzn/primer').then(function (r) { return r.text(); }).then(function (t) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(t).then(function () { setStatus('מילון BenTML הועתק — הדביקו בצ׳אט של ה‑AI', 'ok'); }, function () { setStatus('העתקה נכשלה', 'err'); });
+        } else { setStatus('העתקה לא נתמכת בדפדפן', 'err'); }
+      }).catch(function () { setStatus('שגיאה בטעינת המילון', 'err'); });
+    });
+    ov.querySelector('#imp-go').addEventListener('click', function () {
+      var src = ov.querySelector('#imp-src').value;
+      if (!src.trim()) { setStatus('הדביקו קודם את תשובת ה‑AI', 'err'); return; }
+      var mode = (ov.querySelector('input[name="imp-mode"]:checked') || {}).value || 'replace';
+      setStatus('מייבא…', '');
+      fetch('/admin/api/pzn/to-blocks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: src }) })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) { setStatus(data.error || 'ייבוא נכשל', 'err'); return; }
+          pushHistory();
+          if (mode === 'append') blocks = blocks.concat(data.blocks || []);
+          else blocks = data.blocks || [];
+          selectedId = null;
+          markDirty();
+          renderCanvas();
+          renderProperties();
+          syncToolboxMode();
+          applyCanvasPageBg();
+          close();
+          var note = data.repaired ? (' · תוקן אוטומטית (' + (data.changes || []).length + ')') : '';
+          showToast('יובאו ' + (data.blocks || []).length + ' מודולים' + note + ' ✓', 'ok');
+        })
+        .catch(function () { setStatus('שגיאת רשת בייבוא', 'err'); });
+    });
+  }
+
   // Expose new actions
   window.TapuzBuilder = {
     init: init,
@@ -3585,6 +3840,7 @@
     closePagesNav: closePagesNav,
     openRevisions: openRevisions,
     closeRevisions: closeRevisions,
+    openImportAi: openImportAi,
     // BenTML language bridge (used by admin-bentml-ui.js)
     _getBlocks: function () { return blocks; },
     _setBlocks: function (next) {

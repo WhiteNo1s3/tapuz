@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const {
   createPage, updatePage, publishPage, listPages, listArticles, getPageByFullPath, deletePage,
-  restoreRevision, listRevisions
+  restoreRevision, listRevisions, generateFullPath
 } = require('./pages');
 const { exportAll } = require('./export');
 const { runSetup } = require('./setup');
@@ -354,9 +354,26 @@ app.post('/agent/v1/source', requireAgent('write'), (req, res) => {
       source = extractPzn(source);
     }
     const { savePageSource } = require('./pages');
-    const result = savePageSource(fullPath, source, { publish: !!publish });
-    if (publish) exportAll();
-    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
+    let result;
+    let repaired = false;
+    try {
+      result = savePageSource(fullPath, source, { publish: !!publish });
+      if (publish) exportAll();
+    } catch (strictErr) {
+      // forgiving retry (v0.49): auto-repair and save as a DRAFT — never
+      // publish an auto-corrected page; the admin reviews it in the builder.
+      result = savePageSource(fullPath, source, { publish: false, repair: true });
+      repaired = true;
+    }
+    res.json({
+      ok: true,
+      fullPath,
+      blocks: result.blocks,
+      warnings: result.warnings,
+      repaired,
+      changes: result.changes || [],
+      published: !!publish && !repaired
+    });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
   }
@@ -388,10 +405,26 @@ app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
     const { extractPzn } = require('./pzn-extract');
     source = extractPzn(source);
     const pznApi = require('./pzn/index');
-    const doc = pznApi.parse(source);
-    const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
-    if (errors.length) {
-      return res.status(400).json({ ok: false, error: errors.map((e) => `${e.code}: ${e.message}`).join('; '), issues: errors });
+    let doc;
+    let repaired = false;
+    let changes = [];
+    try {
+      doc = pznApi.parse(source);
+      const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+      if (errors.length) { const err = new Error('invalid'); err.issues = errors; throw err; }
+    } catch (parseErr) {
+      // repair-first (v0.49): an imperfect reply becomes a clean DRAFT the admin
+      // reviews, rather than a hard failure. Needed here because slug derivation
+      // itself requires a parseable document.
+      const { repair } = require('./pzn/repair');
+      const r = repair(source);
+      if (!r.ok || r.remaining.length) {
+        return res.status(400).json({ ok: false, error: r.error || 'could not build a valid page from the reply', issues: r.remaining || parseErr.issues });
+      }
+      source = r.source;
+      doc = pznApi.parse(source);
+      repaired = true;
+      changes = r.changes;
     }
     const title = doc.title || 'דף חדש';
     const { deriveSlug } = require('./pzn/intent');
@@ -402,9 +435,10 @@ app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
     }
     const existed = !!getPageByFullPath(slug);
     if (!existed) createPage({ title, slug, blocks: [] });
-    const result = savePageSource(slug, source, { publish: !!publish });
-    if (publish) exportAll();
-    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings });
+    const doPublish = !!publish && !repaired; // never auto-publish a repaired page
+    const result = savePageSource(slug, source, { publish: doPublish });
+    if (doPublish) exportAll();
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings, repaired, changes, published: doPublish });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
   }
@@ -869,6 +903,28 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
       opacity: 0.75;
       margin-top: 2px;
     }
+    /* BenTML code view is ADVANCED — hidden until the customer opts in, so the
+       default is a clean visual builder (the raw code "looks odd" up front). */
+    #builder-root.adv-off .adv-only { display: none !important; }
+    .mode-advanced-toggle {
+      margin-inline-start: auto;
+      align-self: center;
+      background: transparent;
+      border: 1px dashed #cbd5e1;
+      color: #64748b;
+      border-radius: 999px;
+      padding: 7px 14px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .mode-advanced-toggle[aria-pressed="true"] {
+      background: #eef2ff;
+      border-style: solid;
+      border-color: #c7d2fe;
+      color: #4338ca;
+    }
 
     /* Live page feel — less "list of cards" */
     .builder.live-page .canvas {
@@ -917,22 +973,39 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
     .builder.live-page .block-content { padding: 0; }
 
     /* Interactive builder chrome */
+    /* Foolproof inline editing: a persistent faint underline signals "this text
+       is editable — just click", so no one has to discover double-click. */
     .inline-editable {
       cursor: text;
       outline: 1px dashed transparent;
       border-radius: 4px;
-      transition: outline-color .12s, background .12s;
+      transition: outline-color .12s, background .12s, box-shadow .12s;
+      box-shadow: inset 0 -1px 0 rgba(148,163,184,0.4);
     }
     .inline-editable:hover {
       outline-color: #93c5fd;
-      background: rgba(59,130,246,0.04);
+      background: rgba(59,130,246,0.07);
+      box-shadow: inset 0 -1.5px 0 rgba(59,130,246,0.55);
     }
     .inline-editing {
       outline: 2px solid #0a66c2 !important;
       background: #fffbeb !important;
+      box-shadow: none !important;
       min-width: 2em;
       cursor: text;
     }
+    /* Provisional raw-HTML block + its "graduate to modules" action (v0.51). */
+    .bent-html-card { border: 1px dashed #f59e0b; border-radius: 10px; background: #fffbeb; padding: 12px; }
+    .bent-html-badge { font-size: 0.78rem; font-weight: 700; color: #92400e; margin-bottom: 6px; }
+    .bent-html-note { font-size: 0.78rem; color: #a16207; margin-bottom: 6px; }
+    .bent-html-raw {
+      max-height: 160px; overflow: auto; background: #1e293b; color: #e2e8f0;
+      border-radius: 8px; padding: 10px; margin: 0 0 10px;
+      font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word;
+    }
+    .bent-html-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .bent-html-actions .btn { background: #b45309; }
+    .bent-html-hint { font-size: 0.75rem; color: #a16207; }
     .prop-section-label {
       font-size: 0.72rem;
       font-weight: 700;
@@ -3350,14 +3423,112 @@ app.post('/admin/api/pzn/source', (req, res) => {
     if (publish) exportAll(); // publish from the paste flow means LIVE now
     res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
   } catch (e) {
+    // Strict save failed — compute an auto-correction the user can apply with
+    // one click (v0.49 "auto-correct, then you apply"). No save happens here.
+    let repairInfo = {};
+    try {
+      let src = (req.body || {}).source;
+      if ((req.body || {}).loose) { const { extractPzn } = require('./pzn-extract'); src = extractPzn(src); }
+      const { repair } = require('./pzn/repair');
+      const r = repair(src);
+      if (r.ok && !r.remaining.length && r.changes.length) {
+        repairInfo = { repairable: true, repairedSource: r.source, changes: r.changes };
+      }
+    } catch (_) { /* repair is best-effort */ }
     res.status(400).json({
       ok: false,
       error: e.message,
       code: e.code || 'E_PZN',
       line: e.line,
       column: e.column,
-      issues: e.issues
+      issues: e.issues,
+      ...repairInfo
     });
+  }
+});
+
+/**
+ * Dry-run repair — return a corrected .pzn + the change list WITHOUT saving.
+ * The admin UI calls this to preview "apply the fix" (v0.49).
+ */
+app.post('/admin/api/pzn/repair', (req, res) => {
+  try {
+    let { source, loose } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    if (loose) { const { extractPzn } = require('./pzn-extract'); source = extractPzn(source); }
+    const { repair } = require('./pzn/repair');
+    const r = repair(source);
+    res.json({
+      ok: r.ok,
+      repairedSource: r.source || '',
+      changes: r.changes,
+      remaining: r.remaining,
+      error: r.error
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/**
+ * Graduate (v0.51): convert a provisional bent-html block's raw HTML into real,
+ * visually-editable Tapuz modules. Best-effort — unmappable bits stay in a
+ * smaller html block so nothing is lost. The builder splices the result in
+ * place of the html block; the admin approves it.
+ */
+app.post('/admin/api/pzn/graduate', (req, res) => {
+  try {
+    const content = (req.body || {}).content;
+    if (typeof content !== 'string') {
+      return res.status(400).json({ ok: false, error: 'content required' });
+    }
+    const { htmlToBlocks } = require('./pzn/graduate');
+    const r = htmlToBlocks(content);
+    res.json({ ok: true, blocks: r.blocks, mapped: r.mapped, leftover: r.leftover });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/**
+ * Import BenTML → blocks (v0.53): the in-builder bridge. Takes an LLM's reply
+ * (BenTML, possibly wrapped in prose/fences), extracts + FORGIVINGLY compiles
+ * it to Tapuz blocks WITHOUT saving — the builder applies them (replace/append)
+ * and the admin publishes when ready. Reuses the repair pipeline so imperfect
+ * agent output still lands.
+ */
+app.post('/admin/api/pzn/to-blocks', (req, res) => {
+  try {
+    let { source } = req.body || {};
+    if (typeof source !== 'string' || !source.trim()) {
+      return res.status(400).json({ ok: false, error: 'source required' });
+    }
+    const { extractPzn } = require('./pzn-extract');
+    source = extractPzn(source);
+    const pznApi = require('./pzn/index');
+    let doc;
+    let repaired = false;
+    let changes = [];
+    try {
+      doc = pznApi.parse(source);
+      const errs = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+      if (errs.length) { const e = new Error('invalid'); e.issues = errs; throw e; }
+    } catch (parseErr) {
+      const { repair } = require('./pzn/repair');
+      const r = repair(source);
+      if (!r.ok || r.remaining.length) {
+        return res.status(400).json({ ok: false, error: r.error || 'לא הצלחתי לקרוא את ה‑BenTML', issues: r.remaining || parseErr.issues });
+      }
+      doc = pznApi.parse(r.source);
+      repaired = true;
+      changes = r.changes;
+    }
+    const view = pznApi.toTapuzPage(doc);
+    res.json({ ok: true, blocks: view.blocks, title: view.title, repaired, changes });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
   }
 });
 
@@ -3584,24 +3755,52 @@ app.get('/admin/new', (req, res) => {
       <form method="POST" action="/admin/create">
         <div style="margin-bottom:14px">
           <label style="display:block;margin-bottom:4px;font-weight:600">כותרת</label>
-          <input name="title" required style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <input id="np-title" name="title" required autofocus style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
         </div>
         <div style="margin-bottom:20px">
-          <label style="display:block;margin-bottom:4px;font-weight:600">כתובת (slug)</label>
-          <input name="slug" required style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <label style="display:block;margin-bottom:4px;font-weight:600">כתובת הדף (slug)</label>
+          <input id="np-slug" name="slug" placeholder="נוצר אוטומטית מהכותרת" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <div style="font-size:0.8rem;color:#64748b;margin-top:4px">נוצר אוטומטית מהכותרת — אפשר לשנות, לא חובה להבין ב-slug</div>
         </div>
         <button type="submit" class="btn">צור דף והתחל לערוך</button>
       </form>
     </div>
+    <script>
+      (function () {
+        // Auto-slug for people unfamiliar with sites: derive from the title as
+        // you type, but stop the moment the user edits the slug themselves.
+        var t = document.getElementById('np-title');
+        var s = document.getElementById('np-slug');
+        if (!t || !s) return;
+        var touched = false;
+        s.addEventListener('input', function () { touched = s.value.trim().length > 0; });
+        function slugify(v) {
+          return String(v || '').trim().replace(/\\s+/g, '-')
+            .replace(/[\\\\/:*?"<>|#]/g, '').replace(/\\.\\.+/g, '.').replace(/^\\.+/, '').slice(0, 80);
+        }
+        t.addEventListener('input', function () { if (!touched) s.value = slugify(t.value); });
+      })();
+    </script>
   `;
   res.send(layout(html));
 });
 
 app.post('/admin/create', (req, res) => {
-  const { title, slug } = req.body;
+  const title = (req.body.title || '').trim() || 'דף חדש';
+  let slug = (req.body.slug || '').trim();
+  // Auto-slug when the user left it blank (they may not know what a slug is).
+  if (!slug) {
+    const { deriveSlug } = require('./pzn/intent');
+    slug = deriveSlug(title);
+  }
+  // Never clobber an existing page — suffix until the full_path is free.
+  let candidate = slug;
+  for (let n = 2; getPageByFullPath(generateFullPath('', candidate)); n++) {
+    candidate = slug + '-' + n;
+  }
   const result = createPage({
     title,
-    slug,
+    slug: candidate,
     direction: 'rtl',
     blocks: [
       { type: 'hero', id: 'h_' + Date.now(), data: { title, subtitle: '' } }
@@ -3658,6 +3857,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           </select>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button type="button" onclick="TapuzBuilder.openImportAi()" class="btn secondary" style="padding:8px 12px;border-color:#c7d2fe;color:#4338ca">🤖 ייבא מ‑AI</button>
           <button type="button" onclick="TapuzBuilder.openRevisions()" class="btn secondary" style="padding:8px 12px">היסטוריה</button>
           <a href="/admin/theme" class="btn secondary" style="padding:8px 12px">ערכת נושא</a>
           <a href="/" target="_blank" class="btn secondary" style="padding:8px 12px">צפה באתר</a>
@@ -3668,16 +3868,17 @@ app.get('/admin/edit/:fullPath', (req, res) => {
       </div>
     </div>
 
-    <div class="container">
+    <div class="container adv-off" id="builder-root">
       <div class="builder-mode-tabs" role="tablist">
         <button type="button" data-builder-mode="page" class="active" role="tab">
           בונה הדף
-          <span class="tab-sub">ויזואלי · גרירה · הגדרות</span>
+          <span class="tab-sub">ויזואלי · גרירה · פשוט ליהנות</span>
         </button>
-        <button type="button" data-builder-mode="output" role="tab">
-          פלט BenTML
-          <span class="tab-sub">הקוד של הדף · decompile חי</span>
+        <button type="button" data-builder-mode="output" role="tab" class="adv-only">
+          קוד BenTML
+          <span class="tab-sub">מתקדם · הראו ל‑AI איך הדף בנוי</span>
         </button>
+        <button type="button" id="btn-toggle-advanced" class="mode-advanced-toggle" title="כלים מתקדמים — קוד BenTML" aria-pressed="false">⚙ מתקדם</button>
       </div>
 
       <div class="builder live-page mode-page page-${pageDirection}">
@@ -3704,7 +3905,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
             <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>
-          <div id="bentml-output-dock" class="bentml-output-dock">
+          <div id="bentml-output-dock" class="bentml-output-dock adv-only">
             <div class="bentml-output-dock-head">
               <strong>פלט BenTML חי</strong>
               <span class="dock-sub">הקוד נבנה מכללי השפה בזמן שאתם גוררים/עורכים</span>
@@ -3721,7 +3922,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           <div id="properties-panel">
             <div style="color:#64748b;font-size:0.9rem;padding:30px 10px;text-align:center">
               בחרו מודול בדף · ההגדרות יופיעו כאן<br>
-              <span style="font-size:0.8rem">הפלט למטה = BenTML האמיתי של הדף</span>
+              <span style="font-size:0.8rem">לחצו על טקסט בדף כדי לכתוב · תיהנו מהזרימה ✨</span>
             </div>
           </div>
         </aside>
@@ -3801,6 +4002,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
     <script>
       TapuzBuilder.init({
         fullPath: ${JSON.stringify(page.full_path)},
+        slug: ${JSON.stringify(page.slug || page.full_path)},
         blocks: ${initialBlocks},
         status: ${JSON.stringify(page.status || 'draft')},
         hasUnpublished: ${hasUnpublished ? 'true' : 'false'},
@@ -3809,23 +4011,60 @@ app.get('/admin/edit/:fullPath', (req, res) => {
         meta: ${JSON.stringify(page.meta || {})}
       });
     </script>
+    <script>
+      (function () {
+        // Advanced toggle: reveal the BenTML code view (tab + live dock). Off by
+        // default and remembered, so customers get the clean visual builder.
+        var root = document.getElementById('builder-root');
+        var btn = document.getElementById('btn-toggle-advanced');
+        if (!root || !btn) return;
+        var on = false;
+        try { on = localStorage.getItem('tapuz-advanced') === 'on'; } catch (e) {}
+        function apply() {
+          root.classList.toggle('adv-off', !on);
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+          btn.textContent = on ? '⚙ מתקדם ✓' : '⚙ מתקדם';
+        }
+        apply();
+        btn.addEventListener('click', function () {
+          on = !on;
+          try { localStorage.setItem('tapuz-advanced', on ? 'on' : 'off'); } catch (e) {}
+          // leaving advanced while viewing the code → back to the visual page
+          if (!on && window.BentmlUI && window.BentmlUI.setMode) window.BentmlUI.setMode('page');
+          apply();
+        });
+      })();
+    </script>
   `;
   res.send(layout(html, 'עריכה • ' + page.title));
 });
 
 app.post('/admin/save', (req, res) => {
   try {
-    const { full_path, title, blocks, tags, meta, publish } = req.body || {};
+    const { full_path, title, blocks, tags, meta, publish, slug } = req.body || {};
     const updates = { title, blocks, publish: !!publish };
     if (Array.isArray(tags)) updates.tags = tags;
     if (meta && typeof meta === 'object') updates.meta = meta;
+    // Slug rename (v0.51): auto-follows the page title. A taken address must
+    // NEVER block the content save — skip only the rename and flag it, so the
+    // page's edits always persist. updatePage handles the .pzn/file rename.
+    let slugRejected = false;
+    if (typeof slug === 'string' && slug.trim()) {
+      const existing = getPageByFullPath(full_path);
+      const desired = existing ? generateFullPath(existing.path_prefix || '', slug.trim()) : null;
+      if (desired && desired !== full_path) {
+        if (getPageByFullPath(desired)) slugRejected = true;
+        else updates.slug = slug.trim();
+      }
+    }
     const page = updatePage(full_path, updates);
     const hasUnpublished = JSON.stringify(page.draft_blocks || []) !== JSON.stringify(page.blocks || []);
     res.json({
       ok: true,
       status: page.status,
       hasUnpublished,
-      full_path: page.full_path
+      full_path: page.full_path,
+      slugRejected
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });

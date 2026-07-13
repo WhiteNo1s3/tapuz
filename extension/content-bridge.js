@@ -63,15 +63,20 @@
         t.setAttribute('dir', 'rtl');
         Object.assign(t.style, {
           position: 'fixed', insetInlineEnd: '18px', bottom: '64px', zIndex: 2147483647,
-          padding: '10px 14px', borderRadius: '10px', background: '#052e16', color: '#fff',
-          border: '1px solid #166534', font: '500 13px system-ui, sans-serif'
+          maxWidth: '340px', padding: '10px 14px', borderRadius: '10px',
+          background: r.repaired ? '#422006' : '#052e16', color: '#fff',
+          border: '1px solid ' + (r.repaired ? '#a16207' : '#166534'), font: '500 13px system-ui, sans-serif'
         });
-        t.textContent = (r.created ? 'נוצר דף: ' : 'עודכן: ') + r.fullPath + ' — ';
+        // A repaired page is saved as a DRAFT — the CMS auto-fixed the reply and
+        // is waiting for the admin to review before it goes live.
+        let msg = (r.created ? 'נוצר דף: ' : 'עודכן: ') + r.fullPath;
+        if (r.repaired) msg += ` · תוקן אוטומטית (${r.changes} שינויים), נשמר כטיוטה לבדיקה`;
+        t.textContent = msg + ' — ';
         const a = document.createElement('a');
-        a.href = r.url; a.target = '_blank'; a.textContent = 'צפה בדף'; a.style.color = '#7dd3fc';
+        a.href = r.url; a.target = '_blank'; a.textContent = r.repaired ? 'פתח לעריכה' : 'צפה בדף'; a.style.color = '#7dd3fc';
         t.appendChild(a);
         document.body.appendChild(t);
-        setTimeout(() => t.remove(), 7000);
+        setTimeout(() => t.remove(), 9000);
       } else {
         toast('שגיאה: ' + ((r && r.error) || 'לא ידועה'), false);
       }

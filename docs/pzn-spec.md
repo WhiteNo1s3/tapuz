@@ -1,6 +1,6 @@
 # The `.pzn` page format — standard
 
-**Spec version 0.1** · generated from `tapuziel@0.48.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
+**Spec version 0.1** · generated from `tapuziel@0.53.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
 
 `.pzn` is an open, constrained-HTML page format. A `.pzn` file **is** HTML —
 but the body may contain **only registered `bent-*` module tags**, never raw
@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (32)
+## Modules (33)
 
 ### Category: content
 
@@ -231,6 +231,14 @@ from it directly.
   - `image` · url
   - `overlay` · integer · 0–80 · default `0`
   - `height` · enum · sm \| md \| lg \| full · default `md`
+
+### Category: advanced
+
+#### `<bent-html>` — HTML גולמי (זמני) / Raw HTML (provisional) · leaf
+
+  - `content` · text
+  - `provisional` · boolean · default `true`
+  - `note` · string
 
 ## Versioning
 

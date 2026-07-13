@@ -376,19 +376,38 @@ function getPageSource(full_path, kind = 'draft') {
  * Page identity (full_path) comes from the argument — bent-slug is not a rename.
  * @returns {{ page: object, blocks: object[], warnings: object[] }}
  */
-function savePageSource(full_path, source, { publish = false } = {}) {
+function savePageSource(full_path, source, { publish = false, repair = false } = {}) {
   const existing = getPageByFullPath(full_path);
   if (!existing) throw new Error('Page not found');
   if (typeof source !== 'string' || !source.trim()) throw new Error('Source required');
 
-  const doc = pzn.parse(source); // throws BentError with line/column
-  const issues = pzn.validate(doc, { strict: false });
-  const errors = issues.filter((i) => i.severity === 'error');
-  if (errors.length) {
-    const err = new Error(errors.map((e) => `${e.code}: ${e.message}`).join('; '));
-    err.code = errors[0].code;
-    err.issues = errors;
-    throw err;
+  // Strict by default. With repair:true (the extension / forgiving path), a
+  // parse or validation failure is auto-corrected to a clean document instead
+  // of losing the page — the changes are returned for the caller to surface.
+  let doc;
+  let repairChanges = [];
+  try {
+    doc = pzn.parse(source); // throws BentError with line/column
+    const errors = pzn.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+    if (errors.length) {
+      const err = new Error(errors.map((e) => `${e.code}: ${e.message}`).join('; '));
+      err.code = errors[0].code;
+      err.issues = errors;
+      throw err;
+    }
+  } catch (e) {
+    if (!repair) throw e;
+    const { repair: repairFn } = require('./pzn/repair');
+    const r = repairFn(source);
+    if (!r.ok || r.remaining.length) {
+      const err = new Error('could not auto-repair: ' + (r.error || (r.remaining[0] && r.remaining[0].message) || 'unknown'));
+      err.code = 'E_UNREPAIRABLE';
+      err.issues = r.remaining;
+      throw err;
+    }
+    source = r.source;
+    doc = pzn.parse(source);
+    repairChanges = r.changes;
   }
 
   const view = pzn.toTapuzPage(doc);
@@ -409,7 +428,8 @@ function savePageSource(full_path, source, { publish = false } = {}) {
   return {
     page: saved,
     blocks: view.blocks,
-    warnings: issues.filter((i) => i.severity === 'warning')
+    warnings: pzn.validate(doc, { strict: false }).filter((i) => i.severity === 'warning'),
+    changes: repairChanges
   };
 }
 
