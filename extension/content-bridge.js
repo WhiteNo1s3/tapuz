@@ -45,17 +45,31 @@
     return nodes[nodes.length - 1];
   }
 
+  // React tracks controlled <textarea>/<input> value via its OWN setter, so a
+  // plain `el.value = text` does NOT fire onChange — the model never sees the
+  // text and the send button stays disabled. Go through the native prototype
+  // setter so React's tracker picks it up. (The #1 reason inject silently fails
+  // on ChatGPT / Grok textareas.)
+  function setNativeValue(el, value) {
+    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (desc && desc.set) desc.set.call(el, value);
+    else el.value = value;
+  }
+
   function setComposerText(el, text) {
     if (!el) return false;
     el.focus();
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-      el.value = text;
+      setNativeValue(el, text);
       el.dispatchEvent(new Event('input', { bubbles: true }));
       return true;
     }
+    // contenteditable (Claude ProseMirror, Gemini rich-textarea, new ChatGPT)
     try {
       document.execCommand('selectAll', false, null);
-      document.execCommand('insertText', false, text);
+      const ok = document.execCommand('insertText', false, text);
+      if (!ok) throw new Error('insertText refused');
       el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text }));
       return true;
     } catch (e) {
@@ -63,6 +77,15 @@
       el.dispatchEvent(new Event('input', { bubbles: true }));
       return true;
     }
+  }
+
+  // Which provider selectors actually resolve on THIS page — surfaced in the
+  // panel so per-provider tuning (in a loaded Chrome) is guided, not blind.
+  function selectorHealth() {
+    const has = (sel) => {
+      try { return !!(sel && document.querySelector(sel)); } catch (e) { return false; }
+    };
+    return { composer: has(provider.composer), assistant: has(provider.assistant), send: has(provider.send) };
   }
 
   function clickSend() {
@@ -139,6 +162,16 @@
       badge.textContent = autoPublish ? '👁 ממתין ל‑‎.pzn מלא' : '👁 מעקב (פרסום ידני)';
       badge.style.color = '#94a3b8';
     }
+  }
+
+  function updateDiag() {
+    const el = $('tz-diag');
+    if (!el) return;
+    const h = selectorHealth();
+    const mark = (b) => (b ? '✓' : '✗');
+    el.textContent = `🔎 שדה הקלדה: ${mark(h.composer)} · תשובה: ${mark(h.assistant)} · שליחה: ${mark(h.send)}`;
+    // composer + assistant are the two that matter for inject + auto-publish.
+    el.style.color = h.composer && h.assistant ? '#64748b' : '#f87171';
   }
 
   function simpleHash(s) {
@@ -268,7 +301,8 @@
       <div id="tz-status" style="font-size:12px;color:#94a3b8;margin-bottom:4px;line-height:1.4">
         ה‑session שלכם · בלי מפתחות בשרת
       </div>
-      <div id="tz-watch" style="font-size:11px;margin-bottom:8px;color:#94a3b8">👁 מאתחל מעקב…</div>
+      <div id="tz-watch" style="font-size:11px;margin-bottom:4px;color:#94a3b8">👁 מאתחל מעקב…</div>
+      <div id="tz-diag" style="font-size:10px;margin-bottom:8px;color:#64748b">🔎 בודק שדות…</div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px;cursor:pointer">
         <input type="checkbox" id="tz-auto" checked /> פרסום אוטומטי כשה‑‎.pzn מלא
       </label>
@@ -367,7 +401,7 @@
     observer = new MutationObserver(() => onReplyMaybeChanged());
     const root = document.body || document.documentElement;
     observer.observe(root, { childList: true, subtree: true, characterData: true });
-    setInterval(onReplyMaybeChanged, POLL_MS);
+    setInterval(() => { updateDiag(); onReplyMaybeChanged(); }, POLL_MS);
   }
 
   // load the autoPublish preference from the worker

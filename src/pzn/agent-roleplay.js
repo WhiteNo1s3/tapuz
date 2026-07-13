@@ -43,8 +43,31 @@ function toolsInventoryMarkdown(tools) {
 }
 
 /**
+ * Real media manifest (v0.56) — so the agent references images that ACTUALLY
+ * exist instead of inventing paths like /uploads/x.jpg. Read-only, no key.
+ */
+function mediaInventoryMarkdown(media, he) {
+  const list = (media || []).filter((m) => m && m.url);
+  if (!list.length) return '';
+  const lines = [];
+  lines.push(he
+    ? '## מדיה זמינה — השתמש/י רק בנתיבים האלה (אל תמציא/י נתיבי תמונה)'
+    : '## Available media — use ONLY these paths (do NOT invent image paths)');
+  lines.push('');
+  for (const m of list) {
+    lines.push(`- \`${m.url}\`${m.alt ? ' — alt: ' + m.alt : ''}`);
+  }
+  lines.push('');
+  lines.push(he
+    ? 'אם אין תמונה מתאימה, השאר/י את bent-image בלי src או בקש/י מהשחקן להעלות — אל תמציא/י נתיב.'
+    : 'If nothing fits, leave the bent-image without src or ask the player to upload — never invent a path.');
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
  * Full injectable roleplay setup for a blank chat.
- * @param {{ locale?: 'he'|'en', includeFullDictionary?: boolean, playerBrief?: string }} [opts]
+ * @param {{ locale?: 'he'|'en', includeFullDictionary?: boolean, playerBrief?: string, media?: Array }} [opts]
  */
 function buildRoleplayPack(opts = {}) {
   const locale = opts.locale === 'en' ? 'en' : 'he';
@@ -84,6 +107,9 @@ function buildRoleplayPack(opts = {}) {
   lines.push('');
 
   lines.push(toolsInventoryMarkdown(tools));
+
+  const mediaMd = mediaInventoryMarkdown(opts.media, he);
+  if (mediaMd) lines.push(mediaMd);
 
   lines.push(he ? '## מהלך לדוגמה (כלי → תחביר)' : '## Example move (tool → syntax)');
   lines.push('');
@@ -174,7 +200,8 @@ function buildInjectBundle(opts = {}) {
     tools: pack.tools,
     dictionary: dict,
     completion: COMPLETION_CONTRACT,
-    moduleCount: pack.moduleCount
+    moduleCount: pack.moduleCount,
+    mediaCount: (opts.media || []).length
   };
 }
 
@@ -182,5 +209,6 @@ module.exports = {
   buildRoleplayPack,
   buildRoleCard,
   buildInjectBundle,
-  toolsInventoryMarkdown
+  toolsInventoryMarkdown,
+  mediaInventoryMarkdown
 };

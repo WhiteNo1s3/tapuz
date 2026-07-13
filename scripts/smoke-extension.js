@@ -104,6 +104,10 @@ check('background handles the roleplay game pack', /case 'roleplay'/.test(bg) &&
 check('background handles mission pull + step report', /case 'mission'/.test(bg) && /case 'missionStep'/.test(bg) && /\/agent\/v1\/mission/.test(bg));
 check('background publish gates on completeness', /requireComplete/.test(bg) && /analyzeReply/.test(bg));
 check('content panel injects into the composer + asks worker to publish', /findComposer|setComposerText/.test(content) && /type: 'publish'/.test(content));
+// v0.56 injection hardening — React-controlled inputs need the native setter,
+// else onChange never fires and the composer stays empty on ChatGPT/Grok.
+check('composer inject uses the native value setter (React-safe)', /setNativeValue/.test(content) && /getOwnPropertyDescriptor/.test(content));
+check('panel surfaces per-provider selector-health diagnostics', /selectorHealth/.test(content) && /tz-diag/.test(content));
 
 // ── all JS files parse ───────────────────────────────────────────────
 for (const f of ['extract.js', 'providers.js', 'background.js', 'content-bridge.js', 'popup.js']) {

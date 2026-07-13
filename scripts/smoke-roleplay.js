@@ -8,7 +8,7 @@
  */
 
 const { buildDictionary, toAgentTools, toMarkdown, HIDDEN } = require('../src/pzn/syntax-dictionary');
-const { buildRoleplayPack, buildRoleCard, buildInjectBundle } = require('../src/pzn/agent-roleplay');
+const { buildRoleplayPack, buildRoleCard, buildInjectBundle, mediaInventoryMarkdown } = require('../src/pzn/agent-roleplay');
 const mi = require('../src/pzn/agent-mission');
 const { listModules } = require('../src/pzn/modules/registry');
 
@@ -45,6 +45,15 @@ check('pack moduleCount matches the registry', pack.moduleCount === modNames.len
 const quest = buildRoleplayPack({ locale: 'he', playerBrief: 'דף נחיתה למאפייה' });
 check('playerBrief is injected as the quest',
   /המשימה של השחקן|Player quest/.test(quest.text) && /מאפייה/.test(quest.text));
+
+// ── media manifest injection (v0.56 — no-key media awareness) ────────
+const withMedia = buildRoleplayPack({ locale: 'he', media: [{ url: '/assets/a.jpg', alt: 'front' }, { url: '/assets/b.png', alt: '' }] });
+check('media manifest injects an Available-media section', /מדיה זמינה|Available media/.test(withMedia.text));
+check('media section lists the real path', /\/assets\/a\.jpg/.test(withMedia.text));
+check('media section warns against inventing paths', /אל תמציא|do NOT invent/i.test(withMedia.text));
+check('no-media pack omits the media section', !/מדיה זמינה|Available media/.test(buildRoleplayPack({ locale: 'he' }).text));
+check('mediaInventoryMarkdown is empty for no media', mediaInventoryMarkdown([], true) === '' && mediaInventoryMarkdown(null, false) === '');
+check('inject bundle reports mediaCount', buildInjectBundle({ locale: 'he', media: [{ url: '/assets/x.jpg' }] }).mediaCount === 1);
 
 // ── role card (compact) ──────────────────────────────────────────────
 const card = buildRoleCard();

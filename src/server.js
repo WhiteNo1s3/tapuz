@@ -335,15 +335,25 @@ app.get('/agent/v1/dictionary', requireAgent('read'), (req, res) => {
 
 // The BYOT "injection" (v0.55): ONE pack that primes any chat to roleplay
 // BenTML — role + tool inventory + completion contract + full dictionary.
+// v0.56: the pack now also carries the REAL media manifest, so the agent
+// references images that exist instead of inventing paths (no key needed).
 // The extension injects this into the user's own logged-in LLM composer.
 app.get('/agent/v1/roleplay', requireAgent('read'), (req, res) => {
   const { buildRoleplayPack, buildInjectBundle } = require('./pzn/agent-roleplay');
+  const media = require('./media').listAllMedia(40);
   const brief = req.query.brief ? String(req.query.brief) : '';
   const locale = req.query.locale === 'en' ? 'en' : 'he';
+  const opts = { playerBrief: brief, locale, media };
   if (String(req.query.format || '') === 'json') {
-    return res.json({ ok: true, ...buildInjectBundle({ playerBrief: brief, locale }) });
+    return res.json({ ok: true, ...buildInjectBundle(opts) });
   }
-  res.type('text/markdown; charset=utf-8').send(buildRoleplayPack({ playerBrief: brief, locale }).text);
+  res.type('text/markdown; charset=utf-8').send(buildRoleplayPack(opts).text);
+});
+
+// The media library an agent may reference (read-only — reaching EXISTING media
+// without a key; creating/uploading media is the BYOK tier).
+app.get('/agent/v1/media', requireAgent('read'), (req, res) => {
+  res.json({ ok: true, media: require('./media').listAllMedia() });
 });
 
 // Copilot missions — the extension pulls the latest pending one (bearer token),
@@ -1997,9 +2007,10 @@ const ADMIN_NAV_ITEMS = [
   { key: 'seo', href: '/admin/seo', label: 'SEO' },
   { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס' },
   { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' },
-  { key: 'ai', href: '/admin/ai', label: 'AI ✨' },
-  { key: 'chat', href: '/admin/chat', label: 'צ׳אט סוכן' },
-  { key: 'inject', href: '/admin/inject', label: 'מילון · משחק' },
+  // One AI front door (the copilot hub) + the extension/token setup. The paste
+  // flow (/admin/ai) and the dictionary/game (/admin/inject) are sub-tools
+  // reached from the hub — kept off the top nav to keep it coherent (v0.56).
+  { key: 'chat', href: '/admin/chat', label: 'AI ✨' },
   { key: 'agent', href: '/admin/agent', label: 'גשר סוכן' }
 ];
 
@@ -4345,9 +4356,10 @@ app.get('/admin/agent', (req, res) => {
 // ─── /admin/ai — the paste flow (BYO AI subscription, zero keys) ────
 app.get('/admin/ai', (req, res) => {
   const html = `
-    ${adminNav('ai', 'AI — הדבק ובנה')}
-    <div class="container" style="padding-top:28px;max-width:1180px">
-      <p style="color:#64748b;margin-top:0">
+    ${adminNav('chat', 'AI — הדבקה ידנית')}
+    <div class="container" style="padding-top:20px;max-width:1180px">
+      <a href="/admin/chat" style="font-size:.9rem;color:#7c3aed">← חזרה לבונה החכם (צ׳אט)</a>
+      <p style="color:#64748b;margin:8px 0 0">
         משוחחים עם ה‑AI שכבר יש לכם (ChatGPT / Claude / Grok) — בלי מפתחות API ובלי עלות נוספת.
         מעתיקים את המדריך, מבקשים דף, מדביקים את התשובה — והדף קם.
       </p>
@@ -4427,7 +4439,7 @@ app.get('/admin/menus', (req, res) => {
 // =========================================================================
 app.get('/admin/inject', (req, res) => {
   const html = `
-    ${adminNav('inject', 'מילון השפה · משחק בונה האתרים')}
+    ${adminNav('chat', 'מילון השפה · משחק בונה האתרים')}
     <style>
       .inj-grid { display:grid; grid-template-columns:1.1fr .9fr; gap:18px; max-width:1100px; margin:0 auto; padding:18px; }
       @media(max-width:860px){ .inj-grid{ grid-template-columns:1fr; } }
@@ -4506,10 +4518,11 @@ app.get('/admin/api/syntax-dictionary.md', (req, res) => {
 app.get('/admin/api/inject-pack', (req, res) => {
   const { buildRoleplayPack, buildRoleCard, buildInjectBundle } = require('./pzn/agent-roleplay');
   const { buildDictionary, toMarkdown } = require('./pzn/syntax-dictionary');
+  const media = require('./media').listAllMedia(40);
   const brief = req.query.brief ? String(req.query.brief) : '';
   const locale = req.query.locale === 'en' ? 'en' : 'he';
   const format = String(req.query.format || 'json');
-  const opts = { playerBrief: brief, locale };
+  const opts = { playerBrief: brief, locale, media };
   if (format === 'roleplay') {
     return res.type('text/markdown; charset=utf-8').send(buildRoleplayPack(opts).text);
   }
@@ -4575,10 +4588,13 @@ app.get('/admin/chat', (req, res) => {
           </div>
         </div>
         <div class="card">
-          <h3 style="margin-top:0">הזרקת שפה</h3>
-          <p class="muted" style="font-size:.88rem;margin-top:0">
-            מילון + משחק בונה-אתרים להדבקה ב‑AI: <a href="/admin/inject">מילון · משחק →</a>
-          </p>
+          <h3 style="margin-top:0">עוד דרכים לבנות עם AI</h3>
+          <p class="muted" style="font-size:.88rem;margin:0 0 6px">כל המסלולים מובילים לאותם דפי BenTML — בחרו מה שנוח:</p>
+          <ul class="muted" style="font-size:.88rem;line-height:1.7;padding-inline-start:18px;margin:0">
+            <li><a href="/admin/inject">מילון · משחק</a> — העתקת החבילה להדבקה ידנית ב‑AI</li>
+            <li><a href="/admin/ai">הדבקה ידנית</a> — הדביקו תשובת AI ובנו דף בתוך ה‑CMS</li>
+            <li><a href="/admin/agent">גשר סוכן</a> — חיבור התוסף (פרסום אוטומטי מהצ׳אט)</li>
+          </ul>
         </div>
       </aside>
     </div>
@@ -4595,9 +4611,10 @@ app.get('/admin/api/mission/providers', (req, res) => {
 app.post('/admin/api/mission/teach', (req, res) => {
   const { buildRoleplayPack } = require('./pzn/agent-roleplay');
   const agentMission = require('./pzn/agent-mission');
+  const media = require('./media').listAllMedia(40);
   const provider = (req.body && req.body.provider) || 'generic';
   // The full roleplay game pack = exactly what the extension ① injects.
-  const pack = buildRoleplayPack({ locale: 'he', includeFullDictionary: true });
+  const pack = buildRoleplayPack({ locale: 'he', includeFullDictionary: true, media });
   const meta = agentMission.PROVIDERS[provider] || agentMission.PROVIDERS.generic;
   res.json({
     ok: true,
@@ -4619,14 +4636,16 @@ app.post('/admin/api/mission/create', (req, res) => {
       return res.status(400).json({ ok: false, error: 'description required' });
     }
     const p = provider || 'generic';
-    // ① TEACH = full roleplay game + dictionary (the tool inventory).
-    const teachPack = buildRoleplayPack({ locale: 'he', includeFullDictionary: true });
+    const media = require('./media').listAllMedia(40);
+    // ① TEACH = full roleplay game + dictionary (the tool inventory) + real media.
+    const teachPack = buildRoleplayPack({ locale: 'he', includeFullDictionary: true, media });
     // ② BUILD = the quest with the completion contract (agent already in character).
     const buildMessage = agentMission.buildBuildMessage({ description, title, slug, provider: p });
     // one-shot = the roleplay that already bakes the player brief in as the quest.
     const oneShot = buildRoleplayPack({
       locale: 'he',
       includeFullDictionary: true,
+      media,
       playerBrief: [description, title && `title: ${title}`, slug && `slug: ${slug}`]
         .filter(Boolean)
         .join('\n')
