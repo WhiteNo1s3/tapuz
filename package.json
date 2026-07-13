@@ -37,7 +37,7 @@
     "gen:dictionary": "node scripts/gen-syntax-dictionary.js",
     "gen:spec": "node scripts/gen-pzn-spec.js",
     "gen:icons": "node scripts/gen-extension-icons.js",
-    "test:smoke": "node scripts/smoke-render.js && node scripts/smoke-drafts.js && node scripts/smoke-articles.js && node scripts/smoke-bentml.js && node scripts/smoke-map.js && node scripts/smoke-analytics.js && node scripts/smoke-pzn-roundtrip.js && node scripts/smoke-pzn-store.js && node scripts/smoke-pzn-ops.js && node scripts/smoke-pzn-paste.js && node scripts/smoke-agent-bridge.js && node scripts/smoke-extension.js && node scripts/smoke-uploads.js && node scripts/smoke-pzn-html.js && node scripts/smoke-pzn-repair.js"
+    "test:smoke": "node scripts/smoke-render.js && node scripts/smoke-drafts.js && node scripts/smoke-articles.js && node scripts/smoke-bentml.js && node scripts/smoke-map.js && node scripts/smoke-analytics.js && node scripts/smoke-pzn-roundtrip.js && node scripts/smoke-pzn-store.js && node scripts/smoke-pzn-ops.js && node scripts/smoke-pzn-paste.js && node scripts/smoke-agent-bridge.js && node scripts/smoke-extension.js && node scripts/smoke-uploads.js && node scripts/smoke-pzn-html.js && node scripts/smoke-pzn-repair.js && node scripts/smoke-registry.js && node scripts/smoke-wizard.js"
   },
   "keywords": [
     "cms",

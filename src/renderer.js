@@ -104,6 +104,17 @@ function renderBlock(block, direction = 'rtl') {
   const style = styleAttr(block.data);
   const extra = extraClass + extraId + style;
 
+  // bent-html escape hatch (v0.49): a pzn-level PROVISIONAL raw-HTML block, not
+  // a Tapuz toolbox block — handled here (not a switch case) so it stays out of
+  // the block registry / keyword language. The sanitizer is the guarantee (the
+  // published CSP allows inline script) — see src/html-sanitize.js.
+  if (block.type === 'html') {
+    const safe = sanitizeHtmlFragment((block.data && block.data.content) || '');
+    const prov = (block.data && block.data.provisional !== false && block.data.provisional !== 'false')
+      ? ' data-bent-provisional="true"' : '';
+    return `<div class="bent-html${extraClass}"${extraId}${style}${prov} dir="${direction}">${safe}</div>`;
+  }
+
   switch (block.type) {
     case 'heading': {
       const level = Math.min(Math.max(block.data.level || 2, 1), 6);
@@ -428,15 +439,6 @@ function renderBlock(block, direction = 'rtl') {
         `${pxStyleAttr} dir="${direction}">` +
         `<div class="parallax-inner">${inner}</div></section>`
       );
-    }
-
-    case 'html': {
-      // Escape hatch (v0.49). Sanitizer is the guarantee (CSP allows inline
-      // script on the published site) — see src/html-sanitize.js.
-      const d = block.data || {};
-      const safe = sanitizeHtmlFragment(d.content || '');
-      const prov = (d.provisional !== false && d.provisional !== 'false') ? ' data-bent-provisional="true"' : '';
-      return `<div class="bent-html${extraClass}"${extraId}${style}${prov} dir="${direction}">${safe}</div>`;
     }
 
     default: return `<!-- unknown block: ${block.type} -->`;
