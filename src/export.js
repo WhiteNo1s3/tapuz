@@ -11,6 +11,23 @@ function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+/**
+ * Static export externalizes the theme's inline styles (they already live in
+ * /css/main.css) — but PAGE-specific styles (e.g. the page splash background)
+ * can't go in the shared stylesheet, so they must survive the strip.
+ * @param {string} html
+ * @returns {string}
+ */
+function externalizeStyles(html) {
+  const keep = (html.match(/<style id="tapuz-page-bg">[\s\S]*?<\/style>/) || [])[0] || '';
+  let out = html.replace(/<style[\s\S]*?<\/style>/g, '');
+  if (!out.includes('href="/css/main.css"')) {
+    out = out.replace('</head>', '  <link rel="stylesheet" href="/css/main.css">\n</head>');
+  }
+  if (keep) out = out.replace('</head>', '  ' + keep + '\n</head>');
+  return out;
+}
+
 function copyThemeAssets(themeSlug = 'default') {
   const themeCss = path.join(THEMES_DIR, themeSlug, 'css', 'main.css');
   const destDir = path.join(PUBLIC_DIR, 'css');
@@ -56,11 +73,7 @@ function writePageHtml(page, outputDir, isHome) {
   const outputPath = path.join(outputDir, filename);
   const siteConfig = loadConfig();
   let html = renderPage(page, { siteTitle: siteConfig.title });
-  // Externalize all inline styles (theme + overrides already merged into /css/main.css)
-  html = html.replace(/<style[\s\S]*?<\/style>/g, '');
-  if (!html.includes('href="/css/main.css"')) {
-    html = html.replace('</head>', '  <link rel="stylesheet" href="/css/main.css">\n</head>');
-  }
+  html = externalizeStyles(html);
   fs.writeFileSync(outputPath, html, 'utf8');
   // Home also becomes index.html — but keep its named file so menu links
   // (/<full_path>.html) never 404
@@ -123,5 +136,6 @@ function exportAll(outputDir = PUBLIC_DIR) {
 module.exports = {
   exportPage,
   exportAll,
-  copyThemeAssets
+  copyThemeAssets,
+  externalizeStyles
 };

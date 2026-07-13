@@ -768,6 +768,7 @@
     ensureUiExtras();
     renderCanvas();
     renderProperties();
+    applyCanvasPageBg();
     bindToolboxDrag();
     updateHeaderExtras();
 
@@ -2108,6 +2109,32 @@
     return html;
   }
 
+  /** Live-preview the page splash background on the builder canvas. */
+  function applyCanvasPageBg() {
+    var wrap = document.querySelector('.builder-canvas-wrap');
+    if (!wrap) return;
+    var b = (pageMeta.background && typeof pageMeta.background === 'object') ? pageMeta.background : {};
+    if (b.image) {
+      var ov = Math.min(Math.max(parseInt(b.overlay, 10) || 0, 0), 85) / 100;
+      var grad = ov > 0 ? 'linear-gradient(rgba(0,0,0,' + ov + '),rgba(0,0,0,' + ov + ')),' : '';
+      wrap.style.backgroundImage = grad + "url('" + String(b.image).replace(/['"\\]/g, '') + "')";
+      wrap.style.backgroundSize = 'cover';
+      wrap.style.backgroundPosition = 'center';
+      wrap.style.backgroundAttachment = b.parallax ? 'fixed' : 'scroll';
+      wrap.style.padding = '18px';
+      wrap.style.borderRadius = '14px';
+    } else if (b.color) {
+      wrap.style.background = String(b.color).replace(/[^#\w(),.%\s-]/g, '');
+      wrap.style.backgroundImage = '';
+      wrap.style.padding = '18px';
+      wrap.style.borderRadius = '14px';
+    } else {
+      wrap.style.backgroundImage = '';
+      wrap.style.background = '';
+      wrap.style.padding = '';
+    }
+  }
+
   function renderProperties() {
     var panel = document.getElementById('properties-panel');
     if (!panel) return;
@@ -2132,6 +2159,15 @@
         pageHtml += field('תמונת קובייה (URL)', '<input data-page-meta="cardImage" dir="ltr" value="' + escAttr(pageMeta.cardImage || '') + '" placeholder="ריק = התמונה הראשונה בדף">');
         pageHtml += '<button type="button" class="btn" style="margin:6px 0 12px" data-page-card-media="1">בחר תמונה מהספרייה</button>';
       }
+      var pbg = (pageMeta.background && typeof pageMeta.background === 'object') ? pageMeta.background : {};
+      pageHtml +=
+        '<div class="prop-section-label">רקע הדף · splash</div>' +
+        field('תמונת רקע לכל הדף', '<input data-page-bg="image" dir="ltr" value="' + escAttr(pbg.image || '') + '" placeholder="/uploads/… או ריק">') +
+        '<button type="button" class="btn" style="margin:2px 0 10px" data-page-bg-media="1">בחר תמונת רקע מהספרייה</button>' +
+        field('כהות שכבה כהה · ' + (parseInt(pbg.overlay, 10) || 0) + '%', '<input type="range" min="0" max="85" step="5" data-page-bg="overlay" value="' + (parseInt(pbg.overlay, 10) || 0) + '">') +
+        '<label class="check-line" style="margin:2px 0 8px"><input type="checkbox" data-page-bg="parallax"' + (pbg.parallax ? ' checked' : '') + '> תמונה נעה בגלילה (parallax כמו onepage)</label>' +
+        field('צבע רקע (אם אין תמונה)', '<input type="color" data-page-bg="color" value="' + escAttr(pbg.color || '#ffffff') + '">') +
+        '<div class="prop-hint" style="margin-bottom:12px">התמונה מופיעה מאחורי הדף. הפעילו parallax ל"תמונת שער נעה" בזמן גלילה.</div>';
       pageHtml +=
         '<div class="prop-section-label">SEO (נקודת פתיחה ברמה של CMS גדול)</div>' +
         field('כותרת SEO / Title', '<input data-page-meta="seoTitle" value="' + escAttr(pageMeta.seoTitle || '') + '" placeholder="ריק = כותרת הדף">') +
@@ -2217,6 +2253,31 @@
           });
         });
       }
+      // Page splash background (v0.52) — write to pageMeta.background, live-preview on canvas.
+      function ensureBg() {
+        if (!pageMeta.background || typeof pageMeta.background !== 'object') pageMeta.background = {};
+        return pageMeta.background;
+      }
+      panel.querySelectorAll('[data-page-bg]').forEach(function (input) {
+        var apply = function () {
+          var b = ensureBg();
+          var k = input.getAttribute('data-page-bg');
+          if (input.type === 'checkbox') b[k] = input.checked;
+          else if (input.type === 'range') { b[k] = parseInt(input.value, 10) || 0; var lab = input.closest('.prop-group'); if (lab) { var l = lab.querySelector('label'); if (l) l.textContent = 'כהות שכבה כהה · ' + b[k] + '%'; } }
+          else { var v = input.value.trim(); if (v) b[k] = v; else delete b[k]; }
+          markDirty();
+          applyCanvasPageBg();
+        };
+        input.addEventListener('input', apply);
+        input.addEventListener('change', apply);
+      });
+      var bgMedia = panel.querySelector('[data-page-bg-media]');
+      if (bgMedia) {
+        bgMedia.addEventListener('click', function () {
+          openMediaSingle(function (url) { ensureBg().image = url; markDirty(); renderProperties(); applyCanvasPageBg(); });
+        });
+      }
+      applyCanvasPageBg();
       syncToolboxMode();
       return;
     }
