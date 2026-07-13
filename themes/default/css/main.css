@@ -744,6 +744,33 @@ p, li { max-width: 70ch; }
   color: #fff;
 }
 
+/* Interactive containers (v0.54) — CSS-only, no JS.
+   Tabs: the radio hack (checked radio + adjacent label + panel). */
+.bent-tabs { display: flex; flex-wrap: wrap; margin: 1.25rem 0; border-bottom: 1px solid var(--color-border, #e2e8f0); }
+.bent-tabs > .bent-tab-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.bent-tabs > .bent-tab-label {
+  order: 1; cursor: pointer; padding: 0.65rem 1.15rem; font-weight: 600;
+  color: var(--color-text-muted, #64748b); border-bottom: 2px solid transparent;
+  margin-bottom: -1px; transition: color .15s, border-color .15s;
+}
+.bent-tabs > .bent-tab-panel { order: 2; width: 100%; display: none; padding: 1.1rem 0.15rem; line-height: 1.65; }
+.bent-tabs > .bent-tab-radio:checked + .bent-tab-label { color: var(--color-primary, #0a66c2); border-bottom-color: var(--color-primary, #0a66c2); }
+.bent-tabs > .bent-tab-radio:checked + .bent-tab-label + .bent-tab-panel { display: block; }
+.bent-tabs > .bent-tab-radio:focus-visible + .bent-tab-label { outline: 2px solid var(--color-primary, #0a66c2); outline-offset: 2px; }
+
+/* Accordion: native <details>, styled. */
+.bent-accordion { margin: 1.25rem 0; border: 1px solid var(--color-border, #e2e8f0); border-radius: 12px; overflow: hidden; }
+.bent-fold { border-bottom: 1px solid var(--color-border, #e2e8f0); }
+.bent-fold:last-child { border-bottom: none; }
+.bent-fold > summary {
+  cursor: pointer; padding: 0.9rem 1.15rem; font-weight: 600; list-style: none;
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+}
+.bent-fold > summary::-webkit-details-marker { display: none; }
+.bent-fold > summary::after { content: "\25BE"; color: var(--color-text-muted, #94a3b8); transition: transform .2s; }
+.bent-fold[open] > summary::after { transform: rotate(180deg); }
+.bent-fold > .bent-fold-body { padding: 0 1.15rem 1.05rem; line-height: 1.65; color: var(--color-text, #334155); }
+
 /* marquee — two full-width tracks scrolling in lockstep = seamless at any
    text length (no "pop" for short strings) */
 .marquee {

@@ -371,6 +371,33 @@ function renderBlock(block, direction = 'rtl') {
       return `<section class="faq-list"${extra} dir="${direction}">${rows}</section>`;
     }
 
+    case 'tabs': {
+      // pure-CSS tabs: input:checked + label + .panel (no JS)
+      const items = block.data.items || [];
+      const gid = 'bt-' + (block.data?.id || block.id || Math.random().toString(36).slice(2, 8));
+      let inner = '';
+      items.forEach((it, i) => {
+        const tid = escapeHtml(gid + '-' + i);
+        inner +=
+          `<input type="radio" name="${escapeHtml(gid)}" id="${tid}" class="bent-tab-radio"${i === 0 ? ' checked' : ''}>` +
+          `<label for="${tid}" class="bent-tab-label">${escapeHtml(it.label || ('טאב ' + (i + 1)))}</label>` +
+          `<div class="bent-tab-panel">${renderInlineMarks(it.content || '')}</div>`;
+      });
+      return `<div class="bent-tabs"${extra} dir="${direction}">${inner}</div>`;
+    }
+
+    case 'accordion': {
+      const items = block.data.items || [];
+      const rows = items
+        .map(
+          (it, i) =>
+            `<details class="bent-fold"${i === 0 ? ' open' : ''}><summary>${escapeHtml(it.title || '')}</summary>` +
+            `<div class="bent-fold-body">${renderInlineMarks(it.content || '')}</div></details>`
+        )
+        .join('');
+      return `<div class="bent-accordion"${extra} dir="${direction}">${rows}</div>`;
+    }
+
     case 'contact-info': {
       const d = block.data || {};
       const lines = [];
