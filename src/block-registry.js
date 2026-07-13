@@ -723,6 +723,50 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'tabs',
+    keyword: 'TABS',
+    labelHe: 'טאבים',
+    icon: '❐',
+    category: 'מבנה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'תוכן בלשוניות (CSS בלבד)',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'לשוניות', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'כותרת הלשונית', type: 'string', required: true },
+          { name: 'content', labelHe: 'תוכן', type: 'textarea' }
+        ],
+        hint: 'ב-BenTML: צאצאי TAB (הכותרת פרמטר, התוכן גוף)'
+      }
+    ],
+    textField: null,
+    seed: { items: [{ label: 'לשונית 1', content: '' }, { label: 'לשונית 2', content: '' }] }
+  },
+  {
+    type: 'accordion',
+    keyword: 'ACCORDION',
+    labelHe: 'אקורדיון',
+    icon: '☰',
+    category: 'מבנה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'מגירות נפתחות (CSS בלבד)',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'מגירות', type: 'list',
+        itemFields: [
+          { name: 'title', labelHe: 'כותרת', type: 'string', required: true },
+          { name: 'content', labelHe: 'תוכן', type: 'textarea' }
+        ],
+        hint: 'ב-BenTML: צאצאי FOLD (הכותרת פרמטר, התוכן גוף)'
+      }
+    ],
+    textField: null,
+    seed: { items: [{ title: 'מגירה 1', content: '' }, { title: 'מגירה 2', content: '' }] }
+  },
+  {
     type: 'contact-info',
     keyword: 'CONTACT',
     labelHe: 'פרטי קשר',

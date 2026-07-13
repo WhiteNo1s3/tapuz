@@ -257,6 +257,16 @@ const KEYWORDS = {
     jsonType: 'faq',
     params: {}
   },
+  TABS: {
+    body: 'NO-BODY',
+    jsonType: 'tabs',
+    params: {}
+  },
+  ACCORDION: {
+    body: 'NO-BODY',
+    jsonType: 'accordion',
+    params: {}
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',
@@ -279,7 +289,7 @@ const KEYWORDS = {
 
 const RESERVED = new Set([
   'SECTION', 'FORM', 'INPUT', 'NAV', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
-  'VIDEO', 'AUDIO', 'ACCORDION', 'TABS', 'SLIDER'
+  'VIDEO', 'AUDIO', 'SLIDER'
 ]);
 
 const UNIVERSAL = new Set(['id', 'class', 'dir']);

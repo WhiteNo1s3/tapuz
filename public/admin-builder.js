@@ -1349,6 +1349,34 @@
       return wrap;
     }
 
+    if (block.type === 'tabs') {
+      var tItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-tabs">' +
+        '<div class="preview-tabs-labels">' +
+        (tItems.length ? tItems : [{ label: 'טאב 1' }, { label: 'טאב 2' }]).map(function (it, i) {
+          return '<span class="preview-tab-chip' + (i === 0 ? ' active' : '') + '">' + esc(it.label || ('טאב ' + (i + 1))) + '</span>';
+        }).join('') +
+        '</div>' +
+        '<div class="preview-tab-body">' + esc((tItems[0] && tItems[0].content) || 'תוכן הלשונית — ערכו במאפיינים') + '</div>' +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'accordion') {
+      var aItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-accordion">' +
+        (aItems.length ? aItems : [{ title: 'מגירה 1' }, { title: 'מגירה 2' }]).map(function (it, i) {
+          return '<div class="preview-fold">' +
+            '<div class="preview-fold-head">' + (i === 0 ? '▾ ' : '▸ ') + esc(it.title || 'כותרת') + '</div>' +
+            (i === 0 ? '<div class="preview-fold-body">' + esc(it.content || 'תוכן — ערכו במאפיינים') + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
     // Provisional raw-HTML block (the escape hatch) — show it clearly and offer
     // to graduate it into real modules. Content is shown ESCAPED (never injected
     // into the admin DOM) so an LLM-steered fragment can't run here.

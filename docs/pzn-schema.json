@@ -945,6 +945,74 @@
         }
       }
     },
+    "tab": {
+      "tag": "bent-tab",
+      "label": {
+        "he": "טאב",
+        "en": "Tab"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "label": {
+          "type": "string",
+          "default": "טאב"
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "tabs": {
+      "tag": "bent-tabs",
+      "label": {
+        "he": "טאבים",
+        "en": "Tabs"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "tab"
+      ],
+      "props": {}
+    },
+    "fold": {
+      "tag": "bent-fold",
+      "label": {
+        "he": "מגירה",
+        "en": "Fold"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "title": {
+          "type": "string",
+          "default": "כותרת"
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "accordion": {
+      "tag": "bent-accordion",
+      "label": {
+        "he": "אקורדיון",
+        "en": "Accordion"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "fold"
+      ],
+      "props": {}
+    },
     "html": {
       "tag": "bent-html",
       "label": {

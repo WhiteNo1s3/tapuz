@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (33)
+## Modules (37)
 
 ### Category: content
 
@@ -183,6 +183,20 @@ from it directly.
   - `parallax` · boolean · default `false`
 
 #### `<bent-card>` — כרטיס / Card · container
+
+#### `<bent-tab>` — טאב / Tab · leaf
+
+  - `label` · string · default `טאב`
+  - `text` · text · **(body text, not an attribute)**
+
+#### `<bent-tabs>` — טאבים / Tabs · container (children: `bent-tab`)
+
+#### `<bent-fold>` — מגירה / Fold · leaf
+
+  - `title` · string · default `כותרת`
+  - `text` · text · **(body text, not an attribute)**
+
+#### `<bent-accordion>` — אקורדיון / Accordion · container (children: `bent-fold`)
 
 ### Category: data
 

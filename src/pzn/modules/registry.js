@@ -1073,6 +1073,104 @@ register({
   }
 });
 
+// ─── Interactive containers (v0.54) — CSS-only, no JS ──────────────
+// tabs: pure-CSS via the radio hack (input:checked + label + .panel).
+// accordion: native <details>. Children are leaf tab/fold (label + text).
+
+register({
+  name: 'tab',
+  tag: 'bent-tab',
+  category: 'layout',
+  label: { he: 'טאב', en: 'Tab' },
+  icon: 'tab',
+  container: false,
+  props: {
+    label: { type: 'string', default: 'טאב', label: { he: 'כותרת הטאב', en: 'Tab label' } },
+    text: { type: 'text', content: true, default: '', label: { he: 'תוכן', en: 'Content' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { label: 'טאב' },
+  // rendered by the parent <bent-tabs>; standalone it degrades to a text block
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return `<div${id} class="bent-tab-panel${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</div>`;
+  }
+});
+
+register({
+  name: 'tabs',
+  tag: 'bent-tabs',
+  category: 'layout',
+  label: { he: 'טאבים', en: 'Tabs' },
+  icon: 'tabs',
+  container: true,
+  accept: ['tab'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const group = 'bt-' + escapeAttr(node.id || 'tabs');
+    const tabs = (node.children || []).filter((c) => c.name === 'tab');
+    let inner = '';
+    tabs.forEach((t, i) => {
+      const tid = escapeAttr((node.id || 'tabs') + '-' + i);
+      inner += `<input type="radio" name="${group}" id="${tid}" class="bent-tab-radio"${i === 0 ? ' checked' : ''}>`;
+      inner += `<label for="${tid}" class="bent-tab-label">${escapeHtml(t.props.label || ('טאב ' + (i + 1)))}</label>`;
+      inner += `<div class="bent-tab-panel">${escapeHtml(t.text || '')}</div>`;
+    });
+    return `<div${id} class="bent-tabs${cls}"${dirAttr(ctx)}>${inner}</div>`;
+  }
+});
+
+register({
+  name: 'fold',
+  tag: 'bent-fold',
+  category: 'layout',
+  label: { he: 'מגירה', en: 'Fold' },
+  icon: 'fold',
+  container: false,
+  props: {
+    title: { type: 'string', default: 'כותרת', label: { he: 'כותרת', en: 'Title' } },
+    text: { type: 'text', content: true, default: '', label: { he: 'תוכן', en: 'Content' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { title: 'כותרת' },
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return `<details${id} class="bent-fold${cls}"${dirAttr(ctx)}><summary>${escapeHtml(node.props.title || '')}</summary>` +
+      `<div class="bent-fold-body">${escapeHtml(node.text)}</div></details>`;
+  }
+});
+
+register({
+  name: 'accordion',
+  tag: 'bent-accordion',
+  category: 'layout',
+  label: { he: 'אקורדיון', en: 'Accordion' },
+  icon: 'accordion',
+  container: true,
+  accept: ['fold'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const folds = (node.children || []).filter((c) => c.name === 'fold');
+    const rows = folds.map((f, i) =>
+      `<details class="bent-fold"${i === 0 ? ' open' : ''}><summary>${escapeHtml(f.props.title || '')}</summary>` +
+      `<div class="bent-fold-body">${escapeHtml(f.text || '')}</div></details>`
+    ).join('');
+    return `<div${id} class="bent-accordion${cls}"${dirAttr(ctx)}>${rows}</div>`;
+  }
+});
+
 // ─── Escape hatch (v0.49) — the pressure valve for off-vocabulary designs ──
 // A registered tag whose PAYLOAD is arbitrary HTML. The standard stays a
 // registry (this IS a registered module); the payload is unconstrained but

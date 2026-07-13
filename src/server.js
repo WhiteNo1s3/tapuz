@@ -1006,6 +1006,17 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
     .bent-html-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .bent-html-actions .btn { background: #b45309; }
     .bent-html-hint { font-size: 0.75rem; color: #a16207; }
+    /* Builder previews for interactive containers (v0.54) */
+    .preview-tabs { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .preview-tabs-labels { display: flex; gap: 2px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
+    .preview-tab-chip { padding: 8px 14px; font-size: 0.85rem; font-weight: 600; color: #64748b; cursor: default; }
+    .preview-tab-chip.active { color: #0a66c2; background: #fff; box-shadow: inset 0 -2px 0 #0a66c2; }
+    .preview-tab-body { padding: 12px 14px; color: #334155; font-size: 0.9rem; }
+    .preview-accordion { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .preview-fold { border-bottom: 1px solid #e2e8f0; }
+    .preview-fold:last-child { border-bottom: none; }
+    .preview-fold-head { padding: 9px 14px; font-weight: 600; color: #334155; font-size: 0.9rem; background: #f8fafc; }
+    .preview-fold-body { padding: 10px 14px; color: #475569; font-size: 0.88rem; }
     .prop-section-label {
       font-size: 0.72rem;
       font-weight: 700;

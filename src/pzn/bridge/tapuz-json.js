@@ -196,6 +196,26 @@ function blockToModule(block) {
       return createModule('faq', baseOpts(block, {}, { children }));
     }
 
+    case 'tabs': {
+      const children = (data.items || []).map((item) =>
+        createModule('tab', {
+          props: pickProps(item || {}, ['label']),
+          text: (item && item.content) || ''
+        })
+      );
+      return createModule('tabs', baseOpts(block, {}, { children }));
+    }
+
+    case 'accordion': {
+      const children = (data.items || []).map((item) =>
+        createModule('fold', {
+          props: pickProps(item || {}, ['title']),
+          text: (item && item.content) || ''
+        })
+      );
+      return createModule('accordion', baseOpts(block, {}, { children }));
+    }
+
     case 'contact-info':
       return createModule('contact-info', baseOpts(block, pickProps(data, ['phone', 'email', 'address', 'hours'])));
 
@@ -428,6 +448,30 @@ function moduleToBlock(node) {
           return item;
         });
       return finishBlock(node, 'faq', data);
+    }
+
+    case 'tabs': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'tab')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['label']);
+          if (c.text) item.content = c.text;
+          return item;
+        });
+      return finishBlock(node, 'tabs', data);
+    }
+
+    case 'accordion': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'fold')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['title']);
+          if (c.text) item.content = c.text;
+          return item;
+        });
+      return finishBlock(node, 'accordion', data);
     }
 
     case 'contact-info':
