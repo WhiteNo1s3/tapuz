@@ -1070,6 +1070,33 @@ register({
   }
 });
 
+// ─── Video (v0.62) — native self-hosted <video> (batch item 4). `embed`
+//     already covers YouTube iframes; a YT url here degrades to that embed. ──
+register({
+  name: 'video',
+  tag: 'bent-video',
+  category: 'media',
+  label: { he: 'וידאו', en: 'Video' },
+  icon: 'video',
+  container: false,
+  props: {
+    src: { type: 'url', default: '', label: { he: 'קובץ וידאו / קישור', en: 'Video file / URL' } },
+    poster: { type: 'url', default: '', optional: true, label: { he: 'תמונת שער', en: 'Poster' } },
+    caption: { type: 'string', default: '', optional: true, label: { he: 'כיתוב', en: 'Caption' } },
+    controls: { type: 'boolean', default: true, optional: true, label: { he: 'פקדי נגן', en: 'Controls' } },
+    autoplay: { type: 'boolean', default: false, optional: true, label: { he: 'ניגון אוטומטי', en: 'Autoplay' } },
+    loop: { type: 'boolean', default: false, optional: true, label: { he: 'לולאה', en: 'Loop' } },
+    muted: { type: 'boolean', default: false, optional: true, label: { he: 'מושתק', en: 'Muted' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { controls: true },
+  compile(node) {
+    const { id, cls } = attrsExtra(node);
+    return require('../video-html').renderVideo(node.props || {}, { idAttr: id, cls });
+  }
+});
+
 // ─── Form (v0.58) — the decompiler's #1 tool gap, now first-class ──────
 register({
   name: 'field',

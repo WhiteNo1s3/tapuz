@@ -415,6 +415,12 @@ function renderBlock(block, direction = 'rtl') {
       // `extra`, generic style decls as `decls` so ticker colors never split.
       return require('./pzn/ticker-html').renderTickerFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
 
+    case 'video':
+      // cls = className suffix (goes INSIDE class="") ; extra = id + style
+      // (trailing attrs) — the correct split so a custom class isn't emitted
+      // as a stray boolean attribute.
+      return require('./pzn/video-html').renderVideoFromData(block.data || {}, direction, extraClass, extraId + style);
+
     case 'contact-info': {
       const d = block.data || {};
       const lines = [];

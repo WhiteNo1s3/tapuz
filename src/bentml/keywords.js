@@ -300,6 +300,19 @@ const KEYWORDS = {
       color: { type: 'string' }
     }
   },
+  VIDEO: {
+    body: 'NO-BODY',
+    jsonType: 'video',
+    params: {
+      src: { type: 'string', required: true },
+      poster: { type: 'string' },
+      caption: { type: 'string' },
+      controls: { type: 'boolean', default: true },
+      autoplay: { type: 'boolean', default: false },
+      loop: { type: 'boolean', default: false },
+      muted: { type: 'boolean', default: false }
+    }
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',
@@ -321,10 +334,11 @@ const KEYWORDS = {
 };
 
 const RESERVED = new Set([
-  // FORM graduated v0.58, NAV graduated v0.60. INPUT stays a placeholder —
-  // form fields are the child `field` module (nav links = child `navitem`).
+  // FORM graduated v0.58, NAV graduated v0.60, VIDEO graduated v0.62. INPUT
+  // stays a placeholder — form fields are the child `field` module (nav links
+  // = child `navitem`). AUDIO is the natural next media graduation.
   'SECTION', 'INPUT', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
-  'VIDEO', 'AUDIO', 'SLIDER'
+  'AUDIO', 'SLIDER'
 ]);
 
 const UNIVERSAL = new Set(['id', 'class', 'dir']);

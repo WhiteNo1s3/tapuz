@@ -506,6 +506,22 @@ button:focus-visible,
   border: 0;
 }
 
+/* video (v0.62) — native self-hosted <video>; a YouTube src reuses the
+   .video-embed aspect-ratio box above (same margin so both read alike). */
+.bent-video { margin: 1.75rem 0; }
+.bent-video video {
+  display: block; width: 100%; max-width: 100%;
+  border-radius: 12px; background: #000;
+}
+.bent-video-caption {
+  margin-top: 0.5rem; font-size: 0.9rem;
+  color: var(--color-text-muted, #64748b); text-align: center;
+}
+.bent-video-empty {
+  padding: 2rem; text-align: center; color: #94a3b8;
+  background: #f1f5f9; border-radius: 12px;
+}
+
 /* Map embed block (MAP) */
 .map-embed {
   margin: 1.75rem 0;
