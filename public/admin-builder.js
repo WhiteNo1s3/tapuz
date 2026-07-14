@@ -1389,6 +1389,20 @@
       return wrap;
     }
 
+    if (block.type === 'ticker') {
+      var tItems = d.items || [];
+      var tStyle = d.background ? 'background:' + esc(d.background) : '';
+      wrap.innerHTML =
+        '<div class="preview-ticker"' + (tStyle ? ' style="' + tStyle + '"' : '') + '>' +
+        (d.label ? '<span class="preview-ticker-label">' + esc(d.label) + '</span>' : '') +
+        '<div class="preview-ticker-strip">' +
+        (tItems.length ? tItems : [{ text: 'מבזק ראשון' }, { text: 'מבזק שני' }, { text: 'מבזק שלישי' }]).map(function (it) {
+          return '<span class="preview-ticker-link"' + (d.color ? ' style="color:' + esc(d.color) + '"' : '') + '>' + esc(it.text || 'מבזק') + '</span>';
+        }).join('') +
+        '</div></div>';
+      return wrap;
+    }
+
     if (block.type === 'cards') {
       var cItems = d.items || [];
       wrap.innerHTML =

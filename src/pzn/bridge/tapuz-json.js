@@ -243,6 +243,15 @@ function blockToModule(block) {
       return createModule('nav', baseOpts(block, pickProps(data, ['background', 'color', 'align']), { children }));
     }
 
+    case 'ticker': {
+      const children = (data.items || []).map((it) =>
+        createModule('tickeritem', {
+          props: pickProps(it || {}, ['text', 'href'])
+        })
+      );
+      return createModule('ticker', baseOpts(block, pickProps(data, ['label', 'speed', 'background', 'color']), { children }));
+    }
+
     case 'contact-info':
       return createModule('contact-info', baseOpts(block, pickProps(data, ['phone', 'email', 'address', 'hours'])));
 
@@ -523,6 +532,14 @@ function moduleToBlock(node) {
         .filter((c) => c.name === 'navitem')
         .map((c) => pickData(c.props || {}, ['label', 'href']));
       return finishBlock(node, 'nav', data);
+    }
+
+    case 'ticker': {
+      const data = pickData(props, ['label', 'speed', 'background', 'color']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'tickeritem')
+        .map((c) => pickData(c.props || {}, ['text', 'href']));
+      return finishBlock(node, 'ticker', data);
     }
 
     case 'contact-info':

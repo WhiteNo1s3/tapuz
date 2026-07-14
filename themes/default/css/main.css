@@ -830,6 +830,41 @@ a.bent-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,.12); transform: translat
 }
 .bent-nav-link:hover { opacity: .7; }
 
+/* moving-news ticker (v0.61) — walla's מבזקים strip: a pinned label + a row of
+   scrolling clickable headlines. Reuses the marquee's tapuz-marquee keyframes
+   (two tracks in lockstep = seamless at any headline count); zero JS. */
+.bent-ticker {
+  display: flex; align-items: stretch; margin: 1rem 0;
+  border-radius: 10px; overflow: hidden;
+  background: var(--color-surface, #0f172a);
+}
+.bent-ticker-label {
+  flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 1rem; font-weight: 700; white-space: nowrap;
+  background: rgba(0, 0, 0, 0.25); color: var(--bent-ticker-color, #fff);
+}
+.bent-ticker-viewport {
+  flex: 1; min-width: 0; display: flex; overflow: hidden;
+  white-space: nowrap; padding-block: 0.6rem;
+}
+.bent-ticker-track {
+  flex-shrink: 0; min-width: 100%;
+  display: flex; align-items: center; gap: 2.5rem; padding-inline: 1.25rem;
+  animation: tapuz-marquee var(--marquee-duration, 20s) linear infinite;
+  will-change: transform;
+}
+.bent-ticker-slow .bent-ticker-track { --marquee-duration: 40s; }
+.bent-ticker-fast .bent-ticker-track { --marquee-duration: 11s; }
+.bent-ticker-link {
+  /* light default to match the dark default bar — do NOT fall back to the
+     page's --color-text (usually dark → invisible on the dark ticker). */
+  color: var(--bent-ticker-color, #e2e8f0);
+  text-decoration: none; font-weight: 600; flex-shrink: 0; transition: opacity .15s;
+}
+.bent-ticker-link:hover { opacity: .7; }
+[dir="rtl"] .bent-ticker-track { animation-name: tapuz-marquee-rtl; }
+@media (prefers-reduced-motion: reduce) { .bent-ticker-track { animation: none; } }
+
 /* marquee — two full-width tracks scrolling in lockstep = seamless at any
    text length (no "pop" for short strings) */
 .marquee {

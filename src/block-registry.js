@@ -865,6 +865,43 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'ticker',
+    keyword: 'TICKER',
+    labelHe: 'מבזקים נעים',
+    icon: '📰',
+    category: 'מדיה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'שורת מבזקים נעה — כותרות עם קישורים (סגנון וואלה), עם צבעים ומהירות',
+    params: [
+      { name: 'label', labelHe: 'תווית קבועה', type: 'string', default: '' },
+      {
+        name: 'speed', labelHe: 'מהירות', type: 'enum',
+        enum: ['slow', 'md', 'fast'], default: 'md',
+        hint: 'slow = איטי, fast = מהיר'
+      },
+      { name: 'background', bentmlParam: 'background', labelHe: 'צבע רקע', type: 'string', default: '' },
+      { name: 'color', bentmlParam: 'color', labelHe: 'צבע טקסט', type: 'string', default: '' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'מבזקים', type: 'list',
+        itemFields: [
+          { name: 'text', labelHe: 'כותרת', type: 'string', required: true },
+          { name: 'href', labelHe: 'קישור', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי TICKERITEM'
+      }
+    ],
+    textField: null,
+    seed: {
+      label: 'מבזק', speed: 'md', background: '', color: '',
+      items: [
+        { text: 'כותרת מבזק ראשונה', href: '#' },
+        { text: 'כותרת מבזק שנייה', href: '#' },
+        { text: 'כותרת מבזק שלישית', href: '#' }
+      ]
+    }
+  },
+  {
     type: 'contact-info',
     keyword: 'CONTACT',
     labelHe: 'פרטי קשר',

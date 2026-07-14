@@ -1024,6 +1024,52 @@ register({
   }
 });
 
+// ─── Moving-news ticker (v0.61) — walla's מבזקים strip (batch 3): a pinned
+//     label + scrolling clickable headlines, with color + speed options.
+//     A NEWS component (headlines/links), not the decorative `marquee`. ───
+register({
+  name: 'tickeritem',
+  tag: 'bent-tickeritem',
+  category: 'media',
+  label: { he: 'מבזק', en: 'Ticker headline' },
+  icon: 'link',
+  container: false,
+  props: {
+    text: { type: 'string', default: '', label: { he: 'כותרת', en: 'Headline' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../ticker-html').renderTickerItem(node.props || {});
+  }
+});
+
+register({
+  name: 'ticker',
+  tag: 'bent-ticker',
+  category: 'media',
+  label: { he: 'מבזקים נעים', en: 'News ticker' },
+  icon: 'ticker',
+  container: true,
+  accept: ['tickeritem'],
+  props: {
+    label: { type: 'string', default: '', optional: true, label: { he: 'תווית', en: 'Label' } },
+    speed: { type: 'enum', values: ['slow', 'md', 'fast'], default: 'md', optional: true, label: { he: 'מהירות', en: 'Speed' } },
+    background: { type: 'string', default: '', optional: true, label: { he: 'צבע רקע', en: 'Background color' } },
+    color: { type: 'string', default: '', optional: true, label: { he: 'צבע טקסט', en: 'Text color' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../ticker-html').renderTicker(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 // ─── Form (v0.58) — the decompiler's #1 tool gap, now first-class ──────
 register({
   name: 'field',
