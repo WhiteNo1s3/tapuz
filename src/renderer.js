@@ -404,6 +404,12 @@ function renderBlock(block, direction = 'rtl') {
     case 'cards':
       return require('./pzn/card-html').renderCardsFromData(block.data || {}, direction, extra);
 
+    case 'nav':
+      // pass id/class as `extra` but the generic style decls as `decls` so the
+      // nav renders ONE style attribute (its colors + any generic style), never
+      // two (which the browser would drop, killing the colors).
+      return require('./pzn/nav-html').renderNavFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
+
     case 'contact-info': {
       const d = block.data || {};
       const lines = [];

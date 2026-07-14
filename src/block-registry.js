@@ -833,6 +833,38 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'nav',
+    keyword: 'NAV',
+    labelHe: 'תפריט ניווט',
+    icon: '≡',
+    category: 'מבנה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'שורת ניווט עם צבעים (רקע + טקסט)',
+    params: [
+      { name: 'background', bentmlParam: 'background', labelHe: 'צבע רקע', type: 'string', default: '' },
+      { name: 'color', bentmlParam: 'color', labelHe: 'צבע טקסט', type: 'string', default: '' },
+      { name: 'align', bentmlParam: 'align', labelHe: 'יישור', type: 'enum', enum: ['start', 'center', 'end'], default: 'start' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'קישורים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
+          { name: 'href', labelHe: 'קישור', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי NAVITEM'
+      }
+    ],
+    textField: null,
+    seed: {
+      background: '', color: '', align: 'start',
+      items: [
+        { label: 'בית', href: '/' },
+        { label: 'אודות', href: '/about' },
+        { label: 'צור קשר', href: '/contact' }
+      ]
+    }
+  },
+  {
     type: 'contact-info',
     keyword: 'CONTACT',
     labelHe: 'פרטי קשר',

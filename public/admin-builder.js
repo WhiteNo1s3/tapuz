@@ -1377,6 +1377,18 @@
       return wrap;
     }
 
+    if (block.type === 'nav') {
+      var nItems = d.items || [];
+      var navStyle = d.background ? 'background:' + esc(d.background) : '';
+      wrap.innerHTML =
+        '<div class="preview-nav preview-nav-' + esc(d.align || 'start') + '"' + (navStyle ? ' style="' + navStyle + '"' : '') + '>' +
+        (nItems.length ? nItems : [{ label: 'בית' }, { label: 'אודות' }, { label: 'צור קשר' }]).map(function (it) {
+          return '<span class="preview-nav-link"' + (d.color ? ' style="color:' + esc(d.color) + '"' : '') + '>' + esc(it.label || 'קישור') + '</span>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
     if (block.type === 'cards') {
       var cItems = d.items || [];
       wrap.innerHTML =

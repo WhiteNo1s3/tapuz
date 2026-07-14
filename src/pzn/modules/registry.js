@@ -937,6 +937,49 @@ register({
   }
 });
 
+// ─── Nav (v0.60) — page-level navigation bar with color options (batch 2) ─
+register({
+  name: 'navitem',
+  tag: 'bent-navitem',
+  category: 'layout',
+  label: { he: 'קישור ניווט', en: 'Nav link' },
+  icon: 'link',
+  container: false,
+  props: {
+    label: { type: 'string', default: '', label: { he: 'טקסט', en: 'Label' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../nav-html').renderNavItem(node.props || {});
+  }
+});
+
+register({
+  name: 'nav',
+  tag: 'bent-nav',
+  category: 'layout',
+  label: { he: 'תפריט ניווט', en: 'Nav menu' },
+  icon: 'nav',
+  container: true,
+  accept: ['navitem'],
+  props: {
+    background: { type: 'string', default: '', optional: true, label: { he: 'צבע רקע', en: 'Background color' } },
+    color: { type: 'string', default: '', optional: true, label: { he: 'צבע טקסט', en: 'Text color' } },
+    align: { type: 'enum', values: ['start', 'center', 'end'], default: 'start', label: { he: 'יישור', en: 'Align' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../nav-html').renderNav(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 // ─── Card grid (v0.59) — the walla lesson: a content site is a wall of
 //     media cards. `cards` container of repeatable `mediacard` items. ───
 register({

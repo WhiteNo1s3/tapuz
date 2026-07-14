@@ -1080,6 +1080,10 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
     .preview-card-tag { display: inline-block; margin: 6px 8px 0; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; color: #0a66c2; }
     .preview-card-title { padding: 2px 8px; font-size: 0.8rem; font-weight: 600; color: #1e293b; }
     .preview-card-excerpt { padding: 0 8px 8px; font-size: 0.72rem; color: #64748b; }
+    .preview-nav { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 12px; border-radius: 8px; background: #f1f5f9; }
+    .preview-nav-center { justify-content: center; }
+    .preview-nav-end { justify-content: flex-end; }
+    .preview-nav-link { font-weight: 600; font-size: 0.85rem; color: #334155; }
     .prop-section-label {
       font-size: 0.72rem;
       font-weight: 700;
