@@ -262,9 +262,39 @@ function htmlToBlocks(html) {
         i = end; continue;
       }
 
+      // video → the native video module (v0.62 closed this gap). src from the
+      // <video src> attr or the first child <source>; poster + boolean flags
+      // (controls/autoplay/loop/muted) carried over as present.
+      if (name === 'video') {
+        const a = t.attrs || {};
+        let src = a.src || '';
+        if (!src) {
+          for (let j = i + 1; j < end - 1; j++) {
+            if (tokens[j].name === 'source' && tokens[j].attrs && tokens[j].attrs.src) {
+              src = tokens[j].attrs.src; break;
+            }
+          }
+        }
+        if (src) {
+          const data = { src };
+          if (a.poster) data.poster = a.poster;
+          if ('controls' in a) data.controls = true;
+          if ('autoplay' in a) data.autoplay = true;
+          if ('loop' in a) data.loop = true;
+          if ('muted' in a) data.muted = true;
+          sink.push({ type: 'video', id: nid('video'), data });
+          mapped += 1;
+        } else {
+          let frag = '';
+          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+          raw += frag;
+        }
+        i = end; continue;
+      }
+
       // patterns we RECOGNIZE but have no first-class module for yet →
       // keep verbatim (nothing lost) AND report the missing tool.
-      if (name === 'table' || name === 'video' || name === 'audio') {
+      if (name === 'table' || name === 'audio') {
         suggested.add(name);
         let frag = '';
         for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);

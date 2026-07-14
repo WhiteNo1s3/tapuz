@@ -30,6 +30,7 @@ async function checkRejects(name, fn) {
     <a href="https://wa.me/972501234567">ווטסאפ</a>
     <form action="/x"><input name="q"/></form>
     <table><tr><td>1</td></tr></table>
+    <video src="/clip.mp4" poster="/p.jpg" controls></video>
     <nav><a href="/a">A</a></nav>
     <div class="grid cols-2"><p>right</p><p>left</p></div>
   `);
@@ -41,6 +42,8 @@ async function checkRejects(name, fn) {
     g.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 1) && !g.suggestedTools.includes('form'));
   check('nav decompiles to a nav block (v0.60 closed this gap)',
     g.blocks.some((b) => b.type === 'nav') && !g.suggestedTools.includes('nav'));
+  check('video decompiles to a video block (v0.62 closed this gap)',
+    g.blocks.some((b) => b.type === 'video' && b.data.src === '/clip.mp4') && !g.suggestedTools.includes('video'));
   check('table still reported as toolGap', g.suggestedTools.includes('table'));
   check('grid wrapper with children suggests columns', g.suggestedTools.includes('columns'));
   check('remaining unmapped patterns preserved as provisional html (nothing lost)',

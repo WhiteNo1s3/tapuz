@@ -252,6 +252,9 @@ function blockToModule(block) {
       return createModule('ticker', baseOpts(block, pickProps(data, ['label', 'speed', 'background', 'color']), { children }));
     }
 
+    case 'video':
+      return createModule('video', baseOpts(block, pickProps(data, ['src', 'poster', 'caption', 'controls', 'autoplay', 'loop', 'muted'])));
+
     case 'contact-info':
       return createModule('contact-info', baseOpts(block, pickProps(data, ['phone', 'email', 'address', 'hours'])));
 
@@ -541,6 +544,9 @@ function moduleToBlock(node) {
         .map((c) => pickData(c.props || {}, ['text', 'href']));
       return finishBlock(node, 'ticker', data);
     }
+
+    case 'video':
+      return finishBlock(node, 'video', pickData(props, ['src', 'poster', 'caption', 'controls', 'autoplay', 'loop', 'muted']));
 
     case 'contact-info':
       return finishBlock(node, 'contact-info', pickData(props, ['phone', 'email', 'address', 'hours']));

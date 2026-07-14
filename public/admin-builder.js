@@ -1403,6 +1403,22 @@
       return wrap;
     }
 
+    if (block.type === 'video') {
+      var vurl = d.src || '';
+      var vyt = youtubeId(vurl);
+      var vthumb = vyt ? 'https://img.youtube.com/vi/' + escAttr(vyt) + '/hqdefault.jpg' : (d.poster ? escAttr(d.poster) : '');
+      if (vthumb) {
+        wrap.innerHTML =
+          '<div class="preview-embed"><img src="' + vthumb + '" alt="" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0"><span class="embed-play">▶</span></div>';
+      } else if (vurl) {
+        wrap.innerHTML =
+          '<div class="preview-embed" style="background:#0f172a;min-height:90px;display:flex;align-items:center;justify-content:center"><span class="embed-play" style="position:static">▶</span></div>';
+      } else {
+        wrap.innerHTML = '<div class="preview-image-empty">וידאו — בחר קובץ או הדבק קישור (לחץ לעריכה)</div>';
+      }
+      return wrap;
+    }
+
     if (block.type === 'cards') {
       var cItems = d.items || [];
       wrap.innerHTML =

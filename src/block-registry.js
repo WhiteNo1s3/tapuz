@@ -413,6 +413,33 @@ const BLOCK_REGISTRY = [
     textField: null,
     seed: { url: '' }
   },
+  {
+    type: 'video',
+    keyword: 'VIDEO',
+    labelHe: 'וידאו',
+    icon: '🎬',
+    category: 'מדיה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'נגן וידאו מתארח (mp4/webm) — קישור יוטיוב הופך אוטומטית להטמעה',
+    params: [
+      {
+        name: 'src', labelHe: 'קובץ וידאו / קישור', type: 'media', required: true,
+        hint: 'קובץ תחת ‎/uploads‎ או קישור יוטיוב (E306 כשחסר)'
+      },
+      { name: 'poster', labelHe: 'תמונת שער', type: 'media', hint: 'תמונה שמוצגת לפני הניגון' },
+      { name: 'caption', labelHe: 'כיתוב', type: 'string', hint: 'מוצג מתחת לנגן' },
+      { name: 'controls', labelHe: 'פקדי נגן', type: 'boolean', default: true },
+      {
+        name: 'autoplay', labelHe: 'ניגון אוטומטי', type: 'boolean', default: false, omitDefault: true,
+        hint: 'ניגון אוטומטי מחייב השתקה (מדיניות דפדפן) — נאכף אוטומטית'
+      },
+      { name: 'loop', labelHe: 'לולאה', type: 'boolean', default: false, omitDefault: true },
+      { name: 'muted', labelHe: 'מושתק', type: 'boolean', default: false, omitDefault: true }
+    ],
+    textField: null,
+    seed: { src: '', controls: true }
+  },
 
   // ─────────────────────────── מבנה ───────────────────────────
   {
