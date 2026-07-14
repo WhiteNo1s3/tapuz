@@ -101,7 +101,8 @@ function blockToJson(node, warnings) {
         collapse: p.collapse || 'md',
         valign: p.valign || 'top'
       };
-      if (p.ratio) data.ratio = String(p.ratio);
+      // the cut speaks percent too: "70%:30%" and "70:30" are the same split
+      if (p.ratio) data.ratio = String(p.ratio).split(':').map((s) => s.trim().replace(/%$/, '')).join(':');
       return createBlock('columns', data);
     }
     case 'SPACE': {

@@ -165,6 +165,93 @@ function detectCardCluster(tokens, from, to) {
   return null;
 }
 
+// ─── shared leaf parsers (used by the flat walk AND the v2 hunt) ────────
+
+/** <form> children → form-module fields (skips submit/hidden controls). */
+function parseFormFields(tokens, i, end) {
+  const fields = [];
+  let pendingLabel = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind === 'open' && tk.name === 'label') {
+      const lend = matchClose(tokens, j);
+      pendingLabel = unescapeHtml(textOf(tokens, j + 1, lend - 1));
+      j = lend - 1;
+      continue;
+    }
+    if (tk.kind === 'open' && (tk.name === 'input' || tk.name === 'textarea' || tk.name === 'select')) {
+      const a = tk.attrs || {};
+      const inType = String(a.type || '').toLowerCase();
+      if (tk.name === 'input' && /^(submit|button|hidden|image|reset)$/.test(inType)) {
+        const cend = matchClose(tokens, j); j = cend - 1; pendingLabel = ''; continue;
+      }
+      let ftype = 'text';
+      if (tk.name === 'textarea') ftype = 'textarea';
+      else if (tk.name === 'select') ftype = 'select';
+      else ftype = (inType === 'email' || inType === 'tel' || inType === 'checkbox') ? inType : 'text';
+      const field = {
+        label: pendingLabel || a.placeholder || a.name || '',
+        name: a.name || '',
+        type: ftype,
+        placeholder: a.placeholder || '',
+        required: 'required' in a
+      };
+      const cend = matchClose(tokens, j);
+      if (ftype === 'select') {
+        const opts = [];
+        for (let k = j + 1; k < cend - 1; k++) {
+          if (tokens[k].kind === 'open' && tokens[k].name === 'option') {
+            const oend = matchClose(tokens, k);
+            const label = unescapeHtml(textOf(tokens, k + 1, oend - 1));
+            if (label) opts.push(label);
+            k = oend - 1;
+          }
+        }
+        field.options = opts.join(', ');
+      }
+      j = cend - 1;
+      pendingLabel = '';
+      fields.push(field);
+    }
+  }
+  return fields;
+}
+
+/** <nav> anchors → nav-module items (wrapper ul/li dropped). */
+function parseNavItems(tokens, i, end) {
+  const items = [];
+  for (let j = i + 1; j < end - 1; j++) {
+    if (tokens[j].kind === 'open' && tokens[j].name === 'a') {
+      const aEnd = matchClose(tokens, j);
+      const label = unescapeHtml(textOf(tokens, j + 1, aEnd - 1));
+      if (label) items.push({ label, href: (tokens[j].attrs && tokens[j].attrs.href) || '#' });
+      j = aEnd - 1;
+    }
+  }
+  return items;
+}
+
+/** <video> → video-module data, or null when no src is found. */
+function parseVideoData(tokens, i, end, t) {
+  const a = t.attrs || {};
+  let src = a.src || '';
+  if (!src) {
+    for (let j = i + 1; j < end - 1; j++) {
+      if (tokens[j].name === 'source' && tokens[j].attrs && tokens[j].attrs.src) {
+        src = tokens[j].attrs.src; break;
+      }
+    }
+  }
+  if (!src) return null;
+  const data = { src };
+  if (a.poster) data.poster = a.poster;
+  if ('controls' in a) data.controls = true;
+  if ('autoplay' in a) data.autoplay = true;
+  if ('loop' in a) data.loop = true;
+  if ('muted' in a) data.muted = true;
+  return data;
+}
+
 /**
  * @param {string} html
  * @returns {{ blocks: object[], mapped: number, leftover: number, suggestedTools: string[] }}
@@ -173,7 +260,9 @@ function htmlToBlocks(html) {
   uid = 0;
   let tokens;
   try {
-    tokens = tokenize(String(html == null ? '' : html));
+    // lenient: graduation always faces real-world HTML (yahoo-class attribute
+    // soup) — malformed markup degrades to text instead of aborting the map
+    tokens = tokenize(String(html == null ? '' : html), { lenient: true });
   } catch (e) {
     // Real-world HTML (yahoo.com, etc.) can break the tokenizer on malformed
     // attributes. NEVER hard-fail — keep the whole fragment as one sanitized
@@ -293,51 +382,7 @@ function htmlToBlocks(html) {
       // textarea/select children into fields; skip submit/hidden controls
       // (the module renders its own submit button).
       if (name === 'form') {
-        const fields = [];
-        let pendingLabel = '';
-        for (let j = i + 1; j < end - 1; j++) {
-          const tk = tokens[j];
-          if (tk.kind === 'open' && tk.name === 'label') {
-            const lend = matchClose(tokens, j);
-            pendingLabel = unescapeHtml(textOf(tokens, j + 1, lend - 1));
-            j = lend - 1;
-            continue;
-          }
-          if (tk.kind === 'open' && (tk.name === 'input' || tk.name === 'textarea' || tk.name === 'select')) {
-            const a = tk.attrs || {};
-            const inType = String(a.type || '').toLowerCase();
-            if (tk.name === 'input' && /^(submit|button|hidden|image|reset)$/.test(inType)) {
-              const cend = matchClose(tokens, j); j = cend - 1; pendingLabel = ''; continue;
-            }
-            let ftype = 'text';
-            if (tk.name === 'textarea') ftype = 'textarea';
-            else if (tk.name === 'select') ftype = 'select';
-            else ftype = (inType === 'email' || inType === 'tel' || inType === 'checkbox') ? inType : 'text';
-            const field = {
-              label: pendingLabel || a.placeholder || a.name || '',
-              name: a.name || '',
-              type: ftype,
-              placeholder: a.placeholder || '',
-              required: 'required' in a
-            };
-            const cend = matchClose(tokens, j);
-            if (ftype === 'select') {
-              const opts = [];
-              for (let k = j + 1; k < cend - 1; k++) {
-                if (tokens[k].kind === 'open' && tokens[k].name === 'option') {
-                  const oend = matchClose(tokens, k);
-                  const label = unescapeHtml(textOf(tokens, k + 1, oend - 1));
-                  if (label) opts.push(label);
-                  k = oend - 1;
-                }
-              }
-              field.options = opts.join(', ');
-            }
-            j = cend - 1;
-            pendingLabel = '';
-            fields.push(field);
-          }
-        }
+        const fields = parseFormFields(tokens, i, end);
         if (fields.length) {
           const method = /get/i.test((t.attrs && t.attrs.method) || '') ? 'get' : 'post';
           sink.push({ type: 'form', id: nid('form'), data: { action: (t.attrs && t.attrs.action) || '', method, submit: 'שליחה', fields } });
@@ -353,15 +398,7 @@ function htmlToBlocks(html) {
       // nav → the nav module (v0.60 closed this gap). Its <a> children become
       // nav links; drop wrapper <ul>/<li> (we read the anchors directly).
       if (name === 'nav') {
-        const items = [];
-        for (let j = i + 1; j < end - 1; j++) {
-          if (tokens[j].kind === 'open' && tokens[j].name === 'a') {
-            const aEnd = matchClose(tokens, j);
-            const label = unescapeHtml(textOf(tokens, j + 1, aEnd - 1));
-            if (label) items.push({ label, href: (tokens[j].attrs && tokens[j].attrs.href) || '#' });
-            j = aEnd - 1;
-          }
-        }
+        const items = parseNavItems(tokens, i, end);
         if (items.length) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items } });
           mapped += 1;
@@ -377,22 +414,8 @@ function htmlToBlocks(html) {
       // <video src> attr or the first child <source>; poster + boolean flags
       // (controls/autoplay/loop/muted) carried over as present.
       if (name === 'video') {
-        const a = t.attrs || {};
-        let src = a.src || '';
-        if (!src) {
-          for (let j = i + 1; j < end - 1; j++) {
-            if (tokens[j].name === 'source' && tokens[j].attrs && tokens[j].attrs.src) {
-              src = tokens[j].attrs.src; break;
-            }
-          }
-        }
-        if (src) {
-          const data = { src };
-          if (a.poster) data.poster = a.poster;
-          if ('controls' in a) data.controls = true;
-          if ('autoplay' in a) data.autoplay = true;
-          if ('loop' in a) data.loop = true;
-          if ('muted' in a) data.muted = true;
+        const data = parseVideoData(tokens, i, end, t);
+        if (data) {
           sink.push({ type: 'video', id: nid('video'), data });
           mapped += 1;
         } else {
@@ -441,4 +464,18 @@ function htmlToBlocks(html) {
   return { blocks: out, mapped, leftover, suggestedTools: [...suggested] };
 }
 
-module.exports = { htmlToBlocks };
+module.exports = {
+  htmlToBlocks,
+  // shared internals for the v2 structure hunt (src/pzn/hunt.js)
+  parseFormFields,
+  parseNavItems,
+  parseVideoData,
+  detectCardCluster,
+  childSpans,
+  matchClose,
+  textOf,
+  tokenToHtml,
+  HEADING,
+  CONTAINERS,
+  INLINE
+};
