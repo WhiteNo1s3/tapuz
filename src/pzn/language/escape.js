@@ -24,17 +24,48 @@ function escapeCssUrl(str) {
     .replace(/[\\'"()<>]/g, (c) => '\\' + c.charCodeAt(0).toString(16) + ' ');
 }
 
+// The named entities real pages actually carry (© — ' " … ® ™ nbsp …). `amp`
+// lives here too: a single-pass decode never re-scans its own output, so an
+// escaped "&amp;copy;" resolves to the literal "&copy;", not ©.
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  nbsp: ' ', copy: '©', reg: '®', trade: '™',
+  hellip: '…', mdash: '—', ndash: '–', shy: '­',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”',
+  laquo: '«', raquo: '»', deg: '°', middot: '·',
+  bull: '•', sect: '§', para: '¶', euro: '€',
+  pound: '£', cent: '¢', yen: '¥', times: '×', divide: '÷'
+};
+
+/** A numeric code point → char, guarding invalid/surrogate values (no crash). */
+function fromCodePoint(n) {
+  if (!Number.isInteger(n) || n < 1 || n > 0x10FFFF || (n >= 0xD800 && n <= 0xDFFF)) return '';
+  try { return String.fromCodePoint(n); } catch (e) { return ''; }
+}
+
 /**
- * Decode a minimal set of HTML entities in text/attr values.
+ * Decode HTML entities in text/attr values pulled from real pages — named
+ * (&copy; &nbsp; &mdash;…), decimal (&#169;) and hex (&#xA9;). ONE pass: a
+ * decoded "&" is never re-scanned, so "&amp;copy;" stays the literal "&copy;".
+ * Unknown names pass through untouched (never dropped).
  * @param {string} str
  */
 function unescapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&');
+  return String(str ?? '').replace(
+    /&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g,
+    (m, body) => {
+      if (body[0] === '#') {
+        const n = (body[1] === 'x' || body[1] === 'X')
+          ? parseInt(body.slice(2), 16)
+          : parseInt(body.slice(1), 10);
+        return fromCodePoint(n) || m;
+      }
+      const hit = NAMED_ENTITIES[body] !== undefined
+        ? NAMED_ENTITIES[body]
+        : NAMED_ENTITIES[body.toLowerCase()];
+      return hit !== undefined ? hit : m;
+    }
+  );
 }
 
 /** Neutralize executable URL schemes on clickable links. */
