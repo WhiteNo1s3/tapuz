@@ -17,6 +17,14 @@
  * backlog of modules the palette is missing. The decompiler is how the
  * vocabulary grows: seen on the web → toolGap → we build it → next decompile
  * maps cleaner and every agent's dictionary gets richer.
+ *
+ * v0.65 — card-cluster recognition (the walla lesson, deferred from v0.59):
+ * a content site is a wall of repeated img+heading+link siblings. When a
+ * container's children repeat that shape, the whole cluster becomes ONE
+ * `cards` block with `mediacard` items instead of provisional html. Guards
+ * against false positives: homogeneous root tags only (article/li/a/div/
+ * figure — never section), per-card text cap (a hero SECTION is not a card),
+ * a minimum count, and a match ratio.
  */
 
 const { tokenize } = require('./language/parse');
@@ -70,6 +78,93 @@ const HEADING = /^h([1-6])$/;
 const CONTAINERS = new Set(['div', 'section', 'article', 'main', 'header', 'footer', 'aside', 'figure']);
 const INLINE = new Set(['strong', 'b', 'em', 'i', 'u', 'small', 'span', 'code', 'mark', 'br', 'sup', 'sub']);
 
+// ─── card-cluster recognition (v0.65) ──────────────────────────────────
+// Roots a repeated card may live in. Deliberately NOT section/main/header —
+// a landing page made of hero sections must never collapse into a card grid.
+const CARD_ROOTS = new Set(['article', 'li', 'a', 'div', 'figure']);
+// A card is a TEASER: if a child carries more visible text than this it is a
+// content section, not a card.
+const CARD_TEXT_CAP = 400;
+
+/** Direct child element spans [openIdx, endIdx) inside a token range. */
+function childSpans(tokens, from, to) {
+  const spans = [];
+  let j = from;
+  while (j < to) {
+    if (tokens[j].kind === 'open') {
+      const e = matchClose(tokens, j);
+      spans.push([j, e]);
+      j = e;
+    } else j++;
+  }
+  return spans;
+}
+
+/** Try to read ONE media card out of an element span (null = not a card). */
+function extractCard(tokens, from, to) {
+  const root = tokens[from];
+  const card = {};
+  if (root.name === 'a' && root.attrs && root.attrs.href) card.href = root.attrs.href;
+  for (let j = from; j < to; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (!card.image && tk.name === 'img') {
+      const a = tk.attrs || {};
+      // real sites lazy-load: the true URL often hides in data-src
+      card.image = a.src || a['data-src'] || a['data-lazy-src'] || '';
+    } else if (!card.title && HEADING.test(tk.name)) {
+      const e = matchClose(tokens, j);
+      card.title = unescapeHtml(textOf(tokens, j + 1, e - 1)).slice(0, 200);
+      j = e - 1;
+    } else if (!card.href && tk.name === 'a' && tk.attrs && tk.attrs.href) {
+      card.href = tk.attrs.href;
+    } else if (!card.excerpt && tk.name === 'p') {
+      const e = matchClose(tokens, j);
+      card.excerpt = unescapeHtml(textOf(tokens, j + 1, e - 1)).slice(0, 300);
+      j = e - 1;
+    } else if (!card.tag && tk.name === 'span' && /tag|label|kicker|category|badge/i.test((tk.attrs && tk.attrs.class) || '')) {
+      const e = matchClose(tokens, j);
+      card.tag = unescapeHtml(textOf(tokens, j + 1, e - 1)).slice(0, 60);
+      j = e - 1;
+    }
+  }
+  // a real card = a headline plus a picture or a destination, teaser-sized
+  if (!card.title || !(card.image || card.href)) return null;
+  if (textOf(tokens, from, to).length > CARD_TEXT_CAP) return null;
+  const out = { title: card.title };
+  if (card.image) out.image = card.image;
+  if (card.tag) out.tag = card.tag;
+  if (card.excerpt) out.excerpt = card.excerpt;
+  if (card.href) out.href = card.href;
+  return out;
+}
+
+/**
+ * The walla lesson: repeated img+heading+link siblings ARE a card grid.
+ * Returns the mediacard items, or null when the range is not a cluster.
+ */
+function detectCardCluster(tokens, from, to) {
+  const candidates = childSpans(tokens, from, to)
+    .filter(([s]) => CARD_ROOTS.has(tokens[s].name) && !tokens[s].selfClosing);
+  if (candidates.length < 2) return null;
+  const cards = [];
+  let rootName = null;
+  for (const [s, e] of candidates) {
+    const c = extractCard(tokens, s, e);
+    if (!c) continue;
+    // homogeneous repetition is the essence of a cluster — mixed roots are a
+    // page layout, not a card wall
+    if (rootName === null) rootName = tokens[s].name;
+    else if (tokens[s].name !== rootName) return null;
+    cards.push(c);
+  }
+  // article/li/a repetition is card-intent by markup; generic div/figure needs
+  // a stronger signal
+  const minCount = (rootName === 'article' || rootName === 'li' || rootName === 'a') ? 2 : 3;
+  if (cards.length >= minCount && cards.length / candidates.length >= 0.6) return cards;
+  return null;
+}
+
 /**
  * @param {string} html
  * @returns {{ blocks: object[], mapped: number, leftover: number, suggestedTools: string[] }}
@@ -105,6 +200,15 @@ function htmlToBlocks(html) {
   }
 
   function walk(from, to, sink) {
+    // the whole range repeating the card shape? → ONE cards block (v0.65).
+    // Fires for wrapped clusters (via the CONTAINERS descend) and for bare
+    // top-level sibling clusters alike.
+    const cluster = detectCardCluster(tokens, from, to);
+    if (cluster) {
+      sink.push({ type: 'cards', id: nid('cards'), data: { items: cluster } });
+      mapped += 1;
+      return;
+    }
     let raw = '';
     let i = from;
     while (i < to) {
@@ -167,6 +271,13 @@ function htmlToBlocks(html) {
       }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
       if (name === 'ul' || name === 'ol') {
+        // card-shaped <li>s are a card GRID, not a text list (walla renders
+        // its card walls as ul>li) — try the cluster first, list as fallback
+        const liCluster = detectCardCluster(tokens, i + 1, end - 1);
+        if (liCluster) {
+          sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
+          mapped += 1; i = end; continue;
+        }
         const items = [];
         for (let j = i + 1; j < end - 1; j++) {
           if (tokens[j].kind === 'open' && tokens[j].name === 'li') {

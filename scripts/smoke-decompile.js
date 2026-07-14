@@ -33,6 +33,11 @@ async function checkRejects(name, fn) {
     <video src="/clip.mp4" poster="/p.jpg" controls></video>
     <nav><a href="/a">A</a></nav>
     <div class="grid cols-2"><p>right</p><p>left</p></div>
+    <div class="cubes">
+      <article><figure><img src="/c1.jpg"></figure><h3>כתבה א</h3><a href="/c1">עוד</a></article>
+      <article><figure><img src="/c2.jpg"></figure><h3>כתבה ב</h3><a href="/c2">עוד</a></article>
+      <article><figure><img src="/c3.jpg"></figure><h3>כתבה ג</h3><a href="/c3">עוד</a></article>
+    </div>
   `);
   check('iframe → embed block', g.blocks.some((b) => b.type === 'embed' && /youtube/.test(b.data.url)));
   check('youtube link → embed block', g.blocks.filter((b) => b.type === 'embed').length >= 2);
@@ -44,6 +49,8 @@ async function checkRejects(name, fn) {
     g.blocks.some((b) => b.type === 'nav') && !g.suggestedTools.includes('nav'));
   check('video decompiles to a video block (v0.62 closed this gap)',
     g.blocks.some((b) => b.type === 'video' && b.data.src === '/clip.mp4') && !g.suggestedTools.includes('video'));
+  check('card cluster → ONE cards block (v0.65 closed this gap)',
+    g.blocks.some((b) => b.type === 'cards' && b.data.items.length === 3 && b.data.items[0].title === 'כתבה א'));
   check('table still reported as toolGap', g.suggestedTools.includes('table'));
   check('grid wrapper with children suggests columns', g.suggestedTools.includes('columns'));
   check('remaining unmapped patterns preserved as provisional html (nothing lost)',
