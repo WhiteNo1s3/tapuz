@@ -476,6 +476,20 @@
       .catch(function () { cb(hit ? hit.articles : []); });
   }
 
+  /** Cached one-shot categories fetch (v0.64) — page props + category preview. */
+  var categoriesCache = null; // { at, cats }
+  function loadCategoriesOnce(cb) {
+    if (categoriesCache && Date.now() - categoriesCache.at < 15000) { cb(categoriesCache.cats); return; }
+    fetch('/admin/api/categories')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var cats = (data && data.categories) || [];
+        categoriesCache = { at: Date.now(), cats: cats };
+        cb(cats);
+      })
+      .catch(function () { cb(categoriesCache ? categoriesCache.cats : []); });
+  }
+
   function youtubeId(url) {
     var m = String(url || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,20})/);
     return m ? m[1] : null;
@@ -1419,6 +1433,30 @@
       return wrap;
     }
 
+    if (block.type === 'category') {
+      var catSlug = d.slug || '';
+      wrap.innerHTML =
+        '<div class="preview-category">' +
+        '<div class="preview-category-head" id="pcat-head-' + escAttr(block.id) + '">🗂 ' + esc(catSlug || 'בחרו קטגוריה במאפיינים') + '</div>' +
+        '<div class="preview-cards">' +
+        [1, 2, 3].map(function () {
+          return '<div class="preview-card"><div class="preview-card-media"></div><div class="preview-card-title">כתבה מהקטגוריה</div></div>';
+        }).join('') +
+        '</div></div>';
+      if (catSlug) {
+        loadCategoriesOnce(function (cats) {
+          var meta = null;
+          for (var i = 0; i < cats.length; i++) if (cats[i].slug === catSlug) { meta = cats[i]; break; }
+          var head = document.getElementById('pcat-head-' + block.id);
+          if (head && meta) {
+            head.textContent = '🗂 ' + (meta.name || catSlug);
+            if (/^#[0-9a-fA-F]{6}$/.test(meta.color || '')) head.style.borderColor = meta.color;
+          }
+        });
+      }
+      return wrap;
+    }
+
     if (block.type === 'cards') {
       var cItems = d.items || [];
       wrap.innerHTML =
@@ -2258,7 +2296,11 @@
         '<div class="prop-hint" style="margin:-6px 0 12px">משתנה אוטומטית לפי הכותרת. עריכה ידנית קובעת כתובת קבועה (מחיקה = חזרה לאוטומטי).</div>' +
         '<div class="prop-group">' +
         '<label class="check-line"><input type="checkbox" data-page-article="1"' + (isArticle ? ' checked' : '') + '> דף מאמר (יופיע בקוביות מאמרים)</label>' +
-        '</div>';
+        '</div>' +
+        // v0.64: assign this page to categories — each is just a portable tag
+        '<div class="prop-group" id="page-cats-box" style="display:none">' +
+        '<div style="font-size:0.82rem;font-weight:600;color:#475569;margin-bottom:4px">קטגוריות (הדף יופיע בבלוק הקטגוריה)</div>' +
+        '<div id="page-cats"></div></div>';
       if (isArticle) {
         pageHtml += field('תקציר לקובייה', '<textarea data-page-meta="teaser" placeholder="ריק = נלקח אוטומטית מהטקסט הראשון">' + esc(pageMeta.teaser || '') + '</textarea>');
         pageHtml += field('תמונת קובייה (URL)', '<input data-page-meta="cardImage" dir="ltr" value="' + escAttr(pageMeta.cardImage || '') + '" placeholder="ריק = התמונה הראשונה בדף">');
@@ -2310,6 +2352,28 @@
           renderProperties();
         });
       }
+      // v0.64: category checkboxes (fetched once, cached) toggle category slugs
+      // in pageTags — membership rides on the page's portable tags.
+      loadCategoriesOnce(function (cats) {
+        var box = document.getElementById('page-cats-box');
+        var host = document.getElementById('page-cats');
+        if (!box || !host || !cats.length) return;
+        box.style.display = '';
+        host.innerHTML = cats.map(function (c) {
+          var on = pageTags.indexOf(c.slug) !== -1;
+          return '<label class="check-line"><input type="checkbox" data-page-cat="' + escAttr(c.slug) + '"' + (on ? ' checked' : '') + '> ' +
+            esc(c.name || c.slug) + '</label>';
+        }).join('');
+        host.querySelectorAll('[data-page-cat]').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var slug = cb.dataset.pageCat;
+            var i = pageTags.indexOf(slug);
+            if (cb.checked && i === -1) pageTags.push(slug);
+            if (!cb.checked && i !== -1) pageTags.splice(i, 1);
+            markDirty();
+          });
+        });
+      });
       panel.querySelectorAll('[data-page-meta]').forEach(function (input) {
         var applyMeta = function () {
           var v = input.value.trim();

@@ -313,6 +313,15 @@ const KEYWORDS = {
       muted: { type: 'boolean', default: false }
     }
   },
+  CATEGORY: {
+    body: 'NO-BODY',
+    jsonType: 'category',
+    params: {
+      slug: { type: 'string', required: true },
+      limit: { type: 'integer', default: 6 },
+      showheader: { type: 'boolean', default: true }
+    }
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',

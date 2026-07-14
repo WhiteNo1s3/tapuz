@@ -28,6 +28,7 @@ function compile(doc, context = {}) {
     dir: doc.dir || 'rtl',
     lang: doc.lang || 'he',
     articles: context.articles || [],
+    categories: context.categories || [],
     pretty: context.pretty !== false
   };
 
@@ -100,7 +101,8 @@ function compileFragment(modules, ctx = {}) {
   const context = {
     dir: ctx.dir || 'rtl',
     lang: ctx.lang || 'he',
-    articles: ctx.articles || []
+    articles: ctx.articles || [],
+    categories: ctx.categories || []
   };
   const compileChild = (node, childCtx) =>
     compileModule(node, childCtx || context, compileChild);

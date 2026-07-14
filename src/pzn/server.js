@@ -112,6 +112,7 @@ async function handleApi(req, res, url) {
       200,
       loader.loadPzn(body.source, {
         articles: body.articles,
+        categories: body.categories,
         customCss: body.customCss,
         includeAgentSheet: body.includeAgentSheet !== false
       })
@@ -128,6 +129,7 @@ async function handleApi(req, res, url) {
       200,
       loader.applySource(body.source, {
         articles: body.articles,
+        categories: body.categories,
         customCss: body.customCss || ''
       })
     );
@@ -143,7 +145,8 @@ async function handleApi(req, res, url) {
         parentId: body.parentId || null,
         index: body.index,
         customCss: body.customCss || '',
-        articles: body.articles
+        articles: body.articles,
+        categories: body.categories
       })
     );
   }

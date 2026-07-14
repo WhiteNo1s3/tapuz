@@ -1097,6 +1097,39 @@ register({
   }
 });
 
+// ─── Category presentation (v0.64, batch finale) — a branded header + the
+//     category's article grid. Dynamic leaf like article-list: articles come
+//     from ctx (threaded), category metadata from ctx.categories (the file
+//     store content/categories.json). Membership = the page's portable tags. ──
+register({
+  name: 'category',
+  tag: 'bent-category',
+  category: 'data',
+  label: { he: 'קטגוריה', en: 'Category' },
+  icon: 'category',
+  container: false,
+  props: {
+    slug: { type: 'string', default: '', label: { he: 'קטגוריה (slug)', en: 'Category slug' } },
+    limit: { type: 'integer', min: 1, max: 48, default: 6, optional: true, label: { he: 'כמות', en: 'Limit' } },
+    showheader: { type: 'boolean', default: true, optional: true, label: { he: 'הצג כותרת', en: 'Show header' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { slug: '' },
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const p = node.props || {};
+    const slug = String(p.slug || '');
+    const limit = Math.min(Math.max(parseInt(p.limit, 10) || 6, 1), 48);
+    const articles = (Array.isArray(ctx.articles) ? ctx.articles : [])
+      .filter((a) => slug && (a.tags || []).includes(slug))
+      .slice(0, limit);
+    const category = (Array.isArray(ctx.categories) ? ctx.categories : [])
+      .find((c) => c && c.slug === slug) || null;
+    return require('../category-html').renderCategory(p, { category, articles }, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 // ─── Form (v0.58) — the decompiler's #1 tool gap, now first-class ──────
 register({
   name: 'field',

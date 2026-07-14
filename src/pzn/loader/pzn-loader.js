@@ -194,6 +194,7 @@ function buildPreviewHtml(doc, context = {}, opts = {}) {
     dir: doc.dir || 'rtl',
     lang: doc.lang || 'he',
     articles: context.articles || [],
+    categories: context.categories || [],
     pretty: true
   });
   const custom = opts.customCss
@@ -283,6 +284,7 @@ function loadPzn(source, options = {}) {
       if (!hasErrors) {
         publicHtml = compile(doc, {
           articles: options.articles || [],
+          categories: options.categories || [],
           skipValidate: false
         });
       }
