@@ -327,12 +327,14 @@ class Parser {
 
   collectTextBody(firstChunk) {
     const parts = [];
+    let inlineStart = false;
     if (firstChunk) {
       const close = findUnescapedClose(firstChunk);
       if (close !== -1) {
         return unescapeText(firstChunk.slice(0, close));
       }
       parts.push(firstChunk);
+      inlineStart = true;
     }
     while (this.i < this.n) {
       const line = this.lines[this.i];
@@ -345,8 +347,25 @@ class Parser {
       parts.push(line);
       this.i++;
     }
+    // pretty-printed bodies: the closing brace's own indentation and the
+    // common leading indent of body lines are layout, not content — dedent
+    // so decompile → compile round-trips stay byte-stable
+    if (parts.length > (inlineStart ? 1 : 0) && parts[parts.length - 1].trim() === '') {
+      parts.pop();
+    }
+    let dedent = Infinity;
+    for (let i = inlineStart ? 1 : 0; i < parts.length; i++) {
+      const l = parts[i];
+      if (!l.trim()) continue;
+      dedent = Math.min(dedent, /^ */.exec(l)[0].length);
+    }
+    if (!Number.isFinite(dedent)) dedent = 0;
+    const cleaned = parts.map((l, i) => {
+      if (inlineStart && i === 0) return l;
+      return l.trim() ? l.slice(dedent) : '';
+    });
     // strip one leading newline from pretty open
-    let text = parts.join('\n');
+    let text = cleaned.join('\n');
     if (text.startsWith('\n')) text = text.slice(1);
     if (text.endsWith('\n')) text = text.slice(0, -1);
     return unescapeText(text);
