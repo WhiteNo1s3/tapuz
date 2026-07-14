@@ -410,6 +410,11 @@ function renderBlock(block, direction = 'rtl') {
       // two (which the browser would drop, killing the colors).
       return require('./pzn/nav-html').renderNavFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
 
+    case 'ticker':
+      // same ONE-merged-style contract as nav (v0.60 lesson): id/class as
+      // `extra`, generic style decls as `decls` so ticker colors never split.
+      return require('./pzn/ticker-html').renderTickerFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
+
     case 'contact-info': {
       const d = block.data || {};
       const lines = [];

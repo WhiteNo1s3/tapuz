@@ -21,7 +21,7 @@ const { getCommand, getCommandCatalog } = require('./modules/commands');
 // Kept in the dictionary (agents must know how to fill a container) but marked
 // childOnly and hidden from the flat tool inventory (except `col`, which is the
 // one child type agents place directly when building columns).
-const HIDDEN = new Set(['item', 'feature', 'stat', 'logo', 'qa', 'col', 'tab', 'fold', 'field', 'mediacard', 'navitem']);
+const HIDDEN = new Set(['item', 'feature', 'stat', 'logo', 'qa', 'col', 'tab', 'fold', 'field', 'mediacard', 'navitem', 'tickeritem']);
 
 /**
  * @returns {object} full dictionary catalog

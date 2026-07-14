@@ -290,6 +290,16 @@ const KEYWORDS = {
       align: { type: 'enum', values: ['start', 'center', 'end'], default: 'start' }
     }
   },
+  TICKER: {
+    body: 'NO-BODY',
+    jsonType: 'ticker',
+    params: {
+      label: { type: 'string' },
+      speed: { type: 'enum', values: ['slow', 'md', 'fast'], default: 'md' },
+      background: { type: 'string' },
+      color: { type: 'string' }
+    }
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',
