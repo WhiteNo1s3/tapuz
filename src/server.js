@@ -3798,7 +3798,10 @@ app.post('/admin/api/pzn/decompile', async (req, res) => {
       leftover: r.leftover,
       toolGap: r.toolGap,
       fromUrl: r.fromUrl || null,
-      meta: r.meta
+      meta: r.meta,
+      // v0.66 safety guard: which read won, and every strategy's score
+      strategy: r.strategy,
+      strategies: r.strategies
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });

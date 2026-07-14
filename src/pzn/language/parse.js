@@ -29,9 +29,13 @@ function parse(source) {
 
 /**
  * @param {string} source
+ * @param {{ lenient?: boolean }} [opts] lenient = real-world HTML mode for the
+ *   decompiler: malformed tags/attributes degrade to text instead of throwing.
+ *   Strict (default) stays strict — .pzn parsing is unchanged.
  * @returns {Token[]}
  */
-function tokenize(source) {
+function tokenize(source, opts = {}) {
+  const lenient = !!opts.lenient;
   const tokens = [];
   let i = 0;
   let line = 1;
@@ -56,7 +60,10 @@ function tokenize(source) {
       const startLine = line;
       const startCol = column;
       const end = source.indexOf('>', i);
-      if (end === -1) throw new BentError('E_PARSE', 'Unclosed doctype', { line: startLine, column: startCol });
+      if (end === -1) {
+        if (lenient) { advance(source.length - i); break; }
+        throw new BentError('E_PARSE', 'Unclosed doctype', { line: startLine, column: startCol });
+      }
       tokens.push({ kind: 'doctype', value: source.slice(i, end + 1), line: startLine, column: startCol });
       advance(end + 1 - i);
       continue;
@@ -66,7 +73,10 @@ function tokenize(source) {
       const startLine = line;
       const startCol = column;
       const end = source.indexOf('-->', i + 4);
-      if (end === -1) throw new BentError('E_PARSE', 'Unclosed comment', { line: startLine, column: startCol });
+      if (end === -1) {
+        if (lenient) { advance(source.length - i); break; }
+        throw new BentError('E_PARSE', 'Unclosed comment', { line: startLine, column: startCol });
+      }
       advance(end + 3 - i);
       continue;
     }
@@ -75,7 +85,15 @@ function tokenize(source) {
       const startLine = line;
       const startCol = column;
       const end = source.indexOf('>', i);
-      if (end === -1) throw new BentError('E_PARSE', 'Unclosed tag', { line: startLine, column: startCol });
+      if (end === -1) {
+        if (lenient) {
+          // trailing junk "<" run — keep it as text so nothing is lost
+          tokens.push({ kind: 'text', value: source.slice(i), line: startLine, column: startCol });
+          advance(source.length - i);
+          break;
+        }
+        throw new BentError('E_PARSE', 'Unclosed tag', { line: startLine, column: startCol });
+      }
       const raw = source.slice(i, end + 1);
       advance(end + 1 - i);
 
@@ -85,7 +103,13 @@ function tokenize(source) {
       } else {
         const selfClosing = /\/\s*>$/.test(raw);
         const inner = raw.slice(1, selfClosing ? raw.length - 2 : raw.length - 1).trim();
-        const { name, attrs } = parseStartTag(inner, startLine, startCol);
+        const parsed = parseStartTag(inner, startLine, startCol, lenient);
+        if (!parsed) {
+          // lenient: nameless "<...>" garbage degrades to text
+          tokens.push({ kind: 'text', value: raw, line: startLine, column: startCol });
+          continue;
+        }
+        const { name, attrs } = parsed;
         tokens.push({
           kind: 'open',
           name: name.toLowerCase(),
@@ -115,10 +139,15 @@ function tokenize(source) {
  * @param {string} inner
  * @param {number} line
  * @param {number} column
+ * @param {boolean} [lenient] degrade instead of throwing (returns null on a
+ *   nameless tag; skips over unparseable attribute soup one char at a time)
  */
-function parseStartTag(inner, line, column) {
+function parseStartTag(inner, line, column, lenient) {
   const nameMatch = /^([^\s/>]+)/.exec(inner);
-  if (!nameMatch) throw new BentError('E_PARSE', 'Tag without name', { line, column });
+  if (!nameMatch) {
+    if (lenient) return null;
+    throw new BentError('E_PARSE', 'Tag without name', { line, column });
+  }
   const name = nameMatch[1];
   let rest = inner.slice(name.length).trim();
   /** @type {Record<string, string>} */
@@ -137,6 +166,11 @@ function parseStartTag(inner, line, column) {
     if (flag) {
       attrs[flag[1]] = '';
       rest = rest.slice(flag[0].length).trim();
+      continue;
+    }
+    if (lenient) {
+      // live-site attribute soup (unbalanced quotes, stray =) — skip and go on
+      rest = rest.slice(1).trim();
       continue;
     }
     throw new BentError('E_PARSE', `Bad attribute near: ${rest.slice(0, 24)}`, { line, column });

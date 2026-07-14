@@ -1564,13 +1564,13 @@
 
   function setColumnRatios(block, ratios) {
     if (!block.data) block.data = {};
-    // store as "2:1" style for BenTML decompile
-    block.data.ratio = ratios
-      .map(function (x) {
-        var v = Math.round(x * 10) / 10;
-        return v % 1 === 0 ? String(Math.round(v)) : String(v);
-      })
-      .join(':');
+    // the cut speaks percent: store "65:35" (integers summing to 100) so the
+    // builder labels, BenTML source, and the drag all say the same numbers
+    var sum = ratios.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var pcts = ratios.map(function (x) { return Math.max(5, Math.round((x / sum) * 100)); });
+    var drift = 100 - pcts.reduce(function (a, b) { return a + b; }, 0);
+    pcts[pcts.indexOf(Math.max.apply(null, pcts))] += drift;
+    block.data.ratio = pcts.join(':');
   }
 
   function renderColumnsBody(block) {

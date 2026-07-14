@@ -12,10 +12,12 @@
  * decompile maps cleaner, and every agent's dictionary gets richer. The
  * decompiler is not an importer feature; it is how the palette fills.
  *
- * Pipeline: HTML → extract main/body + title/dir/lang → htmlToBlocks →
- * fromTapuzPage → serialize → validate. decompileUrl() adds a fetch with an
- * SSRF guard (unlike the lab's blind fetch): the admin pasting a URL must not
- * be able to make this server read localhost, LAN hosts, or cloud metadata.
+ * Pipeline (v0.66): HTML → extract main/body + title/dir/lang → a SET of
+ * strategies reads the page (flat stream v1, structure hunt v2) → a quality
+ * scorer picks the winner → fromTapuzPage → serialize → validate.
+ * decompileUrl() adds a fetch with an SSRF guard (unlike the lab's blind
+ * fetch): the admin pasting a URL must not be able to make this server read
+ * localhost, LAN hosts, or cloud metadata.
  */
 
 const { htmlToBlocks } = require('./graduate');
@@ -51,22 +53,117 @@ function extractLang(html) {
   return extractDir(html) === 'rtl' ? 'he' : 'en';
 }
 
+// ── the safety guard (v0.66) ───────────────────────────────────────────
+// A SET of decompilers reads the same page — the flat stream (v1) and the
+// structure hunt (v2) — and a quality scorer picks the winner. A page the
+// hunt reads badly still ships with the flat map; a page with real shape
+// (halves, heroes, card walls) gets the modular read. toolGap is the union:
+// the vocabulary engine keeps every missing-tool sighting from every lens.
+
+const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery']);
+
+/** Walk a block tree (columns/cards/card children included). */
+function eachBlock(blocks, fn) {
+  for (const b of blocks || []) {
+    fn(b);
+    const d = b.data || {};
+    if (Array.isArray(d.columns)) d.columns.forEach((c) => eachBlock(c.blocks, fn));
+    if (Array.isArray(d.blocks)) eachBlock(d.blocks, fn);
+  }
+}
+
+/** Visible text a block tree carries (the content the admin would keep). */
+function blockTextLen(blocks) {
+  let n = 0;
+  eachBlock(blocks, (b) => {
+    const d = b.data || {};
+    n += String(d.text || '').length + String(d.content || '').length;
+    n += String(d.title || '').length + String(d.subtitle || '').length + String(d.buttonText || '').length;
+    for (const it of d.items || []) {
+      if (typeof it === 'string') n += it.length;
+      else n += String(it.text || '').length + String(it.label || '').length + String(it.title || '').length + String(it.excerpt || '').length;
+    }
+  });
+  return n;
+}
+
+/** Visible text in the source HTML (tags and script/style stripped). */
+function sourceTextLen(html) {
+  return String(html || '')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim().length;
+}
+
+/**
+ * Score one strategy's read of the page. Bigger is better. The weights say:
+ * losing content is worst (coverage), leftover raw HTML is bad, duplicated
+ * twins are bad, real structure is good.
+ */
+function scoreBlocks(blocks, srcTextLen) {
+  let total = 0, provisional = 0, structural = 0, empty = 0;
+  const keys = new Map();
+  eachBlock(blocks, (b) => {
+    total += 1;
+    const d = b.data || {};
+    if (b.type === 'html') provisional += 1;
+    if (STRUCTURAL_TYPES.has(b.type)) structural += 1;
+    const text = String(d.text || d.content || d.src || d.url || '').trim();
+    if (!text && !STRUCTURAL_TYPES.has(b.type) && b.type !== 'divider' && b.type !== 'columns') empty += 1;
+    if ((b.type === 'heading' || b.type === 'text' || b.type === 'image' || b.type === 'button') && text) {
+      const k = b.type + '|' + text;
+      keys.set(k, (keys.get(k) || 0) + 1);
+    }
+  });
+  if (!total) return -1; // nothing read — never beats a real map
+  let dups = 0;
+  for (const c of keys.values()) dups += c - 1;
+  const coverage = Math.min(1, blockTextLen(blocks) / Math.max(srcTextLen, 1));
+  return (
+    coverage * 50 +
+    Math.min(structural, 8) * 4 -
+    (provisional / total) * 30 -
+    (dups / total) * 20 -
+    (empty / total) * 15
+  );
+}
+
 /**
  * Decompile an HTML page (or fragment) into a Tapuz page draft.
  * @param {string} html
- * @param {{ title?: string, slug?: string, lang?: string, dir?: string }} [opts]
+ * @param {{ title?: string, slug?: string, lang?: string, dir?: string,
+ *           strategy?: 'auto'|'hunt'|'flat' }} [opts]
  * @returns {{ source: string, blocks: object[], mapped: number, leftover: number,
- *             toolGap: string[], issues: object[], meta: object }}
+ *             toolGap: string[], issues: object[], meta: object,
+ *             strategy: string, strategies: object[] }}
  */
 function decompileHtml(html, opts = {}) {
   const pznApi = require('./index');
+  const { huntBlocks } = require('./hunt');
   const bodyHtml = extractBodyHtml(html);
   const title = (opts.title || '').trim() || extractTitle(html);
   const dir = opts.dir || extractDir(html);
   const lang = opts.lang || extractLang(html);
   const slug = deriveSlug((opts.slug || '').trim() || title);
 
-  const r = htmlToBlocks(bodyHtml);
+  const wanted = opts.strategy === 'hunt' || opts.strategy === 'flat' ? opts.strategy : 'auto';
+  const runners = [
+    { name: 'hunt', run: huntBlocks },
+    { name: 'flat', run: htmlToBlocks }
+  ].filter((s) => wanted === 'auto' || s.name === wanted);
+
+  const srcLen = sourceTextLen(bodyHtml);
+  const attempts = runners.map((s) => {
+    const r = s.run(bodyHtml);
+    return { name: s.name, r, score: scoreBlocks(r.blocks, srcLen) };
+  });
+  // hunt is listed first: on a tie the structured read wins
+  let best = attempts[0];
+  for (const a of attempts) if (a.score > best.score) best = a;
+
+  const r = best.r;
   const blocks = r.blocks.length
     ? r.blocks
     : [{ type: 'text', id: 'empty-decompile', data: { content: 'הדף לא הניב מודולים — ייתכן שהוא בנוי בעיקר מסקריפטים.' } }];
@@ -81,14 +178,27 @@ function decompileHtml(html, opts = {}) {
     issues = [{ severity: 'error', message: e.message }];
   }
 
+  // toolGap = union across every strategy — the vocabulary engine keeps all
+  // sightings even from the read that lost
+  const toolGap = [...new Set(attempts.flatMap((a) => a.r.suggestedTools || []))];
+
   return {
     source,
     blocks,
     mapped: r.mapped,
     leftover: r.leftover,
-    toolGap: [...new Set(r.suggestedTools || [])],
+    toolGap,
     issues,
-    meta: { title, slug, lang, dir }
+    meta: { title, slug, lang, dir },
+    strategy: best.name,
+    strategies: attempts.map((a) => ({
+      name: a.name,
+      score: Math.round(a.score * 10) / 10,
+      mapped: a.r.mapped,
+      leftover: a.r.leftover,
+      blocks: a.r.blocks.length
+    })),
+    roles: r.roles || []
   };
 }
 
