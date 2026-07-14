@@ -1,7 +1,7 @@
 'use strict';
 
 const { parse } = require('./parse');
-const { createBlock } = require('../blocks');
+const { createBlock, isGeneratedBlockId } = require('../blocks');
 const { BentmlError } = require('./errors');
 
 /**
@@ -44,6 +44,16 @@ function compile(source) {
  * @param {object[]} warnings
  */
 function blockToJson(node, warnings) {
+  const p = (node.params || {});
+  const block = buildBlock(node, warnings);
+  // An `id:` param in storage-id shape restores block identity, so
+  // decompile → compile keeps nested block ids stable (authored anchor
+  // ids keep their §7.4 meaning and never look like storage ids).
+  if (block && isGeneratedBlockId(p.id)) block.id = String(p.id);
+  return block;
+}
+
+function buildBlock(node, warnings) {
   const p = node.params || {};
   const text = node.text || '';
 
@@ -54,11 +64,13 @@ function blockToJson(node, warnings) {
       if (p.align && p.align !== 'start') data.align = p.align;
       if (p.animate && p.animate !== 'none') data.animate = p.animate;
       if (p.class) data.className = p.class;
-      if (p.id) data.id = p.id;
+      if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
       return createBlock('heading', data);
     }
     case 'TEXT': {
-      const data = { content: text };
+      // single-line inline bodies keep the spaces inside `{ ... }` —
+      // collapse them so round-trips don't grow padding each cycle
+      const data = { content: text.includes('\n') ? text : collapseSingleParagraph(text) };
       if (p.align && p.align !== 'start') data.align = p.align;
       if (p.size && p.size !== 'md') data.size = p.size;
       if (p.lead === true || p.lead === 'true') data.lead = true;
@@ -122,6 +134,7 @@ function blockToJson(node, warnings) {
         let t = it.text || '';
         // strip optional leading "- "
         t = t.replace(/^\s*-\s+/, '');
+        if (!t.includes('\n')) t = collapseSingleParagraph(t);
         return { text: t };
       });
       return createBlock('list', { ordered, items });
@@ -162,7 +175,7 @@ function blockToJson(node, warnings) {
       const data = { text: collapseSingleParagraph(text) };
       if (p.speed && p.speed !== 'md') data.speed = p.speed;
       if (p.class) data.className = p.class;
-      if (p.id) data.id = p.id;
+      if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
       return createBlock('marquee', data);
     }
     case 'PARALLAX': {
@@ -173,7 +186,7 @@ function blockToJson(node, warnings) {
       if (p.overlay != null && Number(p.overlay) > 0) data.overlay = clampInt(p.overlay, 0, 80, 0);
       if (p.height && p.height !== 'md') data.height = p.height;
       if (p.class) data.className = p.class;
-      if (p.id) data.id = p.id;
+      if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
       return createBlock('parallax', data);
     }
     case 'TESTIMONIAL': {
