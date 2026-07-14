@@ -398,6 +398,9 @@ function renderBlock(block, direction = 'rtl') {
       return `<div class="bent-accordion"${extra} dir="${direction}">${rows}</div>`;
     }
 
+    case 'form':
+      return require('./pzn/form-html').renderFormFromData(block.data || {}, direction, extra);
+
     case 'contact-info': {
       const d = block.data || {};
       const lines = [];

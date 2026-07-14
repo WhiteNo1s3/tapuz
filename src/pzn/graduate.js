@@ -76,7 +76,22 @@ const INLINE = new Set(['strong', 'b', 'em', 'i', 'u', 'small', 'span', 'code', 
  */
 function htmlToBlocks(html) {
   uid = 0;
-  const tokens = tokenize(String(html == null ? '' : html));
+  let tokens;
+  try {
+    tokens = tokenize(String(html == null ? '' : html));
+  } catch (e) {
+    // Real-world HTML (yahoo.com, etc.) can break the tokenizer on malformed
+    // attributes. NEVER hard-fail — keep the whole fragment as one sanitized
+    // provisional block so nothing is lost and the admin can graduate/edit it.
+    const { sanitizeHtmlFragment } = require('../html-sanitize');
+    return {
+      blocks: [{
+        type: 'html', id: nid('html'),
+        data: { content: sanitizeHtmlFragment(String(html || '')).slice(0, 20000), provisional: true, note: 'לא ניתן היה לפרק אוטומטית — נשמר כ‑HTML גולמי' }
+      }],
+      mapped: 0, leftover: 1, suggestedTools: []
+    };
+  }
   const out = [];
   let mapped = 0;
   let leftover = 0;
@@ -163,9 +178,70 @@ function htmlToBlocks(html) {
         if (items.length) { sink.push({ type: 'list', id: nid('list'), data: { ordered: name === 'ol', items } }); mapped += 1; }
         i = end; continue;
       }
+      // form → the form module (v0.58 closed this gap). Parse label/input/
+      // textarea/select children into fields; skip submit/hidden controls
+      // (the module renders its own submit button).
+      if (name === 'form') {
+        const fields = [];
+        let pendingLabel = '';
+        for (let j = i + 1; j < end - 1; j++) {
+          const tk = tokens[j];
+          if (tk.kind === 'open' && tk.name === 'label') {
+            const lend = matchClose(tokens, j);
+            pendingLabel = unescapeHtml(textOf(tokens, j + 1, lend - 1));
+            j = lend - 1;
+            continue;
+          }
+          if (tk.kind === 'open' && (tk.name === 'input' || tk.name === 'textarea' || tk.name === 'select')) {
+            const a = tk.attrs || {};
+            const inType = String(a.type || '').toLowerCase();
+            if (tk.name === 'input' && /^(submit|button|hidden|image|reset)$/.test(inType)) {
+              const cend = matchClose(tokens, j); j = cend - 1; pendingLabel = ''; continue;
+            }
+            let ftype = 'text';
+            if (tk.name === 'textarea') ftype = 'textarea';
+            else if (tk.name === 'select') ftype = 'select';
+            else ftype = (inType === 'email' || inType === 'tel' || inType === 'checkbox') ? inType : 'text';
+            const field = {
+              label: pendingLabel || a.placeholder || a.name || '',
+              name: a.name || '',
+              type: ftype,
+              placeholder: a.placeholder || '',
+              required: 'required' in a
+            };
+            const cend = matchClose(tokens, j);
+            if (ftype === 'select') {
+              const opts = [];
+              for (let k = j + 1; k < cend - 1; k++) {
+                if (tokens[k].kind === 'open' && tokens[k].name === 'option') {
+                  const oend = matchClose(tokens, k);
+                  const label = unescapeHtml(textOf(tokens, k + 1, oend - 1));
+                  if (label) opts.push(label);
+                  k = oend - 1;
+                }
+              }
+              field.options = opts.join(', ');
+            }
+            j = cend - 1;
+            pendingLabel = '';
+            fields.push(field);
+          }
+        }
+        if (fields.length) {
+          const method = /get/i.test((t.attrs && t.attrs.method) || '') ? 'get' : 'post';
+          sink.push({ type: 'form', id: nid('form'), data: { action: (t.attrs && t.attrs.action) || '', method, submit: 'שליחה', fields } });
+          mapped += 1;
+        } else {
+          let frag = '';
+          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+          raw += frag;
+        }
+        i = end; continue;
+      }
+
       // patterns we RECOGNIZE but have no first-class module for yet →
       // keep verbatim (nothing lost) AND report the missing tool.
-      if (name === 'table' || name === 'form' || name === 'video' || name === 'audio' || name === 'nav') {
+      if (name === 'table' || name === 'video' || name === 'audio' || name === 'nav') {
         suggested.add(name);
         let frag = '';
         for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);

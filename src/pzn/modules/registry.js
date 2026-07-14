@@ -937,6 +937,54 @@ register({
   }
 });
 
+// ─── Form (v0.58) — the decompiler's #1 tool gap, now first-class ──────
+register({
+  name: 'field',
+  tag: 'bent-field',
+  category: 'data',
+  label: { he: 'שדה טופס', en: 'Form field' },
+  icon: 'field',
+  container: false,
+  props: {
+    label: { type: 'string', default: '', label: { he: 'תווית', en: 'Label' } },
+    name: { type: 'string', default: '', optional: true, label: { he: 'שם השדה', en: 'Field name' } },
+    type: { type: 'enum', values: ['text', 'email', 'tel', 'textarea', 'select', 'checkbox'], default: 'text', label: { he: 'סוג', en: 'Type' } },
+    placeholder: { type: 'string', default: '', optional: true, label: { he: 'רמז', en: 'Placeholder' } },
+    required: { type: 'boolean', default: false, label: { he: 'חובה', en: 'Required' } },
+    options: { type: 'string', default: '', optional: true, label: { he: 'אפשרויות (מופרד בפסיק)', en: 'Options (comma-sep)' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const { id, cls } = attrsExtra(node);
+    return require('../form-html').renderField(node.props || {}, id, cls);
+  }
+});
+
+register({
+  name: 'form',
+  tag: 'bent-form',
+  category: 'data',
+  label: { he: 'טופס', en: 'Form' },
+  icon: 'form',
+  container: true,
+  accept: ['field'],
+  props: {
+    action: { type: 'string', default: '', optional: true, label: { he: 'יעד שליחה (URL)', en: 'Submit URL' } },
+    method: { type: 'enum', values: ['post', 'get'], default: 'post', label: { he: 'שיטה', en: 'Method' } },
+    submit: { type: 'string', default: 'שליחה', label: { he: 'כפתור שליחה', en: 'Submit label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../form-html').renderForm(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 register({
   name: 'contact-info',
   tag: 'bent-contact-info',

@@ -771,6 +771,29 @@ p, li { max-width: 70ch; }
 .bent-fold[open] > summary::after { transform: rotate(180deg); }
 .bent-fold > .bent-fold-body { padding: 0 1.15rem 1.05rem; line-height: 1.65; color: var(--color-text, #334155); }
 
+/* form (v0.58) — the decompiler's #1 tool gap, now a first-class module */
+.bent-form { margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.9rem; max-width: 34rem; }
+.bent-field { display: flex; flex-direction: column; gap: 0.35rem; }
+.bent-field-label { font-weight: 600; font-size: 0.92rem; color: var(--color-text, #334155); }
+.bent-field-req { color: #dc2626; }
+.bent-form input, .bent-form textarea, .bent-form select {
+  width: 100%; box-sizing: border-box; padding: 0.65rem 0.8rem;
+  border: 1px solid var(--color-border, #cbd5e1); border-radius: 8px;
+  font: inherit; background: var(--color-surface, #fff); color: inherit;
+}
+.bent-form textarea { min-height: 6.5rem; resize: vertical; }
+.bent-field-checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
+.bent-field-checkbox input { width: auto; }
+.bent-form input:focus, .bent-form textarea:focus, .bent-form select:focus {
+  outline: none; border-color: var(--color-accent, #0a66c2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent, #0a66c2) 18%, transparent);
+}
+.bent-form-submit {
+  align-self: flex-start; padding: 0.7rem 1.4rem; border: none; border-radius: 8px;
+  background: var(--color-accent, #0a66c2); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.bent-form-submit:hover { filter: brightness(1.06); }
+
 /* marquee — two full-width tracks scrolling in lockstep = seamless at any
    text length (no "pop" for short strings) */
 .marquee {

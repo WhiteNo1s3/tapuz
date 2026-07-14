@@ -37,11 +37,13 @@ async function checkRejects(name, fn) {
   check('youtube link → embed block', g.blocks.filter((b) => b.type === 'embed').length >= 2);
   check('whatsapp link stays a button + suggests a whatsapp tool',
     g.blocks.some((b) => b.type === 'button' && /wa\.me/.test(b.data.url)) && g.suggestedTools.includes('whatsapp'));
-  check('form/table/nav reported as toolGap',
-    ['form', 'table', 'nav'].every((t) => g.suggestedTools.includes(t)));
+  check('form decompiles to a real form block (v0.58 closed this gap)',
+    g.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 1) && !g.suggestedTools.includes('form'));
+  check('table/nav still reported as toolGap',
+    ['table', 'nav'].every((t) => g.suggestedTools.includes(t)));
   check('grid wrapper with children suggests columns', g.suggestedTools.includes('columns'));
-  check('unmapped patterns preserved as provisional html (nothing lost)',
-    g.blocks.some((b) => b.type === 'html' && /form|table/.test(b.data.content)));
+  check('remaining unmapped patterns preserved as provisional html (nothing lost)',
+    g.blocks.some((b) => b.type === 'html' && /table/.test(b.data.content)));
 
   // ── whole-page decompile → valid .pzn ──────────────────────────────
   const page = `<!DOCTYPE html>
@@ -75,6 +77,12 @@ async function checkRejects(name, fn) {
   // scripted/empty page still yields a page (never a hard failure)
   const empty = decompileHtml('<html><body><script>app()</script></body></html>');
   check('script-only page yields a placeholder page', empty.blocks.length >= 1 && /<\/html>/i.test(empty.source));
+
+  // malformed HTML (a bare / between attributes) throws the tokenizer — the
+  // decompiler must DEGRADE, never crash. Real sites (yahoo.com) hit this.
+  const malformed = decompileHtml('<html><body><main><h1>ok</h1><div a=b / c>x</div></main></body></html>');
+  check('malformed HTML degrades to a page instead of throwing',
+    malformed.blocks.length >= 1 && /<\/html>/i.test(malformed.source));
 
   // ── SSRF guard ─────────────────────────────────────────────────────
   check('private IPv4 ranges detected', ['127.0.0.1', '10.0.0.5', '192.168.1.1', '172.16.0.9', '169.254.169.254', '0.0.0.0', '100.64.0.1'].every(isPrivateIp));

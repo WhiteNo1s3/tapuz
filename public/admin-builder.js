@@ -1377,6 +1377,25 @@
       return wrap;
     }
 
+    if (block.type === 'form') {
+      var fFields = d.fields || [];
+      wrap.innerHTML =
+        '<div class="preview-form">' +
+        (fFields.length ? fFields : [{ label: 'שדה', type: 'text' }]).map(function (f) {
+          var lab = esc(f.label || '') + (f.required ? ' *' : '');
+          var t = f.type || 'text';
+          var ctrl;
+          if (t === 'textarea') ctrl = '<div class="preview-field-box" style="height:44px"></div>';
+          else if (t === 'checkbox') ctrl = '<span class="preview-field-check"></span>';
+          else if (t === 'select') ctrl = '<div class="preview-field-box">' + esc((f.options || '').split(',')[0] || '▾') + '</div>';
+          else ctrl = '<div class="preview-field-box">' + esc(f.placeholder || '') + '</div>';
+          return '<label class="preview-field"><span class="preview-field-label">' + lab + '</span>' + ctrl + '</label>';
+        }).join('') +
+        '<span class="preview-form-submit">' + esc(d.submit || 'שליחה') + '</span>' +
+        '</div>';
+      return wrap;
+    }
+
     // Provisional raw-HTML block (the escape hatch) — show it clearly and offer
     // to graduate it into real modules. Content is shown ESCAPED (never injected
     // into the admin DOM) so an LLM-steered fragment can't run here.

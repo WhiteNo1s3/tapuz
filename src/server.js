@@ -1068,6 +1068,12 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
     .preview-fold:last-child { border-bottom: none; }
     .preview-fold-head { padding: 9px 14px; font-weight: 600; color: #334155; font-size: 0.9rem; background: #f8fafc; }
     .preview-fold-body { padding: 10px 14px; color: #475569; font-size: 0.88rem; }
+    .preview-form { display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+    .preview-field { display: flex; flex-direction: column; gap: 4px; }
+    .preview-field-label { font-size: 0.82rem; font-weight: 600; color: #475569; }
+    .preview-field-box { border: 1px solid #cbd5e1; border-radius: 7px; padding: 8px 10px; background: #f8fafc; color: #94a3b8; font-size: 0.85rem; min-height: 16px; }
+    .preview-field-check { width: 16px; height: 16px; border: 1px solid #cbd5e1; border-radius: 4px; display: inline-block; background: #f8fafc; }
+    .preview-form-submit { align-self: flex-start; background: #0a66c2; color: #fff; padding: 8px 18px; border-radius: 7px; font-size: 0.85rem; font-weight: 600; }
     .prop-section-label {
       font-size: 0.72rem;
       font-weight: 700;
