@@ -421,6 +421,25 @@ function renderBlock(block, direction = 'rtl') {
       // as a stray boolean attribute.
       return require('./pzn/video-html').renderVideoFromData(block.data || {}, direction, extraClass, extraId + style);
 
+    case 'category': {
+      // dynamic leaf like article-list: lazy-require the stores at render time
+      // (avoids require cycles via export.js). Membership = the page tags;
+      // metadata = the file store content/categories.json.
+      const { listArticles } = require('./pages');
+      const { getCategory } = require('./categories');
+      const d = block.data || {};
+      const slug = String(d.slug || '');
+      const limit = Math.min(Math.max(parseInt(d.limit, 10) || 6, 1), 48);
+      let articles = [];
+      try { if (slug) articles = listArticles({ tag: slug, limit }); } catch (e) { /* empty DB in static contexts */ }
+      let category = null;
+      try { category = getCategory(slug); } catch (e) { /* no content dir yet */ }
+      // ONE-merged-style contract (v0.60 lesson): id/class split + decls merged
+      return require('./pzn/category-html').renderCategory(d, { category, articles }, {
+        idAttr: extraId, cls: extraClass, decls: styleDecls(block.data), dir: ` dir="${direction}"`
+      });
+    }
+
     case 'contact-info': {
       const d = block.data || {};
       const lines = [];

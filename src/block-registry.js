@@ -339,6 +339,31 @@ const BLOCK_REGISTRY = [
     textField: null,
     seed: {}
   },
+  {
+    type: 'category',
+    keyword: 'CATEGORY',
+    labelHe: 'קטגוריה',
+    icon: '🗂',
+    category: 'תוכן',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'כותרת קטגוריה ממותגת + רשת הכתבות שלה — מנוהל במסך "קטגוריות"',
+    params: [
+      {
+        name: 'slug', labelHe: 'קטגוריה (slug)', type: 'string', required: true,
+        hint: 'ה-slug מתוך מסך הקטגוריות; דפים משויכים דרך תגיות הדף (E306 כשחסר)'
+      },
+      {
+        name: 'limit', labelHe: 'כמות מקסימלית', type: 'integer',
+        min: 1, max: 48, default: 6
+      },
+      {
+        name: 'showheader', labelHe: 'הצג כותרת קטגוריה', type: 'boolean', default: true
+      }
+    ],
+    textField: null,
+    seed: { slug: '' }
+  },
 
   // ─────────────────────────── מדיה ───────────────────────────
   {

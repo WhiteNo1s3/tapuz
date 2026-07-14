@@ -1088,6 +1088,7 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
     .preview-ticker-label { flex-shrink: 0; background: #c0392b; color: #fff; font-weight: 700; font-size: 0.8rem; padding: 8px 12px; display: flex; align-items: center; }
     .preview-ticker-strip { display: flex; gap: 22px; align-items: center; padding: 8px 12px; overflow: hidden; white-space: nowrap; }
     .preview-ticker-link { font-weight: 600; font-size: 0.85rem; color: #e2e8f0; flex-shrink: 0; }
+    .preview-category-head { font-weight: 700; color: #1e293b; padding: 6px 10px; border-right: 4px solid #0a66c2; background: #f8fafc; border-radius: 6px; margin-bottom: 10px; }
     .prop-section-label {
       font-size: 0.72rem;
       font-weight: 700;
@@ -2020,6 +2021,7 @@ const ADMIN_NAV_ITEMS = [
   { key: 'pages', href: '/admin', label: 'דפים' },
   { key: 'media', href: '/admin/media-library', label: 'מדיה' },
   { key: 'storage', href: '/admin/storage', label: 'אחסון' },
+  { key: 'categories', href: '/admin/categories', label: 'קטגוריות' },
   { key: 'menus', href: '/admin/menus', label: 'תפריטים' },
   { key: 'sitemap', href: '/admin/sitemap', label: 'מפת אתר' },
   { key: 'theme', href: '/admin/theme', label: 'ערכת נושא' },
@@ -2649,6 +2651,107 @@ app.get('/admin/storage', (req, res) => {
     </div>
   `;
   res.send(layout(html, 'אחסון', '#0f766e'));
+});
+
+// ======================== CATEGORIES (v0.64 — the taxonomy, on file storage) ==
+// A category = a first-class tag with metadata. The list lives on disk in
+// content/categories.json (visible in the Storage section); membership rides
+// on each page's portable tags. The screen edits the list as one document
+// (like the menus editor) and POSTs the whole array.
+app.get('/admin/api/categories', (req, res) => {
+  try {
+    res.json({ ok: true, categories: require('./categories').listCategories() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/categories', (req, res) => {
+  try {
+    const saved = require('./categories').saveCategories((req.body && req.body.categories) || []);
+    res.json({ ok: true, categories: saved });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/admin/categories', (req, res) => {
+  const html = `
+    <style>
+      .cat-row { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;align-items:center;margin-bottom:8px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px }
+      .cat-row input[type=text] { width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:7px;box-sizing:border-box }
+      .cat-row input[type=color] { width:44px;height:34px;border:1px solid #cbd5e1;border-radius:7px;padding:2px }
+      .cat-row .cat-del { border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:7px;padding:6px 0;cursor:pointer }
+      .cat-desc { grid-column: 1 / -1; }
+      .cat-head { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;font-size:0.75rem;font-weight:700;color:#64748b;padding:0 10px;margin-bottom:4px }
+    </style>
+    ${adminNav('categories', 'קטגוריות')}
+    <div class="container" style="padding-top:28px;max-width:820px;padding-bottom:60px">
+      <p style="color:#64748b;margin-top:0">קטגוריה = תגית מנוהלת עם מיתוג (שם, צבע, תמונה, תיאור). משייכים דפים לקטגוריה במאפייני הדף בבונה, ומציגים אותה בכל דף עם בלוק "קטגוריה". הרשימה נשמרת כקובץ <code style="direction:ltr">content/categories.json</code> — <a href="/admin/storage">רואים אותו באחסון</a>.</p>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px">
+        <div class="cat-head"><span>slug</span><span>שם תצוגה</span><span>צבע</span><span>תמונת רקע (URL)</span><span></span></div>
+        <div id="cat-list"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+          <button type="button" class="btn secondary" id="cat-add">+ קטגוריה</button>
+          <div style="display:flex;gap:10px;align-items:center">
+            <span id="cat-status" style="color:#166534;font-size:0.85rem"></span>
+            <button type="button" class="btn" id="cat-save">שמור</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var cats = [];
+        function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function isHex(v) { return /^#[0-9a-fA-F]{6}$/.test(String(v || '')); }
+        function render() {
+          document.getElementById('cat-list').innerHTML = cats.map(function (c, i) {
+            return '<div class="cat-row" data-i="' + i + '">' +
+              '<input type="text" data-k="slug" dir="ltr" value="' + esc(c.slug) + '" placeholder="news">' +
+              '<input type="text" data-k="name" value="' + esc(c.name) + '" placeholder="חדשות">' +
+              '<input type="color" data-k="color" value="' + (isHex(c.color) ? esc(c.color) : '#0a66c2') + '">' +
+              '<input type="text" data-k="image" dir="ltr" value="' + esc(c.image) + '" placeholder="/assets/... (לא חובה)">' +
+              '<button type="button" class="cat-del" title="הסר">×</button>' +
+              '<input type="text" data-k="description" class="cat-desc" value="' + esc(c.description) + '" placeholder="תיאור קצר (לא חובה)">' +
+              '</div>';
+          }).join('') || '<div style="color:#94a3b8;padding:14px;text-align:center">אין קטגוריות עדיין — הוסיפו את הראשונה</div>';
+        }
+        function collect() {
+          cats = [].map.call(document.querySelectorAll('.cat-row'), function (row) {
+            var c = {};
+            row.querySelectorAll('[data-k]').forEach(function (inp) { c[inp.dataset.k] = inp.value; });
+            return c;
+          });
+        }
+        document.getElementById('cat-list').addEventListener('click', function (e) {
+          if (!e.target.classList.contains('cat-del')) return;
+          collect();
+          cats.splice(parseInt(e.target.closest('.cat-row').dataset.i, 10), 1);
+          render();
+        });
+        document.getElementById('cat-add').addEventListener('click', function () {
+          collect(); cats.push({ slug: '', name: '', color: '#0a66c2', image: '', description: '' }); render();
+        });
+        document.getElementById('cat-save').addEventListener('click', function () {
+          collect();
+          fetch('/admin/api/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categories: cats })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            var st = document.getElementById('cat-status');
+            if (d.ok) { cats = d.categories; render(); st.textContent = 'נשמר ✓'; setTimeout(function () { st.textContent = ''; }, 2500); }
+            else { st.style.color = '#b91c1c'; st.textContent = d.error || 'שגיאה'; }
+          });
+        });
+        fetch('/admin/api/categories').then(function (r) { return r.json(); }).then(function (d) {
+          cats = (d && d.categories) || []; render();
+        }).catch(function () { render(); });
+      })();
+    </script>
+  `;
+  res.send(layout(html, 'קטגוריות', '#0f766e'));
 });
 
 // ======================== SITE SETTINGS ========================
