@@ -1,0 +1,48 @@
+name: automerge
+
+# Land any PR into main automatically the moment its CI ("security") goes green.
+#
+# Ben's call (2026-07-14): the veto is LIFTED — this repo is molten, keep it
+# flowing so the tester always sees the latest. Fully automatic, no label gate,
+# no click. The durable replacement for a Claude session-cron (which is
+# in-memory and dies with its session — that's why the old "auto worker"
+# stopped working).
+#
+# Safety: this runs on `workflow_run`, which executes from the DEFAULT branch
+# (main) — a trusted context — so it can hold write permissions without ever
+# running untrusted PR code. --match-head-commit guarantees we only merge the
+# exact commit that passed CI, so a push landing after the green run can't
+# sneak in unverified.
+on:
+  workflow_run:
+    workflows: ["security"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    # only when CI actually passed AND the run was for a PR (skip push-to-main
+    # runs, which have no PR and would otherwise loop)
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge the green PR into main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -e
+          pr=$(gh pr list --repo "$REPO" --head "$HEAD" --base main --state open --json number -q '.[0].number')
+          if [ -z "$pr" ] || [ "$pr" = "null" ]; then
+            echo "No open PR for '$HEAD' -> main; nothing to merge."
+            exit 0
+          fi
+          echo "CI green for $HEAD @ $SHA -> auto-merging PR #$pr into main"
+          gh pr merge "$pr" --repo "$REPO" --merge --delete-branch --match-head-commit "$SHA"
