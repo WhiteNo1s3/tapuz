@@ -239,9 +239,32 @@ function htmlToBlocks(html) {
         i = end; continue;
       }
 
+      // nav → the nav module (v0.60 closed this gap). Its <a> children become
+      // nav links; drop wrapper <ul>/<li> (we read the anchors directly).
+      if (name === 'nav') {
+        const items = [];
+        for (let j = i + 1; j < end - 1; j++) {
+          if (tokens[j].kind === 'open' && tokens[j].name === 'a') {
+            const aEnd = matchClose(tokens, j);
+            const label = unescapeHtml(textOf(tokens, j + 1, aEnd - 1));
+            if (label) items.push({ label, href: (tokens[j].attrs && tokens[j].attrs.href) || '#' });
+            j = aEnd - 1;
+          }
+        }
+        if (items.length) {
+          sink.push({ type: 'nav', id: nid('nav'), data: { items } });
+          mapped += 1;
+        } else {
+          let frag = '';
+          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+          raw += frag;
+        }
+        i = end; continue;
+      }
+
       // patterns we RECOGNIZE but have no first-class module for yet →
       // keep verbatim (nothing lost) AND report the missing tool.
-      if (name === 'table' || name === 'video' || name === 'audio' || name === 'nav') {
+      if (name === 'table' || name === 'video' || name === 'audio') {
         suggested.add(name);
         let frag = '';
         for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);

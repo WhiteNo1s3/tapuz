@@ -234,6 +234,15 @@ function blockToModule(block) {
       return createModule('cards', baseOpts(block, {}, { children }));
     }
 
+    case 'nav': {
+      const children = (data.items || []).map((it) =>
+        createModule('navitem', {
+          props: pickProps(it || {}, ['label', 'href'])
+        })
+      );
+      return createModule('nav', baseOpts(block, pickProps(data, ['background', 'color', 'align']), { children }));
+    }
+
     case 'contact-info':
       return createModule('contact-info', baseOpts(block, pickProps(data, ['phone', 'email', 'address', 'hours'])));
 
@@ -506,6 +515,14 @@ function moduleToBlock(node) {
         .filter((c) => c.name === 'mediacard')
         .map((c) => pickData(c.props || {}, ['image', 'tag', 'title', 'excerpt', 'href']));
       return finishBlock(node, 'cards', data);
+    }
+
+    case 'nav': {
+      const data = pickData(props, ['background', 'color', 'align']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'navitem')
+        .map((c) => pickData(c.props || {}, ['label', 'href']));
+      return finishBlock(node, 'nav', data);
     }
 
     case 'contact-info':

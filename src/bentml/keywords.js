@@ -281,6 +281,15 @@ const KEYWORDS = {
     jsonType: 'cards',
     params: {}
   },
+  NAV: {
+    body: 'NO-BODY',
+    jsonType: 'nav',
+    params: {
+      background: { type: 'string' },
+      color: { type: 'string' },
+      align: { type: 'enum', values: ['start', 'center', 'end'], default: 'start' }
+    }
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',
@@ -302,9 +311,9 @@ const KEYWORDS = {
 };
 
 const RESERVED = new Set([
-  // FORM graduated in v0.58 (the decompiler's #1 tool gap). INPUT stays a
-  // placeholder — form fields are the child `field` module, not a keyword.
-  'SECTION', 'INPUT', 'NAV', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
+  // FORM graduated v0.58, NAV graduated v0.60. INPUT stays a placeholder —
+  // form fields are the child `field` module (nav links = child `navitem`).
+  'SECTION', 'INPUT', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
   'VIDEO', 'AUDIO', 'SLIDER'
 ]);
 

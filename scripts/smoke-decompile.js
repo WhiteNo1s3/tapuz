@@ -39,8 +39,9 @@ async function checkRejects(name, fn) {
     g.blocks.some((b) => b.type === 'button' && /wa\.me/.test(b.data.url)) && g.suggestedTools.includes('whatsapp'));
   check('form decompiles to a real form block (v0.58 closed this gap)',
     g.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 1) && !g.suggestedTools.includes('form'));
-  check('table/nav still reported as toolGap',
-    ['table', 'nav'].every((t) => g.suggestedTools.includes(t)));
+  check('nav decompiles to a nav block (v0.60 closed this gap)',
+    g.blocks.some((b) => b.type === 'nav') && !g.suggestedTools.includes('nav'));
+  check('table still reported as toolGap', g.suggestedTools.includes('table'));
   check('grid wrapper with children suggests columns', g.suggestedTools.includes('columns'));
   check('remaining unmapped patterns preserved as provisional html (nothing lost)',
     g.blocks.some((b) => b.type === 'html' && /table/.test(b.data.content)));
