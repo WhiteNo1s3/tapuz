@@ -3538,6 +3538,71 @@ app.post('/admin/api/pzn/repair', (req, res) => {
 });
 
 /**
+ * Decompile (v0.57): any HTML page or live URL → a draft Tapuz page + a
+ * toolGap report (the vocabulary engine — see src/pzn/decompile.js). The
+ * toolGap counts are aggregated into config/tool-gap.json: the running
+ * backlog of modules real pages keep asking for.
+ */
+function recordToolGap(toolGap) {
+  try {
+    if (!Array.isArray(toolGap) || !toolGap.length) return;
+    const fs = require('fs');
+    const path = require('path');
+    const { CONFIG_DIR } = require('./paths');
+    const file = path.join(CONFIG_DIR, 'tool-gap.json');
+    let data = {};
+    try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { /* fresh */ }
+    for (const t of toolGap) data[t] = (data[t] || 0) + 1;
+    if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) { /* the report must never fail the decompile */ }
+}
+
+app.post('/admin/api/pzn/decompile', async (req, res) => {
+  try {
+    const { url, html, title, slug, create } = req.body || {};
+    const { decompileHtml, decompileUrl } = require('./pzn/decompile');
+    let r;
+    if (url && String(url).trim()) {
+      r = await decompileUrl(String(url).trim(), { title, slug });
+    } else if (typeof html === 'string' && html.trim()) {
+      r = decompileHtml(html, { title, slug });
+    } else {
+      return res.status(400).json({ ok: false, error: 'url or html required' });
+    }
+    recordToolGap(r.toolGap);
+
+    let fullPath = null;
+    if (create) {
+      const { createPage, getPageByFullPath, savePageSource } = require('./pages');
+      // never clobber — suffix until free (same rule as /admin/create)
+      let candidate = r.meta.slug;
+      for (let n = 2; getPageByFullPath(candidate); n++) candidate = r.meta.slug + '-' + n;
+      createPage({ title: r.meta.title, slug: candidate, blocks: [] });
+      try {
+        savePageSource(candidate, r.source, { publish: false });
+      } catch (strictErr) {
+        savePageSource(candidate, r.source, { publish: false, repair: true });
+      }
+      fullPath = candidate;
+    }
+    res.json({
+      ok: true,
+      fullPath,
+      source: r.source,
+      blocks: r.blocks.length,
+      mapped: r.mapped,
+      leftover: r.leftover,
+      toolGap: r.toolGap,
+      fromUrl: r.fromUrl || null,
+      meta: r.meta
+    });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/**
  * Graduate (v0.51): convert a provisional bent-html block's raw HTML into real,
  * visually-editable Tapuz modules. Best-effort — unmappable bits stay in a
  * smaller html block so nothing is lost. The builder splices the result in
@@ -3829,6 +3894,20 @@ app.get('/admin/new', (req, res) => {
         </div>
         <button type="submit" class="btn">צור דף והתחל לערוך</button>
       </form>
+
+      <details style="margin-top:26px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:6px 16px 16px">
+        <summary style="cursor:pointer;font-weight:600;padding:10px 0">🔁 יש לכם כבר דף? ייבאו אותו (מכתובת או מ‑HTML)</summary>
+        <p style="color:#64748b;font-size:.88rem;margin:6px 0 12px">
+          תפוזיאל יפרק את הדף למודולים שאפשר לערוך בבונה. מה שלא ממופה נשמר כ‑HTML זמני — שום דבר לא הולך לאיבוד.
+        </p>
+        <label style="display:block;margin-bottom:4px;font-weight:600;font-size:.9rem">כתובת דף (URL)</label>
+        <input id="imp-url" dir="ltr" placeholder="https://example.com/page" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+        <div style="text-align:center;color:#94a3b8;font-size:.8rem;margin:8px 0">— או —</div>
+        <label style="display:block;margin-bottom:4px;font-weight:600;font-size:.9rem">הדביקו HTML</label>
+        <textarea id="imp-html" dir="ltr" rows="5" placeholder="<html>…</html>" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:.82rem"></textarea>
+        <button type="button" id="imp-go" class="btn" style="margin-top:12px">🔁 ייבא ופתח בבונה</button>
+        <div id="imp-status" style="margin-top:10px;font-size:.88rem;display:none"></div>
+      </details>
     </div>
     <script>
       (function () {
@@ -3844,6 +3923,36 @@ app.get('/admin/new', (req, res) => {
             .replace(/[\\\\/:*?"<>|#]/g, '').replace(/\\.\\.+/g, '.').replace(/^\\.+/, '').slice(0, 80);
         }
         t.addEventListener('input', function () { if (!touched) s.value = slugify(t.value); });
+      })();
+
+      (function () {
+        // Decompile-import (v0.57): URL or pasted HTML → draft page → builder.
+        var go = document.getElementById('imp-go');
+        var st = document.getElementById('imp-status');
+        if (!go) return;
+        function say(msg, ok) {
+          st.style.display = 'block';
+          st.style.color = ok ? '#166534' : '#b91c1c';
+          st.textContent = msg;
+        }
+        go.addEventListener('click', function () {
+          var url = document.getElementById('imp-url').value.trim();
+          var htmlIn = document.getElementById('imp-html').value.trim();
+          if (!url && !htmlIn) { say('הזינו כתובת או הדביקו HTML', false); return; }
+          go.disabled = true;
+          say(url ? 'מביא ומפרק את הדף…' : 'מפרק את ה‑HTML…', true);
+          fetch('/admin/api/pzn/decompile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url, html: htmlIn, create: true })
+          }).then(function (r) { return r.json(); }).then(function (r) {
+            go.disabled = false;
+            if (!r.ok) { say('שגיאה: ' + (r.error || '?'), false); return; }
+            var gap = (r.toolGap && r.toolGap.length) ? ' · חסרים לנו כלים ל: ' + r.toolGap.join(', ') : '';
+            say('נוצר "' + r.meta.title + '" — ' + r.mapped + ' מודולים מופו, ' + r.leftover + ' נשמרו כ‑HTML זמני' + gap, true);
+            setTimeout(function () { location.href = '/admin/edit/' + encodeURIComponent(r.fullPath); }, 1400);
+          }).catch(function (e) { go.disabled = false; say('שגיאה: ' + e.message, false); });
+        });
       })();
     </script>
   `;

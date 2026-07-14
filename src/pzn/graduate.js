@@ -10,6 +10,13 @@
  * It is deliberately best-effort (a real page's markup is messy). Anything it
  * can confidently map becomes a module; anything left over stays in a smaller
  * bent-html block so nothing is lost. The admin approves the result.
+ *
+ * v0.57 — the vocabulary engine (Ben's Red Hat line, idea from the grok lab):
+ * every unmappable PATTERN (form, table, video, nav…) is also *reported* as a
+ * suggested tool. Decompiling real pages returns a `suggestedTools` list — the
+ * backlog of modules the palette is missing. The decompiler is how the
+ * vocabulary grows: seen on the web → toolGap → we build it → next decompile
+ * maps cleaner and every agent's dictionary gets richer.
  */
 
 const { tokenize } = require('./language/parse');
@@ -65,7 +72,7 @@ const INLINE = new Set(['strong', 'b', 'em', 'i', 'u', 'small', 'span', 'code', 
 
 /**
  * @param {string} html
- * @returns {{ blocks: object[], mapped: number, leftover: number }}
+ * @returns {{ blocks: object[], mapped: number, leftover: number, suggestedTools: string[] }}
  */
 function htmlToBlocks(html) {
   uid = 0;
@@ -73,12 +80,13 @@ function htmlToBlocks(html) {
   const out = [];
   let mapped = 0;
   let leftover = 0;
+  const suggested = new Set();
 
-  function flushRaw(buf) {
+  function flushRaw(buf, sink) {
     const trimmed = buf.trim();
     if (!trimmed) return;
     leftover += 1;
-    out.push({ type: 'html', id: nid('html'), data: { content: trimmed, provisional: true } });
+    sink.push({ type: 'html', id: nid('html'), data: { content: trimmed, provisional: true } });
   }
 
   function walk(from, to, sink) {
@@ -99,8 +107,14 @@ function htmlToBlocks(html) {
 
       if (INLINE.has(name)) { raw += textOf(tokens, i, end) + ' '; i = end; continue; }
 
-      // any pending raw text becomes a text block before we emit a real module
-      if (raw.trim()) { sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(raw).replace(/\s+/g, ' ').trim() } }); mapped += 1; raw = ''; }
+      // pending raw becomes a block before we emit a real module: plain text →
+      // text block; anything with markup → provisional html (NOT text, or the
+      // tags would show as visible garbage on the page)
+      if (raw.trim()) {
+        if (/<[a-z]/i.test(raw)) { flushRaw(raw, sink); }
+        else { sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(raw).replace(/\s+/g, ' ').trim() } }); mapped += 1; }
+        raw = '';
+      }
 
       const hm = HEADING.exec(name);
       if (hm) {
@@ -120,7 +134,20 @@ function htmlToBlocks(html) {
         mapped += 1; i = end; continue;
       }
       if (name === 'a') {
-        sink.push({ type: 'button', id: nid('b'), data: { text: unescapeHtml(textOf(tokens, i + 1, end - 1)) || 'קישור', url: t.attrs.href || '#' } });
+        const href = t.attrs.href || '#';
+        const label = unescapeHtml(textOf(tokens, i + 1, end - 1)) || 'קישור';
+        if (/youtube\.com|youtu\.be/i.test(href)) {
+          // a YouTube link is better as an embed (renderer auto-embeds the player)
+          sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
+        } else {
+          if (/wa\.me|whatsapp/i.test(href)) suggested.add('whatsapp'); // real sites want a first-class whatsapp module
+          sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
+        }
+        mapped += 1; i = end; continue;
+      }
+      if (name === 'iframe') {
+        // youtube or any src → embed (renderer auto-embeds youtube, links out otherwise)
+        sink.push({ type: 'embed', id: nid('em'), data: { url: t.attrs.src || '' } });
         mapped += 1; i = end; continue;
       }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
@@ -136,9 +163,24 @@ function htmlToBlocks(html) {
         if (items.length) { sink.push({ type: 'list', id: nid('list'), data: { ordered: name === 'ol', items } }); mapped += 1; }
         i = end; continue;
       }
+      // patterns we RECOGNIZE but have no first-class module for yet →
+      // keep verbatim (nothing lost) AND report the missing tool.
+      if (name === 'table' || name === 'form' || name === 'video' || name === 'audio' || name === 'nav') {
+        suggested.add(name);
+        let frag = '';
+        for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+        raw += frag;
+        i = end; continue;
+      }
+
       if (CONTAINERS.has(name)) {
-        // descend: its children become blocks (the wrapper itself is dropped)
+        // descend: its children become blocks (the wrapper itself is dropped).
+        // A grid/flex wrapper with several children hints at a columns layout.
+        const before = sink.length;
         walk(i + 1, end - 1, sink);
+        if (sink.length - before > 1 && /col|grid|row|flex/i.test(t.attrs.class || '')) {
+          suggested.add('columns');
+        }
         i = end; continue;
       }
 
@@ -150,13 +192,13 @@ function htmlToBlocks(html) {
     }
     if (raw.trim()) {
       // trailing raw: text if it's plain, else a small html block
-      if (/<[a-z]/i.test(raw)) flushRaw(raw);
+      if (/<[a-z]/i.test(raw)) flushRaw(raw, sink);
       else { sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(raw).replace(/\s+/g, ' ').trim() } }); mapped += 1; }
     }
   }
 
   walk(0, tokens.length, out);
-  return { blocks: out, mapped, leftover };
+  return { blocks: out, mapped, leftover, suggestedTools: [...suggested] };
 }
 
 module.exports = { htmlToBlocks };
