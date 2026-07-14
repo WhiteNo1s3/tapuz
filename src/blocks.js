@@ -4,7 +4,7 @@ const BLOCK_TYPES = [
   'heading', 'text', 'image', 'button', 'columns', 'spacer', 'divider',
   'list', 'quote', 'card', 'hero', 'testimonial', 'gallery', 'features', 'embed',
   'article-list', 'map', 'cta', 'stats', 'logos', 'faq', 'contact-info', 'banner',
-  'marquee', 'parallax', 'tabs', 'accordion', 'form'
+  'marquee', 'parallax', 'tabs', 'accordion', 'form', 'cards'
 ];
 
 function createBlock(type, data = {}) {

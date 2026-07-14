@@ -937,6 +937,50 @@ register({
   }
 });
 
+// ─── Card grid (v0.59) — the walla lesson: a content site is a wall of
+//     media cards. `cards` container of repeatable `mediacard` items. ───
+register({
+  name: 'mediacard',
+  tag: 'bent-mediacard',
+  category: 'media',
+  label: { he: 'כרטיס תוכן', en: 'Media card' },
+  icon: 'card',
+  container: false,
+  props: {
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Image' } },
+    tag: { type: 'string', default: '', optional: true, label: { he: 'תגית / קטגוריה', en: 'Tag' } },
+    title: { type: 'string', default: '', label: { he: 'כותרת', en: 'Title' } },
+    excerpt: { type: 'string', default: '', optional: true, label: { he: 'תקציר', en: 'Excerpt' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../card-html').renderCard(node.props || {});
+  }
+});
+
+register({
+  name: 'cards',
+  tag: 'bent-cards',
+  category: 'media',
+  label: { he: 'רשת כרטיסים', en: 'Card grid' },
+  icon: 'grid',
+  container: true,
+  accept: ['mediacard'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../card-html').renderCardsGrid(inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 // ─── Form (v0.58) — the decompiler's #1 tool gap, now first-class ──────
 register({
   name: 'field',

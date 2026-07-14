@@ -794,6 +794,28 @@ p, li { max-width: 70ch; }
 }
 .bent-form-submit:hover { filter: brightness(1.06); }
 
+/* card grid (v0.59) — the walla lesson: a content site is a wall of media
+   cards. Responsive auto-fit grid, zero JS. */
+.bent-cards {
+  display: grid; gap: 1.25rem; margin: 1.5rem 0;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+.bent-card {
+  display: flex; flex-direction: column; text-decoration: none; color: inherit;
+  background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 12px; overflow: hidden; transition: box-shadow .2s, transform .2s;
+}
+a.bent-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,.12); transform: translateY(-2px); }
+.bent-card-media { margin: 0; aspect-ratio: 16 / 9; background: var(--color-border, #eef2f7); overflow: hidden; }
+.bent-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bent-card-body { padding: 0.9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.bent-card-tag {
+  align-self: flex-start; font-size: 0.72rem; font-weight: 700; letter-spacing: .02em;
+  text-transform: uppercase; color: var(--color-accent, #0a66c2);
+}
+.bent-card-title { margin: 0; font-size: 1.05rem; line-height: 1.3; color: var(--color-text, #0f172a); }
+.bent-card-excerpt { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--color-text-muted, #64748b); }
+
 /* marquee — two full-width tracks scrolling in lockstep = seamless at any
    text length (no "pop" for short strings) */
 .marquee {
