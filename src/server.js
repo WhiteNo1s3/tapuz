@@ -10,7 +10,7 @@ const {
 const { exportAll } = require('./export');
 const { runSetup } = require('./setup');
 const { loadMenus, saveMenus, saveMenu } = require('./menus');
-const { getThemeSettings, saveThemeSettings, loadOverrides, overridesToCss } = require('./theme');
+const { getThemeSettings, saveThemeSettings, loadOverrides, overridesToCss, LOOKS } = require('./theme');
 const { loadConfig, saveConfig } = require('./config');
 const blockRegistry = require('./block-registry');
 
@@ -2859,8 +2859,11 @@ app.get('/admin/seo', (req, res) => {
         <textarea id="seo-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">${escapeAdmin(config.description)}</textarea>
         <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">משמש כשלדף אין תיאור משלו</div>
         <label style="display:block;font-weight:600;margin-bottom:4px">תמונת שיתוף ברירת מחדל (og:image)</label>
-        <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="/uploads/share.jpg" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו. נתיב מ<a href="/admin/media-library">ספריית המדיה</a>.</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+          <button type="button" class="btn secondary" data-media-pick="seo-og" style="white-space:nowrap">🖼 בחר / העלה</button>
+        </div>
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו.</div>
         <label style="display:block;font-weight:600;margin-bottom:4px">כתובת האתר (base URL)</label>
         <input id="seo-base" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://www.example.co.il" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
         <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">מפעיל canonical / og:url / נתונים מובנים (JSON-LD) עם כתובות מלאות, וקובע את הכתובות ב-sitemap.xml. ריק = מדלגים על תגיות שדורשות כתובת מלאה.</div>
@@ -2870,6 +2873,7 @@ app.get('/admin/seo', (req, res) => {
         </div>
       </section>
     </div>
+    <script src="/admin-media-picker.js"></script>
     <script>
       document.getElementById('seo-save').addEventListener('click', function () {
         fetch('/admin/api/seo', {
@@ -4638,6 +4642,11 @@ app.get('/admin/theme', (req, res) => {
     ${adminNav('theme', 'ערכת נושא')}
     <div class="container" style="padding-top:28px;max-width:920px">
       <p style="color:#64748b;margin-top:0">שנה צבעים, פונט, לוגו ופריסת תפריט — בלי לגעת בקוד התמה. נשמר כ-overrides.</p>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px">
+        <h3 style="margin-top:0">מראות מוכנים</h3>
+        <p style="color:#64748b;margin:0 0 14px;font-size:.9rem">לחיצה אחת מחליפה את כל האישיות של האתר — צבעים, פינות, צללים וגופנים. אחרי הבחירה הכול נשאר ניתן לכיוון עדין למטה.</p>
+        <div id="th-looks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px"></div>
+      </section>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">אתר</h3>
@@ -4652,17 +4661,49 @@ app.get('/admin/theme', (req, res) => {
           </select>
           <label style="display:block;font-weight:600;margin-bottom:4px">טקסט לוגו</label>
           <input id="th-logo-text" value="${escAttr(logo.text)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
-          <label style="display:block;font-weight:600;margin-bottom:4px">כתובת תמונת לוגו</label>
-          <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="/assets/logo.png" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label style="display:block;font-weight:600;margin-bottom:4px">תמונת לוגו</label>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+            <button type="button" class="btn secondary" data-media-pick="th-logo-image" style="white-space:nowrap">🖼 בחר / העלה</button>
+          </div>
         </section>
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">צבעים</h3>
           ${colorRow('primary', 'ראשי', o.colors.primary)}
+          ${colorRow('secondary', 'משלים (גרדיאנט)', o.colors.secondary)}
           ${colorRow('text', 'טקסט', o.colors.text)}
           ${colorRow('muted', 'משני', o.colors.muted)}
           ${colorRow('border', 'מסגרת', o.colors.border)}
           ${colorRow('bg', 'רקע', o.colors.bg)}
           ${colorRow('lightBg', 'רקע בהיר', o.colors.lightBg)}
+          ${colorRow('surface', 'משטח (כרטיסים)', o.colors.surface)}
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">אופי העיצוב</h3>
+          <label style="display:block;font-weight:600;margin-bottom:4px">פינות</label>
+          <select id="th-radius" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="sharp" ${o.style.radius === 'sharp' ? 'selected' : ''}>חדות (עיתונאי)</option>
+            <option value="soft" ${o.style.radius === 'soft' || !o.style.radius ? 'selected' : ''}>רכות</option>
+            <option value="round" ${o.style.radius === 'round' ? 'selected' : ''}>עגולות</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">צללים</label>
+          <select id="th-shadow" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="flat" ${o.style.shadow === 'flat' ? 'selected' : ''}>שטוח</option>
+            <option value="soft" ${o.style.shadow === 'soft' || !o.style.shadow ? 'selected' : ''}>עדין</option>
+            <option value="deep" ${o.style.shadow === 'deep' ? 'selected' : ''}>עמוק</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">צבע הדגשה</label>
+          <select id="th-accent" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="solid" ${o.style.accent !== 'gradient' ? 'selected' : ''}>אחיד</option>
+            <option value="gradient" ${o.style.accent === 'gradient' ? 'selected' : ''}>גרדיאנט (ראשי ← משלים)</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">גופן כותרות</label>
+          <select id="th-font-heading" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+            <option value="" ${!o.fonts.headingFamily ? 'selected' : ''}>כמו גופן הטקסט</option>
+            <option value='Georgia, "Times New Roman", "Noto Serif Hebrew", serif' ${(o.fonts.headingFamily || '').includes('Georgia') ? 'selected' : ''}>סריפית קלאסית</option>
+            <option value='"Arial Black", "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif' ${(o.fonts.headingFamily || '').includes('Arial Black') ? 'selected' : ''}>שמנה מודגשת</option>
+            <option value='Tahoma, Arial, "Noto Sans Hebrew", sans-serif' ${(o.fonts.headingFamily || '').includes('Tahoma') ? 'selected' : ''}>קומפקטית</option>
+          </select>
         </section>
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">טיפוגרפיה ופריסה</h3>
@@ -4689,6 +4730,8 @@ app.get('/admin/theme', (req, res) => {
         <button type="button" class="btn" id="th-save-build" style="background:#166534">שמור + בנה אתר</button>
       </div>
     </div>
+    <script>window.TAPUZ_LOOKS = ${JSON.stringify(LOOKS)};</script>
+    <script src="/admin-media-picker.js"></script>
     <script src="/admin-theme.js"></script>
   `;
   res.send(layout(html, 'ערכת נושא', '#059669'));

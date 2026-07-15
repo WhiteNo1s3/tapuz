@@ -3,7 +3,7 @@
   "title": "Tapuziel .pzn page language",
   "description": "Constrained-HTML page format (benTML dialect). Body may contain only registered bent-* module tags.",
   "specVersion": "0.1",
-  "generatedFrom": "tapuziel@0.53.0-alpha",
+  "generatedFrom": "tapuziel@0.66.0-alpha",
   "modules": {
     "heading": {
       "tag": "bent-heading",
@@ -135,6 +135,11 @@
           "default": "",
           "optional": true
         },
+        "title": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
         "caption": {
           "type": "string",
           "default": "",
@@ -200,6 +205,25 @@
           "type": "text",
           "default": "לחץ כאן",
           "content": true
+        },
+        "rel": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "target": {
+          "type": "enum",
+          "enum": [
+            "_self",
+            "_blank"
+          ],
+          "default": "_self",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": "",
+          "optional": true
         }
       }
     },
@@ -814,6 +838,366 @@
       ],
       "props": {}
     },
+    "navitem": {
+      "tag": "bent-navitem",
+      "label": {
+        "he": "קישור ניווט",
+        "en": "Nav link"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "href": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "nav": {
+      "tag": "bent-nav",
+      "label": {
+        "he": "תפריט ניווט",
+        "en": "Nav menu"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "navitem"
+      ],
+      "props": {
+        "background": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "color": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "default": "start"
+        }
+      }
+    },
+    "mediacard": {
+      "tag": "bent-mediacard",
+      "label": {
+        "he": "כרטיס תוכן",
+        "en": "Media card"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "tag": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "excerpt": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "href": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "cards": {
+      "tag": "bent-cards",
+      "label": {
+        "he": "רשת כרטיסים",
+        "en": "Card grid"
+      },
+      "category": "media",
+      "container": true,
+      "accept": [
+        "mediacard"
+      ],
+      "props": {}
+    },
+    "tickeritem": {
+      "tag": "bent-tickeritem",
+      "label": {
+        "he": "מבזק",
+        "en": "Ticker headline"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "text": {
+          "type": "string",
+          "default": ""
+        },
+        "href": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "ticker": {
+      "tag": "bent-ticker",
+      "label": {
+        "he": "מבזקים נעים",
+        "en": "News ticker"
+      },
+      "category": "media",
+      "container": true,
+      "accept": [
+        "tickeritem"
+      ],
+      "props": {
+        "label": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "speed": {
+          "type": "enum",
+          "enum": [
+            "slow",
+            "md",
+            "fast"
+          ],
+          "default": "md",
+          "optional": true
+        },
+        "background": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "color": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "newspopitem": {
+      "tag": "bent-newspopitem",
+      "label": {
+        "he": "עדכון",
+        "en": "News update"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "time": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "text": {
+          "type": "string",
+          "default": ""
+        },
+        "href": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "newspop": {
+      "tag": "bent-newspop",
+      "label": {
+        "he": "מבזקים עם שעות",
+        "en": "News feed"
+      },
+      "category": "media",
+      "container": true,
+      "accept": [
+        "newspopitem"
+      ],
+      "props": {
+        "label": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "video": {
+      "tag": "bent-video",
+      "label": {
+        "he": "וידאו",
+        "en": "Video"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "src": {
+          "type": "url",
+          "default": ""
+        },
+        "poster": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "caption": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "controls": {
+          "type": "boolean",
+          "default": true,
+          "optional": true
+        },
+        "autoplay": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        },
+        "loop": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        },
+        "muted": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        }
+      }
+    },
+    "category": {
+      "tag": "bent-category",
+      "label": {
+        "he": "קטגוריה",
+        "en": "Category"
+      },
+      "category": "data",
+      "container": false,
+      "accept": [],
+      "props": {
+        "slug": {
+          "type": "string",
+          "default": ""
+        },
+        "limit": {
+          "type": "integer",
+          "min": 1,
+          "max": 48,
+          "default": 6,
+          "optional": true
+        },
+        "showheader": {
+          "type": "boolean",
+          "default": true,
+          "optional": true
+        }
+      }
+    },
+    "field": {
+      "tag": "bent-field",
+      "label": {
+        "he": "שדה טופס",
+        "en": "Form field"
+      },
+      "category": "data",
+      "container": false,
+      "accept": [],
+      "props": {
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "name": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "type": {
+          "type": "enum",
+          "enum": [
+            "text",
+            "email",
+            "tel",
+            "textarea",
+            "select",
+            "checkbox"
+          ],
+          "default": "text"
+        },
+        "placeholder": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "options": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "form": {
+      "tag": "bent-form",
+      "label": {
+        "he": "טופס",
+        "en": "Form"
+      },
+      "category": "data",
+      "container": true,
+      "accept": [
+        "field"
+      ],
+      "props": {
+        "action": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "method": {
+          "type": "enum",
+          "enum": [
+            "post",
+            "get"
+          ],
+          "default": "post"
+        },
+        "submit": {
+          "type": "string",
+          "default": "שליחה"
+        }
+      }
+    },
     "contact-info": {
       "tag": "bent-contact-info",
       "label": {
@@ -849,7 +1233,7 @@
     "banner": {
       "tag": "bent-banner",
       "label": {
-        "he": "באנר הודעה",
+        "he": "באנר",
         "en": "Banner"
       },
       "category": "content",

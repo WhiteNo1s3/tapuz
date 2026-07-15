@@ -476,6 +476,9 @@ function renderBlock(block, direction = 'rtl') {
 
     case 'banner': {
       const d = block.data || {};
+      // an empty banner is markup residue — a reader must never meet a blank
+      // (or placeholder) announcement strip
+      if (!String(d.text || '').trim()) return '';
       const tone = ['brand', 'dark', 'light', 'warn'].includes(d.tone) ? d.tone : 'brand';
       return (
         `<div class="site-banner tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +

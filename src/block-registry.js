@@ -1014,7 +1014,7 @@ const BLOCK_REGISTRY = [
   {
     type: 'banner',
     keyword: 'BANNER',
-    labelHe: 'באנר הודעה',
+    labelHe: 'באנר',
     icon: '▬',
     category: 'מבנה',
     bodyClass: 'text',

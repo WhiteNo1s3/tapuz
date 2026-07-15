@@ -1274,7 +1274,7 @@ register({
   name: 'banner',
   tag: 'bent-banner',
   category: 'content',
-  label: { he: 'באנר הודעה', en: 'Banner' },
+  label: { he: 'באנר', en: 'Banner' },
   icon: 'banner',
   container: false,
   props: {
@@ -1293,6 +1293,8 @@ register({
   defaults: {},
   compile(node, ctx) {
     const { id, cls } = attrsExtra(node);
+    // an empty banner is markup residue — never ship a blank strip to a reader
+    if (!String(node.text || '').trim()) return '';
     const tone = ['brand', 'dark', 'light', 'warn'].includes(node.props.tone) ? node.props.tone : 'brand';
     return `<div${id} class="site-banner tone-${escapeAttr(tone)} bent-banner${cls}"${dirAttr(ctx)}><p>${escapeHtml(node.text)}</p></div>`;
   }

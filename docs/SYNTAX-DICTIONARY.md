@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (25)
+## Modules (34)
 
 ### תוכן
 
@@ -109,6 +109,9 @@ Shape: `BUTTON(params) { text body }`
 | `url` | `url` | url | yes |  |
 | `variant` | `style` | enum primary\|secondary\|outline |  | "primary" |
 | `align` | `align` | enum start\|center\|end |  | "start" |
+| `rel` | `rel` | string |  | "" |
+| `target` | `target` | enum _self\|_blank |  | "_self" |
+| `title` | `title` | string |  | "" |
 
 ```bentml
 BUTTON(url: "/contact", style: primary) {
@@ -200,6 +203,22 @@ Shape: `ARTICLES(params)`
 ARTICLES(tag: "article", limit: 6, columns: 3)
 ```
 
+#### `CATEGORY` → `category`
+
+🗂 **קטגוריה** — כותרת קטגוריה ממותגת + רשת הכתבות שלה — מנוהל במסך "קטגוריות"
+
+Shape: `CATEGORY(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `slug` | `slug` | string | yes |  |
+| `limit` | `limit` | integer |  | 6 |
+| `showheader` | `showheader` | boolean |  | true |
+
+```bentml
+CATEGORY(slug: "...")
+```
+
 ### מדיה
 
 #### `IMAGE` → `image`
@@ -212,6 +231,7 @@ Shape: `IMAGE(params)`
 |---|---|---|---|---|
 | `src` | `src` | media | yes |  |
 | `alt` | `alt` | string |  | "" |
+| `title` | `title` | string |  | "" |
 | `caption` | `caption` | string |  |  |
 | `width` | `width` | enum sm\|md\|lg\|full |  | "full" |
 
@@ -248,6 +268,26 @@ Shape: `EMBED(params)`
 
 ```bentml
 EMBED(url: "https://www.youtube.com/watch?v=XXXXXXXX")
+```
+
+#### `VIDEO` → `video`
+
+🎬 **וידאו** — נגן וידאו מתארח (mp4/webm) — קישור יוטיוב הופך אוטומטית להטמעה
+
+Shape: `VIDEO(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `src` | `src` | media | yes |  |
+| `poster` | `poster` | media |  |  |
+| `caption` | `caption` | string |  |  |
+| `controls` | `controls` | boolean |  | true |
+| `autoplay` | `autoplay` | boolean |  | false |
+| `loop` | `loop` | boolean |  | false |
+| `muted` | `muted` | boolean |  | false |
+
+```bentml
+VIDEO(src: "...")
 ```
 
 ### מבנה
@@ -440,6 +480,125 @@ Shape: `FAQ(params)`
 FAQ
 ```
 
+### מבנה
+
+#### `TABS` → `tabs`
+
+❐ **טאבים** — תוכן בלשוניות (CSS בלבד)
+
+Shape: `TABS(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+
+```bentml
+TABS
+```
+
+#### `ACCORDION` → `accordion`
+
+☰ **אקורדיון** — מגירות נפתחות (CSS בלבד)
+
+Shape: `ACCORDION(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+
+```bentml
+ACCORDION
+```
+
+### שילובים
+
+#### `FORM` → `form`
+
+✉ **טופס** — טופס יצירת קשר / הרשמה (מודול #1 שהמפרק ביקש)
+
+Shape: `FORM(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `action` | `action` | url |  | "" |
+| `method` | `method` | enum post\|get |  | "post" |
+| `submit` | `submit` | string |  | "שליחה" |
+| `fields` | `—` | list |  |  |
+
+```bentml
+FORM
+```
+
+### מדיה
+
+#### `CARDS` → `cards`
+
+▦ **רשת כרטיסים** — רשת כרטיסי תוכן (תמונה + כותרת + קישור) — היחידה של אתר תוכן
+
+Shape: `CARDS(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+
+```bentml
+CARDS
+```
+
+### מבנה
+
+#### `NAV` → `nav`
+
+≡ **תפריט ניווט** — שורת ניווט עם צבעים (רקע + טקסט)
+
+Shape: `NAV(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `background` | `background` | string |  | "" |
+| `color` | `color` | string |  | "" |
+| `align` | `align` | enum start\|center\|end |  | "start" |
+| `items` | `—` | list |  |  |
+
+```bentml
+NAV(align: start)
+```
+
+### מדיה
+
+#### `TICKER` → `ticker`
+
+📰 **מבזקים נעים** — שורת מבזקים נעה — כותרות עם קישורים (סגנון וואלה), עם צבעים ומהירות
+
+Shape: `TICKER(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `label` | `label` | string |  | "" |
+| `speed` | `speed` | enum slow\|md\|fast |  | "md" |
+| `background` | `background` | string |  | "" |
+| `color` | `color` | string |  | "" |
+| `items` | `—` | list |  |  |
+
+```bentml
+TICKER
+```
+
+#### `NEWSPOP` → `newspop`
+
+🕐 **מבזקים עם שעות** — מבזקי חדשות עם שעות — עמודה קבועה של "שעה · כותרת" (סגנון וואלה, לא נעה)
+
+Shape: `NEWSPOP(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `label` | `label` | string |  | "" |
+| `items` | `—` | list |  |  |
+
+```bentml
+NEWSPOP
+```
+
 ### שילובים
 
 #### `CONTACT` → `contact-info`
@@ -463,7 +622,7 @@ CONTACT
 
 #### `BANNER` → `banner`
 
-▬ **באנר הודעה** — פס הודעה עליון / מבצע
+▬ **באנר** — פס הודעה עליון / מבצע
 
 Shape: `BANNER(params) { text body }`
 
@@ -486,6 +645,6 @@ Universal on most keywords: `class`, `id`.
 
 ## Reserved (future advanced modules)
 
-`SECTION`, `FORM`, `INPUT`, `NAV`, `FOOTER`, `HEADER`, `CODE`, `TABLE`, `VIDEO`, `AUDIO`, `ACCORDION`, `TABS`, `SLIDER`
+`SECTION`, `INPUT`, `FOOTER`, `HEADER`, `CODE`, `TABLE`, `AUDIO`, `SLIDER`
 
 These are **not** implemented yet. Using them in BenTML is an error today.
