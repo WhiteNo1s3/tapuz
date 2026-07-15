@@ -2,25 +2,14 @@
 <html lang="he" dir="rtl" bent-version="0.1">
   <head>
     <meta charset="utf-8" />
-    <title>עמוד הבית</title>
+    <title>Tapuziel Demo</title>
     <meta name="bent-slug" content="home" />
   </head>
   <body>
-    <bent-heading id="h0" level="1">ברוכים הבאים</bent-heading>
-    <bent-text id="t0">פסקה 0</bent-text>
-    <bent-text id="t1">פסקה 1</bent-text>
-    <bent-text id="t2">פסקה 2</bent-text>
-    <bent-text id="t3">פסקה 3</bent-text>
-    <bent-text id="t4">פסקה 4</bent-text>
-    <bent-text id="t5">פסקה 5</bent-text>
-    <bent-text id="t6">פסקה 6</bent-text>
-    <bent-text id="t7">פסקה 7</bent-text>
-    <bent-text id="t8">פסקה 8</bent-text>
-    <bent-text id="t9">פסקה 9</bent-text>
-    <bent-text id="t10">פסקה 10</bent-text>
-    <bent-text id="t11">פסקה 11</bent-text>
-    <bent-text id="t12">פסקה 12</bent-text>
-    <bent-text id="t13">פסקה 13</bent-text>
-    <bent-text id="t14">פסקה 14</bent-text>
+    <bent-hero>
+      <bent-heading level="1">Tapuziel Demo</bent-heading>
+      <bent-text>CMS in Hebrew</bent-text>
+    </bent-hero>
+    <bent-text>זהו דף הבית החדש שלך. לחץ &quot;ערוך&quot; כדי לשנות הכל.</bent-text>
   </body>
 </html>
