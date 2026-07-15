@@ -505,6 +505,11 @@ app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
       repaired = true;
       changes = r.changes;
     }
+    // same empty-template guard as the admin paste route (v0.72): an agent
+    // reply with zero modules must not create a placeholder-titled page.
+    if (!pznApi.toTapuzPage(doc).blocks.length) {
+      return res.status(400).json({ ok: false, error: 'empty page — the reply carries no bent-* modules (looks like the bare template)' });
+    }
     const title = doc.title || 'דף חדש';
     const { deriveSlug } = require('./pzn/intent');
     const slug = deriveSlug((doc.slug || '').trim() || title);
@@ -4083,6 +4088,12 @@ app.post('/admin/api/pzn/create-from-source', (req, res) => {
         error: errors.map((e) => `${e.code}: ${e.message}`).join('; '),
         issues: errors
       });
+    }
+    // an EMPTY document must never become a page a reader meets — this is how
+    // a pristine paste-template (title "כותרת הדף", zero modules) once got
+    // PUBLISHED with its placeholder as the visible title (v0.72 fix).
+    if (!pznApi.toTapuzPage(doc).blocks.length) {
+      return res.status(400).json({ ok: false, error: 'הדף ריק — נראה שהודבקה התבנית לדוגמה במקום תשובת הבוט. הדביקו את התשובה המלאה (עם מודולי bent-*).' });
     }
     const title = doc.title || 'דף חדש';
     // deriveSlug hardens against path traversal (backslash / '..').
