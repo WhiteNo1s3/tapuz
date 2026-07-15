@@ -31,7 +31,10 @@ const {
   collectLinkRun,
   coalesceButtonRuns,
   navItemsFromList,
+  anchorCard,
+  attrOf,
   LINK_RUN_MIN,
+  LINK_LABEL_MAX,
   imageSrcOf,
   classBgMap,
   bgOfAttrs,
@@ -335,9 +338,19 @@ function huntBlocks(html, opts = {}) {
         sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(textOf(tokens, i + 1, end - 1)) } });
         mapped += 1; i = end; continue;
       }
-      if (name === 'blockquote') {
-        sink.push({ type: 'quote', id: nid('q'), data: { text: unescapeHtml(textOf(tokens, i + 1, end - 1)) } });
-        mapped += 1; i = end; continue;
+      if (name === 'blockquote' || name === 'q' || name === 'cite') {
+        const qt = unescapeHtml(textOf(tokens, i + 1, end - 1));
+        if (qt) { sink.push({ type: 'quote', id: nid('q'), data: { text: qt } }); mapped += 1; }
+        i = end; continue;
+      }
+      // a bare <button> with visible text is a CTA (textless ones are chrome)
+      if (name === 'button') {
+        const btnLabel = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
+        if (btnLabel) {
+          sink.push({ type: 'button', id: nid('b'), data: { text: btnLabel, url: (t.attrs && t.attrs.formaction) || '#' } });
+          mapped += 1;
+        }
+        i = end; continue;
       }
       if (name === 'img') {
         const a = t.attrs || {};
@@ -364,6 +377,12 @@ function huntBlocks(html, opts = {}) {
         i = end; continue;
       }
       if (name === 'a') {
+        // a picture/headline teaser link IS a card — the picture survives
+        const teaser = anchorCard(tokens, i, end, bgMap);
+        if (teaser) {
+          sink.push({ type: 'cards', id: nid('cards'), data: { items: [teaser] } });
+          mapped += 1; i = end; continue;
+        }
         // a run of ≥4 short bare links is a menu, not a button pile
         const run = collectLinkRun(tokens, i, to);
         if (run.items.length >= LINK_RUN_MIN) {
@@ -371,18 +390,21 @@ function huntBlocks(html, opts = {}) {
           mapped += 1; i = run.end; continue;
         }
         const href = (t.attrs && t.attrs.href) || '#';
-        const label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
+        let label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
         if (!label) {
           // a textless link is an icon or a picture link — keep the picture,
-          // never emit a nameless "קישור" button
+          // or fall back to the aria name; never a nameless "קישור" button
+          let pictured = false;
           for (let j = i + 1; j < end - 1; j++) {
             if (tokens[j].kind === 'open' && (tokens[j].name === 'img' || tokens[j].name === 'source')) {
               const src = imageSrcOf(tokens[j].attrs);
-              if (src) { sink.push({ type: 'image', id: nid('img'), data: { src, alt: tokens[j].attrs.alt || '' } }); mapped += 1; }
+              if (src) { sink.push({ type: 'image', id: nid('img'), data: { src, alt: tokens[j].attrs.alt || '' } }); mapped += 1; pictured = true; }
               break;
             }
           }
-          i = end; continue;
+          if (pictured) { i = end; continue; }
+          label = attrOf(t.attrs, 'aria-label', 'title').trim().slice(0, LINK_LABEL_MAX);
+          if (!label) { i = end; continue; }
         }
         if (/youtube\.com|youtu\.be/i.test(href)) {
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });

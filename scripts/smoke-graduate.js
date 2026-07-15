@@ -26,6 +26,7 @@ const html = [
   '  <blockquote>ממליצים</blockquote>',
   '  <hr>',
   '  <custom-thing x="1">לא ידוע</custom-thing>',
+  '  <blink>אלמנט עתיק</blink>',
   '</div>'
 ].join('\n');
 
@@ -40,7 +41,11 @@ check('ul → list with 2 items', r.blocks.some((b) => b.type === 'list' && (b.d
 check('a → button', r.blocks.some((b) => b.type === 'button' && b.data.url === '/shop'));
 check('blockquote → quote', r.blocks.some((b) => b.type === 'quote' && /ממליצים/.test(b.data.text)));
 check('hr → divider', types.includes('divider'));
-check('unknown element kept as leftover html (nothing lost)', r.blocks.some((b) => b.type === 'html' && /custom-thing/.test(b.data.content)));
+// v0.68: custom elements (SPA shells) DESCEND — their content graduates as
+// real blocks instead of a raw wrapper blob; plain unknown tags stay leftover
+check('custom element descends — its text survives as a block (nothing lost)',
+  r.blocks.some((b) => b.type === 'text' && /לא ידוע/.test(b.data.content || '')));
+check('unknown plain element kept as leftover html (nothing lost)', r.blocks.some((b) => b.type === 'html' && /blink/.test(b.data.content)));
 check('reported mapped count ≥ 6', r.mapped >= 6);
 
 // the graduated blocks must form a VALID BenTML document

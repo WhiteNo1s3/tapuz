@@ -200,6 +200,51 @@ async function checkRejects(name, fn) {
     tree[0].data.src === '/assets/local.webp' && tree[2].data.items[0].image === '/assets/local.webp'
     && tree[3].data.columns[0].blocks[0].data.src === '/assets/local.webp');
 
+  // ── v0.68: the brains merge — lab fidelity ideas rebuilt on Tapuz ──
+  const { pickFromSrcset } = require('../src/pzn/graduate');
+
+  // CDN URLs carry bare commas — srcset must be read by width descriptors
+  check('pickFromSrcset survives CDN commas and picks the largest',
+    pickFromSrcset('https://c.dn/f_auto,q_auto,w_300/a.jpg 300w,https://c.dn/f_auto,q_auto,w_900/a.jpg 900w')
+      === 'https://c.dn/f_auto,q_auto,w_900/a.jpg');
+  check('imageSrcOf reads React-dump camelCase srcSet',
+    imageSrcOf({ srcSet: '/small.jpg 1x, /big.jpg 2x' }) === '/big.jpg');
+  check('imageSrcOf upgrades protocol-relative CDN urls',
+    imageSrcOf({ 'data-src': '//cdn.x/pic.jpg' }) === 'https://cdn.x/pic.jpg');
+
+  // a teaser link (picture+headline inside <a>) becomes a card, picture kept
+  const teaser = htmlToBlocks('<div>'
+    + '<a href="/story"><picture><source srcset="/tease.jpg 600w"/></picture><h2>כותרת הכתבה המלאה</h2></a>'
+    + '</div>');
+  const teaserCards = teaser.blocks.find((b) => b.type === 'cards');
+  check('picture+headline link → card with the picture kept',
+    !!teaserCards && teaserCards.data.items[0].image === '/tease.jpg' && /כותרת/.test(teaserCards.data.items[0].title));
+
+  // sibling teaser links fuse into ONE card wall
+  const wall2 = htmlToBlocks('<div>'
+    + ['א', 'ב', 'ג'].map((t, n) => `<a href="/${n}"><img src="/${n}.jpg"/><h3>כתבה ${t}</h3></a>`).join('')
+    + '</div>');
+  check('adjacent teaser links fuse into one card wall',
+    wall2.blocks.filter((b) => b.type === 'cards').length === 1
+    && wall2.blocks.find((b) => b.type === 'cards').data.items.length === 3);
+
+  // a walla-class <script> state dump must never become a provisional blob
+  const scripty = htmlToBlocks('<div><script>window.state="' + 'x'.repeat(5000) + '"</script><p>תוכן אמיתי</p></div>');
+  check('script tags are skipped, never kept as provisional blobs',
+    !scripty.blocks.some((b) => b.type === 'html') && scripty.blocks.some((b) => b.type === 'text' && /אמיתי/.test(b.data.content)));
+
+  // icon links with an aria name become labeled links, not dropped
+  const aria = htmlToBlocks('<p>לפני</p><a href="/mail" aria-label="דואר"><i class="ico"></i></a><p>אחרי</p>');
+  check('textless link with aria-label keeps its name',
+    aria.blocks.some((b) => b.type === 'button' && b.data.text === 'דואר'));
+
+  // q/cite and bare buttons map instead of leaking to leftovers
+  const extras = htmlToBlocks('<div><q>ציטוט קצר</q><button type="button">הרשמה</button><button></button></div>');
+  check('q → quote, texty bare button → button, textless button dropped',
+    extras.blocks.some((b) => b.type === 'quote' && /ציטוט/.test(b.data.text))
+    && extras.blocks.some((b) => b.type === 'button' && b.data.text === 'הרשמה')
+    && extras.blocks.filter((b) => b.type === 'button').length === 1);
+
   console.log('');
   console.log(fail ? 'SMOKE DECOMPILE: FAIL' : 'SMOKE DECOMPILE: PASS');
   process.exit(fail ? 1 : 0);
