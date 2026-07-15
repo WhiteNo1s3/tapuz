@@ -300,6 +300,13 @@ const KEYWORDS = {
       color: { type: 'string' }
     }
   },
+  NEWSPOP: {
+    body: 'NO-BODY',
+    jsonType: 'newspop',
+    params: {
+      label: { type: 'string' }
+    }
+  },
   VIDEO: {
     body: 'NO-BODY',
     jsonType: 'video',

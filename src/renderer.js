@@ -415,6 +415,10 @@ function renderBlock(block, direction = 'rtl') {
       // `extra`, generic style decls as `decls` so ticker colors never split.
       return require('./pzn/ticker-html').renderTickerFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
 
+    case 'newspop':
+      // timestamped news feed (v0.70) — same ONE-merged-style contract.
+      return require('./pzn/newspop-html').renderNewspopFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
+
     case 'video':
       // cls = className suffix (goes INSIDE class="") ; extra = id + style
       // (trailing attrs) — the correct split so a custom class isn't emitted

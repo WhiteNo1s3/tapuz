@@ -954,6 +954,37 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'newspop',
+    keyword: 'NEWSPOP',
+    labelHe: 'מבזקים עם שעות',
+    icon: '🕐',
+    category: 'מדיה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'מבזקי חדשות עם שעות — עמודה קבועה של "שעה · כותרת" (סגנון וואלה, לא נעה)',
+    params: [
+      { name: 'label', labelHe: 'תווית', type: 'string', default: '' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'עדכונים', type: 'list',
+        itemFields: [
+          { name: 'time', labelHe: 'שעה', type: 'string' },
+          { name: 'text', labelHe: 'כותרת', type: 'string', required: true },
+          { name: 'href', labelHe: 'קישור', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי NEWSPOPITEM'
+      }
+    ],
+    textField: null,
+    seed: {
+      label: 'מבזקים',
+      items: [
+        { time: '12:00', text: 'עדכון ראשון', href: '#' },
+        { time: '11:30', text: 'עדכון שני', href: '#' },
+        { time: '11:00', text: 'עדכון שלישי', href: '#' }
+      ]
+    }
+  },
+  {
     type: 'contact-info',
     keyword: 'CONTACT',
     labelHe: 'פרטי קשר',
