@@ -3763,7 +3763,7 @@ function recordToolGap(toolGap) {
 
 app.post('/admin/api/pzn/decompile', async (req, res) => {
   try {
-    const { url, html, title, slug, create } = req.body || {};
+    const { url, html, title, slug, create, assets } = req.body || {};
     const { decompileHtml, decompileUrl } = require('./pzn/decompile');
     let r;
     if (url && String(url).trim()) {
@@ -3774,6 +3774,27 @@ app.post('/admin/api/pzn/decompile', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'url or html required' });
     }
     recordToolGap(r.toolGap);
+
+    // v0.67: make the pictures OURS — download every remote image the blocks
+    // reference, convert to webp, host under /assets/imported/<slug>/, and
+    // rewrite the blocks to local paths. On by default; assets:false skips.
+    let assetsReport = null;
+    if (assets !== false) {
+      try {
+        const { ingestBlockImages } = require('./media-ingest');
+        assetsReport = await ingestBlockImages(r.blocks, { folder: 'imported/' + r.meta.slug });
+        if (assetsReport.saved) {
+          const pznApi = require('./pzn');
+          const doc = pznApi.fromTapuzPage({
+            title: r.meta.title, slug: r.meta.slug, lang: r.meta.lang,
+            direction: r.meta.dir, tags: [], meta: {}, blocks: r.blocks
+          });
+          r.source = pznApi.serialize(doc);
+        }
+      } catch (e) {
+        assetsReport = { found: 0, saved: 0, failed: [{ url: '*', reason: e.message }], skipped: 0 };
+      }
+    }
 
     let fullPath = null;
     if (create) {
@@ -3801,7 +3822,9 @@ app.post('/admin/api/pzn/decompile', async (req, res) => {
       meta: r.meta,
       // v0.66 safety guard: which read won, and every strategy's score
       strategy: r.strategy,
-      strategies: r.strategies
+      strategies: r.strategies,
+      // v0.67: the image-ingestion report (null when assets:false)
+      assets: assetsReport
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });

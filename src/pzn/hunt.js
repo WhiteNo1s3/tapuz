@@ -28,6 +28,13 @@ const {
   parseNavItems,
   parseVideoData,
   detectCardCluster,
+  collectLinkRun,
+  coalesceButtonRuns,
+  navItemsFromList,
+  LINK_RUN_MIN,
+  imageSrcOf,
+  classBgMap,
+  bgOfAttrs,
   childSpans,
   matchClose,
   textOf,
@@ -121,7 +128,7 @@ function heroShape(tokens, i, end) {
 }
 
 /** Pull the hero slots (title/subtitle/button/image) out of a hero range. */
-function extractHero(tokens, i, end) {
+function extractHero(tokens, i, end, bgMap) {
   const data = {};
   for (let j = i + 1; j < end - 1; j++) {
     const tk = tokens[j];
@@ -142,10 +149,17 @@ function extractHero(tokens, i, end) {
         data.buttonUrl = (tk.attrs && (tk.attrs.href || tk.attrs.formaction)) || '#';
       }
       j = e - 1;
-    } else if (!data.image && tk.name === 'img') {
-      const a = tk.attrs || {};
-      data.image = a.src || a['data-src'] || '';
+    } else if (!data.image && (tk.name === 'img' || tk.name === 'source')) {
+      data.image = imageSrcOf(tk.attrs);
+    } else if (!data.image) {
+      // hero backgrounds usually ride a CSS background-image, not an <img>
+      const bg = bgOfAttrs(tk.attrs, bgMap);
+      if (bg) data.image = bg;
     }
+  }
+  if (!data.image) {
+    const bg = bgOfAttrs(tokens[i].attrs, bgMap);
+    if (bg) data.image = bg;
   }
   return data.title ? data : null;
 }
@@ -206,9 +220,10 @@ const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'svg', 'template', 'ca
  * @returns {{ blocks: object[], mapped: number, leftover: number,
  *             suggestedTools: string[], roles: string[] }}
  */
-function huntBlocks(html) {
+function huntBlocks(html, opts = {}) {
   let uid = 0;
   const nid = (p) => `${p}-v2${++uid}`;
+  const bgMap = opts.bgMap != null ? opts.bgMap : classBgMap(html);
 
   let tokens;
   try {
@@ -285,7 +300,7 @@ function huntBlocks(html) {
     const sink = [];
 
     // a whole range repeating the card shape → ONE cards block (v0.65 rule)
-    const cluster = detectCardCluster(tokens, from, to);
+    const cluster = detectCardCluster(tokens, from, to, bgMap);
     if (cluster) {
       sink.push({ type: 'cards', id: nid('cards'), data: { items: cluster } });
       mapped += 1;
@@ -326,7 +341,7 @@ function huntBlocks(html) {
       }
       if (name === 'img') {
         const a = t.attrs || {};
-        sink.push({ type: 'image', id: nid('img'), data: { src: a.src || a['data-src'] || '', alt: a.alt || '' } });
+        sink.push({ type: 'image', id: nid('img'), data: { src: imageSrcOf(a), alt: a.alt || '' } });
         mapped += 1; i = end; continue;
       }
       // <picture> (A++ marketing sites) → image from the inner img/source
@@ -336,11 +351,10 @@ function huntBlocks(html) {
           const tk = tokens[j];
           if (tk.kind !== 'open') continue;
           if (tk.name === 'img') {
-            src = (tk.attrs && (tk.attrs.src || tk.attrs['data-src'])) || src;
+            src = imageSrcOf(tk.attrs) || src;
             alt = (tk.attrs && tk.attrs.alt) || alt;
           } else if (tk.name === 'source' && !src) {
-            const ss = (tk.attrs && (tk.attrs.srcset || tk.attrs.src)) || '';
-            src = String(ss).split(',')[0].trim().split(/\s+/)[0] || '';
+            src = imageSrcOf(tk.attrs);
           }
         }
         if (src) {
@@ -350,8 +364,26 @@ function huntBlocks(html) {
         i = end; continue;
       }
       if (name === 'a') {
+        // a run of ≥4 short bare links is a menu, not a button pile
+        const run = collectLinkRun(tokens, i, to);
+        if (run.items.length >= LINK_RUN_MIN) {
+          sink.push({ type: 'nav', id: nid('nav'), data: { items: run.items } });
+          mapped += 1; i = run.end; continue;
+        }
         const href = (t.attrs && t.attrs.href) || '#';
-        const label = unescapeHtml(textOf(tokens, i + 1, end - 1)) || 'קישור';
+        const label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
+        if (!label) {
+          // a textless link is an icon or a picture link — keep the picture,
+          // never emit a nameless "קישור" button
+          for (let j = i + 1; j < end - 1; j++) {
+            if (tokens[j].kind === 'open' && (tokens[j].name === 'img' || tokens[j].name === 'source')) {
+              const src = imageSrcOf(tokens[j].attrs);
+              if (src) { sink.push({ type: 'image', id: nid('img'), data: { src, alt: tokens[j].attrs.alt || '' } }); mapped += 1; }
+              break;
+            }
+          }
+          i = end; continue;
+        }
         if (/youtube\.com|youtu\.be/i.test(href)) {
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
         } else {
@@ -366,9 +398,15 @@ function huntBlocks(html) {
       }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
       if (name === 'ul' || name === 'ol') {
-        const liCluster = detectCardCluster(tokens, i + 1, end - 1);
+        const liCluster = detectCardCluster(tokens, i + 1, end - 1, bgMap);
         if (liCluster) {
           sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
+          mapped += 1; i = end; continue;
+        }
+        // a ul of single short links is a menu — keep the hrefs (v0.67)
+        const menu = navItemsFromList(tokens, i, end);
+        if (menu) {
+          sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
           mapped += 1; i = end; continue;
         }
         const items = [];
@@ -441,7 +479,7 @@ function huntBlocks(html) {
 
         // hero role + hero shape → one hero block (role-collapse via ctx)
         if (role === 'hero' && !ctx.inHero && heroShape(tokens, i, end)) {
-          const data = extractHero(tokens, i, end);
+          const data = extractHero(tokens, i, end, bgMap);
           if (data) {
             sink.push({ type: 'hero', id: nid('hero'), data });
             mapped += 1;
@@ -452,7 +490,13 @@ function huntBlocks(html) {
         // every other wrapper descends — structure comes from columns/cards/
         // hero, never from empty grouping shells
         const childCtx = role === 'hero' ? { ...ctx, inHero: true } : ctx;
-        walk(i + 1, end - 1, depth + 1, childCtx).forEach((b) => sink.push(b));
+        const kids = walk(i + 1, end - 1, depth + 1, childCtx);
+        kids.forEach((b) => sink.push(b));
+        // an empty wrapper whose CSS carries a background IS a picture
+        if (!kids.length) {
+          const bg = bgOfAttrs(t.attrs, bgMap);
+          if (bg) { sink.push({ type: 'image', id: nid('img'), data: { src: bg, alt: '' } }); mapped += 1; }
+        }
         i = end; continue;
       }
 
@@ -471,7 +515,7 @@ function huntBlocks(html) {
     }
     if (raw.trim()) flushRaw(raw, sink);
 
-    return dedupeSiblings(sink.filter((b) => !isEmptyBlock(b)));
+    return coalesceButtonRuns(dedupeSiblings(sink.filter((b) => !isEmptyBlock(b))));
   }
 
   const blocks = walk(0, tokens.length, 0, {});

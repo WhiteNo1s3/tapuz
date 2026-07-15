@@ -156,8 +156,11 @@ const MIME_EXT = {
   'image/avif': '.avif'
 };
 
-/** Save a base64 data-URL upload into <assets>/<folder>/ and register it. */
-function saveBase64({ filename, data, folder }) {
+/** Save a validated image buffer into <assets>/<folder>/ and register it.
+ * SECURITY: the type/extension come from MAGIC BYTES, never from the caller's
+ * mime or filename. Only images pass; SVGs are sanitized; oversized rejected.
+ * (Closes the .html/.js upload → stored-XSS vector and SVG script injection.) */
+function saveBuffer({ filename, buffer, folder }) {
   ensureSchema();
   folder = cleanFolder(folder);
   if (folder) createFolder(folder);
@@ -165,16 +168,13 @@ function saveBase64({ filename, data, folder }) {
   const safe = String(filename || 'image')
     .replace(/[^a-zA-Z0-9._\-֐-׿]/g, '_')
     .slice(0, 80);
-  const match = String(data || '').match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) throw new Error('invalid data url');
-
-  // SECURITY: the type/extension come from MAGIC BYTES, never from the client's
-  // mime or filename. Only images pass; SVGs are sanitized; oversized rejected.
-  // (Closes the .html/.js upload → stored-XSS vector and SVG script injection.)
-  const rawBuf = Buffer.from(match[2], 'base64');
-  const { ext, mime, buf } = validateUpload(rawBuf); // throws E_UPLOAD_* on bad input
+  const { ext, mime, buf } = validateUpload(buffer); // throws E_UPLOAD_* on bad input
   const base = path.basename(safe, path.extname(safe)) || 'image';
-  const finalName = base + '-' + Date.now() + ext;
+  // parallel ingestion can land two saves in the same millisecond — never clobber
+  let finalName = base + '-' + Date.now() + ext;
+  for (let n = 2; fs.existsSync(path.join(folderDiskPath(folder), finalName)); n++) {
+    finalName = base + '-' + Date.now() + '-' + n + ext;
+  }
 
   fs.writeFileSync(path.join(folderDiskPath(folder), finalName), buf);
   const url = '/assets/' + (folder ? folder + '/' : '') + finalName;
@@ -182,6 +182,13 @@ function saveBase64({ filename, data, folder }) {
     .run(finalName, url, folder, mime, buf.length);
 
   return { id: result.lastInsertRowid, name: finalName, url: url };
+}
+
+/** Save a base64 data-URL upload into <assets>/<folder>/ and register it. */
+function saveBase64({ filename, data, folder }) {
+  const match = String(data || '').match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error('invalid data url');
+  return saveBuffer({ filename, buffer: Buffer.from(match[2], 'base64'), folder });
 }
 
 module.exports = {
@@ -194,5 +201,6 @@ module.exports = {
   deleteFile,
   moveFile,
   saveBase64,
+  saveBuffer,
   ASSETS_DIR
 };

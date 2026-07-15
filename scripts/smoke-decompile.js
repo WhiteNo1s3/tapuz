@@ -117,6 +117,89 @@ async function checkRejects(name, fn) {
   check('self-decompile: rendered Tapuz HTML maps back to blocks',
     self.blocks.some((b) => b.type === 'heading') && self.mapped >= 2);
 
+  // ── v0.67: the decompiler SEES the page — image sight + menu sight ──
+  const { imageSrcOf, classBgMap, coalesceButtonRuns } = require('../src/pzn/graduate');
+  const { extractBaseUrl } = require('../src/pzn/decompile');
+
+  // the walla page-eater: a homepage with MANY <article>s must never
+  // collapse to the first article (v0.66 shipped one button from 679KB)
+  const wall = '<html><body><div><h1>פורטל</h1>'
+    + Array.from({ length: 5 }, (_, n) => `<article><h3>כתבה ${n}</h3><a href="/${n}">עוד</a></article>`).join('')
+    + '</div></body></html>';
+  const wallBody = extractBodyHtml(wall);
+  check('multi-article page keeps the whole body (the page-eater fix)', /פורטל/.test(wallBody) && /כתבה 4/.test(wallBody));
+  const single = '<html><body><nav><a href="/">בית</a></nav><article><h1>פוסט</h1>'
+    + '<p>' + 'תוכן ארוך מאוד '.repeat(30) + '</p></article></body></html>';
+  check('single dominant article still extracts (a blog post is the article)',
+    !/בית/.test(extractBodyHtml(single)) && /פוסט/.test(extractBodyHtml(single)));
+
+  // image sight: srcset / data-src beat a placeholder src
+  check('imageSrcOf reads srcset when src is a data: placeholder',
+    imageSrcOf({ src: 'data:image/gif;base64,x', srcset: '/s.jpg 320w, /l.jpg 1280w' }) === '/l.jpg');
+  check('imageSrcOf prefers data-src over nothing', imageSrcOf({ 'data-src': '/lazy.jpg' }) === '/lazy.jpg');
+
+  // CSS-in-JS background sight: emotion-style <style> class → card picture
+  const emotion = '<html><head><style>.css-abc{width:100%;background-image:url(/photo1.jpg);}</style></head><body><div>'
+    + '<article><div class="css-abc"></div><h3>כרטיס א</h3><a href="/a">עוד</a></article>'
+    + '<article><div class="css-abc"></div><h3>כרטיס ב</h3><a href="/b">עוד</a></article>'
+    + '<article><div class="css-abc"></div><h3>כרטיס ג</h3><a href="/c">עוד</a></article>'
+    + '</div></body></html>';
+  check('classBgMap reads <style> background rules', classBgMap(emotion).get('css-abc') === '/photo1.jpg');
+  const em = decompileHtml(emotion);
+  check('emotion-class background becomes the card picture',
+    em.blocks.some((b) => b.type === 'cards' && (b.data.items || []).every((it) => it.image === '/photo1.jpg')));
+
+  // menu sight: a ul of short links keeps its hrefs as a nav (not a text list)
+  const menuHtml = '<div><ul><li><a href="/a">חדשות</a></li><li><a href="/b">ספורט</a></li>'
+    + '<li><a href="/c">תרבות</a></li><li><a href="/d">אוכל</a></li></ul></div>';
+  const menu = htmlToBlocks(menuHtml);
+  check('ul of short links → nav with hrefs kept',
+    menu.blocks.some((b) => b.type === 'nav' && b.data.items.length === 4 && b.data.items[0].href === '/a'));
+
+  // wrapper-blind menus: single-anchor wrappers coalesce into one nav
+  const wrapped = htmlToBlocks('<div>'
+    + ['בית', 'אודות', 'צור קשר', 'בלוג'].map((t, n) => `<div><a href="/${n}">${t}</a></div>`).join('')
+    + '</div>');
+  check('4 wrapped sibling links coalesce into one nav',
+    wrapped.blocks.some((b) => b.type === 'nav' && b.data.items.length === 4));
+
+  // headline stacks: ≥3 consecutive LONG links are an article wall (cards)
+  const headlines = coalesceButtonRuns(Array.from({ length: 3 }, (_, n) => ({
+    type: 'button', id: 'b' + n,
+    data: { text: 'כותרת ארוכה מאוד של כתבה חדשותית עם הרבה מאוד מילים מספר ' + n, url: '/item/' + n }
+  })));
+  check('3 consecutive headline-length links → one cards wall',
+    headlines.length === 1 && headlines[0].type === 'cards' && headlines[0].data.items.length === 3);
+
+  // icon links: a textless anchor never becomes a "קישור" button; its picture survives
+  const icon = htmlToBlocks('<p>לפני</p><a href="/home"><img src="/logo.png" alt="לוגו"/></a><p>אחרי</p>');
+  check('textless picture link → image block, no nameless button',
+    icon.blocks.some((b) => b.type === 'image' && b.data.src === '/logo.png')
+    && !icon.blocks.some((b) => b.type === 'button'));
+
+  // base-url resolution: pasted HTML resolves relative media via canonical
+  const canon = '<html><head><link rel="canonical" href="https://site.example/page"/></head>'
+    + '<body><img src="/pic.jpg" alt=""/></body></html>';
+  check('extractBaseUrl finds the canonical link', extractBaseUrl(canon) === 'https://site.example/page');
+  const abs = decompileHtml(canon);
+  check('pasted HTML absolutizes image srcs against its canonical',
+    abs.blocks.some((b) => b.type === 'image' && b.data.src === 'https://site.example/pic.jpg'));
+
+  // ingestion plumbing (offline): every image field in a tree is found + rewritten
+  const { imageRefs } = require('../src/media-ingest');
+  const tree = [
+    { type: 'image', data: { src: 'https://x.example/a.jpg' } },
+    { type: 'hero', data: { image: 'https://x.example/b.jpg', title: 'x' } },
+    { type: 'cards', data: { items: [{ title: 'c', image: 'https://x.example/c.jpg' }] } },
+    { type: 'columns', data: { columns: [{ blocks: [{ type: 'image', data: { src: 'https://x.example/d.jpg' } }] }] } }
+  ];
+  const refs = imageRefs(tree);
+  check('imageRefs finds every image field in a nested tree', refs.length === 4);
+  refs.forEach((r) => r.set('/assets/local.webp'));
+  check('imageRefs rewrites through to the blocks',
+    tree[0].data.src === '/assets/local.webp' && tree[2].data.items[0].image === '/assets/local.webp'
+    && tree[3].data.columns[0].blocks[0].data.src === '/assets/local.webp');
+
   console.log('');
   console.log(fail ? 'SMOKE DECOMPILE: FAIL' : 'SMOKE DECOMPILE: PASS');
   process.exit(fail ? 1 : 0);
