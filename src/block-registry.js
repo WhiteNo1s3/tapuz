@@ -387,6 +387,7 @@ const BLOCK_REGISTRY = [
         name: 'alt', labelHe: 'טקסט חלופי (Alt)', type: 'string', default: '',
         hint: 'חשוב לנגישות ול-SEO — אזהרת W401 כשריק'
       },
+      { name: 'title', labelHe: 'כותרת תמונה (SEO)', type: 'string', default: '', hint: 'מופיע ברחיפה ומחזק SEO לתמונה' },
       { name: 'caption', labelHe: 'כיתוב', type: 'string', hint: 'מוצג מתחת לתמונה' },
       {
         name: 'width', labelHe: 'רוחב', type: 'enum',

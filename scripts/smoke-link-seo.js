@@ -37,6 +37,33 @@ const btn = pzn.toTapuzPage(doc).blocks.find((b) => b.type === 'button');
 check('round-trip preserves rel/target/title', btn && btn.data.rel === 'nofollow' && btn.data.target === '_blank' && btn.data.title === 'כ');
 check('round-trip validates clean', pzn.validate(doc, { strict: false }).filter((i) => i.severity === 'error').length === 0);
 
+// ── image SEO (v0.71): title attribute, compile + round-trip ─────────
+const imgPage = { title: 't', slug: 't', direction: 'rtl', tags: [], meta: {}, blocks: [
+  { type: 'image', id: 'i1', data: { src: '/a.jpg', alt: 'חלופי', title: 'כותרת תמונה' } },
+  { type: 'image', id: 'i2', data: { src: '/b.jpg', alt: 'ב' } }
+] };
+const imgSrc = pzn.serialize(pzn.fromTapuzPage(imgPage));
+const imgDoc = pzn.parse(imgSrc);
+const imgHtml = pzn.compile(imgDoc);
+check('compiled <img> carries title', /<img[^>]*src="\/a\.jpg"[^>]*title="כותרת תמונה"/.test(imgHtml));
+check('compiled <img> without title has NO title attr', !/<img[^>]*src="\/b\.jpg"[^>]*title=/.test(imgHtml));
+const backImgs = pzn.toTapuzPage(imgDoc).blocks.filter((b) => b.type === 'image');
+check('image title round-trips through .pzn', backImgs[0].data.title === 'כותרת תמונה' && backImgs[1].data.title === undefined);
+check('image round-trip validates clean', pzn.validate(imgDoc, { strict: false }).filter((i) => i.severity === 'error').length === 0);
+
+// ── BenTML dialect carries the image title too (review finding: the legacy
+//    source view must not silently delete a builder-set title on apply).
+//    Pure submodules required directly — bentml/index.js drags in the db. ──
+const { decompile: bentDecompile } = require('../src/bentml/decompile');
+const { compile: bentCompile } = require('../src/bentml/compile');
+const bentSrc = bentDecompile({ title: 't', slug: 't' }, [
+  { type: 'image', id: 'i1', data: { src: '/a.jpg', alt: 'א', title: 'כותרת SEO' } }
+]);
+check('BenTML decompile emits the title param', /title:\s*"כותרת SEO"/.test(bentSrc));
+const bentBack = bentCompile(bentSrc);
+const bentImg = (bentBack.blocks || []).find((b) => b.type === 'image');
+check('BenTML compile keeps the title (no data loss on apply)', bentImg && bentImg.data.title === 'כותרת SEO');
+
 console.log('');
 console.log(fail ? 'SMOKE LINK-SEO: FAIL' : 'SMOKE LINK-SEO: PASS');
 process.exit(fail ? 1 : 0);

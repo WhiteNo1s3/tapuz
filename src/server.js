@@ -200,8 +200,12 @@ function siteBaseUrl(req) {
 app.get('/sitemap.xml', (req, res) => {
   try {
     const seo = require('./seo');
-    const pages = require('./pages').listPages({ status: 'published' });
-    const homePath = seo.pickHomePath(pages, require('./export').scoreHomeCandidate);
+    // Crown the home over ALL published pages FIRST, then filter eligibility
+    // (redirects + robots-noindex stay out). Crowning after filtering would
+    // let a lookalike page inherit '/' when the real home is excluded.
+    const all = require('./pages').listPages({ status: 'published' });
+    const homePath = seo.pickHomePath(all);
+    const pages = all.filter((p) => seo.sitemapEligible(p.meta));
     res.type('application/xml').send(seo.buildSitemapXml(pages, siteBaseUrl(req), homePath));
   } catch (e) {
     res.status(500).type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"/>\n');
@@ -2857,6 +2861,9 @@ app.get('/admin/seo', (req, res) => {
         <label style="display:block;font-weight:600;margin-bottom:4px">תמונת שיתוף ברירת מחדל (og:image)</label>
         <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="/uploads/share.jpg" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
         <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו. נתיב מ<a href="/admin/media-library">ספריית המדיה</a>.</div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">כתובת האתר (base URL)</label>
+        <input id="seo-base" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://www.example.co.il" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">מפעיל canonical / og:url / נתונים מובנים (JSON-LD) עם כתובות מלאות, וקובע את הכתובות ב-sitemap.xml. ריק = מדלגים על תגיות שדורשות כתובת מלאה.</div>
         <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
           <span id="seo-status" style="color:#166534;font-size:0.85rem"></span>
           <button type="button" class="btn" id="seo-save">שמור SEO</button>
@@ -2871,7 +2878,8 @@ app.get('/admin/seo', (req, res) => {
           body: JSON.stringify({
             titlePattern: document.getElementById('seo-pattern').value,
             description: document.getElementById('seo-desc').value,
-            defaultOgImage: document.getElementById('seo-og').value
+            defaultOgImage: document.getElementById('seo-og').value,
+            baseUrl: document.getElementById('seo-base').value
           })
         }).then(function (r) { return r.json(); }).then(function (d) {
           document.getElementById('seo-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
@@ -2885,7 +2893,7 @@ app.get('/admin/seo', (req, res) => {
 app.get('/admin/api/seo', (req, res) => {
   try {
     const config = loadConfig();
-    res.json({ ok: true, seo: config.seo || {}, description: config.description || '' });
+    res.json({ ok: true, seo: config.seo || {}, description: config.description || '', baseUrl: config.baseUrl || '' });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -2899,6 +2907,23 @@ app.post('/admin/api/seo', (req, res) => {
     if (b.titlePattern !== undefined) config.seo.titlePattern = String(b.titlePattern || '');
     if (b.defaultOgImage !== undefined) config.seo.defaultOgImage = String(b.defaultOgImage || '');
     if (b.description !== undefined) config.description = String(b.description || '');
+    // site base URL (v0.71): powers canonical/og:url/JSON-LD absolute URLs +
+    // sitemap <loc>. Stored at config level (robots/sitemap already read it).
+    // Forgiving: a schemeless domain gets https:// ; anything unparseable is
+    // rejected — a broken base would corrupt canonicals sitewide.
+    if (b.baseUrl !== undefined) {
+      const raw = String(b.baseUrl || '').trim();
+      if (!raw) {
+        config.baseUrl = '';
+      } else {
+        let u;
+        try { u = new URL(raw.includes('://') ? raw : 'https://' + raw); } catch (e) { u = null; }
+        if (!u || !/^https?:$/.test(u.protocol)) {
+          return res.status(400).json({ ok: false, error: 'כתובת האתר אינה תקינה — צורה תקינה: https://www.example.co.il' });
+        }
+        config.baseUrl = (u.origin + u.pathname).replace(/\/+$/, '');
+      }
+    }
     saveConfig(config);
     res.json({ ok: true, seo: config.seo });
   } catch (e) {

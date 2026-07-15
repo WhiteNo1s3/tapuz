@@ -179,6 +179,7 @@ register({
   props: {
     src: { type: 'url', default: '', label: { he: 'מקור', en: 'Source' } },
     alt: { type: 'string', default: '', optional: true, label: { he: 'טקסט חלופי', en: 'Alt' } },
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת תמונה (SEO)', en: 'Image title' } },
     caption: { type: 'string', default: '', optional: true, label: { he: 'כיתוב', en: 'Caption' } },
     align: {
       type: 'enum', values: ['left', 'center', 'right'], default: 'center', optional: true,
@@ -195,7 +196,8 @@ register({
   compile(node, ctx) {
     const { src = '', alt = '', caption = '', align = 'center' } = node.props;
     const { id, cls } = attrsExtra(node);
-    let inner = `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" loading="lazy">`;
+    const imgTitle = node.props.title ? ` title="${escapeAttr(node.props.title)}"` : '';
+    let inner = `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"${imgTitle} loading="lazy">`;
     if (caption) inner += `<figcaption>${escapeHtml(caption)}</figcaption>`;
     const widthCls = node.props.width && node.props.width !== 'full' ? ` width-${escapeAttr(node.props.width)}` : '';
     return `<figure${id} class="bent-image align-${escapeAttr(align)}${widthCls}${cls}"${dirAttr(ctx)}>${inner}</figure>`;

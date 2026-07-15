@@ -108,7 +108,7 @@ function blockToModule(block) {
       return createModule('article-list', baseOpts(block, pickProps(data, ['tag', 'limit', 'columns'])));
 
     case 'image':
-      return createModule('image', baseOpts(block, pickProps(data, ['src', 'alt', 'caption', 'width'])));
+      return createModule('image', baseOpts(block, pickProps(data, ['src', 'alt', 'title', 'caption', 'width'])));
 
     case 'gallery': {
       const children = (data.images || []).map((img) =>
@@ -408,7 +408,7 @@ function moduleToBlock(node) {
       return finishBlock(node, 'article-list', pickData(props, ['tag', 'limit', 'columns']));
 
     case 'image':
-      return finishBlock(node, 'image', pickData(props, ['src', 'alt', 'caption', 'width']));
+      return finishBlock(node, 'image', pickData(props, ['src', 'alt', 'title', 'caption', 'width']));
 
     case 'gallery': {
       const data = pickData(props, ['columns']);

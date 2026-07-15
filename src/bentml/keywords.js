@@ -47,6 +47,7 @@ const KEYWORDS = {
     params: {
       src: { type: 'string', required: true },
       alt: { type: 'string', default: '' },
+      title: { type: 'string' },
       caption: { type: 'string' },
       width: { type: 'enum', default: 'full', values: ['sm', 'md', 'lg', 'full'] }
     }

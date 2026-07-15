@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>דף נסתר</title>
+    <meta name="bent-slug" content="seo-e2e-hidden" />
+  </head>
+  <body>
+    <bent-text id="t1">לא באינדקס.</bent-text>
+  </body>
+</html>
