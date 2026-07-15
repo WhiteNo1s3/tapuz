@@ -63,6 +63,46 @@ const ALIASES = {
   contact: 'contact-info', 'contact-details': 'contact-info'
 };
 
+/** Common model drift on PROP names: url= for href=, src= for image=… (v0.69).
+ * Twin adoption fires only when the schema key is EMPTY and the twin is not
+ * itself a real prop of the module — same "server owns the vocabulary" move
+ * as the tag ALIASES above. */
+const PROP_TWINS = {
+  href: ['url', 'link', 'to'],
+  url: ['href', 'link'],
+  image: ['src', 'img', 'background'],
+  src: ['image', 'file'],
+  poster: ['thumbnail', 'thumb'],
+  content: ['text', 'body'],
+  text: ['content', 'label']
+};
+
+/** Adopt obvious prop twins across a parsed doc. @returns change list */
+function adoptPropTwins(doc) {
+  const changes = [];
+  walk(doc, (node) => {
+    if (!isModule(node)) return;
+    const def = getModule(node.name);
+    if (!def || !def.props) return;
+    for (const [key, twins] of Object.entries(PROP_TWINS)) {
+      if (!def.props[key]) continue;
+      const cur = node.props && node.props[key];
+      if (cur !== undefined && cur !== null && cur !== '') continue;
+      for (const tw of twins) {
+        if (def.props[tw]) continue; // a real prop here — not drift
+        const v = node.props && node.props[tw];
+        if (v !== undefined && v !== null && v !== '') {
+          node.props[key] = v;
+          delete node.props[tw];
+          changes.push({ code: 'PROP_ALIAS', message: `<bent-${node.name}> "${tw}" → "${key}"` });
+          break;
+        }
+      }
+    }
+  });
+  return changes;
+}
+
 /** HTML tags safe to keep as element names when quarantining unknowns. */
 const HTML_TAGS = new Set([
   'div', 'span', 'p', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -231,6 +271,7 @@ function repairAst(doc, changes) {
   fixNames(doc.body);
 
   // 3) props: required/enum/range/type, per (now-aliased) module def
+  changes.push(...adoptPropTwins(doc)); // url= → href= before fill/snap/clamp
   walk(doc, (node) => {
     if (!isModule(node)) return;
     const def = getModule(node.name);
@@ -345,4 +386,4 @@ function repair(source) {
   return { ok: true, source: serialize(doc), changes, remaining };
 }
 
-module.exports = { repair, ALIASES };
+module.exports = { repair, ALIASES, adoptPropTwins };

@@ -189,10 +189,12 @@ function staticSecurityHeaders(res, filePath) {
   }
 }
 
-app.use(express.static(PUBLIC_DIR, { setHeaders: staticSecurityHeaders }));
+// extensions:['html'] — the page's natural address is /שם-הדף (no suffix);
+// without this every slug URL 404'd and only /שם-הדף.html answered (v0.69)
+app.use(express.static(PUBLIC_DIR, { extensions: ['html'], setHeaders: staticSecurityHeaders }));
 
 // Admin client scripts always ship with the package (site public/ may be elsewhere)
-app.use(express.static(path.join(__dirname, '..', 'public'), { index: false, setHeaders: staticSecurityHeaders }));
+app.use(express.static(path.join(__dirname, '..', 'public'), { index: false, extensions: ['html'], setHeaders: staticSecurityHeaders }));
 
 // Assets
 const uploadDir = ASSETS_DIR;
@@ -3552,6 +3554,20 @@ app.post('/admin/api/bentml/compile', (req, res) => {
     if (typeof source !== 'string') {
       return res.status(400).json({ error: 'source (BenTML string) required' });
     }
+    // the advanced tab accepts BOTH dialects (v0.69): an AI primed with the
+    // dictionary answers in <bent-*> .pzn — pasting that here used to be
+    // rejected by the keyword compiler ("does not accept the code")
+    if (looksLikePzn(source)) {
+      const { view, repaired, changes } = pznSourceToBlocks(source);
+      return res.json({
+        ok: true,
+        page: { title: view.title },
+        blocks: view.blocks,
+        warnings: repaired ? changes.map((c) => String(c && c.message || c)) : [],
+        dialect: 'pzn',
+        repaired
+      });
+    }
     const result = bentml.compile(source);
     res.json({
       ok: true,
@@ -3769,7 +3785,33 @@ app.post('/admin/api/pzn/decompile', async (req, res) => {
     if (url && String(url).trim()) {
       r = await decompileUrl(String(url).trim(), { title, slug });
     } else if (typeof html === 'string' && html.trim()) {
-      r = decompileHtml(html, { title, slug });
+      if (looksLikePzn(html)) {
+        // the paste is already BenTML (an AI reply) — the HTML decompiler
+        // would shred bent-* tags into provisional blobs (v0.69). Route it
+        // through the forgiving import instead; same draft-creating flow.
+        const pznApi = require('./pzn/index');
+        const { deriveSlug } = require('./pzn/intent');
+        const { view, repaired } = pznSourceToBlocks(html);
+        const pageTitle = (title || '').trim() || view.title || 'דף מיובא';
+        const pageSlug = deriveSlug((slug || '').trim() || pageTitle);
+        const doc2 = pznApi.fromTapuzPage({
+          title: pageTitle, slug: pageSlug, lang: view.lang || 'he',
+          direction: view.direction || 'rtl', tags: view.tags || [], meta: view.meta || {}, blocks: view.blocks
+        });
+        r = {
+          source: pznApi.serialize(doc2),
+          blocks: view.blocks,
+          mapped: view.blocks.length,
+          leftover: 0,
+          toolGap: [],
+          issues: [],
+          meta: { title: pageTitle, slug: pageSlug, lang: view.lang || 'he', dir: view.direction || 'rtl' },
+          strategy: repaired ? 'bentml-repaired' : 'bentml',
+          strategies: []
+        };
+      } else {
+        r = decompileHtml(html, { title, slug });
+      }
     } else {
       return res.status(400).json({ ok: false, error: 'url or html required' });
     }
@@ -3858,36 +3900,57 @@ app.post('/admin/api/pzn/graduate', (req, res) => {
  * and the admin publishes when ready. Reuses the repair pipeline so imperfect
  * agent output still lands.
  */
+/** An LLM reply that speaks .pzn — <bent-*> tags / a bent-version head. */
+function looksLikePzn(source) {
+  return /<bent-[a-z]/i.test(source) || /bent-version/i.test(source);
+}
+
+/**
+ * The ONE forgiving pipeline for pasted BenTML (v0.69 — shared by every paste
+ * door: the in-builder AI import, the advanced code tab, and /admin/new).
+ * extract → parse | repair → toTapuzPage. Throws with .issues on a dead paste.
+ */
+function pznSourceToBlocks(rawSource) {
+  const { extractPzn } = require('./pzn-extract');
+  const source = extractPzn(rawSource);
+  const pznApi = require('./pzn/index');
+  let doc;
+  let repaired = false;
+  let changes = [];
+  try {
+    doc = pznApi.parse(source);
+    const errs = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+    if (errs.length) { const e = new Error('invalid'); e.issues = errs; throw e; }
+  } catch (parseErr) {
+    const { repair } = require('./pzn/repair');
+    const r = repair(source);
+    if (!r.ok || r.remaining.length) {
+      const err = new Error(r.error || 'לא הצלחתי לקרוא את ה‑BenTML');
+      err.issues = r.remaining || parseErr.issues;
+      throw err;
+    }
+    doc = pznApi.parse(r.source);
+    repaired = true;
+    changes = r.changes;
+  }
+  // even a VALID doc can carry prop drift (url= for href=) — adopt twins so
+  // the model's obvious intent lands instead of silently dropping
+  const twinChanges = require('./pzn/repair').adoptPropTwins(doc);
+  if (twinChanges.length) changes = changes.concat(twinChanges);
+  const view = pznApi.toTapuzPage(doc);
+  return { view, doc, repaired, changes };
+}
+
 app.post('/admin/api/pzn/to-blocks', (req, res) => {
   try {
-    let { source } = req.body || {};
+    const { source } = req.body || {};
     if (typeof source !== 'string' || !source.trim()) {
       return res.status(400).json({ ok: false, error: 'source required' });
     }
-    const { extractPzn } = require('./pzn-extract');
-    source = extractPzn(source);
-    const pznApi = require('./pzn/index');
-    let doc;
-    let repaired = false;
-    let changes = [];
-    try {
-      doc = pznApi.parse(source);
-      const errs = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
-      if (errs.length) { const e = new Error('invalid'); e.issues = errs; throw e; }
-    } catch (parseErr) {
-      const { repair } = require('./pzn/repair');
-      const r = repair(source);
-      if (!r.ok || r.remaining.length) {
-        return res.status(400).json({ ok: false, error: r.error || 'לא הצלחתי לקרוא את ה‑BenTML', issues: r.remaining || parseErr.issues });
-      }
-      doc = pznApi.parse(r.source);
-      repaired = true;
-      changes = r.changes;
-    }
-    const view = pznApi.toTapuzPage(doc);
+    const { view, repaired, changes } = pznSourceToBlocks(source);
     res.json({ ok: true, blocks: view.blocks, title: view.title, repaired, changes });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    res.status(400).json({ ok: false, error: e.message, issues: e.issues });
   }
 });
 
@@ -4486,11 +4549,15 @@ app.post('/admin/publish', (req, res) => {
       updatePage(full_path, updates);
     }
     const page = publishPage(full_path);
+    // publish MEANS live (v0.69): the static site is rebuilt right here — the
+    // admin never needed to know a separate "build" step existed to see the page
+    exportAll();
     res.json({
       ok: true,
       status: page.status,
       hasUnpublished: false,
-      full_path: page.full_path
+      full_path: page.full_path,
+      liveUrl: '/' + page.full_path
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });

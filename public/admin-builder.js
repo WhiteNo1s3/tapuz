@@ -771,6 +771,8 @@
     redoStack = [];
     isDirty = false;
     hasUnpublishedState = !!config.hasUnpublished;
+    // a published page always shows its live door from the first paint
+    if (config.status === 'published') updateLiveLink('/' + (config.fullPath || config.full_path || currentPageFullPath));
     // Direction of the PAGE being edited (ask B): the settings drawer side
     // follows it — RTL page → panel on the right, LTR page → panel on the left.
     pageDirection = config.direction === 'ltr' ? 'ltr' : 'rtl';
@@ -3884,7 +3886,7 @@
       body: JSON.stringify({ full_path: currentPageFullPath, title: title, blocks: blocks, tags: pageTags, meta: pageMeta })
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (data.ok) {
-        showToast('פורסם ✓', 'ok');
+        showToast('פורסם ✓ — הדף חי', 'ok');
         hasUnpublishedState = false;
         markSaved();
         var badge = document.getElementById('publish-badge');
@@ -3893,11 +3895,29 @@
           badge.style.color = '#166534';
           badge.textContent = 'פורסם';
         }
+        updateLiveLink(data.liveUrl || ('/' + (data.full_path || currentPageFullPath)));
       } else {
         showToast('שגיאה: ' + (data.error || ''), 'err');
       }
       return data;
     }).catch(function () { showToast('שגיאה בפרסום', 'err'); });
+  }
+
+  /** A visible, always-clickable door to the live page — no guessing URLs. */
+  function updateLiveLink(url) {
+    if (!url) return;
+    var link = document.getElementById('view-live-link');
+    if (!link) {
+      link = document.createElement('a');
+      link.id = 'view-live-link';
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.className = 'btn secondary';
+      var bar = document.querySelector('.save-bar .container');
+      if (bar) bar.insertBefore(link, bar.firstChild);
+    }
+    link.href = encodeURI(url);
+    link.textContent = 'צפה בדף החי ↗';
   }
 
   /** Refresh the topbar badge to reflect draft-vs-published state. */
@@ -3911,7 +3931,9 @@
   }
 
   function publishAndBuild() {
-    publishPage().then(function () {
+    var liveUrl = '';
+    publishPage().then(function (pub) {
+      liveUrl = (pub && pub.liveUrl) || ('/' + currentPageFullPath);
       return fetch('/admin/build', { method: 'POST' });
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (data && data.ok === false) {
@@ -3919,7 +3941,8 @@
         return;
       }
       showToast('נבנה ✓ — נפתח בחלון חדש', 'ok');
-      window.open('/', '_blank');
+      // open THE PAGE that was just published, not the homepage
+      window.open(encodeURI(liveUrl), '_blank');
     }).catch(function () { showToast('שגיאה בבנייה', 'err'); });
   }
 
