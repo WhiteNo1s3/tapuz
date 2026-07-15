@@ -23,16 +23,39 @@
 const { htmlToBlocks } = require('./graduate');
 const { deriveSlug } = require('./intent');
 
-/** Pull the main content region from a full HTML page (best-effort). */
+/** Pull the main content region from a full HTML page (best-effort).
+ * The walla lesson (v0.67): a homepage has 111 <article> tags — the first-
+ * article fallback ate the whole page down to one news item. An <article> is
+ * the page only when it IS the page (a single post holding most of the text);
+ * a tiny <main> is a client-rendered shell and the body is the truth. */
 function extractBodyHtml(html) {
   const raw = String(html || '');
-  const main = /<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(raw);
-  if (main) return main[1];
-  const article = /<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(raw);
-  if (article) return article[1];
   const body = /<body\b[^>]*>([\s\S]*?)<\/body>/i.exec(raw);
-  if (body) return body[1];
-  return raw;
+  const scope = body ? body[1] : raw;
+  const scopeLen = sourceTextLen(scope);
+  const main = /<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(raw);
+  if (main && sourceTextLen(main[1]) >= scopeLen * 0.25) return main[1];
+  const articleCount = (scope.match(/<article\b/gi) || []).length;
+  if (articleCount === 1) {
+    const article = /<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(scope);
+    if (article && sourceTextLen(article[1]) >= scopeLen * 0.5) return article[1];
+  }
+  return scope;
+}
+
+/** The page's own idea of its address — for resolving relative URLs when
+ * the HTML was pasted (saved/rendered DOM) rather than fetched. */
+function extractBaseUrl(html) {
+  const raw = String(html || '');
+  const base = /<base\b[^>]*\shref=["']([^"']+)["']/i.exec(raw);
+  if (base) return base[1];
+  const canon = /<link\b[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["']/i.exec(raw) ||
+    /<link\b[^>]*href=["']([^"']+)["'][^>]*rel=["']canonical["']/i.exec(raw);
+  if (canon) return canon[1];
+  const og = /<meta\b[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["']/i.exec(raw) ||
+    /<meta\b[^>]*content=["']([^"']+)["'][^>]*property=["']og:url["']/i.exec(raw);
+  if (og) return og[1];
+  return '';
 }
 
 function extractTitle(html) {
@@ -130,6 +153,43 @@ function scoreBlocks(blocks, srcTextLen) {
   );
 }
 
+// ── URL absolutization (v0.67) ─────────────────────────────────────────
+// A decompiled walla card says image="/media/123.jpg" — meaningless off
+// walla's own host. With the page's base URL every media/link reference
+// becomes absolute, so the ingest step can fetch it and the admin's links
+// keep working.
+
+const REL_SKIP = /^(https?:|data:|#|mailto:|tel:|javascript:)/i;
+
+function absolutize(v, base) {
+  const s = String(v || '').trim();
+  if (!s || REL_SKIP.test(s)) return s;
+  try { return new URL(s, base).href; } catch (e) { return s; }
+}
+
+/** Resolve every media src + link href in a block tree against baseUrl. */
+function absolutizeBlockUrls(blocks, baseUrl) {
+  if (!baseUrl) return;
+  eachBlock(blocks, (b) => {
+    const d = b.data || {};
+    if (d.src != null) d.src = absolutize(d.src, baseUrl);
+    if (d.image != null) d.image = absolutize(d.image, baseUrl);
+    if (d.poster != null) d.poster = absolutize(d.poster, baseUrl);
+    if (d.url != null) d.url = absolutize(d.url, baseUrl);
+    if (d.buttonUrl != null) d.buttonUrl = absolutize(d.buttonUrl, baseUrl);
+    if (d.backdrop && d.backdrop.image != null) d.backdrop.image = absolutize(d.backdrop.image, baseUrl);
+    for (const it of d.items || []) {
+      if (it && typeof it === 'object') {
+        if (it.image != null) it.image = absolutize(it.image, baseUrl);
+        if (it.href != null) it.href = absolutize(it.href, baseUrl);
+      }
+    }
+    for (const im of d.images || []) {
+      if (im && typeof im === 'object' && im.src != null) im.src = absolutize(im.src, baseUrl);
+    }
+  });
+}
+
 /**
  * Decompile an HTML page (or fragment) into a Tapuz page draft.
  * @param {string} html
@@ -142,7 +202,11 @@ function scoreBlocks(blocks, srcTextLen) {
 function decompileHtml(html, opts = {}) {
   const pznApi = require('./index');
   const { huntBlocks } = require('./hunt');
+  const { classBgMap } = require('./graduate');
   const bodyHtml = extractBodyHtml(html);
+  // class → CSS background URL, from the FULL page's <style> blocks (emotion/
+  // styled-components put card pictures there, invisible in the body alone)
+  const bgMap = classBgMap(html);
   const title = (opts.title || '').trim() || extractTitle(html);
   const dir = opts.dir || extractDir(html);
   const lang = opts.lang || extractLang(html);
@@ -156,7 +220,7 @@ function decompileHtml(html, opts = {}) {
 
   const srcLen = sourceTextLen(bodyHtml);
   const attempts = runners.map((s) => {
-    const r = s.run(bodyHtml);
+    const r = s.run(bodyHtml, { bgMap });
     return { name: s.name, r, score: scoreBlocks(r.blocks, srcLen) };
   });
   // hunt is listed first: on a tie the structured read wins
@@ -167,6 +231,8 @@ function decompileHtml(html, opts = {}) {
   const blocks = r.blocks.length
     ? r.blocks
     : [{ type: 'text', id: 'empty-decompile', data: { content: 'הדף לא הניב מודולים — ייתכן שהוא בנוי בעיקר מסקריפטים.' } }];
+  const baseUrl = opts.baseUrl || extractBaseUrl(html);
+  if (baseUrl) absolutizeBlockUrls(blocks, baseUrl);
 
   const doc = pznApi.fromTapuzPage({ title, slug, lang, direction: dir, tags: [], meta: {}, blocks });
   let source = '';
@@ -319,7 +385,7 @@ async function decompileUrl(rawUrl, opts = {}) {
     chunks.push(value);
   }
   const html = Buffer.concat(chunks).toString('utf8');
-  const result = decompileHtml(html, opts);
+  const result = decompileHtml(html, { ...opts, baseUrl: u.href });
   result.fromUrl = u.href;
   return result;
 }
@@ -327,7 +393,10 @@ async function decompileUrl(rawUrl, opts = {}) {
 module.exports = {
   decompileHtml,
   decompileUrl,
+  absolutizeBlockUrls,
+  eachBlock,
   extractBodyHtml,
+  extractBaseUrl,
   extractTitle,
   extractDir,
   extractLang,

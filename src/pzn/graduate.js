@@ -73,6 +73,63 @@ function matchClose(tokens, openIdx) {
 let uid = 0;
 function nid(p) { uid += 1; return `${p}-g${uid}`; }
 
+// ─── image sight (v0.67) ────────────────────────────────────────────────
+// Real sites almost never put the picture in a plain src: it hides in
+// data-src (lazy loaders), srcset (responsive), or a CSS background-image.
+// The walla census: 74 <img src>, 5 srcset-only, 60 CSS backgrounds.
+
+/** The true image URL of an <img>/<source> token's attributes. */
+function imageSrcOf(attrs) {
+  const a = attrs || {};
+  const direct = a.src || a['data-src'] || a['data-lazy-src'] || a['data-original'] || '';
+  if (direct && !/^data:/i.test(direct)) return direct;
+  const set = a.srcset || a['data-srcset'] || '';
+  if (set) {
+    // last candidate is conventionally the largest — best master for ingestion
+    const cands = String(set).split(',').map((c) => c.trim().split(/\s+/)[0]).filter(Boolean);
+    if (cands.length) return cands[cands.length - 1];
+  }
+  return direct; // a data: URL beats nothing
+}
+
+/** background-image URL from an inline style attribute ('' when none). */
+function styleImageOf(attrs) {
+  const m = /background(?:-image)?\s*:[^;]*url\(\s*(?:&quot;|['"])?([^'")&]+)/i.exec((attrs || {}).style || '');
+  return m ? m[1].trim() : '';
+}
+
+/**
+ * CSS-in-JS sites (walla is emotion) put the picture in a <style> block:
+ * `.css-ibqk57{background-image:url(…)}` — invisible to inline-style sight.
+ * Scan every <style> once and map class → background URL; the walks look
+ * elements up by their class list.
+ */
+function classBgMap(html) {
+  const map = new Map();
+  const styleRe = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  let m;
+  while ((m = styleRe.exec(String(html || '')))) {
+    const ruleRe = /\.([A-Za-z0-9_-]+)[^{}]*\{[^{}]*?background(?:-image)?\s*:[^};]*?url\(\s*['"]?([^'")]+)/gi;
+    let r;
+    while ((r = ruleRe.exec(m[1]))) {
+      const url = r[2].trim();
+      if (url && !/^data:/i.test(url)) map.set(r[1], url);
+    }
+  }
+  return map;
+}
+
+/** Lookup: the background URL an element's class list carries ('' if none). */
+function bgOfAttrs(attrs, bgMap) {
+  const inline = styleImageOf(attrs);
+  if (inline) return inline;
+  if (!bgMap || !bgMap.size) return '';
+  for (const cls of String((attrs || {}).class || '').split(/\s+/)) {
+    if (cls && bgMap.has(cls)) return bgMap.get(cls);
+  }
+  return '';
+}
+
 const HEADING = /^h([1-6])$/;
 // tags we descend INTO (their children become blocks) rather than map directly
 const CONTAINERS = new Set(['div', 'section', 'article', 'main', 'header', 'footer', 'aside', 'figure']);
@@ -101,17 +158,19 @@ function childSpans(tokens, from, to) {
 }
 
 /** Try to read ONE media card out of an element span (null = not a card). */
-function extractCard(tokens, from, to) {
+function extractCard(tokens, from, to, bgMap) {
   const root = tokens[from];
   const card = {};
+  let bgImage = '';
   if (root.name === 'a' && root.attrs && root.attrs.href) card.href = root.attrs.href;
   for (let j = from; j < to; j++) {
     const tk = tokens[j];
     if (tk.kind !== 'open') continue;
-    if (!card.image && tk.name === 'img') {
-      const a = tk.attrs || {};
-      // real sites lazy-load: the true URL often hides in data-src
-      card.image = a.src || a['data-src'] || a['data-lazy-src'] || '';
+    // a CSS background on any wrapper is the card picture when no <img> shows
+    if (!bgImage) bgImage = bgOfAttrs(tk.attrs, bgMap);
+    if (!card.image && (tk.name === 'img' || tk.name === 'source')) {
+      // real sites lazy-load: the true URL hides in data-src/srcset
+      card.image = imageSrcOf(tk.attrs);
     } else if (!card.title && HEADING.test(tk.name)) {
       const e = matchClose(tokens, j);
       card.title = unescapeHtml(textOf(tokens, j + 1, e - 1)).slice(0, 200);
@@ -128,6 +187,7 @@ function extractCard(tokens, from, to) {
       j = e - 1;
     }
   }
+  if (!card.image && bgImage) card.image = bgImage;
   // a real card = a headline plus a picture or a destination, teaser-sized
   if (!card.title || !(card.image || card.href)) return null;
   if (textOf(tokens, from, to).length > CARD_TEXT_CAP) return null;
@@ -143,14 +203,14 @@ function extractCard(tokens, from, to) {
  * The walla lesson: repeated img+heading+link siblings ARE a card grid.
  * Returns the mediacard items, or null when the range is not a cluster.
  */
-function detectCardCluster(tokens, from, to) {
+function detectCardCluster(tokens, from, to, bgMap) {
   const candidates = childSpans(tokens, from, to)
     .filter(([s]) => CARD_ROOTS.has(tokens[s].name) && !tokens[s].selfClosing);
   if (candidates.length < 2) return null;
   const cards = [];
   let rootName = null;
   for (const [s, e] of candidates) {
-    const c = extractCard(tokens, s, e);
+    const c = extractCard(tokens, s, e, bgMap);
     if (!c) continue;
     // homogeneous repetition is the essence of a cluster — mixed roots are a
     // page layout, not a card wall
@@ -163,6 +223,109 @@ function detectCardCluster(tokens, from, to) {
   const minCount = (rootName === 'article' || rootName === 'li' || rootName === 'a') ? 2 : 3;
   if (cards.length >= minCount && cards.length / candidates.length >= 0.6) return cards;
   return null;
+}
+
+/**
+ * A run of ≥4 consecutive sibling anchors with short labels IS a menu, not
+ * a pile of buttons (the walla lesson v0.67: the flat read turned the
+ * portal's section menus into 85 stacked primary buttons). Links carrying
+ * pictures or long labels are content — the run stops there. Returns the
+ * items plus the index just past the run so the walk can jump it.
+ */
+const LINK_RUN_MIN = 4;
+const LINK_LABEL_MAX = 40;
+
+/**
+ * Wrapper-blind menu sight: real menus wrap each link in its own div/li, so
+ * the walk meets one anchor per range and the run detector never fires.
+ * After a sink level is built, ≥4 CONSECUTIVE short-label button blocks
+ * collapse into one nav — the shape survives no matter how it was nested.
+ */
+function coalesceButtonRuns(blocks) {
+  const out = [];
+  let run = [];
+  const isShort = (b) => String(b.data.text || '').length <= LINK_LABEL_MAX;
+  const flushSegment = (seg) => {
+    if (!seg.length) return;
+    if (isShort(seg[0]) && seg.length >= LINK_RUN_MIN) {
+      out.push({
+        type: 'nav', id: nid('nav'),
+        data: { items: seg.map((b) => ({ label: b.data.text, href: b.data.url })) }
+      });
+    } else if (!isShort(seg[0]) && seg.length >= 3) {
+      // a stack of headline-length links is an article wall, not buttons
+      out.push({
+        type: 'cards', id: nid('cards'),
+        data: { items: seg.map((b) => ({ title: String(b.data.text || '').slice(0, 200), href: b.data.url })) }
+      });
+    } else out.push(...seg);
+  };
+  const flush = () => {
+    let seg = [];
+    for (const b of run) {
+      if (seg.length && isShort(seg[0]) !== isShort(b)) { flushSegment(seg); seg = []; }
+      seg.push(b);
+    }
+    flushSegment(seg);
+    run = [];
+  };
+  for (const b of blocks) {
+    const label = b.type === 'button' ? String((b.data || {}).text || '').trim() : '';
+    if (b.type === 'button' && label) run.push(b);
+    else { flush(); out.push(b); }
+  }
+  flush();
+  return out;
+}
+
+/** A ul whose items are single short links is a MENU — keep the hrefs. */
+function navItemsFromList(tokens, i, end) {
+  let liCount = 0;
+  const items = [];
+  for (let j = i + 1; j < end - 1; j++) {
+    if (tokens[j].kind === 'open' && tokens[j].name === 'li') {
+      liCount += 1;
+      const liEnd = matchClose(tokens, j);
+      const anchors = [];
+      for (let k = j + 1; k < liEnd - 1; k++) {
+        if (tokens[k].kind === 'open' && tokens[k].name === 'a' && tokens[k].attrs && tokens[k].attrs.href) {
+          const aEnd = matchClose(tokens, k);
+          anchors.push({ label: unescapeHtml(textOf(tokens, k + 1, aEnd - 1)).trim(), href: tokens[k].attrs.href });
+          k = aEnd - 1;
+        }
+      }
+      if (anchors.length === 1 && anchors[0].label && anchors[0].label.length <= LINK_LABEL_MAX) {
+        items.push(anchors[0]);
+      }
+      j = liEnd - 1;
+    }
+  }
+  if (liCount >= LINK_RUN_MIN && items.length >= liCount * 0.8) return items;
+  return null;
+}
+
+function collectLinkRun(tokens, i, to) {
+  const items = [];
+  let j = i;
+  while (j < to) {
+    const t = tokens[j];
+    if (t.kind === 'text') {
+      if (t.value.trim()) break; // real text between links = content, not menu
+      j++; continue;
+    }
+    if (t.kind !== 'open' || t.name !== 'a' || !(t.attrs && t.attrs.href)) break;
+    const e = matchClose(tokens, j);
+    const label = unescapeHtml(textOf(tokens, j + 1, e - 1)).trim();
+    if (!label || label.length > LINK_LABEL_MAX) break;
+    let hasImg = false;
+    for (let k = j; k < e; k++) {
+      if (tokens[k].kind === 'open' && (tokens[k].name === 'img' || tokens[k].name === 'picture')) { hasImg = true; break; }
+    }
+    if (hasImg) break;
+    items.push({ label, href: t.attrs.href });
+    j = e;
+  }
+  return { items, end: j };
 }
 
 // ─── shared leaf parsers (used by the flat walk AND the v2 hunt) ────────
@@ -254,10 +417,14 @@ function parseVideoData(tokens, i, end, t) {
 
 /**
  * @param {string} html
+ * @param {{ bgMap?: Map<string,string> }} [opts]  class → CSS background URL
+ *        (decompile.js builds it from the FULL page's <style> blocks; when
+ *        absent we scan the fragment itself)
  * @returns {{ blocks: object[], mapped: number, leftover: number, suggestedTools: string[] }}
  */
-function htmlToBlocks(html) {
+function htmlToBlocks(html, opts = {}) {
   uid = 0;
+  const bgMap = opts.bgMap != null ? opts.bgMap : classBgMap(html);
   let tokens;
   try {
     // lenient: graduation always faces real-world HTML (yahoo-class attribute
@@ -292,7 +459,7 @@ function htmlToBlocks(html) {
     // the whole range repeating the card shape? → ONE cards block (v0.65).
     // Fires for wrapped clusters (via the CONTAINERS descend) and for bare
     // top-level sibling clusters alike.
-    const cluster = detectCardCluster(tokens, from, to);
+    const cluster = detectCardCluster(tokens, from, to, bgMap);
     if (cluster) {
       sink.push({ type: 'cards', id: nid('cards'), data: { items: cluster } });
       mapped += 1;
@@ -338,12 +505,30 @@ function htmlToBlocks(html) {
         mapped += 1; i = end; continue;
       }
       if (name === 'img') {
-        sink.push({ type: 'image', id: nid('img'), data: { src: t.attrs.src || '', alt: t.attrs.alt || '' } });
+        sink.push({ type: 'image', id: nid('img'), data: { src: imageSrcOf(t.attrs), alt: t.attrs.alt || '' } });
         mapped += 1; i = end; continue;
       }
       if (name === 'a') {
+        // a run of ≥4 short bare links is a menu, not a button pile
+        const run = collectLinkRun(tokens, i, to);
+        if (run.items.length >= LINK_RUN_MIN) {
+          sink.push({ type: 'nav', id: nid('nav'), data: { items: run.items } });
+          mapped += 1; i = run.end; continue;
+        }
         const href = t.attrs.href || '#';
-        const label = unescapeHtml(textOf(tokens, i + 1, end - 1)) || 'קישור';
+        const label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
+        if (!label) {
+          // a textless link is an icon or a picture link — keep the picture,
+          // never emit a nameless "קישור" button
+          for (let j = i + 1; j < end - 1; j++) {
+            if (tokens[j].kind === 'open' && (tokens[j].name === 'img' || tokens[j].name === 'source')) {
+              const src = imageSrcOf(tokens[j].attrs);
+              if (src) { sink.push({ type: 'image', id: nid('img'), data: { src, alt: tokens[j].attrs.alt || '' } }); mapped += 1; }
+              break;
+            }
+          }
+          i = end; continue;
+        }
         if (/youtube\.com|youtu\.be/i.test(href)) {
           // a YouTube link is better as an embed (renderer auto-embeds the player)
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
@@ -362,9 +547,15 @@ function htmlToBlocks(html) {
       if (name === 'ul' || name === 'ol') {
         // card-shaped <li>s are a card GRID, not a text list (walla renders
         // its card walls as ul>li) — try the cluster first, list as fallback
-        const liCluster = detectCardCluster(tokens, i + 1, end - 1);
+        const liCluster = detectCardCluster(tokens, i + 1, end - 1, bgMap);
         if (liCluster) {
           sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
+          mapped += 1; i = end; continue;
+        }
+        // a ul of single short links is a menu — keep the hrefs (v0.67)
+        const menu = navItemsFromList(tokens, i, end);
+        if (menu) {
+          sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
           mapped += 1; i = end; continue;
         }
         const items = [];
@@ -444,6 +635,11 @@ function htmlToBlocks(html) {
         if (sink.length - before > 1 && /col|grid|row|flex/i.test(t.attrs.class || '')) {
           suggested.add('columns');
         }
+        // an empty wrapper whose CSS carries a background IS a picture
+        if (sink.length === before) {
+          const bg = bgOfAttrs(t.attrs, bgMap);
+          if (bg) { sink.push({ type: 'image', id: nid('img'), data: { src: bg, alt: '' } }); mapped += 1; }
+        }
         i = end; continue;
       }
 
@@ -461,7 +657,7 @@ function htmlToBlocks(html) {
   }
 
   walk(0, tokens.length, out);
-  return { blocks: out, mapped, leftover, suggestedTools: [...suggested] };
+  return { blocks: coalesceButtonRuns(out), mapped, leftover, suggestedTools: [...suggested] };
 }
 
 module.exports = {
@@ -471,6 +667,15 @@ module.exports = {
   parseNavItems,
   parseVideoData,
   detectCardCluster,
+  collectLinkRun,
+  coalesceButtonRuns,
+  navItemsFromList,
+  LINK_RUN_MIN,
+  LINK_LABEL_MAX,
+  imageSrcOf,
+  styleImageOf,
+  classBgMap,
+  bgOfAttrs,
   childSpans,
   matchClose,
   textOf,
