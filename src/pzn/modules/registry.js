@@ -1076,6 +1076,50 @@ register({
   }
 });
 
+// ─── Timestamped news feed (v0.70) — walla's standing "HH:MM · headline"
+//     column (the ticker scrolls; newspop stays). A `newspop` container of
+//     repeatable `newspopitem` rows, each with a time + headline + link. ───
+register({
+  name: 'newspopitem',
+  tag: 'bent-newspopitem',
+  category: 'media',
+  label: { he: 'עדכון', en: 'News update' },
+  icon: 'link',
+  container: false,
+  props: {
+    time: { type: 'string', default: '', optional: true, label: { he: 'שעה', en: 'Time' } },
+    text: { type: 'string', default: '', label: { he: 'כותרת', en: 'Headline' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../newspop-html').renderNewspopItem(node.props || {});
+  }
+});
+
+register({
+  name: 'newspop',
+  tag: 'bent-newspop',
+  category: 'media',
+  label: { he: 'מבזקים עם שעות', en: 'News feed' },
+  icon: 'ticker',
+  container: true,
+  accept: ['newspopitem'],
+  props: {
+    label: { type: 'string', default: '', optional: true, label: { he: 'תווית', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../newspop-html').renderNewspop(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 // ─── Video (v0.62) — native self-hosted <video> (batch item 4). `embed`
 //     already covers YouTube iframes; a YT url here degrades to that embed. ──
 register({

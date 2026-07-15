@@ -251,6 +251,14 @@ function blockToModule(block) {
       );
       return createModule('ticker', baseOpts(block, pickProps(data, ['label', 'speed', 'background', 'color']), { children }));
     }
+    case 'newspop': {
+      const children = (data.items || []).map((it) =>
+        createModule('newspopitem', {
+          props: pickProps(it || {}, ['time', 'text', 'href'])
+        })
+      );
+      return createModule('newspop', baseOpts(block, pickProps(data, ['label']), { children }));
+    }
 
     case 'video':
       return createModule('video', baseOpts(block, pickProps(data, ['src', 'poster', 'caption', 'controls', 'autoplay', 'loop', 'muted'])));
@@ -546,6 +554,13 @@ function moduleToBlock(node) {
         .filter((c) => c.name === 'tickeritem')
         .map((c) => pickData(c.props || {}, ['text', 'href']));
       return finishBlock(node, 'ticker', data);
+    }
+    case 'newspop': {
+      const data = pickData(props, ['label']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'newspopitem')
+        .map((c) => pickData(c.props || {}, ['time', 'text', 'href']));
+      return finishBlock(node, 'newspop', data);
     }
 
     case 'video':
