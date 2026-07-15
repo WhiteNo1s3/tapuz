@@ -155,7 +155,8 @@ function renderBlock(block, direction = 'rtl') {
       const { text = '', url = '#', variant = 'primary' } = block.data;
       const btnClass = ` class="btn btn-${escapeHtml(variant)}${extraClass}"`;
       const btnId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
-      return `<a${btnId}${btnClass}${style} href="${escapeHtml(safeHref(url))}" dir="${direction}">${escapeHtml(text)}</a>`;
+      const seo = require('./pzn/link-attrs').linkSeoAttrs(block.data || {});
+      return `<a${btnId}${btnClass}${style} href="${escapeHtml(safeHref(url))}"${seo} dir="${direction}">${escapeHtml(text)}</a>`;
     }
     case 'spacer': return `<div${extra} class="spacer" style="height:${escapeHtml(block.data.height || '2rem')}"></div>`;
     case 'divider': return `<hr${extra} dir="${direction}">`;

@@ -214,7 +214,10 @@ const BLOCK_REGISTRY = [
         default: 'primary',
         hint: 'ראשי / משני / מתאר (ghost ב-BenTML)'
       },
-      ALIGN_PARAM
+      ALIGN_PARAM,
+      { name: 'rel', labelHe: 'יחס קישור (rel)', type: 'string', default: '', hint: 'nofollow / sponsored / ugc — לבקרת קישורים ו-SEO' },
+      { name: 'target', labelHe: 'פתיחה', type: 'enum', enum: ['_self', '_blank'], default: '_self', hint: '_blank = חלון חדש (מקבל noopener אוטומטית)' },
+      { name: 'title', labelHe: 'כותרת קישור (SEO)', type: 'string', default: '' }
     ],
     textField: 'text',
     textFieldLabelHe: 'טקסט הכפתור',

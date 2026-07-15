@@ -70,7 +70,7 @@ function blockToModule(block) {
     }
 
     case 'button': {
-      const props = pickProps(data, ['variant', 'align']);
+      const props = pickProps(data, ['variant', 'align', 'rel', 'target', 'title']);
       if (data.url !== undefined) props.href = data.url;
       return createModule('button', baseOpts(block, props, { text: data.text || '' }));
     }
@@ -362,7 +362,7 @@ function moduleToBlock(node) {
     }
 
     case 'button': {
-      const data = pickData(props, ['variant', 'align']);
+      const data = pickData(props, ['variant', 'align', 'rel', 'target', 'title']);
       if (props.href !== undefined) data.url = props.href;
       if (node.text) data.text = node.text;
       return finishBlock(node, 'button', data);

@@ -223,6 +223,9 @@ register({
       type: 'text', content: true, default: 'לחץ כאן',
       label: { he: 'טקסט', en: 'Label' }
     },
+    rel: { type: 'string', default: '', optional: true, label: { he: 'יחס קישור (rel)', en: 'Link rel' } },
+    target: { type: 'enum', values: ['_self', '_blank'], default: '_self', optional: true, label: { he: 'פתיחה', en: 'Target' } },
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת קישור (SEO)', en: 'Link title' } },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -231,7 +234,8 @@ register({
     const href = safeHref(node.props.href || '#');
     const variant = node.props.variant || 'primary';
     const { id, cls } = attrsExtra(node);
-    return `<a${id} href="${escapeAttr(href)}" class="btn btn-${escapeAttr(variant)} bent-button${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</a>`;
+    const seo = require('../link-attrs').linkSeoAttrs(node.props);
+    return `<a${id} href="${escapeAttr(href)}"${seo} class="btn btn-${escapeAttr(variant)} bent-button${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</a>`;
   }
 });
 
