@@ -95,10 +95,13 @@ function eachBlock(blocks, fn) {
   }
 }
 
-/** Visible text a block tree carries (the content the admin would keep). */
+/** Visible text a block tree carries (the content the admin would keep).
+ * Provisional html blobs do NOT count — a 356KB <script> dump kept "as raw"
+ * is preserved, not READ, and must never buy coverage points (v0.68). */
 function blockTextLen(blocks) {
   let n = 0;
   eachBlock(blocks, (b) => {
+    if (b.type === 'html') return;
     const d = b.data || {};
     n += String(d.text || '').length + String(d.content || '').length;
     n += String(d.title || '').length + String(d.subtitle || '').length + String(d.buttonText || '').length;

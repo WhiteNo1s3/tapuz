@@ -78,18 +78,60 @@ function nid(p) { uid += 1; return `${p}-g${uid}`; }
 // data-src (lazy loaders), srcset (responsive), or a CSS background-image.
 // The walla census: 74 <img src>, 5 srcset-only, 60 CSS backgrounds.
 
+/** Case-blind attribute get — React DOM dumps say srcSet, data-Original… */
+function attrOf(attrs, ...keys) {
+  if (!attrs) return '';
+  for (const key of keys) {
+    const v = attrs[key];
+    if (v != null && String(v).trim() !== '') return String(v);
+  }
+  const lower = {};
+  for (const [k, v] of Object.entries(attrs)) lower[k.toLowerCase()] = v;
+  for (const key of keys) {
+    const v = lower[key.toLowerCase()];
+    if (v != null && String(v).trim() !== '') return String(v);
+  }
+  return '';
+}
+
+/**
+ * Largest candidate out of a srcset (the lab's walla lesson, rebuilt): CDN
+ * URLs carry bare commas (f_auto,q_auto,w_500/…), so a srcset must be read
+ * by its width descriptors — NEVER split on ','.
+ */
+function pickFromSrcset(set) {
+  const s = String(set || '');
+  if (!s.trim()) return '';
+  let best = '';
+  let bestW = -1;
+  const re = /(\S+)\s+(\d+(?:\.\d+)?)[wx](?=\s*,|\s|$)/g;
+  let m;
+  while ((m = re.exec(s))) {
+    // "…300w,https://next" glues the separator comma onto the next candidate
+    const u = m[1].replace(/^,+/, '');
+    if (!u || u.startsWith('data:')) continue;
+    const w = parseFloat(m[2]);
+    if (w > bestW) { best = u; bestW = w; }
+  }
+  if (best) return best;
+  // no descriptors — fall back to comma-space candidates
+  for (const part of s.split(/,\s+/)) {
+    const u = part.trim().split(/\s+/)[0];
+    if (u && !u.startsWith('data:')) return u;
+  }
+  return '';
+}
+
 /** The true image URL of an <img>/<source> token's attributes. */
 function imageSrcOf(attrs) {
   const a = attrs || {};
-  const direct = a.src || a['data-src'] || a['data-lazy-src'] || a['data-original'] || '';
-  if (direct && !/^data:/i.test(direct)) return direct;
-  const set = a.srcset || a['data-srcset'] || '';
-  if (set) {
-    // last candidate is conventionally the largest — best master for ingestion
-    const cands = String(set).split(',').map((c) => c.trim().split(/\s+/)[0]).filter(Boolean);
-    if (cands.length) return cands[cands.length - 1];
-  }
-  return direct; // a data: URL beats nothing
+  const direct = attrOf(a, 'src', 'data-src', 'data-lazy-src', 'data-original', 'data-bg', 'data-image', 'data-url');
+  let src = direct && !/^data:/i.test(direct) && direct !== 'about:blank' ? direct : '';
+  if (!src) src = pickFromSrcset(attrOf(a, 'srcset', 'srcSet', 'data-srcset', 'data-src-set'));
+  if (!src) src = direct; // a data: URL beats nothing
+  src = String(src).trim();
+  if (src.startsWith('//')) src = 'https:' + src; // protocol-relative CDN
+  return src;
 }
 
 /** background-image URL from an inline style attribute ('' when none). */
@@ -134,6 +176,9 @@ const HEADING = /^h([1-6])$/;
 // tags we descend INTO (their children become blocks) rather than map directly
 const CONTAINERS = new Set(['div', 'section', 'article', 'main', 'header', 'footer', 'aside', 'figure']);
 const INLINE = new Set(['strong', 'b', 'em', 'i', 'u', 'small', 'span', 'code', 'mark', 'br', 'sup', 'sub']);
+// never content: a walla dump carries 356KB of <script> state — skipping it
+// is the difference between a page and a blob (v0.68; hunt always did this)
+const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'svg', 'template', 'canvas', 'link', 'meta']);
 
 // ─── card-cluster recognition (v0.65) ──────────────────────────────────
 // Roots a repeated card may live in. Deliberately NOT section/main/header —
@@ -236,6 +281,22 @@ const LINK_RUN_MIN = 4;
 const LINK_LABEL_MAX = 40;
 
 /**
+ * A link wrapping a picture or a headline is a TEASER, not a button (the
+ * lab's walla training, rebuilt): read the anchor's children into ONE media
+ * card so the picture survives. Returns null when the link is simple.
+ */
+const TEASER_CHILD = /^(img|picture|figure|h[1-6])$/;
+
+function anchorCard(tokens, i, end, bgMap) {
+  let complex = false;
+  for (let j = i + 1; j < end - 1; j++) {
+    if (tokens[j].kind === 'open' && TEASER_CHILD.test(tokens[j].name)) { complex = true; break; }
+  }
+  if (!complex) return null;
+  return extractCard(tokens, i, end, bgMap);
+}
+
+/**
  * Wrapper-blind menu sight: real menus wrap each link in its own div/li, so
  * the walk meets one anchor per range and the run detector never fires.
  * After a sink level is built, ≥4 CONSECUTIVE short-label button blocks
@@ -275,7 +336,15 @@ function coalesceButtonRuns(blocks) {
     else { flush(); out.push(b); }
   }
   flush();
-  return out;
+  // finally: adjacent card walls fuse into ONE grid (teaser links arrive as
+  // single-item cards — siblings belong together)
+  const fused = [];
+  for (const b of out) {
+    const prev = fused[fused.length - 1];
+    if (b.type === 'cards' && prev && prev.type === 'cards') prev.data.items.push(...b.data.items);
+    else fused.push(b);
+  }
+  return fused;
 }
 
 /** A ul whose items are single short links is a MENU — keep the hrefs. */
@@ -480,6 +549,7 @@ function htmlToBlocks(html, opts = {}) {
       const name = t.name;
       const end = matchClose(tokens, i);
 
+      if (SKIP_TAGS.has(name)) { i = end; continue; }
       if (INLINE.has(name)) { raw += textOf(tokens, i, end) + ' '; i = end; continue; }
 
       // pending raw becomes a block before we emit a real module: plain text →
@@ -500,15 +570,47 @@ function htmlToBlocks(html, opts = {}) {
         sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(textOf(tokens, i + 1, end - 1)) } });
         mapped += 1; i = end; continue;
       }
-      if (name === 'blockquote') {
-        sink.push({ type: 'quote', id: nid('q'), data: { text: unescapeHtml(textOf(tokens, i + 1, end - 1)) } });
-        mapped += 1; i = end; continue;
+      if (name === 'blockquote' || name === 'q' || name === 'cite') {
+        const qt = unescapeHtml(textOf(tokens, i + 1, end - 1));
+        if (qt) { sink.push({ type: 'quote', id: nid('q'), data: { text: qt } }); mapped += 1; }
+        i = end; continue;
       }
       if (name === 'img') {
         sink.push({ type: 'image', id: nid('img'), data: { src: imageSrcOf(t.attrs), alt: t.attrs.alt || '' } });
         mapped += 1; i = end; continue;
       }
+      // <picture> — the true URL hides in the inner img/source srcsets
+      if (name === 'picture') {
+        let src = '', alt = '';
+        for (let j = i + 1; j < end - 1; j++) {
+          const tk = tokens[j];
+          if (tk.kind !== 'open') continue;
+          if (tk.name === 'img') {
+            src = imageSrcOf(tk.attrs) || src;
+            alt = (tk.attrs && tk.attrs.alt) || alt;
+          } else if (tk.name === 'source' && !src) {
+            src = imageSrcOf(tk.attrs);
+          }
+        }
+        if (src) { sink.push({ type: 'image', id: nid('img'), data: { src, alt } }); mapped += 1; }
+        i = end; continue;
+      }
+      // a bare <button> with visible text is a CTA (textless ones are chrome)
+      if (name === 'button') {
+        const btnLabel = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
+        if (btnLabel) {
+          sink.push({ type: 'button', id: nid('b'), data: { text: btnLabel, url: (t.attrs && t.attrs.formaction) || '#' } });
+          mapped += 1;
+        }
+        i = end; continue;
+      }
       if (name === 'a') {
+        // a picture/headline teaser link IS a card — the picture survives
+        const teaser = anchorCard(tokens, i, end, bgMap);
+        if (teaser) {
+          sink.push({ type: 'cards', id: nid('cards'), data: { items: [teaser] } });
+          mapped += 1; i = end; continue;
+        }
         // a run of ≥4 short bare links is a menu, not a button pile
         const run = collectLinkRun(tokens, i, to);
         if (run.items.length >= LINK_RUN_MIN) {
@@ -516,18 +618,21 @@ function htmlToBlocks(html, opts = {}) {
           mapped += 1; i = run.end; continue;
         }
         const href = t.attrs.href || '#';
-        const label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
+        let label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
         if (!label) {
           // a textless link is an icon or a picture link — keep the picture,
-          // never emit a nameless "קישור" button
+          // or fall back to the aria name; never a nameless "קישור" button
+          let pictured = false;
           for (let j = i + 1; j < end - 1; j++) {
             if (tokens[j].kind === 'open' && (tokens[j].name === 'img' || tokens[j].name === 'source')) {
               const src = imageSrcOf(tokens[j].attrs);
-              if (src) { sink.push({ type: 'image', id: nid('img'), data: { src, alt: tokens[j].attrs.alt || '' } }); mapped += 1; }
+              if (src) { sink.push({ type: 'image', id: nid('img'), data: { src, alt: tokens[j].attrs.alt || '' } }); mapped += 1; pictured = true; }
               break;
             }
           }
-          i = end; continue;
+          if (pictured) { i = end; continue; }
+          label = attrOf(t.attrs, 'aria-label', 'title').trim().slice(0, LINK_LABEL_MAX);
+          if (!label) { i = end; continue; }
         }
         if (/youtube\.com|youtu\.be/i.test(href)) {
           // a YouTube link is better as an embed (renderer auto-embeds the player)
@@ -643,6 +748,13 @@ function htmlToBlocks(html, opts = {}) {
         i = end; continue;
       }
 
+      // custom elements / SPA shells (devsite-*, react-*) — walk children,
+      // never keep framework wrappers as raw blobs
+      if (name.includes('-')) {
+        walk(i + 1, end - 1, sink);
+        i = end; continue;
+      }
+
       // unmappable element → keep verbatim as leftover raw HTML
       let frag = '';
       for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
@@ -670,6 +782,9 @@ module.exports = {
   collectLinkRun,
   coalesceButtonRuns,
   navItemsFromList,
+  anchorCard,
+  attrOf,
+  pickFromSrcset,
   LINK_RUN_MIN,
   LINK_LABEL_MAX,
   imageSrcOf,
