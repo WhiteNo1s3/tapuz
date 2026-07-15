@@ -189,6 +189,28 @@ function staticSecurityHeaders(res, filePath) {
   }
 }
 
+// ─── SEO essentials (v0.71): sitemap.xml + robots.txt, derived live from the
+// published pages. Registered before the static mount so they always answer,
+// and absolute URLs come from config.baseUrl (falling back to the request host).
+function siteBaseUrl(req) {
+  let base = '';
+  try { base = String((loadConfig().baseUrl || '')).trim().replace(/\/+$/, ''); } catch (e) {}
+  return base || `${req.protocol}://${req.headers.host}`;
+}
+app.get('/sitemap.xml', (req, res) => {
+  try {
+    const seo = require('./seo');
+    const pages = require('./pages').listPages({ status: 'published' });
+    const homePath = seo.pickHomePath(pages, require('./export').scoreHomeCandidate);
+    res.type('application/xml').send(seo.buildSitemapXml(pages, siteBaseUrl(req), homePath));
+  } catch (e) {
+    res.status(500).type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"/>\n');
+  }
+});
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(require('./seo').buildRobotsTxt(siteBaseUrl(req), auth.getAdminBase()));
+});
+
 // extensions:['html'] — the page's natural address is /שם-הדף (no suffix);
 // without this every slug URL 404'd and only /שם-הדף.html answered (v0.69)
 app.use(express.static(PUBLIC_DIR, { extensions: ['html'], setHeaders: staticSecurityHeaders }));

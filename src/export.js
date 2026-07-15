@@ -137,5 +137,6 @@ module.exports = {
   exportPage,
   exportAll,
   copyThemeAssets,
-  externalizeStyles
+  externalizeStyles,
+  scoreHomeCandidate
 };
