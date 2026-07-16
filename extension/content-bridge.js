@@ -23,11 +23,82 @@
   let busy = false;
   let observer = null;
 
+  // Coalesce DOM mutations. ChatGPT streams tokens as a storm of childList +
+  // characterData mutations; running latestReplyText() (which reads innerText and
+  // forces layout) + analyzeReply() on every one pegs the main thread and freezes
+  // the tab. Cap the watcher to one run per CHECK_THROTTLE_MS instead.
+  const CHECK_THROTTLE_MS = 300;
+  let checkScheduled = false;
+  let lastCheckAt = 0;
+
+  function isOwnNode(n) {
+    if (!n) return false;
+    if (n === panel || n === fab) return true;
+    if (panel && n.nodeType === 1 && panel.contains(n)) return true;
+    return !!(n.nodeType === 1 && n.dataset && n.dataset.tzToast);
+  }
+
+  function mutationsAreOwn(muts) {
+    if (!muts || !muts.length) return false;
+    for (let i = 0; i < muts.length; i++) {
+      if (!isOwnNode(muts[i].target)) return false;
+    }
+    return true; // every mutation came from our own panel/toast/fab — ignore
+  }
+
+  function scheduleCheck(muts) {
+    if (mutationsAreOwn(muts)) return;
+    if (checkScheduled) return;
+    checkScheduled = true;
+    const wait = Math.max(0, CHECK_THROTTLE_MS - (Date.now() - lastCheckAt));
+    setTimeout(() => {
+      checkScheduled = false;
+      lastCheckAt = Date.now();
+      onReplyMaybeChanged();
+    }, wait);
+  }
+
   function latestReplyText() {
-    const nodes = document.querySelectorAll(provider.assistant);
-    if (!nodes.length) return '';
-    const el = nodes[nodes.length - 1];
-    return (el.innerText || el.textContent || '').trim();
+    let nodes = [];
+    try {
+      nodes = document.querySelectorAll(provider.assistant);
+    } catch (e) {
+      /* invalid selector — fall through to generic */
+    }
+    if (nodes.length) {
+      const el = nodes[nodes.length - 1];
+      return (el.innerText || el.textContent || '').trim();
+    }
+    return genericReplyText();
+  }
+
+  // Fallback reply reader — when the provider's assistant selector no longer
+  // matches, walk a prioritized list of common reply containers and take the
+  // last sizeable one. Filters on textContent (no layout) and only reads the
+  // layout-forcing innerText on the single chosen node.
+  function genericReplyText() {
+    const tiers = [
+      '[data-message-author-role="assistant"]',
+      '[data-message-author-role]',
+      'article',
+      '[class*="markdown"]',
+      '[class*="prose"]',
+      '[class*="message"]'
+    ];
+    for (const sel of tiers) {
+      let els;
+      try {
+        els = Array.from(document.querySelectorAll(sel));
+      } catch (e) {
+        continue;
+      }
+      els = els.filter((el) => !isOwnNode(el) && (el.textContent || '').trim().length > 40);
+      if (els.length) {
+        const el = els[els.length - 1];
+        return (el.innerText || el.textContent || '').trim();
+      }
+    }
+    return '';
   }
 
   function isStreaming() {
@@ -39,10 +110,54 @@
     }
   }
 
+  function isVisible(el) {
+    if (!el || !el.getClientRects || !el.getClientRects().length) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width < 40 || r.height < 16) return false;
+    const s = window.getComputedStyle(el);
+    return s.visibility !== 'hidden' && s.display !== 'none' && el.getAttribute('aria-hidden') !== 'true';
+  }
+
+  // Generic composer finder — the safety net for when a provider redesign breaks
+  // its CSS selector. Picks the largest visible editable, preferring the one
+  // nearest the viewport bottom (where a chat composer lives). Keeps inject alive
+  // even on an unrecognized layout.
+  function genericComposer() {
+    let cands;
+    try {
+      cands = Array.from(
+        document.querySelectorAll('textarea, [contenteditable="true"], [contenteditable=""], [role="textbox"]')
+      );
+    } catch (e) {
+      return null;
+    }
+    cands = cands.filter((el) => !isOwnNode(el) && isVisible(el));
+    if (!cands.length) return null;
+    const vh = window.innerHeight || 800;
+    let best = null;
+    let bestScore = -Infinity;
+    for (const el of cands) {
+      const r = el.getBoundingClientRect();
+      const score = r.width * r.height + (r.bottom / vh) * 40000; // area + bottom-proximity
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+    return best;
+  }
+
   function findComposer() {
-    const nodes = document.querySelectorAll(provider.composer);
-    if (!nodes.length) return null;
-    return nodes[nodes.length - 1];
+    try {
+      const nodes = document.querySelectorAll(provider.composer);
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        if (isVisible(nodes[i])) return nodes[i];
+      }
+      if (nodes.length) return nodes[nodes.length - 1];
+    } catch (e) {
+      /* stale/invalid provider selector — fall through to the generic net */
+    }
+    return genericComposer();
   }
 
   // React tracks controlled <textarea>/<input> value via its OWN setter, so a
@@ -85,7 +200,42 @@
     const has = (sel) => {
       try { return !!(sel && document.querySelector(sel)); } catch (e) { return false; }
     };
-    return { composer: has(provider.composer), assistant: has(provider.assistant), send: has(provider.send) };
+    // Report real capability, not just raw-selector matches: composer/assistant
+    // count as healthy when the generic fallback can operate, and send counts as
+    // healthy whenever we have a composer (Enter-key fallback always works).
+    return {
+      composer: !!findComposer(),
+      assistant: has(provider.assistant) || !!genericReplyText(),
+      send: has(provider.send) || !!findComposer()
+    };
+  }
+
+  // Clipboard write for the manual-paste fallback. Never a network call — the
+  // content script must not fetch. navigator.clipboard first, execCommand second.
+  function copyToClipboard(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (e) {
+      /* fall through to execCommand */
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.dataset.tzToast = '1'; // mark as our own so the observer ignores it
+      ta.style.position = 'fixed';
+      ta.style.top = '-2000px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch (e) {
+      return false;
+    }
   }
 
   function clickSend() {
@@ -109,17 +259,32 @@
   function inject(text, { send } = {}) {
     const c = findComposer();
     if (!c) {
-      toast('לא נמצא שדה הקלדה — הדביקו ידנית', false);
+      // Graceful degradation: put the text on the clipboard so "paste manually"
+      // is actually possible, and keep the guidance on screen long enough to act.
+      const copied = copyToClipboard(text);
+      toast(
+        copied
+          ? 'לא נמצא שדה הקלדה — הטקסט הועתק ללוח. הדביקו עם Ctrl+V ושלחו'
+          : 'לא נמצא שדה הקלדה — סמנו והעתיקו את הטקסט ידנית',
+        false,
+        30000
+      );
       return false;
     }
-    setComposerText(c, text);
+    const ok = setComposerText(c, text);
+    if (!ok) {
+      copyToClipboard(text);
+      toast('ההזרקה נכשלה — הטקסט הועתק ללוח. הדביקו עם Ctrl+V', false, 30000);
+      return false;
+    }
     if (send) setTimeout(() => clickSend(), 280);
     return true;
   }
 
-  function toast(msg, ok) {
+  function toast(msg, ok, ms) {
     const t = document.createElement('div');
     t.setAttribute('dir', 'rtl');
+    t.dataset.tzToast = '1';
     Object.assign(t.style, {
       position: 'fixed', insetInlineEnd: '18px', bottom: '128px', zIndex: 2147483647,
       maxWidth: '360px', padding: '10px 14px', borderRadius: '10px',
@@ -129,7 +294,7 @@
     });
     t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 6500);
+    setTimeout(() => t.remove(), ms || 6500);
   }
 
   function btnStyle(bg) {
@@ -398,7 +563,7 @@
 
   function startWatching() {
     if (observer) return;
-    observer = new MutationObserver(() => onReplyMaybeChanged());
+    observer = new MutationObserver(scheduleCheck);
     const root = document.body || document.documentElement;
     observer.observe(root, { childList: true, subtree: true, characterData: true });
     setInterval(() => { updateDiag(); onReplyMaybeChanged(); }, POLL_MS);
