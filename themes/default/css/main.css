@@ -746,11 +746,24 @@ p, li { max-width: 70ch; }
 .parallax-md { min-height: 50vh; }
 .parallax-lg { min-height: 70vh; }
 .parallax-full { min-height: 100vh; }
-.parallax-section.parallax-overlaid::before {
+.parallax-section.parallax-overlaid::before,
+.parallax-tint-dark::before,
+.parallax-tint-light::before,
+.parallax-tint-brand::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, var(--px-overlay, 0.3));
+  background: var(--px-tint, #000);
+  opacity: var(--px-overlay, 0.35);
+}
+/* BACKDROP tint: colour of the layer between the fixed image and the content */
+.parallax-tint-dark { --px-tint: #0b1220; }
+.parallax-tint-light { --px-tint: #ffffff; }
+.parallax-tint-brand { --px-tint: var(--color-primary, #0a66c2); }
+.parallax-tint-light .parallax-inner { color: #0f172a; }
+/* BACKDROP fade: the content block fades in once as a unit */
+@media (prefers-reduced-motion: no-preference) {
+  .parallax-fade .parallax-inner { animation: tapuz-fade 1s ease-out both; }
 }
 .parallax-inner {
   position: relative;
@@ -959,4 +972,40 @@ a.bent-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,.12); transform: translat
 @media (prefers-reduced-motion: reduce) {
   .marquee-track { animation: none; }
   .anim-fade, .anim-rise { animation: none; }
+}
+
+/* MOTION entrance effects (effect: fade | slide | typewriter) — the text is
+   always fully present; CSS supplies the motion. Distinct from the marquee
+   scroll (effect: marquee). Speed sets the duration. */
+.motion-text { padding-block: 0.4rem; }
+.motion-text .motion-text-inner { display: inline-block; max-width: 100%; }
+.motion-slow { --motion-dur: 1.5s; }
+.motion-md { --motion-dur: 0.9s; }
+.motion-fast { --motion-dur: 0.5s; }
+@media (prefers-reduced-motion: no-preference) {
+  .motion-fade .motion-text-inner { animation: tapuz-fade var(--motion-dur, 0.9s) ease-out both; }
+  .motion-slide .motion-text-inner { animation: tapuz-motion-slide var(--motion-dur, 0.9s) cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .motion-typewriter .motion-text-inner {
+    overflow: hidden;
+    white-space: nowrap;
+    border-inline-end: 2px solid currentColor;
+    animation: tapuz-typewriter var(--motion-dur, 0.9s) steps(32, end) both,
+               tapuz-caret 0.75s step-end infinite;
+  }
+}
+@keyframes tapuz-motion-slide {
+  from { opacity: 0; transform: translateX(-1.5rem); }
+  to { opacity: 1; transform: none; }
+}
+[dir="rtl"] .motion-slide .motion-text-inner { animation-name: tapuz-motion-slide-rtl; }
+@keyframes tapuz-motion-slide-rtl {
+  from { opacity: 0; transform: translateX(1.5rem); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tapuz-typewriter { from { width: 0; } to { width: 100%; } }
+@keyframes tapuz-caret { 50% { border-color: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  .motion-fade .motion-text-inner,
+  .motion-slide .motion-text-inner,
+  .motion-typewriter .motion-text-inner { animation: none; width: auto; border-inline-end: 0; }
 }

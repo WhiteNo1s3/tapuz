@@ -480,15 +480,22 @@ function renderBlock(block, direction = 'rtl') {
     case 'marquee': {
       const d = block.data || {};
       const speed = ['slow', 'md', 'fast'].includes(d.speed) ? d.speed : 'md';
+      const effect = ['marquee', 'fade', 'slide', 'typewriter'].includes(d.effect) ? d.effect : 'marquee';
       const t = escapeHtml(d.text || '');
-      const cls = `marquee marquee-${speed}${extraClass}`;
-      // two full-width tracks side by side → seamless loop for any text length
-      const trackInner = `<span class="marquee-item">${t}</span>`;
-      return (
-        `<div class="${cls}"${extraId}${style} dir="${direction}">` +
-        `<div class="marquee-track">${trackInner}</div>` +
-        `<div class="marquee-track" aria-hidden="true">${trackInner}</div></div>`
-      );
+      if (effect === 'marquee') {
+        // two full-width tracks side by side → seamless horizontal scroll
+        const cls = `marquee marquee-${speed}${extraClass}`;
+        const trackInner = `<span class="marquee-item">${t}</span>`;
+        return (
+          `<div class="${cls}"${extraId}${style} dir="${direction}">` +
+          `<div class="marquee-track">${trackInner}</div>` +
+          `<div class="marquee-track" aria-hidden="true">${trackInner}</div></div>`
+        );
+      }
+      // entrance animations (fade / slide / typewriter) — the full text is
+      // always in the DOM; CSS handles the motion, prefers-reduced-motion stills it.
+      const cls = `motion-text motion-${effect} motion-${speed}${extraClass}`;
+      return `<div class="${cls}"${extraId}${style} dir="${direction}"><span class="motion-text-inner">${t}</span></div>`;
     }
 
     case 'parallax': {
@@ -496,6 +503,9 @@ function renderBlock(block, direction = 'rtl') {
       const height = ['sm', 'md', 'lg', 'full'].includes(d.height) ? d.height : 'md';
       const overlayVal = Math.min(Math.max(parseInt(d.overlay, 10) || 0, 0), 80);
       const overlaidCls = overlayVal > 0 ? ' parallax-overlaid' : '';
+      const tint = ['dark', 'light', 'brand'].includes(d.tint) ? d.tint : '';
+      const tintCls = tint ? ` parallax-tint-${tint}` : '';
+      const fadeCls = (d.fade === true || d.fade === 'true') ? ' parallax-fade' : '';
       const pxStyle = [];
       if (overlayVal > 0) pxStyle.push(`--px-overlay:${(overlayVal / 100).toFixed(2)}`);
       if (d.image) pxStyle.push(`background-image:url('${cssUrl(d.image)}')`);
@@ -504,7 +514,7 @@ function renderBlock(block, direction = 'rtl') {
       const pxStyleAttr = pxStyle.length ? ` style="${pxStyle.join(';')}"` : '';
       const inner = (d.blocks || []).map((b) => renderBlock(b, direction)).join('');
       return (
-        `<section class="parallax-section parallax-${height}${overlaidCls}${extraClass}"${extraId}` +
+        `<section class="parallax-section parallax-${height}${overlaidCls}${tintCls}${fadeCls}${extraClass}"${extraId}` +
         `${pxStyleAttr} dir="${direction}">` +
         `<div class="parallax-inner">${inner}</div></section>`
       );

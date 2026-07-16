@@ -600,14 +600,20 @@ const BLOCK_REGISTRY = [
   // ─────────────────────────── אפקטים ───────────────────────────
   {
     type: 'marquee',
-    keyword: 'MARQUEE',
+    keyword: 'MOTION',
+    aliases: ['MARQUEE'],
     labelHe: 'טקסט נע',
     icon: '〰',
     category: 'אפקטים',
     bodyClass: 'text',
     childrenOf: null,
-    hintHe: 'שורת טקסט שנעה לרוחב המסך',
+    hintHe: 'טקסט שזז — נע לרוחב או נכנס באנימציה',
     params: [
+      {
+        name: 'effect', labelHe: 'אפקט', type: 'enum',
+        enum: ['marquee', 'fade', 'slide', 'typewriter'], default: 'marquee', omitDefault: true,
+        hint: 'marquee = נע לרוחב, fade = הופעה, slide = החלקה, typewriter = הקלדה'
+      },
       {
         name: 'speed', labelHe: 'מהירות', type: 'enum',
         enum: ['slow', 'md', 'fast'], default: 'md', omitDefault: true,
@@ -621,8 +627,9 @@ const BLOCK_REGISTRY = [
   },
   {
     type: 'parallax',
-    keyword: 'PARALLAX',
-    labelHe: 'רקע קבוע (פרלקסה)',
+    keyword: 'BACKDROP',
+    aliases: ['PARALLAX'],
+    labelHe: 'רקע קבוע (Backdrop)',
     icon: '🏔',
     category: 'אפקטים',
     bodyClass: 'blocks',
@@ -638,6 +645,15 @@ const BLOCK_REGISTRY = [
         name: 'overlay', labelHe: 'כהות שכבת רקע', type: 'integer',
         min: 0, max: 80, default: 0, omitDefault: true,
         hint: '0–80 — מכהה את התמונה כדי שהטקסט יבלוט'
+      },
+      {
+        name: 'tint', labelHe: 'גוון שכבת הרקע', type: 'enum',
+        enum: ['none', 'dark', 'light', 'brand'], default: 'none', omitDefault: true,
+        hint: 'צבע שכבת הכיסוי מעל התמונה — dark/light/brand'
+      },
+      {
+        name: 'fade', labelHe: 'הופעה הדרגתית', type: 'boolean', default: false, omitDefault: true,
+        hint: 'התוכן נכנס בהופעה רכה כשמגיעים אליו בגלילה'
       },
       {
         name: 'height', labelHe: 'גובה', type: 'enum',
@@ -694,7 +710,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'מספרים / מדדים',
     icon: '＃',
     category: 'תוכן',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'שורה של מדדים (לקוחות, פרויקטים…)',
     params: [
@@ -726,7 +742,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'לוגואים / לקוחות',
     icon: '▣▣',
     category: 'מדיה',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'רצועת לוגואים — PLACEHOLDER עד העלאת קבצים',
     params: [
@@ -754,7 +770,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'שאלות נפוצות',
     icon: '?',
     category: 'תוכן',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'רשימת שאלה / תשובה',
     params: [

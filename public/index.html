@@ -15,18 +15,22 @@
 </head>
 <body>
   <a class="skip-link" href="#main">דלג לתוכן</a>
-  <header class="site-header">
+  <header class="site-header ">
     <div class="container">
       <div class="header-inner">
-        <a href="/" class="site-logo">
-          WhiteNo1se
-        </a>
-        
+        <div class="header-brand">
+          <a href="/" class="site-logo">
+            WhiteNo1se
+          </a>
+          
+        </div>
+
         <nav class="main-nav" aria-label="ניווט ראשי">
           <ul>
             <li><a href="/">דף הבית</a></li>
           </ul>
         </nav>
+        
       </div>
     </div>
   </header>
@@ -40,14 +44,22 @@
 
   <footer class="site-footer">
     <div class="container">
+      
       <div class="footer-inner">
-        <p>&copy; WhiteNo1se — 2026</p>
-        <nav class="footer-nav" aria-label="ניווט תחתון">
-          <a href="/privacy-policy">מדיניות פרטיות</a>
-        </nav>
+        <div class="footer-copy">
+          <p>&copy; WhiteNo1se — 2026</p>
+          
+          <p class="footer-credit">נבנה עם Tapuz</p>
+        </div>
+        <div class="footer-end">
+          <nav class="footer-nav" aria-label="ניווט תחתון">
+            <a href="/privacy-policy">מדיניות פרטיות</a>
+          </nav>
+          
+        </div>
       </div>
     </div>
   </footer>
-  
+  <script>(function(){try{if(navigator.doNotTrack=='1'||window.doNotTrack=='1'||navigator.msDoNotTrack=='1')return;var u="/_tapuz/collect";var b=JSON.stringify({path:location.pathname,ref:document.referrer});if(navigator.sendBeacon){navigator.sendBeacon(u,new Blob([b],{type:'application/json'}));}else{fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:b,keepalive:true}).catch(function(){});}}catch(e){}})();</script>
 </body>
 </html>
