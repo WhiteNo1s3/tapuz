@@ -1,7 +1,7 @@
 'use strict';
 
 const { parse } = require('./parse');
-const { createBlock } = require('../blocks');
+const { createBlock, isGeneratedBlockId } = require('../blocks');
 const { BentmlError } = require('./errors');
 
 /**
@@ -47,7 +47,9 @@ function compile(source) {
  */
 function applyChrome(data, p) {
   if (p.class) data.className = p.class;
-  if (p.id) data.id = p.id;
+  // generated (storage-shape) ids are block identity, not authored anchors —
+  // blockToJson restores those on the block itself, never into data.id
+  if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
   const style = {};
   if (p.color) style.color = p.color;
   if (p.background) style.background = p.background;
@@ -59,6 +61,16 @@ function applyChrome(data, p) {
 }
 
 function blockToJson(node, warnings) {
+  const p = (node.params || {});
+  const block = buildBlock(node, warnings);
+  // An `id:` param in storage-id shape restores block identity, so
+  // decompile → compile keeps nested block ids stable (authored anchor
+  // ids keep their §7.4 meaning and never look like storage ids).
+  if (block && isGeneratedBlockId(p.id)) block.id = String(p.id);
+  return block;
+}
+
+function buildBlock(node, warnings) {
   const p = node.params || {};
   const text = node.text || '';
 
@@ -72,7 +84,9 @@ function blockToJson(node, warnings) {
       return createBlock('heading', data);
     }
     case 'TEXT': {
-      const data = { content: text };
+      // single-line inline bodies keep the spaces inside `{ ... }` —
+      // collapse them so round-trips don't grow padding each cycle
+      const data = { content: text.includes('\n') ? text : collapseSingleParagraph(text) };
       if (p.align && p.align !== 'start') data.align = p.align;
       if (p.size && p.size !== 'md') data.size = p.size;
       if (p.lead === true || p.lead === 'true') data.lead = true;
@@ -136,6 +150,7 @@ function blockToJson(node, warnings) {
         let t = it.text || '';
         // strip optional leading "- "
         t = t.replace(/^\s*-\s+/, '');
+        if (!t.includes('\n')) t = collapseSingleParagraph(t);
         return { text: t };
       });
       return createBlock('list', { ordered, items });
@@ -183,7 +198,7 @@ function blockToJson(node, warnings) {
       if (effect !== 'marquee') data.effect = effect;
       if (p.speed && p.speed !== 'md') data.speed = p.speed;
       if (p.class) data.className = p.class;
-      if (p.id) data.id = p.id;
+      if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
       return createBlock('marquee', data);
     }
     case 'BACKDROP':
@@ -198,7 +213,7 @@ function blockToJson(node, warnings) {
       if (p.tint && p.tint !== 'none') data.tint = p.tint;
       if (p.fade === true || p.fade === 'true') data.fade = true;
       if (p.class) data.className = p.class;
-      if (p.id) data.id = p.id;
+      if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
       return createBlock('parallax', data);
     }
     case 'TESTIMONIAL': {

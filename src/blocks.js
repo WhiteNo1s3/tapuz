@@ -15,6 +15,13 @@ function createBlock(type, data = {}) {
   };
 }
 
+// Matches ids minted by createBlock above and by the builder's uid()
+// (public/admin-builder.js) — distinguishes storage ids from authored
+// anchor ids so BenTML round-trips can carry them in `id:` params.
+function isGeneratedBlockId(id) {
+  return typeof id === 'string' && /^[a-z][a-z0-9-]*_\d+_[a-z0-9]+$/.test(id);
+}
+
 function createHeading(text, level = 2) { return createBlock('heading', { level, text }); }
 function createText(content) { return createBlock('text', { content }); }
 function createButton(text, url, variant = 'primary') { return createBlock('button', { text, url, variant }); }
@@ -35,6 +42,7 @@ function createFeatures(items) {
 module.exports = {
   BLOCK_TYPES,
   createBlock,
+  isGeneratedBlockId,
   createHeading, createText, createButton, createImage,
   createHero, createTestimonial, createGallery, createFeatures
 };

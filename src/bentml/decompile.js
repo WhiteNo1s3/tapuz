@@ -1,5 +1,7 @@
 'use strict';
 
+const { isGeneratedBlockId } = require('../blocks');
+
 /**
  * decompile(page, blocks) → canonical BenTML
  *
@@ -46,9 +48,12 @@ function decompile(page = {}, blocks = []) {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }
 
-function uni(params, d) {
+function uni(params, d, idParams = []) {
   if (d.className) params.push(`class: ${q(d.className)}`);
+  // the id: slot holds either the authored anchor (data.id, §7.4) or the
+  // nested block's storage id — the anchor is content, so it wins
   if (d.id) params.push(`id: ${q(d.id)}`);
+  else params.push(...idParams);
   const s = d.style || {};
   if (s.color) params.push(`color: ${q(s.color)}`);
   if (s.background) params.push(`background: ${q(s.background)}`);
@@ -61,6 +66,10 @@ function decompileBlock(block, indent) {
   const pad = '  '.repeat(indent);
   const type = block.type;
   const d = block.data || {};
+  // Nested blocks carry their storage id as an `id:` param so recompile
+  // preserves identity — top-level blocks can be reconciled by position,
+  // children of CARD/ROW/PARALLAX/BACKDROP cannot.
+  const idParams = indent > 0 && isGeneratedBlockId(block.id) ? [`id: ${q(block.id)}`] : [];
 
   switch (type) {
     case 'heading': {
@@ -68,7 +77,7 @@ function decompileBlock(block, indent) {
       if (d.level != null && d.level !== 2) params.push(`level: ${d.level}`);
       if (d.align && d.align !== 'start') params.push(`align: ${d.align}`);
       if (d.animate && d.animate !== 'none') params.push(`animate: ${d.animate}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}HEADING${paramList(params)} { ${escBody(d.text || '')} }`;
     }
     case 'text': {
@@ -82,7 +91,7 @@ function decompileBlock(block, indent) {
       if (d.dropcap) params.push('dropcap: true');
       if (d.maxWidth && d.maxWidth !== 'full') params.push(`maxwidth: ${d.maxWidth}`);
       if (d.animate && d.animate !== 'none') params.push(`animate: ${d.animate}`);
-      uni(params, d);
+      uni(params, d, idParams);
       const body = String(d.content || '');
       if (!body.includes('\n')) {
         return `${pad}TEXT${paramList(params)} { ${escBody(body)} }`;
@@ -94,7 +103,7 @@ function decompileBlock(block, indent) {
       if (d.alt) params.push(`alt: ${q(d.alt)}`);
       if (d.caption) params.push(`caption: ${q(d.caption)}`);
       if (d.width && d.width !== 'full') params.push(`width: ${d.width}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}IMAGE${paramList(params)}`;
     }
     case 'button': {
@@ -102,7 +111,7 @@ function decompileBlock(block, indent) {
       const params = [`url: ${q(d.url || '#')}`];
       if (style !== 'primary') params.push(`style: ${style}`);
       if (d.align && d.align !== 'start') params.push(`align: ${d.align}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}BUTTON${paramList(params)} { ${escBody(d.text || '')} }`;
     }
     case 'columns': {
@@ -111,7 +120,7 @@ function decompileBlock(block, indent) {
       if (d.collapse && d.collapse !== 'md') params.push(`collapse: ${d.collapse}`);
       if (d.valign && d.valign !== 'top') params.push(`valign: ${d.valign}`);
       if (d.ratio) params.push(`ratio: ${q(String(d.ratio))}`);
-      uni(params, d);
+      uni(params, d, idParams);
       let colBlocks = d.columns || [];
       if (!colBlocks.length && Array.isArray(d.children)) {
         colBlocks = d.children.map((c) => ({ blocks: c }));
@@ -128,7 +137,7 @@ function decompileBlock(block, indent) {
       const size = d.size || sizeFromHeight(d.height) || 'md';
       const params = [];
       if (size !== 'md') params.push(`size: ${size}`);
-      uni(params, d);
+      uni(params, d, idParams);
       if (!params.length) return `${pad}SPACE`;
       return `${pad}SPACE${paramList(params)}`;
     }
@@ -136,14 +145,14 @@ function decompileBlock(block, indent) {
       const st = d.bentStyle || (d.style === 'dashed' ? 'dots' : 'line');
       const params = [];
       if (st !== 'line') params.push(`style: ${st}`);
-      uni(params, d);
+      uni(params, d, idParams);
       if (!params.length) return `${pad}DIVIDER`;
       return `${pad}DIVIDER${paramList(params)}`;
     }
     case 'list': {
       const params = [];
       if (d.ordered) params.push('type: number');
-      uni(params, d);
+      uni(params, d, idParams);
       const items = (d.items || [])
         .map((it) => {
           const t = typeof it === 'string' ? it : it.text || '';
@@ -156,19 +165,19 @@ function decompileBlock(block, indent) {
     case 'quote': {
       const params = [];
       if (d.author) params.push(`author: ${q(d.author)}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}QUOTE${paramList(params)} { ${escBody(d.text || '')} }`;
     }
     case 'card': {
       if (d.backdrop) {
         const params = [`image: ${q(d.backdrop.image || '')}`];
         if (d.backdrop.tint && d.backdrop.tint !== 'none') params.push(`tint: ${d.backdrop.tint}`);
-        uni(params, d);
+        uni(params, d, idParams);
         const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
         return `${pad}BACKDROP${paramList(params)} {\n${kids}\n${pad}}`;
       }
       const params = [];
-      uni(params, d);
+      uni(params, d, idParams);
       const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
       return `${pad}CARD${paramList(params)} {\n${kids}\n${pad}}`;
     }
@@ -178,7 +187,7 @@ function decompileBlock(block, indent) {
       if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);
       if (d.overlay != null && Number(d.overlay) > 0) params.push(`overlay: ${d.overlay}`);
       if (d.parallax) params.push('parallax: true');
-      uni(params, d);
+      uni(params, d, idParams);
       const kids = [];
       if (d.title) kids.push(`${pad}  HEADING(level: 1) { ${escBody(d.title)} }`);
       if (d.subtitle) kids.push(`${pad}  TEXT { ${escBody(d.subtitle)} }`);
@@ -191,7 +200,7 @@ function decompileBlock(block, indent) {
       const params = [];
       if (d.author) params.push(`author: ${q(d.author)}`);
       if (d.role) params.push(`role: ${q(d.role)}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}TESTIMONIAL${paramList(params)} { ${escBody(d.quote || d.text || '')} }`;
     }
     case 'marquee': {
@@ -199,7 +208,7 @@ function decompileBlock(block, indent) {
       const effect = ['marquee', 'fade', 'slide', 'typewriter'].includes(d.effect) ? d.effect : 'marquee';
       if (effect !== 'marquee') params.push(`effect: ${effect}`);
       if (d.speed && d.speed !== 'md') params.push(`speed: ${d.speed}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}MOTION${paramList(params)} { ${escBody(d.text || '')} }`;
     }
     case 'parallax': {
@@ -208,14 +217,14 @@ function decompileBlock(block, indent) {
       if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);
       if (d.tint && d.tint !== 'none') params.push(`tint: ${d.tint}`);
       if (d.fade === true || d.fade === 'true') params.push('fade: true');
-      uni(params, d);
+      uni(params, d, idParams);
       const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
       return `${pad}BACKDROP${paramList(params)} {\n${kids}\n${pad}}`;
     }
     case 'gallery': {
       const params = [];
       if (d.columns && d.columns !== 3) params.push(`columns: ${d.columns}`);
-      uni(params, d);
+      uni(params, d, idParams);
       const imgs = (d.images || [])
         .map((img) => {
           const src = typeof img === 'string' ? img : img.src || '';
@@ -232,7 +241,7 @@ function decompileBlock(block, indent) {
     case 'features': {
       const params = [];
       if (d.columns && d.columns !== 3) params.push(`columns: ${d.columns}`);
-      uni(params, d);
+      uni(params, d, idParams);
       const feats = (d.items || [])
         .map((it) => {
           const title = typeof it === 'string' ? it : it.title || '';
@@ -248,14 +257,14 @@ function decompileBlock(block, indent) {
     }
     case 'embed': {
       const params = [`url: ${q(d.url || '')}`];
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}EMBED${paramList(params)}`;
     }
     case 'map': {
       const params = [`address: ${q(d.address || '')}`];
       if (d.zoom != null && Number(d.zoom) !== 15) params.push(`zoom: ${d.zoom}`);
       if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}MAP${paramList(params)}`;
     }
     case 'article-list': {
@@ -263,7 +272,7 @@ function decompileBlock(block, indent) {
       if (d.tag && d.tag !== 'article') params.push(`tag: ${q(d.tag)}`);
       if (d.limit && d.limit !== 6) params.push(`limit: ${d.limit}`);
       if (d.columns && d.columns !== 3) params.push(`columns: ${d.columns}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}ARTICLES${paramList(params)}`;
     }
     case 'cta': {
@@ -274,13 +283,13 @@ function decompileBlock(block, indent) {
       if (style !== 'primary') params.push(`style: ${style}`);
       if (d.tone && d.tone !== 'brand') params.push(`tone: ${d.tone}`);
       if (d.align && d.align !== 'start') params.push(`align: ${d.align}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}CTA${paramList(params)}`;
     }
     case 'stats': {
       const params = [];
       if (d.columns && d.columns !== 3) params.push(`columns: ${d.columns}`);
-      uni(params, d);
+      uni(params, d, idParams);
       const kids = (d.items || [])
         .map((it) => {
           const ps = [`value: ${q(it.value || '')}`, `label: ${q(it.label || '')}`];
@@ -291,7 +300,7 @@ function decompileBlock(block, indent) {
     }
     case 'logos': {
       const params = [];
-      uni(params, d);
+      uni(params, d, idParams);
       const kids = (d.items || [])
         .map((it) => {
           const ps = [`src: ${q(it.src || '')}`];
@@ -304,7 +313,7 @@ function decompileBlock(block, indent) {
     }
     case 'faq': {
       const params = [];
-      uni(params, d);
+      uni(params, d, idParams);
       const kids = (d.items || [])
         .map((it) => {
           const ps = [`question: ${q(it.question || '')}`];
@@ -319,14 +328,14 @@ function decompileBlock(block, indent) {
       if (d.email) params.push(`email: ${q(d.email)}`);
       if (d.address) params.push(`address: ${q(d.address)}`);
       if (d.hours) params.push(`hours: ${q(d.hours)}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}CONTACT${paramList(params)}`;
     }
     case 'banner': {
       const params = [];
       if (d.tone && d.tone !== 'brand') params.push(`tone: ${d.tone}`);
       if (d.align && d.align !== 'start') params.push(`align: ${d.align}`);
-      uni(params, d);
+      uni(params, d, idParams);
       return `${pad}BANNER${paramList(params)} { ${escBody(d.text || '')} }`;
     }
     default:
