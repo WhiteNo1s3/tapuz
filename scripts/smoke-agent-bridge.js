@@ -191,6 +191,15 @@ async function main() {
     const cfsDup = await req('POST', '/agent/v1/create-from-source', { token: writeTok, body: { source: botReply } });
     check('create-from-source collision → 409', cfsDup.status === 409);
     check('create-from-source needs write scope', (await req('POST', '/agent/v1/create-from-source', { token: readTok, body: { source: botReply } })).status === 403);
+    // v0.73 BYOK: the provider constants endpoint — the CMS is the authority
+    // on where each LLM API lives; the extension fetches this, never hardcodes.
+    const prov = await req('GET', '/agent/v1/providers', { token: readTok });
+    check('providers endpoint returns the table (read scope)', prov.status === 200 && prov.json.ok && Array.isArray(prov.json.providers) && prov.json.providers.length >= 1);
+    const claude = (prov.json.providers || []).find((p) => p.id === 'claude');
+    check('claude provider carries endpoint + auth shape + model', !!claude && /anthropic\.com/.test(claude.endpoint) && claude.authHeader === 'x-api-key' && !!claude.defaultModel);
+    check('provider table carries NO secret (no apiKey/key field)', (prov.json.providers || []).every((p) => p.apiKey === undefined && p.key === undefined));
+    check('providers needs a token (401 without)', (await req('GET', '/agent/v1/providers', {})).status === 401);
+
     // v0.72 regression: a pristine/empty template (zero modules, placeholder
     // title) must NEVER become a page — one once got PUBLISHED with
     // "כותרת הדף" as the reader-visible title.

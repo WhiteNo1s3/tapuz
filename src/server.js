@@ -332,6 +332,14 @@ app.get('/agent/v1/ping', requireAgent('read'), (req, res) => {
   res.json({ ok: true, agent: req.agent.name, scopes: req.agent.scopes, version: require('../package.json').version });
 });
 
+// BYOK provider constants (v0.73) — the CMS is the authority on WHERE each LLM
+// supplier's API lives and HOW to shape a call. The extension fetches this and
+// never hardcodes an endpoint/model. Read-scoped like the rest of /agent/v1;
+// contains NO secret (the user's key lives only in the extension worker).
+app.get('/agent/v1/providers', requireAgent('read'), (req, res) => {
+  res.json({ ok: true, providers: require('./providers').listProviders() });
+});
+
 // The .pzn standard is PUBLIC (unauthenticated) — anyone may implement it.
 // Served live from the registry so it can never drift. CORS-open, read-only.
 app.get('/pzn-schema.json', (req, res) => {
