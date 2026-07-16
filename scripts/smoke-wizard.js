@@ -93,6 +93,15 @@ check('built css carries chosen primary', css.includes('#166534'));
 runSetup({ title: 'שם אחר', pages: ['home'] });
 check('rerun keeps original home blocks', getPageByFullPath('home').blocks[0].data.title === 'אתר הבדיקה');
 
+// A LOOK applies the whole personality (v0.72 grade-1 path) — and explicit
+// fine-tune colors still win over the look's palette.
+runSetup({ title: 'שם אחר', pages: ['home'], look: 'layla', colors: { primary: '#123456' } });
+const lookOv = loadOverrides();
+check('look applies the dark palette', lookOv.colors.bg === '#0b1220' && lookOv.colors.surface === '#131f36');
+check('look applies the style knobs', lookOv.style.shadow === 'deep' && lookOv.style.accent === 'gradient');
+check('explicit fine-tune color wins over the look', lookOv.colors.primary === '#123456');
+check('unknown look is ignored safely', (() => { runSetup({ title: 'x', pages: ['home'], look: 'nope', colors: { primary: '#166534' } }); return loadOverrides().colors.primary === '#166534'; })());
+
 // Isolation: nothing leaked outside TAPUZ_ROOT
 check('temp DB used', fs.existsSync(path.join(ROOT, 'db', 'tapuz.db')));
 

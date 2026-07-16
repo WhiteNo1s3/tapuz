@@ -2154,17 +2154,22 @@ app.get('/admin/setup', (req, res) => {
           <input id="wiz-desc" class="wiz-input" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="margin-top:8px">
         </div>
 
-        <!-- Step 2: coloring = the theme creator, taught live -->
+        <!-- Step 2: coloring = the theme creator, taught live. The MOODS here
+             are the same LOOKS constant the theme screen uses (one source of
+             truth in the CMS) — a card click sets the whole personality. -->
         <div class="wiz-panel" data-panel="1">
-          <div class="wiz-teach">🎨 <strong>זהו יוצר ערכת הנושא.</strong> מה שתבחרו כאן הוא בדיוק מה שמחכה לכם אחר כך במסך "ערכת נושא" — אפשר לשנות הכל, מתי שרוצים.</div>
-          <label style="font-weight:600;display:block;margin-bottom:8px">בחרו פלטה — או כווננו כל צבע</label>
-          <div class="wiz-palettes" id="wiz-palettes"></div>
-          <div class="wiz-colors">
-            <label class="wiz-color-row"><input type="color" id="wc-primary" value="#0a66c2"> ראשי (כפתורים וקישורים)</label>
-            <label class="wiz-color-row"><input type="color" id="wc-text" value="#111827"> טקסט</label>
-            <label class="wiz-color-row"><input type="color" id="wc-bg" value="#ffffff"> רקע</label>
-            <label class="wiz-color-row"><input type="color" id="wc-lightBg" value="#f8fafc"> רקע משני</label>
-          </div>
+          <div class="wiz-teach">🎨 <strong>זהו יוצר ערכת הנושא.</strong> בחרו מראה מוכן — צבעים, פינות וצללים בלחיצה אחת. הכל מחכה לכם אחר כך במסך "ערכת נושא", לשינוי מתי שרוצים.</div>
+          <label style="font-weight:600;display:block;margin-bottom:8px">איזה מראה מתאים לאתר שלכם?</label>
+          <div class="wiz-palettes" id="wiz-looks"></div>
+          <details style="margin-bottom:16px">
+            <summary style="cursor:pointer;font-weight:600;color:#475569;font-size:.9rem">כיוונון עדין (לא חובה)</summary>
+            <div class="wiz-colors" style="margin-top:10px">
+              <label class="wiz-color-row"><input type="color" id="wc-primary" value="#ea580c"> ראשי (כפתורים וקישורים)</label>
+              <label class="wiz-color-row"><input type="color" id="wc-text" value="#1c1917"> טקסט</label>
+              <label class="wiz-color-row"><input type="color" id="wc-bg" value="#fffbf7"> רקע</label>
+              <label class="wiz-color-row"><input type="color" id="wc-lightBg" value="#fdf1e6"> רקע משני</label>
+            </div>
+          </details>
           <label style="font-weight:600;display:block;margin-bottom:6px">איפה התפריט?</label>
           <select id="wiz-menu-placement" class="wiz-input" style="max-width:220px">
             <option value="top">למעלה (קלאסי)</option>
@@ -2198,16 +2203,11 @@ app.get('/admin/setup', (req, res) => {
         <p id="wiz-err" style="color:#b91c1c;font-size:0.85rem;margin:10px 0 0;display:none"></p>
       </div>
     </div>
+    <script>window.WIZ_LOOKS = ${JSON.stringify(LOOKS)};</script>
     <script>
       (function () {
         var PAGE_LABELS = { home: 'דף הבית', about: 'אודות', contact: 'צור קשר', articles: 'מאמרים' };
-        var PALETTES = [
-          { name: 'כחול קלאסי', primary: '#0a66c2', text: '#111827', bg: '#ffffff', lightBg: '#f8fafc' },
-          { name: 'ירוק יער', primary: '#166534', text: '#111827', bg: '#ffffff', lightBg: '#f0fdf4' },
-          { name: 'שקיעה חמה', primary: '#ea580c', text: '#1c1917', bg: '#fffbf7', lightBg: '#fff7ed' },
-          { name: 'סגול מלכותי', primary: '#7c3aed', text: '#111827', bg: '#ffffff', lightBg: '#f5f3ff' },
-          { name: 'כהה אלגנטי', primary: '#38bdf8', text: '#e2e8f0', bg: '#0f172a', lightBg: '#1e293b' }
-        ];
+        var selectedLook = 'tapuz'; // the brand default — a site is never colorless
         var step = 0;
         var TOTAL = 4;
 
@@ -2223,18 +2223,27 @@ app.get('/admin/setup', (req, res) => {
           return out;
         }
 
-        function renderPalettes() {
-          var box = q('wiz-palettes');
-          box.innerHTML = PALETTES.map(function (p, i) {
-            return '<div class="wiz-palette" data-pal="' + i + '">' +
-              '<div class="sw"><span style="background:' + p.primary + '"></span><span style="background:' + p.lightBg + '"></span><span style="background:' + p.bg + ';border:1px solid #e2e8f0"></span><span style="background:' + p.text + '"></span></div>' +
-              '<small>' + p.name + '</small></div>';
+        function lookStyle() {
+          var lk = window.WIZ_LOOKS[selectedLook];
+          return (lk && lk.overrides && lk.overrides.style) || { radius: 'soft', shadow: 'soft', accent: 'gradient' };
+        }
+        function renderLooks() {
+          var box = q('wiz-looks');
+          var keys = Object.keys(window.WIZ_LOOKS);
+          box.innerHTML = keys.map(function (key) {
+            var lk = window.WIZ_LOOKS[key];
+            var c = lk.overrides.colors;
+            return '<div class="wiz-palette' + (key === selectedLook ? ' selected' : '') + '" data-look="' + key + '">' +
+              '<div style="font-size:1.3rem;line-height:1;margin-bottom:4px">' + (lk.emoji || '🎨') + '</div>' +
+              '<div class="sw"><span style="background:' + c.primary + '"></span><span style="background:' + c.secondary + '"></span><span style="background:' + c.bg + ';border:1px solid #e2e8f0"></span><span style="background:' + c.text + '"></span></div>' +
+              '<small>' + lk.label + '</small></div>';
           }).join('');
-          box.querySelectorAll('[data-pal]').forEach(function (el) {
+          box.querySelectorAll('[data-look]').forEach(function (el) {
             el.addEventListener('click', function () {
-              var p = PALETTES[parseInt(el.dataset.pal, 10)];
-              q('wc-primary').value = p.primary; q('wc-text').value = p.text;
-              q('wc-bg').value = p.bg; q('wc-lightBg').value = p.lightBg;
+              selectedLook = el.dataset.look;
+              var c = window.WIZ_LOOKS[selectedLook].overrides.colors;
+              q('wc-primary').value = c.primary; q('wc-text').value = c.text;
+              q('wc-bg').value = c.bg; q('wc-lightBg').value = c.lightBg;
               box.querySelectorAll('.wiz-palette').forEach(function (x) { x.classList.remove('selected'); });
               el.classList.add('selected');
               renderPreview();
@@ -2244,6 +2253,12 @@ app.get('/admin/setup', (req, res) => {
 
         function renderPreview() {
           var c = colors();
+          var st = lookStyle();
+          var lookColors = (window.WIZ_LOOKS[selectedLook] || { overrides: { colors: {} } }).overrides.colors || {};
+          var radius = st.radius === 'sharp' ? '4px' : st.radius === 'round' ? '14px' : '8px';
+          var btnBg = st.accent === 'gradient'
+            ? 'linear-gradient(135deg,' + c.primary + ',' + (lookColors.secondary || c.primary) + ')'
+            : c.primary;
           var side = q('wiz-menu-placement').value === 'side';
           var title = (q('wiz-title').value || 'האתר שלי');
           q('wiz-preview').innerHTML =
@@ -2254,7 +2269,7 @@ app.get('/admin/setup', (req, res) => {
             selectedPages().map(function (p) { return '<span style="color:' + c.primary + '">' + PAGE_LABELS[p] + '</span>'; }).join('') +
             '</span></div>' +
             '<div style="text-align:center;padding:18px 12px;background:' + c.lightBg + '"><div style="font-size:16px;font-weight:800">' + title.replace(/</g, '&lt;') + '</div>' +
-            '<span style="display:inline-block;margin-top:8px;background:' + c.primary + ';color:#fff;border-radius:6px;padding:4px 14px">כפתור ראשי</span></div>' +
+            '<span style="display:inline-block;margin-top:8px;background:' + btnBg + ';color:#fff;border-radius:' + radius + ';padding:4px 14px">כפתור ראשי</span></div>' +
             '<div style="display:flex;gap:8px;padding:10px 12px">' +
             '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
             '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
@@ -2303,6 +2318,7 @@ app.get('/admin/setup', (req, res) => {
             body: JSON.stringify({
               title: q('wiz-title').value.trim(),
               description: q('wiz-desc').value.trim(),
+              look: selectedLook,
               colors: colors(),
               menuPlacement: q('wiz-menu-placement').value,
               pages: selectedPages(),
@@ -2330,7 +2346,7 @@ app.get('/admin/setup', (req, res) => {
           cb.addEventListener('change', renderPreview);
         });
 
-        renderPalettes();
+        renderLooks();
         show(0);
       })();
     </script>
@@ -2352,7 +2368,14 @@ app.get('/admin', (req, res) => {
   if (needsSetup()) return res.redirect('/admin/setup');
   const pages = listPages();
   const msg = req.query.built
-    ? `<div style="background:#ecfdf5;border:1px solid #10b981;color:#166534;padding:12px 18px;border-radius:10px;margin-bottom:16px;">האתר נבנה בהצלחה ✓ <a href="/" target="_blank" style="color:#166534;font-weight:600">צפה באתר</a></div>`
+    ? `<div style="background:#ecfdf5;border:1px solid #10b981;padding:16px 18px;border-radius:12px;margin-bottom:16px;">
+         <div style="color:#166534;font-weight:700;margin-bottom:10px">🎉 האתר שלכם חי! מה עכשיו?</div>
+         <div style="display:flex;gap:10px;flex-wrap:wrap">
+           <a href="/" target="_blank" class="btn" style="background:#166534;border-color:#166534">👀 צפו באתר</a>
+           <a href="/admin/edit/home" class="btn secondary">✏️ ערכו את דף הבית</a>
+           <a href="/admin/theme" class="btn secondary">🎨 שחקו עם המראה</a>
+         </div>
+       </div>`
     : '';
 
   let listHtml = pages.length === 0
