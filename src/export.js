@@ -41,22 +41,9 @@ function copyThemeAssets(themeSlug = 'default') {
   }
 }
 
-function scoreHomeCandidate(page) {
-  if (!page) return -1;
-  const title = (page.title || '').toLowerCase();
-  const fullPath = page.full_path || '';
-  let score = 0;
-  if (fullPath === 'amvd-hbyt') score += 100;
-  if (fullPath === 'home') score += 40;
-  if (title.includes('whiteno1se') && title.includes('עמוד הבית')) score += 80;
-  if (title === 'עמוד הבית' || title.includes('דף הבית')) score += 50;
-  if (title === 'home') score += 20;
-  try {
-    const blocks = typeof page.blocks === 'string' ? JSON.parse(page.blocks) : page.blocks || [];
-    score += Math.min((blocks || []).length, 40);
-  } catch (e) {}
-  return score;
-}
+// Home scoring lives in src/seo.js now (renderer needs it too and requiring
+// export.js from the renderer would be a cycle); re-exported below unchanged.
+const { scoreHomeCandidate } = require('./seo');
 
 function writePageHtml(page, outputDir, isHome) {
   ensureDir(outputDir);
@@ -72,7 +59,9 @@ function writePageHtml(page, outputDir, isHome) {
 
   const outputPath = path.join(outputDir, filename);
   const siteConfig = loadConfig();
-  let html = renderPage(page, { siteTitle: siteConfig.title });
+  // isHome flows into the render so the crowned home (and ONLY it) gets
+  // canonical '/', og:url '/' and the WebSite JSON-LD object.
+  let html = renderPage(page, { siteTitle: siteConfig.title, isHome: isHome === true });
   html = externalizeStyles(html);
   fs.writeFileSync(outputPath, html, 'utf8');
   // Home also becomes index.html — but keep its named file so menu links
@@ -89,13 +78,19 @@ function exportPage(fullPath, outputDir = PUBLIC_DIR) {
   const page = getPageByFullPath(fullPath);
   if (!page) throw new Error('Page not found: ' + fullPath);
 
-  // Single-page export: treat classic home paths as index
-  const isHome =
-    fullPath === 'amvd-hbyt' ||
-    fullPath === 'home' ||
-    /עמוד הבית|דף הבית|^home$/i.test(page.title || '');
+  // Single-page export: home is CROWNED by ranking all published pages (one
+  // winner via pickHomePath), never guessed from this page's own title — a
+  // substring match ('דף הבית' inside an article headline) must not steal
+  // index.html or ship canonical '/'.
+  return writePageHtml(page, outputDir, fullPath === crownedHomePath());
+}
 
-  return writePageHtml(page, outputDir, isHome);
+/** The one published page that owns '/' right now (ranked), or null. */
+function crownedHomePath() {
+  const candidates = listPages()
+    .filter((p) => p.status === 'published')
+    .map((p) => getPageByFullPath(p.full_path) || p);
+  return require('./seo').pickHomePath(candidates);
 }
 
 function exportAll(outputDir = PUBLIC_DIR) {
@@ -105,17 +100,11 @@ function exportAll(outputDir = PUBLIC_DIR) {
 
   copyThemeAssets('default');
 
-  // One homepage wins index.html (richest WhiteNo1se home preferred)
-  let homePath = null;
-  let best = -1;
-  for (const p of pages) {
-    const full = getPageByFullPath(p.full_path);
-    const s = scoreHomeCandidate(full || p);
-    if (s > best) {
-      best = s;
-      homePath = p.full_path;
-    }
-  }
+  // One homepage wins index.html (richest WhiteNo1se home preferred) — same
+  // crowning as exportPage/sitemap: ranked pick, one winner or none.
+  const homePath = require('./seo').pickHomePath(
+    pages.map((p) => getPageByFullPath(p.full_path) || p)
+  );
 
   for (const p of pages) {
     try {
@@ -123,7 +112,7 @@ function exportAll(outputDir = PUBLIC_DIR) {
       if (!full) continue;
       // Ensure we export published blocks only
       const exportPageData = { ...full, blocks: full.blocks || [] };
-      const isHome = best >= 20 && p.full_path === homePath;
+      const isHome = homePath !== null && p.full_path === homePath;
       const out = writePageHtml(exportPageData, outputDir, isHome);
       results.push({ full_path: p.full_path, output: out, isHome });
     } catch (err) {

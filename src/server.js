@@ -10,7 +10,7 @@ const {
 const { exportAll } = require('./export');
 const { runSetup } = require('./setup');
 const { loadMenus, saveMenus, saveMenu } = require('./menus');
-const { getThemeSettings, saveThemeSettings, loadOverrides, overridesToCss } = require('./theme');
+const { getThemeSettings, saveThemeSettings, loadOverrides, overridesToCss, LOOKS } = require('./theme');
 const { loadConfig, saveConfig } = require('./config');
 const blockRegistry = require('./block-registry');
 
@@ -200,8 +200,12 @@ function siteBaseUrl(req) {
 app.get('/sitemap.xml', (req, res) => {
   try {
     const seo = require('./seo');
-    const pages = require('./pages').listPages({ status: 'published' });
-    const homePath = seo.pickHomePath(pages, require('./export').scoreHomeCandidate);
+    // Crown the home over ALL published pages FIRST, then filter eligibility
+    // (redirects + robots-noindex stay out). Crowning after filtering would
+    // let a lookalike page inherit '/' when the real home is excluded.
+    const all = require('./pages').listPages({ status: 'published' });
+    const homePath = seo.pickHomePath(all);
+    const pages = all.filter((p) => seo.sitemapEligible(p.meta));
     res.type('application/xml').send(seo.buildSitemapXml(pages, siteBaseUrl(req), homePath));
   } catch (e) {
     res.status(500).type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"/>\n');
@@ -326,6 +330,14 @@ function requireAgent(scope) {
 
 app.get('/agent/v1/ping', requireAgent('read'), (req, res) => {
   res.json({ ok: true, agent: req.agent.name, scopes: req.agent.scopes, version: require('../package.json').version });
+});
+
+// BYOK provider constants (v0.73) — the CMS is the authority on WHERE each LLM
+// supplier's API lives and HOW to shape a call. The extension fetches this and
+// never hardcodes an endpoint/model. Read-scoped like the rest of /agent/v1;
+// contains NO secret (the user's key lives only in the extension worker).
+app.get('/agent/v1/providers', requireAgent('read'), (req, res) => {
+  res.json({ ok: true, providers: require('./providers').listProviders() });
 });
 
 // The .pzn standard is PUBLIC (unauthenticated) — anyone may implement it.
@@ -500,6 +512,11 @@ app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
       doc = pznApi.parse(source);
       repaired = true;
       changes = r.changes;
+    }
+    // same empty-template guard as the admin paste route (v0.72): an agent
+    // reply with zero modules must not create a placeholder-titled page.
+    if (!pznApi.toTapuzPage(doc).blocks.length) {
+      return res.status(400).json({ ok: false, error: 'empty page — the reply carries no bent-* modules (looks like the bare template)' });
     }
     const title = doc.title || 'דף חדש';
     const { deriveSlug } = require('./pzn/intent');
@@ -2252,17 +2269,22 @@ app.get('/admin/setup', (req, res) => {
           <input id="wiz-desc" class="wiz-input" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="margin-top:8px">
         </div>
 
-        <!-- Step 2: coloring = the theme creator, taught live -->
+        <!-- Step 2: coloring = the theme creator, taught live. The MOODS here
+             are the same LOOKS constant the theme screen uses (one source of
+             truth in the CMS) — a card click sets the whole personality. -->
         <div class="wiz-panel" data-panel="1">
-          <div class="wiz-teach">🎨 <strong>זהו יוצר ערכת הנושא.</strong> מה שתבחרו כאן הוא בדיוק מה שמחכה לכם אחר כך במסך "ערכת נושא" — אפשר לשנות הכל, מתי שרוצים.</div>
-          <label style="font-weight:600;display:block;margin-bottom:8px">בחרו פלטה — או כווננו כל צבע</label>
-          <div class="wiz-palettes" id="wiz-palettes"></div>
-          <div class="wiz-colors">
-            <label class="wiz-color-row"><input type="color" id="wc-primary" value="#0a66c2"> ראשי (כפתורים וקישורים)</label>
-            <label class="wiz-color-row"><input type="color" id="wc-text" value="#111827"> טקסט</label>
-            <label class="wiz-color-row"><input type="color" id="wc-bg" value="#ffffff"> רקע</label>
-            <label class="wiz-color-row"><input type="color" id="wc-lightBg" value="#f8fafc"> רקע משני</label>
-          </div>
+          <div class="wiz-teach">🎨 <strong>זהו יוצר ערכת הנושא.</strong> בחרו מראה מוכן — צבעים, פינות וצללים בלחיצה אחת. הכל מחכה לכם אחר כך במסך "ערכת נושא", לשינוי מתי שרוצים.</div>
+          <label style="font-weight:600;display:block;margin-bottom:8px">איזה מראה מתאים לאתר שלכם?</label>
+          <div class="wiz-palettes" id="wiz-looks"></div>
+          <details style="margin-bottom:16px">
+            <summary style="cursor:pointer;font-weight:600;color:#475569;font-size:.9rem">כיוונון עדין (לא חובה)</summary>
+            <div class="wiz-colors" style="margin-top:10px">
+              <label class="wiz-color-row"><input type="color" id="wc-primary" value="#ea580c"> ראשי (כפתורים וקישורים)</label>
+              <label class="wiz-color-row"><input type="color" id="wc-text" value="#1c1917"> טקסט</label>
+              <label class="wiz-color-row"><input type="color" id="wc-bg" value="#fffbf7"> רקע</label>
+              <label class="wiz-color-row"><input type="color" id="wc-lightBg" value="#fdf1e6"> רקע משני</label>
+            </div>
+          </details>
           <label style="font-weight:600;display:block;margin-bottom:6px">איפה התפריט?</label>
           <select id="wiz-menu-placement" class="wiz-input" style="max-width:220px">
             <option value="top">למעלה (קלאסי)</option>
@@ -2296,16 +2318,11 @@ app.get('/admin/setup', (req, res) => {
         <p id="wiz-err" style="color:#b91c1c;font-size:0.85rem;margin:10px 0 0;display:none"></p>
       </div>
     </div>
+    <script>window.WIZ_LOOKS = ${JSON.stringify(LOOKS)};</script>
     <script>
       (function () {
         var PAGE_LABELS = { home: 'דף הבית', about: 'אודות', contact: 'צור קשר', articles: 'מאמרים' };
-        var PALETTES = [
-          { name: 'כחול קלאסי', primary: '#0a66c2', text: '#111827', bg: '#ffffff', lightBg: '#f8fafc' },
-          { name: 'ירוק יער', primary: '#166534', text: '#111827', bg: '#ffffff', lightBg: '#f0fdf4' },
-          { name: 'שקיעה חמה', primary: '#ea580c', text: '#1c1917', bg: '#fffbf7', lightBg: '#fff7ed' },
-          { name: 'סגול מלכותי', primary: '#7c3aed', text: '#111827', bg: '#ffffff', lightBg: '#f5f3ff' },
-          { name: 'כהה אלגנטי', primary: '#38bdf8', text: '#e2e8f0', bg: '#0f172a', lightBg: '#1e293b' }
-        ];
+        var selectedLook = 'tapuz'; // the brand default — a site is never colorless
         var step = 0;
         var TOTAL = 4;
 
@@ -2321,18 +2338,27 @@ app.get('/admin/setup', (req, res) => {
           return out;
         }
 
-        function renderPalettes() {
-          var box = q('wiz-palettes');
-          box.innerHTML = PALETTES.map(function (p, i) {
-            return '<div class="wiz-palette" data-pal="' + i + '">' +
-              '<div class="sw"><span style="background:' + p.primary + '"></span><span style="background:' + p.lightBg + '"></span><span style="background:' + p.bg + ';border:1px solid #e2e8f0"></span><span style="background:' + p.text + '"></span></div>' +
-              '<small>' + p.name + '</small></div>';
+        function lookStyle() {
+          var lk = window.WIZ_LOOKS[selectedLook];
+          return (lk && lk.overrides && lk.overrides.style) || { radius: 'soft', shadow: 'soft', accent: 'gradient' };
+        }
+        function renderLooks() {
+          var box = q('wiz-looks');
+          var keys = Object.keys(window.WIZ_LOOKS);
+          box.innerHTML = keys.map(function (key) {
+            var lk = window.WIZ_LOOKS[key];
+            var c = lk.overrides.colors;
+            return '<div class="wiz-palette' + (key === selectedLook ? ' selected' : '') + '" data-look="' + key + '">' +
+              '<div style="font-size:1.3rem;line-height:1;margin-bottom:4px">' + (lk.emoji || '🎨') + '</div>' +
+              '<div class="sw"><span style="background:' + c.primary + '"></span><span style="background:' + c.secondary + '"></span><span style="background:' + c.bg + ';border:1px solid #e2e8f0"></span><span style="background:' + c.text + '"></span></div>' +
+              '<small>' + lk.label + '</small></div>';
           }).join('');
-          box.querySelectorAll('[data-pal]').forEach(function (el) {
+          box.querySelectorAll('[data-look]').forEach(function (el) {
             el.addEventListener('click', function () {
-              var p = PALETTES[parseInt(el.dataset.pal, 10)];
-              q('wc-primary').value = p.primary; q('wc-text').value = p.text;
-              q('wc-bg').value = p.bg; q('wc-lightBg').value = p.lightBg;
+              selectedLook = el.dataset.look;
+              var c = window.WIZ_LOOKS[selectedLook].overrides.colors;
+              q('wc-primary').value = c.primary; q('wc-text').value = c.text;
+              q('wc-bg').value = c.bg; q('wc-lightBg').value = c.lightBg;
               box.querySelectorAll('.wiz-palette').forEach(function (x) { x.classList.remove('selected'); });
               el.classList.add('selected');
               renderPreview();
@@ -2342,6 +2368,12 @@ app.get('/admin/setup', (req, res) => {
 
         function renderPreview() {
           var c = colors();
+          var st = lookStyle();
+          var lookColors = (window.WIZ_LOOKS[selectedLook] || { overrides: { colors: {} } }).overrides.colors || {};
+          var radius = st.radius === 'sharp' ? '4px' : st.radius === 'round' ? '14px' : '8px';
+          var btnBg = st.accent === 'gradient'
+            ? 'linear-gradient(135deg,' + c.primary + ',' + (lookColors.secondary || c.primary) + ')'
+            : c.primary;
           var side = q('wiz-menu-placement').value === 'side';
           var title = (q('wiz-title').value || 'האתר שלי');
           q('wiz-preview').innerHTML =
@@ -2352,7 +2384,7 @@ app.get('/admin/setup', (req, res) => {
             selectedPages().map(function (p) { return '<span style="color:' + c.primary + '">' + PAGE_LABELS[p] + '</span>'; }).join('') +
             '</span></div>' +
             '<div style="text-align:center;padding:18px 12px;background:' + c.lightBg + '"><div style="font-size:16px;font-weight:800">' + title.replace(/</g, '&lt;') + '</div>' +
-            '<span style="display:inline-block;margin-top:8px;background:' + c.primary + ';color:#fff;border-radius:6px;padding:4px 14px">כפתור ראשי</span></div>' +
+            '<span style="display:inline-block;margin-top:8px;background:' + btnBg + ';color:#fff;border-radius:' + radius + ';padding:4px 14px">כפתור ראשי</span></div>' +
             '<div style="display:flex;gap:8px;padding:10px 12px">' +
             '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
             '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
@@ -2401,6 +2433,7 @@ app.get('/admin/setup', (req, res) => {
             body: JSON.stringify({
               title: q('wiz-title').value.trim(),
               description: q('wiz-desc').value.trim(),
+              look: selectedLook,
               colors: colors(),
               menuPlacement: q('wiz-menu-placement').value,
               pages: selectedPages(),
@@ -2428,7 +2461,7 @@ app.get('/admin/setup', (req, res) => {
           cb.addEventListener('change', renderPreview);
         });
 
-        renderPalettes();
+        renderLooks();
         show(0);
       })();
     </script>
@@ -2450,7 +2483,14 @@ app.get('/admin', (req, res) => {
   if (needsSetup()) return res.redirect('/admin/setup');
   const pages = listPages();
   const msg = req.query.built
-    ? `<div style="background:#ecfdf5;border:1px solid #10b981;color:#166534;padding:12px 18px;border-radius:10px;margin-bottom:16px;">האתר נבנה בהצלחה ✓ <a href="/" target="_blank" style="color:#166534;font-weight:600">צפה באתר</a></div>`
+    ? `<div style="background:#ecfdf5;border:1px solid #10b981;padding:16px 18px;border-radius:12px;margin-bottom:16px;">
+         <div style="color:#166534;font-weight:700;margin-bottom:10px">🎉 האתר שלכם חי! מה עכשיו?</div>
+         <div style="display:flex;gap:10px;flex-wrap:wrap">
+           <a href="/" target="_blank" class="btn" style="background:#166534;border-color:#166534">👀 צפו באתר</a>
+           <a href="/admin/edit/home" class="btn secondary">✏️ ערכו את דף הבית</a>
+           <a href="/admin/theme" class="btn secondary">🎨 שחקו עם המראה</a>
+         </div>
+       </div>`
     : '';
 
   let listHtml = pages.length === 0
@@ -3015,14 +3055,21 @@ app.get('/admin/seo', (req, res) => {
         <textarea id="seo-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">${escapeAdmin(config.description)}</textarea>
         <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">משמש כשלדף אין תיאור משלו</div>
         <label style="display:block;font-weight:600;margin-bottom:4px">תמונת שיתוף ברירת מחדל (og:image)</label>
-        <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="/uploads/share.jpg" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו. נתיב מ<a href="/admin/media-library">ספריית המדיה</a>.</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+          <button type="button" class="btn secondary" data-media-pick="seo-og" style="white-space:nowrap">🖼 בחר / העלה</button>
+        </div>
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו.</div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">כתובת האתר (base URL)</label>
+        <input id="seo-base" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://www.example.co.il" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">מפעיל canonical / og:url / נתונים מובנים (JSON-LD) עם כתובות מלאות, וקובע את הכתובות ב-sitemap.xml. ריק = מדלגים על תגיות שדורשות כתובת מלאה.</div>
         <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
           <span id="seo-status" style="color:#166534;font-size:0.85rem"></span>
           <button type="button" class="btn" id="seo-save">שמור SEO</button>
         </div>
       </section>
     </div>
+    <script src="/admin-media-picker.js"></script>
     <script>
       document.getElementById('seo-save').addEventListener('click', function () {
         fetch('/admin/api/seo', {
@@ -3031,7 +3078,8 @@ app.get('/admin/seo', (req, res) => {
           body: JSON.stringify({
             titlePattern: document.getElementById('seo-pattern').value,
             description: document.getElementById('seo-desc').value,
-            defaultOgImage: document.getElementById('seo-og').value
+            defaultOgImage: document.getElementById('seo-og').value,
+            baseUrl: document.getElementById('seo-base').value
           })
         }).then(function (r) { return r.json(); }).then(function (d) {
           document.getElementById('seo-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
@@ -3045,7 +3093,7 @@ app.get('/admin/seo', (req, res) => {
 app.get('/admin/api/seo', (req, res) => {
   try {
     const config = loadConfig();
-    res.json({ ok: true, seo: config.seo || {}, description: config.description || '' });
+    res.json({ ok: true, seo: config.seo || {}, description: config.description || '', baseUrl: config.baseUrl || '' });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -3059,6 +3107,23 @@ app.post('/admin/api/seo', (req, res) => {
     if (b.titlePattern !== undefined) config.seo.titlePattern = String(b.titlePattern || '');
     if (b.defaultOgImage !== undefined) config.seo.defaultOgImage = String(b.defaultOgImage || '');
     if (b.description !== undefined) config.description = String(b.description || '');
+    // site base URL (v0.71): powers canonical/og:url/JSON-LD absolute URLs +
+    // sitemap <loc>. Stored at config level (robots/sitemap already read it).
+    // Forgiving: a schemeless domain gets https:// ; anything unparseable is
+    // rejected — a broken base would corrupt canonicals sitewide.
+    if (b.baseUrl !== undefined) {
+      const raw = String(b.baseUrl || '').trim();
+      if (!raw) {
+        config.baseUrl = '';
+      } else {
+        let u;
+        try { u = new URL(raw.includes('://') ? raw : 'https://' + raw); } catch (e) { u = null; }
+        if (!u || !/^https?:$/.test(u.protocol)) {
+          return res.status(400).json({ ok: false, error: 'כתובת האתר אינה תקינה — צורה תקינה: https://www.example.co.il' });
+        }
+        config.baseUrl = (u.origin + u.pathname).replace(/\/+$/, '');
+      }
+    }
     saveConfig(config);
     res.json({ ok: true, seo: config.seo });
   } catch (e) {
@@ -4215,6 +4280,12 @@ app.post('/admin/api/pzn/create-from-source', (req, res) => {
         issues: errors
       });
     }
+    // an EMPTY document must never become a page a reader meets — this is how
+    // a pristine paste-template (title "כותרת הדף", zero modules) once got
+    // PUBLISHED with its placeholder as the visible title (v0.72 fix).
+    if (!pznApi.toTapuzPage(doc).blocks.length) {
+      return res.status(400).json({ ok: false, error: 'הדף ריק — נראה שהודבקה התבנית לדוגמה במקום תשובת הבוט. הדביקו את התשובה המלאה (עם מודולי bent-*).' });
+    }
     const title = doc.title || 'דף חדש';
     // deriveSlug hardens against path traversal (backslash / '..').
     const { deriveSlug } = require('./pzn/intent');
@@ -4774,6 +4845,11 @@ app.get('/admin/theme', (req, res) => {
     ${adminNav('theme', 'ערכת נושא')}
     <div class="container" style="padding-top:28px;max-width:920px">
       <p style="color:#64748b;margin-top:0">שנה צבעים, פונט, לוגו ופריסת תפריט — בלי לגעת בקוד התמה. נשמר כ-overrides.</p>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px">
+        <h3 style="margin-top:0">מראות מוכנים</h3>
+        <p style="color:#64748b;margin:0 0 14px;font-size:.9rem">לחיצה אחת מחליפה את כל האישיות של האתר — צבעים, פינות, צללים וגופנים. אחרי הבחירה הכול נשאר ניתן לכיוון עדין למטה.</p>
+        <div id="th-looks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px"></div>
+      </section>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">אתר</h3>
@@ -4788,17 +4864,49 @@ app.get('/admin/theme', (req, res) => {
           </select>
           <label style="display:block;font-weight:600;margin-bottom:4px">טקסט לוגו</label>
           <input id="th-logo-text" value="${escAttr(logo.text)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
-          <label style="display:block;font-weight:600;margin-bottom:4px">כתובת תמונת לוגו</label>
-          <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="/assets/logo.png" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label style="display:block;font-weight:600;margin-bottom:4px">תמונת לוגו</label>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+            <button type="button" class="btn secondary" data-media-pick="th-logo-image" style="white-space:nowrap">🖼 בחר / העלה</button>
+          </div>
         </section>
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">צבעים</h3>
           ${colorRow('primary', 'ראשי', o.colors.primary)}
+          ${colorRow('secondary', 'משלים (גרדיאנט)', o.colors.secondary)}
           ${colorRow('text', 'טקסט', o.colors.text)}
           ${colorRow('muted', 'משני', o.colors.muted)}
           ${colorRow('border', 'מסגרת', o.colors.border)}
           ${colorRow('bg', 'רקע', o.colors.bg)}
           ${colorRow('lightBg', 'רקע בהיר', o.colors.lightBg)}
+          ${colorRow('surface', 'משטח (כרטיסים)', o.colors.surface)}
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">אופי העיצוב</h3>
+          <label style="display:block;font-weight:600;margin-bottom:4px">פינות</label>
+          <select id="th-radius" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="sharp" ${o.style.radius === 'sharp' ? 'selected' : ''}>חדות (עיתונאי)</option>
+            <option value="soft" ${o.style.radius === 'soft' || !o.style.radius ? 'selected' : ''}>רכות</option>
+            <option value="round" ${o.style.radius === 'round' ? 'selected' : ''}>עגולות</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">צללים</label>
+          <select id="th-shadow" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="flat" ${o.style.shadow === 'flat' ? 'selected' : ''}>שטוח</option>
+            <option value="soft" ${o.style.shadow === 'soft' || !o.style.shadow ? 'selected' : ''}>עדין</option>
+            <option value="deep" ${o.style.shadow === 'deep' ? 'selected' : ''}>עמוק</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">צבע הדגשה</label>
+          <select id="th-accent" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="solid" ${o.style.accent !== 'gradient' ? 'selected' : ''}>אחיד</option>
+            <option value="gradient" ${o.style.accent === 'gradient' ? 'selected' : ''}>גרדיאנט (ראשי ← משלים)</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">גופן כותרות</label>
+          <select id="th-font-heading" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+            <option value="" ${!o.fonts.headingFamily ? 'selected' : ''}>כמו גופן הטקסט</option>
+            <option value='Georgia, "Times New Roman", "Noto Serif Hebrew", serif' ${(o.fonts.headingFamily || '').includes('Georgia') ? 'selected' : ''}>סריפית קלאסית</option>
+            <option value='"Arial Black", "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif' ${(o.fonts.headingFamily || '').includes('Arial Black') ? 'selected' : ''}>שמנה מודגשת</option>
+            <option value='Tahoma, Arial, "Noto Sans Hebrew", sans-serif' ${(o.fonts.headingFamily || '').includes('Tahoma') ? 'selected' : ''}>קומפקטית</option>
+          </select>
         </section>
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">טיפוגרפיה ופריסה</h3>
@@ -4825,6 +4933,8 @@ app.get('/admin/theme', (req, res) => {
         <button type="button" class="btn" id="th-save-build" style="background:#166534">שמור + בנה אתר</button>
       </div>
     </div>
+    <script>window.TAPUZ_LOOKS = ${JSON.stringify(LOOKS)};</script>
+    <script src="/admin-media-picker.js"></script>
     <script src="/admin-theme.js"></script>
   `;
   res.send(layout(html, 'ערכת נושא', accentFor('theme')));

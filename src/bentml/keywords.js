@@ -47,6 +47,7 @@ const KEYWORDS = {
     params: {
       src: { type: 'string', required: true },
       alt: { type: 'string', default: '' },
+      title: { type: 'string' },
       caption: { type: 'string' },
       width: { type: 'enum', default: 'full', values: ['sm', 'md', 'lg', 'full'] }
     }
@@ -57,7 +58,10 @@ const KEYWORDS = {
     params: {
       url: { type: 'string', required: true },
       style: { type: 'enum', default: 'primary', values: ['primary', 'secondary', 'ghost'] },
-      align: { type: 'enum', default: 'start', values: ['start', 'center', 'end'] }
+      align: { type: 'enum', default: 'start', values: ['start', 'center', 'end'] },
+      rel: { type: 'string' },
+      target: { type: 'enum', default: '_self', values: ['_self', '_blank'] },
+      title: { type: 'string' }
     }
   },
   ROW: {

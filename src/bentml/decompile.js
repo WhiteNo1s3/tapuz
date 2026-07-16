@@ -101,6 +101,7 @@ function decompileBlock(block, indent) {
     case 'image': {
       const params = [`src: ${q(d.src || '')}`];
       if (d.alt) params.push(`alt: ${q(d.alt)}`);
+      if (d.title) params.push(`title: ${q(d.title)}`); // image SEO title (v0.71)
       if (d.caption) params.push(`caption: ${q(d.caption)}`);
       if (d.width && d.width !== 'full') params.push(`width: ${d.width}`);
       uni(params, d, idParams);

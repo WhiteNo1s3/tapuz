@@ -34,6 +34,14 @@ function runSetup(body = {}) {
     if (isHex(wanted && wanted[k])) colors[k] = wanted[k];
   });
 
+  // A LOOK (v0.72) is the grade-1 path: one card click = the whole
+  // personality (palette + radius + shadows + gradient + fonts). The look
+  // is the base; the wizard's fine-tune color pickers win on top of it.
+  const { LOOKS } = require('./theme');
+  const look = body.look && LOOKS[body.look]
+    ? JSON.parse(JSON.stringify(LOOKS[body.look].overrides))
+    : null;
+
   const config = loadConfig();
   config.title = siteTitle;
   config.description = description;
@@ -43,7 +51,8 @@ function runSetup(body = {}) {
   saveThemeSettings({
     siteTitle: siteTitle,
     overrides: {
-      colors,
+      ...(look || {}),
+      colors: { ...((look && look.colors) || {}), ...colors },
       layout: { menuPlacement: body.menuPlacement === 'side' ? 'side' : 'top' }
     }
   });

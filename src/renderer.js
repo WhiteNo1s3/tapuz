@@ -147,7 +147,8 @@ function renderBlock(block, direction = 'rtl') {
       const wClass = width && width !== 'full' ? ` img-w-${escapeHtml(width)}` : '';
       const figClass = ` class="bent-image${wClass}${extraClass}"`;
       const figId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
-      let h = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy">`;
+      const imgTitle = block.data?.title ? ` title="${escapeHtml(block.data.title)}"` : '';
+      let h = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${imgTitle} loading="lazy">`;
       if (caption) h += `<figcaption>${escapeHtml(caption)}</figcaption>`;
       return `<figure${figId}${figClass}${style} dir="${direction}">${h}</figure>`;
     }
@@ -155,7 +156,8 @@ function renderBlock(block, direction = 'rtl') {
       const { text = '', url = '#', variant = 'primary' } = block.data;
       const btnClass = ` class="btn btn-${escapeHtml(variant)}${extraClass}"`;
       const btnId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
-      return `<a${btnId}${btnClass}${style} href="${escapeHtml(safeHref(url))}" dir="${direction}">${escapeHtml(text)}</a>`;
+      const seo = require('./pzn/link-attrs').linkSeoAttrs(block.data || {});
+      return `<a${btnId}${btnClass}${style} href="${escapeHtml(safeHref(url))}"${seo} dir="${direction}">${escapeHtml(text)}</a>`;
     }
     case 'spacer': return `<div${extra} class="spacer" style="height:${escapeHtml(block.data.height || '2rem')}"></div>`;
     case 'divider': return `<hr${extra} dir="${direction}">`;
@@ -474,6 +476,9 @@ function renderBlock(block, direction = 'rtl') {
 
     case 'banner': {
       const d = block.data || {};
+      // an empty banner is markup residue — a reader must never meet a blank
+      // (or placeholder) announcement strip
+      if (!String(d.text || '').trim()) return '';
       const tone = ['brand', 'dark', 'light', 'warn'].includes(d.tone) ? d.tone : 'brand';
       return (
         `<div class="site-banner tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +
@@ -805,9 +810,40 @@ function renderPage(page, options = {}) {
       .split('{page}').join(pageTitle)
       .split('{site}').join(config.title || '');
   }
-  const pageDesc = page.meta?.description || config.description || '';
-  const pageOg = page.meta?.ogImage || page.meta?.ogimage || (config.seo && config.seo.defaultOgImage) || '';
+  const pageDesc = page.meta?.description || page.meta?.teaser || config.description || '';
+  const pageOg = page.meta?.ogImage || page.meta?.ogimage || page.meta?.cardImage || (config.seo && config.seo.defaultOgImage) || '';
   const pageRobots = page.meta?.robots || 'index, follow';
+
+  // v0.71 SEO head: canonical + og:url/site_name/locale, twitter cards,
+  // article times, and JSON-LD structured data (Article/WebPage + WebSite on
+  // home). URL-dependent tags appear only when config.baseUrl is set — a
+  // wrong canonical is worse than none. Everything lands in the {{head}}
+  // slot, so every theme layout gets it without new placeholders.
+  const seoLib = require('./seo');
+  const seoBase = String(config.baseUrl || '').trim().replace(/\/+$/, '');
+  const isArticle = (page.tags || []).includes('article');
+  // Home is NEVER guessed here — the scorer is a RANKING heuristic (substring
+  // title matches like 'דף הבית' score 50 alone), and an absolute test would
+  // stamp canonical='/' + a WebSite object onto any article about homepages,
+  // deindexing it. Only the caller that ranks ALL pages and crowns ONE winner
+  // (export.js) may pass isHome:true.
+  const isHome = options.isHome === true;
+  const seoPath = isHome ? '' : (page.full_path || '');
+  const ogAbs = seoLib.absolutize(pageOg, seoBase);
+  const publishedIso = seoLib.toIsoDate(page.created_at);
+  const modifiedIso = seoLib.toIsoDate(page.updated_at);
+  const seoHeadTags = seoLib.buildSeoHeadTags({
+    base: seoBase, path: seoPath, title: pageTitle, description: pageDesc,
+    image: ogAbs, siteName: config.title || '', lang, isArticle, publishedIso, modifiedIso
+  });
+  const seoJsonLd = seoLib.jsonLdScript(seoLib.buildJsonLd({
+    title: pageTitle, description: pageDesc, image: ogAbs, isArticle, isHome,
+    siteName: config.title || '',
+    logo: seoLib.absolutize((config.logo && config.logo.image) || '', seoBase),
+    base: seoBase, path: seoPath, datePublished: publishedIso, dateModified: modifiedIso
+  }));
+  if (seoHeadTags) head += '\n  ' + seoHeadTags;
+  if (seoJsonLd) head += '\n  ' + seoJsonLd;
 
   const replacements = {
     '{{lang}}': lang,
@@ -818,7 +854,8 @@ function renderPage(page, options = {}) {
     '{{site.title}}': escapeHtml(config.title),
     '{{currentYear}}': currentYear,
     '{{meta.description}}': escapeHtml(pageDesc),
-    '{{meta.ogImage}}': escapeHtml(pageOg),
+    '{{meta.ogImage}}': escapeHtml(ogAbs),
+    '{{meta.ogType}}': isArticle ? 'article' : 'website',
     '{{meta.robots}}': escapeHtml(pageRobots),
     '{{logo_html}}': logoHtml,
     '{{menu_html}}': menuHtml,
@@ -834,9 +871,13 @@ function renderPage(page, options = {}) {
     '{{footer_credit_html}}': chrome.footerCredit
   };
 
-  Object.keys(replacements).forEach(key => {
-    layout = layout.split(key).join(replacements[key]);
-  });
+  // ONE pass over the layout: a substituted value is never re-scanned, so page
+  // content (e.g. an imported meta description containing "{{site_extras}}")
+  // can never expand a later placeholder inside the head, the JSON-LD script,
+  // or anywhere else. Unknown tokens pass through untouched, as before.
+  layout = layout.replace(/\{\{[\w.]+\}\}/g, (token) =>
+    Object.prototype.hasOwnProperty.call(replacements, token) ? String(replacements[token]) : token
+  );
 
   // Fallback for theme layouts without a {{site_extras}} slot
   if (siteExtras && !hasExtrasSlot) {

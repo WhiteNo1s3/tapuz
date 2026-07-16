@@ -214,7 +214,10 @@ const BLOCK_REGISTRY = [
         default: 'primary',
         hint: 'ראשי / משני / מתאר (ghost ב-BenTML)'
       },
-      ALIGN_PARAM
+      ALIGN_PARAM,
+      { name: 'rel', labelHe: 'יחס קישור (rel)', type: 'string', default: '', hint: 'nofollow / sponsored / ugc — לבקרת קישורים ו-SEO' },
+      { name: 'target', labelHe: 'פתיחה', type: 'enum', enum: ['_self', '_blank'], default: '_self', hint: '_blank = חלון חדש (מקבל noopener אוטומטית)' },
+      { name: 'title', labelHe: 'כותרת קישור (SEO)', type: 'string', default: '' }
     ],
     textField: 'text',
     textFieldLabelHe: 'טקסט הכפתור',
@@ -384,6 +387,7 @@ const BLOCK_REGISTRY = [
         name: 'alt', labelHe: 'טקסט חלופי (Alt)', type: 'string', default: '',
         hint: 'חשוב לנגישות ול-SEO — אזהרת W401 כשריק'
       },
+      { name: 'title', labelHe: 'כותרת תמונה (SEO)', type: 'string', default: '', hint: 'מופיע ברחיפה ומחזק SEO לתמונה' },
       { name: 'caption', labelHe: 'כיתוב', type: 'string', hint: 'מוצג מתחת לתמונה' },
       {
         name: 'width', labelHe: 'רוחב', type: 'enum',
@@ -1026,7 +1030,7 @@ const BLOCK_REGISTRY = [
   {
     type: 'banner',
     keyword: 'BANNER',
-    labelHe: 'באנר הודעה',
+    labelHe: 'באנר',
     icon: '▬',
     category: 'מבנה',
     bodyClass: 'text',

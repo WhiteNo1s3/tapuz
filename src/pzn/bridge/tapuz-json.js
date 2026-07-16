@@ -70,7 +70,7 @@ function blockToModule(block) {
     }
 
     case 'button': {
-      const props = pickProps(data, ['variant', 'align']);
+      const props = pickProps(data, ['variant', 'align', 'rel', 'target', 'title']);
       if (data.url !== undefined) props.href = data.url;
       return createModule('button', baseOpts(block, props, { text: data.text || '' }));
     }
@@ -108,7 +108,7 @@ function blockToModule(block) {
       return createModule('article-list', baseOpts(block, pickProps(data, ['tag', 'limit', 'columns'])));
 
     case 'image':
-      return createModule('image', baseOpts(block, pickProps(data, ['src', 'alt', 'caption', 'width'])));
+      return createModule('image', baseOpts(block, pickProps(data, ['src', 'alt', 'title', 'caption', 'width'])));
 
     case 'gallery': {
       const children = (data.images || []).map((img) =>
@@ -370,7 +370,7 @@ function moduleToBlock(node) {
     }
 
     case 'button': {
-      const data = pickData(props, ['variant', 'align']);
+      const data = pickData(props, ['variant', 'align', 'rel', 'target', 'title']);
       if (props.href !== undefined) data.url = props.href;
       if (node.text) data.text = node.text;
       return finishBlock(node, 'button', data);
@@ -416,7 +416,7 @@ function moduleToBlock(node) {
       return finishBlock(node, 'article-list', pickData(props, ['tag', 'limit', 'columns']));
 
     case 'image':
-      return finishBlock(node, 'image', pickData(props, ['src', 'alt', 'caption', 'width']));
+      return finishBlock(node, 'image', pickData(props, ['src', 'alt', 'title', 'caption', 'width']));
 
     case 'gallery': {
       const data = pickData(props, ['columns']);

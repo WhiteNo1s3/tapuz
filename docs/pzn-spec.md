@@ -1,6 +1,6 @@
 # The `.pzn` page format — standard
 
-**Spec version 0.1** · generated from `tapuziel@0.53.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
+**Spec version 0.1** · generated from `tapuziel@0.66.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
 
 `.pzn` is an open, constrained-HTML page format. A `.pzn` file **is** HTML —
 but the body may contain **only registered `bent-*` module tags**, never raw
@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (37)
+## Modules (49)
 
 ### Category: content
 
@@ -72,6 +72,7 @@ from it directly.
 
   - `src` · url
   - `alt` · string
+  - `title` · string
   - `caption` · string
   - `align` · enum · left \| center \| right · default `center`
   - `width` · enum · sm \| md \| lg \| full · default `full`
@@ -82,6 +83,9 @@ from it directly.
   - `variant` · enum · primary \| secondary \| outline · default `primary`
   - `align` · enum · start \| center \| end · default `start`
   - `text` · text · default `לחץ כאן` · **(body text, not an attribute)**
+  - `rel` · string
+  - `target` · enum · _self \| _blank · default `_self`
+  - `title` · string
 
 #### `<bent-item>` — פריט רשימה / List item · leaf
 
@@ -152,7 +156,7 @@ from it directly.
 
 #### `<bent-faq>` — שאלות נפוצות / FAQ · container (children: `bent-qa`)
 
-#### `<bent-banner>` — באנר הודעה / Banner · leaf
+#### `<bent-banner>` — באנר / Banner · leaf
 
   - `tone` · enum · brand \| dark \| light \| warn · default `brand`
   - `align` · enum · start \| center \| end · default `start`
@@ -183,6 +187,17 @@ from it directly.
   - `parallax` · boolean · default `false`
 
 #### `<bent-card>` — כרטיס / Card · container
+
+#### `<bent-navitem>` — קישור ניווט / Nav link · leaf
+
+  - `label` · string
+  - `href` · url
+
+#### `<bent-nav>` — תפריט ניווט / Nav menu · container (children: `bent-navitem`)
+
+  - `background` · string
+  - `color` · string
+  - `align` · enum · start \| center \| end · default `start`
 
 #### `<bent-tab>` — טאב / Tab · leaf
 
@@ -216,6 +231,27 @@ from it directly.
   - `zoom` · integer · 1–20 · default `15`
   - `height` · enum · sm \| md \| lg · default `md`
 
+#### `<bent-category>` — קטגוריה / Category · leaf
+
+  - `slug` · string
+  - `limit` · integer · 1–48 · default `6`
+  - `showheader` · boolean · default `true`
+
+#### `<bent-field>` — שדה טופס / Form field · leaf
+
+  - `label` · string
+  - `name` · string
+  - `type` · enum · text \| email \| tel \| textarea \| select \| checkbox · default `text`
+  - `placeholder` · string
+  - `required` · boolean · default `false`
+  - `options` · string
+
+#### `<bent-form>` — טופס / Form · container (children: `bent-field`)
+
+  - `action` · string
+  - `method` · enum · post \| get · default `post`
+  - `submit` · string · default `שליחה`
+
 #### `<bent-contact-info>` — פרטי קשר / Contact info · leaf
 
   - `phone` · string
@@ -232,6 +268,48 @@ from it directly.
   - `url` · url
 
 #### `<bent-logos>` — לוגואים / לקוחות / Logos · container (children: `bent-logo`)
+
+#### `<bent-mediacard>` — כרטיס תוכן / Media card · leaf
+
+  - `image` · url
+  - `tag` · string
+  - `title` · string
+  - `excerpt` · string
+  - `href` · url
+
+#### `<bent-cards>` — רשת כרטיסים / Card grid · container (children: `bent-mediacard`)
+
+#### `<bent-tickeritem>` — מבזק / Ticker headline · leaf
+
+  - `text` · string
+  - `href` · url
+
+#### `<bent-ticker>` — מבזקים נעים / News ticker · container (children: `bent-tickeritem`)
+
+  - `label` · string
+  - `speed` · enum · slow \| md \| fast · default `md`
+  - `background` · string
+  - `color` · string
+
+#### `<bent-newspopitem>` — עדכון / News update · leaf
+
+  - `time` · string
+  - `text` · string
+  - `href` · url
+
+#### `<bent-newspop>` — מבזקים עם שעות / News feed · container (children: `bent-newspopitem`)
+
+  - `label` · string
+
+#### `<bent-video>` — וידאו / Video · leaf
+
+  - `src` · url
+  - `poster` · url
+  - `caption` · string
+  - `controls` · boolean · default `true`
+  - `autoplay` · boolean · default `false`
+  - `loop` · boolean · default `false`
+  - `muted` · boolean · default `false`
 
 ### Category: effects
 

@@ -103,6 +103,7 @@ function buildBlock(node, warnings) {
         caption: p.caption || '',
         width: p.width || 'full'
       };
+      if (p.title) data.title = p.title; // image SEO title (v0.71)
       if (!data.alt) warnings.push({ code: 'W401', message: 'IMAGE missing alt' });
       if (p.class) data.className = p.class;
       return createBlock('image', data);
