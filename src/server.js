@@ -584,7 +584,7 @@ app.get('/admin/login', (req, res) => {
       <input name="password" type="password" autocomplete="current-password" required style="${authInput}">
       <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">התחבר</button>
     </form>`;
-  res.send(layout(authCard(inner), 'כניסה', '#0a66c2'));
+  res.send(layout(authCard(inner), 'כניסה', '#f97316'));
 });
 
 app.post('/admin/login', (req, res) => {
@@ -601,7 +601,7 @@ app.post('/admin/login', (req, res) => {
     res.setHeader('Retry-After', String(ra));
     const inner = authErr(`נחסמת זמנית עקב ניסיונות כושלים. נסה שוב בעוד ${ra} שניות.`) +
       `<div style="text-align:center"><a href="${base}/login">חזרה לכניסה</a></div>`;
-    return res.status(429).send(layout(authCard(inner), 'נחסם', '#0a66c2'));
+    return res.status(429).send(layout(authCard(inner), 'נחסם', '#f97316'));
   }
 
   const user = auth.verifyLogin(username, (req.body && req.body.password) || '');
@@ -767,7 +767,7 @@ app.post('/admin/upload-legacy', (req, res) => {
 });
 */
 
-function layout(content, title = 'Tapuz', accent = '#0a66c2') {
+function layout(content, title = 'Tapuz', accent = '#f97316') {
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -776,27 +776,48 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
   <title>${title} • Tapuz</title>
   <link rel="stylesheet" href="/css/main.css">
   <style>
-    /* section identity: each admin area carries its own accent */
+    /* section identity: each admin area carries its own accent (derived from
+       its tool-family color in ADMIN_NAV_GROUPS) */
     :root { --admin-accent: ${accent}; }
-    .topbar { border-top: 4px solid var(--admin-accent); }
-    .topbar-inner span[style*="font-weight:600"] { color: var(--admin-accent); }
     .btn:not(.secondary) { background: var(--admin-accent); border-color: var(--admin-accent); }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif;
-      background: #f8fafc;
+      /* soft wash of the section color fading into the workspace */
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--admin-accent) 7%, #f8fafc) 0%, #f8fafc 280px);
+      background-color: #f8fafc;
       margin: 0;
       color: #0f172a;
     }
     .container { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
 
+    /* signature rainbow strip: one thin line carrying every tool-family color */
+    .brand-strip {
+      height: 4px;
+      background: linear-gradient(90deg, #f97316, #2563eb, #0d9488, #7c3aed, #059669, #c026d3);
+    }
+    .brand-logo {
+      font-size: 1.45rem;
+      font-weight: 800;
+      text-decoration: none;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.5px;
+    }
+    .section-title { font-weight: 700; color: var(--admin-accent); }
+
     .topbar {
-      background: #fff;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(10px);
       border-bottom: 1px solid #e2e8f0;
-      padding: 12px 0;
+      padding: 0 0 10px;
       position: sticky;
       top: 0;
       z-index: 200;
     }
+    .topbar .topbar-inner { padding-top: 10px; }
     .topbar-inner {
       display: flex;
       align-items: center;
@@ -901,23 +922,51 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
       line-height: 1.5;
     }
 
-    /* Shared CMS navigation (all admin screens) */
+    /* Shared CMS navigation (all admin screens) — tools clustered by family,
+       each cluster tinted with its own color so the menu reads as a handful of
+       categories instead of a flat pile of options. */
     .admin-nav {
       display: flex;
-      gap: 4px;
+      gap: 8px;
       flex-wrap: wrap;
-      padding: 8px 20px 0;
+      align-items: stretch;
+      padding: 10px 20px 0;
     }
-    .admin-nav a {
-      padding: 6px 12px;
-      border-radius: 8px;
-      color: #475569;
+    .nav-group {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px 4px;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--g) 7%, #ffffff);
+      border: 1px solid color-mix(in srgb, var(--g) 16%, #ffffff);
+    }
+    .nav-group-label {
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: var(--g);
+      padding: 0 8px 0 4px;
+      letter-spacing: 0.3px;
+    }
+    .nav-group a {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 9px;
+      color: #334155;
       text-decoration: none;
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       font-weight: 600;
+      transition: background .12s, color .12s;
     }
-    .admin-nav a:hover { background: #f1f5f9; color: #0f172a; }
-    .admin-nav a.active { background: var(--admin-accent); color: #fff; }
+    .nav-ico { font-size: 0.9em; }
+    .nav-group a:hover { background: color-mix(in srgb, var(--g) 15%, #ffffff); color: #0f172a; }
+    .nav-group a.active {
+      background: var(--g);
+      color: #fff;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--g) 40%, transparent);
+    }
 
     /* Toolbox category labels (generated from the block registry) */
     .tool-group-label {
@@ -1994,18 +2043,29 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
       align-items: center;
       gap: 8px;
       padding: 9px 16px;
-      background: #0a66c2;
+      background: var(--admin-accent, #f97316);
       color: white;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       font-weight: 600;
       font-size: 0.95rem;
       text-decoration: none;
       cursor: pointer;
+      box-shadow: 0 1px 3px color-mix(in srgb, var(--admin-accent, #f97316) 35%, transparent);
+      transition: filter .12s, transform .12s, box-shadow .12s;
     }
-    .btn:hover { background: #084d96; }
-    .btn.secondary { background: #64748b; }
-    .btn.secondary:hover { background: #475569; }
+    .btn:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--admin-accent, #f97316) 35%, transparent);
+    }
+    .btn.secondary {
+      background: #fff;
+      color: #334155;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+    .btn.secondary:hover { background: #f8fafc; color: #0f172a; }
 
     .modal {
       position: fixed;
@@ -2040,39 +2100,86 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
  * / theme / settings / SEO / integrations). The page builder is reached by
  * editing a page from the pages list.
  */
-const ADMIN_NAV_ITEMS = [
-  { key: 'dashboard', href: '/admin/dashboard', label: 'דשבורד' },
-  { key: 'pages', href: '/admin', label: 'דפים' },
-  { key: 'import', href: '/admin/import', label: 'ייבוא' },
-  { key: 'media', href: '/admin/media-library', label: 'מדיה' },
-  { key: 'storage', href: '/admin/storage', label: 'אחסון' },
-  { key: 'categories', href: '/admin/categories', label: 'קטגוריות' },
-  { key: 'menus', href: '/admin/menus', label: 'תפריטים' },
-  { key: 'sitemap', href: '/admin/sitemap', label: 'מפת אתר' },
-  { key: 'theme', href: '/admin/theme', label: 'ערכת נושא' },
-  { key: 'settings', href: '/admin/settings', label: 'הגדרות אתר' },
-  { key: 'site-chrome', href: '/admin/site-chrome', label: 'כותרת ותחתית' },
-  { key: 'seo', href: '/admin/seo', label: 'SEO' },
-  { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס' },
-  { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' },
-  // One AI front door (the copilot hub) + the extension/token setup. The paste
-  // flow (/admin/ai) and the dictionary/game (/admin/inject) are sub-tools
-  // reached from the hub — kept off the top nav to keep it coherent (v0.56).
-  { key: 'chat', href: '/admin/chat', label: 'AI ✨' },
-  { key: 'agent', href: '/admin/agent', label: 'גשר סוכן' }
+// Tools sorted into color-coded families instead of one flat pile — every
+// group carries its own hue, and each tool inherits the group identity in the
+// nav, the dashboard hub, and the per-section accent. ONLY real, shipped tools
+// appear here (the A++ teardown gap list lives in docs/ADMIN-TOOL-MAP.md, not
+// in the customer's face).
+const ADMIN_NAV_GROUPS = [
+  {
+    key: 'home', label: '', color: '#f97316',
+    items: [{ key: 'dashboard', href: '/admin/dashboard', label: 'דשבורד', icon: '🏠' }]
+  },
+  {
+    key: 'content', label: 'תוכן', color: '#2563eb', desc: 'הדפים של האתר — יצירה, ייבוא וסידור',
+    items: [
+      { key: 'pages', href: '/admin', label: 'דפים', icon: '📄' },
+      { key: 'import', href: '/admin/import', label: 'ייבוא', icon: '📥' },
+      { key: 'categories', href: '/admin/categories', label: 'קטגוריות', icon: '🗂️' }
+    ]
+  },
+  {
+    key: 'media', label: 'מדיה', color: '#0d9488', desc: 'תמונות, קבצים ומה שמאוחסן בשרת',
+    items: [
+      { key: 'media', href: '/admin/media-library', label: 'ספרייה', icon: '🖼️' },
+      { key: 'storage', href: '/admin/storage', label: 'אחסון', icon: '📦' }
+    ]
+  },
+  {
+    key: 'design', label: 'עיצוב', color: '#7c3aed', desc: 'איך האתר נראה — צבעים, ניווט ומסגרת',
+    items: [
+      { key: 'theme', href: '/admin/theme', label: 'ערכת נושא', icon: '🎨' },
+      { key: 'menus', href: '/admin/menus', label: 'תפריטים', icon: '🧭' },
+      { key: 'site-chrome', href: '/admin/site-chrome', label: 'כותרת ותחתית', icon: '🧱' }
+    ]
+  },
+  {
+    key: 'growth', label: 'קידום', color: '#059669', desc: 'להיראות בגוגל ולדעת מי נכנס',
+    items: [
+      { key: 'seo', href: '/admin/seo', label: 'SEO', icon: '🔍' },
+      { key: 'sitemap', href: '/admin/sitemap', label: 'מפת אתר', icon: '🗺️' },
+      { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס', icon: '📈' },
+      { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות', icon: '🔌' }
+    ]
+  },
+  {
+    // One AI front door (the copilot hub) + the extension/token setup. The paste
+    // flow (/admin/ai) and the dictionary/game (/admin/inject) are sub-tools
+    // reached from the hub — kept off the top nav to keep it coherent (v0.56).
+    key: 'ai', label: 'AI', color: '#c026d3', desc: 'העוזרים החכמים של טפוז',
+    items: [
+      { key: 'chat', href: '/admin/chat', label: 'קופיילוט', icon: '✨' },
+      { key: 'agent', href: '/admin/agent', label: 'גשר סוכן', icon: '🤖' }
+    ]
+  },
+  {
+    key: 'system', label: 'מערכת', color: '#475569', desc: 'הגדרות הבסיס של האתר',
+    items: [{ key: 'settings', href: '/admin/settings', label: 'הגדרות אתר', icon: '⚙️' }]
+  }
 ];
 
+// key -> group color, so every screen's accent is derived from its family
+// instead of hand-picked hexes drifting per route.
+const ADMIN_ACCENTS = {};
+for (const g of ADMIN_NAV_GROUPS) for (const it of g.items) ADMIN_ACCENTS[it.key] = g.color;
+const accentFor = key => ADMIN_ACCENTS[key] || '#f97316';
+
 function adminNav(active, sectionTitle, actionsHtml = '') {
-  const links = ADMIN_NAV_ITEMS.map(item =>
-    `<a href="${item.href}"${item.key === active ? ' class="active"' : ''}>${item.label}</a>`
-  ).join('');
+  const groups = ADMIN_NAV_GROUPS.map(g => {
+    const links = g.items.map(item =>
+      `<a href="${item.href}"${item.key === active ? ' class="active"' : ''}><span class="nav-ico">${item.icon}</span>${item.label}</a>`
+    ).join('');
+    const label = g.label ? `<span class="nav-group-label">${g.label}</span>` : '';
+    return `<div class="nav-group" style="--g:${g.color}">${label}${links}</div>`;
+  }).join('');
   return `
     <div class="topbar">
+      <div class="brand-strip"></div>
       <div class="container topbar-inner">
         <div style="display:flex;align-items:center;gap:12px">
-          <a href="/admin" style="font-size:1.6rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
-          <span style="color:#94a3b8">•</span>
-          <span style="font-weight:600">${sectionTitle}</span>
+          <a href="/admin/dashboard" class="brand-logo">🍊 Tapuz</a>
+          <span style="color:#cbd5e1">/</span>
+          <span class="section-title">${sectionTitle}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <a href="/" target="_blank" class="btn secondary" style="padding:7px 12px">צפה באתר</a>
@@ -2082,7 +2189,7 @@ function adminNav(active, sectionTitle, actionsHtml = '') {
           </form>
         </div>
       </div>
-      <div class="container admin-nav">${links}</div>
+      <div class="container admin-nav">${groups}</div>
     </div>`;
 }
 
@@ -2326,7 +2433,7 @@ app.get('/admin/setup', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html, 'התקנה ראשונית', '#f59e0b'));
+  res.send(layout(html, 'התקנה ראשונית', '#f97316'));
 });
 
 app.post('/admin/setup', (req, res) => {
@@ -2383,7 +2490,7 @@ app.get('/admin', (req, res) => {
       ${listHtml}
     </div>
   `;
-  res.send(layout(html));
+  res.send(layout(html, 'דפים', accentFor('pages')));
 });
 
 // ---- Block registry API (ask C: schema-generated builder UI) ----
@@ -2413,13 +2520,13 @@ app.get('/admin/dashboard', (req, res) => {
   } catch (e) { /* media table may not exist yet */ }
 
   const statCard = (num, label, color) => `
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;text-align:center">
-      <div style="font-size:2rem;font-weight:800;color:${color}">${num}</div>
-      <div style="color:#64748b;font-size:0.9rem;margin-top:4px">${label}</div>
+    <div class="stat-card" style="--c:${color}">
+      <div class="stat-num">${num}</div>
+      <div class="stat-label">${label}</div>
     </div>`;
 
   const recent = pages.slice(0, 5).map(p => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;background:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:6px;background:#fff">
       <div>
         <strong>${escapeAdmin(p.title)}</strong>
         <span style="font-size:0.75rem;color:#94a3b8;margin-inline-start:8px">${String(p.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
@@ -2427,38 +2534,91 @@ app.get('/admin/dashboard', (req, res) => {
       <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn" style="padding:6px 14px">ערוך</a>
     </div>`).join('') || '<p style="color:#64748b">אין דפים עדיין</p>';
 
+  // The tool families as a colorful hub — same data that drives the nav, so
+  // the dashboard can never advertise a tool that doesn't exist.
+  const hubCards = ADMIN_NAV_GROUPS.filter(g => g.key !== 'home').map(g => `
+    <div class="hub-card" style="--g:${g.color}">
+      <div class="hub-card-title">${g.label}</div>
+      <div class="hub-card-desc">${g.desc || ''}</div>
+      <div class="hub-card-links">
+        ${g.items.map(it => `<a href="${it.href}">${it.icon} ${it.label}</a>`).join('')}
+      </div>
+    </div>`).join('');
+
   const html = `
     ${adminNav('dashboard', 'דשבורד', '<a href="/admin/new" class="btn">+ דף חדש</a>')}
-    <div class="container" style="padding-top:28px;max-width:960px;padding-bottom:60px">
+    <style>
+      .stat-card {
+        background: linear-gradient(160deg, color-mix(in srgb, var(--c) 10%, #fff), #fff 60%);
+        border: 1px solid color-mix(in srgb, var(--c) 22%, #fff);
+        border-radius: 14px;
+        padding: 18px 20px;
+        text-align: center;
+      }
+      .stat-num { font-size: 2rem; font-weight: 800; color: var(--c); }
+      .stat-label { color: #64748b; font-size: 0.88rem; margin-top: 4px; }
+      .hub-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 14px;
+        margin-bottom: 30px;
+      }
+      .hub-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-top: 4px solid var(--g);
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        transition: box-shadow .15s, transform .15s;
+      }
+      .hub-card:hover { box-shadow: 0 8px 24px rgba(15, 23, 42, 0.09); transform: translateY(-2px); }
+      .hub-card-title { font-weight: 800; color: var(--g); font-size: 1.02rem; }
+      .hub-card-desc { color: #64748b; font-size: 0.82rem; margin: 4px 0 12px; }
+      .hub-card-links { display: flex; flex-wrap: wrap; gap: 6px; }
+      .hub-card-links a {
+        text-decoration: none;
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: #334155;
+        background: color-mix(in srgb, var(--g) 8%, #fff);
+        border: 1px solid color-mix(in srgb, var(--g) 18%, #fff);
+        border-radius: 999px;
+        padding: 5px 12px;
+        transition: background .12s, color .12s;
+      }
+      .hub-card-links a:hover { background: var(--g); color: #fff; }
+    </style>
+    <div class="container" style="padding-top:28px;max-width:1080px;padding-bottom:60px">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px">
-        ${statCard(pages.length, 'דפים', '#0a66c2')}
-        ${statCard(published, 'פורסמו', '#166534')}
-        ${statCard(drafts, 'טיוטות', '#b45309')}
+        ${statCard(pages.length, 'דפים', '#2563eb')}
+        ${statCard(published, 'פורסמו', '#059669')}
+        ${statCard(drafts, 'טיוטות', '#f97316')}
         ${statCard(pending, 'שינויים ממתינים לפרסום', '#7c3aed')}
-        ${statCard(mediaCount, 'קבצי מדיה', '#0f766e')}
+        ${statCard(mediaCount, 'קבצי מדיה', '#0d9488')}
       </div>
+      <h3 style="margin:0 0 12px">ארגז הכלים</h3>
+      <div class="hub-grid">${hubCards}</div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
         <section>
           <h3 style="margin-top:0">דפים אחרונים</h3>
           ${recent}
         </section>
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;height:fit-content">
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;height:fit-content">
           <h3 style="margin-top:0">קיצורי דרך</h3>
           <div style="display:flex;flex-direction:column;gap:8px">
             <a href="/admin/new" class="btn">+ דף חדש</a>
-            <a href="/admin/media-library" class="btn secondary">ספריית מדיה</a>
-            <a href="/admin/theme" class="btn secondary">ערכת נושא</a>
-            <a href="/admin/integrations" class="btn secondary">אינטגרציות (WhatsApp, מפות)</a>
-            <a href="/admin/seo" class="btn secondary">הגדרות SEO</a>
+            <a href="/admin/import" class="btn secondary">📥 ייבוא דף קיים</a>
+            <a href="/admin/chat" class="btn secondary">✨ לבנות עם AI</a>
             <form method="POST" action="/admin/build-redirect" style="margin:0">
-              <button type="submit" class="btn" style="background:#166534;width:100%">בנה את האתר</button>
+              <button type="submit" class="btn" style="background:#059669;width:100%">🚀 בנה את האתר</button>
             </form>
           </div>
         </section>
       </div>
     </div>
   `;
-  res.send(layout(html, 'דשבורד', '#0a66c2'));
+  res.send(layout(html, 'דשבורד', accentFor('dashboard')));
 });
 
 app.post('/admin/build-redirect', (req, res) => {
@@ -2596,7 +2756,7 @@ app.get('/admin/media-library', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html, 'ספריית מדיה', '#0f766e'));
+  res.send(layout(html, 'ספריית מדיה', accentFor('media')));
 });
 
 // ======================== STORAGE (your files on disk) ========================
@@ -2675,7 +2835,7 @@ app.get('/admin/storage', (req, res) => {
       <div class="stg-grid">${dataCards}</div>
     </div>
   `;
-  res.send(layout(html, 'אחסון', '#0f766e'));
+  res.send(layout(html, 'אחסון', accentFor('storage')));
 });
 
 // ======================== CATEGORIES (v0.64 — the taxonomy, on file storage) ==
@@ -2776,7 +2936,7 @@ app.get('/admin/categories', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html, 'קטגוריות', '#0f766e'));
+  res.send(layout(html, 'קטגוריות', accentFor('categories')));
 });
 
 // ======================== SITE SETTINGS ========================
@@ -2821,7 +2981,7 @@ app.get('/admin/settings', (req, res) => {
       });
     </script>
   `;
-  res.send(layout(html, 'הגדרות אתר', '#475569'));
+  res.send(layout(html, 'הגדרות אתר', accentFor('settings')));
 });
 
 app.post('/admin/api/settings', (req, res) => {
@@ -2879,7 +3039,7 @@ app.get('/admin/seo', (req, res) => {
       });
     </script>
   `;
-  res.send(layout(html, 'SEO', '#b45309'));
+  res.send(layout(html, 'SEO', accentFor('seo')));
 });
 
 app.get('/admin/api/seo', (req, res) => {
@@ -3009,7 +3169,7 @@ app.get('/admin/integrations', (req, res) => {
       });
     </script>
   `;
-  res.send(layout(html, 'אינטגרציות', '#25D366'));
+  res.send(layout(html, 'אינטגרציות', accentFor('integrations')));
 });
 
 app.get('/admin/api/integrations', (req, res) => {
@@ -3220,7 +3380,7 @@ app.get('/admin/analytics', (req, res) => {
         </p>
       </div>
     `;
-    res.send(layout(html, 'אנליטיקס', '#0d9488'));
+    res.send(layout(html, 'אנליטיקס', accentFor('analytics')));
   } catch (e) {
     res.status(500).send('שגיאה בטעינת אנליטיקס: ' + escapeAdmin(e.message));
   }
@@ -3428,7 +3588,7 @@ app.get('/admin/site-chrome', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html, 'כותרת ותחתית', '#7c3aed'));
+  res.send(layout(html, 'כותרת ותחתית', accentFor('site-chrome')));
 });
 
 app.get('/admin/api/site-chrome', (req, res) => {
@@ -4271,7 +4431,7 @@ app.get('/admin/new', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html));
+  res.send(layout(html, 'דף חדש', accentFor('pages')));
 });
 
 app.post('/admin/create', (req, res) => {
@@ -4334,9 +4494,10 @@ app.get('/admin/edit/:fullPath', (req, res) => {
 
   const html = `
     <div class="topbar">
+      <div class="brand-strip"></div>
       <div class="container topbar-inner">
         <div class="topbar-left">
-          <a href="/admin" style="font-weight:700;font-size:1.35rem;text-decoration:none;color:#0f172a">Tapuz</a>
+          <a href="/admin" class="brand-logo" style="font-size:1.35rem">🍊 Tapuz</a>
           <button type="button" id="btn-pages-nav" class="btn secondary" style="padding:6px 12px" title="ניווט דפים">☰ דפים</button>
           <input id="page-title" class="page-title" value="${safeTitle}" placeholder="כותרת הדף">
           <span id="publish-badge" style="font-size:0.8rem;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeFg}">${statusLabel}${badgeExtra}</span>
@@ -4666,7 +4827,7 @@ app.get('/admin/theme', (req, res) => {
     </div>
     <script src="/admin-theme.js"></script>
   `;
-  res.send(layout(html, 'ערכת נושא', '#059669'));
+  res.send(layout(html, 'ערכת נושא', accentFor('theme')));
 });
 
 // ======================== MENUS EDITOR ========================
@@ -4745,7 +4906,7 @@ app.get('/admin/sitemap', (req, res) => {
       <section class="sm-card"><h3>דפים שלא בתפריט</h3><ul class="sm-list" style="border:none;padding-inline-start:0">${orphanRows}</ul></section>
     </div>
   `;
-  res.send(layout(html, 'מפת אתר', '#ea580c'));
+  res.send(layout(html, 'מפת אתר', accentFor('sitemap')));
 });
 
 // ─── /admin/agent — pair the browser bridge (agent tokens) ──────────
@@ -4778,7 +4939,7 @@ app.get('/admin/agent', (req, res) => {
     </div>
     <script src="/admin-agent.js"></script>
   `;
-  res.send(layout(html, 'גשר סוכן', '#7c3aed'));
+  res.send(layout(html, 'גשר סוכן', accentFor('agent')));
 });
 
 // ─── Export-file importer (v0.69) — build straight from a vendor export ────
@@ -4877,7 +5038,7 @@ app.get('/admin/import', (req, res) => {
     })();
     </script>
   `;
-  res.send(layout(html, 'ייבוא', '#0891b2'));
+  res.send(layout(html, 'ייבוא', accentFor('import')));
 });
 
 // ─── /admin/ai — the paste flow (BYO AI subscription, zero keys) ────
@@ -4922,7 +5083,7 @@ app.get('/admin/ai', (req, res) => {
     </div>
     <script src="/admin-ai.js"></script>
   `;
-  res.send(layout(html, 'AI', '#0891b2'));
+  res.send(layout(html, 'AI', accentFor('chat')));
 });
 
 app.get('/admin/menus', (req, res) => {
@@ -4953,7 +5114,7 @@ app.get('/admin/menus', (req, res) => {
     </script>
     <script src="/admin-menus.js"></script>
   `;
-  res.send(layout(html, 'תפריטים', '#7c3aed'));
+  res.send(layout(html, 'תפריטים', accentFor('menus')));
 });
 
 // =========================================================================
@@ -5029,7 +5190,7 @@ app.get('/admin/inject', (req, res) => {
     </div>
     <script src="/admin-inject.js"></script>
   `;
-  res.send(layout(html, 'מילון · משחק', '#ea580c'));
+  res.send(layout(html, 'מילון · משחק', accentFor('chat')));
 });
 
 app.get('/admin/api/syntax-dictionary', (req, res) => {
@@ -5127,7 +5288,7 @@ app.get('/admin/chat', (req, res) => {
     </div>
     <script src="/admin-chat.js"></script>
   `;
-  res.send(layout(html, 'צ׳אט סוכן', '#7c3aed'));
+  res.send(layout(html, 'צ׳אט סוכן', accentFor('chat')));
 });
 
 app.get('/admin/api/mission/providers', (req, res) => {
