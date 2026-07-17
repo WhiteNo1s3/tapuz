@@ -1484,6 +1484,10 @@ app.get('/admin/dashboard', (req, res) => {
   try {
     mediaCount = require('./db').db.prepare('SELECT COUNT(*) AS c FROM media').get().c;
   } catch (e) { /* media table may not exist yet */ }
+  let unreadInbox = 0;
+  try {
+    unreadInbox = require('./forms').unreadCount();
+  } catch (e) { /* inbox table may not exist yet */ }
 
   const statCard = (num, label, color) => `
     <div class="stat-card" style="--c:${color}">
@@ -1562,6 +1566,7 @@ app.get('/admin/dashboard', (req, res) => {
         ${statCard(drafts, 'טיוטות', '#f97316')}
         ${statCard(pending, 'שינויים ממתינים לפרסום', '#7c3aed')}
         ${statCard(mediaCount, 'קבצי מדיה', '#0d9488')}
+        <a href="/admin/inbox" style="text-decoration:none">${statCard(unreadInbox, unreadInbox ? 'פניות חדשות 📬' : 'פניות חדשות', unreadInbox ? '#dc2626' : '#64748b')}</a>
       </div>
       <h3 style="margin:0 0 12px">ארגז הכלים</h3>
       <div class="hub-grid">${hubCards}</div>
