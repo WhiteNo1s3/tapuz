@@ -3246,13 +3246,19 @@ app.get('/admin/edit/:fullPath', (req, res) => {
 
   // Toolbox is GENERATED from the block registry (src/block-registry.js),
   // grouped by category — a new block type appears here automatically.
-  const toolboxHtml = blockRegistry.BLOCK_CATEGORIES.map(cat => {
+  // Categories fold closed (first one open) so the palette never drowns the
+  // canvas; a search field cuts across all of them.
+  const toolboxHtml = blockRegistry.BLOCK_CATEGORIES.map((cat, catIndex) => {
     const entries = blockRegistry.BLOCK_REGISTRY.filter(e => e.category === cat && !e.childrenOf);
     if (!entries.length) return '';
-    return `<div class="tool-group-label">${escapeAdmin(cat)}</div>` + entries.map(e => `
-          <button type="button" class="tool-btn" data-type="${escapeAdmin(e.type)}" title="${escapeAdmin(e.hintHe || e.labelHe)}">
-            <span class="tool-ico">${escapeAdmin(e.icon || '•')}</span><span class="tool-meta"><span class="tool-name">${escapeAdmin(e.labelHe)}</span><span class="tool-hint">${escapeAdmin(e.hintHe || '')}</span></span>
-          </button>`).join('');
+    const buttons = entries.map(e => `
+            <button type="button" class="tool-btn" data-type="${escapeAdmin(e.type)}" title="${escapeAdmin(e.hintHe || e.labelHe)}">
+              <span class="tool-ico">${escapeAdmin(e.icon || '•')}</span><span class="tool-meta"><span class="tool-name">${escapeAdmin(e.labelHe)}</span><span class="tool-hint">${escapeAdmin(e.hintHe || '')}</span></span>
+            </button>`).join('');
+    return `<details class="tool-cat" data-cat-i="${catIndex}"${catIndex === 0 ? ' open' : ''}>
+            <summary class="tool-cat-toggle"><span class="chev">▸</span><span class="tool-cat-title">${escapeAdmin(cat)}</span><span class="tool-cat-count">${entries.length}</span></summary>
+            <div class="tool-cat-body">${buttons}</div>
+          </details>`;
   }).join('');
 
   const html = `
@@ -3299,6 +3305,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           <button type="button" id="toolbox-handle" class="toolbox-handle" aria-label="פתח/סגור ארגז מודולים">🧰 מודולים <span class="th-arrow">▲</span></button>
           <h4>מודולים</h4>
           <div id="toolbox-mode" class="toolbox-mode">גרור לדף · בחר לעריכה בצד</div>
+          <input type="search" id="tool-search" class="tool-search" placeholder="🔎 חיפוש מודול..." autocomplete="off">
           ${toolboxHtml}
           <hr style="margin:12px 0">
           <button type="button" class="tool-btn tool-utility" onclick="TapuzBuilder.openMediaLibrary()">

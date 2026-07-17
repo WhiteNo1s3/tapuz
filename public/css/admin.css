@@ -449,6 +449,77 @@ body.builder-screen .save-bar {
   letter-spacing: 0.5px;
   margin: 12px 0 6px;
 }
+
+/* ---- folding tool categories (E) — closed by default, search cuts across.
+   Each family carries an accent aligned with the admin-nav color language. ---- */
+.tool-search {
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--r-sm);
+  background: #0b1220;
+  color: var(--bc-text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.tool-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.tool-search::placeholder { color: var(--bc-muted); }
+.tool-cat {
+  --cat: #7dd3fc;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+.tool-cat[data-cat-i="0"] { --cat: #2563eb; }  /* תוכן — content blue */
+.tool-cat[data-cat-i="1"] { --cat: #7c3aed; }  /* מבנה — structure violet */
+.tool-cat[data-cat-i="2"] { --cat: #0d9488; }  /* מדיה — media teal */
+.tool-cat[data-cat-i="3"] { --cat: #c026d3; }  /* אפקטים — effects magenta */
+.tool-cat[data-cat-i="4"] { --cat: #059669; }  /* שילובים — combos green */
+.tool-cat[open] {
+  border-color: color-mix(in srgb, var(--cat) 30%, transparent);
+  background: rgba(0, 0, 0, .18);
+}
+.tool-cat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: background var(--dur);
+}
+.tool-cat-toggle::-webkit-details-marker { display: none; }
+.tool-cat-toggle:hover { background: rgba(255, 255, 255, .05); }
+.tool-cat-toggle .chev {
+  width: 1rem;
+  text-align: center;
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--cat) 70%, #fff);
+  transition: transform var(--dur);
+}
+.tool-cat[open] .tool-cat-toggle .chev { transform: rotate(90deg); }
+.tool-cat-title {
+  flex: 1;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--cat) 55%, #fff);
+}
+.tool-cat-count {
+  font-size: 0.65rem;
+  color: var(--bc-muted);
+  background: #0b1220;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.tool-cat-body { padding: 2px 5px 6px; }
+.tool-cat .tool-btn .tool-ico { color: color-mix(in srgb, var(--cat) 65%, #fff); }
 .tool-btn {
   display: flex;
   align-items: center;

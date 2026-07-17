@@ -824,6 +824,7 @@
       builderEl.classList.toggle('page-ltr', pageDirection === 'ltr');
     }
     ensureUiExtras();
+    initToolSearch();
     renderCanvas();
     renderProperties();
     applyCanvasPageBg();
@@ -2201,6 +2202,39 @@
       var sel = hasSel ? getBlock(selectedId) : null;
       btn.classList.toggle('is-current', !!(sel && sel.type === t));
       btn.classList.toggle('is-replace-mode', hasSel);
+    });
+    // the selected block's family unfolds so its highlighted tool is visible
+    var cur = document.querySelector('.tool-btn.is-current');
+    if (cur) {
+      var cat = cur.closest('details.tool-cat');
+      if (cat) cat.open = true;
+    }
+  }
+
+  // ---- toolbox search: cuts across the folded categories ----
+  function initToolSearch() {
+    var search = document.getElementById('tool-search');
+    if (!search) return;
+    search.addEventListener('input', function () {
+      var q = search.value.trim().toLowerCase();
+      document.querySelectorAll('.tool-cat').forEach(function (cat, i) {
+        var any = false;
+        cat.querySelectorAll('.tool-btn[data-type]').forEach(function (btn) {
+          var hit = !q || btn.textContent.toLowerCase().indexOf(q) !== -1;
+          btn.style.display = hit ? '' : 'none';
+          if (hit) any = true;
+        });
+        cat.style.display = any ? '' : 'none';
+        if (q) cat.open = true;
+        else cat.open = i === 0; // restore the default fold
+      });
+    });
+    search.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && search.value) {
+        search.value = '';
+        search.dispatchEvent(new Event('input'));
+        e.stopPropagation();
+      }
     });
   }
 
