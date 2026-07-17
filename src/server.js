@@ -2276,6 +2276,23 @@ app.post('/admin/api/integrations', (req, res) => {
 // library. A ?days=7|30|90 range selector drives every aggregation. Also shows
 // the GA4 injection state and the (disabled) GA Data API read-back status.
 // =========================================================================
+// Analytics as spreadsheets (v0.87) — one table per dashboard card,
+// same Excel-proofed CSV core as the inbox export.
+app.get('/admin/analytics.csv', (req, res) => {
+  const { csvTable } = require('./csv');
+  const t = analytics.exportTable(String(req.query.what || 'daily'), req.query.days);
+  if (!t) {
+    return res.status(400).json({
+      ok: false, error: 'unknown table',
+      tables: ['daily', 'pages', 'referrers', 'devices', 'conversions']
+    });
+  }
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.type('text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="tapuz-analytics-${t.name}-${stamp}.csv"`);
+  res.send(csvTable(t.head, t.rows));
+});
+
 app.get('/admin/analytics', (req, res) => {
   try {
     const RANGES = [7, 30, 90];
@@ -2347,6 +2364,15 @@ app.get('/admin/analytics', (req, res) => {
       `<a href="/admin/analytics?days=${r}" class="btn ${r === days ? '' : 'secondary'}" style="padding:6px 14px">${r} ימים</a>`
     ).join('');
 
+    // ⬇ export row — every dashboard card as an Excel-ready CSV (v0.87)
+    const csvLink = (what, label) =>
+      `<a href="/admin/analytics.csv?what=${what}&days=${days}" style="color:#0891b2;text-decoration:none">${label}</a>`;
+    const exportRow =
+      `<div style="font-size:0.82rem;color:#64748b;margin-top:6px">⬇ ייצוא CSV: ` +
+      [csvLink('daily', 'לפי יום'), csvLink('pages', 'דפים'), csvLink('referrers', 'מקורות'),
+       csvLink('devices', 'מכשירים'), csvLink('conversions', 'המרות')].join(' · ') +
+      `</div>`;
+
     const card = 'background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px';
 
     // GA status strips
@@ -2364,6 +2390,7 @@ app.get('/admin/analytics', (req, res) => {
           <p style="color:#64748b;margin:0">סטטיסטיקות פרטיות שנאספות על-ידי Tapuz — ללא צד שלישי, ללא שמירת כתובות IP.</p>
           <div style="display:flex;gap:6px">${rangeTabs}</div>
         </div>
+        ${exportRow}
         ${ga4Strip}${fpStrip}
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:18px 0">

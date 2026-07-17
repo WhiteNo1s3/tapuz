@@ -57,6 +57,27 @@ check(Math.abs(conv.rate - 3 / 12) < 1e-9, 'overall rate = total submissions / t
 // dashboardData carries it
 check(typeof analytics.dashboardData(30).conversions === 'object', 'dashboardData exposes conversions');
 
+// ── CSV export (v0.87) — every dashboard card leaves as a spreadsheet ──
+const { csvTable } = require('../src/csv');
+const daily = analytics.exportTable('daily', 30);
+check(daily && daily.head.join() === 'day,views,visitors' && daily.rows.length === 30,
+  'daily table: one row per calendar day, gap-filled');
+const pages = analytics.exportTable('pages', 30);
+check(pages && pages.rows.some((r) => r[0] === 'צור-קשר' && r[1] === 8),
+  'pages table: decoded slugs with view counts');
+const convT = analytics.exportTable('conversions', 30);
+check(convT && convT.head.join() === 'page,views,submissions,rate_percent' &&
+  convT.rows.some((r) => r[0] === 'צור-קשר' && r[2] === 2 && r[3] === 25),
+  'conversions table: rate as a percent number (25 for 2/8)');
+check(convT.rows.some((r) => r[0] === '(דף הבית)' && r[3] === ''),
+  'zero-view page exports an empty rate, not NaN');
+check(analytics.exportTable('nope', 30) === null, 'unknown table name → null (route 400s)');
+const sheet = csvTable(convT.head, convT.rows);
+check(sheet.charCodeAt(0) === 0xfeff && sheet.includes('\r\n') && sheet.includes('"צור-קשר"'),
+  'csvTable output is Excel-ready (BOM, CRLF, quoted Hebrew)');
+check(require('../src/csv').cell('=SUM(A1)') === '"\'=SUM(A1)"',
+  'shared cell() keeps the formula-injection guard');
+
 try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) {}
 
 console.log('');

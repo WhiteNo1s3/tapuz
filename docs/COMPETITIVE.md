@@ -13,7 +13,7 @@ module/feature hunt. Update it every version batch.
 | **AI authoring without an API key** | BYOT: hand any chat the BenTML dictionary once, paste replies; extension injects/publishes; forgiving repair pipeline; **lite pack fits FREE chat plans** (v0.86) | plugins, each wanting a paid key | none native | walled-garden AI, their key, their meter |
 | **A page language an LLM writes correctly first try** | BenTML — one way per construct, errors carry the literal fix, cheatsheet = the whole language on one screen | shortcode/Gutenberg JSON soup | Twig/templates — dev territory | no exposed language at all |
 | **Visual builder ⇄ code, live both ways** | the canvas and the BenTML source are one page — drag rewrites code, typing recompiles the canvas, click syncs selection | Gutenberg hides its JSON | none | none |
-| **Analytics out of the box** | first-party, private (no IP stored, daily-salted visitor hash), plus **form-conversion tracking per page** | none — needs Jetpack/plugins + usually GA | none native | basic hit counters |
+| **Analytics out of the box** | first-party, private (no IP stored, daily-salted visitor hash), **form-conversion tracking per page**, every card exports as CSV (v0.87) | none — needs Jetpack/plugins + usually GA | none native | basic hit counters |
 | **Leads land in the CMS** | forms inbox (תיבת פניות) with honeypot + rate-limit, dashboard tile, **one-click Excel-ready CSV export** (v0.87 — BOM for Hebrew, formula-injection guarded) | Contact Form 7 + a storage plugin | webform modules | yes — their strongest suit |
 | **Hebrew/RTL first-class** | RTL-first renderer, Hebrew slugs, logical CSS everywhere | RTL as an afterthought | partial | localized but generic |
 | **Zero-JS published pages** | tabs/accordion/carousel/table/ticker all CSS-only; JS only for opt-in analytics | plugin JS soup | theme-dependent | heavy runtime |
@@ -38,11 +38,12 @@ module/feature hunt. Update it every version batch.
    client-side index (lunr-style, build-time) fits the zero-runtime model.
 5. **Multilingual** — Hebrew-first is the moat, but he↔en paired pages would
    beat WPML's complexity with a fraction of the surface.
-6. **CSV export for analytics** — the inbox side shipped in v0.87
-   (`/admin/inbox.csv`); the analytics screens (views, conversions) still
-   only render in the browser.
-7. **Module hunt continues** — timeline, steps, pricing-table sugar
+6. **Module hunt continues** — timeline, steps, pricing-table sugar
    (CODE stays reserved; INPUT stays a FIELD child).
+
+(~~CSV export~~ — shipped whole in v0.87: `/admin/inbox.csv` +
+`/admin/analytics.csv?what=daily|pages|referrers|devices|conversions`,
+one shared Excel-proofed core in `src/csv.js`.)
 
 ## Rules of engagement
 
