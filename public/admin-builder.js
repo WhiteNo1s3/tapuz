@@ -440,6 +440,29 @@
     var statusEl = document.getElementById('page-status');
     if (statusEl) statusEl.addEventListener('change', markDirty);
 
+    // responsive drawers: toolbox bottom sheet + settings slide-over
+    var toolboxHandle = document.getElementById('toolbox-handle');
+    if (toolboxHandle) {
+      toolboxHandle.addEventListener('click', function () {
+        document.body.classList.toggle('toolbox-open');
+      });
+    }
+    var propsClose = document.getElementById('props-close');
+    if (propsClose) {
+      propsClose.addEventListener('click', function () {
+        document.body.classList.remove('props-open');
+      });
+    }
+    var pagePropsBtn = document.getElementById('btn-page-props');
+    if (pagePropsBtn) {
+      pagePropsBtn.addEventListener('click', function () {
+        selectedId = null;
+        renderCanvas();
+        renderProperties();
+        document.body.classList.add('props-open');
+      });
+    }
+
     window.addEventListener('beforeunload', function (e) {
       if (!isDirty) return;
       e.preventDefault();
@@ -1919,6 +1942,8 @@
         e.dataTransfer.effectAllowed = 'copy';
         btn.classList.add('dragging-tool');
         document.body.classList.add('is-dragging');
+        // bottom-sheet toolbox must not cover the canvas while dragging onto it
+        document.body.classList.remove('toolbox-open');
       });
       btn.addEventListener('dragend', function () {
         btn.classList.remove('dragging-tool');
@@ -1941,6 +1966,9 @@
     if (!opts.skipCanvas) renderCanvas();
     if (!opts.skipProps) renderProperties();
     syncToolboxMode();
+    // narrow viewports: the settings panel is a slide-over drawer —
+    // selecting a block opens it, deselecting closes it (no-op on wide)
+    document.body.classList.toggle('props-open', !!id);
   }
 
   /** Live-update canvas text from side panel without destroying the tree. */
@@ -3762,6 +3790,16 @@
     ) {
       e.preventDefault();
       deleteBlock(selectedId);
+    }
+    if (e.key === 'Escape') {
+      // responsive drawers close first; then selection clears
+      if (document.body.classList.contains('toolbox-open')) {
+        document.body.classList.remove('toolbox-open');
+      } else if (document.body.classList.contains('props-open')) {
+        document.body.classList.remove('props-open');
+      } else if (selectedId && !inField) {
+        selectBlock(null);
+      }
     }
   });
 

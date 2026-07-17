@@ -3296,6 +3296,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
 
       <div class="builder live-page mode-page page-${pageDirection}">
         <aside class="toolbox" aria-label="ארגז מודולים">
+          <button type="button" id="toolbox-handle" class="toolbox-handle" aria-label="פתח/סגור ארגז מודולים">🧰 מודולים <span class="th-arrow">▲</span></button>
           <h4>מודולים</h4>
           <div id="toolbox-mode" class="toolbox-mode">גרור לדף · בחר לעריכה בצד</div>
           ${toolboxHtml}
@@ -3315,6 +3316,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           <div class="canvas-header">
             <span>דף חי · טיוטה</span>
             <span id="block-count">${(draft || []).length} מודולים</span>
+            <button type="button" id="btn-page-props" class="page-props-btn">⚙ הגדרות דף</button>
             <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>
@@ -3331,7 +3333,10 @@ app.get('/admin/edit/:fullPath', (req, res) => {
         </div>
 
         <aside class="properties" aria-label="הגדרות מודול">
-          <h4>הגדרות</h4>
+          <div class="props-head-row">
+            <h4>הגדרות</h4>
+            <button type="button" id="props-close" class="props-close" aria-label="סגור הגדרות">✕</button>
+          </div>
           <div id="properties-panel">
             <div class="props-empty">
               בחרו מודול בדף · ההגדרות יופיעו כאן<br>

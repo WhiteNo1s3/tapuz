@@ -1488,3 +1488,126 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
   text-align: center;
   color: #475569;
 }
+
+/* ==========================================================================
+   Responsive builder — the canvas always wins.
+   ≥1101px: three columns (unchanged).
+   ≤1100px: settings panel becomes a slide-over drawer; two columns remain.
+   ≤760px:  vertical building — toolbox becomes a bottom sheet, one column.
+   ========================================================================== */
+.toolbox-handle,
+.props-close,
+.page-props-btn { display: none; }
+
+@media (max-width: 1100px) {
+  .builder, .builder.page-ltr { grid-template-columns: 200px 1fr; }
+  .builder.page-rtl { grid-template-columns: 1fr 200px; }
+  .builder.mode-source { grid-template-columns: 1fr; }
+
+  /* settings drawer: slides in from the side it used to live on */
+  .properties {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: min(340px, 92vw);
+    height: auto;
+    max-height: none;
+    overflow-y: auto;
+    border-radius: 0;
+    z-index: 500;
+    box-shadow: 0 0 60px rgba(0, 0, 0, .5);
+    transition: transform var(--dur-slow) ease;
+  }
+  .builder.page-ltr .properties { left: 0; right: auto; transform: translateX(-105%); }
+  .builder.page-rtl .properties { right: 0; left: auto; transform: translateX(105%); }
+  body.props-open .builder .properties { transform: translateX(0); }
+
+  .props-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--bc-border);
+    background: var(--bc-panel-2);
+    color: var(--bc-text);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .props-close:hover { border-color: var(--danger); color: #fca5a5; }
+  .page-props-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--bc-border);
+    background: var(--bc-panel-2);
+    color: var(--bc-text);
+    border-radius: 999px;
+    padding: 3px 10px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+}
+.props-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.props-head-row h4 { margin: 0; }
+.properties .props-head-row { margin-bottom: 14px; }
+
+@media (max-width: 760px) {
+  .builder, .builder.page-ltr, .builder.page-rtl { grid-template-columns: 1fr; }
+
+  /* toolbox: bottom sheet — collapsed to its handle, canvas stays king */
+  .toolbox {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 450;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    border-bottom: none;
+    max-height: 54vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateY(calc(100% - 48px));
+    transition: transform var(--dur-slow) var(--pop);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, .45);
+    padding-top: 0;
+  }
+  body.toolbox-open .toolbox { transform: translateY(0); }
+
+  .toolbox-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: calc(100% + 28px);
+    margin: 0 -14px 10px;
+    padding: 13px 14px;
+    border: none;
+    border-bottom: 1px solid var(--bc-border);
+    background: transparent;
+    color: var(--bc-text);
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    position: sticky;
+    top: 0;
+    background: var(--bc-panel);
+    z-index: 2;
+  }
+  .toolbox-handle .th-arrow { transition: transform var(--dur-slow); }
+  body.toolbox-open .toolbox-handle .th-arrow { transform: rotate(180deg); }
+
+  /* the fixed save-bar would collide with the bottom sheet; topbar keeps
+     the same actions on small screens */
+  .save-bar { display: none; }
+  .builder { padding-bottom: 70px; }
+}
