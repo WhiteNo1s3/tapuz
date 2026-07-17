@@ -251,6 +251,52 @@ function conversions(days = 30) {
   return { total, rate: totalViews ? total / totalViews : null, pages };
 }
 
+/**
+ * CSV export tables (v0.87) — data leaves when the owner asks. Each named
+ * table mirrors one dashboard card; src/csv.js does the Excel-proofing.
+ * @returns {{ name: string, head: string[], rows: Array<Array<unknown>> } | null}
+ */
+function exportTable(what, days = 30) {
+  const d = clampDays(days);
+  switch (what) {
+    case 'daily':
+      return {
+        name: 'daily',
+        head: ['day', 'views', 'visitors'],
+        rows: pageviewsByDay(d).map((r) => [r.day, r.views, r.visitors])
+      };
+    case 'pages':
+      return {
+        name: 'pages',
+        head: ['page', 'views'],
+        rows: topPages(d, 100).map((p) => [normalizePagePath(p.path) || '(דף הבית)', p.views])
+      };
+    case 'referrers':
+      return {
+        name: 'referrers',
+        head: ['referrer', 'views'],
+        rows: topReferrers(d, 100).map((r) => [r.host, r.views])
+      };
+    case 'devices':
+      return {
+        name: 'devices',
+        head: ['device', 'views'],
+        rows: deviceBreakdown(d).map((r) => [r.device, r.views])
+      };
+    case 'conversions':
+      return {
+        name: 'conversions',
+        head: ['page', 'views', 'submissions', 'rate_percent'],
+        rows: conversions(d).pages.map((c) => [
+          c.page, c.views, c.submissions,
+          c.rate != null ? +(c.rate * 100).toFixed(2) : ''
+        ])
+      };
+    default:
+      return null;
+  }
+}
+
 function dashboardData(days = 30) {
   const d = clampDays(days);
   return {
@@ -274,6 +320,7 @@ module.exports = {
   getDailySalt,
   // dashboard
   dashboardData,
+  exportTable,
   totals,
   pageviewsByDay,
   topPages,
