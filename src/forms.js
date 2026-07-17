@@ -79,6 +79,47 @@ function unreadCount() {
   return db.prepare('SELECT COUNT(*) AS c FROM form_submissions WHERE is_read = 0').get().c;
 }
 
+/** Every submission, newest first — the export path (no page cap). */
+function allSubmissions() {
+  return db.prepare('SELECT * FROM form_submissions ORDER BY id DESC').all().map(hydrate);
+}
+
+/**
+ * CSV export (v0.87) — the inbox as a spreadsheet, the SMB lead workflow.
+ * Columns: fixed head + the union of field names in first-seen order, so
+ * different forms on different pages land in one coherent sheet.
+ * Excel-proofed: UTF-8 BOM (Hebrew), CRLF, all values quoted, and cells that
+ * start with =/+/-/@ get a leading ' so a hostile submission can never become
+ * a formula on the site owner's machine (CSV injection).
+ */
+const BOM = String.fromCharCode(0xfeff); // Excel needs it to read Hebrew as UTF-8
+
+function toCsv(items) {
+  const fieldCols = [];
+  for (const s of items) {
+    for (const k of Object.keys(s.fields)) {
+      if (!fieldCols.includes(k)) fieldCols.push(k);
+    }
+  }
+  const cell = (v) => {
+    let s = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  };
+  const head = ['id', 'created_at', 'page', 'read', ...fieldCols];
+  const lines = [head.map(cell).join(',')];
+  for (const s of items) {
+    lines.push([
+      s.id,
+      s.created_at || '',
+      s.page || '',
+      s.is_read ? 1 : 0,
+      ...fieldCols.map((k) => (k in s.fields ? s.fields[k] : ''))
+    ].map(cell).join(','));
+  }
+  return BOM + lines.join('\r\n') + '\r\n';
+}
+
 function hydrate(row) {
   let fields = {};
   try { fields = JSON.parse(row.fields || '{}'); } catch (e) {}
@@ -88,8 +129,10 @@ function hydrate(row) {
 module.exports = {
   saveSubmission,
   listSubmissions,
+  allSubmissions,
   getSubmission,
   markRead,
   deleteSubmission,
-  unreadCount
+  unreadCount,
+  toCsv
 };

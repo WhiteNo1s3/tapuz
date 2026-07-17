@@ -1427,8 +1427,9 @@ app.get('/admin/inbox', (req, res) => {
   const html = `
     ${adminNav('inbox', 'תיבת פניות')}
     <div class="container" style="padding-top:30px;max-width:860px;padding-bottom:60px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px">
         <p style="color:#64748b;margin:0">כל שליחת טופס מהאתר נוחתת כאן. ${unread ? `<strong style="color:#1d4ed8">${unread} חדשות</strong>` : 'אין חדשות'}.</p>
+        ${items.length ? '<a class="btn secondary" href="/admin/inbox.csv" style="padding:7px 14px;white-space:nowrap;text-decoration:none">⬇ ייצוא CSV</a>' : ''}
       </div>
       ${rows}
     </div>
@@ -1448,6 +1449,15 @@ app.get('/admin/inbox', (req, res) => {
     </script>
   `;
   res.send(layout(html, 'תיבת פניות', accentFor('inbox')));
+});
+
+// The inbox as a spreadsheet (v0.87) — Excel-ready UTF-8 (BOM, Hebrew-safe).
+app.get('/admin/inbox.csv', (req, res) => {
+  const forms = require('./forms');
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.type('text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="tapuz-inbox-${stamp}.csv"`);
+  res.send(forms.toCsv(forms.allSubmissions()));
 });
 
 app.post('/admin/inbox/read', (req, res) => {
