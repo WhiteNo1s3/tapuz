@@ -3549,9 +3549,30 @@ app.post('/admin/api/menus/:name', (req, res) => {
 });
 
 app.get('/admin/new', (req, res) => {
+  // Starter templates (v0.93) — pick a layout instead of a blank page.
+  const templates = require('./templates').listTemplates();
+  const templateCards = templates.map((t, i) =>
+    `<label class="tpl-card">
+       <input type="radio" name="template" value="${t.key}"${i === 0 ? ' checked' : ''}>
+       <span class="tpl-ico">${t.icon}</span>
+       <span class="tpl-name">${t.name}</span>
+       <span class="tpl-desc">${t.desc}</span>
+     </label>`
+  ).join('');
   const html = `
     ${adminNav('pages', 'דף חדש')}
-    <div class="container" style="max-width:520px;padding-top:40px">
+    <style>
+      .tpl-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px }
+      .tpl-card { position:relative;display:flex;flex-direction:column;gap:4px;background:#fff;border:2px solid #e2e8f0;
+        border-radius:12px;padding:12px;cursor:pointer;transition:border-color .12s }
+      .tpl-card:hover { border-color:#94a3b8 }
+      .tpl-card input { position:absolute;opacity:0;pointer-events:none }
+      .tpl-card:has(input:checked) { border-color:var(--admin-accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--admin-accent) 18%, transparent) }
+      .tpl-ico { font-size:1.4rem }
+      .tpl-name { font-weight:700;font-size:.92rem }
+      .tpl-desc { font-size:.75rem;color:#64748b;line-height:1.45 }
+    </style>
+    <div class="container" style="max-width:640px;padding-top:40px">
       <h2 style="margin-bottom:20px">דף חדש</h2>
       <form method="POST" action="/admin/create">
         <div style="margin-bottom:14px">
@@ -3563,6 +3584,8 @@ app.get('/admin/new', (req, res) => {
           <input id="np-slug" name="slug" placeholder="נוצר אוטומטית מהכותרת" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
           <div style="font-size:0.8rem;color:#64748b;margin-top:4px">נוצר אוטומטית מהכותרת — אפשר לשנות, לא חובה להבין ב-slug</div>
         </div>
+        <label style="display:block;margin-bottom:8px;font-weight:600">מתחילים מ…</label>
+        <div class="tpl-grid">${templateCards}</div>
         <button type="submit" class="btn">צור דף והתחל לערוך</button>
       </form>
 
@@ -3647,9 +3670,9 @@ app.post('/admin/create', (req, res) => {
     title,
     slug: candidate,
     direction: 'rtl',
-    blocks: [
-      { type: 'hero', id: 'h_' + Date.now(), data: { title, subtitle: '' } }
-    ]
+    // starter templates (v0.93) — unknown/missing key falls back to 'basic',
+    // which is exactly the old single-hero seed (behavior preserved)
+    blocks: require('./templates').templateBlocks(req.body.template, title)
   });
   res.redirect('/admin/edit/' + encodeURIComponent(result.full_path));
 });
