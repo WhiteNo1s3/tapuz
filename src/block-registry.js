@@ -839,6 +839,38 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'table',
+    keyword: 'TABLE',
+    labelHe: 'טבלה',
+    icon: '📋',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'שעות פתיחה, מחירון, לו"ז — שורות מופרדות ב-| (ללא JS)',
+    params: [
+      {
+        name: 'header', bentmlParam: 'header', labelHe: 'שורה ראשונה = כותרת', type: 'boolean',
+        default: true
+      },
+      {
+        name: 'rows', bentmlParam: null, labelHe: 'שורות', type: 'list',
+        itemFields: [
+          { name: 'cells', labelHe: 'תאים (מופרדים ב-|)', type: 'string', required: true }
+        ],
+        hint: 'ב-BenTML: צאצאי TROW — הגוף הוא השורה: TROW { יום | שעות }'
+      }
+    ],
+    textField: null,
+    seed: {
+      header: true,
+      rows: [
+        { cells: 'יום | שעות' },
+        { cells: 'ראשון–חמישי | 9:00–17:00' },
+        { cells: 'שישי | 9:00–13:00' }
+      ]
+    }
+  },
+  {
     type: 'tabs',
     keyword: 'TABS',
     labelHe: 'טאבים',

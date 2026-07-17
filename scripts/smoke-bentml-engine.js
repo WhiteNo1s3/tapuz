@@ -148,6 +148,7 @@ const VOCAB_DATA = {
   newspop: { label: 'מבזקים', items: [{ time: '12:00', text: 'עדכון', href: '/u' }] },
   video: { src: '/uploads/clip.mp4', controls: true },
   audio: { src: '/uploads/episode.mp3', caption: 'פרק 1', loop: false },
+  table: { header: true, rows: [{ cells: 'יום | שעות' }, { cells: 'ראשון | 9:00–17:00' }] },
   category: { slug: 'ספורט', limit: 6, showheader: true }
 };
 

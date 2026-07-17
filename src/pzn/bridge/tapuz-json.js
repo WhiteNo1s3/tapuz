@@ -308,6 +308,13 @@ function blockToModule(block) {
     case 'audio':
       return createModule('audio', baseOpts(block, pickProps(data, ['src', 'caption', 'loop'])));
 
+    case 'table': {
+      const children = (data.rows || []).map((r) =>
+        createModule('trow', { text: typeof r === 'string' ? r : (r && r.cells) || '' })
+      );
+      return createModule('table', baseOpts(block, pickProps(data, ['header']), { children }));
+    }
+
     case 'category':
       return createModule('category', baseOpts(block, pickProps(data, ['slug', 'limit', 'showheader'])));
 
@@ -622,6 +629,14 @@ function moduleToBlock(node) {
 
     case 'audio':
       return finishBlock(node, 'audio', pickData(props, ['src', 'caption', 'loop']));
+
+    case 'table': {
+      const data = pickData(props, ['header']);
+      data.rows = (node.children || [])
+        .filter((c) => c.name === 'trow')
+        .map((c) => ({ cells: c.text || '' }));
+      return finishBlock(node, 'table', data);
+    }
 
     case 'category':
       return finishBlock(node, 'category', pickData(props, ['slug', 'limit', 'showheader']));

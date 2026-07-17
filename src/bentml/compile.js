@@ -525,6 +525,19 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('video', data);
     }
+    case 'TABLE': {
+      const rows = (node.children || [])
+        .filter((c) => c.name === 'TROW')
+        .map((c) => ({ cells: collapseSingleParagraph(c.text || '') }));
+      const data = {
+        rows: rows.length
+          ? rows
+          : [{ cells: 'יום | שעות' }, { cells: 'ראשון–חמישי | 9:00–17:00' }]
+      };
+      if (p.header === false || p.header === 'false') data.header = false;
+      applyChrome(data, p);
+      return createBlock('table', data);
+    }
     case 'AUDIO': {
       const data = { src: p.src || '' };
       if (p.caption) data.caption = p.caption;
@@ -552,6 +565,7 @@ function buildBlock(node, warnings) {
     case 'FIELD':
     case 'MEDIACARD':
     case 'SLIDE':
+    case 'TROW':
     case 'NAVITEM':
     case 'TICKERITEM':
     case 'NEWSPOPITEM':
