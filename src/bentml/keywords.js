@@ -118,6 +118,13 @@ const KEYWORDS = {
     body: 'BLOCK-BODY',
     jsonType: 'card'
   },
+  SECTION: {
+    body: 'BLOCK-BODY',
+    jsonType: 'section',
+    params: {
+      size: { type: 'enum', values: ['sm', 'md', 'lg', 'xl'] }
+    }
+  },
   HERO: {
     body: 'BLOCK-BODY',
     jsonType: 'hero',
@@ -392,10 +399,11 @@ const KEYWORDS = {
 };
 
 const RESERVED = new Set([
-  // FORM graduated v0.58, NAV graduated v0.60, VIDEO graduated v0.62. INPUT
-  // stays a placeholder — form fields are the child `field` module (nav links
-  // = child `navitem`). AUDIO is the natural next media graduation.
-  'SECTION', 'INPUT', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
+  // FORM graduated v0.58, NAV graduated v0.60, VIDEO graduated v0.62,
+  // SECTION graduated v0.75 (container-as-tool). INPUT stays a placeholder —
+  // form fields are the child `field` module (nav links = child `navitem`).
+  // AUDIO is the natural next media graduation.
+  'INPUT', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
   'AUDIO', 'SLIDER'
 ]);
 

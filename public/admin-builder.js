@@ -3378,15 +3378,33 @@
     renderProperties();
   }
 
+  /** Delete = soft erase (Ben's modularity law): the tool goes, the shape
+   *  stays. A deleted module becomes an empty מיכל (section) holding its
+   *  place; deleting the empty מיכל removes it for real. Pure-space types
+   *  (spacer/divider) and empty containers skip straight to removal. */
   function deleteBlock(id) {
-    if (!findNode(id)) return;
+    var node = findNode(id);
+    if (!node) return;
     pushHistory();
-    removeNode(id);
-    if (selectedId === id) selectedId = null;
+    var kids = (node.data && (node.data.blocks || node.data.columns)) || [];
+    var pureSpace = node.type === 'spacer' || node.type === 'divider';
+    var emptyContainer = isBlocksContainer(node.type) && !kids.length;
+    var soft = !pureSpace && !emptyContainer;
+    if (soft) {
+      node.type = 'section';
+      node.data = { blocks: [], size: 'md' };
+    } else {
+      removeNode(id);
+      if (selectedId === id) selectedId = null;
+    }
     renderCanvas();
     renderProperties();
     syncToolboxMode();
-    showToast('המודול נמחק', null, { label: '↩ בטל', onClick: undo });
+    showToast(
+      soft ? 'המודול פונה — המיכל נשאר לשמור מקום' : 'המודול נמחק',
+      null,
+      { label: '↩ בטל', onClick: undo }
+    );
   }
 
   /** Graduation (v0.51): convert a provisional bent-html block's raw HTML into

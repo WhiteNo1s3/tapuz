@@ -216,6 +216,15 @@ function renderBlock(block, direction = 'rtl') {
       const inner = (block.data.blocks || []).map(b => renderBlock(b, direction)).join('');
       return `<div class="card bent-card"${extra} dir="${direction}">${inner}</div>`;
     }
+    case 'section': {
+      // container-as-tool (v0.75): legitimate empty — publishes as reserved
+      // blank space to be filled in a future release
+      const d = block.data || {};
+      const inner = (d.blocks || []).map(b => renderBlock(b, direction)).join('');
+      const size = ['sm', 'md', 'lg', 'xl'].includes(d.size) ? d.size : 'md';
+      const empty = inner ? '' : ` is-empty size-${size}`;
+      return `<section class="bent-section tz-section${empty}"${extra} dir="${direction}">${inner}</section>`;
+    }
     case 'hero': {
       const d = block.data || {};
       const title = renderInlineMarks(d.title || '');

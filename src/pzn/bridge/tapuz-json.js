@@ -163,6 +163,11 @@ function blockToModule(block) {
         children: (data.blocks || []).map(blockToModule).filter(Boolean)
       }));
 
+    case 'section':
+      return createModule('section', baseOpts(block, pickProps(data, ['size']), {
+        children: (data.blocks || []).map(blockToModule).filter(Boolean)
+      }));
+
     case 'map':
       return createModule('map', baseOpts(block, pickProps(data, ['address', 'zoom', 'height'])));
 
@@ -618,10 +623,12 @@ function moduleToBlock(node) {
           /* fall through */
         }
       }
-      // generic section authored in .pzn — closest Tapuz shape is a card
-      return finishBlock(node, 'card', {
-        blocks: (node.children || []).map(moduleToBlock).filter(Boolean)
-      });
+      // first-class section (v0.75 container-as-tool): size + children.
+      // Generic sections authored in .pzn land here too — they ARE sections
+      // now (pre-v0.75 they degraded to a card).
+      const data = pickData(props, ['size']);
+      data.blocks = (node.children || []).map(moduleToBlock).filter(Boolean);
+      return finishBlock(node, 'section', data);
     }
 
     case 'html':

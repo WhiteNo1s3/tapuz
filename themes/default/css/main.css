@@ -1035,3 +1035,13 @@ a.bent-newspop-text:hover { text-decoration: underline; }
   .motion-slide .motion-text-inner,
   .motion-typewriter .motion-text-inner { animation: none; width: auto; border-inline-end: 0; }
 }
+
+/* ── section (מיכל) — container-as-tool, v0.75 ──
+   A section with content flows naturally; an EMPTY section is legitimate —
+   it publishes as reserved blank space waiting for a future release. */
+.tz-section { min-width: 0; }
+.tz-section.is-empty { display: block; }
+.tz-section.is-empty.size-sm { min-height: 2.5rem; }
+.tz-section.is-empty.size-md { min-height: 6rem; }
+.tz-section.is-empty.size-lg { min-height: 12rem; }
+.tz-section.is-empty.size-xl { min-height: 20rem; }
