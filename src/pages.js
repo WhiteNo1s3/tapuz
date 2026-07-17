@@ -227,7 +227,7 @@ function getPageByFullPath(full_path) {
 
 function listPages({ q, status } = {}) {
   let sql = `
-    SELECT id, full_path, title, status, direction, theme, updated_at,
+    SELECT id, full_path, title, status, direction, theme, updated_at, meta,
            CASE WHEN draft_blocks IS NOT NULL AND draft_blocks != blocks THEN 1 ELSE 0 END AS has_unpublished
     FROM pages
   `;

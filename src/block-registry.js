@@ -214,7 +214,10 @@ const BLOCK_REGISTRY = [
         default: 'primary',
         hint: 'ראשי / משני / מתאר (ghost ב-BenTML)'
       },
-      ALIGN_PARAM
+      ALIGN_PARAM,
+      { name: 'rel', labelHe: 'יחס קישור (rel)', type: 'string', default: '', hint: 'nofollow / sponsored / ugc — לבקרת קישורים ו-SEO' },
+      { name: 'target', labelHe: 'פתיחה', type: 'enum', enum: ['_self', '_blank'], default: '_self', hint: '_blank = חלון חדש (מקבל noopener אוטומטית)' },
+      { name: 'title', labelHe: 'כותרת קישור (SEO)', type: 'string', default: '' }
     ],
     textField: 'text',
     textFieldLabelHe: 'טקסט הכפתור',
@@ -384,6 +387,7 @@ const BLOCK_REGISTRY = [
         name: 'alt', labelHe: 'טקסט חלופי (Alt)', type: 'string', default: '',
         hint: 'חשוב לנגישות ול-SEO — אזהרת W401 כשריק'
       },
+      { name: 'title', labelHe: 'כותרת תמונה (SEO)', type: 'string', default: '', hint: 'מופיע ברחיפה ומחזק SEO לתמונה' },
       { name: 'caption', labelHe: 'כיתוב', type: 'string', hint: 'מוצג מתחת לתמונה' },
       {
         name: 'width', labelHe: 'רוחב', type: 'enum',
@@ -600,14 +604,20 @@ const BLOCK_REGISTRY = [
   // ─────────────────────────── אפקטים ───────────────────────────
   {
     type: 'marquee',
-    keyword: 'MARQUEE',
+    keyword: 'MOTION',
+    aliases: ['MARQUEE'],
     labelHe: 'טקסט נע',
     icon: '〰',
     category: 'אפקטים',
     bodyClass: 'text',
     childrenOf: null,
-    hintHe: 'שורת טקסט שנעה לרוחב המסך',
+    hintHe: 'טקסט שזז — נע לרוחב או נכנס באנימציה',
     params: [
+      {
+        name: 'effect', labelHe: 'אפקט', type: 'enum',
+        enum: ['marquee', 'fade', 'slide', 'typewriter'], default: 'marquee', omitDefault: true,
+        hint: 'marquee = נע לרוחב, fade = הופעה, slide = החלקה, typewriter = הקלדה'
+      },
       {
         name: 'speed', labelHe: 'מהירות', type: 'enum',
         enum: ['slow', 'md', 'fast'], default: 'md', omitDefault: true,
@@ -621,8 +631,9 @@ const BLOCK_REGISTRY = [
   },
   {
     type: 'parallax',
-    keyword: 'PARALLAX',
-    labelHe: 'רקע קבוע (פרלקסה)',
+    keyword: 'BACKDROP',
+    aliases: ['PARALLAX'],
+    labelHe: 'רקע קבוע (Backdrop)',
     icon: '🏔',
     category: 'אפקטים',
     bodyClass: 'blocks',
@@ -638,6 +649,15 @@ const BLOCK_REGISTRY = [
         name: 'overlay', labelHe: 'כהות שכבת רקע', type: 'integer',
         min: 0, max: 80, default: 0, omitDefault: true,
         hint: '0–80 — מכהה את התמונה כדי שהטקסט יבלוט'
+      },
+      {
+        name: 'tint', labelHe: 'גוון שכבת הרקע', type: 'enum',
+        enum: ['none', 'dark', 'light', 'brand'], default: 'none', omitDefault: true,
+        hint: 'צבע שכבת הכיסוי מעל התמונה — dark/light/brand'
+      },
+      {
+        name: 'fade', labelHe: 'הופעה הדרגתית', type: 'boolean', default: false, omitDefault: true,
+        hint: 'התוכן נכנס בהופעה רכה כשמגיעים אליו בגלילה'
       },
       {
         name: 'height', labelHe: 'גובה', type: 'enum',
@@ -694,7 +714,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'מספרים / מדדים',
     icon: '＃',
     category: 'תוכן',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'שורה של מדדים (לקוחות, פרויקטים…)',
     params: [
@@ -726,7 +746,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'לוגואים / לקוחות',
     icon: '▣▣',
     category: 'מדיה',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'רצועת לוגואים — PLACEHOLDER עד העלאת קבצים',
     params: [
@@ -754,7 +774,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'שאלות נפוצות',
     icon: '?',
     category: 'תוכן',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'רשימת שאלה / תשובה',
     params: [
@@ -954,6 +974,37 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'newspop',
+    keyword: 'NEWSPOP',
+    labelHe: 'מבזקים עם שעות',
+    icon: '🕐',
+    category: 'מדיה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'מבזקי חדשות עם שעות — עמודה קבועה של "שעה · כותרת" (סגנון וואלה, לא נעה)',
+    params: [
+      { name: 'label', labelHe: 'תווית', type: 'string', default: '' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'עדכונים', type: 'list',
+        itemFields: [
+          { name: 'time', labelHe: 'שעה', type: 'string' },
+          { name: 'text', labelHe: 'כותרת', type: 'string', required: true },
+          { name: 'href', labelHe: 'קישור', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי NEWSPOPITEM'
+      }
+    ],
+    textField: null,
+    seed: {
+      label: 'מבזקים',
+      items: [
+        { time: '12:00', text: 'עדכון ראשון', href: '#' },
+        { time: '11:30', text: 'עדכון שני', href: '#' },
+        { time: '11:00', text: 'עדכון שלישי', href: '#' }
+      ]
+    }
+  },
+  {
     type: 'contact-info',
     keyword: 'CONTACT',
     labelHe: 'פרטי קשר',
@@ -979,7 +1030,7 @@ const BLOCK_REGISTRY = [
   {
     type: 'banner',
     keyword: 'BANNER',
-    labelHe: 'באנר הודעה',
+    labelHe: 'באנר',
     icon: '▬',
     category: 'מבנה',
     bodyClass: 'text',

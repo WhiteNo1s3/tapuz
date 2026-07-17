@@ -29,10 +29,12 @@ function compile(source) {
     meta: {
       description: ast.meta.description || '',
       ogImage: ast.meta.ogimage || '',
+      seoTitle: ast.meta.seotitle || '',
+      robots: ast.meta.robots || '',
       author: ast.meta.author || '',
       date: ast.meta.date || '',
-      teaser: '',
-      cardImage: ''
+      teaser: ast.meta.teaser || '',
+      cardImage: ast.meta.cardimage || ''
     }
   };
 
@@ -43,6 +45,21 @@ function compile(source) {
  * @param {object} node
  * @param {object[]} warnings
  */
+function applyChrome(data, p) {
+  if (p.class) data.className = p.class;
+  // generated (storage-shape) ids are block identity, not authored anchors —
+  // blockToJson restores those on the block itself, never into data.id
+  if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
+  const style = {};
+  if (p.color) style.color = p.color;
+  if (p.background) style.background = p.background;
+  if (p.fontsize) style.fontSize = p.fontsize;
+  if (p.padding) style.padding = p.padding;
+  if (p.radius) style.radius = p.radius;
+  if (Object.keys(style).length) data.style = style;
+  return data;
+}
+
 function blockToJson(node, warnings) {
   const p = (node.params || {});
   const block = buildBlock(node, warnings);
@@ -63,8 +80,7 @@ function buildBlock(node, warnings) {
       const data = { level, text: collapseSingleParagraph(text) };
       if (p.align && p.align !== 'start') data.align = p.align;
       if (p.animate && p.animate !== 'none') data.animate = p.animate;
-      if (p.class) data.className = p.class;
-      if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
+      applyChrome(data, p);
       return createBlock('heading', data);
     }
     case 'TEXT': {
@@ -77,7 +93,7 @@ function buildBlock(node, warnings) {
       if (p.dropcap === true || p.dropcap === 'true') data.dropcap = true;
       if (p.maxwidth && p.maxwidth !== 'full') data.maxWidth = p.maxwidth;
       if (p.animate && p.animate !== 'none') data.animate = p.animate;
-      if (p.class) data.className = p.class;
+      applyChrome(data, p);
       return createBlock('text', data);
     }
     case 'IMAGE': {
@@ -87,6 +103,7 @@ function buildBlock(node, warnings) {
         caption: p.caption || '',
         width: p.width || 'full'
       };
+      if (p.title) data.title = p.title; // image SEO title (v0.71)
       if (!data.alt) warnings.push({ code: 'W401', message: 'IMAGE missing alt' });
       if (p.class) data.className = p.class;
       return createBlock('image', data);
@@ -171,20 +188,31 @@ function buildBlock(node, warnings) {
       if (p.parallax === true || p.parallax === 'true') data.parallax = true;
       return createBlock('hero', data);
     }
+    case 'MOTION':
     case 'MARQUEE': {
+      // MOTION is canonical; MARQUEE is the alias fixed to effect: marquee.
+      // effect marquee = horizontal scroll; fade/slide/typewriter = entrance.
+      const effect = node.name === 'MARQUEE'
+        ? 'marquee'
+        : (['marquee', 'fade', 'slide', 'typewriter'].includes(p.effect) ? p.effect : 'marquee');
       const data = { text: collapseSingleParagraph(text) };
+      if (effect !== 'marquee') data.effect = effect;
       if (p.speed && p.speed !== 'md') data.speed = p.speed;
       if (p.class) data.className = p.class;
       if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
       return createBlock('marquee', data);
     }
+    case 'BACKDROP':
     case 'PARALLAX': {
+      // BACKDROP is canonical; PARALLAX is the alias (no tint/fade).
       const data = {
         image: p.image || '',
         blocks: (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean)
       };
       if (p.overlay != null && Number(p.overlay) > 0) data.overlay = clampInt(p.overlay, 0, 80, 0);
       if (p.height && p.height !== 'md') data.height = p.height;
+      if (p.tint && p.tint !== 'none') data.tint = p.tint;
+      if (p.fade === true || p.fade === 'true') data.fade = true;
       if (p.class) data.className = p.class;
       if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
       return createBlock('parallax', data);
@@ -239,33 +267,6 @@ function buildBlock(node, warnings) {
         height: p.height || 'md'
       });
     }
-    case 'MOTION': {
-      // v0.1: store as text with class for theme motion hooks
-      return createBlock('text', {
-        content: text,
-        className: `motion motion-${p.effect || 'fade'}`,
-        motion: {
-          effect: p.effect || 'fade',
-          speed: p.speed || 'normal',
-          repeat: p.repeat || 'once'
-        }
-      });
-    }
-    case 'BACKDROP': {
-      const blocks = (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean);
-      // map to card/section-like: use card with class backdrop
-      return createBlock('card', {
-        blocks,
-        className: 'backdrop',
-        backdrop: {
-          image: p.image,
-          tint: p.tint || 'none',
-          opacity: p.opacity != null ? p.opacity : 100,
-          fade: !!p.fade,
-          minheight: p.minheight || 'md'
-        }
-      });
-    }
     case 'HTML': {
       warnings.push({
         code: 'W_HTML',
@@ -277,9 +278,80 @@ function buildBlock(node, warnings) {
         className: 'bentml-html-fence'
       });
     }
+    case 'STATS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'STAT')
+        .map((c) => ({
+          value: (c.params && c.params.value) || '',
+          label: (c.params && c.params.label) || ''
+        }));
+      const data = {
+        columns: clampInt(p.columns, 2, 4, 3),
+        items: items.length
+          ? items
+          : [
+              { value: '—', label: 'מדד' },
+              { value: '—', label: 'מדד' },
+              { value: '—', label: 'מדד' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('stats', data);
+    }
+    case 'LOGOS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'LOGO')
+        .map((c) => ({
+          src: (c.params && c.params.src) || '',
+          alt: (c.params && c.params.alt) || '',
+          url: (c.params && c.params.url) || ''
+        }));
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { src: '/uploads/PLACEHOLDER-logo-1.svg', alt: 'Logo 1' },
+              { src: '/uploads/PLACEHOLDER-logo-2.svg', alt: 'Logo 2' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('logos', data);
+    }
+    case 'FAQ': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'QA')
+        .map((c) => ({
+          question: (c.params && c.params.question) || '',
+          answer: collapseSingleParagraph(c.text || '')
+        }));
+      const data = {
+        items: items.length ? items : [{ question: 'שאלה?', answer: 'תשובה.' }]
+      };
+      applyChrome(data, p);
+      return createBlock('faq', data);
+    }
+    case 'CONTACT': {
+      const data = {
+        phone: p.phone || '',
+        email: p.email || '',
+        address: p.address || '',
+        hours: p.hours || ''
+      };
+      applyChrome(data, p);
+      return createBlock('contact-info', data);
+    }
+    case 'BANNER': {
+      const data = {
+        text: collapseSingleParagraph(text) || '',
+        tone: p.tone || 'brand',
+        align: p.align || 'start'
+      };
+      applyChrome(data, p);
+      return createBlock('banner', data);
+    }
     case 'CTA': {
       const variant = p.style === 'ghost' ? 'outline' : p.style || 'primary';
-      return createBlock('cta', {
+      const data = {
         title: p.title || '',
         text: p.text || '',
         buttonText: p.buttontext || p.buttonText || 'לפרטים',
@@ -287,51 +359,16 @@ function buildBlock(node, warnings) {
         variant,
         tone: p.tone || 'brand',
         align: p.align || 'start'
-      });
-    }
-    case 'STATS': {
-      return createBlock('stats', {
-        columns: clampInt(p.columns, 2, 4, 3),
-        items: [
-          { value: '—', label: 'מדד' },
-          { value: '—', label: 'מדד' },
-          { value: '—', label: 'מדד' }
-        ]
-      });
-    }
-    case 'LOGOS': {
-      return createBlock('logos', {
-        items: [
-          { src: '/uploads/PLACEHOLDER-logo-1.svg', alt: 'Logo 1' },
-          { src: '/uploads/PLACEHOLDER-logo-2.svg', alt: 'Logo 2' }
-        ]
-      });
-    }
-    case 'FAQ': {
-      return createBlock('faq', {
-        items: [
-          { question: 'שאלה?', answer: 'תשובה.' }
-        ]
-      });
-    }
-    case 'CONTACT': {
-      return createBlock('contact-info', {
-        phone: p.phone || '',
-        email: p.email || '',
-        address: p.address || '',
-        hours: p.hours || ''
-      });
-    }
-    case 'BANNER': {
-      return createBlock('banner', {
-        text: collapseSingleParagraph(text) || '',
-        tone: p.tone || 'brand',
-        align: p.align || 'start'
-      });
+      };
+      applyChrome(data, p);
+      return createBlock('cta', data);
     }
     case 'COL':
     case 'ITEM':
     case 'FEATURE':
+    case 'STAT':
+    case 'LOGO':
+    case 'QA':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });

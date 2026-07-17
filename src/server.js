@@ -10,7 +10,7 @@ const {
 const { exportAll } = require('./export');
 const { runSetup } = require('./setup');
 const { loadMenus, saveMenus, saveMenu } = require('./menus');
-const { getThemeSettings, saveThemeSettings, loadOverrides, overridesToCss } = require('./theme');
+const { getThemeSettings, saveThemeSettings, loadOverrides, overridesToCss, LOOKS } = require('./theme');
 const { loadConfig, saveConfig } = require('./config');
 const blockRegistry = require('./block-registry');
 
@@ -189,6 +189,32 @@ function staticSecurityHeaders(res, filePath) {
   }
 }
 
+// ─── SEO essentials (v0.71): sitemap.xml + robots.txt, derived live from the
+// published pages. Registered before the static mount so they always answer,
+// and absolute URLs come from config.baseUrl (falling back to the request host).
+function siteBaseUrl(req) {
+  let base = '';
+  try { base = String((loadConfig().baseUrl || '')).trim().replace(/\/+$/, ''); } catch (e) {}
+  return base || `${req.protocol}://${req.headers.host}`;
+}
+app.get('/sitemap.xml', (req, res) => {
+  try {
+    const seo = require('./seo');
+    // Crown the home over ALL published pages FIRST, then filter eligibility
+    // (redirects + robots-noindex stay out). Crowning after filtering would
+    // let a lookalike page inherit '/' when the real home is excluded.
+    const all = require('./pages').listPages({ status: 'published' });
+    const homePath = seo.pickHomePath(all);
+    const pages = all.filter((p) => seo.sitemapEligible(p.meta));
+    res.type('application/xml').send(seo.buildSitemapXml(pages, siteBaseUrl(req), homePath));
+  } catch (e) {
+    res.status(500).type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"/>\n');
+  }
+});
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(require('./seo').buildRobotsTxt(siteBaseUrl(req), auth.getAdminBase()));
+});
+
 // extensions:['html'] — the page's natural address is /שם-הדף (no suffix);
 // without this every slug URL 404'd and only /שם-הדף.html answered (v0.69)
 app.use(express.static(PUBLIC_DIR, { extensions: ['html'], setHeaders: staticSecurityHeaders }));
@@ -304,6 +330,14 @@ function requireAgent(scope) {
 
 app.get('/agent/v1/ping', requireAgent('read'), (req, res) => {
   res.json({ ok: true, agent: req.agent.name, scopes: req.agent.scopes, version: require('../package.json').version });
+});
+
+// BYOK provider constants (v0.73) — the CMS is the authority on WHERE each LLM
+// supplier's API lives and HOW to shape a call. The extension fetches this and
+// never hardcodes an endpoint/model. Read-scoped like the rest of /agent/v1;
+// contains NO secret (the user's key lives only in the extension worker).
+app.get('/agent/v1/providers', requireAgent('read'), (req, res) => {
+  res.json({ ok: true, providers: require('./providers').listProviders() });
 });
 
 // The .pzn standard is PUBLIC (unauthenticated) — anyone may implement it.
@@ -479,6 +513,11 @@ app.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) => {
       repaired = true;
       changes = r.changes;
     }
+    // same empty-template guard as the admin paste route (v0.72): an agent
+    // reply with zero modules must not create a placeholder-titled page.
+    if (!pznApi.toTapuzPage(doc).blocks.length) {
+      return res.status(400).json({ ok: false, error: 'empty page — the reply carries no bent-* modules (looks like the bare template)' });
+    }
     const title = doc.title || 'דף חדש';
     const { deriveSlug } = require('./pzn/intent');
     const slug = deriveSlug((doc.slug || '').trim() || title);
@@ -562,7 +601,7 @@ app.get('/admin/login', (req, res) => {
       <input name="password" type="password" autocomplete="current-password" required style="${authInput}">
       <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">התחבר</button>
     </form>`;
-  res.send(layout(authCard(inner), 'כניסה', '#0a66c2'));
+  res.send(layout(authCard(inner), 'כניסה', '#f97316'));
 });
 
 app.post('/admin/login', (req, res) => {
@@ -579,7 +618,7 @@ app.post('/admin/login', (req, res) => {
     res.setHeader('Retry-After', String(ra));
     const inner = authErr(`נחסמת זמנית עקב ניסיונות כושלים. נסה שוב בעוד ${ra} שניות.`) +
       `<div style="text-align:center"><a href="${base}/login">חזרה לכניסה</a></div>`;
-    return res.status(429).send(layout(authCard(inner), 'נחסם', '#0a66c2'));
+    return res.status(429).send(layout(authCard(inner), 'נחסם', '#f97316'));
   }
 
   const user = auth.verifyLogin(username, (req.body && req.body.password) || '');
@@ -745,7 +784,7 @@ app.post('/admin/upload-legacy', (req, res) => {
 });
 */
 
-function layout(content, title = 'Tapuz', accent = '#0a66c2') {
+function layout(content, title = 'Tapuz', accent = '#f97316') {
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -754,27 +793,48 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
   <title>${title} • Tapuz</title>
   <link rel="stylesheet" href="/css/main.css">
   <style>
-    /* section identity: each admin area carries its own accent */
+    /* section identity: each admin area carries its own accent (derived from
+       its tool-family color in ADMIN_NAV_GROUPS) */
     :root { --admin-accent: ${accent}; }
-    .topbar { border-top: 4px solid var(--admin-accent); }
-    .topbar-inner span[style*="font-weight:600"] { color: var(--admin-accent); }
     .btn:not(.secondary) { background: var(--admin-accent); border-color: var(--admin-accent); }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif;
-      background: #f8fafc;
+      /* soft wash of the section color fading into the workspace */
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--admin-accent) 7%, #f8fafc) 0%, #f8fafc 280px);
+      background-color: #f8fafc;
       margin: 0;
       color: #0f172a;
     }
     .container { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
 
+    /* signature rainbow strip: one thin line carrying every tool-family color */
+    .brand-strip {
+      height: 4px;
+      background: linear-gradient(90deg, #f97316, #2563eb, #0d9488, #7c3aed, #059669, #c026d3);
+    }
+    .brand-logo {
+      font-size: 1.45rem;
+      font-weight: 800;
+      text-decoration: none;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.5px;
+    }
+    .section-title { font-weight: 700; color: var(--admin-accent); }
+
     .topbar {
-      background: #fff;
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(10px);
       border-bottom: 1px solid #e2e8f0;
-      padding: 12px 0;
+      padding: 0 0 10px;
       position: sticky;
       top: 0;
       z-index: 200;
     }
+    .topbar .topbar-inner { padding-top: 10px; }
     .topbar-inner {
       display: flex;
       align-items: center;
@@ -879,23 +939,51 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
       line-height: 1.5;
     }
 
-    /* Shared CMS navigation (all admin screens) */
+    /* Shared CMS navigation (all admin screens) — tools clustered by family,
+       each cluster tinted with its own color so the menu reads as a handful of
+       categories instead of a flat pile of options. */
     .admin-nav {
       display: flex;
-      gap: 4px;
+      gap: 8px;
       flex-wrap: wrap;
-      padding: 8px 20px 0;
+      align-items: stretch;
+      padding: 10px 20px 0;
     }
-    .admin-nav a {
-      padding: 6px 12px;
-      border-radius: 8px;
-      color: #475569;
+    .nav-group {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px 4px;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--g) 7%, #ffffff);
+      border: 1px solid color-mix(in srgb, var(--g) 16%, #ffffff);
+    }
+    .nav-group-label {
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: var(--g);
+      padding: 0 8px 0 4px;
+      letter-spacing: 0.3px;
+    }
+    .nav-group a {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 9px;
+      color: #334155;
       text-decoration: none;
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       font-weight: 600;
+      transition: background .12s, color .12s;
     }
-    .admin-nav a:hover { background: #f1f5f9; color: #0f172a; }
-    .admin-nav a.active { background: var(--admin-accent); color: #fff; }
+    .nav-ico { font-size: 0.9em; }
+    .nav-group a:hover { background: color-mix(in srgb, var(--g) 15%, #ffffff); color: #0f172a; }
+    .nav-group a.active {
+      background: var(--g);
+      color: #fff;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--g) 40%, transparent);
+    }
 
     /* Toolbox category labels (generated from the block registry) */
     .tool-group-label {
@@ -1972,18 +2060,29 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
       align-items: center;
       gap: 8px;
       padding: 9px 16px;
-      background: #0a66c2;
+      background: var(--admin-accent, #f97316);
       color: white;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       font-weight: 600;
       font-size: 0.95rem;
       text-decoration: none;
       cursor: pointer;
+      box-shadow: 0 1px 3px color-mix(in srgb, var(--admin-accent, #f97316) 35%, transparent);
+      transition: filter .12s, transform .12s, box-shadow .12s;
     }
-    .btn:hover { background: #084d96; }
-    .btn.secondary { background: #64748b; }
-    .btn.secondary:hover { background: #475569; }
+    .btn:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--admin-accent, #f97316) 35%, transparent);
+    }
+    .btn.secondary {
+      background: #fff;
+      color: #334155;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    }
+    .btn.secondary:hover { background: #f8fafc; color: #0f172a; }
 
     .modal {
       position: fixed;
@@ -2018,38 +2117,86 @@ function layout(content, title = 'Tapuz', accent = '#0a66c2') {
  * / theme / settings / SEO / integrations). The page builder is reached by
  * editing a page from the pages list.
  */
-const ADMIN_NAV_ITEMS = [
-  { key: 'dashboard', href: '/admin/dashboard', label: 'דשבורד' },
-  { key: 'pages', href: '/admin', label: 'דפים' },
-  { key: 'media', href: '/admin/media-library', label: 'מדיה' },
-  { key: 'storage', href: '/admin/storage', label: 'אחסון' },
-  { key: 'categories', href: '/admin/categories', label: 'קטגוריות' },
-  { key: 'menus', href: '/admin/menus', label: 'תפריטים' },
-  { key: 'sitemap', href: '/admin/sitemap', label: 'מפת אתר' },
-  { key: 'theme', href: '/admin/theme', label: 'ערכת נושא' },
-  { key: 'settings', href: '/admin/settings', label: 'הגדרות אתר' },
-  { key: 'site-chrome', href: '/admin/site-chrome', label: 'כותרת ותחתית' },
-  { key: 'seo', href: '/admin/seo', label: 'SEO' },
-  { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס' },
-  { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות' },
-  // One AI front door (the copilot hub) + the extension/token setup. The paste
-  // flow (/admin/ai) and the dictionary/game (/admin/inject) are sub-tools
-  // reached from the hub — kept off the top nav to keep it coherent (v0.56).
-  { key: 'chat', href: '/admin/chat', label: 'AI ✨' },
-  { key: 'agent', href: '/admin/agent', label: 'גשר סוכן' }
+// Tools sorted into color-coded families instead of one flat pile — every
+// group carries its own hue, and each tool inherits the group identity in the
+// nav, the dashboard hub, and the per-section accent. ONLY real, shipped tools
+// appear here (the A++ teardown gap list lives in docs/ADMIN-TOOL-MAP.md, not
+// in the customer's face).
+const ADMIN_NAV_GROUPS = [
+  {
+    key: 'home', label: '', color: '#f97316',
+    items: [{ key: 'dashboard', href: '/admin/dashboard', label: 'דשבורד', icon: '🏠' }]
+  },
+  {
+    key: 'content', label: 'תוכן', color: '#2563eb', desc: 'הדפים של האתר — יצירה, ייבוא וסידור',
+    items: [
+      { key: 'pages', href: '/admin', label: 'דפים', icon: '📄' },
+      { key: 'import', href: '/admin/import', label: 'ייבוא', icon: '📥' },
+      { key: 'categories', href: '/admin/categories', label: 'קטגוריות', icon: '🗂️' }
+    ]
+  },
+  {
+    key: 'media', label: 'מדיה', color: '#0d9488', desc: 'תמונות, קבצים ומה שמאוחסן בשרת',
+    items: [
+      { key: 'media', href: '/admin/media-library', label: 'ספרייה', icon: '🖼️' },
+      { key: 'storage', href: '/admin/storage', label: 'אחסון', icon: '📦' }
+    ]
+  },
+  {
+    key: 'design', label: 'עיצוב', color: '#7c3aed', desc: 'איך האתר נראה — צבעים, ניווט ומסגרת',
+    items: [
+      { key: 'theme', href: '/admin/theme', label: 'ערכת נושא', icon: '🎨' },
+      { key: 'menus', href: '/admin/menus', label: 'תפריטים', icon: '🧭' },
+      { key: 'site-chrome', href: '/admin/site-chrome', label: 'כותרת ותחתית', icon: '🧱' }
+    ]
+  },
+  {
+    key: 'growth', label: 'קידום', color: '#059669', desc: 'להיראות בגוגל ולדעת מי נכנס',
+    items: [
+      { key: 'seo', href: '/admin/seo', label: 'SEO', icon: '🔍' },
+      { key: 'sitemap', href: '/admin/sitemap', label: 'מפת אתר', icon: '🗺️' },
+      { key: 'analytics', href: '/admin/analytics', label: 'אנליטיקס', icon: '📈' },
+      { key: 'integrations', href: '/admin/integrations', label: 'אינטגרציות', icon: '🔌' }
+    ]
+  },
+  {
+    // One AI front door (the copilot hub) + the extension/token setup. The paste
+    // flow (/admin/ai) and the dictionary/game (/admin/inject) are sub-tools
+    // reached from the hub — kept off the top nav to keep it coherent (v0.56).
+    key: 'ai', label: 'AI', color: '#c026d3', desc: 'העוזרים החכמים של טפוז',
+    items: [
+      { key: 'chat', href: '/admin/chat', label: 'קופיילוט', icon: '✨' },
+      { key: 'agent', href: '/admin/agent', label: 'גשר סוכן', icon: '🤖' }
+    ]
+  },
+  {
+    key: 'system', label: 'מערכת', color: '#475569', desc: 'הגדרות הבסיס של האתר',
+    items: [{ key: 'settings', href: '/admin/settings', label: 'הגדרות אתר', icon: '⚙️' }]
+  }
 ];
 
+// key -> group color, so every screen's accent is derived from its family
+// instead of hand-picked hexes drifting per route.
+const ADMIN_ACCENTS = {};
+for (const g of ADMIN_NAV_GROUPS) for (const it of g.items) ADMIN_ACCENTS[it.key] = g.color;
+const accentFor = key => ADMIN_ACCENTS[key] || '#f97316';
+
 function adminNav(active, sectionTitle, actionsHtml = '') {
-  const links = ADMIN_NAV_ITEMS.map(item =>
-    `<a href="${item.href}"${item.key === active ? ' class="active"' : ''}>${item.label}</a>`
-  ).join('');
+  const groups = ADMIN_NAV_GROUPS.map(g => {
+    const links = g.items.map(item =>
+      `<a href="${item.href}"${item.key === active ? ' class="active"' : ''}><span class="nav-ico">${item.icon}</span>${item.label}</a>`
+    ).join('');
+    const label = g.label ? `<span class="nav-group-label">${g.label}</span>` : '';
+    return `<div class="nav-group" style="--g:${g.color}">${label}${links}</div>`;
+  }).join('');
   return `
     <div class="topbar">
+      <div class="brand-strip"></div>
       <div class="container topbar-inner">
         <div style="display:flex;align-items:center;gap:12px">
-          <a href="/admin" style="font-size:1.6rem;font-weight:700;text-decoration:none;color:#0f172a">Tapuz</a>
-          <span style="color:#94a3b8">•</span>
-          <span style="font-weight:600">${sectionTitle}</span>
+          <a href="/admin/dashboard" class="brand-logo">🍊 Tapuz</a>
+          <span style="color:#cbd5e1">/</span>
+          <span class="section-title">${sectionTitle}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <a href="/" target="_blank" class="btn secondary" style="padding:7px 12px">צפה באתר</a>
@@ -2059,7 +2206,7 @@ function adminNav(active, sectionTitle, actionsHtml = '') {
           </form>
         </div>
       </div>
-      <div class="container admin-nav">${links}</div>
+      <div class="container admin-nav">${groups}</div>
     </div>`;
 }
 
@@ -2122,17 +2269,22 @@ app.get('/admin/setup', (req, res) => {
           <input id="wiz-desc" class="wiz-input" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="margin-top:8px">
         </div>
 
-        <!-- Step 2: coloring = the theme creator, taught live -->
+        <!-- Step 2: coloring = the theme creator, taught live. The MOODS here
+             are the same LOOKS constant the theme screen uses (one source of
+             truth in the CMS) — a card click sets the whole personality. -->
         <div class="wiz-panel" data-panel="1">
-          <div class="wiz-teach">🎨 <strong>זהו יוצר ערכת הנושא.</strong> מה שתבחרו כאן הוא בדיוק מה שמחכה לכם אחר כך במסך "ערכת נושא" — אפשר לשנות הכל, מתי שרוצים.</div>
-          <label style="font-weight:600;display:block;margin-bottom:8px">בחרו פלטה — או כווננו כל צבע</label>
-          <div class="wiz-palettes" id="wiz-palettes"></div>
-          <div class="wiz-colors">
-            <label class="wiz-color-row"><input type="color" id="wc-primary" value="#0a66c2"> ראשי (כפתורים וקישורים)</label>
-            <label class="wiz-color-row"><input type="color" id="wc-text" value="#111827"> טקסט</label>
-            <label class="wiz-color-row"><input type="color" id="wc-bg" value="#ffffff"> רקע</label>
-            <label class="wiz-color-row"><input type="color" id="wc-lightBg" value="#f8fafc"> רקע משני</label>
-          </div>
+          <div class="wiz-teach">🎨 <strong>זהו יוצר ערכת הנושא.</strong> בחרו מראה מוכן — צבעים, פינות וצללים בלחיצה אחת. הכל מחכה לכם אחר כך במסך "ערכת נושא", לשינוי מתי שרוצים.</div>
+          <label style="font-weight:600;display:block;margin-bottom:8px">איזה מראה מתאים לאתר שלכם?</label>
+          <div class="wiz-palettes" id="wiz-looks"></div>
+          <details style="margin-bottom:16px">
+            <summary style="cursor:pointer;font-weight:600;color:#475569;font-size:.9rem">כיוונון עדין (לא חובה)</summary>
+            <div class="wiz-colors" style="margin-top:10px">
+              <label class="wiz-color-row"><input type="color" id="wc-primary" value="#ea580c"> ראשי (כפתורים וקישורים)</label>
+              <label class="wiz-color-row"><input type="color" id="wc-text" value="#1c1917"> טקסט</label>
+              <label class="wiz-color-row"><input type="color" id="wc-bg" value="#fffbf7"> רקע</label>
+              <label class="wiz-color-row"><input type="color" id="wc-lightBg" value="#fdf1e6"> רקע משני</label>
+            </div>
+          </details>
           <label style="font-weight:600;display:block;margin-bottom:6px">איפה התפריט?</label>
           <select id="wiz-menu-placement" class="wiz-input" style="max-width:220px">
             <option value="top">למעלה (קלאסי)</option>
@@ -2166,16 +2318,11 @@ app.get('/admin/setup', (req, res) => {
         <p id="wiz-err" style="color:#b91c1c;font-size:0.85rem;margin:10px 0 0;display:none"></p>
       </div>
     </div>
+    <script>window.WIZ_LOOKS = ${JSON.stringify(LOOKS)};</script>
     <script>
       (function () {
         var PAGE_LABELS = { home: 'דף הבית', about: 'אודות', contact: 'צור קשר', articles: 'מאמרים' };
-        var PALETTES = [
-          { name: 'כחול קלאסי', primary: '#0a66c2', text: '#111827', bg: '#ffffff', lightBg: '#f8fafc' },
-          { name: 'ירוק יער', primary: '#166534', text: '#111827', bg: '#ffffff', lightBg: '#f0fdf4' },
-          { name: 'שקיעה חמה', primary: '#ea580c', text: '#1c1917', bg: '#fffbf7', lightBg: '#fff7ed' },
-          { name: 'סגול מלכותי', primary: '#7c3aed', text: '#111827', bg: '#ffffff', lightBg: '#f5f3ff' },
-          { name: 'כהה אלגנטי', primary: '#38bdf8', text: '#e2e8f0', bg: '#0f172a', lightBg: '#1e293b' }
-        ];
+        var selectedLook = 'tapuz'; // the brand default — a site is never colorless
         var step = 0;
         var TOTAL = 4;
 
@@ -2191,18 +2338,27 @@ app.get('/admin/setup', (req, res) => {
           return out;
         }
 
-        function renderPalettes() {
-          var box = q('wiz-palettes');
-          box.innerHTML = PALETTES.map(function (p, i) {
-            return '<div class="wiz-palette" data-pal="' + i + '">' +
-              '<div class="sw"><span style="background:' + p.primary + '"></span><span style="background:' + p.lightBg + '"></span><span style="background:' + p.bg + ';border:1px solid #e2e8f0"></span><span style="background:' + p.text + '"></span></div>' +
-              '<small>' + p.name + '</small></div>';
+        function lookStyle() {
+          var lk = window.WIZ_LOOKS[selectedLook];
+          return (lk && lk.overrides && lk.overrides.style) || { radius: 'soft', shadow: 'soft', accent: 'gradient' };
+        }
+        function renderLooks() {
+          var box = q('wiz-looks');
+          var keys = Object.keys(window.WIZ_LOOKS);
+          box.innerHTML = keys.map(function (key) {
+            var lk = window.WIZ_LOOKS[key];
+            var c = lk.overrides.colors;
+            return '<div class="wiz-palette' + (key === selectedLook ? ' selected' : '') + '" data-look="' + key + '">' +
+              '<div style="font-size:1.3rem;line-height:1;margin-bottom:4px">' + (lk.emoji || '🎨') + '</div>' +
+              '<div class="sw"><span style="background:' + c.primary + '"></span><span style="background:' + c.secondary + '"></span><span style="background:' + c.bg + ';border:1px solid #e2e8f0"></span><span style="background:' + c.text + '"></span></div>' +
+              '<small>' + lk.label + '</small></div>';
           }).join('');
-          box.querySelectorAll('[data-pal]').forEach(function (el) {
+          box.querySelectorAll('[data-look]').forEach(function (el) {
             el.addEventListener('click', function () {
-              var p = PALETTES[parseInt(el.dataset.pal, 10)];
-              q('wc-primary').value = p.primary; q('wc-text').value = p.text;
-              q('wc-bg').value = p.bg; q('wc-lightBg').value = p.lightBg;
+              selectedLook = el.dataset.look;
+              var c = window.WIZ_LOOKS[selectedLook].overrides.colors;
+              q('wc-primary').value = c.primary; q('wc-text').value = c.text;
+              q('wc-bg').value = c.bg; q('wc-lightBg').value = c.lightBg;
               box.querySelectorAll('.wiz-palette').forEach(function (x) { x.classList.remove('selected'); });
               el.classList.add('selected');
               renderPreview();
@@ -2212,6 +2368,12 @@ app.get('/admin/setup', (req, res) => {
 
         function renderPreview() {
           var c = colors();
+          var st = lookStyle();
+          var lookColors = (window.WIZ_LOOKS[selectedLook] || { overrides: { colors: {} } }).overrides.colors || {};
+          var radius = st.radius === 'sharp' ? '4px' : st.radius === 'round' ? '14px' : '8px';
+          var btnBg = st.accent === 'gradient'
+            ? 'linear-gradient(135deg,' + c.primary + ',' + (lookColors.secondary || c.primary) + ')'
+            : c.primary;
           var side = q('wiz-menu-placement').value === 'side';
           var title = (q('wiz-title').value || 'האתר שלי');
           q('wiz-preview').innerHTML =
@@ -2222,7 +2384,7 @@ app.get('/admin/setup', (req, res) => {
             selectedPages().map(function (p) { return '<span style="color:' + c.primary + '">' + PAGE_LABELS[p] + '</span>'; }).join('') +
             '</span></div>' +
             '<div style="text-align:center;padding:18px 12px;background:' + c.lightBg + '"><div style="font-size:16px;font-weight:800">' + title.replace(/</g, '&lt;') + '</div>' +
-            '<span style="display:inline-block;margin-top:8px;background:' + c.primary + ';color:#fff;border-radius:6px;padding:4px 14px">כפתור ראשי</span></div>' +
+            '<span style="display:inline-block;margin-top:8px;background:' + btnBg + ';color:#fff;border-radius:' + radius + ';padding:4px 14px">כפתור ראשי</span></div>' +
             '<div style="display:flex;gap:8px;padding:10px 12px">' +
             '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
             '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
@@ -2271,6 +2433,7 @@ app.get('/admin/setup', (req, res) => {
             body: JSON.stringify({
               title: q('wiz-title').value.trim(),
               description: q('wiz-desc').value.trim(),
+              look: selectedLook,
               colors: colors(),
               menuPlacement: q('wiz-menu-placement').value,
               pages: selectedPages(),
@@ -2298,12 +2461,12 @@ app.get('/admin/setup', (req, res) => {
           cb.addEventListener('change', renderPreview);
         });
 
-        renderPalettes();
+        renderLooks();
         show(0);
       })();
     </script>
   `;
-  res.send(layout(html, 'התקנה ראשונית', '#f59e0b'));
+  res.send(layout(html, 'התקנה ראשונית', '#f97316'));
 });
 
 app.post('/admin/setup', (req, res) => {
@@ -2320,7 +2483,14 @@ app.get('/admin', (req, res) => {
   if (needsSetup()) return res.redirect('/admin/setup');
   const pages = listPages();
   const msg = req.query.built
-    ? `<div style="background:#ecfdf5;border:1px solid #10b981;color:#166534;padding:12px 18px;border-radius:10px;margin-bottom:16px;">האתר נבנה בהצלחה ✓ <a href="/" target="_blank" style="color:#166534;font-weight:600">צפה באתר</a></div>`
+    ? `<div style="background:#ecfdf5;border:1px solid #10b981;padding:16px 18px;border-radius:12px;margin-bottom:16px;">
+         <div style="color:#166534;font-weight:700;margin-bottom:10px">🎉 האתר שלכם חי! מה עכשיו?</div>
+         <div style="display:flex;gap:10px;flex-wrap:wrap">
+           <a href="/" target="_blank" class="btn" style="background:#166534;border-color:#166534">👀 צפו באתר</a>
+           <a href="/admin/edit/home" class="btn secondary">✏️ ערכו את דף הבית</a>
+           <a href="/admin/theme" class="btn secondary">🎨 שחקו עם המראה</a>
+         </div>
+       </div>`
     : '';
 
   let listHtml = pages.length === 0
@@ -2360,7 +2530,7 @@ app.get('/admin', (req, res) => {
       ${listHtml}
     </div>
   `;
-  res.send(layout(html));
+  res.send(layout(html, 'דפים', accentFor('pages')));
 });
 
 // ---- Block registry API (ask C: schema-generated builder UI) ----
@@ -2390,13 +2560,13 @@ app.get('/admin/dashboard', (req, res) => {
   } catch (e) { /* media table may not exist yet */ }
 
   const statCard = (num, label, color) => `
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;text-align:center">
-      <div style="font-size:2rem;font-weight:800;color:${color}">${num}</div>
-      <div style="color:#64748b;font-size:0.9rem;margin-top:4px">${label}</div>
+    <div class="stat-card" style="--c:${color}">
+      <div class="stat-num">${num}</div>
+      <div class="stat-label">${label}</div>
     </div>`;
 
   const recent = pages.slice(0, 5).map(p => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;background:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:6px;background:#fff">
       <div>
         <strong>${escapeAdmin(p.title)}</strong>
         <span style="font-size:0.75rem;color:#94a3b8;margin-inline-start:8px">${String(p.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
@@ -2404,38 +2574,91 @@ app.get('/admin/dashboard', (req, res) => {
       <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn" style="padding:6px 14px">ערוך</a>
     </div>`).join('') || '<p style="color:#64748b">אין דפים עדיין</p>';
 
+  // The tool families as a colorful hub — same data that drives the nav, so
+  // the dashboard can never advertise a tool that doesn't exist.
+  const hubCards = ADMIN_NAV_GROUPS.filter(g => g.key !== 'home').map(g => `
+    <div class="hub-card" style="--g:${g.color}">
+      <div class="hub-card-title">${g.label}</div>
+      <div class="hub-card-desc">${g.desc || ''}</div>
+      <div class="hub-card-links">
+        ${g.items.map(it => `<a href="${it.href}">${it.icon} ${it.label}</a>`).join('')}
+      </div>
+    </div>`).join('');
+
   const html = `
     ${adminNav('dashboard', 'דשבורד', '<a href="/admin/new" class="btn">+ דף חדש</a>')}
-    <div class="container" style="padding-top:28px;max-width:960px;padding-bottom:60px">
+    <style>
+      .stat-card {
+        background: linear-gradient(160deg, color-mix(in srgb, var(--c) 10%, #fff), #fff 60%);
+        border: 1px solid color-mix(in srgb, var(--c) 22%, #fff);
+        border-radius: 14px;
+        padding: 18px 20px;
+        text-align: center;
+      }
+      .stat-num { font-size: 2rem; font-weight: 800; color: var(--c); }
+      .stat-label { color: #64748b; font-size: 0.88rem; margin-top: 4px; }
+      .hub-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 14px;
+        margin-bottom: 30px;
+      }
+      .hub-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-top: 4px solid var(--g);
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        transition: box-shadow .15s, transform .15s;
+      }
+      .hub-card:hover { box-shadow: 0 8px 24px rgba(15, 23, 42, 0.09); transform: translateY(-2px); }
+      .hub-card-title { font-weight: 800; color: var(--g); font-size: 1.02rem; }
+      .hub-card-desc { color: #64748b; font-size: 0.82rem; margin: 4px 0 12px; }
+      .hub-card-links { display: flex; flex-wrap: wrap; gap: 6px; }
+      .hub-card-links a {
+        text-decoration: none;
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: #334155;
+        background: color-mix(in srgb, var(--g) 8%, #fff);
+        border: 1px solid color-mix(in srgb, var(--g) 18%, #fff);
+        border-radius: 999px;
+        padding: 5px 12px;
+        transition: background .12s, color .12s;
+      }
+      .hub-card-links a:hover { background: var(--g); color: #fff; }
+    </style>
+    <div class="container" style="padding-top:28px;max-width:1080px;padding-bottom:60px">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px">
-        ${statCard(pages.length, 'דפים', '#0a66c2')}
-        ${statCard(published, 'פורסמו', '#166534')}
-        ${statCard(drafts, 'טיוטות', '#b45309')}
+        ${statCard(pages.length, 'דפים', '#2563eb')}
+        ${statCard(published, 'פורסמו', '#059669')}
+        ${statCard(drafts, 'טיוטות', '#f97316')}
         ${statCard(pending, 'שינויים ממתינים לפרסום', '#7c3aed')}
-        ${statCard(mediaCount, 'קבצי מדיה', '#0f766e')}
+        ${statCard(mediaCount, 'קבצי מדיה', '#0d9488')}
       </div>
+      <h3 style="margin:0 0 12px">ארגז הכלים</h3>
+      <div class="hub-grid">${hubCards}</div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
         <section>
           <h3 style="margin-top:0">דפים אחרונים</h3>
           ${recent}
         </section>
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;height:fit-content">
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;height:fit-content">
           <h3 style="margin-top:0">קיצורי דרך</h3>
           <div style="display:flex;flex-direction:column;gap:8px">
             <a href="/admin/new" class="btn">+ דף חדש</a>
-            <a href="/admin/media-library" class="btn secondary">ספריית מדיה</a>
-            <a href="/admin/theme" class="btn secondary">ערכת נושא</a>
-            <a href="/admin/integrations" class="btn secondary">אינטגרציות (WhatsApp, מפות)</a>
-            <a href="/admin/seo" class="btn secondary">הגדרות SEO</a>
+            <a href="/admin/import" class="btn secondary">📥 ייבוא דף קיים</a>
+            <a href="/admin/chat" class="btn secondary">✨ לבנות עם AI</a>
             <form method="POST" action="/admin/build-redirect" style="margin:0">
-              <button type="submit" class="btn" style="background:#166534;width:100%">בנה את האתר</button>
+              <button type="submit" class="btn" style="background:#059669;width:100%">🚀 בנה את האתר</button>
             </form>
           </div>
         </section>
       </div>
     </div>
   `;
-  res.send(layout(html, 'דשבורד', '#0a66c2'));
+  res.send(layout(html, 'דשבורד', accentFor('dashboard')));
 });
 
 app.post('/admin/build-redirect', (req, res) => {
@@ -2573,7 +2796,7 @@ app.get('/admin/media-library', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html, 'ספריית מדיה', '#0f766e'));
+  res.send(layout(html, 'ספריית מדיה', accentFor('media')));
 });
 
 // ======================== STORAGE (your files on disk) ========================
@@ -2652,7 +2875,7 @@ app.get('/admin/storage', (req, res) => {
       <div class="stg-grid">${dataCards}</div>
     </div>
   `;
-  res.send(layout(html, 'אחסון', '#0f766e'));
+  res.send(layout(html, 'אחסון', accentFor('storage')));
 });
 
 // ======================== CATEGORIES (v0.64 — the taxonomy, on file storage) ==
@@ -2753,7 +2976,7 @@ app.get('/admin/categories', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html, 'קטגוריות', '#0f766e'));
+  res.send(layout(html, 'קטגוריות', accentFor('categories')));
 });
 
 // ======================== SITE SETTINGS ========================
@@ -2798,7 +3021,7 @@ app.get('/admin/settings', (req, res) => {
       });
     </script>
   `;
-  res.send(layout(html, 'הגדרות אתר', '#475569'));
+  res.send(layout(html, 'הגדרות אתר', accentFor('settings')));
 });
 
 app.post('/admin/api/settings', (req, res) => {
@@ -2832,14 +3055,21 @@ app.get('/admin/seo', (req, res) => {
         <textarea id="seo-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">${escapeAdmin(config.description)}</textarea>
         <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">משמש כשלדף אין תיאור משלו</div>
         <label style="display:block;font-weight:600;margin-bottom:4px">תמונת שיתוף ברירת מחדל (og:image)</label>
-        <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="/uploads/share.jpg" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו. נתיב מ<a href="/admin/media-library">ספריית המדיה</a>.</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+          <button type="button" class="btn secondary" data-media-pick="seo-og" style="white-space:nowrap">🖼 בחר / העלה</button>
+        </div>
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו.</div>
+        <label style="display:block;font-weight:600;margin-bottom:4px">כתובת האתר (base URL)</label>
+        <input id="seo-base" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://www.example.co.il" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">מפעיל canonical / og:url / נתונים מובנים (JSON-LD) עם כתובות מלאות, וקובע את הכתובות ב-sitemap.xml. ריק = מדלגים על תגיות שדורשות כתובת מלאה.</div>
         <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
           <span id="seo-status" style="color:#166534;font-size:0.85rem"></span>
           <button type="button" class="btn" id="seo-save">שמור SEO</button>
         </div>
       </section>
     </div>
+    <script src="/admin-media-picker.js"></script>
     <script>
       document.getElementById('seo-save').addEventListener('click', function () {
         fetch('/admin/api/seo', {
@@ -2848,7 +3078,8 @@ app.get('/admin/seo', (req, res) => {
           body: JSON.stringify({
             titlePattern: document.getElementById('seo-pattern').value,
             description: document.getElementById('seo-desc').value,
-            defaultOgImage: document.getElementById('seo-og').value
+            defaultOgImage: document.getElementById('seo-og').value,
+            baseUrl: document.getElementById('seo-base').value
           })
         }).then(function (r) { return r.json(); }).then(function (d) {
           document.getElementById('seo-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
@@ -2856,13 +3087,13 @@ app.get('/admin/seo', (req, res) => {
       });
     </script>
   `;
-  res.send(layout(html, 'SEO', '#b45309'));
+  res.send(layout(html, 'SEO', accentFor('seo')));
 });
 
 app.get('/admin/api/seo', (req, res) => {
   try {
     const config = loadConfig();
-    res.json({ ok: true, seo: config.seo || {}, description: config.description || '' });
+    res.json({ ok: true, seo: config.seo || {}, description: config.description || '', baseUrl: config.baseUrl || '' });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -2876,6 +3107,23 @@ app.post('/admin/api/seo', (req, res) => {
     if (b.titlePattern !== undefined) config.seo.titlePattern = String(b.titlePattern || '');
     if (b.defaultOgImage !== undefined) config.seo.defaultOgImage = String(b.defaultOgImage || '');
     if (b.description !== undefined) config.description = String(b.description || '');
+    // site base URL (v0.71): powers canonical/og:url/JSON-LD absolute URLs +
+    // sitemap <loc>. Stored at config level (robots/sitemap already read it).
+    // Forgiving: a schemeless domain gets https:// ; anything unparseable is
+    // rejected — a broken base would corrupt canonicals sitewide.
+    if (b.baseUrl !== undefined) {
+      const raw = String(b.baseUrl || '').trim();
+      if (!raw) {
+        config.baseUrl = '';
+      } else {
+        let u;
+        try { u = new URL(raw.includes('://') ? raw : 'https://' + raw); } catch (e) { u = null; }
+        if (!u || !/^https?:$/.test(u.protocol)) {
+          return res.status(400).json({ ok: false, error: 'כתובת האתר אינה תקינה — צורה תקינה: https://www.example.co.il' });
+        }
+        config.baseUrl = (u.origin + u.pathname).replace(/\/+$/, '');
+      }
+    }
     saveConfig(config);
     res.json({ ok: true, seo: config.seo });
   } catch (e) {
@@ -2986,7 +3234,7 @@ app.get('/admin/integrations', (req, res) => {
       });
     </script>
   `;
-  res.send(layout(html, 'אינטגרציות', '#25D366'));
+  res.send(layout(html, 'אינטגרציות', accentFor('integrations')));
 });
 
 app.get('/admin/api/integrations', (req, res) => {
@@ -3197,7 +3445,7 @@ app.get('/admin/analytics', (req, res) => {
         </p>
       </div>
     `;
-    res.send(layout(html, 'אנליטיקס', '#0d9488'));
+    res.send(layout(html, 'אנליטיקס', accentFor('analytics')));
   } catch (e) {
     res.status(500).send('שגיאה בטעינת אנליטיקס: ' + escapeAdmin(e.message));
   }
@@ -3405,7 +3653,7 @@ app.get('/admin/site-chrome', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html, 'כותרת ותחתית', '#7c3aed'));
+  res.send(layout(html, 'כותרת ותחתית', accentFor('site-chrome')));
 });
 
 app.get('/admin/api/site-chrome', (req, res) => {
@@ -4032,6 +4280,12 @@ app.post('/admin/api/pzn/create-from-source', (req, res) => {
         issues: errors
       });
     }
+    // an EMPTY document must never become a page a reader meets — this is how
+    // a pristine paste-template (title "כותרת הדף", zero modules) once got
+    // PUBLISHED with its placeholder as the visible title (v0.72 fix).
+    if (!pznApi.toTapuzPage(doc).blocks.length) {
+      return res.status(400).json({ ok: false, error: 'הדף ריק — נראה שהודבקה התבנית לדוגמה במקום תשובת הבוט. הדביקו את התשובה המלאה (עם מודולי bent-*).' });
+    }
     const title = doc.title || 'דף חדש';
     // deriveSlug hardens against path traversal (backslash / '..').
     const { deriveSlug } = require('./pzn/intent');
@@ -4248,7 +4502,7 @@ app.get('/admin/new', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html));
+  res.send(layout(html, 'דף חדש', accentFor('pages')));
 });
 
 app.post('/admin/create', (req, res) => {
@@ -4311,9 +4565,10 @@ app.get('/admin/edit/:fullPath', (req, res) => {
 
   const html = `
     <div class="topbar">
+      <div class="brand-strip"></div>
       <div class="container topbar-inner">
         <div class="topbar-left">
-          <a href="/admin" style="font-weight:700;font-size:1.35rem;text-decoration:none;color:#0f172a">Tapuz</a>
+          <a href="/admin" class="brand-logo" style="font-size:1.35rem">🍊 Tapuz</a>
           <button type="button" id="btn-pages-nav" class="btn secondary" style="padding:6px 12px" title="ניווט דפים">☰ דפים</button>
           <input id="page-title" class="page-title" value="${safeTitle}" placeholder="כותרת הדף">
           <span id="publish-badge" style="font-size:0.8rem;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeFg}">${statusLabel}${badgeExtra}</span>
@@ -4590,6 +4845,11 @@ app.get('/admin/theme', (req, res) => {
     ${adminNav('theme', 'ערכת נושא')}
     <div class="container" style="padding-top:28px;max-width:920px">
       <p style="color:#64748b;margin-top:0">שנה צבעים, פונט, לוגו ופריסת תפריט — בלי לגעת בקוד התמה. נשמר כ-overrides.</p>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px">
+        <h3 style="margin-top:0">מראות מוכנים</h3>
+        <p style="color:#64748b;margin:0 0 14px;font-size:.9rem">לחיצה אחת מחליפה את כל האישיות של האתר — צבעים, פינות, צללים וגופנים. אחרי הבחירה הכול נשאר ניתן לכיוון עדין למטה.</p>
+        <div id="th-looks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px"></div>
+      </section>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">אתר</h3>
@@ -4604,17 +4864,49 @@ app.get('/admin/theme', (req, res) => {
           </select>
           <label style="display:block;font-weight:600;margin-bottom:4px">טקסט לוגו</label>
           <input id="th-logo-text" value="${escAttr(logo.text)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
-          <label style="display:block;font-weight:600;margin-bottom:4px">כתובת תמונת לוגו</label>
-          <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="/assets/logo.png" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label style="display:block;font-weight:600;margin-bottom:4px">תמונת לוגו</label>
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+            <button type="button" class="btn secondary" data-media-pick="th-logo-image" style="white-space:nowrap">🖼 בחר / העלה</button>
+          </div>
         </section>
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">צבעים</h3>
           ${colorRow('primary', 'ראשי', o.colors.primary)}
+          ${colorRow('secondary', 'משלים (גרדיאנט)', o.colors.secondary)}
           ${colorRow('text', 'טקסט', o.colors.text)}
           ${colorRow('muted', 'משני', o.colors.muted)}
           ${colorRow('border', 'מסגרת', o.colors.border)}
           ${colorRow('bg', 'רקע', o.colors.bg)}
           ${colorRow('lightBg', 'רקע בהיר', o.colors.lightBg)}
+          ${colorRow('surface', 'משטח (כרטיסים)', o.colors.surface)}
+        </section>
+        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+          <h3 style="margin-top:0">אופי העיצוב</h3>
+          <label style="display:block;font-weight:600;margin-bottom:4px">פינות</label>
+          <select id="th-radius" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="sharp" ${o.style.radius === 'sharp' ? 'selected' : ''}>חדות (עיתונאי)</option>
+            <option value="soft" ${o.style.radius === 'soft' || !o.style.radius ? 'selected' : ''}>רכות</option>
+            <option value="round" ${o.style.radius === 'round' ? 'selected' : ''}>עגולות</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">צללים</label>
+          <select id="th-shadow" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="flat" ${o.style.shadow === 'flat' ? 'selected' : ''}>שטוח</option>
+            <option value="soft" ${o.style.shadow === 'soft' || !o.style.shadow ? 'selected' : ''}>עדין</option>
+            <option value="deep" ${o.style.shadow === 'deep' ? 'selected' : ''}>עמוק</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">צבע הדגשה</label>
+          <select id="th-accent" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+            <option value="solid" ${o.style.accent !== 'gradient' ? 'selected' : ''}>אחיד</option>
+            <option value="gradient" ${o.style.accent === 'gradient' ? 'selected' : ''}>גרדיאנט (ראשי ← משלים)</option>
+          </select>
+          <label style="display:block;font-weight:600;margin-bottom:4px">גופן כותרות</label>
+          <select id="th-font-heading" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+            <option value="" ${!o.fonts.headingFamily ? 'selected' : ''}>כמו גופן הטקסט</option>
+            <option value='Georgia, "Times New Roman", "Noto Serif Hebrew", serif' ${(o.fonts.headingFamily || '').includes('Georgia') ? 'selected' : ''}>סריפית קלאסית</option>
+            <option value='"Arial Black", "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif' ${(o.fonts.headingFamily || '').includes('Arial Black') ? 'selected' : ''}>שמנה מודגשת</option>
+            <option value='Tahoma, Arial, "Noto Sans Hebrew", sans-serif' ${(o.fonts.headingFamily || '').includes('Tahoma') ? 'selected' : ''}>קומפקטית</option>
+          </select>
         </section>
         <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <h3 style="margin-top:0">טיפוגרפיה ופריסה</h3>
@@ -4641,9 +4933,11 @@ app.get('/admin/theme', (req, res) => {
         <button type="button" class="btn" id="th-save-build" style="background:#166534">שמור + בנה אתר</button>
       </div>
     </div>
+    <script>window.TAPUZ_LOOKS = ${JSON.stringify(LOOKS)};</script>
+    <script src="/admin-media-picker.js"></script>
     <script src="/admin-theme.js"></script>
   `;
-  res.send(layout(html, 'ערכת נושא', '#059669'));
+  res.send(layout(html, 'ערכת נושא', accentFor('theme')));
 });
 
 // ======================== MENUS EDITOR ========================
@@ -4722,7 +5016,7 @@ app.get('/admin/sitemap', (req, res) => {
       <section class="sm-card"><h3>דפים שלא בתפריט</h3><ul class="sm-list" style="border:none;padding-inline-start:0">${orphanRows}</ul></section>
     </div>
   `;
-  res.send(layout(html, 'מפת אתר', '#ea580c'));
+  res.send(layout(html, 'מפת אתר', accentFor('sitemap')));
 });
 
 // ─── /admin/agent — pair the browser bridge (agent tokens) ──────────
@@ -4755,7 +5049,106 @@ app.get('/admin/agent', (req, res) => {
     </div>
     <script src="/admin-agent.js"></script>
   `;
-  res.send(layout(html, 'גשר סוכן', '#7c3aed'));
+  res.send(layout(html, 'גשר סוכן', accentFor('agent')));
+});
+
+// ─── Export-file importer (v0.69) — build straight from a vendor export ────
+// A dedicated section per vendor (the user declares the format; we never
+// guess from the file). WordPress is live; the rest arrive as adapters land.
+app.post('/admin/api/import', (req, res) => {
+  try {
+    const { format, content, publish } = req.body || {};
+    if (!format || typeof content !== 'string' || !content.trim()) {
+      return res.status(400).json({ ok: false, error: 'format and content required' });
+    }
+    let result;
+    try {
+      result = require('./importers').importFile(content, { format: String(format) });
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: e.message });
+    }
+    const { createPage, getPageByFullPath, savePageSource } = require('./pages');
+    const created = [];
+    for (const page of result.pages) {
+      // never clobber — suffix until the slug is free (same rule as decompile)
+      let candidate = page.slug;
+      for (let n = 2; getPageByFullPath(candidate); n++) candidate = page.slug + '-' + n;
+      createPage({ title: page.title, slug: candidate, blocks: [] });
+      try {
+        savePageSource(candidate, page.source, { publish: !!publish });
+      } catch (strictErr) {
+        savePageSource(candidate, page.source, { publish: !!publish, repair: true });
+      }
+      created.push({ title: page.title, fullPath: candidate });
+    }
+    res.json({ ok: true, format: result.format, count: created.length, created });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'import failed' });
+  }
+});
+
+app.get('/admin/import', (req, res) => {
+  const soon = [
+    ['Builder.io', 'קובץ ה‑JSON של Builder.io'],
+    ['HubSpot', 'ייצוא HubSpot CMS'],
+    ['Camilyo', 'ייצוא Camilyo'],
+    ['Mobeart', 'ייצוא Mobeart']
+  ].map((v) => `
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:14px;opacity:.65">
+        <h3 style="margin:0 0 4px">${v[0]} <span style="font-size:.72rem;background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:999px;vertical-align:middle">בקרוב</span></h3>
+        <p style="color:#94a3b8;margin:0;font-size:.9rem">${v[1]} — נוסף בקרוב.</p>
+      </section>`).join('');
+  const html = `
+    ${adminNav('import', 'ייבוא — מערכות חיצוניות')}
+    <div class="container" style="padding-top:24px;max-width:920px">
+      <p style="color:#64748b;margin-top:0">
+        בוחרים מערכת, מעלים את קובץ הייצוא — ותפוזיאל בונה את הדפים בשפת ה‑<code>.pzn</code> שלנו.
+        לכל מערכת קטע נפרד; אין צורך לנחש איזה קובץ העליתם.
+      </p>
+      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:14px">
+        <h3 style="margin:0 0 4px">וורדפרס / Elementor <span style="font-size:.72rem;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;vertical-align:middle">פעיל</span></h3>
+        <p style="color:#64748b;margin:0 0 12px;font-size:.9rem">קובץ ייצוא <b>WXR</b> (ב‑WordPress: כלים ← ייצוא ← כל התוכן).</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+          <input type="file" id="wp-file" accept=".xml,.wxr" style="flex:1;min-width:220px">
+          <label style="font-size:.9rem;color:#475569"><input type="checkbox" id="wp-publish"> פרסם מיד</label>
+          <button type="button" class="btn" data-format="wordpress" data-file="wp-file" data-publish="wp-publish" data-result="wp-result">ייבא</button>
+        </div>
+        <div id="wp-result" style="margin-top:12px;font-size:.9rem"></div>
+      </section>
+      ${soon}
+    </div>
+    <script>
+    (function(){
+      function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+      document.querySelectorAll('button[data-format]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var fileEl = document.getElementById(btn.dataset.file);
+          var pubEl = btn.dataset.publish ? document.getElementById(btn.dataset.publish) : null;
+          var out = document.getElementById(btn.dataset.result);
+          var f = fileEl && fileEl.files && fileEl.files[0];
+          if(!f){ out.innerHTML = '<span style="color:#b91c1c">בחרו קובץ קודם.</span>'; return; }
+          var label = btn.textContent; btn.disabled = true; btn.textContent = 'מייבא…';
+          var reader = new FileReader();
+          reader.onload = function(){
+            fetch('/admin/api/import', { method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ format: btn.dataset.format, content: reader.result, publish: pubEl ? pubEl.checked : false }) })
+            .then(function(r){return r.json();})
+            .then(function(d){
+              btn.disabled = false; btn.textContent = label;
+              if(!d.ok){ out.innerHTML = '<span style="color:#b91c1c">שגיאה: '+esc(d.error||'')+'</span>'; return; }
+              if(!d.count){ out.innerHTML = '<span style="color:#64748b">לא נמצאו דפים לייבוא בקובץ.</span>'; return; }
+              var li = d.created.map(function(p){ return '<li><a href="/admin/edit/'+encodeURIComponent(p.fullPath)+'">'+esc(p.title)+'</a> <span style="color:#94a3b8">('+esc(p.fullPath)+')</span></li>'; }).join('');
+              out.innerHTML = '<div style="color:#166534;margin-bottom:6px">יובאו '+d.count+' דפים:</div><ul style="margin:0;padding-inline-start:18px">'+li+'</ul>';
+            })
+            .catch(function(){ btn.disabled=false; btn.textContent=label; out.innerHTML = '<span style="color:#b91c1c">שגיאת רשת.</span>'; });
+          };
+          reader.readAsText(f);
+        });
+      });
+    })();
+    </script>
+  `;
+  res.send(layout(html, 'ייבוא', accentFor('import')));
 });
 
 // ─── /admin/ai — the paste flow (BYO AI subscription, zero keys) ────
@@ -4800,7 +5193,7 @@ app.get('/admin/ai', (req, res) => {
     </div>
     <script src="/admin-ai.js"></script>
   `;
-  res.send(layout(html, 'AI', '#0891b2'));
+  res.send(layout(html, 'AI', accentFor('chat')));
 });
 
 app.get('/admin/menus', (req, res) => {
@@ -4831,7 +5224,7 @@ app.get('/admin/menus', (req, res) => {
     </script>
     <script src="/admin-menus.js"></script>
   `;
-  res.send(layout(html, 'תפריטים', '#7c3aed'));
+  res.send(layout(html, 'תפריטים', accentFor('menus')));
 });
 
 // =========================================================================
@@ -4907,7 +5300,7 @@ app.get('/admin/inject', (req, res) => {
     </div>
     <script src="/admin-inject.js"></script>
   `;
-  res.send(layout(html, 'מילון · משחק', '#ea580c'));
+  res.send(layout(html, 'מילון · משחק', accentFor('chat')));
 });
 
 app.get('/admin/api/syntax-dictionary', (req, res) => {
@@ -5005,7 +5398,7 @@ app.get('/admin/chat', (req, res) => {
     </div>
     <script src="/admin-chat.js"></script>
   `;
-  res.send(layout(html, 'צ׳אט סוכן', '#7c3aed'));
+  res.send(layout(html, 'צ׳אט סוכן', accentFor('chat')));
 });
 
 app.get('/admin/api/mission/providers', (req, res) => {

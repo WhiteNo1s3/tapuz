@@ -1,6 +1,20 @@
-// Theme builder live preview + save helpers (loaded by /admin/theme)
+// Theme builder — looks, live preview + save helpers (loaded by /admin/theme)
 (function () {
-  var colorKeys = ['primary', 'text', 'muted', 'border', 'bg', 'lightBg'];
+  var colorKeys = ['primary', 'secondary', 'text', 'muted', 'border', 'bg', 'lightBg', 'surface'];
+  var styleIds = ['th-radius', 'th-shadow', 'th-accent', 'th-font-heading'];
+
+  // mirror src/theme.js scales for the live preview (server stays the truth)
+  var RADIUS = { sharp: { md: '4px', lg: '6px' }, soft: { md: '8px', lg: '12px' }, round: { md: '14px', lg: '20px' } };
+  var SHADOW = {
+    flat: 'none',
+    soft: '0 10px 30px rgba(2, 8, 23, 0.12)',
+    deep: '0 18px 50px rgba(0, 0, 0, 0.45)'
+  };
+
+  function val(id, fallback) {
+    var el = document.getElementById(id);
+    return el && el.value !== undefined ? el.value : (fallback || '');
+  }
 
   function bindColor(k) {
     var c = document.getElementById('th-color-' + k);
@@ -12,16 +26,17 @@
       preview();
     });
   }
-
   colorKeys.forEach(bindColor);
 
-  ['th-title', 'th-font', 'th-font-size', 'th-maxw', 'th-menu-place', 'th-logo-type', 'th-logo-text', 'th-logo-image', 'th-desc'].forEach(function (id) {
-    var el = document.getElementById(id);
-    if (el) {
-      el.addEventListener('input', preview);
-      el.addEventListener('change', preview);
-    }
-  });
+  ['th-title', 'th-font', 'th-font-size', 'th-maxw', 'th-menu-place', 'th-logo-type', 'th-logo-text', 'th-logo-image', 'th-desc']
+    .concat(styleIds)
+    .forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', preview);
+        el.addEventListener('change', preview);
+      }
+    });
 
   function colors() {
     var o = {};
@@ -34,24 +49,30 @@
 
   function payload() {
     return {
-      siteTitle: (document.getElementById('th-title') || {}).value || '',
-      description: (document.getElementById('th-desc') || {}).value || '',
+      siteTitle: val('th-title'),
+      description: val('th-desc'),
       logo: {
-        type: (document.getElementById('th-logo-type') || {}).value || 'text',
-        text: (document.getElementById('th-logo-text') || {}).value || '',
-        image: (document.getElementById('th-logo-image') || {}).value || '',
+        type: val('th-logo-type', 'text') || 'text',
+        text: val('th-logo-text'),
+        image: val('th-logo-image'),
         width: 180,
         height: 50
       },
       overrides: {
         colors: colors(),
         fonts: {
-          family: (document.getElementById('th-font') || {}).value || '',
-          baseSize: (document.getElementById('th-font-size') || {}).value || '17px'
+          family: val('th-font'),
+          headingFamily: val('th-font-heading'),
+          baseSize: val('th-font-size', '17px') || '17px'
+        },
+        style: {
+          radius: val('th-radius', 'soft') || 'soft',
+          shadow: val('th-shadow', 'soft') || 'soft',
+          accent: val('th-accent', 'solid') || 'solid'
         },
         layout: {
-          maxWidth: (document.getElementById('th-maxw') || {}).value || '900px',
-          menuPlacement: (document.getElementById('th-menu-place') || {}).value || 'top'
+          maxWidth: val('th-maxw', '900px') || '900px',
+          menuPlacement: val('th-menu-place', 'top') || 'top'
         }
       }
     };
@@ -61,16 +82,79 @@
     var p = payload();
     var box = document.getElementById('th-preview');
     if (!box) return;
-    box.style.background = p.overrides.colors.bg;
-    box.style.color = p.overrides.colors.text;
+    var c = p.overrides.colors;
+    var st = p.overrides.style;
+    var r = RADIUS[st.radius] || RADIUS.soft;
+    var accentBg = st.accent === 'gradient'
+      ? 'linear-gradient(135deg, ' + c.primary + ', ' + c.secondary + ')'
+      : c.primary;
+    // font stacks carry double quotes ("Times New Roman") — single-quote them
+    // so they can live inside the double-quoted style="" attributes below
+    var q = function (f) { return String(f || '').replace(/"/g, "'"); };
+    var headingFont = q(p.overrides.fonts.headingFamily || p.overrides.fonts.family);
+    box.style.background = c.bg;
+    box.style.color = c.text;
     box.style.fontFamily = p.overrides.fonts.family;
     box.innerHTML =
-      '<div style="font-weight:700;font-size:1.2rem;margin-bottom:8px;color:' + p.overrides.colors.primary + '">' +
-      (p.siteTitle || 'Site').replace(/</g, '<') + '</div>' +
-      '<p style="color:' + p.overrides.colors.muted + ';margin:0 0 12px">טקסט משני לדוגמה</p>' +
-      '<a href="#" style="display:inline-block;background:' + p.overrides.colors.primary + ';color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;font-weight:600">כפתור</a>' +
-      '<hr style="border:none;border-top:1px solid ' + p.overrides.colors.border + ';margin:16px 0">' +
+      '<div style="font-weight:800;font-size:1.25rem;margin-bottom:8px;color:' + c.primary + ';font-family:' + headingFont + '">' +
+      (p.siteTitle || 'Site').replace(/</g, '&lt;') + '</div>' +
+      '<p style="color:' + c.muted + ';margin:0 0 12px">טקסט משני לדוגמה</p>' +
+      '<div style="background:' + c.surface + ';border:1px solid ' + c.border + ';border-radius:' + r.lg + ';box-shadow:' + (SHADOW[st.shadow] || SHADOW.soft) + ';padding:14px;margin-bottom:14px">' +
+      '<div style="font-weight:700;margin-bottom:4px;font-family:' + headingFont + '">כרטיס לדוגמה</div>' +
+      '<p style="margin:0;color:' + c.muted + ';font-size:.9rem">כך ייראו כרטיסים, טפסים ומבזקים.</p>' +
+      '</div>' +
+      '<a href="#" style="display:inline-block;background:' + accentBg + ';color:#fff;padding:9px 18px;border-radius:' + r.md + ';text-decoration:none;font-weight:600">כפתור ראשי</a>' +
+      '<hr style="border:none;border-top:1px solid ' + c.border + ';margin:16px 0">' +
       '<p style="margin:0">פסקת תוכן רגילה לבדיקת ניגודיות וקריאות.</p>';
+  }
+
+  // ── Looks: one-click whole personalities (data injected by the page) ──
+  function setColor(k, v) {
+    var c = document.getElementById('th-color-' + k);
+    var h = document.getElementById('th-color-' + k + '-hex');
+    if (c && v) c.value = v;
+    if (h && v) h.value = v;
+  }
+  function setSelect(id, v) {
+    var el = document.getElementById(id);
+    if (el && v !== undefined) el.value = v;
+  }
+
+  function applyLook(look) {
+    var o = look.overrides || {};
+    Object.keys(o.colors || {}).forEach(function (k) { setColor(k, o.colors[k]); });
+    if (o.style) {
+      setSelect('th-radius', o.style.radius);
+      setSelect('th-shadow', o.style.shadow);
+      setSelect('th-accent', o.style.accent);
+    }
+    if (o.fonts && o.fonts.headingFamily !== undefined) setSelect('th-font-heading', o.fonts.headingFamily);
+    preview();
+  }
+
+  function renderLooks() {
+    var host = document.getElementById('th-looks');
+    var looks = window.TAPUZ_LOOKS;
+    if (!host || !looks) return;
+    Object.keys(looks).forEach(function (key) {
+      var look = looks[key];
+      var c = (look.overrides || {}).colors || {};
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.setAttribute('dir', 'rtl');
+      card.style.cssText = 'cursor:pointer;text-align:center;padding:12px 8px;border:1.5px solid #e2e8f0;border-radius:12px;background:' + (c.bg || '#fff') + ';transition:border-color .15s, transform .15s';
+      var dots = ['primary', 'secondary', 'surface', 'text'].map(function (k) {
+        return '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;margin:0 2px;border:1px solid rgba(0,0,0,.12);background:' + (c[k] || '#ccc') + '"></span>';
+      }).join('');
+      card.innerHTML =
+        '<div style="font-size:1.5rem;line-height:1">' + (look.emoji || '🎨') + '</div>' +
+        '<div style="font-weight:700;margin:6px 0 8px;color:' + (c.text || '#111') + '">' + look.label + '</div>' +
+        '<div>' + dots + '</div>';
+      card.addEventListener('mouseenter', function () { card.style.borderColor = '#94a3b8'; card.style.transform = 'translateY(-2px)'; });
+      card.addEventListener('mouseleave', function () { card.style.borderColor = '#e2e8f0'; card.style.transform = 'none'; });
+      card.addEventListener('click', function () { applyLook(look); });
+      host.appendChild(card);
+    });
   }
 
   function save(thenBuild) {
@@ -99,19 +183,21 @@
   var resetBtn = document.getElementById('th-reset');
   if (resetBtn) resetBtn.onclick = function () {
     if (!confirm('לאפס overrides לברירת מחדל?')) return;
+    // the 'naki' look IS the default bundle — one source of truth
+    var naki = (window.TAPUZ_LOOKS || {}).naki;
+    var overrides = naki ? JSON.parse(JSON.stringify(naki.overrides)) : {};
+    overrides.fonts = overrides.fonts || {};
+    overrides.fonts.family = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Hebrew", sans-serif';
+    overrides.fonts.baseSize = '17px';
+    overrides.layout = { maxWidth: '900px', menuPlacement: 'top' };
     fetch('/admin/api/theme', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        overrides: {
-          colors: { primary: '#0a66c2', text: '#111827', muted: '#6b7280', border: '#e5e7eb', bg: '#ffffff', lightBg: '#f8fafc' },
-          fonts: { family: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Hebrew", sans-serif', baseSize: '17px' },
-          layout: { maxWidth: '900px', menuPlacement: 'top' }
-        }
-      })
+      body: JSON.stringify({ overrides: overrides })
     }).then(function () { location.reload(); });
   };
 
+  renderLooks();
   // Initial preview
   setTimeout(preview, 50);
 })();

@@ -6,26 +6,46 @@
  * and ask this worker to publish; the worker holds the credential. */
 'use strict';
 
-importScripts('extract.js');
+importScripts('extract.js', 'llm.js');
 
 const KEYS = {
   url: 'cms_url',
   token: 'cms_token',
   target: 'target_page',
-  autoPublish: 'auto_publish'
+  autoPublish: 'auto_publish',
+  // BYOK (v0.73): the user's own LLM key + chosen provider/model. The key is
+  // read ONLY inside this worker's generate flow and never leaves the browser.
+  byokKey: 'byok_key',
+  byokProvider: 'byok_provider',
+  byokModel: 'byok_model'
 };
 
 function getConfig() {
   return new Promise((resolve) => {
-    chrome.storage.local.get([KEYS.url, KEYS.token, KEYS.target, KEYS.autoPublish], (r) => {
-      resolve({
-        url: (r[KEYS.url] || '').replace(/\/+$/, ''),
-        token: r[KEYS.token] || '',
-        target: r[KEYS.target] || '__new__',
-        autoPublish: r[KEYS.autoPublish] !== false // default ON
-      });
-    });
+    chrome.storage.local.get(
+      [KEYS.url, KEYS.token, KEYS.target, KEYS.autoPublish, KEYS.byokKey, KEYS.byokProvider, KEYS.byokModel],
+      (r) => {
+        resolve({
+          url: (r[KEYS.url] || '').replace(/\/+$/, ''),
+          token: r[KEYS.token] || '',
+          target: r[KEYS.target] || '__new__',
+          autoPublish: r[KEYS.autoPublish] !== false, // default ON
+          byokKey: r[KEYS.byokKey] || '',
+          byokProvider: r[KEYS.byokProvider] || 'claude',
+          byokModel: r[KEYS.byokModel] || ''
+        });
+      }
+    );
   });
+}
+
+// providers table from the CMS (constants authority) — cached in the worker
+let _providersCache = null;
+async function fetchProviders(cfg) {
+  if (_providersCache) return _providersCache;
+  const r = await cms('/agent/v1/providers', { cfg });
+  _providersCache = (r && r.providers) || [];
+  return _providersCache;
 }
 
 async function cms(path, { method = 'GET', body, cfg } = {}) {
@@ -93,18 +113,69 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       switch (msg && msg.type) {
         case 'getConfig': {
           const c = await getConfig();
-          // NEVER return the token to callers; only whether one is set.
-          sendResponse({ ok: true, url: c.url, hasToken: !!c.token, target: c.target, autoPublish: c.autoPublish });
+          // NEVER return the token OR the byok key to callers; only whether set.
+          sendResponse({
+            ok: true, url: c.url, hasToken: !!c.token, target: c.target, autoPublish: c.autoPublish,
+            hasKey: !!c.byokKey, byokProvider: c.byokProvider, byokModel: c.byokModel
+          });
           return;
         }
         case 'setConfig': {
           const patch = {};
-          if (typeof msg.url === 'string') patch[KEYS.url] = msg.url.trim().replace(/\/+$/, '');
+          if (typeof msg.url === 'string') {
+            const newUrl = msg.url.trim().replace(/\/+$/, '');
+            // re-pointed at a different CMS → its provider table is stale
+            const cur = await getConfig();
+            if (newUrl !== cur.url) _providersCache = null;
+            patch[KEYS.url] = newUrl;
+          }
           if (typeof msg.token === 'string' && msg.token) patch[KEYS.token] = msg.token.trim();
           if (typeof msg.target === 'string') patch[KEYS.target] = msg.target;
           if (typeof msg.autoPublish === 'boolean') patch[KEYS.autoPublish] = msg.autoPublish;
+          // BYOK: store the user's key/provider/model. Key is write-only from
+          // the popup's view (getConfig never reads it back out).
+          if (typeof msg.byokKey === 'string' && msg.byokKey) patch[KEYS.byokKey] = msg.byokKey.trim();
+          if (typeof msg.byokProvider === 'string') patch[KEYS.byokProvider] = msg.byokProvider;
+          if (typeof msg.byokModel === 'string') patch[KEYS.byokModel] = msg.byokModel;
           await new Promise((r) => chrome.storage.local.set(patch, r));
           sendResponse({ ok: true });
+          return;
+        }
+        case 'clearKey': {
+          await new Promise((r) => chrome.storage.local.remove(KEYS.byokKey, r));
+          sendResponse({ ok: true });
+          return;
+        }
+        case 'providers': {
+          const c = await getConfig();
+          if (!c.url || !c.token) throw new Error('CMS not configured');
+          const providers = await fetchProviders(c);
+          // strip nothing sensitive — the table has no secrets — but do not
+          // echo the user's key (it isn't in the table anyway)
+          sendResponse({ ok: true, providers, selected: c.byokProvider, model: c.byokModel });
+          return;
+        }
+        case 'generate': {
+          // BYOK one-shot: user's key -> provider API (direct) -> .pzn -> CMS.
+          const c = await getConfig();
+          if (!c.url || !c.token) throw new Error('CMS not configured');
+          if (!c.byokKey) throw new Error('לא הוגדר מפתח API — פתחו «מפתח משלכם» והזינו אותו');
+          const brief = String((msg && msg.brief) || '').trim();
+          if (!brief) throw new Error('כתבו מה לבנות (למשל: דף נחיתה למאפייה)');
+          const providers = await fetchProviders(c);
+          const provider = providers.find((p) => p.id === c.byokProvider) || providers[0];
+          if (!provider) throw new Error('לא נמצא ספק — בדקו את חיבור ה‑CMS');
+          // a stored model from a DIFFERENT provider (dropdown switched without
+          // re-saving) would 400 — only honor byokModel if it belongs here.
+          const model = (provider.models || []).includes(c.byokModel) ? c.byokModel : provider.defaultModel;
+          // system prompt = the site-builder game from the CMS (teaches .pzn)
+          const roleRes = await fetch(c.url + '/agent/v1/roleplay?locale=he', { headers: { Authorization: 'Bearer ' + c.token } });
+          if (!roleRes.ok) throw new Error('roleplay HTTP ' + roleRes.status);
+          const system = await roleRes.text();
+          const userText = 'בנה דף שלם ב‑.pzn לפי הבקשה, החזר רק את מסמך ה‑HTML המלא בתוך גדר קוד:\n\n' + brief;
+          const reply = await self.TapuzLLM.generate(provider, c.byokKey, system, userText, model);
+          const published = await publishReply(reply, { publish: c.autoPublish, requireComplete: false });
+          sendResponse({ ok: true, ...published, provider: provider.id, model });
           return;
         }
         case 'ping': {

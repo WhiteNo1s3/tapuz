@@ -179,6 +179,7 @@ register({
   props: {
     src: { type: 'url', default: '', label: { he: 'מקור', en: 'Source' } },
     alt: { type: 'string', default: '', optional: true, label: { he: 'טקסט חלופי', en: 'Alt' } },
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת תמונה (SEO)', en: 'Image title' } },
     caption: { type: 'string', default: '', optional: true, label: { he: 'כיתוב', en: 'Caption' } },
     align: {
       type: 'enum', values: ['left', 'center', 'right'], default: 'center', optional: true,
@@ -195,7 +196,8 @@ register({
   compile(node, ctx) {
     const { src = '', alt = '', caption = '', align = 'center' } = node.props;
     const { id, cls } = attrsExtra(node);
-    let inner = `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}" loading="lazy">`;
+    const imgTitle = node.props.title ? ` title="${escapeAttr(node.props.title)}"` : '';
+    let inner = `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"${imgTitle} loading="lazy">`;
     if (caption) inner += `<figcaption>${escapeHtml(caption)}</figcaption>`;
     const widthCls = node.props.width && node.props.width !== 'full' ? ` width-${escapeAttr(node.props.width)}` : '';
     return `<figure${id} class="bent-image align-${escapeAttr(align)}${widthCls}${cls}"${dirAttr(ctx)}>${inner}</figure>`;
@@ -223,6 +225,9 @@ register({
       type: 'text', content: true, default: 'לחץ כאן',
       label: { he: 'טקסט', en: 'Label' }
     },
+    rel: { type: 'string', default: '', optional: true, label: { he: 'יחס קישור (rel)', en: 'Link rel' } },
+    target: { type: 'enum', values: ['_self', '_blank'], default: '_self', optional: true, label: { he: 'פתיחה', en: 'Target' } },
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת קישור (SEO)', en: 'Link title' } },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -231,7 +236,8 @@ register({
     const href = safeHref(node.props.href || '#');
     const variant = node.props.variant || 'primary';
     const { id, cls } = attrsExtra(node);
-    return `<a${id} href="${escapeAttr(href)}" class="btn btn-${escapeAttr(variant)} bent-button${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</a>`;
+    const seo = require('../link-attrs').linkSeoAttrs(node.props);
+    return `<a${id} href="${escapeAttr(href)}"${seo} class="btn btn-${escapeAttr(variant)} bent-button${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</a>`;
   }
 });
 
@@ -1070,6 +1076,50 @@ register({
   }
 });
 
+// ─── Timestamped news feed (v0.70) — walla's standing "HH:MM · headline"
+//     column (the ticker scrolls; newspop stays). A `newspop` container of
+//     repeatable `newspopitem` rows, each with a time + headline + link. ───
+register({
+  name: 'newspopitem',
+  tag: 'bent-newspopitem',
+  category: 'media',
+  label: { he: 'עדכון', en: 'News update' },
+  icon: 'link',
+  container: false,
+  props: {
+    time: { type: 'string', default: '', optional: true, label: { he: 'שעה', en: 'Time' } },
+    text: { type: 'string', default: '', label: { he: 'כותרת', en: 'Headline' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../newspop-html').renderNewspopItem(node.props || {});
+  }
+});
+
+register({
+  name: 'newspop',
+  tag: 'bent-newspop',
+  category: 'media',
+  label: { he: 'מבזקים עם שעות', en: 'News feed' },
+  icon: 'ticker',
+  container: true,
+  accept: ['newspopitem'],
+  props: {
+    label: { type: 'string', default: '', optional: true, label: { he: 'תווית', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../newspop-html').renderNewspop(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 // ─── Video (v0.62) — native self-hosted <video> (batch item 4). `embed`
 //     already covers YouTube iframes; a YT url here degrades to that embed. ──
 register({
@@ -1224,7 +1274,7 @@ register({
   name: 'banner',
   tag: 'bent-banner',
   category: 'content',
-  label: { he: 'באנר הודעה', en: 'Banner' },
+  label: { he: 'באנר', en: 'Banner' },
   icon: 'banner',
   container: false,
   props: {
@@ -1236,13 +1286,18 @@ register({
       type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
       label: { he: 'יישור', en: 'Align' }
     },
-    text: { type: 'text', content: true, default: '', label: { he: 'הודעה', en: 'Message' } },
+    // a fresh banner starts with visible placeholder text (like heading/text/
+    // button) — the compile guard below hides EMPTIED banners from readers,
+    // and a blank default would make the builder drop an invisible block
+    text: { type: 'text', content: true, default: 'הודעה חדשה', label: { he: 'הודעה', en: 'Message' } },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
   defaults: {},
   compile(node, ctx) {
     const { id, cls } = attrsExtra(node);
+    // an empty banner is markup residue — never ship a blank strip to a reader
+    if (!String(node.text || '').trim()) return '';
     const tone = ['brand', 'dark', 'light', 'warn'].includes(node.props.tone) ? node.props.tone : 'brand';
     return `<div${id} class="site-banner tone-${escapeAttr(tone)} bent-banner${cls}"${dirAttr(ctx)}><p>${escapeHtml(node.text)}</p></div>`;
   }

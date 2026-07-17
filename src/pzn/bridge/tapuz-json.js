@@ -70,7 +70,7 @@ function blockToModule(block) {
     }
 
     case 'button': {
-      const props = pickProps(data, ['variant', 'align']);
+      const props = pickProps(data, ['variant', 'align', 'rel', 'target', 'title']);
       if (data.url !== undefined) props.href = data.url;
       return createModule('button', baseOpts(block, props, { text: data.text || '' }));
     }
@@ -108,7 +108,7 @@ function blockToModule(block) {
       return createModule('article-list', baseOpts(block, pickProps(data, ['tag', 'limit', 'columns'])));
 
     case 'image':
-      return createModule('image', baseOpts(block, pickProps(data, ['src', 'alt', 'caption', 'width'])));
+      return createModule('image', baseOpts(block, pickProps(data, ['src', 'alt', 'title', 'caption', 'width'])));
 
     case 'gallery': {
       const children = (data.images || []).map((img) =>
@@ -251,6 +251,14 @@ function blockToModule(block) {
       );
       return createModule('ticker', baseOpts(block, pickProps(data, ['label', 'speed', 'background', 'color']), { children }));
     }
+    case 'newspop': {
+      const children = (data.items || []).map((it) =>
+        createModule('newspopitem', {
+          props: pickProps(it || {}, ['time', 'text', 'href'])
+        })
+      );
+      return createModule('newspop', baseOpts(block, pickProps(data, ['label']), { children }));
+    }
 
     case 'video':
       return createModule('video', baseOpts(block, pickProps(data, ['src', 'poster', 'caption', 'controls', 'autoplay', 'loop', 'muted'])));
@@ -362,7 +370,7 @@ function moduleToBlock(node) {
     }
 
     case 'button': {
-      const data = pickData(props, ['variant', 'align']);
+      const data = pickData(props, ['variant', 'align', 'rel', 'target', 'title']);
       if (props.href !== undefined) data.url = props.href;
       if (node.text) data.text = node.text;
       return finishBlock(node, 'button', data);
@@ -408,7 +416,7 @@ function moduleToBlock(node) {
       return finishBlock(node, 'article-list', pickData(props, ['tag', 'limit', 'columns']));
 
     case 'image':
-      return finishBlock(node, 'image', pickData(props, ['src', 'alt', 'caption', 'width']));
+      return finishBlock(node, 'image', pickData(props, ['src', 'alt', 'title', 'caption', 'width']));
 
     case 'gallery': {
       const data = pickData(props, ['columns']);
@@ -546,6 +554,13 @@ function moduleToBlock(node) {
         .filter((c) => c.name === 'tickeritem')
         .map((c) => pickData(c.props || {}, ['text', 'href']));
       return finishBlock(node, 'ticker', data);
+    }
+    case 'newspop': {
+      const data = pickData(props, ['label']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'newspopitem')
+        .map((c) => pickData(c.props || {}, ['time', 'text', 'href']));
+      return finishBlock(node, 'newspop', data);
     }
 
     case 'video':

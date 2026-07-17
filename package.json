@@ -39,6 +39,9 @@
     "test:cards": "node scripts/smoke-cards.js",
     "test:nav": "node scripts/smoke-nav.js",
     "test:ticker": "node scripts/smoke-ticker.js",
+    "test:newspop": "node scripts/smoke-newspop.js",
+    "test:theme": "node scripts/smoke-theme.js",
+    "test:byok": "node scripts/smoke-byok.js",
     "test:video": "node scripts/smoke-video.js",
     "test:storage": "node scripts/smoke-storage.js",
     "test:categories": "node scripts/smoke-categories.js",
@@ -49,7 +52,7 @@
     "gen:dictionary": "node scripts/gen-syntax-dictionary.js",
     "gen:spec": "node scripts/gen-pzn-spec.js",
     "gen:icons": "node scripts/gen-extension-icons.js",
-    "test:smoke": "node scripts/smoke-render.js && node scripts/smoke-drafts.js && node scripts/smoke-articles.js && node scripts/smoke-bentml.js && node scripts/smoke-map.js && node scripts/smoke-analytics.js && node scripts/smoke-pzn-roundtrip.js && node scripts/smoke-pzn-store.js && node scripts/smoke-pzn-ops.js && node scripts/smoke-pzn-paste.js && node scripts/smoke-agent-bridge.js && node scripts/smoke-extension.js && node scripts/smoke-uploads.js && node scripts/smoke-pzn-html.js && node scripts/smoke-pzn-repair.js && node scripts/smoke-graduate.js && node scripts/smoke-page-bg.js && node scripts/smoke-import.js && node scripts/smoke-containers.js && node scripts/smoke-form.js && node scripts/smoke-cards.js && node scripts/smoke-nav.js && node scripts/smoke-ticker.js && node scripts/smoke-video.js && node scripts/smoke-storage.js && node scripts/smoke-categories.js && node scripts/smoke-card-cluster.js && node scripts/smoke-roleplay.js && node scripts/smoke-mission.js && node scripts/smoke-decompile.js && node scripts/smoke-hunt.js && node scripts/smoke-publish-live.js && node scripts/smoke-registry.js && node scripts/smoke-wizard.js"
+    "test:smoke": "node scripts/smoke-render.js && node scripts/smoke-drafts.js && node scripts/smoke-articles.js && node scripts/smoke-bentml.js && node scripts/smoke-map.js && node scripts/smoke-analytics.js && node scripts/smoke-pzn-roundtrip.js && node scripts/smoke-pzn-store.js && node scripts/smoke-pzn-ops.js && node scripts/smoke-pzn-paste.js && node scripts/smoke-agent-bridge.js && node scripts/smoke-extension.js && node scripts/smoke-byok.js && node scripts/smoke-uploads.js && node scripts/smoke-pzn-html.js && node scripts/smoke-pzn-repair.js && node scripts/smoke-graduate.js && node scripts/smoke-page-bg.js && node scripts/smoke-import.js && node scripts/smoke-containers.js && node scripts/smoke-form.js && node scripts/smoke-cards.js && node scripts/smoke-nav.js && node scripts/smoke-ticker.js && node scripts/smoke-newspop.js && node scripts/smoke-video.js && node scripts/smoke-storage.js && node scripts/smoke-categories.js && node scripts/smoke-card-cluster.js && node scripts/smoke-roleplay.js && node scripts/smoke-mission.js && node scripts/smoke-decompile.js && node scripts/smoke-hunt.js && node scripts/smoke-publish-live.js && node scripts/smoke-registry.js && node scripts/smoke-seo.js && node scripts/smoke-theme.js && node scripts/smoke-link-seo.js && node scripts/smoke-wizard.js"
   },
   "keywords": [
     "cms",

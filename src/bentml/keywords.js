@@ -47,6 +47,7 @@ const KEYWORDS = {
     params: {
       src: { type: 'string', required: true },
       alt: { type: 'string', default: '' },
+      title: { type: 'string' },
       caption: { type: 'string' },
       width: { type: 'enum', default: 'full', values: ['sm', 'md', 'lg', 'full'] }
     }
@@ -57,7 +58,10 @@ const KEYWORDS = {
     params: {
       url: { type: 'string', required: true },
       style: { type: 'enum', default: 'primary', values: ['primary', 'secondary', 'ghost'] },
-      align: { type: 'enum', default: 'start', values: ['start', 'center', 'end'] }
+      align: { type: 'enum', default: 'start', values: ['start', 'center', 'end'] },
+      rel: { type: 'string' },
+      target: { type: 'enum', default: '_self', values: ['_self', '_blank'] },
+      title: { type: 'string' }
     }
   },
   ROW: {
@@ -124,20 +128,23 @@ const KEYWORDS = {
       parallax: { type: 'boolean', default: false }
     }
   },
+  // Alias of MOTION(effect: marquee) — kept so older sources keep compiling.
+  // Canonical decompile output is MOTION (see decompile.js).
   MARQUEE: {
     body: 'TEXT-BODY',
     jsonType: 'marquee',
+    aliasOf: 'MOTION',
     params: {
       speed: { type: 'enum', default: 'md', values: ['slow', 'md', 'fast'] }
     }
   },
+  // Alias of BACKDROP — kept so older sources keep compiling.
+  // Canonical decompile output is BACKDROP (see decompile.js).
   PARALLAX: {
     body: 'BLOCK-BODY',
     jsonType: 'parallax',
+    aliasOf: 'BACKDROP',
     params: {
-      // image is not `required` at the language level so an empty-image block
-      // round-trips (decompile → compile) without throwing E306; the block
-      // registry marks it required for the admin form instead.
       image: { type: 'string' },
       overlay: { type: 'integer', default: 0 },
       height: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'full'] }
@@ -203,25 +210,30 @@ const KEYWORDS = {
       height: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg'] }
     }
   },
-  // v0.1 advanced — compile stubs with best-effort JSON
+  // Canonical moving-text keyword. effect: marquee = the horizontal scroll
+  // ("moving text"); fade/slide/typewriter = CSS entrance animations. Renders
+  // as the `marquee` type (MARQUEE is the alias). Reduced-motion safe.
   MOTION: {
     body: 'TEXT-BODY',
-    jsonType: 'text',
+    jsonType: 'marquee',
     params: {
-      effect: { type: 'enum', default: 'fade', values: ['fade', 'slide', 'typewriter', 'marquee'] },
-      speed: { type: 'enum', default: 'normal', values: ['slow', 'normal', 'fast'] },
-      repeat: { type: 'enum', default: 'once', values: ['once', 'loop'] }
+      effect: { type: 'enum', default: 'marquee', values: ['marquee', 'fade', 'slide', 'typewriter'] },
+      speed: { type: 'enum', default: 'md', values: ['slow', 'md', 'fast'] }
     }
   },
+  // Canonical fixed-background keyword — the content scrolls over a pinned
+  // image. Renders as the `parallax` type (PARALLAX is the alias).
   BACKDROP: {
     body: 'BLOCK-BODY',
-    jsonType: 'card', // rendered as card + backdrop meta until SECTION ships
+    jsonType: 'parallax',
     params: {
-      image: { type: 'string', required: true },
-      tint: { type: 'enum', default: 'none', values: ['dark', 'light', 'brand', 'none'] },
-      opacity: { type: 'integer', default: 100 },
-      fade: { type: 'boolean', default: false },
-      minheight: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'full'] }
+      // image not `required` at the language level so an empty-image block
+      // round-trips without E306 (the registry marks it required for the form).
+      image: { type: 'string' },
+      overlay: { type: 'integer', default: 0 },
+      height: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'full'] },
+      tint: { type: 'enum', default: 'none', values: ['none', 'dark', 'light', 'brand'] },
+      fade: { type: 'boolean', default: false }
     }
   },
   HTML: { body: 'HTML' },
@@ -241,21 +253,51 @@ const KEYWORDS = {
     }
   },
   STATS: {
-    body: 'NO-BODY',
+    body: 'BLOCK-BODY',
     jsonType: 'stats',
+    children: ['STAT'],
     params: {
       columns: { type: 'integer', default: 3 }
     }
   },
-  LOGOS: {
+  STAT: {
     body: 'NO-BODY',
+    childOnly: true,
+    parent: 'STATS',
+    params: {
+      value: { type: 'string', required: true },
+      label: { type: 'string', required: true }
+    }
+  },
+  LOGOS: {
+    body: 'BLOCK-BODY',
     jsonType: 'logos',
+    children: ['LOGO'],
     params: {}
   },
-  FAQ: {
+  LOGO: {
     body: 'NO-BODY',
+    childOnly: true,
+    parent: 'LOGOS',
+    params: {
+      src: { type: 'string', required: true },
+      alt: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
+  FAQ: {
+    body: 'BLOCK-BODY',
     jsonType: 'faq',
+    children: ['QA'],
     params: {}
+  },
+  QA: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'FAQ',
+    params: {
+      question: { type: 'string', required: true }
+    }
   },
   TABS: {
     body: 'NO-BODY',
@@ -298,6 +340,13 @@ const KEYWORDS = {
       speed: { type: 'enum', values: ['slow', 'md', 'fast'], default: 'md' },
       background: { type: 'string' },
       color: { type: 'string' }
+    }
+  },
+  NEWSPOP: {
+    body: 'NO-BODY',
+    jsonType: 'newspop',
+    params: {
+      label: { type: 'string' }
     }
   },
   VIDEO: {

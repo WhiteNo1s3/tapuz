@@ -82,6 +82,25 @@ body {
   color: var(--color-primary);
 }
 
+/* ===== CMS-managed header chrome (S3) ===== */
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.site-tagline {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+.header-cta {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.site-header--nosticky {
+  position: static;
+}
+
 /* ===== Main Content ===== */
 .main-content {
   max-width: var(--max-width);
@@ -346,6 +365,54 @@ figcaption {
   color: var(--color-text);
 }
 
+/* ===== CMS-managed footer chrome (S3) ===== */
+.footer-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1.5rem;
+  padding-bottom: 1.75rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.footer-col-title {
+  font-size: 0.98rem;
+  color: var(--color-text);
+  margin: 0 0 0.6rem;
+}
+.footer-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.footer-col li { margin-bottom: 0.4rem; }
+.footer-col a {
+  color: var(--color-muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.footer-col a:hover { color: var(--color-primary); }
+
+.footer-end {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.footer-social { display: flex; gap: 0.85rem; }
+.footer-social a {
+  color: var(--color-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.footer-social a:hover { color: var(--color-primary); }
+
+.footer-text { margin: 0.4rem 0; }
+.footer-credit {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  opacity: 0.75;
+}
+
 /* ===== Misc ===== */
 hr {
   border: none;
@@ -439,6 +506,22 @@ button:focus-visible,
   border: 0;
 }
 
+/* video (v0.62) — native self-hosted <video>; a YouTube src reuses the
+   .video-embed aspect-ratio box above (same margin so both read alike). */
+.bent-video { margin: 1.75rem 0; }
+.bent-video video {
+  display: block; width: 100%; max-width: 100%;
+  border-radius: 12px; background: #000;
+}
+.bent-video-caption {
+  margin-top: 0.5rem; font-size: 0.9rem;
+  color: var(--color-text-muted, #64748b); text-align: center;
+}
+.bent-video-empty {
+  padding: 2rem; text-align: center; color: #94a3b8;
+  background: #f1f5f9; border-radius: 12px;
+}
+
 /* Map embed block (MAP) */
 .map-embed {
   margin: 1.75rem 0;
@@ -496,6 +579,95 @@ button:focus-visible,
   background: var(--color-surface, #f8fafc);
 }
 
+/* Enterprise modules */
+.cta-strip {
+  border-radius: 14px;
+  padding: 2rem 1.5rem;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+.cta-strip.tone-brand { background: linear-gradient(135deg, #0a66c2, #0369a1); color: #fff; }
+.cta-strip.tone-dark { background: #0f172a; color: #f8fafc; }
+.cta-strip.tone-light { background: #f1f5f9; color: #0f172a; border: 1px solid #e2e8f0; }
+.cta-strip h2 { margin: 0 0 0.5rem; font-size: 1.6rem; }
+.cta-strip p { margin: 0 0 1rem; opacity: 0.92; }
+.cta-strip .btn { margin-top: 0.25rem; }
+
+.stats-row {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+.stats-row.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.stats-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.stats-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.stat-value { font-size: 2rem; font-weight: 800; color: var(--color-primary, #0a66c2); line-height: 1.1; }
+.stat-label { color: var(--color-muted, #6b7280); font-size: 0.95rem; margin-top: 0.35rem; }
+
+.logos-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 2rem;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 0;
+  margin: 1rem 0;
+  border-block: 1px solid var(--color-border, #e5e7eb);
+}
+.logo-cell img {
+  max-height: 40px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  filter: grayscale(0.2);
+  opacity: 0.85;
+}
+
+.faq-list { margin: 1.25rem 0; }
+.faq-item {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  margin-bottom: 0.5rem;
+  background: #fff;
+}
+.faq-item summary { cursor: pointer; font-weight: 600; }
+.faq-answer { margin-top: 0.5rem; color: var(--color-muted, #6b7280); line-height: 1.6; }
+
+.contact-info {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 12px;
+  padding: 1.15rem 1.25rem;
+  background: var(--color-surface, #f8fafc);
+}
+.contact-line { margin: 0.4rem 0; }
+.contact-k { font-weight: 700; margin-inline-end: 0.35rem; color: var(--color-primary, #0a66c2); }
+
+.site-banner {
+  padding: 0.75rem 1.25rem;
+  text-align: center;
+  border-radius: 8px;
+  margin: 0.75rem 0;
+}
+.site-banner p { margin: 0; font-weight: 600; }
+.site-banner.tone-brand { background: #dbeafe; color: #1e3a8a; }
+.site-banner.tone-dark { background: #0f172a; color: #f8fafc; }
+.site-banner.tone-light { background: #f1f5f9; color: #334155; }
+.site-banner.tone-warn { background: #fef3c7; color: #92400e; }
+
+.features.cols-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.features.cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.features.cols-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.feature-icon { font-size: 1.4rem; display: block; margin-bottom: 0.35rem; }
+
+@media (max-width: 700px) {
+  .stats-row.cols-2, .stats-row.cols-3, .stats-row.cols-4,
+  .features.cols-2, .features.cols-3, .features.cols-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* WhatsApp click-to-chat floating button (site integration) */
 .whatsapp-float {
   position: fixed;
@@ -540,6 +712,302 @@ p, li { max-width: 70ch; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .card, .feature, .main-nav a::after, .skip-link, .whatsapp-float { transition: none; }
+}
+
+/* ── Signature visuals (v0.44) — heroes with fixed backgrounds, text
+   scrolling over them with opacity, moving text (the vision's namesakes) ── */
+
+/* hero overlay + parallax */
+.hero { position: relative; }
+.hero.hero-overlaid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit; /* follow the hero's rounded corners, no dark square bleed */
+  background: rgba(0, 0, 0, var(--hero-overlay, 0.35));
+  pointer-events: none;
+}
+.hero.hero-overlaid > * { position: relative; z-index: 1; }
+.hero.hero-overlaid { color: #fff; }
+.hero.hero-parallax { background-attachment: fixed; }
+
+/* parallax section — fixed image, content scrolls over it */
+.parallax-section {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.25rem;
+}
+.parallax-sm { min-height: 30vh; }
+.parallax-md { min-height: 50vh; }
+.parallax-lg { min-height: 70vh; }
+.parallax-full { min-height: 100vh; }
+.parallax-section.parallax-overlaid::before,
+.parallax-tint-dark::before,
+.parallax-tint-light::before,
+.parallax-tint-brand::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--px-tint, #000);
+  opacity: var(--px-overlay, 0.35);
+}
+/* BACKDROP tint: colour of the layer between the fixed image and the content */
+.parallax-tint-dark { --px-tint: #0b1220; }
+.parallax-tint-light { --px-tint: #ffffff; }
+.parallax-tint-brand { --px-tint: var(--color-primary, #0a66c2); }
+.parallax-tint-light .parallax-inner { color: #0f172a; }
+/* BACKDROP fade: the content block fades in once as a unit */
+@media (prefers-reduced-motion: no-preference) {
+  .parallax-fade .parallax-inner { animation: tapuz-fade 1s ease-out both; }
+}
+.parallax-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 860px;
+  text-align: center;
+  color: #fff;
+}
+
+/* Interactive containers (v0.54) — CSS-only, no JS.
+   Tabs: the radio hack (checked radio + adjacent label + panel). */
+.bent-tabs { display: flex; flex-wrap: wrap; margin: 1.25rem 0; border-bottom: 1px solid var(--color-border, #e2e8f0); }
+.bent-tabs > .bent-tab-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.bent-tabs > .bent-tab-label {
+  order: 1; cursor: pointer; padding: 0.65rem 1.15rem; font-weight: 600;
+  color: var(--color-text-muted, #64748b); border-bottom: 2px solid transparent;
+  margin-bottom: -1px; transition: color .15s, border-color .15s;
+}
+.bent-tabs > .bent-tab-panel { order: 2; width: 100%; display: none; padding: 1.1rem 0.15rem; line-height: 1.65; }
+.bent-tabs > .bent-tab-radio:checked + .bent-tab-label { color: var(--color-primary, #0a66c2); border-bottom-color: var(--color-primary, #0a66c2); }
+.bent-tabs > .bent-tab-radio:checked + .bent-tab-label + .bent-tab-panel { display: block; }
+.bent-tabs > .bent-tab-radio:focus-visible + .bent-tab-label { outline: 2px solid var(--color-primary, #0a66c2); outline-offset: 2px; }
+
+/* Accordion: native <details>, styled. */
+.bent-accordion { margin: 1.25rem 0; border: 1px solid var(--color-border, #e2e8f0); border-radius: 12px; overflow: hidden; }
+.bent-fold { border-bottom: 1px solid var(--color-border, #e2e8f0); }
+.bent-fold:last-child { border-bottom: none; }
+.bent-fold > summary {
+  cursor: pointer; padding: 0.9rem 1.15rem; font-weight: 600; list-style: none;
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+}
+.bent-fold > summary::-webkit-details-marker { display: none; }
+.bent-fold > summary::after { content: "\25BE"; color: var(--color-text-muted, #94a3b8); transition: transform .2s; }
+.bent-fold[open] > summary::after { transform: rotate(180deg); }
+.bent-fold > .bent-fold-body { padding: 0 1.15rem 1.05rem; line-height: 1.65; color: var(--color-text, #334155); }
+
+/* form (v0.58) — the decompiler's #1 tool gap, now a first-class module */
+.bent-form { margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.9rem; max-width: 34rem; }
+.bent-field { display: flex; flex-direction: column; gap: 0.35rem; }
+.bent-field-label { font-weight: 600; font-size: 0.92rem; color: var(--color-text, #334155); }
+.bent-field-req { color: #dc2626; }
+.bent-form input, .bent-form textarea, .bent-form select {
+  width: 100%; box-sizing: border-box; padding: 0.65rem 0.8rem;
+  border: 1px solid var(--color-border, #cbd5e1); border-radius: 8px;
+  font: inherit; background: var(--color-surface, #fff); color: inherit;
+}
+.bent-form textarea { min-height: 6.5rem; resize: vertical; }
+.bent-field-checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
+.bent-field-checkbox input { width: auto; }
+.bent-form input:focus, .bent-form textarea:focus, .bent-form select:focus {
+  outline: none; border-color: var(--color-accent, #0a66c2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent, #0a66c2) 18%, transparent);
+}
+.bent-form-submit {
+  align-self: flex-start; padding: 0.7rem 1.4rem; border: none; border-radius: 8px;
+  background: var(--color-accent, #0a66c2); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.bent-form-submit:hover { filter: brightness(1.06); }
+
+/* card grid (v0.59) — the walla lesson: a content site is a wall of media
+   cards. Responsive auto-fit grid, zero JS. */
+.bent-cards {
+  display: grid; gap: 1.25rem; margin: 1.5rem 0;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+.bent-card {
+  display: flex; flex-direction: column; text-decoration: none; color: inherit;
+  background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 12px; overflow: hidden; transition: box-shadow .2s, transform .2s;
+}
+a.bent-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,.12); transform: translateY(-2px); }
+.bent-card-media { margin: 0; aspect-ratio: 16 / 9; background: var(--color-border, #eef2f7); overflow: hidden; }
+.bent-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bent-card-body { padding: 0.9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.bent-card-tag {
+  align-self: flex-start; font-size: 0.72rem; font-weight: 700; letter-spacing: .02em;
+  text-transform: uppercase; color: var(--color-accent, #0a66c2);
+}
+.bent-card-title { margin: 0; font-size: 1.05rem; line-height: 1.3; color: var(--color-text, #0f172a); }
+.bent-card-excerpt { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--color-text-muted, #64748b); }
+
+/* category presentation (v0.64) — a branded header above the category's
+   article grid (the grid itself REUSES .bent-cards). Accent color arrives as
+   --bent-cat-color on the section (safeCssColor-guarded). */
+.bent-category { margin: 1.75rem 0; }
+.bent-category-head {
+  padding: 0.9rem 1.1rem; margin-bottom: 1rem; border-radius: 12px;
+  border-inline-start: 5px solid var(--bent-cat-color, var(--color-primary, #0a66c2));
+  background: var(--color-bg-alt, #f8fafc);
+}
+.bent-category-head.has-cover {
+  background-size: cover; background-position: center; position: relative;
+  min-height: 7.5rem; display: flex; flex-direction: column; justify-content: flex-end;
+  overflow: hidden;
+}
+.bent-category-head.has-cover::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(2, 6, 23, 0.72), rgba(2, 6, 23, 0.08));
+}
+.bent-category-head.has-cover .bent-category-name,
+.bent-category-head.has-cover .bent-category-desc { position: relative; color: #fff; }
+.bent-category-name { margin: 0; font-size: 1.45rem; }
+.bent-category-desc { margin: 0.25rem 0 0; color: var(--color-text-muted, #64748b); }
+
+/* nav (v0.60) — page-level navigation bar with color options, zero JS */
+.bent-nav {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 1.25rem;
+  padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 10px;
+}
+.bent-nav-start { justify-content: flex-start; }
+.bent-nav-center { justify-content: center; }
+.bent-nav-end { justify-content: flex-end; }
+.bent-nav-link {
+  color: var(--bent-nav-color, var(--color-text, #334155)); text-decoration: none;
+  font-weight: 600; padding: 0.35rem 0.55rem; border-radius: 6px; transition: opacity .15s;
+}
+.bent-nav-link:hover { opacity: .7; }
+
+/* moving-news ticker (v0.61) — walla's מבזקים strip: a pinned label + a row of
+   scrolling clickable headlines. Reuses the marquee's tapuz-marquee keyframes
+   (two tracks in lockstep = seamless at any headline count); zero JS. */
+.bent-ticker {
+  display: flex; align-items: stretch; margin: 1rem 0;
+  border-radius: 10px; overflow: hidden;
+  background: var(--color-surface, #0f172a);
+}
+.bent-ticker-label {
+  flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 1rem; font-weight: 700; white-space: nowrap;
+  background: rgba(0, 0, 0, 0.25); color: var(--bent-ticker-color, #fff);
+}
+.bent-ticker-viewport {
+  flex: 1; min-width: 0; display: flex; overflow: hidden;
+  white-space: nowrap; padding-block: 0.6rem;
+}
+.bent-ticker-track {
+  flex-shrink: 0; min-width: 100%;
+  display: flex; align-items: center; gap: 2.5rem; padding-inline: 1.25rem;
+  animation: tapuz-marquee var(--marquee-duration, 20s) linear infinite;
+  will-change: transform;
+}
+.bent-ticker-slow .bent-ticker-track { --marquee-duration: 40s; }
+.bent-ticker-fast .bent-ticker-track { --marquee-duration: 11s; }
+.bent-ticker-link {
+  /* light default to match the dark default bar — do NOT fall back to the
+     page's --color-text (usually dark → invisible on the dark ticker). */
+  color: var(--bent-ticker-color, #e2e8f0);
+  text-decoration: none; font-weight: 600; flex-shrink: 0; transition: opacity .15s;
+}
+.bent-ticker-link:hover { opacity: .7; }
+[dir="rtl"] .bent-ticker-track { animation-name: tapuz-marquee-rtl; }
+@media (prefers-reduced-motion: reduce) { .bent-ticker-track { animation: none; } }
+
+/* marquee — two full-width tracks scrolling in lockstep = seamless at any
+   text length (no "pop" for short strings) */
+.marquee {
+  display: flex;
+  overflow: hidden;
+  white-space: nowrap;
+  padding-block: 0.6rem;
+}
+.marquee-track {
+  flex-shrink: 0;
+  min-width: 100%;
+  display: flex;
+  justify-content: space-around;
+  gap: 3rem;
+  animation: tapuz-marquee var(--marquee-duration, 18s) linear infinite;
+  will-change: transform;
+}
+.marquee-slow .marquee-track { --marquee-duration: 32s; }
+.marquee-fast .marquee-track { --marquee-duration: 9s; }
+.marquee-item { display: inline-block; font-size: 1.15rem; }
+@keyframes tapuz-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+[dir="rtl"] .marquee-track { animation-name: tapuz-marquee-rtl; }
+@keyframes tapuz-marquee-rtl {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+/* entrance animations — scroll-driven where supported, one-shot elsewhere */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .anim-fade { animation: tapuz-fade both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
+    .anim-rise { animation: tapuz-rise both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
+  }
+  @supports not (animation-timeline: view()) {
+    .anim-fade { animation: tapuz-fade 0.8s ease-out both; }
+    .anim-rise { animation: tapuz-rise 0.8s ease-out both; }
+  }
+}
+@keyframes tapuz-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tapuz-rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
+/* fixed backgrounds are janky on touch devices (any size — tablets, big
+   phones, landscape) — key on the input type, not just a width breakpoint */
+@media (hover: none) and (pointer: coarse) {
+  .hero.hero-parallax, .parallax-section { background-attachment: scroll; }
+}
+@media (max-width: 768px) {
+  .hero.hero-parallax, .parallax-section { background-attachment: scroll; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+  .anim-fade, .anim-rise { animation: none; }
+}
+
+/* MOTION entrance effects (effect: fade | slide | typewriter) — the text is
+   always fully present; CSS supplies the motion. Distinct from the marquee
+   scroll (effect: marquee). Speed sets the duration. */
+.motion-text { padding-block: 0.4rem; }
+.motion-text .motion-text-inner { display: inline-block; max-width: 100%; }
+.motion-slow { --motion-dur: 1.5s; }
+.motion-md { --motion-dur: 0.9s; }
+.motion-fast { --motion-dur: 0.5s; }
+@media (prefers-reduced-motion: no-preference) {
+  .motion-fade .motion-text-inner { animation: tapuz-fade var(--motion-dur, 0.9s) ease-out both; }
+  .motion-slide .motion-text-inner { animation: tapuz-motion-slide var(--motion-dur, 0.9s) cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .motion-typewriter .motion-text-inner {
+    overflow: hidden;
+    white-space: nowrap;
+    border-inline-end: 2px solid currentColor;
+    animation: tapuz-typewriter var(--motion-dur, 0.9s) steps(32, end) both,
+               tapuz-caret 0.75s step-end infinite;
+  }
+}
+@keyframes tapuz-motion-slide {
+  from { opacity: 0; transform: translateX(-1.5rem); }
+  to { opacity: 1; transform: none; }
+}
+[dir="rtl"] .motion-slide .motion-text-inner { animation-name: tapuz-motion-slide-rtl; }
+@keyframes tapuz-motion-slide-rtl {
+  from { opacity: 0; transform: translateX(1.5rem); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tapuz-typewriter { from { width: 0; } to { width: 100%; } }
+@keyframes tapuz-caret { 50% { border-color: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  .motion-fade .motion-text-inner,
+  .motion-slide .motion-text-inner,
+  .motion-typewriter .motion-text-inner { animation: none; width: auto; border-inline-end: 0; }
 }
 
 
