@@ -389,23 +389,23 @@
       '.preview-embed{position:relative;display:inline-block}' +
       '.embed-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2rem;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.6);pointer-events:none}' +
       '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:inherit}' +
-      '.media-explorer{display:flex;flex-direction:column;gap:10px}' +
+      '.media-explorer{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}' +
       '.media-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;padding-bottom:8px}' +
       '.media-crumbs{font-size:0.9rem;color:#334155}' +
       '.crumb{cursor:pointer;padding:2px 4px;border-radius:4px}' +
       '.crumb:hover{background:#eff6ff;color:#0a66c2}' +
-      '.media-actions{display:flex;gap:6px}' +
-      '.mbtn{border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.85rem}' +
+      '.media-actions{display:flex;gap:6px;flex-wrap:wrap}' +
+      '.mbtn{border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:0.85rem}' +
       '.mbtn:hover{background:#f8fafc}' +
       '.mbtn-primary{background:#0a66c2;border-color:#0a66c2;color:#fff}' +
-      '.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;max-height:380px;overflow:auto;padding:2px}' +
+      '.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(136px,1fr));gap:12px;flex:1;min-height:0;overflow:auto;align-content:start;padding:2px}' +
       '.media-tile{border:1px solid #e2e8f0;border-radius:10px;padding:8px;cursor:pointer;text-align:center;background:#fff;user-select:none}' +
-      '.media-tile:hover{border-color:#93c5fd;background:#f8fafc}' +
-      '.media-tile img{width:100%;height:72px;object-fit:cover;border-radius:6px}' +
-      '.media-folder .tile-icon{font-size:2.6rem;line-height:72px;height:72px}' +
-      '.media-name{font-size:0.72rem;color:#475569;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '.media-tile:hover{border-color:#93c5fd;background:#f8fafc;box-shadow:0 4px 12px rgba(15,23,42,.08)}' +
+      '.media-tile img{width:100%;height:104px;object-fit:cover;border-radius:6px}' +
+      '.media-folder .tile-icon{font-size:3rem;line-height:104px;height:104px}' +
+      '.media-name{font-size:0.74rem;color:#475569;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.tile-selected{outline:3px solid #0a66c2;outline-offset:-1px;background:#eff6ff}' +
-      '.media-empty{grid-column:1/-1;color:#64748b;padding:26px;text-align:center}' +
+      '.media-empty{grid-column:1/-1;color:#64748b;padding:40px 20px;text-align:center;font-size:0.95rem}' +
       '#tapuz-ctx{position:fixed;z-index:10000;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,0.2);min-width:170px;padding:4px;display:flex;flex-direction:column}' +
       '.ctx-item{background:none;border:none;text-align:start;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:0.9rem;color:#0f172a}' +
       '.ctx-item:hover{background:#f1f5f9}' +
@@ -530,6 +530,17 @@
         cb(cats);
       })
       .catch(function () { cb(categoriesCache ? categoriesCache.cats : []); });
+  }
+
+  /** Normalized src of a media list entry ('' when the slot is empty). */
+  function mediaSrcOf(im) {
+    var src = typeof im === 'string' ? im : ((im && im.src) || '');
+    return String(src).trim();
+  }
+
+  /** Drop empty entries from a media list (imports leave blank slots). */
+  function filledMedia(list) {
+    return (Array.isArray(list) ? list : []).filter(function (im) { return mediaSrcOf(im); });
   }
 
   function youtubeId(url) {
@@ -957,6 +968,41 @@
     return slot;
   }
 
+  /** The "גרור לכאן" placeholder is a REAL drop target — dropping a tool or a
+   *  block on it inserts at the top of that (empty) container list. Without
+   *  this, everything inside a container sits under a .canvas-block and the
+   *  generic list-surface fallback ignores the drop. */
+  function bindEmptyTarget(el, parentBlock, colIndex) {
+    function hint() {
+      return {
+        mode: 'insert',
+        parentId: parentBlock ? parentBlock.id : null,
+        colIndex: colIndex,
+        index: 0
+      };
+    }
+    el.addEventListener('dragover', function (e) {
+      if (!dragState) return;
+      if (dragState.kind === 'block' && parentBlock &&
+          wouldNestIntoSelf(getBlock(dragState.blockId), parentBlock.id)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = dragState.kind === 'toolbox' ? 'copy' : 'move';
+      setDropHint(hint());
+      clearDropClasses();
+      el.classList.add('drop-hover');
+    });
+    el.addEventListener('dragleave', function (e) {
+      if (!el.contains(e.relatedTarget)) el.classList.remove('drop-hover');
+    });
+    el.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('drop-hover');
+      commitDrop(hint());
+    });
+  }
+
   function bindListSurface(el, parentBlock, colIndex) {
     // fallback: dropping on empty padding of the list = append
     el.addEventListener('dragover', function (e) {
@@ -1027,8 +1073,10 @@
       if (act === 'split') splitBlockInPlace(block.id);
       if (act === 'replace') {
         selectBlock(block.id);
-        // focus replace chips in properties
+        // unfold the advanced replace section and focus its chips
         setTimeout(function () {
+          var det = document.querySelector('.replace-advanced');
+          if (det) det.open = true;
           var chip = document.querySelector('.replace-chip');
           if (chip) chip.focus();
         }, 30);
@@ -1232,9 +1280,22 @@
       if (d.src) {
         wrap.innerHTML =
           '<img src="' + escAttr(d.src) + '" alt="" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0">';
+        var imgEl = wrap.querySelector('img');
+        imgEl.title = 'לחיצה כפולה = החלפת תמונה';
+        imgEl.addEventListener('dblclick', function (e) {
+          e.stopPropagation();
+          selectBlock(block.id);
+          openMediaLibrary(block.id);
+        });
       } else {
+        // the easiest module: an empty image is ONE click away from the bank
         wrap.innerHTML =
-          '<div class="preview-image-empty">תמונה (לחץ לעריכה במאפיינים / מדיה)</div>';
+          '<div class="preview-image-empty" style="cursor:pointer">🖼 לחצו לבחירת תמונה מהספרייה</div>';
+        wrap.querySelector('.preview-image-empty').addEventListener('click', function (e) {
+          e.stopPropagation();
+          selectBlock(block.id);
+          openMediaLibrary(block.id);
+        });
       }
       return wrap;
     }
@@ -1343,7 +1404,7 @@
     }
 
     if (block.type === 'gallery') {
-      var gImgs = d.images || [];
+      var gImgs = filledMedia(d.images);
       if (!gImgs.length) {
         wrap.innerHTML = '<div class="preview-image-empty">גלריה ריקה — הוסף תמונות במאפיינים</div>';
         return wrap;
@@ -1351,8 +1412,7 @@
       wrap.innerHTML =
         '<div class="preview-gallery">' +
         gImgs.slice(0, 8).map(function (im) {
-          var src = typeof im === 'string' ? im : (im.src || '');
-          return '<img src="' + escAttr(src) + '" alt="" loading="lazy">';
+          return '<img src="' + escAttr(mediaSrcOf(im)) + '" alt="" loading="lazy">';
         }).join('') +
         (gImgs.length > 8 ? '<span class="gallery-more">+' + (gImgs.length - 8) + '</span>' : '') +
         '</div>';
@@ -1389,6 +1449,7 @@
         var contEmpty = document.createElement('div');
         contEmpty.className = 'column-empty';
         contEmpty.textContent = 'גרור לכאן';
+        bindEmptyTarget(contEmpty, block, 'blocks');
         contList.appendChild(contEmpty);
       }
       renderListInto(contList, contKids, block, 'blocks');
@@ -1653,6 +1714,7 @@
         var empty = document.createElement('div');
         empty.className = 'column-empty';
         empty.textContent = 'גרור לכאן';
+        bindEmptyTarget(empty, block, colIndex);
         listWrap.appendChild(empty);
       }
       renderListInto(listWrap, col.blocks, block, colIndex);
@@ -1841,8 +1903,8 @@
   var autoScrollRAF = null;
   function dragAutoScroll(e) {
     if (!document.body.classList.contains('is-dragging')) { autoScrollVel = 0; return; }
-    var EDGE = 90;
-    var MAX = 26;
+    var EDGE = 140;
+    var MAX = 34;
     var y = e.clientY;
     var vh = window.innerHeight;
     if (y < EDGE) autoScrollVel = -MAX * (1 - y / EDGE);
@@ -1977,8 +2039,12 @@
     document.querySelectorAll('.tool-btn[data-type]').forEach(function (btn) {
       btn.setAttribute('draggable', 'true');
 
-      // Click: selection → REPLACE in place; no selection → ADD at end.
-      // Drag always inserts/splits via drop zones (never auto-replaces).
+      // Click NEVER replaces (a misclick must not destroy content):
+      //   empty container selected → the tool fills it;
+      //   module selected         → the tool lands right below it;
+      //   nothing selected        → append at the end.
+      // Replacing a module's type is an explicit advanced action in the
+      // settings panel (or the ⇄ button on the block toolbar).
       btn.addEventListener('click', function (e) {
         if (btn.dataset.didDrag === '1') {
           btn.dataset.didDrag = '0';
@@ -1986,8 +2052,25 @@
         }
         e.preventDefault();
         var type = btn.dataset.type;
-        if (selectedId && getBlock(selectedId)) {
-          replaceBlockType(selectedId, type);
+        var sel = selectedId ? findNode(selectedId) : null;
+        if (sel && isBlocksContainer(sel.block.type) && !ensureBlocks(sel.block).length) {
+          pushHistory();
+          var intoChild = makeBlock(type);
+          ensureBlocks(sel.block).push(intoChild);
+          selectedId = intoChild.id;
+          renderCanvas();
+          renderProperties();
+          syncToolboxMode();
+          flashCanvasHint('נוסף «' + typeLabel(type) + '» לתוך המיכל');
+        } else if (sel) {
+          pushHistory();
+          var below = makeBlock(type);
+          sel.list.splice(sel.index + 1, 0, below);
+          selectedId = below.id;
+          renderCanvas();
+          renderProperties();
+          syncToolboxMode();
+          flashCanvasHint('נוסף «' + typeLabel(type) + '» מתחת למודול הנבחר');
         } else {
           addBlock(type);
         }
@@ -2193,15 +2276,18 @@
     var hasSel = !!(selectedId && getBlock(selectedId));
     box.classList.toggle('has-selection', hasSel);
     if (mode) {
-      mode.innerHTML = hasSel
-        ? 'נבחר מודול · <strong>לחיצה = החלפה</strong> · גרירה = הוספה'
-        : 'גרור לקנבס · או לחץ להוספה בסוף';
+      var selBlock = hasSel ? getBlock(selectedId) : null;
+      var emptyContainerSel = !!(selBlock && isBlocksContainer(selBlock.type) && !ensureBlocks(selBlock).length);
+      mode.innerHTML = emptyContainerSel
+        ? 'מיכל ריק נבחר · <strong>לחיצה = מילוי המיכל</strong>'
+        : hasSel
+          ? 'נבחר מודול · <strong>לחיצה = הוספה מתחתיו</strong> · גרירה = מיקום חופשי'
+          : 'גרור לקנבס · או לחץ להוספה בסוף';
     }
     document.querySelectorAll('.tool-btn[data-type]').forEach(function (btn) {
       var t = btn.dataset.type;
       var sel = hasSel ? getBlock(selectedId) : null;
       btn.classList.toggle('is-current', !!(sel && sel.type === t));
-      btn.classList.toggle('is-replace-mode', hasSel);
     });
     // the selected block's family unfolds so its highlighted tool is visible
     var cur = document.querySelector('.tool-btn.is-current');
@@ -2226,7 +2312,7 @@
         });
         cat.style.display = any ? '' : 'none';
         if (q) cat.open = true;
-        else cat.open = i === 0; // restore the default fold
+        else cat.open = false; // default: ALL families folded — a calm palette
       });
     });
     search.addEventListener('keydown', function (e) {
@@ -2309,13 +2395,20 @@
     var html = '<div class="prop-section-label">' + esc(p.labelHe || p.name) + '</div>';
 
     if (hasMedia) {
-      // gallery-style thumbs + multi picker from the media library
-      html += '<div class="gallery-edit">' + items.map(function (im, i) {
-        var src = typeof im === 'string' ? im : (im && im.src) || '';
-        return '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-lp-del="' + i + '" data-lp="' + escAttr(p.name) + '" title="הסר">×</button></div>';
-      }).join('') + '</div>';
+      // gallery-style thumbs + multi picker; empty slots hidden + cleanable
+      var emptyCount = 0;
+      var thumbs = '';
+      items.forEach(function (im, i) {
+        var src = mediaSrcOf(im);
+        if (!src) { emptyCount++; return; }
+        thumbs += '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-lp-del="' + i + '" data-lp="' + escAttr(p.name) + '" title="הסר">×</button></div>';
+      });
+      html += '<div class="gallery-edit">' + thumbs + '</div>';
       html += '<button type="button" class="btn" style="margin:6px 0" data-lp-media-add="' + escAttr(p.name) + '">+ הוסף תמונות מהספרייה</button>';
-      html += '<div class="prop-hint">' + items.length + ' פריטים</div>';
+      if (emptyCount) {
+        html += '<button type="button" class="btn secondary" style="margin:0 0 6px" data-lp-clean="' + escAttr(p.name) + '">🧹 נקה ' + emptyCount + ' משבצות ריקות</button>';
+      }
+      html += '<div class="prop-hint">' + (items.length - emptyCount) + ' פריטים</div>';
       return html;
     }
 
@@ -2460,7 +2553,7 @@
         '<div class="props-empty-line"><strong>הוספה</strong> — לחץ או גרור מהסרגל</div>' +
         '<div class="props-empty-line"><strong>סידור</strong> — גרור ⠿ בין מודולים</div>' +
         '<div class="props-empty-line"><strong>פיצול</strong> — גרור לצד מודול / ⧉</div>' +
-        '<div class="props-empty-line"><strong>החלפה</strong> — בחר מודול ואז לחץ סוג אחר</div>' +
+        '<div class="props-empty-line"><strong>החלפה</strong> — בחר מודול · «החלף סוג מודול» בהגדרות (מתקדם)</div>' +
         '</div>';
       panel.innerHTML = pageHtml;
 
@@ -2596,10 +2689,6 @@
       '<div class="prop-type-name">' + esc(typeLabel(block.type)) + '</div>' +
       '<div class="prop-type-sub">בחרת מכולה · ערוך כאן או לחיצה כפולה על הטקסט בדף</div>' +
       '</div></div>' +
-      '<div class="prop-group">' +
-      '<label>החלף סוג מודול</label>' +
-      buildReplaceChips(block.type) +
-      '</div>' +
       '<div class="prop-section-label">תוכן</div>';
 
     // Ask C: for every type the registry describes, the settings form is
@@ -2622,6 +2711,14 @@
       html += '<button type="button" class="btn" data-container-add-text="1">+ טקסט במכולה</button>';
     } else if (regDef && !HAND_WRITTEN[block.type]) {
       html += renderSchemaForm(regDef, block);
+      if (block.type === 'spacer') {
+        var exactPx = /^\d+px$/.test(String(d.height || '')) ? parseInt(d.height, 10) : '';
+        html += field(
+          'גובה מדויק (פיקסלים)',
+          '<input type="number" min="0" max="800" step="2" data-spacer-px="1" value="' + exactPx + '" placeholder="למשל 120">'
+        );
+        html += '<div class="prop-hint">ריק = לפי הגודל למעלה · ערך = בדיוק הרווח שרוצים</div>';
+      }
     } else if (block.type === 'hero') {
       html += field('כותרת', '<input data-key="title" value="' + escAttr(d.title || '') + '">');
       html += field('תת כותרת', '<input data-key="subtitle" value="' + escAttr(d.subtitle || '') + '">');
@@ -2825,15 +2922,22 @@
       html += field('קישור (YouTube או כל URL)', '<input data-key="url" dir="ltr" value="' + escAttr(d.url || '') + '" placeholder="https://www.youtube.com/watch?v=...">');
       html += '<div class="prop-hint">קישור YouTube הופך לנגן מוטמע באתר המפורסם</div>';
     } else if (block.type === 'gallery') {
+      // Only REAL photos are shown — empty slots (e.g. from imports) are
+      // invisible dead weight; surface them once with a one-click cleanup.
       var galImgs = d.images || [];
-      html += '<div class="gallery-edit">' +
-        galImgs.map(function (im, i) {
-          var src = typeof im === 'string' ? im : (im.src || '');
-          return '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-gal-del="' + i + '" title="הסר">×</button></div>';
-        }).join('') +
-        '</div>';
+      var galEmptyCount = 0;
+      var galThumbs = '';
+      galImgs.forEach(function (im, i) {
+        var src = mediaSrcOf(im);
+        if (!src) { galEmptyCount++; return; }
+        galThumbs += '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-gal-del="' + i + '" title="הסר">×</button></div>';
+      });
+      html += '<div class="gallery-edit">' + galThumbs + '</div>';
       html += '<button type="button" class="btn" style="margin:6px 0" data-gal-add="1">+ הוסף תמונות מהספרייה</button>';
-      html += '<div class="prop-hint">' + galImgs.length + ' תמונות בגלריה · לחיצה ימנית בספרייה = אפשרויות</div>';
+      if (galEmptyCount) {
+        html += '<button type="button" class="btn secondary" style="margin:0 0 6px" data-gal-clean="1">🧹 נקה ' + galEmptyCount + ' משבצות ריקות</button>';
+      }
+      html += '<div class="prop-hint">' + (galImgs.length - galEmptyCount) + ' תמונות בגלריה · לחיצה ימנית בספרייה = אפשרויות</div>';
     } else if (block.type === 'article-list') {
       html += field('תגית (אילו דפים להציג)', '<input data-key="tag" value="' + escAttr(d.tag || 'article') + '" placeholder="article">');
       html += field('כמות מקסימלית', '<input type="number" min="1" max="48" data-key="limit" value="' + (parseInt(d.limit, 10) || 6) + '">');
@@ -2859,6 +2963,14 @@
       }
       html += '<button type="button" class="btn secondary" style="margin:4px;width:100%" data-unwrap="1">פרק עמודות (השטח הכל)</button>';
     }
+
+    // ── Replace type (advanced, folded — a misclick can't nuke content) ──
+    html +=
+      '<details class="style-advanced replace-advanced">' +
+      '<summary>החלף סוג מודול <span class="adv-badge">מתקדם</span></summary>' +
+      '<div class="prop-hint" style="margin-bottom:8px">ממיר את המודול לסוג אחר — טקסט ותמונות עוברים איתו כשאפשר.</div>' +
+      buildReplaceChips(block.type) +
+      '</details>';
 
     // ── Style (first advanced module surface) ──
     html +=
@@ -2949,6 +3061,8 @@
         // Registry side-effects for legacy renderer fields:
         if (block.type === 'spacer' && input.dataset.key === 'size') {
           block.data.height = SPACER_HEIGHTS[val] || '1.5rem';
+          var pxField = panel.querySelector('[data-spacer-px]');
+          if (pxField) pxField.value = ''; // preset takes over from exact px
         }
         if (block.type === 'divider' && input.dataset.key === 'bentStyle' && typeof block.data.style !== 'object') {
           block.data.style = val === 'dots' ? 'dashed' : 'solid';
@@ -3056,6 +3170,24 @@
       });
     }
 
+    // exact-px spacer: a number wins over the preset; clearing it returns
+    // control to the size preset
+    var spacerPx = panel.querySelector('[data-spacer-px]');
+    if (spacerPx) {
+      var applySpacerPx = function () {
+        if (!spacerPx._histPushed) { pushHistory(); spacerPx._histPushed = true; }
+        if (!block.data) block.data = {};
+        var v = parseInt(spacerPx.value, 10);
+        block.data.height = v > 0
+          ? v + 'px'
+          : (SPACER_HEIGHTS[block.data.size || 'md'] || '1.5rem');
+        markDirty();
+        renderCanvas();
+      };
+      spacerPx.addEventListener('input', applySpacerPx);
+      spacerPx.addEventListener('change', applySpacerPx);
+    }
+
     var heroMedia = panel.querySelector('[data-media-hero]');
     if (heroMedia) {
       heroMedia.addEventListener('click', function () {
@@ -3150,6 +3282,18 @@
         renderProperties();
       });
     });
+
+    var galClean = panel.querySelector('[data-gal-clean]');
+    if (galClean) {
+      galClean.addEventListener('click', function () {
+        pushHistory();
+        if (block.data) block.data.images = filledMedia(block.data.images);
+        markDirty();
+        renderCanvas();
+        renderProperties();
+        flashCanvasHint('המשבצות הריקות נוקו 🧹');
+      });
+    }
 
     var galAdd = panel.querySelector('[data-gal-add]');
     if (galAdd) {
@@ -3293,6 +3437,19 @@
       });
     });
 
+    // list param with media items: one-click cleanup of empty slots
+    panel.querySelectorAll('[data-lp-clean]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.lpClean;
+        pushHistory();
+        if (block.data) block.data[key] = filledMedia(block.data[key]);
+        markDirty();
+        renderCanvas();
+        renderProperties();
+        flashCanvasHint('המשבצות הריקות נוקו 🧹');
+      });
+    });
+
     // list param with media items (e.g. gallery): multi-pick from the library
     panel.querySelectorAll('[data-lp-media-add]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -3385,14 +3542,21 @@
   function deleteBlock(id) {
     var node = findNode(id);
     if (!node) return;
+    var block = node.block;
     pushHistory();
-    var kids = (node.data && (node.data.blocks || node.data.columns)) || [];
-    var pureSpace = node.type === 'spacer' || node.type === 'divider';
-    var emptyContainer = isBlocksContainer(node.type) && !kids.length;
+    var d = block.data || {};
+    var kidCount = 0;
+    if (Array.isArray(d.blocks)) kidCount = d.blocks.length;
+    if (Array.isArray(d.columns)) {
+      d.columns.forEach(function (col) { kidCount += ((col && col.blocks) || []).length; });
+    }
+    var pureSpace = block.type === 'spacer' || block.type === 'divider';
+    var emptyContainer =
+      (isBlocksContainer(block.type) || isColumnsContainer(block.type)) && !kidCount;
     var soft = !pureSpace && !emptyContainer;
     if (soft) {
-      node.type = 'section';
-      node.data = { blocks: [], size: 'md' };
+      block.type = 'section';
+      block.data = { blocks: [], size: 'md' };
     } else {
       removeNode(id);
       if (selectedId === id) selectedId = null;
@@ -3648,6 +3812,7 @@
       '<div class="media-actions">' +
       (mediaState.folder ? '<button type="button" class="mbtn" data-up="1" title="תיקייה למעלה">⬆</button>' : '') +
       '<button type="button" class="mbtn" data-newfolder="1">📁+ תיקייה חדשה</button>' +
+      '<button type="button" class="mbtn" data-upload-here="1">⬆ העלאה לתיקייה זו</button>' +
       (mediaState.mode === 'multi'
         ? '<button type="button" class="mbtn mbtn-primary" data-confirm-multi="1">הוסף (<span id="media-sel-count">0</span>)</button>'
         : '') +
@@ -3698,6 +3863,11 @@
           else showToast(d.error || 'שגיאה', 'err');
         });
     });
+    var uh = list.querySelector('[data-upload-here]');
+    if (uh) uh.addEventListener('click', function () {
+      var fileInput = document.getElementById('media-upload-input');
+      if (fileInput) fileInput.click();
+    });
     var cm = list.querySelector('[data-confirm-multi]');
     if (cm) cm.addEventListener('click', function () {
       if (mediaState.onPick && mediaState.selection.length) {
@@ -3719,6 +3889,11 @@
     });
 
     list.querySelectorAll('.media-item').forEach(function (tile) {
+      // keep multi-selection visible across folder loads / uploads
+      if (mediaState.mode === 'multi' &&
+          mediaState.selection.some(function (s) { return s.url === tile.dataset.url; })) {
+        tile.classList.add('tile-selected');
+      }
       tile.addEventListener('click', function () {
         if (mediaState.mode === 'single') {
           pickMedia(tile.dataset.url);
@@ -3735,6 +3910,10 @@
           items.push({ label: '✔ בחר תמונה', fn: function () { pickMedia(tile.dataset.url); } });
         }
         items.push({
+          label: '📁 העבר לתיקייה…',
+          fn: function () { moveMediaFile(tile.dataset.id, tile.dataset.name); }
+        });
+        items.push({
           label: '🔗 העתק כתובת',
           fn: function () {
             if (navigator.clipboard) navigator.clipboard.writeText(tile.dataset.url);
@@ -3748,6 +3927,9 @@
         showCtxMenu(e.clientX, e.clientY, items);
       });
     });
+
+    var selCount = document.getElementById('media-sel-count');
+    if (selCount) selCount.textContent = String(mediaState.selection.length);
   }
 
   function toggleMediaSelection(tile) {
@@ -3762,6 +3944,24 @@
     }
     var count = document.getElementById('media-sel-count');
     if (count) count.textContent = String(mediaState.selection.length);
+  }
+
+  function moveMediaFile(id, name) {
+    var target = window.prompt(
+      'להעביר את "' + name + '" לאיזו תיקייה?\n(ריק = השורש · אפשר נתיב כמו banners/2026)',
+      mediaState.folder
+    );
+    if (target === null) return;
+    fetch('/admin/media/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: parseInt(id, 10), folder: String(target).trim() })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) { showToast('הועבר ✓', 'ok'); loadMediaFolder(mediaState.folder); }
+        else showToast(d.error || 'שגיאה בהעברה', 'err');
+      });
   }
 
   function deleteMediaFile(id, name) {
@@ -3851,30 +4051,56 @@
     closeMediaLibrary();
   }
 
+  /** Upload one or many files into the CURRENT folder. Uploads are queued
+   *  one-by-one; in multi mode they land pre-selected so "add photos" is
+   *  upload → confirm, no hunting for what you just uploaded. */
   function uploadMedia(input) {
     if (!input.files || !input.files.length) return;
-    var file = input.files[0];
-    var reader = new FileReader();
-    reader.onload = function () {
-      fetch('/admin/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, data: reader.result, folder: mediaState.folder })
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.ok && data.url) {
-            showToast('הועלה ✓', 'ok');
-            if (mediaState.mode === 'single' && (currentMediaTarget || mediaState.onPickSingle)) pickMedia(data.url);
-            else loadMediaFolder(mediaState.folder);
-          } else {
-            showToast(data.error || 'שגיאה בהעלאה', 'err');
+    var files = Array.prototype.slice.call(input.files);
+    input.value = '';
+    var uploaded = [];
+
+    function finish() {
+      if (!uploaded.length) return;
+      showToast('הועלו ' + uploaded.length + ' קבצים ✓', 'ok');
+      if (mediaState.mode === 'single' && (currentMediaTarget || mediaState.onPickSingle)) {
+        pickMedia(uploaded[0].url);
+        return;
+      }
+      if (mediaState.mode === 'multi') {
+        uploaded.forEach(function (u) {
+          if (!mediaState.selection.some(function (s) { return s.url === u.url; })) {
+            mediaState.selection.push(u);
           }
-          input.value = '';
+        });
+      }
+      loadMediaFolder(mediaState.folder);
+    }
+
+    function next(i) {
+      if (i >= files.length) { finish(); return; }
+      var file = files[i];
+      var reader = new FileReader();
+      reader.onload = function () {
+        fetch('/admin/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, data: reader.result, folder: mediaState.folder })
         })
-        .catch(function () { showToast('שגיאה בהעלאה', 'err'); });
-    };
-    reader.readAsDataURL(file);
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.ok && data.url) uploaded.push({ url: data.url, name: file.name });
+            else showToast((data.error || 'שגיאה בהעלאה') + ' — ' + file.name, 'err');
+            next(i + 1);
+          })
+          .catch(function () {
+            showToast('שגיאה בהעלאה — ' + file.name, 'err');
+            next(i + 1);
+          });
+      };
+      reader.readAsDataURL(file);
+    }
+    next(0);
   }
 
   // ---- Keyboard ----

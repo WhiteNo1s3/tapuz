@@ -263,10 +263,12 @@ function renderBlock(block, direction = 'rtl') {
     }
 
     case 'gallery': {
-      const images = block.data.images || [];
+      // empty slots (imports, half-filled arrays) render nothing — only real photos
+      const images = (block.data.images || [])
+        .filter(img => String(typeof img === 'string' ? img : (img && img.src) || '').trim());
       const cols = Math.min(Math.max(parseInt(block.data.columns, 10) || 3, 1), 4);
       const imgs = images.map(img => {
-        const src = escapeHtml(img.src || img);
+        const src = escapeHtml(typeof img === 'string' ? img : img.src);
         const alt = escapeHtml(img.alt || '');
         return `<img src="${src}" alt="${alt}">`;
       }).join('');

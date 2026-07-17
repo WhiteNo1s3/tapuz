@@ -3267,7 +3267,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
             <button type="button" class="tool-btn" data-type="${escapeAdmin(e.type)}" title="${escapeAdmin(e.hintHe || e.labelHe)}">
               <span class="tool-ico">${escapeAdmin(e.icon || '•')}</span><span class="tool-meta"><span class="tool-name">${escapeAdmin(e.labelHe)}</span><span class="tool-hint">${escapeAdmin(e.hintHe || '')}</span></span>
             </button>`).join('');
-    return `<details class="tool-cat" data-cat-i="${catIndex}"${catIndex === 0 ? ' open' : ''}>
+    return `<details class="tool-cat" data-cat-i="${catIndex}">
             <summary class="tool-cat-toggle"><span class="chev">▸</span><span class="tool-cat-title">${escapeAdmin(cat)}</span><span class="tool-cat-count">${entries.length}</span></summary>
             <div class="tool-cat-body">${buttons}</div>
           </details>`;
@@ -3391,13 +3391,13 @@ app.get('/admin/edit/:fullPath', (req, res) => {
     </div>
 
     <div id="media-modal" class="modal" onclick="if (event.target.id === 'media-modal') TapuzBuilder.closeMediaLibrary()">
-      <div class="modal-content" onclick="event.stopPropagation()">
-        <h3 style="margin-top:0">מספריית מדיה</h3>
-        <div id="media-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;max-height:400px;overflow:auto"></div>
-        <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+      <div class="modal-content media-modal-content" onclick="event.stopPropagation()">
+        <h3 style="margin-top:0">🗂 ספריית המדיה</h3>
+        <div id="media-list"></div>
+        <div class="media-modal-foot">
           <button type="button" class="btn secondary" onclick="TapuzBuilder.closeMediaLibrary()">סגור</button>
-          <label class="btn" style="cursor:pointer">העלה תמונה
-            <input type="file" accept="image/*" style="display:none" onchange="TapuzBuilder.uploadMedia(this)">
+          <label class="btn" style="cursor:pointer">⬆ העלאת תמונות
+            <input id="media-upload-input" type="file" accept="image/*" multiple style="display:none" onchange="TapuzBuilder.uploadMedia(this)">
           </label>
         </div>
       </div>
