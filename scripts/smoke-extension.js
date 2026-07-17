@@ -99,30 +99,22 @@ check('content script does NOT fetch the CMS directly', !/\bfetch\s*\(/.test(con
 check('popup never reads a token from a response', !/\b(?:c|r|res|resp|data)\.token\b/.test(popup));
 check('background getConfig response omits the raw token', /hasToken:\s*!!/.test(bg) && !/sendResponse\([^)]*token:\s*c\.token/.test(bg));
 
-// ── BYOK (v0.73): the user's LLM key has the SAME isolation as the CMS token ─
-const llm = fs.readFileSync(path.join(EXT, 'llm.js'), 'utf8');
-check('llm.js exists + parses', (() => { try { new Function(llm); return true; } catch (e) { return false; } })());
-check('background imports llm.js', /importScripts\([^)]*llm\.js/.test(bg));
-check('background reads the byok key', /byok_key|KEYS\.byokKey/.test(bg));
-check('getConfig response exposes hasKey, NEVER the raw key', /hasKey:\s*!!/.test(bg) && !/sendResponse\([^)]*byokKey:\s*c\./.test(bg));
-check('generate flow sends key to the PROVIDER, not the CMS', /TapuzLLM\.generate\([^)]*byokKey/.test(bg));
-check('the CMS is never fetched with the byok key', !/cms\([^)]*byokKey/.test(bg) && !/Bearer'\s*\+\s*c\.byokKey/.test(bg));
-check('content script never sees the byok key', !/byok/i.test(content));
-check('popup never reads the raw key back from a response', !/\b(?:c|r|res|resp|data)\.byokKey\b/.test(popup));
-check('llm.js never logs/returns the key', !/console\.(log|warn|error)\([^)]*key/i.test(llm));
-// providers.js (content-script scrape table) must stay separate from the CMS
-// provider CONSTANTS (server-side) — the extension has no hardcoded endpoint
-check('background.js has no hardcoded provider API endpoint (constants come from CMS)',
+// ── Tier realignment (v0.85): the extension is the KEYLESS tier. The user's
+//    LLM key lives in the CMS (config/ai.json, server-side — smoke-byok.js
+//    asserts that side); the extension must carry NO key path at all. ─
+check('llm.js is GONE (its logic moved server-side to src/ai.js)',
+  !fs.existsSync(path.join(EXT, 'llm.js')));
+check('background no longer imports llm.js', !/importScripts\([^)]*llm\.js/.test(bg));
+check('generate is a deprecation pointing at the CMS chat',
+  /case 'generate'/.test(bg) && /\/admin\/chat/.test(bg) && !/TapuzLLM\.generate/.test(bg));
+check('background never calls a provider API with a key',
   !/api\.anthropic\.com|api\.openai\.com/.test(bg));
-// llm.js DOES hardcode the allowed HOSTS — a security boundary (the CMS may
-// name the model/headers, but never where the key is sent). This is the fix
-// for the review's high finding, so assert the guard is present.
-check('llm.js hardcodes an endpoint host allowlist (key can only go to known hosts)',
-  /ALLOWED_API_HOSTS/.test(llm) && /endpointAllowed/.test(llm) && /api\.anthropic\.com/.test(llm));
-check('generate() refuses a non-allowlisted endpoint before sending the key',
-  /endpointAllowed\(provider\.endpoint\)/.test(llm));
-check('manifest grants the provider API hosts for direct BYOK calls',
-  JSON.stringify(manifest.host_permissions).includes('api.anthropic.com'));
+check('content script never sees a byok key', !/byok/i.test(content));
+check('popup has NO key input anymore', !/byok-key\b/.test(fs.readFileSync(path.join(EXT, 'popup.html'), 'utf8')));
+check('popup links key users to the CMS copilot', /byok-cms-link/.test(popup) && /\/admin\/chat/.test(popup));
+check('manifest no longer requests provider API hosts (least privilege)',
+  !JSON.stringify(manifest.host_permissions).includes('api.anthropic.com') &&
+  !JSON.stringify(manifest.host_permissions).includes('api.openai.com'));
 
 // ── BYOT roleplay + mission handlers wired (v0.55) ───────────────────
 check('background handles the roleplay game pack', /case 'roleplay'/.test(bg) && /\/agent\/v1\/roleplay/.test(bg));

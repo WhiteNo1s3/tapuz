@@ -4398,6 +4398,52 @@ app.get('/admin/api/inject-pack', (req, res) => {
   res.json(buildInjectBundle(opts));
 });
 
+// ─── Tier-1 AI (v0.85): the key lives in the CMS, the chat runs here ───
+// Ben's realignment: key-based chat = CMS feature (server-side calls to the
+// provider's official API); the extension stays the KEYLESS tier.
+app.get('/admin/api/ai/settings', (req, res) => {
+  try {
+    const ai = require('./ai');
+    res.json({ ok: true, ...ai.getSettings(), providers: ai.listProviders() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/ai/settings', (req, res) => {
+  try {
+    const b = req.body || {};
+    const settings = require('./ai').saveSettings({
+      provider: b.provider,
+      model: b.model,
+      apiKey: b.apiKey // undefined = keep, '' = clear, value = replace
+    });
+    res.json({ ok: true, ...settings });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/ai/chat', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const message = String(b.message || '').trim();
+    if (!message) return res.status(400).json({ ok: false, error: 'הודעה ריקה' });
+    // the same persona every AI on-ramp gets: role + dictionary + REAL media
+    const { buildRoleplayPack } = require('./pzn/agent-roleplay');
+    const media = require('./media').listAllMedia(40);
+    const system = buildRoleplayPack({ locale: 'he', media }).text;
+    const reply = await require('./ai').generate({
+      system,
+      user: message,
+      history: Array.isArray(b.history) ? b.history : []
+    });
+    res.json({ ok: true, reply });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/admin/chat', (req, res) => {
   const html = `
     ${adminNav('chat', 'צ׳אט סוכן — תיאור → BenTML → דף')}
@@ -4429,41 +4475,38 @@ app.get('/admin/chat', (req, res) => {
         <div class="chat-compose">
           <textarea id="chat-input" placeholder="תארו את הדף שאתם רוצים… (Ctrl+Enter לשליחה)"></textarea>
           <div class="row">
-            <button type="button" class="btn" id="btn-send">שלח תיאור · בנה משימה</button>
-            <button type="button" class="btn secondary" id="btn-teach">📚 העתק לימוד BenTML</button>
+            <button type="button" class="btn" id="btn-send">שלח</button>
+            <span id="chat-status" class="muted" style="font-size:.85rem;align-self:center"></span>
           </div>
         </div>
       </div>
       <aside class="chat-side">
         <div class="card">
-          <h3 style="margin-top:0">סוכן</h3>
-          <div class="field"><label>בחרו מודל (בדפדפן שלכם)</label>
-            <select id="provider"></select>
+          <h3 style="margin-top:0">🔑 המפתח שלכם — בתוך ה‑CMS</h3>
+          <p class="muted" style="font-size:.85rem;margin:0 0 10px">הצ׳אט קורא ל‑API הרשמי של הספק מהשרת שלכם, עם המפתח שלכם. המפתח נשמר בשרת בלבד (קובץ מוגן, מחוץ ל‑git) ולעולם לא נשלח לדפדפן.</p>
+          <div class="field"><label>ספק</label><select id="ai-provider"></select></div>
+          <div class="field"><label>מודל</label><select id="ai-model"></select></div>
+          <div class="field"><label>מפתח API <span id="ai-key-state" class="muted"></span></label>
+            <input id="ai-key" type="password" dir="ltr" autocomplete="off" placeholder="sk-…">
           </div>
-          <p class="muted" style="font-size:.85rem;margin:0">השרת לא מחזיק cookies של LLM. התוסף מזריק לצ׳אט שאתם כבר מחוברים אליו.</p>
-        </div>
-        <div class="card">
-          <h3 style="margin-top:0">יעד דף</h3>
-          <div class="field"><label>כותרת (אופציונלי)</label><input id="page-title" /></div>
-          <div class="field"><label>סלאג</label><input id="page-slug" dir="ltr" /></div>
-          <div class="field"><label>יעד</label>
-            <select id="page-target"><option value="__new__">דף חדש</option></select>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button type="button" class="btn" id="ai-save" style="padding:7px 14px">שמור</button>
+            <span id="ai-settings-status" class="muted" style="font-size:.82rem"></span>
           </div>
         </div>
         <div class="card">
-          <h3 style="margin-top:0">עוד דרכים לבנות עם AI</h3>
-          <p class="muted" style="font-size:.88rem;margin:0 0 6px">כל המסלולים מובילים לאותם דפי BenTML — בחרו מה שנוח:</p>
+          <h3 style="margin-top:0">בלי מפתח? יש מסלול</h3>
           <ul class="muted" style="font-size:.88rem;line-height:1.7;padding-inline-start:18px;margin:0">
-            <li><a href="/admin/inject">מילון · משחק</a> — העתקת החבילה להדבקה ידנית ב‑AI</li>
+            <li><a href="/admin/inject">מילון · משחק</a> — הדביקו את החבילה בצ׳אט שאתם כבר מנויים עליו</li>
             <li><a href="/admin/ai">הדבקה ידנית</a> — הדביקו תשובת AI ובנו דף בתוך ה‑CMS</li>
-            <li><a href="/admin/agent">גשר סוכן</a> — חיבור התוסף (פרסום אוטומטי מהצ׳אט)</li>
+            <li><a href="/admin/agent">גשר סוכן</a> — התוסף (ללא מפתח) עובד על הצ׳אט הפתוח שלכם</li>
           </ul>
         </div>
       </aside>
     </div>
     <script src="/admin-chat.js"></script>
   `;
-  res.send(layout(html, 'צ׳אט סוכן', accentFor('chat')));
+  res.send(layout(html, 'קופיילוט', accentFor('chat')));
 });
 
 app.get('/admin/api/mission/providers', (req, res) => {

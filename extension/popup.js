@@ -98,70 +98,11 @@
     } else status('שגיאה: ' + ((r && r.error) || '?'), false);
   });
 
-  // ── BYOK: provider constants come from the CMS; key stays in the worker ──
-  let PROVIDERS = [];
-  function fillModels(providerId, selectedModel) {
-    const p = PROVIDERS.find((x) => x.id === providerId);
-    const sel = $('byok-model');
-    sel.innerHTML = '';
-    if (!p) return;
-    (p.models || [p.defaultModel]).forEach((m) => {
-      const o = document.createElement('option');
-      o.value = m; o.textContent = m;
-      if (m === (selectedModel || p.defaultModel)) o.selected = true;
-      sel.appendChild(o);
-    });
-    // keyUrl comes from the CMS table — only trust an https link (a
-    // javascript:/data: href from a compromised CMS must not run in the popup)
-    $('byok-keyurl').href = /^https:\/\//i.test(p.keyUrl || '') ? p.keyUrl : '#';
-    if (p.keyHint) $('byok-key').placeholder = p.keyHint;
-  }
-
-  async function loadProviders(cfg) {
-    const r = await send({ type: 'providers' });
-    if (!r || !r.ok) return; // CMS not connected yet
-    PROVIDERS = r.providers || [];
-    const provSel = $('byok-provider');
-    provSel.innerHTML = '';
-    PROVIDERS.forEach((p) => {
-      const o = document.createElement('option');
-      o.value = p.id; o.textContent = p.label;
-      if (p.id === (cfg.byokProvider || r.selected)) o.selected = true;
-      provSel.appendChild(o);
-    });
-    fillModels(provSel.value, cfg.byokModel || r.model);
-    if (cfg.hasKey) $('byok-key').placeholder = '•••••• (שמור כדי להחליף)';
-  }
-
-  $('byok-provider').addEventListener('change', () => {
-    fillModels($('byok-provider').value, '');
-    // persist BOTH the provider AND the now-selected (default) model, so a
-    // stale cross-provider model can't linger in storage and 400 the call
-    send({ type: 'setConfig', byokProvider: $('byok-provider').value, byokModel: $('byok-model').value });
+  // Tier realignment (v0.85): key-based generation lives in the CMS now
+  // (/admin/chat — the key on the user own server). This popup stays the
+  // KEYLESS tier; the card links to the copilot.
+  send({ type: 'getConfig' }).then((c) => {
+    const link = $('byok-cms-link');
+    if (link && c && c.ok && c.url) link.href = c.url + '/admin/chat';
   });
-  $('byok-model').addEventListener('change', () => send({ type: 'setConfig', byokModel: $('byok-model').value }));
-
-  $('byok-save').addEventListener('click', async () => {
-    const patch = { type: 'setConfig', byokProvider: $('byok-provider').value, byokModel: $('byok-model').value };
-    if ($('byok-key').value) patch.byokKey = $('byok-key').value;
-    const r = await send(patch);
-    if (r && r.ok) { status('נשמר — המפתח נשאר בדפדפן שלכם בלבד', true); $('byok-key').value = ''; $('byok-key').placeholder = '•••••• (שמור כדי להחליף)'; }
-    else status('שגיאה בשמירה', false);
-  });
-
-  $('byok-generate').addEventListener('click', async () => {
-    const brief = $('byok-brief').value.trim();
-    if (!brief) return status('כתבו מה לבנות', false);
-    const btn = $('byok-generate'); const label = btn.textContent;
-    btn.disabled = true; btn.textContent = '⏳ בונה…';
-    const r = await send({ type: 'generate', brief });
-    btn.disabled = false; btn.textContent = label;
-    if (r && r.ok) {
-      status((r.created ? 'נוצר ופורסם: ' : 'עודכן: ') + r.fullPath + ' ✓', true);
-      loadTargets($('target').value);
-    } else status('שגיאה: ' + ((r && r.error) || '?'), false);
-  });
-
-  // hydrate BYOK once config is known (append to init)
-  send({ type: 'getConfig' }).then((c) => { if (c && c.ok) loadProviders(c); });
 })();

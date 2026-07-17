@@ -1,23 +1,30 @@
-/* /admin/chat — copilot: teach BenTML, capture a page description, mint a mission
-   the extension injects into your own logged-in AI chat, then auto-publishes. */
+/* /admin/chat — the tier-1 copilot (v0.85, the tier realignment):
+   the user's LLM key lives in the CMS; the chat calls the provider's OFFICIAL
+   API from the server, speaks BenTML (the same roleplay pack every on-ramp
+   gets), and a reply that carries a page becomes a draft in one click.
+   No key? The sidebar routes to the keyless tier (inject / paste / extension). */
 (function () {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
   const log = $('chat-log');
   const input = $('chat-input');
-  let provider = 'claude';
-  let lastMission = null;
+  const history = []; // [{role, content}] — sent with each turn, capped server-side
+
+  let providers = [];
+  let settings = { provider: 'claude', model: '', hasKey: false, keyTail: '' };
 
   async function api(path, opts = {}) {
-    const res = await fetch(path, {
-      headers: { 'Content-Type': 'application/json' },
-      ...opts
-    });
+    const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('json') ? await res.json() : await res.text();
     if (!res.ok) throw new Error((data && data.error) || res.statusText);
     return data;
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function bubble(role, html) {
@@ -29,147 +36,148 @@
     return div;
   }
 
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+  function setStatus(msg) {
+    const el = $('chat-status');
+    if (el) el.textContent = msg || '';
   }
 
-  // boot providers
-  (async function init() {
-    try {
-      const r = await api('/admin/api/mission/providers');
-      const sel = $('provider');
-      sel.innerHTML = (r.providers || [])
-        .filter((p) => p.id !== 'generic')
-        .map((p) => `<option value="${p.id}">${esc(p.label)}</option>`)
-        .join('');
-      provider = sel.value || 'claude';
-      sel.onchange = () => {
-        provider = sel.value;
-      };
+  /* ── settings card ── */
 
-      bubble(
-        'system',
-        `<strong>🎮 בונה אתרים ב‑AI שלכם</strong> — המוח שלכם, השפה שלנו.<br/>
-        <span class="muted">① לימוד BenTML (משחק + מילון) · ② תיאור הדף · ③ התוסף מזריק לצ׳אט שלכם · ④ <b>פרסום אוטומטי</b> כשה‑‎.pzn מלא (&lt;/html&gt; + מודול bent-* + fence סגור).</span><br/>
-        <span class="muted">בלי מפתחות API, בלי cookies של ה‑AI בשרת — הכול רץ אצלכם בדפדפן.</span>`
-      );
+  function fillModels() {
+    const p = providers.find((x) => x.id === $('ai-provider').value) || providers[0];
+    const sel = $('ai-model');
+    sel.innerHTML = (p ? p.models : []).map((m) =>
+      '<option value="' + esc(m) + '"' + (m === settings.model ? ' selected' : '') + '>' + esc(m) + '</option>'
+    ).join('');
+  }
+
+  function renderSettings() {
+    const provSel = $('ai-provider');
+    provSel.innerHTML = providers.map((p) =>
+      '<option value="' + esc(p.id) + '"' + (p.id === settings.provider ? ' selected' : '') + '>' + esc(p.label) + '</option>'
+    ).join('');
+    fillModels();
+    $('ai-key-state').textContent = settings.hasKey ? '· מוגדר (…' + settings.keyTail + ')' : '· לא מוגדר';
+    $('ai-key').placeholder = settings.hasKey
+      ? 'להחלפה — הדביקו מפתח חדש'
+      : ((providers.find((p) => p.id === settings.provider) || {}).keyHint || 'sk-…');
+  }
+
+  async function saveSettings() {
+    const body = { provider: $('ai-provider').value, model: $('ai-model').value };
+    const key = $('ai-key').value.trim();
+    if (key) body.apiKey = key; // empty field = keep the stored key
+    $('ai-settings-status').textContent = 'שומר…';
+    try {
+      const d = await api('/admin/api/ai/settings', { method: 'POST', body: JSON.stringify(body) });
+      settings = d;
+      $('ai-key').value = '';
+      renderSettings();
+      $('ai-settings-status').textContent = 'נשמר ✓';
+      if (d.hasKey) welcome(true);
+    } catch (e) {
+      $('ai-settings-status').textContent = 'שגיאה: ' + e.message;
+    }
+  }
+
+  /* ── the conversation ── */
+
+  function welcome(fresh) {
+    if (fresh) log.innerHTML = '';
+    if (settings.hasKey) {
+      bubble('system', 'הקופיילוט מחובר ✓ תארו דף — והוא ייבנה כטיוטה בלחיצה. המפתח שלכם נשאר בשרת.');
+    } else {
+      bubble('system', 'עוד אין מפתח API. הגדירו אותו בצד (נשמר בשרת בלבד) — או השתמשו במסלולים ללא מפתח.');
+    }
+  }
+
+  function replyActions(reply) {
+    // a reply that carries a page offers one-click creation
+    if (!/<bent-|<!DOCTYPE html/i.test(reply)) return '';
+    return '<div class="actions">' +
+      '<button type="button" class="act primary" data-act="create">🪄 צור דף מהתשובה (טיוטה)</button>' +
+      '<button type="button" class="act" data-act="copy">העתק</button>' +
+      '</div>';
+  }
+
+  async function send() {
+    const message = input.value.trim();
+    if (!message) return;
+    if (!settings.hasKey) {
+      bubble('system', 'קודם מגדירים מפתח בצד — או עוברים ל<a href="/admin/ai">הדבקה ידנית</a>.');
+      return;
+    }
+    input.value = '';
+    bubble('user', esc(message));
+    setStatus('חושב…');
+    $('btn-send').disabled = true;
+    try {
+      const d = await api('/admin/api/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message, history })
+      });
+      history.push({ role: 'user', content: message }, { role: 'assistant', content: d.reply });
+      const b = bubble('assistant',
+        '<div style="white-space:pre-wrap;word-break:break-word;direction:rtl">' + esc(d.reply) + '</div>' +
+        replyActions(d.reply));
+      wireActions(b, d.reply);
+      setStatus('');
     } catch (e) {
       bubble('system', 'שגיאה: ' + esc(e.message));
-    }
-  })();
-
-  $('btn-teach').addEventListener('click', async () => {
-    try {
-      const r = await api('/admin/api/mission/teach', {
-        method: 'POST',
-        body: JSON.stringify({ provider })
-      });
-      await navigator.clipboard.writeText(r.message);
-      bubble(
-        'assistant',
-        `📚 <strong>הודעת הלימוד הועתקה</strong> (${esc(r.providerLabel)}).<br/>
-        הדביקו בצ׳אט של ה‑AI, או לחצו «פתח + הפעל תוסף» אחרי שתתארו את הדף.<br/>
-        <details><summary>תצוגת ההודעה</summary><pre class="code">${esc(r.message.slice(0, 1200))}…</pre></details>`
-      );
-    } catch (e) {
-      bubble('system', esc(e.message));
-    }
-  });
-
-  async function submitDescription() {
-    const description = input.value.trim();
-    if (!description) return;
-    input.value = '';
-    bubble('user', esc(description));
-    try {
-      const r = await api('/admin/api/mission/create', {
-        method: 'POST',
-        body: JSON.stringify({
-          description,
-          provider,
-          title: $('page-title').value.trim(),
-          slug: $('page-slug').value.trim(),
-          targetPage: $('page-target').value
-        })
-      });
-      lastMission = r.mission;
-      bubble(
-        'assistant',
-        `🚀 <strong>המשימה מוכנה</strong> · ${esc(r.mission.id.slice(0, 8))}…<br/>
-        <div class="actions">
-          <button type="button" class="act" data-copy="one">📋 העתק הודעה מלאה (לימוד+בנייה)</button>
-          <button type="button" class="act" data-copy="build">📋 העתק רק תיאור+בנייה</button>
-          <button type="button" class="act primary" data-open="1">↗ פתח ${esc(r.providerLabel)} + הפעל תוסף</button>
-        </div>
-        <p class="muted">בתוסף: סמנו «פרסום אוטומטי» · ① לימוד · ② בנייה · המעקב מפרסם כשהמסמך <b>מלא</b>.</p>
-        <details open><summary>איך זה עובד</summary>
-          <ol class="muted">
-            <li>התוסף מחובר ל‑CMS עם טוקן write</li>
-            <li>לשונית ${esc(r.providerLabel)} — אתם מחוברים כרגיל (BYOT)</li>
-            <li>⬇ משוך משימה → ① לימוד → ② בנייה</li>
-            <li>חכו ל‑&lt;/html&gt; + fence סגור — או PZN_READY</li>
-            <li>פרסום אוטומטי · פתחו את הדף החי</li>
-          </ol>
-        </details>`
-      );
-      wireActionButtons();
-    } catch (e) {
-      bubble('system', esc(e.message));
+      setStatus('');
+    } finally {
+      $('btn-send').disabled = false;
+      input.focus();
     }
   }
 
-  function wireActionButtons() {
-    log.querySelectorAll('.act').forEach((btn) => {
-      if (btn._wired) return;
-      btn._wired = true;
+  function wireActions(container, reply) {
+    container.querySelectorAll('[data-act]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        if (!lastMission) return;
-        if (btn.getAttribute('data-copy') === 'one') {
-          await navigator.clipboard.writeText(lastMission.oneShot);
-          btn.textContent = '✓ הועתק';
-        } else if (btn.getAttribute('data-copy') === 'build') {
-          await navigator.clipboard.writeText(lastMission.buildMessage);
-          btn.textContent = '✓ הועתק';
-        } else if (btn.getAttribute('data-open')) {
-          // mark the mission active so the extension can pull it
-          await api('/admin/api/mission/activate/' + lastMission.id, { method: 'POST', body: '{}' });
-          const url = lastMission.providerUrl || 'https://claude.ai/new';
-          window.open(url, '_blank');
-          bubble(
-            'system',
-            'נפתח הצ׳אט של ה‑AI. בתוסף לחצו <strong>⬇ משוך משימה</strong> — הוא משתמש ב‑session שלכם.'
-          );
+        if (btn.dataset.act === 'copy') {
+          try { await navigator.clipboard.writeText(reply); btn.textContent = 'הועתק ✓'; } catch (e) {}
+          return;
+        }
+        // create: the forgiving pipeline — extract → repair → DRAFT page
+        btn.disabled = true;
+        btn.textContent = 'בונה…';
+        try {
+          const d = await api('/admin/api/pzn/create-from-source', {
+            method: 'POST',
+            body: JSON.stringify({ source: reply })
+          });
+          bubble('system',
+            'נוצרה טיוטה ✓ ' +
+            '<a href="/admin/edit/' + encodeURIComponent(d.fullPath) + '">פתחו בבונה</a>' +
+            (d.warnings && d.warnings.length ? ' · ' + d.warnings.length + ' אזהרות' : ''));
+          btn.textContent = 'נוצר ✓';
+        } catch (e) {
+          bubble('system', 'הבנייה נכשלה: ' + esc(e.message));
+          btn.disabled = false;
+          btn.textContent = '🪄 צור דף מהתשובה (טיוטה)';
         }
       });
     });
   }
 
-  $('btn-send').addEventListener('click', submitDescription);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      submitDescription();
-    }
-  });
+  /* ── boot ── */
 
-  // load page targets
-  (async () => {
+  (async function init() {
     try {
-      const r = await api('/admin/api/pages');
-      const sel = $('page-target');
-      for (const p of r.pages || []) {
-        const o = document.createElement('option');
-        o.value = p.full_path;
-        o.textContent = p.title + ' (' + p.full_path + ')';
-        sel.appendChild(o);
-      }
-      const q = new URLSearchParams(location.search).get('page');
-      if (q) sel.value = q;
+      const d = await api('/admin/api/ai/settings');
+      providers = d.providers || [];
+      settings = d;
+      renderSettings();
     } catch (e) {
-      /* ok */
+      bubble('system', 'שגיאה בטעינת ההגדרות: ' + esc(e.message));
     }
+    welcome(false);
+
+    $('ai-provider').addEventListener('change', fillModels);
+    $('ai-save').addEventListener('click', saveSettings);
+    $('btn-send').addEventListener('click', send);
+    input.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }
+    });
   })();
 })();

@@ -39,22 +39,11 @@
     <span class="hint">מעתיק תפקיד + מילון BenTML — הדביקו בצ׳אט וה‑AI יֵדע לבנות דפים</span>
   </button>
 
-  <details id="byok">
-    <summary style="color:#7c3aed">🔑 בנייה במפתח משלכם (BYOK)</summary>
-    <p class="sub" style="margin:8px 0">בלי להעתיק-להדביק: כתבו מה לבנות, וה‑AI יבנה ויפרסם ישירות. המפתח נשמר בדפדפן שלכם בלבד — ה‑CMS לעולם לא רואה אותו.</p>
-    <label>ספק</label>
-    <select id="byok-provider"></select>
-    <label>דגם</label>
-    <select id="byok-model"></select>
-    <label>מפתח ה‑API שלכם <a id="byok-keyurl" href="#" target="_blank" style="font-weight:400;font-size:.75rem">(מאיפה?)</a></label>
-    <div class="row">
-      <input id="byok-key" dir="ltr" type="password" placeholder="sk-…" style="flex:1" />
-      <button id="byok-save" class="sec" style="flex:0 0 auto;margin-top:0">שמור</button>
-    </div>
-    <label>מה לבנות?</label>
-    <textarea id="byok-brief" rows="2" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #cbd5e1;border-radius:8px;font:inherit" placeholder="דף נחיתה למאפייה שכונתית עם גלריה וטופס..."></textarea>
-    <button id="byok-generate" style="width:100%;background:linear-gradient(135deg,#8b5cf6,#7c3aed)">✨ בנה ופרסם</button>
-  </details>
+  <div id="byok-moved" style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:10px 12px;margin:10px 0">
+    <div style="font-weight:700;color:#5b21b6;font-size:.85rem">🔑 יש לכם מפתח API?</div>
+    <p class="sub" style="margin:6px 0 8px">הצ׳אט עם מפתח עבר לממשק הניהול — המפתח נשמר בשרת שלכם, לא בדפדפן. התוסף הזה נשאר המסלול ללא מפתח: הזרקת המשחק לצ׳אט שאתם כבר מנויים עליו.</p>
+    <a id="byok-cms-link" href="#" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-radius:8px;padding:8px 0;text-decoration:none;font-weight:700;font-size:.85rem">פתחו את הקופיילוט ב‑CMS</a>
+  </div>
 
   <label>יעד הפרסום</label>
   <select id="target"><option value="__new__">✨ דף חדש (לפי הכותרת שהבוט כתב)</option></select>
