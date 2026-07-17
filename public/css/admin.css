@@ -258,6 +258,28 @@ body {
   animation: rise-in var(--dur-slow) var(--pop);
 }
 
+/* Media bank — a real file manager window, not a cramped strip */
+.media-modal-content {
+  max-width: min(1100px, 94vw);
+  height: min(760px, 88vh);
+  display: flex;
+  flex-direction: column;
+  padding: 22px 24px;
+}
+.media-modal-content #media-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.media-modal-foot {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .save-bar {
   position: fixed;
   bottom: 0;
@@ -416,6 +438,11 @@ body.builder-screen .save-bar {
   position: sticky;
   top: 70px;
   color: var(--bc-text);
+  /* the toolbox scrolls INSIDE itself — a long palette never stretches the
+     page, so the canvas is always beside you when you pick a tool */
+  max-height: calc(100vh - 86px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .toolbox h4 {
   margin: 0 0 12px;
@@ -573,15 +600,6 @@ body.builder-screen .save-bar {
   border-color: var(--select);
   background: color-mix(in srgb, var(--select) 16%, var(--bc-panel-2));
   box-shadow: inset 3px 0 0 var(--select);
-}
-.toolbox.has-selection .tool-btn.is-replace-mode:not(.is-current):hover {
-  border-color: #a78bfa;
-  background: color-mix(in srgb, #7c3aed 14%, var(--bc-panel-2));
-  color: #ddd6fe;
-}
-.toolbox.has-selection .tool-btn.is-replace-mode:not(.is-current):hover .tool-ico {
-  background: rgba(0, 0, 0, .35);
-  color: #a78bfa;
 }
 .tool-btn.dragging-tool { opacity: 0.55; cursor: grabbing; }
 .tool-btn[draggable="true"] { cursor: grab; }
@@ -798,7 +816,15 @@ body.builder-screen .canvas-header {
   justify-content: center;
   transition: height .12s;
 }
-body.is-dragging .drop-slot { height: 18px; min-height: 28px; opacity: 1; }
+/* While dragging, slots stay QUIET — no wall of bars in nested containers.
+   Only the slot under the cursor (.drop-slot-active) lights up; a fat
+   invisible hit area keeps them easy to reach without visual noise. */
+body.is-dragging .drop-slot { height: 14px; min-height: 14px; opacity: 1; }
+body.is-dragging .drop-slot::after {
+  content: '';
+  position: absolute;
+  inset: -9px 0;
+}
 .drop-slot-line {
   display: block;
   width: 100%;
@@ -807,7 +833,6 @@ body.is-dragging .drop-slot { height: 18px; min-height: 28px; opacity: 1; }
   border-radius: 2px;
   transition: background .12s, height .12s, box-shadow .12s;
 }
-body.is-dragging .drop-slot-line { background: color-mix(in srgb, var(--select) 22%, transparent); height: 3px; }
 .drop-slot-label {
   display: none;
   position: absolute;
@@ -819,7 +844,8 @@ body.is-dragging .drop-slot-line { background: color-mix(in srgb, var(--select) 
   border-radius: 999px;
   pointer-events: none;
 }
-.drop-slot.drop-slot-active { height: 28px; }
+body.is-dragging .drop-slot.drop-slot-active,
+.drop-slot.drop-slot-active { height: 28px; min-height: 28px; }
 .drop-slot.drop-slot-active .drop-slot-line {
   height: 4px;
   background: linear-gradient(90deg, transparent, var(--select) 20%, var(--select) 80%, transparent);
@@ -912,6 +938,24 @@ body.is-dragging .canvas-block:hover .split-zone,
   text-transform: uppercase;
   letter-spacing: .4px;
 }
+/* Container name-bars stay quiet on the live page — nested containers no
+   longer stack a permanent bar per level. A bar surfaces only for the
+   container you're actually working (hover / selection / resize). */
+.builder.live-page .column-head {
+  max-height: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity .15s, max-height .15s, margin-bottom .15s;
+}
+.builder.live-page .column-pane:hover > .column-head,
+.builder.live-page .preview-card.is-container:hover > .column-head,
+.builder.live-page .canvas-block.selected > .block-content .column-head,
+body.is-col-resizing .column-head {
+  max-height: 22px;
+  margin-bottom: 6px;
+  opacity: 1;
+}
 .column-empty {
   padding: 18px 8px;
   text-align: center;
@@ -927,6 +971,13 @@ body.is-dragging .canvas-block:hover .split-zone,
     rgba(148, 163, 184, 0.06) 6px,
     rgba(148, 163, 184, 0.06) 12px
   );
+}
+.column-empty.drop-hover {
+  border-color: var(--select);
+  border-style: solid;
+  background: var(--select-soft);
+  color: var(--select);
+  font-weight: 700;
 }
 .column-add {
   width: 100%;
