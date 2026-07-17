@@ -892,7 +892,10 @@ const BLOCK_REGISTRY = [
     childrenOf: null,
     hintHe: 'טופס יצירת קשר / הרשמה (מודול #1 שהמפרק ביקש)',
     params: [
-      { name: 'action', bentmlParam: 'action', labelHe: 'יעד שליחה (URL)', type: 'url', default: '' },
+      {
+        name: 'action', bentmlParam: 'action', labelHe: 'יעד שליחה (URL)', type: 'url', default: '',
+        hint: 'ריק = תיבת הפניות המובנית (ניהול → תיבת פניות)'
+      },
       { name: 'method', bentmlParam: 'method', labelHe: 'שיטה', type: 'enum', enum: ['post', 'get'], default: 'post' },
       { name: 'submit', bentmlParam: 'submit', labelHe: 'כפתור שליחה', type: 'string', default: 'שליחה' },
       {

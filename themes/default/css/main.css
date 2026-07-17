@@ -823,6 +823,11 @@ p, li { max-width: 70ch; }
   background: var(--color-accent, #0a66c2); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 .bent-form-submit:hover { filter: brightness(1.06); }
+/* honeypot — visually gone, still in the DOM for bots to trip on */
+.bent-form .bent-hp {
+  position: absolute !important; inline-size: 1px; block-size: 1px;
+  opacity: 0; pointer-events: none; overflow: hidden;
+}
 
 /* card grid (v0.59) — the walla lesson: a content site is a wall of media
    cards. Responsive auto-fit grid, zero JS. */
