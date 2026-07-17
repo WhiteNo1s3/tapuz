@@ -70,6 +70,24 @@ check(forms.unreadCount() === unreadBefore, 'markRead(false) restores');
 check(forms.deleteSubmission(saved.id) === true, 'delete works');
 check(forms.getSubmission(saved.id) === null, 'deleted is gone');
 
+// ── CSV export (v0.87) — the inbox as an Excel-ready spreadsheet ──
+forms.saveSubmission({ page: 'landing', fields: { email: 'a@b.co', note: '=HYPERLINK("evil")' } });
+forms.saveSubmission({ page: 'צור-קשר', fields: { שם: 'רות, "המנהלת"', הודעה: 'שורה\nשנייה' } });
+const csv = forms.toCsv(forms.allSubmissions());
+check(csv.charCodeAt(0) === 0xfeff, 'CSV opens with a UTF-8 BOM (Excel reads Hebrew)');
+check(csv.includes('\r\n'), 'CSV uses CRLF rows');
+const headRow = csv.slice(1).split('\r\n')[0];
+check(headRow.startsWith('"id","created_at","page","read"'), 'fixed head columns first');
+check(headRow.includes('"email"') && headRow.includes('"שם"'),
+  'field columns are the union across different forms');
+check(csv.includes('"רות, ""המנהלת"""'), 'quotes doubled, commas survive inside quotes');
+check(csv.includes('שורה\nשנייה'), 'multiline value survives inside its quoted cell');
+check(csv.includes('"\'=HYPERLINK'), 'formula injection neutralized (leading apostrophe)');
+check(!/[^'"]=HYPERLINK/.test(csv), 'no unguarded formula cell anywhere');
+check(forms.toCsv([]).slice(1).startsWith('"id"'), 'empty inbox exports a header-only sheet');
+check(forms.allSubmissions().length === forms.listSubmissions({ limit: 500 }).length,
+  'allSubmissions sees everything the list sees');
+
 try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) {}
 
 console.log('');
