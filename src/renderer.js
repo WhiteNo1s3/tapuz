@@ -3,7 +3,7 @@ const path = require('path');
 
 const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
-const { getMenu } = require('./menus');
+const { getMenuForLocation } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
 const { sanitizeHtmlFragment } = require('./html-sanitize');
 
@@ -764,8 +764,8 @@ function renderPage(page, options = {}) {
   head += renderGa4Snippet(config);
   const currentYear = new Date().getFullYear();
 
-  const mainMenu = getMenu('main');
-  const footerMenu = getMenu('footer');
+  const mainMenu = getMenuForLocation('main');
+  const footerMenu = getMenuForLocation('footer');
 
   // CMS-managed static chrome (S3): header tagline/CTA + footer columns/social/credit
   const chrome = renderSiteChrome(config, direction);

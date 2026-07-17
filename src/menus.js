@@ -10,6 +10,10 @@ const DEFAULT_MENUS = {
   footer: []
 };
 
+// Render slots on the site chrome. Menus are named entities (any number);
+// each location gets one assigned — the WordPress model.
+const MENU_LOCATIONS = ['main', 'footer'];
+
 function ensureSchema() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS menus (
@@ -17,6 +21,10 @@ function ensureSchema() {
       name TEXT UNIQUE NOT NULL,
       items TEXT NOT NULL DEFAULT '[]',
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS menu_locations (
+      location TEXT PRIMARY KEY,
+      menu TEXT NOT NULL
     )
   `);
   seedIfEmpty();
@@ -147,13 +155,67 @@ function listMenuNames() {
   return db.prepare('SELECT name, updated_at FROM menus ORDER BY name').all();
 }
 
+/** Delete a named menu. The built-in defaults (main/footer) are permanent —
+ *  loadMenus() would resurrect them empty anyway. Locations pointing at the
+ *  deleted menu fall back to their same-named default. */
+function deleteMenu(name) {
+  ensureSchema();
+  const key = String(name || '').trim();
+  if (!key || key === 'main' || key === 'footer') {
+    throw new Error('תפריטי ברירת המחדל (main/footer) קבועים');
+  }
+  db.prepare('DELETE FROM menus WHERE name = ?').run(key);
+  MENU_LOCATIONS.forEach((loc) => {
+    const row = db.prepare('SELECT menu FROM menu_locations WHERE location = ?').get(loc);
+    if (row && row.menu === key) {
+      db.prepare('UPDATE menu_locations SET menu = ? WHERE location = ?').run(loc, loc);
+    }
+  });
+  return loadMenus();
+}
+
+/** location → assigned menu name (defaults: each location's own name). */
+function getMenuLocations() {
+  ensureSchema();
+  const out = {};
+  MENU_LOCATIONS.forEach((loc) => { out[loc] = loc; });
+  db.prepare('SELECT location, menu FROM menu_locations').all().forEach((row) => {
+    if (MENU_LOCATIONS.includes(row.location)) out[row.location] = row.menu;
+  });
+  return out;
+}
+
+function setMenuLocations(map) {
+  ensureSchema();
+  const upsert = db.prepare(`
+    INSERT INTO menu_locations (location, menu) VALUES (?, ?)
+    ON CONFLICT(location) DO UPDATE SET menu = excluded.menu
+  `);
+  MENU_LOCATIONS.forEach((loc) => {
+    const menu = String((map || {})[loc] || '').trim();
+    if (menu) upsert.run(loc, menu);
+  });
+  return getMenuLocations();
+}
+
+/** The menu a site-chrome slot should render — location-aware getMenu. */
+function getMenuForLocation(location) {
+  const map = getMenuLocations();
+  return getMenu(map[location] || location);
+}
+
 module.exports = {
   ensureSchema,
   loadMenus,
   saveMenus,
   getMenu,
   saveMenu,
+  deleteMenu,
   listMenuNames,
+  getMenuLocations,
+  setMenuLocations,
+  getMenuForLocation,
+  MENU_LOCATIONS,
   normalizeItems,
   resolveUrl,
   ITEM_TYPES
