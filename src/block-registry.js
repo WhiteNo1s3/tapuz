@@ -563,6 +563,30 @@ const BLOCK_REGISTRY = [
     textField: null,
     seed: { blocks: [] }
   },
+  {
+    // container-as-tool (v0.75): a block container that is legitimate EMPTY.
+    // Drop it to reserve blank space; it publishes as a sized empty section
+    // and gets filled in a future release. Deleting a tool also leaves one
+    // of these behind (the shape survives the content).
+    type: 'section',
+    keyword: 'SECTION',
+    labelHe: 'מיכל',
+    icon: '▣',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'שטח שמור — מלאו עכשיו או אחרי הפרסום',
+    childrenKey: 'blocks',
+    params: [
+      {
+        name: 'size', labelHe: 'גובה כשריק', type: 'enum',
+        enum: ['sm', 'md', 'lg', 'xl'], default: 'md',
+        hint: 'כמה מקום המיכל שומר כשהוא עדיין ריק'
+      }
+    ],
+    textField: null,
+    seed: { blocks: [], size: 'md' }
+  },
 
   // ─────────────────────────── שילובים ───────────────────────────
   {

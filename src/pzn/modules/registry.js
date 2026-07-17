@@ -418,10 +418,14 @@ register({
 // ─── Layout ────────────────────────────────────────────────────────
 
 register({
+  // v0.75: section doubles as the container-as-tool (מיכל). A content section
+  // with no children is legitimate EMPTY — it compiles to reserved blank
+  // space (sized by `size`) to be filled in a future release. The `kind`
+  // prop keeps its old job: lossless stash for unknown block types.
   name: 'section',
   tag: 'bent-section',
   category: 'layout',
-  label: { he: 'סקשן', en: 'Section' },
+  label: { he: 'מיכל', en: 'Section' },
   icon: 'section',
   container: true,
   accept: [],
@@ -430,15 +434,21 @@ register({
       type: 'string', default: 'content', optional: true,
       label: { he: 'סוג', en: 'Kind' }
     },
+    size: {
+      type: 'enum', values: ['sm', 'md', 'lg', 'xl'], default: 'md', optional: true,
+      label: { he: 'גובה כשריק', en: 'Empty height' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
-  defaults: { kind: 'content' },
+  defaults: { kind: 'content', size: 'md' },
   compile(node, ctx, compileChild) {
     const kind = node.props.kind || 'content';
     const { id, cls } = attrsExtra(node);
     const inner = node.children.map((c) => compileChild(c, ctx)).join('');
-    return `<section${id} class="bent-section kind-${escapeAttr(kind)}${cls}"${dirAttr(ctx)}>${inner}</section>`;
+    const size = ['sm', 'md', 'lg', 'xl'].includes(String(node.props.size)) ? node.props.size : 'md';
+    const empty = (!inner && kind === 'content') ? ` tz-section is-empty size-${size}` : '';
+    return `<section${id} class="bent-section kind-${escapeAttr(kind)}${empty}${cls}"${dirAttr(ctx)}>${inner}</section>`;
   }
 });
 

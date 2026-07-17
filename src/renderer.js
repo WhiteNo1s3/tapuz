@@ -3,7 +3,7 @@ const path = require('path');
 
 const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
-const { getMenu } = require('./menus');
+const { getMenuForLocation } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
 const { sanitizeHtmlFragment } = require('./html-sanitize');
 
@@ -215,6 +215,15 @@ function renderBlock(block, direction = 'rtl') {
     case 'card': {
       const inner = (block.data.blocks || []).map(b => renderBlock(b, direction)).join('');
       return `<div class="card bent-card"${extra} dir="${direction}">${inner}</div>`;
+    }
+    case 'section': {
+      // container-as-tool (v0.75): legitimate empty — publishes as reserved
+      // blank space to be filled in a future release
+      const d = block.data || {};
+      const inner = (d.blocks || []).map(b => renderBlock(b, direction)).join('');
+      const size = ['sm', 'md', 'lg', 'xl'].includes(d.size) ? d.size : 'md';
+      const empty = inner ? '' : ` is-empty size-${size}`;
+      return `<section class="bent-section tz-section${empty}"${extra} dir="${direction}">${inner}</section>`;
     }
     case 'hero': {
       const d = block.data || {};
@@ -755,8 +764,8 @@ function renderPage(page, options = {}) {
   head += renderGa4Snippet(config);
   const currentYear = new Date().getFullYear();
 
-  const mainMenu = getMenu('main');
-  const footerMenu = getMenu('footer');
+  const mainMenu = getMenuForLocation('main');
+  const footerMenu = getMenuForLocation('footer');
 
   // CMS-managed static chrome (S3): header tagline/CTA + footer columns/social/credit
   const chrome = renderSiteChrome(config, direction);

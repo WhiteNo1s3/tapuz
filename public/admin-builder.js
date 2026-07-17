@@ -373,19 +373,22 @@
 
     var style = document.createElement('style');
     style.textContent =
-      '#history-controls{display:inline-flex;gap:4px;align-items:center;margin-inline-start:10px}' +
-      '#history-controls button{border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:2px 9px;cursor:pointer;font-size:0.95rem}' +
+      '#history-controls{display:inline-flex;gap:6px;align-items:center;margin-inline-start:8px}' +
+      '#history-controls button{border:1px solid var(--bc-border,#2a3a5c);background:var(--bc-panel-2,#1a243c);color:var(--bc-text,#e8eefc);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:1rem;font-weight:600;transition:border-color .15s,transform .15s}' +
+      '#history-controls button:hover:not(:disabled){border-color:var(--accent,#f97316);transform:translateY(-1px)}' +
       '#history-controls button:disabled{opacity:0.35;cursor:default}' +
-      '#dirty-dot{width:9px;height:9px;border-radius:50%;background:#cbd5e1;display:inline-block;margin-inline-start:6px;transition:background .2s}' +
-      '#dirty-dot.on{background:#f59e0b}' +
+      '#dirty-dot{width:9px;height:9px;border-radius:50%;background:#475569;display:inline-block;margin-inline-start:6px;transition:background .2s}' +
+      '#dirty-dot.on{background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,.6)}' +
       '#tapuz-toasts{position:fixed;bottom:18px;inset-inline-start:18px;z-index:9999;display:flex;flex-direction:column;gap:8px}' +
-      '.tapuz-toast{background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:0.9rem;box-shadow:0 6px 20px rgba(0,0,0,0.25);opacity:0;transform:translateY(8px);transition:all .25s}' +
+      '.tapuz-toast{display:flex;align-items:center;gap:10px;background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:0.9rem;box-shadow:0 6px 20px rgba(0,0,0,0.25);opacity:0;transform:translateY(8px);transition:all .25s}' +
+      '.tapuz-toast .toast-action{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;border-radius:7px;padding:3px 10px;cursor:pointer;font:inherit;font-size:.85rem;font-weight:700}' +
+      '.tapuz-toast .toast-action:hover{background:rgba(255,255,255,.25)}' +
       '.tapuz-toast.show{opacity:1;transform:none}' +
       '.tapuz-toast.ok{background:#166534}' +
       '.tapuz-toast.err{background:#b91c1c}' +
       '.preview-embed{position:relative;display:inline-block}' +
       '.embed-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2rem;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.6);pointer-events:none}' +
-      '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:#334155}' +
+      '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:inherit}' +
       '.media-explorer{display:flex;flex-direction:column;gap:10px}' +
       '.media-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;padding-bottom:8px}' +
       '.media-crumbs{font-size:0.9rem;color:#334155}' +
@@ -421,14 +424,15 @@
     toasts.id = 'tapuz-toasts';
     document.body.appendChild(toasts);
 
-    var header = document.querySelector('.canvas-header');
+    // undo/redo live in the TOPBAR — always visible, never a hidden trick
+    var header = document.querySelector('.topbar-left') || document.querySelector('.canvas-header');
     if (header && !document.getElementById('history-controls')) {
       var wrap = document.createElement('span');
       wrap.id = 'history-controls';
       wrap.innerHTML =
-        '<button type="button" id="btn-undo" title="בטל (Ctrl+Z)">↩</button>' +
+        '<button type="button" id="btn-undo" title="בטל (Ctrl+Z)">↩ בטל</button>' +
         '<button type="button" id="btn-redo" title="בצע שוב (Ctrl+Shift+Z)">↪</button>' +
-        '<span id="dirty-dot"></span>';
+        '<span id="dirty-dot" title="שינויים שלא נשמרו"></span>';
       header.appendChild(wrap);
       document.getElementById('btn-undo').addEventListener('click', undo);
       document.getElementById('btn-redo').addEventListener('click', redo);
@@ -439,6 +443,29 @@
     var statusEl = document.getElementById('page-status');
     if (statusEl) statusEl.addEventListener('change', markDirty);
 
+    // responsive drawers: toolbox bottom sheet + settings slide-over
+    var toolboxHandle = document.getElementById('toolbox-handle');
+    if (toolboxHandle) {
+      toolboxHandle.addEventListener('click', function () {
+        document.body.classList.toggle('toolbox-open');
+      });
+    }
+    var propsClose = document.getElementById('props-close');
+    if (propsClose) {
+      propsClose.addEventListener('click', function () {
+        document.body.classList.remove('props-open');
+      });
+    }
+    var pagePropsBtn = document.getElementById('btn-page-props');
+    if (pagePropsBtn) {
+      pagePropsBtn.addEventListener('click', function () {
+        selectedId = null;
+        renderCanvas();
+        renderProperties();
+        document.body.classList.add('props-open');
+      });
+    }
+
     window.addEventListener('beforeunload', function (e) {
       if (!isDirty) return;
       e.preventDefault();
@@ -446,18 +473,33 @@
     });
   }
 
-  function showToast(msg, kind) {
+  function showToast(msg, kind, action) {
     var host = document.getElementById('tapuz-toasts');
     if (!host) return;
     var t = document.createElement('div');
     t.className = 'tapuz-toast' + (kind ? ' ' + kind : '');
     t.textContent = msg;
+    // destructive actions carry their own inline undo — cancel without
+    // knowing Ctrl+Z exists
+    if (action && action.label) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'toast-action';
+      b.textContent = action.label;
+      b.addEventListener('click', function () {
+        try { action.onClick(); } finally {
+          t.classList.remove('show');
+          setTimeout(function () { t.remove(); }, 300);
+        }
+      });
+      t.appendChild(b);
+    }
     host.appendChild(t);
     requestAnimationFrame(function () { t.classList.add('show'); });
     setTimeout(function () {
       t.classList.remove('show');
       setTimeout(function () { t.remove(); }, 300);
-    }, 2800);
+    }, action ? 5200 : 2800);
   }
 
   /** Cached article fetch for the article-list canvas preview. */
@@ -782,6 +824,7 @@
       builderEl.classList.toggle('page-ltr', pageDirection === 'ltr');
     }
     ensureUiExtras();
+    initToolSearch();
     renderCanvas();
     renderProperties();
     applyCanvasPageBg();
@@ -1771,6 +1814,7 @@
       pushHistorySnapshot(snap);
       dropInProgress = false;
       finishDrop();
+      flashJustDropped(result.selectedId || state.blockId);
     } catch (err) {
       console.error('Tapuz drop failed, restoring tree', err);
       restoreTree(snap);
@@ -1778,6 +1822,44 @@
       finishDrop();
     }
   }
+
+  /** The landed block wobbles once — feedback that the drop took. */
+  function flashJustDropped(id) {
+    if (!id) return;
+    var el = document.querySelector('.canvas-block[data-id="' + cssEsc(id) + '"]');
+    if (!el) return;
+    el.classList.add('just-dropped');
+    el.addEventListener('animationend', function onEnd() {
+      el.classList.remove('just-dropped');
+      el.removeEventListener('animationend', onEnd);
+    });
+  }
+
+  // ---- drag auto-scroll: the page follows the drag near viewport edges,
+  // so long pages can be built with drag & drop without dropping blind ----
+  var autoScrollVel = 0;
+  var autoScrollRAF = null;
+  function dragAutoScroll(e) {
+    if (!document.body.classList.contains('is-dragging')) { autoScrollVel = 0; return; }
+    var EDGE = 90;
+    var MAX = 26;
+    var y = e.clientY;
+    var vh = window.innerHeight;
+    if (y < EDGE) autoScrollVel = -MAX * (1 - y / EDGE);
+    else if (y > vh - EDGE) autoScrollVel = MAX * (1 - (vh - y) / EDGE);
+    else autoScrollVel = 0;
+    if (autoScrollVel && !autoScrollRAF) {
+      autoScrollRAF = requestAnimationFrame(function step() {
+        autoScrollRAF = null;
+        if (!autoScrollVel || !document.body.classList.contains('is-dragging')) return;
+        window.scrollBy(0, autoScrollVel);
+        autoScrollRAF = requestAnimationFrame(step);
+      });
+    }
+  }
+  document.addEventListener('dragover', dragAutoScroll);
+  document.addEventListener('dragend', function () { autoScrollVel = 0; });
+  document.addEventListener('drop', function () { autoScrollVel = 0; });
 
   function doInsertMove(hint, state) {
     var list = getLiveList(hint.parentId || null, hint.colIndex);
@@ -1918,6 +2000,8 @@
         e.dataTransfer.effectAllowed = 'copy';
         btn.classList.add('dragging-tool');
         document.body.classList.add('is-dragging');
+        // bottom-sheet toolbox must not cover the canvas while dragging onto it
+        document.body.classList.remove('toolbox-open');
       });
       btn.addEventListener('dragend', function () {
         btn.classList.remove('dragging-tool');
@@ -1940,6 +2024,9 @@
     if (!opts.skipCanvas) renderCanvas();
     if (!opts.skipProps) renderProperties();
     syncToolboxMode();
+    // narrow viewports: the settings panel is a slide-over drawer —
+    // selecting a block opens it, deselecting closes it (no-op on wide)
+    document.body.classList.toggle('props-open', !!id);
   }
 
   /** Live-update canvas text from side panel without destroying the tree. */
@@ -2115,6 +2202,39 @@
       var sel = hasSel ? getBlock(selectedId) : null;
       btn.classList.toggle('is-current', !!(sel && sel.type === t));
       btn.classList.toggle('is-replace-mode', hasSel);
+    });
+    // the selected block's family unfolds so its highlighted tool is visible
+    var cur = document.querySelector('.tool-btn.is-current');
+    if (cur) {
+      var cat = cur.closest('details.tool-cat');
+      if (cat) cat.open = true;
+    }
+  }
+
+  // ---- toolbox search: cuts across the folded categories ----
+  function initToolSearch() {
+    var search = document.getElementById('tool-search');
+    if (!search) return;
+    search.addEventListener('input', function () {
+      var q = search.value.trim().toLowerCase();
+      document.querySelectorAll('.tool-cat').forEach(function (cat, i) {
+        var any = false;
+        cat.querySelectorAll('.tool-btn[data-type]').forEach(function (btn) {
+          var hit = !q || btn.textContent.toLowerCase().indexOf(q) !== -1;
+          btn.style.display = hit ? '' : 'none';
+          if (hit) any = true;
+        });
+        cat.style.display = any ? '' : 'none';
+        if (q) cat.open = true;
+        else cat.open = i === 0; // restore the default fold
+      });
+    });
+    search.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && search.value) {
+        search.value = '';
+        search.dispatchEvent(new Event('input'));
+        e.stopPropagation();
+      }
     });
   }
 
@@ -2301,7 +2421,7 @@
         '</div>' +
         // v0.64: assign this page to categories — each is just a portable tag
         '<div class="prop-group" id="page-cats-box" style="display:none">' +
-        '<div style="font-size:0.82rem;font-weight:600;color:#475569;margin-bottom:4px">קטגוריות (הדף יופיע בבלוק הקטגוריה)</div>' +
+        '<div style="font-size:0.82rem;font-weight:600;margin-bottom:4px">קטגוריות (הדף יופיע בבלוק הקטגוריה)</div>' +
         '<div id="page-cats"></div></div>';
       if (isArticle) {
         pageHtml += field('תקציר לקובייה', '<textarea data-page-meta="teaser" placeholder="ריק = נלקח אוטומטית מהטקסט הראשון">' + esc(pageMeta.teaser || '') + '</textarea>');
@@ -2334,7 +2454,7 @@
         ) +
         '<div class="prop-hint">SEO מובנה בחבילה — לא תוסף. סוכנים כותבים description ב־META BenTML.</div>';
       pageHtml +=
-        '<hr style="margin:14px 0;border-color:#f1f5f9">' +
+        '<hr style="margin:14px 0;opacity:.25">' +
         '<div class="props-empty">' +
         '<div class="props-empty-title">אין מודול נבחר</div>' +
         '<div class="props-empty-line"><strong>הוספה</strong> — לחץ או גרור מהסרגל</div>' +
@@ -3258,14 +3378,33 @@
     renderProperties();
   }
 
+  /** Delete = soft erase (Ben's modularity law): the tool goes, the shape
+   *  stays. A deleted module becomes an empty מיכל (section) holding its
+   *  place; deleting the empty מיכל removes it for real. Pure-space types
+   *  (spacer/divider) and empty containers skip straight to removal. */
   function deleteBlock(id) {
-    if (!findNode(id)) return;
+    var node = findNode(id);
+    if (!node) return;
     pushHistory();
-    removeNode(id);
-    if (selectedId === id) selectedId = null;
+    var kids = (node.data && (node.data.blocks || node.data.columns)) || [];
+    var pureSpace = node.type === 'spacer' || node.type === 'divider';
+    var emptyContainer = isBlocksContainer(node.type) && !kids.length;
+    var soft = !pureSpace && !emptyContainer;
+    if (soft) {
+      node.type = 'section';
+      node.data = { blocks: [], size: 'md' };
+    } else {
+      removeNode(id);
+      if (selectedId === id) selectedId = null;
+    }
     renderCanvas();
     renderProperties();
     syncToolboxMode();
+    showToast(
+      soft ? 'המודול פונה — המיכל נשאר לשמור מקום' : 'המודול נמחק',
+      null,
+      { label: '↩ בטל', onClick: undo }
+    );
   }
 
   /** Graduation (v0.51): convert a provisional bent-html block's raw HTML into
@@ -3761,6 +3900,16 @@
     ) {
       e.preventDefault();
       deleteBlock(selectedId);
+    }
+    if (e.key === 'Escape') {
+      // responsive drawers close first; then selection clears
+      if (document.body.classList.contains('toolbox-open')) {
+        document.body.classList.remove('toolbox-open');
+      } else if (document.body.classList.contains('props-open')) {
+        document.body.classList.remove('props-open');
+      } else if (selectedId && !inField) {
+        selectBlock(null);
+      }
     }
   });
 
