@@ -2182,7 +2182,7 @@
    * Double-click to write directly in the container.
    * Commits to block.data and refreshes the side settings text.
    */
-  function startInlineEdit(blockId, key) {
+  function startInlineEdit(blockId, key, evt) {
     var block = getBlock(blockId);
     if (!block) return;
     if (!block.data) block.data = {};
@@ -2208,11 +2208,47 @@
     el.contentEditable = 'true';
     el.classList.add('inline-editing');
     el.focus();
+    // Never nuke real content (v0.82): clicking into text puts the caret AT
+    // THE CLICK \u2014 what every editor does. Select-all happens ONLY while the
+    // text is still the untouched seed placeholder (type-to-replace). The old
+    // always-select-all made the first keystroke swallow the whole text.
+    var seed = '';
     try {
-      var range = document.createRange();
-      range.selectNodeContents(el);
+      var dd = defaultData(block.type) || {};
+      if (dd[key] != null) seed = String(dd[key]);
+    } catch (e) {}
+    var isPlaceholder = original !== '' && original === seed;
+    try {
       var sel = window.getSelection();
       sel.removeAllRanges();
+      var range = null;
+      if (isPlaceholder) {
+        range = document.createRange();
+        range.selectNodeContents(el);
+      } else {
+        var cx = evt && evt.clientX;
+        var cy = evt && evt.clientY;
+        if (cx != null && cy != null) {
+          // the coords survive the renderCanvas rebuild \u2014 same layout, new node
+          if (document.caretRangeFromPoint) {
+            var cr = document.caretRangeFromPoint(cx, cy);
+            if (cr && el.contains(cr.startContainer)) range = cr;
+          } else if (document.caretPositionFromPoint) {
+            var pos = document.caretPositionFromPoint(cx, cy);
+            if (pos && el.contains(pos.offsetNode)) {
+              range = document.createRange();
+              range.setStart(pos.offsetNode, pos.offset);
+            }
+          }
+        }
+        if (!range) {
+          // no usable point (keyboard entry, padding click) \u2192 caret at the end
+          range = document.createRange();
+          range.selectNodeContents(el);
+        }
+        // point-ranges are already collapsed; the end-fallback collapses here
+        range.collapse(false);
+      }
       sel.addRange(range);
     } catch (e) {}
 
@@ -2277,7 +2313,7 @@
         if (el.isContentEditable) return;
         e.preventDefault();
         e.stopPropagation();
-        startInlineEdit(block.id, key);
+        startInlineEdit(block.id, key, e);
       };
       el.addEventListener('click', start);
       el.addEventListener('dblclick', start);
