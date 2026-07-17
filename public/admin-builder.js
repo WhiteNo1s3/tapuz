@@ -373,14 +373,16 @@
 
     var style = document.createElement('style');
     style.textContent =
-      '#history-controls{display:inline-flex;gap:4px;align-items:center;margin-inline-start:10px}' +
-      '#history-controls button{border:1px solid var(--bc-border,#2a3a5c);background:var(--bc-panel-2,#1a243c);color:var(--bc-text,#e8eefc);border-radius:6px;padding:2px 9px;cursor:pointer;font-size:0.95rem;transition:border-color .15s,transform .15s}' +
+      '#history-controls{display:inline-flex;gap:6px;align-items:center;margin-inline-start:8px}' +
+      '#history-controls button{border:1px solid var(--bc-border,#2a3a5c);background:var(--bc-panel-2,#1a243c);color:var(--bc-text,#e8eefc);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:1rem;font-weight:600;transition:border-color .15s,transform .15s}' +
       '#history-controls button:hover:not(:disabled){border-color:var(--accent,#f97316);transform:translateY(-1px)}' +
       '#history-controls button:disabled{opacity:0.35;cursor:default}' +
       '#dirty-dot{width:9px;height:9px;border-radius:50%;background:#475569;display:inline-block;margin-inline-start:6px;transition:background .2s}' +
       '#dirty-dot.on{background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,.6)}' +
       '#tapuz-toasts{position:fixed;bottom:18px;inset-inline-start:18px;z-index:9999;display:flex;flex-direction:column;gap:8px}' +
-      '.tapuz-toast{background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:0.9rem;box-shadow:0 6px 20px rgba(0,0,0,0.25);opacity:0;transform:translateY(8px);transition:all .25s}' +
+      '.tapuz-toast{display:flex;align-items:center;gap:10px;background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:0.9rem;box-shadow:0 6px 20px rgba(0,0,0,0.25);opacity:0;transform:translateY(8px);transition:all .25s}' +
+      '.tapuz-toast .toast-action{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;border-radius:7px;padding:3px 10px;cursor:pointer;font:inherit;font-size:.85rem;font-weight:700}' +
+      '.tapuz-toast .toast-action:hover{background:rgba(255,255,255,.25)}' +
       '.tapuz-toast.show{opacity:1;transform:none}' +
       '.tapuz-toast.ok{background:#166534}' +
       '.tapuz-toast.err{background:#b91c1c}' +
@@ -422,14 +424,15 @@
     toasts.id = 'tapuz-toasts';
     document.body.appendChild(toasts);
 
-    var header = document.querySelector('.canvas-header');
+    // undo/redo live in the TOPBAR — always visible, never a hidden trick
+    var header = document.querySelector('.topbar-left') || document.querySelector('.canvas-header');
     if (header && !document.getElementById('history-controls')) {
       var wrap = document.createElement('span');
       wrap.id = 'history-controls';
       wrap.innerHTML =
-        '<button type="button" id="btn-undo" title="בטל (Ctrl+Z)">↩</button>' +
+        '<button type="button" id="btn-undo" title="בטל (Ctrl+Z)">↩ בטל</button>' +
         '<button type="button" id="btn-redo" title="בצע שוב (Ctrl+Shift+Z)">↪</button>' +
-        '<span id="dirty-dot"></span>';
+        '<span id="dirty-dot" title="שינויים שלא נשמרו"></span>';
       header.appendChild(wrap);
       document.getElementById('btn-undo').addEventListener('click', undo);
       document.getElementById('btn-redo').addEventListener('click', redo);
@@ -470,18 +473,33 @@
     });
   }
 
-  function showToast(msg, kind) {
+  function showToast(msg, kind, action) {
     var host = document.getElementById('tapuz-toasts');
     if (!host) return;
     var t = document.createElement('div');
     t.className = 'tapuz-toast' + (kind ? ' ' + kind : '');
     t.textContent = msg;
+    // destructive actions carry their own inline undo — cancel without
+    // knowing Ctrl+Z exists
+    if (action && action.label) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'toast-action';
+      b.textContent = action.label;
+      b.addEventListener('click', function () {
+        try { action.onClick(); } finally {
+          t.classList.remove('show');
+          setTimeout(function () { t.remove(); }, 300);
+        }
+      });
+      t.appendChild(b);
+    }
     host.appendChild(t);
     requestAnimationFrame(function () { t.classList.add('show'); });
     setTimeout(function () {
       t.classList.remove('show');
       setTimeout(function () { t.remove(); }, 300);
-    }, 2800);
+    }, action ? 5200 : 2800);
   }
 
   /** Cached article fetch for the article-list canvas preview. */
@@ -3334,6 +3352,7 @@
     renderCanvas();
     renderProperties();
     syncToolboxMode();
+    showToast('המודול נמחק', null, { label: '↩ בטל', onClick: undo });
   }
 
   /** Graduation (v0.51): convert a provisional bent-html block's raw HTML into
