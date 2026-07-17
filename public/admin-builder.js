@@ -443,6 +443,16 @@
     var statusEl = document.getElementById('page-status');
     if (statusEl) statusEl.addEventListener('change', markDirty);
 
+    // layers fold — remembered per browser (closed by default: foolproof first)
+    var layersFold = document.getElementById('layers-fold');
+    if (layersFold) {
+      layersFold.open = localStorage.getItem('tapuz-layers-open') === '1';
+      layersFold.addEventListener('toggle', function () {
+        localStorage.setItem('tapuz-layers-open', layersFold.open ? '1' : '0');
+        if (layersFold.open) renderLayers();
+      });
+    }
+
     // responsive drawers: toolbox bottom sheet + settings slide-over
     var toolboxHandle = document.getElementById('toolbox-handle');
     if (toolboxHandle) {
@@ -861,6 +871,76 @@
 
   // ---- Canvas ----
 
+  // ── Layers panel (v0.89) — the page as an outline (the Builder.io tree). ──
+  var MODULE_META = {};
+  MODULES.forEach(function (m) { MODULE_META[m.type] = m; });
+
+  /** First human-recognizable snippet of a block's own text, for the row label. */
+  function layerText(d) {
+    var t = d.title || d.heading || d.content || d.text || d.label || d.alt || '';
+    t = String(t).replace(/\s+/g, ' ').trim();
+    return t.length > 26 ? t.slice(0, 25) + '…' : t;
+  }
+
+  /**
+   * Flatten the block tree to rows: {id, type, depth, virtual?}.
+   * Containers follow the registry (childrenKey): data.blocks children at
+   * depth+1; columns get a virtual row per column (click selects the parent).
+   */
+  function flattenLayers(list, depth, out) {
+    depth = depth || 0;
+    out = out || [];
+    (list || []).forEach(function (b) {
+      if (!b) return;
+      out.push({ id: b.id, type: b.type, depth: depth, data: b.data || {} });
+      var ck = childrenKeyFor(b.type);
+      if (ck === 'blocks' && b.data && Array.isArray(b.data.blocks)) {
+        flattenLayers(b.data.blocks, depth + 1, out);
+      } else if (ck === 'columns' && b.data && Array.isArray(b.data.columns)) {
+        b.data.columns.forEach(function (col, ci) {
+          out.push({ id: b.id, type: 'col', depth: depth + 1, virtual: true, colIndex: ci });
+          flattenLayers((col && col.blocks) || [], depth + 2, out);
+        });
+      }
+    });
+    return out;
+  }
+
+  function renderLayers() {
+    var tree = document.getElementById('layers-tree');
+    if (!tree) return;
+    var rows = flattenLayers(blocks);
+    var count = document.getElementById('layers-count');
+    if (count) count.textContent = rows.filter(function (r) { return !r.virtual; }).length || '';
+    if (!rows.length) {
+      tree.innerHTML = '<div class="layers-empty">הדף ריק — גררו מודול מהארגז</div>';
+      return;
+    }
+    tree.innerHTML = '';
+    rows.forEach(function (r) {
+      var meta = MODULE_META[r.type] || {};
+      var row = document.createElement('div');
+      row.className = 'layer-row' + (!r.virtual && r.id === selectedId ? ' active' : '') + (r.virtual ? ' virtual' : '');
+      row.style.paddingInlineStart = 8 + r.depth * 14 + 'px';
+      var ico = document.createElement('span');
+      ico.className = 'layer-ico';
+      ico.textContent = r.virtual ? '│' : (meta.icon || '·');
+      var label = document.createElement('span');
+      label.className = 'layer-label';
+      label.textContent = r.virtual ? 'עמודה ' + (r.colIndex + 1) : (meta.label || r.type);
+      var hint = document.createElement('span');
+      hint.className = 'layer-hint';
+      hint.textContent = r.virtual ? '' : layerText(r.data);
+      row.appendChild(ico); row.appendChild(label); row.appendChild(hint);
+      row.onclick = function () {
+        selectBlock(r.id);
+        var el = document.querySelector('.canvas-block[data-id="' + cssEsc(r.id) + '"]');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+      tree.appendChild(row);
+    });
+  }
+
   function renderCanvas() {
     var canvas = document.getElementById('canvas');
     if (!canvas) return;
@@ -890,11 +970,13 @@
       canvas.appendChild(empty);
       bindListSurface(canvas, null, null);
       updateCount();
+      renderLayers();
       return;
     }
 
     renderListInto(canvas, blocks, null, null);
     updateCount();
+    renderLayers();
   }
 
   function updateCount() {
@@ -2155,6 +2237,7 @@
     opts = opts || {};
     selectedId = id;
     if (!opts.skipCanvas) renderCanvas();
+    else renderLayers(); // canvas skipped — keep the outline's highlight honest
     if (!opts.skipProps) renderProperties();
     syncToolboxMode();
     // narrow viewports: the settings panel is a slide-over drawer —
@@ -4513,6 +4596,8 @@
     openRevisions: openRevisions,
     closeRevisions: closeRevisions,
     openImportAi: openImportAi,
+    // layers outline (v0.89) — flatten exposed for QA/debug
+    _layersFlatten: flattenLayers,
     // BenTML language bridge (used by admin-bentml-ui.js)
     _getBlocks: function () { return blocks; },
     _setBlocks: function (next, opts) {
