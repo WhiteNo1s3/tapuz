@@ -1209,6 +1209,29 @@ register({
   }
 });
 
+// ─── Audio (v0.80) — the last media graduation: native <audio> player
+//     (podcasts, music, radio clips). YouTube src degrades to the embed. ───
+register({
+  name: 'audio',
+  tag: 'bent-audio',
+  category: 'media',
+  label: { he: 'שמע', en: 'Audio' },
+  icon: 'audio',
+  container: false,
+  props: {
+    src: { type: 'url', default: '', label: { he: 'קובץ שמע / קישור', en: 'Audio file / URL' } },
+    caption: { type: 'string', default: '', optional: true, label: { he: 'כיתוב', en: 'Caption' } },
+    loop: { type: 'boolean', default: false, optional: true, label: { he: 'לולאה', en: 'Loop' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const { id, cls } = attrsExtra(node);
+    return require('../audio-html').renderAudio(node.props || {}, { idAttr: id, cls });
+  }
+});
+
 // ─── Category presentation (v0.64, batch finale) — a branded header + the
 //     category's article grid. Dynamic leaf like article-list: articles come
 //     from ctx (threaded), category metadata from ctx.categories (the file

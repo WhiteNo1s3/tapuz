@@ -305,6 +305,9 @@ function blockToModule(block) {
     case 'video':
       return createModule('video', baseOpts(block, pickProps(data, ['src', 'poster', 'caption', 'controls', 'autoplay', 'loop', 'muted'])));
 
+    case 'audio':
+      return createModule('audio', baseOpts(block, pickProps(data, ['src', 'caption', 'loop'])));
+
     case 'category':
       return createModule('category', baseOpts(block, pickProps(data, ['slug', 'limit', 'showheader'])));
 
@@ -616,6 +619,9 @@ function moduleToBlock(node) {
 
     case 'video':
       return finishBlock(node, 'video', pickData(props, ['src', 'poster', 'caption', 'controls', 'autoplay', 'loop', 'muted']));
+
+    case 'audio':
+      return finishBlock(node, 'audio', pickData(props, ['src', 'caption', 'loop']));
 
     case 'category':
       return finishBlock(node, 'category', pickData(props, ['slug', 'limit', 'showheader']));

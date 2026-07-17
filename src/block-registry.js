@@ -469,6 +469,26 @@ const BLOCK_REGISTRY = [
     textField: null,
     seed: { src: '', controls: true }
   },
+  {
+    type: 'audio',
+    keyword: 'AUDIO',
+    labelHe: 'שמע',
+    icon: '🎧',
+    category: 'מדיה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'נגן שמע (mp3/ogg) — פודקאסט, מוזיקה, קטע רדיו; קישור יוטיוב הופך להטמעה',
+    params: [
+      {
+        name: 'src', labelHe: 'קובץ שמע / קישור', type: 'media', required: true,
+        hint: 'קובץ תחת ‎/uploads‎ או קישור יוטיוב (E306 כשחסר)'
+      },
+      { name: 'caption', labelHe: 'כיתוב', type: 'string', hint: 'מוצג מתחת לנגן' },
+      { name: 'loop', labelHe: 'לולאה', type: 'boolean', default: false, omitDefault: true }
+    ],
+    textField: null,
+    seed: { src: '' }
+  },
 
   // ─────────────────────────── מבנה ───────────────────────────
   {

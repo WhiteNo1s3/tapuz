@@ -442,6 +442,12 @@ function renderBlock(block, direction = 'rtl') {
       // as a stray boolean attribute.
       return require('./pzn/video-html').renderVideoFromData(block.data || {}, direction, extraClass, extraId + style);
 
+    case 'audio':
+      // native <audio> player (v0.80) — same split contract as video
+      return require('./pzn/audio-html').renderAudio(block.data || {}, {
+        cls: extraClass, extra: extraId + style, dir: ` dir="${direction}"`
+      });
+
     case 'category': {
       // dynamic leaf like article-list: lazy-require the stores at render time
       // (avoids require cycles via export.js). Membership = the page tags;

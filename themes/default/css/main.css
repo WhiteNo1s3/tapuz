@@ -846,6 +846,16 @@ a.bent-card:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12)); tr
 .bent-card-title { margin: 0; font-size: 1.05rem; line-height: 1.3; color: var(--color-text, #0f172a); }
 .bent-card-excerpt { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--color-text-muted, #64748b); }
 
+/* audio (v0.80) — native player, the video figure's little sibling */
+.bent-audio { margin: 1.5rem 0; }
+.bent-audio audio { width: 100%; max-width: 34rem; display: block; }
+.bent-audio-caption { margin-top: 0.4rem; font-size: 0.85rem; color: var(--color-text-muted, #64748b); }
+.bent-audio-empty {
+  padding: 1rem 1.25rem; border: 1px dashed var(--color-border, #cbd5e1);
+  border-radius: var(--radius-md, 10px); color: var(--color-text-muted, #64748b);
+  background: var(--color-bg-alt, #f8fafc);
+}
+
 /* carousel (v0.79) — the cards unit sliding instead of wrapping. Zero JS:
    CSS scroll-snap, touch-native, RTL-aware via logical properties (the strip
    starts at inline-start — the right on RTL pages). `peek` keeps the next
