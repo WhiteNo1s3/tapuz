@@ -65,7 +65,7 @@ check('setupDone flag', cfg.setupDone === true);
 const ov = loadOverrides();
 check('primary color applied', ov.colors.primary === '#166534');
 check('lightBg applied', ov.colors.lightBg === '#f0fdf4');
-check('bad color rejected (default kept)', ov.colors.text === '#111827');
+check('bad color rejected (default kept)', ov.colors.text === '#1c1917'); // תפוז look default (v0.72)
 check('menu placement side', ov.layout.menuPlacement === 'side');
 
 // Menu

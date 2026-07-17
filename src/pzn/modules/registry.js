@@ -1286,7 +1286,10 @@ register({
       type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
       label: { he: 'יישור', en: 'Align' }
     },
-    text: { type: 'text', content: true, default: '', label: { he: 'הודעה', en: 'Message' } },
+    // a fresh banner starts with visible placeholder text (like heading/text/
+    // button) — the compile guard below hides EMPTIED banners from readers,
+    // and a blank default would make the builder drop an invisible block
+    text: { type: 'text', content: true, default: 'הודעה חדשה', label: { he: 'הודעה', en: 'Message' } },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
