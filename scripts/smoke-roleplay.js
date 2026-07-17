@@ -7,8 +7,8 @@
  * carry the completion contract the extension watches for.
  */
 
-const { buildDictionary, toAgentTools, toMarkdown, HIDDEN } = require('../src/pzn/syntax-dictionary');
-const { buildRoleplayPack, buildRoleCard, buildInjectBundle, mediaInventoryMarkdown } = require('../src/pzn/agent-roleplay');
+const { buildDictionary, toAgentTools, toMarkdown, toCompactMarkdown, HIDDEN } = require('../src/pzn/syntax-dictionary');
+const { buildRoleplayPack, buildRoleCard, buildInjectBundle, mediaInventoryMarkdown, LITE_BUDGET_CHARS, LITE_MEDIA_CAP } = require('../src/pzn/agent-roleplay');
 const mi = require('../src/pzn/agent-mission');
 const { listModules } = require('../src/pzn/modules/registry');
 
@@ -40,6 +40,43 @@ check('pack embeds the completion contract', /COMPLETION CONTRACT/.test(pack.tex
 check('pack lists the tool inventory', /tool inventory/i.test(pack.text) && /\*\*hero\*\*/.test(pack.text));
 check('pack includes the full dictionary by default', /Syntax Dictionary/.test(pack.text));
 check('pack moduleCount matches the registry', pack.moduleCount === modNames.length);
+
+// ── lite pack (v0.86 — the free-tier payload) ────────────────────────
+// Free chat plans (ChatGPT free etc.) reject the full pack at the message
+// gate; the lite pack must stay inside the budget FOREVER, even as the
+// vocabulary grows — this is the check that keeps free users in the game.
+const manyMedia = Array.from({ length: 40 }, (_, i) => ({
+  url: '/uploads/m' + i + '.webp',
+  alt: 'a long descriptive alt text for image number ' + i + ' with plenty of detail'
+}));
+const lite = buildRoleplayPack({ locale: 'he', media: manyMedia, size: 'lite' });
+const fullSized = buildRoleplayPack({ locale: 'he', media: manyMedia });
+check(`lite pack fits the free-plan budget (${lite.chars} ≤ ${LITE_BUDGET_CHARS})`,
+  lite.size === 'lite' && lite.chars <= LITE_BUDGET_CHARS);
+check('lite is a fraction of the full pack', lite.chars < fullSized.chars / 2.5);
+check('lite drops the full dictionary', !/Syntax Dictionary/.test(lite.text));
+check('lite keeps role + contract + example move',
+  /בונה אתרים/.test(lite.text) && /COMPLETION CONTRACT/.test(lite.text) &&
+  /PZN_READY/.test(lite.text) && /<!DOCTYPE html>/.test(lite.text));
+check('lite grammar carries the WHOLE vocabulary incl. child-only tags',
+  ['bent-tab', 'bent-fold', 'bent-field', 'bent-trow'].every((t) => lite.text.includes('`' + t + '`')));
+check('lite grammar maps containers to their children',
+  /`bent-tabs` ⊃ bent-tab/.test(lite.text) && /`bent-accordion` ⊃ bent-fold/.test(lite.text));
+check('lite grammar marks open containers (section accepts anything)',
+  /`bent-section` ⊃ כל כלי/.test(lite.text));
+check('lite grammar shows enum values', /=sm\|md\|lg/.test(lite.text));
+check(`lite caps the media manifest at ${LITE_MEDIA_CAP} + a "more exist" note`,
+  (lite.text.match(/- `\/uploads\/m\d+\.webp`/g) || []).length === LITE_MEDIA_CAP &&
+  new RegExp('\\+' + (manyMedia.length - LITE_MEDIA_CAP) + ' תמונות נוספות').test(lite.text));
+check('full pack keeps the whole media manifest',
+  (fullSized.text.match(/- `\/uploads\/m\d+\.webp`/g) || []).length === manyMedia.length);
+check('en-locale lite renders too', /any tool/.test(buildRoleplayPack({ locale: 'en', size: 'lite' }).text));
+check('inject bundle reports packSize + packChars',
+  buildInjectBundle({ locale: 'he', size: 'lite' }).packSize === 'lite' &&
+  buildInjectBundle({ locale: 'he' }).packSize === 'full' &&
+  buildInjectBundle({ locale: 'he', size: 'lite' }).packChars <= LITE_BUDGET_CHARS);
+check('toCompactMarkdown covers every module',
+  (() => { const md = toCompactMarkdown(dict); return dict.modules.every((m) => md.includes('`' + m.tag + '`')); })());
 
 // playerBrief becomes the in-game quest
 const quest = buildRoleplayPack({ locale: 'he', playerBrief: 'דף נחיתה למאפייה' });

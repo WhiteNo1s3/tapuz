@@ -447,7 +447,10 @@ app.get('/agent/v1/roleplay', requireAgent('read'), (req, res) => {
   const media = require('./media').listAllMedia(40);
   const brief = req.query.brief ? String(req.query.brief) : '';
   const locale = req.query.locale === 'en' ? 'en' : 'he';
-  const opts = { playerBrief: brief, locale, media };
+  // size=lite (v0.86): the free-tier pack — compact grammar + capped media,
+  // sized to fit one message on a free chat plan (ChatGPT free etc.).
+  const size = String(req.query.size || '') === 'lite' ? 'lite' : 'full';
+  const opts = { playerBrief: brief, locale, media, size };
   if (String(req.query.format || '') === 'json') {
     return res.json({ ok: true, ...buildInjectBundle(opts) });
   }
@@ -4330,6 +4333,10 @@ app.get('/admin/inject', (req, res) => {
           </p>
           <label class="muted">תיאור דף (אופציונלי — נכנס למשחק כמשימה)</label>
           <textarea id="brief" rows="3" placeholder="למשל: דף נחיתה לסטודיו צילום עם הירו, שתי עמודות ו‑CTA"></textarea>
+          <label class="muted" style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;cursor:pointer">
+            <input type="checkbox" id="lite" style="margin-top:3px" />
+            <span><strong>חבילה חסכונית</strong> — לחשבון AI חינמי (ChatGPT חינם וכד׳): מילון מקוצר שנכנס במגבלת האורך של הודעה אחת. במנוי בתשלום עדיפה החבילה המלאה.</span>
+          </label>
           <div class="inj-actions">
             <button type="button" class="btn" id="btn-roleplay">📋 העתק משחק מלא (תפקיד+כלים+מילון)</button>
             <button type="button" class="btn secondary" id="btn-card">🃏 כרטיס תפקיד קצר</button>
@@ -4385,7 +4392,8 @@ app.get('/admin/api/inject-pack', (req, res) => {
   const brief = req.query.brief ? String(req.query.brief) : '';
   const locale = req.query.locale === 'en' ? 'en' : 'he';
   const format = String(req.query.format || 'json');
-  const opts = { playerBrief: brief, locale, media };
+  const size = String(req.query.size || '') === 'lite' ? 'lite' : 'full';
+  const opts = { playerBrief: brief, locale, media, size };
   if (format === 'roleplay') {
     return res.type('text/markdown; charset=utf-8').send(buildRoleplayPack(opts).text);
   }

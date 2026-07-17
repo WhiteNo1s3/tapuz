@@ -34,6 +34,7 @@
     if (c && c.ok) {
       $('url').value = c.url || '';
       if (c.hasToken) $('token').placeholder = '•••••• (שמור כדי להחליף)';
+      $('lite').checked = c.packSize === 'lite';
       if (configured) loadTargets(c.target);
     }
     // First run: the extension GIVES tools (the primer is the hero button), so
@@ -88,12 +89,18 @@
     status('אין חיבור: ' + err + hint, false);
   });
 
+  // free-plan (lite) pack — persisted so the on-page panel follows the same choice
+  $('lite').addEventListener('change', () =>
+    send({ type: 'setConfig', packSize: $('lite').checked ? 'lite' : 'full' }));
+
   $('primer').addEventListener('click', async () => {
-    const r = await send({ type: 'roleplay', locale: 'he' });
+    const size = $('lite').checked ? 'lite' : 'full';
+    const r = await send({ type: 'roleplay', locale: 'he', size });
     if (r && r.ok && r.roleplay) {
       try {
         await navigator.clipboard.writeText(r.roleplay);
-        status('משחק בונה-האתרים הועתק — הדביקו בצ׳אט חדש של ה‑AI', true);
+        const kb = ((r.length || r.roleplay.length) / 1000).toFixed(1);
+        status(`משחק בונה-האתרים הועתק (${kb}K תווים) — הדביקו בצ׳אט חדש של ה‑AI`, true);
       } catch (e) { status('העתקה נכשלה', false); }
     } else status('שגיאה: ' + ((r && r.error) || '?'), false);
   });

@@ -15,7 +15,7 @@
  * (v0.55 — ported from the grokTapuziel language lab.)
  */
 
-const { buildDictionary, toMarkdown, toAgentTools } = require('./syntax-dictionary');
+const { buildDictionary, toMarkdown, toCompactMarkdown, toAgentTools } = require('./syntax-dictionary');
 const { COMPLETION_CONTRACT } = require('./agent-mission');
 
 /**
@@ -46,16 +46,24 @@ function toolsInventoryMarkdown(tools) {
  * Real media manifest (v0.56) — so the agent references images that ACTUALLY
  * exist instead of inventing paths like /uploads/x.jpg. Read-only, no key.
  */
-function mediaInventoryMarkdown(media, he) {
+function mediaInventoryMarkdown(media, he, cap) {
   const list = (media || []).filter((m) => m && m.url);
   if (!list.length) return '';
+  const shown = cap > 0 ? list.slice(0, cap) : list;
   const lines = [];
   lines.push(he
     ? '## מדיה זמינה — השתמש/י רק בנתיבים האלה (אל תמציא/י נתיבי תמונה)'
     : '## Available media — use ONLY these paths (do NOT invent image paths)');
   lines.push('');
-  for (const m of list) {
-    lines.push(`- \`${m.url}\`${m.alt ? ' — alt: ' + m.alt : ''}`);
+  for (const m of shown) {
+    // capped (lite) mode also trims long alts — every char counts on free plans
+    const alt = m.alt && cap > 0 && m.alt.length > 60 ? m.alt.slice(0, 57) + '…' : m.alt;
+    lines.push(`- \`${m.url}\`${alt ? ' — alt: ' + alt : ''}`);
+  }
+  if (shown.length < list.length) {
+    lines.push(he
+      ? `- (+${list.length - shown.length} תמונות נוספות בספרייה — בקש/י מהשחקן לבחור או להעלות)`
+      : `- (+${list.length - shown.length} more in the library — ask the player to pick or upload)`);
   }
   lines.push('');
   lines.push(he
@@ -65,15 +73,27 @@ function mediaInventoryMarkdown(media, he) {
   return lines.join('\n');
 }
 
+// The lite pack must fit ONE message on a free chat plan (ChatGPT free is the
+// tightest gate). Budget in chars; smoke-roleplay enforces it so vocabulary
+// growth can never silently push free users back over the limit.
+const LITE_BUDGET_CHARS = 9000;
+const LITE_MEDIA_CAP = 12;
+
 /**
  * Full injectable roleplay setup for a blank chat.
- * @param {{ locale?: 'he'|'en', includeFullDictionary?: boolean, playerBrief?: string, media?: Array }} [opts]
+ *
+ * `size: 'lite'` (v0.86) — the free-tier pack. Subscribed models get the full
+ * ~25KB pack (dictionary included); free plans can't paste that much, so lite
+ * swaps the dictionary + inventory for the compact grammar (still the WHOLE
+ * vocabulary — one line per tool) and caps the media manifest.
+ * @param {{ locale?: 'he'|'en', size?: 'full'|'lite', includeFullDictionary?: boolean, playerBrief?: string, media?: Array }} [opts]
  */
 function buildRoleplayPack(opts = {}) {
   const locale = opts.locale === 'en' ? 'en' : 'he';
+  const lite = opts.size === 'lite';
   const dict = buildDictionary();
   const tools = toAgentTools(dict);
-  const includeDict = opts.includeFullDictionary !== false;
+  const includeDict = !lite && opts.includeFullDictionary !== false;
 
   const he = locale === 'he';
   const lines = [];
@@ -106,9 +126,11 @@ function buildRoleplayPack(opts = {}) {
   lines.push(he ? '5. אחרי שהמסמך מוכן — השחקן מפרסם ל‑CMS; הבונה הויזואלי מציג את אותה צורה.' : '5. After the document is ready the player publishes into the CMS; the visual builder shows the same shape.');
   lines.push('');
 
-  lines.push(toolsInventoryMarkdown(tools));
+  // lite: the compact grammar IS the whole vocabulary (inventory + dictionary
+  // in one) — the only rendering that fits a free plan's message gate.
+  lines.push(lite ? toCompactMarkdown(dict, { locale }) : toolsInventoryMarkdown(tools));
 
-  const mediaMd = mediaInventoryMarkdown(opts.media, he);
+  const mediaMd = mediaInventoryMarkdown(opts.media, he, lite ? LITE_MEDIA_CAP : 0);
   if (mediaMd) lines.push(mediaMd);
 
   lines.push(he ? '## מהלך לדוגמה (כלי → תחביר)' : '## Example move (tool → syntax)');
@@ -158,11 +180,14 @@ function buildRoleplayPack(opts = {}) {
       : 'Briefly acknowledge you are the Site Builder with the inventory above, then wait for the player’s page description.');
   }
 
+  const text = lines.join('\n');
   return {
-    text: lines.join('\n'),
+    text,
     tools,
     moduleCount: dict.count,
-    locale
+    locale,
+    size: lite ? 'lite' : 'full',
+    chars: text.length
   };
 }
 
@@ -201,7 +226,9 @@ function buildInjectBundle(opts = {}) {
     dictionary: dict,
     completion: COMPLETION_CONTRACT,
     moduleCount: pack.moduleCount,
-    mediaCount: (opts.media || []).length
+    mediaCount: (opts.media || []).length,
+    packSize: pack.size,
+    packChars: pack.chars
   };
 }
 
@@ -210,5 +237,7 @@ module.exports = {
   buildRoleCard,
   buildInjectBundle,
   toolsInventoryMarkdown,
-  mediaInventoryMarkdown
+  mediaInventoryMarkdown,
+  LITE_BUDGET_CHARS,
+  LITE_MEDIA_CAP
 };
