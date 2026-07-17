@@ -2110,6 +2110,10 @@
     // narrow viewports: the settings panel is a slide-over drawer —
     // selecting a block opens it, deselecting closes it (no-op on wide)
     document.body.classList.toggle('props-open', !!id);
+    // the language dances with the canvas — highlight this block's BenTML
+    if (!opts.fromSource && window.BentmlUI && typeof window.BentmlUI.onBlockSelect === 'function') {
+      window.BentmlUI.onBlockSelect(id);
+    }
   }
 
   /** Live-update canvas text from side panel without destroying the tree. */
@@ -4410,13 +4414,19 @@
     openImportAi: openImportAi,
     // BenTML language bridge (used by admin-bentml-ui.js)
     _getBlocks: function () { return blocks; },
-    _setBlocks: function (next) {
+    _setBlocks: function (next, opts) {
+      opts = opts || {};
       blocks = Array.isArray(next) ? next : [];
-      selectedId = null;
+      // live-apply from the source editor keeps the selection when the block
+      // survived the recompile (nested blocks keep ids; top-level get new ones)
+      if (!(opts.keepSelection && selectedId && getBlock(selectedId))) selectedId = null;
       renderCanvas();
       renderProperties();
       syncToolboxMode();
     },
+    _selectBlock: selectBlock,
+    _getSelectedId: function () { return selectedId; },
+    _pushHistory: pushHistory,
     _getTags: function () { return pageTags; },
     _getMeta: function () { return pageMeta; },
     _markDirty: markDirty,

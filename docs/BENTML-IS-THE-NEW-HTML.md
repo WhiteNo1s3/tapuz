@@ -11,15 +11,22 @@
 
 Authoring source of truth: **BenTML** (what the decompiler produces as you build).
 
-## Live accumulation
+## Live accumulation — and the dance (v0.77)
 
 Every builder change:
 
 1. Updates the module tree  
-2. **Decompiles** → full BenTML picture (META, modules, style, nested content)  
-3. Shows under the canvas (**פלט BenTML חי**) and in tab **פלט BenTML**
+2. **Decompiles in the browser** (`window.BentmlEngine`, the real compiler bundled) → full BenTML picture (META, modules, style, nested content)  
+3. Shows under the canvas (**BenTML חי**) and in tab **קוד BenTML** — highlighted, editable
 
-This is not “export as an afterthought.” The output **is** the page file of the system.
+And the reverse is live too:
+
+- **Typing in the source compiles as you type** and applies to the canvas (atomic — an error touches nothing, lights the exact line, prints the fix)  
+- **Click a block on the canvas** → its BenTML lines glow and scroll into view  
+- **Click a line in the source** → the block it compiles to is selected on the canvas  
+- Undo (בטל) covers source edits — one step per typing burst
+
+This is not “export as an afterthought.” The output **is** the page file of the system — and now it dances with the canvas.
 
 ## Full picture (decompiler captures)
 

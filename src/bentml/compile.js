@@ -105,7 +105,7 @@ function buildBlock(node, warnings) {
       };
       if (p.title) data.title = p.title; // image SEO title (v0.71)
       if (!data.alt) warnings.push({ code: 'W401', message: 'IMAGE missing alt' });
-      if (p.class) data.className = p.class;
+      applyChrome(data, p);
       return createBlock('image', data);
     }
     case 'BUTTON': {
@@ -117,6 +117,7 @@ function buildBlock(node, warnings) {
         variant: variant === 'outline' ? 'outline' : variant
       };
       if (p.align && p.align !== 'start') data.align = p.align;
+      applyChrome(data, p);
       return createBlock('button', data);
     }
     case 'ROW': {
@@ -132,18 +133,19 @@ function buildBlock(node, warnings) {
       };
       // the cut speaks percent too: "70%:30%" and "70:30" are the same split
       if (p.ratio) data.ratio = String(p.ratio).split(':').map((s) => s.trim().replace(/%$/, '')).join(':');
+      applyChrome(data, p);
       return createBlock('columns', data);
     }
     case 'SPACE': {
       const size = p.size || 'md';
       const heightMap = { sm: '0.75rem', md: '1.5rem', lg: '2.5rem', xl: '4rem' };
-      return createBlock('spacer', { size, height: heightMap[size] || '1.5rem' });
+      return createBlock('spacer', applyChrome({ size, height: heightMap[size] || '1.5rem' }, p));
     }
     case 'DIVIDER': {
       // renderer uses style solid|dashed — map line→solid, dots→dashed, thick→solid
       const styleMap = { line: 'solid', dots: 'dashed', thick: 'solid' };
       const st = p.style || 'line';
-      return createBlock('divider', { style: styleMap[st] || 'solid', bentStyle: st });
+      return createBlock('divider', applyChrome({ style: styleMap[st] || 'solid', bentStyle: st }, p));
     }
     case 'LIST': {
       const ordered = p.type === 'number';
@@ -154,17 +156,17 @@ function buildBlock(node, warnings) {
         if (!t.includes('\n')) t = collapseSingleParagraph(t);
         return { text: t };
       });
-      return createBlock('list', { ordered, items });
+      return createBlock('list', applyChrome({ ordered, items }, p));
     }
     case 'QUOTE': {
-      return createBlock('quote', {
+      return createBlock('quote', applyChrome({
         text: collapseSingleParagraph(text),
         author: p.author || ''
-      });
+      }, p));
     }
     case 'CARD': {
       const blocks = (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean);
-      return createBlock('card', { blocks });
+      return createBlock('card', applyChrome({ blocks }, p));
     }
     case 'HERO': {
       // children: at most one HEADING, TEXT, BUTTON → flat hero data
@@ -186,6 +188,7 @@ function buildBlock(node, warnings) {
       // spec §11.1 overlay/parallax — stored since v0.44 (the drift is closed)
       if (p.overlay != null && Number(p.overlay) > 0) data.overlay = clampInt(p.overlay, 0, 80, 0);
       if (p.parallax === true || p.parallax === 'true') data.parallax = true;
+      applyChrome(data, p);
       return createBlock('hero', data);
     }
     case 'MOTION':
@@ -198,8 +201,7 @@ function buildBlock(node, warnings) {
       const data = { text: collapseSingleParagraph(text) };
       if (effect !== 'marquee') data.effect = effect;
       if (p.speed && p.speed !== 'md') data.speed = p.speed;
-      if (p.class) data.className = p.class;
-      if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
+      applyChrome(data, p);
       return createBlock('marquee', data);
     }
     case 'BACKDROP':
@@ -213,16 +215,15 @@ function buildBlock(node, warnings) {
       if (p.height && p.height !== 'md') data.height = p.height;
       if (p.tint && p.tint !== 'none') data.tint = p.tint;
       if (p.fade === true || p.fade === 'true') data.fade = true;
-      if (p.class) data.className = p.class;
-      if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
+      applyChrome(data, p);
       return createBlock('parallax', data);
     }
     case 'TESTIMONIAL': {
-      return createBlock('testimonial', {
+      return createBlock('testimonial', applyChrome({
         quote: collapseSingleParagraph(text),
         author: p.author || '',
         role: p.role || ''
-      });
+      }, p));
     }
     case 'GALLERY': {
       const images = (node.children || [])
@@ -231,10 +232,10 @@ function buildBlock(node, warnings) {
           src: c.params.src || '',
           alt: c.params.alt || ''
         }));
-      return createBlock('gallery', {
+      return createBlock('gallery', applyChrome({
         images,
         columns: clampInt(p.columns, 1, 4, 3)
-      });
+      }, p));
     }
     case 'FEATURES': {
       const items = (node.children || [])
@@ -244,28 +245,28 @@ function buildBlock(node, warnings) {
           icon: (c.params && c.params.icon) || '',
           description: collapseSingleParagraph(c.text || '')
         }));
-      return createBlock('features', {
+      return createBlock('features', applyChrome({
         items,
         columns: clampInt(p.columns, 1, 4, 3)
-      });
+      }, p));
     }
     case 'EMBED': {
-      return createBlock('embed', { url: p.url || '' });
+      return createBlock('embed', applyChrome({ url: p.url || '' }, p));
     }
     case 'ARTICLES': {
-      return createBlock('article-list', {
+      return createBlock('article-list', applyChrome({
         tag: p.tag || 'article',
         limit: clampInt(p.limit, 1, 48, 6),
         columns: clampInt(p.columns, 1, 4, 3)
-      });
+      }, p));
     }
     case 'MAP': {
       // since 0.2 — Google Maps embed, no API key
-      return createBlock('map', {
+      return createBlock('map', applyChrome({
         address: p.address || '',
         zoom: clampInt(p.zoom, 1, 20, 15),
         height: p.height || 'md'
-      });
+      }, p));
     }
     case 'HTML': {
       warnings.push({
@@ -363,12 +364,169 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('cta', data);
     }
+    case 'SECTION': {
+      const data = {
+        blocks: (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean),
+        size: p.size || 'md'
+      };
+      applyChrome(data, p);
+      return createBlock('section', data);
+    }
+    case 'TABS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'TAB')
+        .map((c) => ({
+          label: (c.params && c.params.label) || '',
+          content: singleOrMultiline(c.text)
+        }));
+      const data = {
+        items: items.length
+          ? items
+          : [{ label: 'לשונית 1', content: '' }, { label: 'לשונית 2', content: '' }]
+      };
+      applyChrome(data, p);
+      return createBlock('tabs', data);
+    }
+    case 'ACCORDION': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'FOLD')
+        .map((c) => ({
+          title: (c.params && c.params.title) || '',
+          content: singleOrMultiline(c.text)
+        }));
+      const data = {
+        items: items.length
+          ? items
+          : [{ title: 'מגירה 1', content: '' }, { title: 'מגירה 2', content: '' }]
+      };
+      applyChrome(data, p);
+      return createBlock('accordion', data);
+    }
+    case 'FORM': {
+      const fields = (node.children || [])
+        .filter((c) => c.name === 'FIELD')
+        .map((c) => {
+          const fp = c.params || {};
+          const field = { label: fp.label || '' };
+          if (fp.name) field.name = fp.name;
+          if (fp.type && fp.type !== 'text') field.type = fp.type;
+          if (fp.placeholder) field.placeholder = fp.placeholder;
+          if (fp.required === true || fp.required === 'true') field.required = true;
+          if (Array.isArray(fp.options) && fp.options.length) field.options = fp.options;
+          return field;
+        });
+      const data = {
+        action: p.action || '',
+        method: p.method === 'get' ? 'get' : 'post',
+        submit: p.submit || 'שליחה',
+        fields: fields.length
+          ? fields
+          : [
+              { label: 'שם', name: 'name', required: true },
+              { label: 'אימייל', name: 'email', type: 'email', required: true },
+              { label: 'הודעה', name: 'message', type: 'textarea' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('form', data);
+    }
+    case 'CARDS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'MEDIACARD')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { title: cp.title || '' };
+          if (cp.image) item.image = cp.image;
+          if (cp.tag) item.tag = cp.tag;
+          const excerpt = collapseSingleParagraph(c.text || '');
+          if (excerpt) item.excerpt = excerpt;
+          if (cp.url) item.href = cp.url;
+          return item;
+        });
+      const data = { items };
+      applyChrome(data, p);
+      return createBlock('cards', data);
+    }
+    case 'NAV': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'NAVITEM')
+        .map((c) => ({
+          label: collapseSingleParagraph(c.text || ''),
+          href: (c.params && c.params.url) || '#'
+        }));
+      const data = { items };
+      if (p.background) data.background = p.background;
+      if (p.color) data.color = p.color;
+      if (p.align && p.align !== 'start') data.align = p.align;
+      // background/color are the nav's own fields here, not generic chrome
+      applyChrome(data, { ...p, background: undefined, color: undefined });
+      return createBlock('nav', data);
+    }
+    case 'TICKER': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'TICKERITEM')
+        .map((c) => {
+          const item = { text: collapseSingleParagraph(c.text || '') };
+          const url = c.params && c.params.url;
+          if (url) item.href = url;
+          return item;
+        });
+      const data = { items };
+      if (p.label) data.label = p.label;
+      if (p.speed && p.speed !== 'md') data.speed = p.speed;
+      if (p.background) data.background = p.background;
+      if (p.color) data.color = p.color;
+      applyChrome(data, { ...p, background: undefined, color: undefined });
+      return createBlock('ticker', data);
+    }
+    case 'NEWSPOP': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'NEWSPOPITEM')
+        .map((c) => {
+          const item = { text: collapseSingleParagraph(c.text || '') };
+          const cp = c.params || {};
+          if (cp.time) item.time = cp.time;
+          if (cp.url) item.href = cp.url;
+          return item;
+        });
+      const data = { items };
+      if (p.label) data.label = p.label;
+      applyChrome(data, p);
+      return createBlock('newspop', data);
+    }
+    case 'VIDEO': {
+      const data = { src: p.src || '' };
+      if (p.poster) data.poster = p.poster;
+      if (p.caption) data.caption = p.caption;
+      data.controls = !(p.controls === false || p.controls === 'false');
+      if (p.autoplay === true || p.autoplay === 'true') data.autoplay = true;
+      if (p.loop === true || p.loop === 'true') data.loop = true;
+      if (p.muted === true || p.muted === 'true') data.muted = true;
+      applyChrome(data, p);
+      return createBlock('video', data);
+    }
+    case 'CATEGORY': {
+      const data = {
+        slug: p.slug || '',
+        limit: clampInt(p.limit, 1, 48, 6),
+        showheader: !(p.showheader === false || p.showheader === 'false')
+      };
+      applyChrome(data, p);
+      return createBlock('category', data);
+    }
     case 'COL':
     case 'ITEM':
     case 'FEATURE':
     case 'STAT':
     case 'LOGO':
     case 'QA':
+    case 'TAB':
+    case 'FOLD':
+    case 'FIELD':
+    case 'MEDIACARD':
+    case 'NAVITEM':
+    case 'TICKERITEM':
+    case 'NEWSPOPITEM':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });
@@ -382,6 +540,12 @@ function collapseSingleParagraph(text) {
     .replace(/\n/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** TAB/FOLD content: keep authored line breaks, collapse one-liners' padding. */
+function singleOrMultiline(text) {
+  const t = String(text || '');
+  return t.includes('\n') ? t : collapseSingleParagraph(t);
 }
 
 function clampInt(v, min, max, dflt) {

@@ -306,42 +306,99 @@ const KEYWORDS = {
       question: { type: 'string', required: true }
     }
   },
+  // ── containers with typed children (v0.77): the whole builder vocabulary
+  //    round-trips — content children follow the ITEM/FEATURE pattern
+  //    (the link/label params on the keyword, the visible text as the body).
   TABS: {
-    body: 'NO-BODY',
+    body: 'BLOCK-BODY',
     jsonType: 'tabs',
+    children: ['TAB'],
     params: {}
+  },
+  TAB: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TABS',
+    params: {
+      label: { type: 'string', required: true }
+    }
   },
   ACCORDION: {
-    body: 'NO-BODY',
+    body: 'BLOCK-BODY',
     jsonType: 'accordion',
+    children: ['FOLD'],
     params: {}
   },
+  FOLD: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'ACCORDION',
+    params: {
+      title: { type: 'string', required: true }
+    }
+  },
   FORM: {
-    body: 'NO-BODY',
+    body: 'BLOCK-BODY',
     jsonType: 'form',
+    children: ['FIELD'],
     params: {
       action: { type: 'string' },
       method: { type: 'enum', values: ['post', 'get'], default: 'post' },
       submit: { type: 'string', default: 'שליחה' }
     }
   },
-  CARDS: {
+  FIELD: {
     body: 'NO-BODY',
+    childOnly: true,
+    parent: 'FORM',
+    params: {
+      label: { type: 'string', required: true },
+      name: { type: 'string' },
+      type: { type: 'enum', values: ['text', 'email', 'tel', 'textarea', 'select', 'checkbox'], default: 'text' },
+      placeholder: { type: 'string' },
+      required: { type: 'boolean', default: false },
+      options: { type: 'list' }
+    }
+  },
+  CARDS: {
+    body: 'BLOCK-BODY',
     jsonType: 'cards',
+    children: ['MEDIACARD'],
     params: {}
   },
+  MEDIACARD: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'CARDS',
+    params: {
+      title: { type: 'string', required: true },
+      image: { type: 'string' },
+      tag: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
   NAV: {
-    body: 'NO-BODY',
+    body: 'BLOCK-BODY',
     jsonType: 'nav',
+    children: ['NAVITEM'],
     params: {
       background: { type: 'string' },
       color: { type: 'string' },
       align: { type: 'enum', values: ['start', 'center', 'end'], default: 'start' }
     }
   },
+  NAVITEM: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'NAV',
+    params: {
+      url: { type: 'string', required: true }
+    }
+  },
   TICKER: {
-    body: 'NO-BODY',
+    body: 'BLOCK-BODY',
     jsonType: 'ticker',
+    children: ['TICKERITEM'],
     params: {
       label: { type: 'string' },
       speed: { type: 'enum', values: ['slow', 'md', 'fast'], default: 'md' },
@@ -349,11 +406,29 @@ const KEYWORDS = {
       color: { type: 'string' }
     }
   },
+  TICKERITEM: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TICKER',
+    params: {
+      url: { type: 'string' }
+    }
+  },
   NEWSPOP: {
-    body: 'NO-BODY',
+    body: 'BLOCK-BODY',
     jsonType: 'newspop',
+    children: ['NEWSPOPITEM'],
     params: {
       label: { type: 'string' }
+    }
+  },
+  NEWSPOPITEM: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'NEWSPOP',
+    params: {
+      time: { type: 'string' },
+      url: { type: 'string' }
     }
   },
   VIDEO: {
