@@ -430,6 +430,23 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}CARDS${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'carousel': {
+      const params = [];
+      if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);
+      if (d.peek === false) params.push('peek: false');
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [];
+          if (it.title) ps.push(`title: ${q(it.title)}`);
+          if (it.image) ps.push(`image: ${q(it.image)}`);
+          if (it.tag) ps.push(`tag: ${q(it.tag)}`);
+          if (it.href && it.href !== '#') ps.push(`url: ${q(it.href)}`);
+          return childWithBody('SLIDE', ps, it.excerpt, indent);
+        })
+        .join('\n');
+      return `${pad}CAROUSEL${paramList(params)} {\n${kids}\n${pad}}`;
+    }
     case 'nav': {
       const params = [];
       if (d.background) params.push(`background: ${q(d.background)}`);

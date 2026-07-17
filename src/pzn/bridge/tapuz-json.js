@@ -267,6 +267,15 @@ function blockToModule(block) {
       return createModule('cards', baseOpts(block, {}, { children }));
     }
 
+    case 'carousel': {
+      const children = (data.items || []).map((it) =>
+        createModule('slide', {
+          props: pickProps(it || {}, ['image', 'tag', 'title', 'excerpt', 'href'])
+        })
+      );
+      return createModule('carousel', baseOpts(block, pickProps(data, ['height', 'peek']), { children }));
+    }
+
     case 'nav': {
       const children = (data.items || []).map((it) =>
         createModule('navitem', {
@@ -572,6 +581,14 @@ function moduleToBlock(node) {
         .filter((c) => c.name === 'mediacard')
         .map((c) => pickData(c.props || {}, ['image', 'tag', 'title', 'excerpt', 'href']));
       return finishBlock(node, 'cards', data);
+    }
+
+    case 'carousel': {
+      const data = pickData(props, ['height', 'peek']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'slide')
+        .map((c) => pickData(c.props || {}, ['image', 'tag', 'title', 'excerpt', 'href']));
+      return finishBlock(node, 'carousel', data);
     }
 
     case 'nav': {

@@ -142,6 +142,7 @@ const VOCAB_DATA = {
     fields: [{ label: 'שם', name: 'name', required: true }, { label: 'נושא', name: 't', type: 'select', options: ['א', 'ב'] }]
   },
   cards: { items: [{ title: 'כרטיס', image: '/uploads/a.jpg', tag: 'תג', excerpt: 'תקציר', href: '/a' }] },
+  carousel: { height: 'lg', peek: false, items: [{ title: 'שקופית', image: '/uploads/s.jpg', excerpt: 'תקציר', href: '/s' }] },
   nav: { items: [{ label: 'בית', href: '/' }], background: '#111', color: '#fff', align: 'center' },
   ticker: { label: 'מבזק', speed: 'fast', items: [{ text: 'ידיעה', href: '/n' }] },
   newspop: { label: 'מבזקים', items: [{ time: '12:00', text: 'עדכון', href: '/u' }] },

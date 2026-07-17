@@ -1040,6 +1040,58 @@ register({
   }
 });
 
+// ─── Carousel (v0.79) — the cards unit sliding instead of wrapping: a
+//     zero-JS horizontal scroll-snap strip (touch-native, RTL-aware). ───
+register({
+  name: 'slide',
+  tag: 'bent-slide',
+  category: 'media',
+  label: { he: 'שקופית', en: 'Slide' },
+  icon: 'card',
+  container: false,
+  props: {
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Image' } },
+    tag: { type: 'string', default: '', optional: true, label: { he: 'תגית / קטגוריה', en: 'Tag' } },
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת', en: 'Title' } },
+    excerpt: { type: 'string', default: '', optional: true, label: { he: 'תקציר', en: 'Excerpt' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../carousel-html').renderSlide(node.props || {});
+  }
+});
+
+register({
+  name: 'carousel',
+  tag: 'bent-carousel',
+  category: 'media',
+  label: { he: 'קרוסלה', en: 'Carousel' },
+  icon: 'carousel',
+  container: true,
+  accept: ['slide'],
+  props: {
+    height: { type: 'enum', values: ['sm', 'md', 'lg'], default: 'md', optional: true, label: { he: 'גובה', en: 'Height' } },
+    peek: { type: 'boolean', default: true, optional: true, label: { he: 'הצצה לשקופית הבאה', en: 'Peek next slide' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../carousel-html').renderCarouselTrack(inner, {
+      idAttr: id,
+      cls,
+      height: node.props && node.props.height,
+      peek: node.props && node.props.peek,
+      dir: dirAttr(ctx)
+    });
+  }
+});
+
 // ─── Moving-news ticker (v0.61) — walla's מבזקים strip (batch 3): a pinned
 //     label + scrolling clickable headlines, with color + speed options.
 //     A NEWS component (headlines/links), not the decorative `marquee`. ───

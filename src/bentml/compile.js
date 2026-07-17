@@ -447,6 +447,26 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('cards', data);
     }
+    case 'CAROUSEL': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'SLIDE')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = {};
+          if (cp.title) item.title = cp.title;
+          if (cp.image) item.image = cp.image;
+          if (cp.tag) item.tag = cp.tag;
+          const excerpt = collapseSingleParagraph(c.text || '');
+          if (excerpt) item.excerpt = excerpt;
+          if (cp.url) item.href = cp.url;
+          return item;
+        });
+      const data = { items };
+      if (p.height && p.height !== 'md') data.height = p.height;
+      if (p.peek === false || p.peek === 'false') data.peek = false;
+      applyChrome(data, p);
+      return createBlock('carousel', data);
+    }
     case 'NAV': {
       const items = (node.children || [])
         .filter((c) => c.name === 'NAVITEM')
@@ -524,6 +544,7 @@ function buildBlock(node, warnings) {
     case 'FOLD':
     case 'FIELD':
     case 'MEDIACARD':
+    case 'SLIDE':
     case 'NAVITEM':
     case 'TICKERITEM':
     case 'NEWSPOPITEM':

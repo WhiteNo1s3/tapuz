@@ -846,6 +846,33 @@ a.bent-card:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12)); tr
 .bent-card-title { margin: 0; font-size: 1.05rem; line-height: 1.3; color: var(--color-text, #0f172a); }
 .bent-card-excerpt { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--color-text-muted, #64748b); }
 
+/* carousel (v0.79) — the cards unit sliding instead of wrapping. Zero JS:
+   CSS scroll-snap, touch-native, RTL-aware via logical properties (the strip
+   starts at inline-start — the right on RTL pages). `peek` keeps the next
+   slide's edge visible so scrollability is self-evident. */
+.bent-carousel { margin: 1.5rem 0; }
+.bent-carousel-track {
+  display: flex; gap: 1rem;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  padding-block-end: 0.5rem; /* room for the scrollbar, no clipped shadows */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.bent-slide {
+  flex: 0 0 80%; max-width: 26rem;
+  scroll-snap-align: start;
+}
+.bent-carousel-full .bent-slide { flex-basis: 100%; max-width: 100%; }
+.bent-slide .bent-card { height: 100%; }
+.bent-carousel-sm .bent-slide .bent-card-media { aspect-ratio: 21 / 9; }
+.bent-carousel-md .bent-slide .bent-card-media { aspect-ratio: 16 / 9; }
+.bent-carousel-lg .bent-slide .bent-card-media { aspect-ratio: 4 / 3; }
+@media (min-width: 768px) {
+  .bent-slide { flex-basis: 44%; }
+  .bent-carousel-full .bent-slide { flex-basis: 100%; }
+}
+
 /* category presentation (v0.64) — a branded header above the category's
    article grid (the grid itself REUSES .bent-cards). Accent color arrives as
    --bent-cat-color on the section (safeCssColor-guarded). */
