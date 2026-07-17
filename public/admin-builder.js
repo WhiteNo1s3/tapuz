@@ -374,10 +374,11 @@
     var style = document.createElement('style');
     style.textContent =
       '#history-controls{display:inline-flex;gap:4px;align-items:center;margin-inline-start:10px}' +
-      '#history-controls button{border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:2px 9px;cursor:pointer;font-size:0.95rem}' +
+      '#history-controls button{border:1px solid var(--bc-border,#2a3a5c);background:var(--bc-panel-2,#1a243c);color:var(--bc-text,#e8eefc);border-radius:6px;padding:2px 9px;cursor:pointer;font-size:0.95rem;transition:border-color .15s,transform .15s}' +
+      '#history-controls button:hover:not(:disabled){border-color:var(--accent,#f97316);transform:translateY(-1px)}' +
       '#history-controls button:disabled{opacity:0.35;cursor:default}' +
-      '#dirty-dot{width:9px;height:9px;border-radius:50%;background:#cbd5e1;display:inline-block;margin-inline-start:6px;transition:background .2s}' +
-      '#dirty-dot.on{background:#f59e0b}' +
+      '#dirty-dot{width:9px;height:9px;border-radius:50%;background:#475569;display:inline-block;margin-inline-start:6px;transition:background .2s}' +
+      '#dirty-dot.on{background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,.6)}' +
       '#tapuz-toasts{position:fixed;bottom:18px;inset-inline-start:18px;z-index:9999;display:flex;flex-direction:column;gap:8px}' +
       '.tapuz-toast{background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-size:0.9rem;box-shadow:0 6px 20px rgba(0,0,0,0.25);opacity:0;transform:translateY(8px);transition:all .25s}' +
       '.tapuz-toast.show{opacity:1;transform:none}' +
@@ -385,7 +386,7 @@
       '.tapuz-toast.err{background:#b91c1c}' +
       '.preview-embed{position:relative;display:inline-block}' +
       '.embed-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2rem;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.6);pointer-events:none}' +
-      '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:#334155}' +
+      '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:inherit}' +
       '.media-explorer{display:flex;flex-direction:column;gap:10px}' +
       '.media-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;padding-bottom:8px}' +
       '.media-crumbs{font-size:0.9rem;color:#334155}' +
@@ -2301,7 +2302,7 @@
         '</div>' +
         // v0.64: assign this page to categories — each is just a portable tag
         '<div class="prop-group" id="page-cats-box" style="display:none">' +
-        '<div style="font-size:0.82rem;font-weight:600;color:#475569;margin-bottom:4px">קטגוריות (הדף יופיע בבלוק הקטגוריה)</div>' +
+        '<div style="font-size:0.82rem;font-weight:600;margin-bottom:4px">קטגוריות (הדף יופיע בבלוק הקטגוריה)</div>' +
         '<div id="page-cats"></div></div>';
       if (isArticle) {
         pageHtml += field('תקציר לקובייה', '<textarea data-page-meta="teaser" placeholder="ריק = נלקח אוטומטית מהטקסט הראשון">' + esc(pageMeta.teaser || '') + '</textarea>');
@@ -2334,7 +2335,7 @@
         ) +
         '<div class="prop-hint">SEO מובנה בחבילה — לא תוסף. סוכנים כותבים description ב־META BenTML.</div>';
       pageHtml +=
-        '<hr style="margin:14px 0;border-color:#f1f5f9">' +
+        '<hr style="margin:14px 0;opacity:.25">' +
         '<div class="props-empty">' +
         '<div class="props-empty-title">אין מודול נבחר</div>' +
         '<div class="props-empty-line"><strong>הוספה</strong> — לחץ או גרור מהסרגל</div>' +
