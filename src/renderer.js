@@ -417,6 +417,10 @@ function renderBlock(block, direction = 'rtl') {
     case 'cards':
       return require('./pzn/card-html').renderCardsFromData(block.data || {}, direction, extra);
 
+    case 'carousel':
+      // the cards unit, sliding: zero-JS scroll-snap strip (v0.79)
+      return require('./pzn/carousel-html').renderCarouselFromData(block.data || {}, direction, extra);
+
     case 'nav':
       // pass id/class as `extra` but the generic style decls as `decls` so the
       // nav renders ONE style attribute (its colors + any generic style), never

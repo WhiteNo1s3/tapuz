@@ -929,6 +929,45 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'carousel',
+    keyword: 'CAROUSEL',
+    labelHe: 'קרוסלה',
+    icon: '🎠',
+    category: 'מדיה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'שקופיות בגלילה אופקית (ללא JS) — כרטיסי תוכן שמחליקים',
+    params: [
+      {
+        name: 'height', bentmlParam: 'height', labelHe: 'גובה', type: 'enum',
+        enum: ['sm', 'md', 'lg'], default: 'md'
+      },
+      {
+        name: 'peek', bentmlParam: 'peek', labelHe: 'הצצה לשקופית הבאה', type: 'boolean',
+        default: true, hint: 'קצה השקופית הבאה נשאר גלוי — רואים שיש עוד'
+      },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'שקופיות', type: 'list',
+        itemFields: [
+          { name: 'image', labelHe: 'תמונה', type: 'media' },
+          { name: 'tag', labelHe: 'תגית', type: 'string' },
+          { name: 'title', labelHe: 'כותרת', type: 'string' },
+          { name: 'excerpt', labelHe: 'תקציר', type: 'string' },
+          { name: 'href', labelHe: 'קישור', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי SLIDE (התקציר גוף, השאר פרמטרים)'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { image: '', tag: 'חדש', title: 'שקופית ראשונה', excerpt: 'גררו הצידה — אין צורך ב-JS.', href: '#' },
+        { image: '', tag: '', title: 'שקופית שנייה', excerpt: 'כל שקופית היא כרטיס תוכן.', href: '#' },
+        { image: '', tag: '', title: 'שקופית שלישית', excerpt: 'תמונה, כותרת, תקציר וקישור.', href: '#' }
+      ]
+    }
+  },
+  {
     type: 'nav',
     keyword: 'NAV',
     labelHe: 'תפריט ניווט',

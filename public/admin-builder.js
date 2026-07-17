@@ -1579,6 +1579,25 @@
       return wrap;
     }
 
+    if (block.type === 'carousel') {
+      var slItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-carousel">' +
+        (slItems.length ? slItems : [{ title: 'שקופית 1' }, { title: 'שקופית 2' }, { title: 'שקופית 3' }]).map(function (it) {
+          return '<div class="preview-card preview-slide">' +
+            (it.image
+              ? '<div class="preview-card-media" style="background-image:url(' + esc(it.image) + ');background-size:cover;background-position:center"></div>'
+              : '<div class="preview-card-media"></div>') +
+            (it.tag ? '<span class="preview-card-tag">' + esc(it.tag) + '</span>' : '') +
+            '<div class="preview-card-title">' + esc(it.title || 'שקופית') + '</div>' +
+            (it.excerpt ? '<div class="preview-card-excerpt">' + esc(it.excerpt) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '<span class="preview-carousel-hint">↔ גלילה</span>' +
+        '</div>';
+      return wrap;
+    }
+
     if (block.type === 'form') {
       var fFields = d.fields || [];
       wrap.innerHTML =

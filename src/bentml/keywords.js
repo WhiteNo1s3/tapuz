@@ -366,6 +366,26 @@ const KEYWORDS = {
     children: ['MEDIACARD'],
     params: {}
   },
+  CAROUSEL: {
+    body: 'BLOCK-BODY',
+    jsonType: 'carousel',
+    children: ['SLIDE'],
+    params: {
+      height: { type: 'enum', values: ['sm', 'md', 'lg'], default: 'md' },
+      peek: { type: 'boolean', default: true }
+    }
+  },
+  SLIDE: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'CAROUSEL',
+    params: {
+      title: { type: 'string' },
+      image: { type: 'string' },
+      tag: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
   MEDIACARD: {
     body: 'TEXT-BODY',
     childOnly: true,
@@ -475,11 +495,12 @@ const KEYWORDS = {
 
 const RESERVED = new Set([
   // FORM graduated v0.58, NAV graduated v0.60, VIDEO graduated v0.62,
-  // SECTION graduated v0.75 (container-as-tool). INPUT stays a placeholder —
-  // form fields are the child `field` module (nav links = child `navitem`).
-  // AUDIO is the natural next media graduation.
+  // SECTION graduated v0.75 (container-as-tool), SLIDER graduated v0.79 as
+  // CAROUSEL (the slide strip; a range-input SLIDER would be a FORM field).
+  // INPUT stays a placeholder — form fields are the child `field` module
+  // (nav links = child `navitem`). AUDIO is the natural next media graduation.
   'INPUT', 'FOOTER', 'HEADER', 'CODE', 'TABLE',
-  'AUDIO', 'SLIDER'
+  'AUDIO'
 ]);
 
 const UNIVERSAL = new Set(['id', 'class', 'dir']);

@@ -88,6 +88,8 @@ FORM(action: "/api", method: post|get, submit: "שליחה") {
 }
 CARDS { MEDIACARD(title: "..." REQUIRED, image: "/x.jpg", tag: "חדשות", url: "/a")
         { התקציר } ... }
+CAROUSEL(height: sm|md|lg, peek: true|false) {
+  SLIDE(title: "...", image: "/x.jpg", tag: "...", url: "/a") { התקציר } ... }
 NAV(background: "#0b0f1a", color: "#fff", align: start|center|end)
   { NAVITEM(url: "/" REQUIRED) { בית } ... }
 TICKER(label: "מבזק", speed: slow|md|fast, background: "...", color: "...")
