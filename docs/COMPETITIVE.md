@@ -39,10 +39,11 @@ module/feature hunt. Update it every version batch.
    client-side index (lunr-style, build-time) fits the zero-runtime model.
 5. **Multilingual** — Hebrew-first is the moat, but he↔en paired pages would
    beat WPML's complexity with a fraction of the surface.
-6. **Builder.io-class builder extras** (Ben's goal, 2026-07-18) — saved
-   reusable blocks ("symbols"), starter templates gallery. Done so far: the
-   Ctrl+K palette (v0.88), the layers/outline panel (v0.89), responsive
-   device preview (v0.90 — the REAL rendered draft at 375/768/1024/full).
+6. **Builder.io-class builder extras** (Ben's goal, 2026-07-18) — remaining:
+   starter templates gallery; synced (live-linked) symbols as a future tier.
+   Done: Ctrl+K palette (v0.88), layers/outline panel (v0.89), responsive
+   device preview (v0.90), saved reusable blocks — unsynced symbols (v0.91:
+   💠 on any block → the library in the toolbox → insert on any page).
 7. **Module hunt continues** — timeline, steps, pricing-table sugar
    (CODE stays reserved; INPUT stays a FIELD child).
 
