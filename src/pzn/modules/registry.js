@@ -1568,8 +1568,11 @@ register({
   },
   defaults: {},
   compile(node) {
-    // rendered by the parent table (needs the full grid for width equalizing)
-    return '';
+    // Inside a real table the PARENT renders the whole grid (it needs every
+    // row for width equalizing) and reads this child's text directly. A
+    // stray standalone trow (repair paths) degrades to a one-row table —
+    // content always visible, never an empty string.
+    return require('../table-html').renderTable({ header: false, rows: [{ cells: node.text || ' ' }] });
   }
 });
 
