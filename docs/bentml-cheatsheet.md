@@ -99,6 +99,9 @@ VIDEO(src: "/uploads/clip.mp4 or YouTube" REQUIRED, poster: "/x.jpg", caption: "
       controls: true|false, autoplay: true|false, loop: true|false, muted: true|false)
 AUDIO(src: "/uploads/ep.mp3 or YouTube" REQUIRED, caption: "...", loop: true|false)
       ← no braces; controls always on, no autoplay (browsers block it anyway)
+TABLE(header: true|false) { TROW { יום | שעות } TROW { ראשון | 9:00–17:00 } ... }
+      ← each TROW body is one row, cells split on | (like a markdown row);
+        header: true (default) renders the first TROW as the header row
 
 CHROME on any block (optional): id: "anchor", class: "hook",
   color/background: "#hex", fontsize/padding/radius: sm|md|lg — the theme resolves them.

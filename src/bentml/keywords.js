@@ -464,6 +464,20 @@ const KEYWORDS = {
       muted: { type: 'boolean', default: false }
     }
   },
+  TABLE: {
+    body: 'BLOCK-BODY',
+    jsonType: 'table',
+    children: ['TROW'],
+    params: {
+      header: { type: 'boolean', default: true }
+    }
+  },
+  TROW: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TABLE',
+    params: {}
+  },
   AUDIO: {
     body: 'NO-BODY',
     jsonType: 'audio',
@@ -506,10 +520,10 @@ const RESERVED = new Set([
   // FORM graduated v0.58, NAV graduated v0.60, VIDEO graduated v0.62,
   // SECTION graduated v0.75 (container-as-tool), SLIDER graduated v0.79 as
   // CAROUSEL (the slide strip; a range-input SLIDER would be a FORM field),
-  // AUDIO graduated v0.80 — the media set is complete. INPUT stays a
-  // placeholder — form fields are the child `field` module (nav links =
-  // child `navitem`).
-  'INPUT', 'FOOTER', 'HEADER', 'CODE', 'TABLE'
+  // AUDIO graduated v0.80 (media set complete), TABLE graduated v0.83
+  // (pipe-row syntax). INPUT stays a placeholder — form fields are the
+  // child `field` module (nav links = child `navitem`).
+  'INPUT', 'FOOTER', 'HEADER', 'CODE'
 ]);
 
 const UNIVERSAL = new Set(['id', 'class', 'dir']);

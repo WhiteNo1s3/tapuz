@@ -1552,6 +1552,53 @@ register({
   }
 });
 
+// ─── Table (v0.83) — hours, prices, schedules. Rows are ONE pipe-joined
+//     string everywhere (the markdown-table reflex); zero JS. ───
+register({
+  name: 'trow',
+  tag: 'bent-trow',
+  category: 'content',
+  label: { he: 'שורת טבלה', en: 'Table row' },
+  icon: 'row',
+  container: false,
+  props: {
+    cells: { type: 'text', content: true, default: '', label: { he: 'תאים (מופרדים ב-|)', en: 'Cells (pipe-separated)' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    // rendered by the parent table (needs the full grid for width equalizing)
+    return '';
+  }
+});
+
+register({
+  name: 'table',
+  tag: 'bent-table',
+  category: 'content',
+  label: { he: 'טבלה', en: 'Table' },
+  icon: 'table',
+  container: true,
+  accept: ['trow'],
+  props: {
+    header: { type: 'boolean', default: true, optional: true, label: { he: 'שורה ראשונה = כותרת', en: 'First row is header' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const rows = (node.children || [])
+      .filter((c) => c.name === 'trow')
+      .map((c) => ({ cells: c.text || '' }));
+    return require('../table-html').renderTable(
+      { header: node.props && node.props.header, rows },
+      { idAttr: id, cls, dir: dirAttr(ctx) }
+    );
+  }
+});
+
 // ─── Escape hatch (v0.49) — the pressure valve for off-vocabulary designs ──
 // A registered tag whose PAYLOAD is arbitrary HTML. The standard stays a
 // registry (this IS a registered module); the payload is unconstrained but

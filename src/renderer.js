@@ -448,6 +448,12 @@ function renderBlock(block, direction = 'rtl') {
         cls: extraClass, extra: extraId + style, dir: ` dir="${direction}"`
       });
 
+    case 'table':
+      // hours/prices/schedules (v0.83) — overflow-x wrapped per invariant I2
+      return require('./pzn/table-html').renderTable(block.data || {}, {
+        cls: extraClass, extra: extraId + style, dir: ` dir="${direction}"`
+      });
+
     case 'category': {
       // dynamic leaf like article-list: lazy-require the stores at render time
       // (avoids require cycles via export.js). Membership = the page tags;

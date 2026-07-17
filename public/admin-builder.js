@@ -1539,6 +1539,25 @@
       return wrap;
     }
 
+    if (block.type === 'table') {
+      var tRows = (d.rows || []).map(function (r) {
+        return String((typeof r === 'string' ? r : (r && r.cells) || '')).split('|').map(function (c) { return c.trim(); });
+      }).filter(function (r) { return r.some(function (c) { return c; }); });
+      var tHeader = !(d.header === false);
+      var tW = tRows.reduce(function (m, r) { return Math.max(m, r.length); }, 0);
+      var tHtml = '<table class="preview-table">';
+      tRows.forEach(function (r, i) {
+        var tag = tHeader && i === 0 ? 'th' : 'td';
+        tHtml += '<tr>';
+        for (var ci = 0; ci < tW; ci++) tHtml += '<' + tag + '>' + esc(r[ci] || '') + '</' + tag + '>';
+        tHtml += '</tr>';
+      });
+      tHtml += '</table>';
+      wrap.innerHTML = tRows.length ? '<div class="preview-table-wrap">' + tHtml + '</div>'
+        : '<div class="preview-image-empty">📋 טבלה — הוסיפו שורות בצד (תאים מופרדים ב-|)</div>';
+      return wrap;
+    }
+
     if (block.type === 'audio') {
       if (d.src) {
         wrap.innerHTML =

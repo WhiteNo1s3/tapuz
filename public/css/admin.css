@@ -1471,6 +1471,10 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
 .preview-field-check { width: 16px; height: 16px; border: 1px solid #cbd5e1; border-radius: 4px; display: inline-block; background: #f8fafc; }
 .preview-form-submit { align-self: flex-start; background: #0a66c2; color: #fff; padding: 8px 18px; border-radius: 7px; font-size: 0.85rem; font-weight: 600; }
 .preview-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.preview-table-wrap { overflow-x: auto; }
+.preview-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+.preview-table th, .preview-table td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: start; }
+.preview-table th { background: #f8fafc; font-weight: 700; border-bottom-width: 2px; }
 .preview-carousel {
   position: relative;
   display: flex;
