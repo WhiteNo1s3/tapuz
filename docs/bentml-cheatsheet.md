@@ -97,6 +97,8 @@ TICKER(label: "מבזק", speed: slow|md|fast, background: "...", color: "...")
 NEWSPOP(label: "מבזקים") { NEWSPOPITEM(time: "12:00", url: "/x") { העדכון } ... }
 VIDEO(src: "/uploads/clip.mp4 or YouTube" REQUIRED, poster: "/x.jpg", caption: "...",
       controls: true|false, autoplay: true|false, loop: true|false, muted: true|false)
+AUDIO(src: "/uploads/ep.mp3 or YouTube" REQUIRED, caption: "...", loop: true|false)
+      ← no braces; controls always on, no autoplay (browsers block it anyway)
 
 CHROME on any block (optional): id: "anchor", class: "hook",
   color/background: "#hex", fontsize/padding/radius: sm|md|lg — the theme resolves them.

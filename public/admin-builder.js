@@ -1539,6 +1539,18 @@
       return wrap;
     }
 
+    if (block.type === 'audio') {
+      if (d.src) {
+        wrap.innerHTML =
+          '<div class="preview-audio">🎧 <audio src="' + escAttr(d.src) + '" controls preload="none" style="width:100%;max-width:420px"></audio>' +
+          (d.caption ? '<div class="preview-card-excerpt">' + esc(d.caption) + '</div>' : '') +
+          '</div>';
+      } else {
+        wrap.innerHTML = '<div class="preview-image-empty">🎧 שמע — בחר קובץ או הדבק קישור (לחץ לעריכה)</div>';
+      }
+      return wrap;
+    }
+
     if (block.type === 'category') {
       var catSlug = d.slug || '';
       wrap.innerHTML =

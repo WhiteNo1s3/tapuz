@@ -147,6 +147,7 @@ const VOCAB_DATA = {
   ticker: { label: 'מבזק', speed: 'fast', items: [{ text: 'ידיעה', href: '/n' }] },
   newspop: { label: 'מבזקים', items: [{ time: '12:00', text: 'עדכון', href: '/u' }] },
   video: { src: '/uploads/clip.mp4', controls: true },
+  audio: { src: '/uploads/episode.mp3', caption: 'פרק 1', loop: false },
   category: { slug: 'ספורט', limit: 6, showheader: true }
 };
 

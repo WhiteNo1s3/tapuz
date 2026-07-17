@@ -499,6 +499,13 @@ function decompileBlock(block, indent) {
       uni(params, d, idParams);
       return `${pad}VIDEO${paramList(params)}`;
     }
+    case 'audio': {
+      const params = [`src: ${q(d.src || '')}`];
+      if (d.caption) params.push(`caption: ${q(d.caption)}`);
+      if (d.loop) params.push('loop: true');
+      uni(params, d, idParams);
+      return `${pad}AUDIO${paramList(params)}`;
+    }
     case 'category': {
       const params = [`slug: ${q(d.slug || '')}`];
       if (d.limit != null && Number(d.limit) !== 6) params.push(`limit: ${d.limit}`);

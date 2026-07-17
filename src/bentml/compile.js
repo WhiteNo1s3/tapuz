@@ -525,6 +525,13 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('video', data);
     }
+    case 'AUDIO': {
+      const data = { src: p.src || '' };
+      if (p.caption) data.caption = p.caption;
+      if (p.loop === true || p.loop === 'true') data.loop = true;
+      applyChrome(data, p);
+      return createBlock('audio', data);
+    }
     case 'CATEGORY': {
       const data = {
         slug: p.slug || '',
