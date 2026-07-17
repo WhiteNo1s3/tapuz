@@ -4450,7 +4450,12 @@
       e.preventDefault();
       savePage();
     }
-    var inField = /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '');
+    // "typing somewhere" = form fields OR inline editing (contenteditable).
+    // Structural shortcuts must NEVER fire mid-typing — Delete was nuking the
+    // whole block and Ctrl+Z was eating the browser's text-undo (v0.92 fix,
+    // the same keystroke-eating family as the v0.82 inline-edit race).
+    var inField = /INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '') ||
+      !!(e.target && e.target.isContentEditable);
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z') && !inField) {
       e.preventDefault();
       if (e.shiftKey) redo(); else undo();
@@ -4459,11 +4464,11 @@
       e.preventDefault();
       redo();
     }
-    if (
-      e.key === 'Delete' &&
-      selectedId &&
-      !/INPUT|TEXTAREA|SELECT/.test((e.target || {}).tagName || '')
-    ) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D') && selectedId && !inField) {
+      e.preventDefault(); // editors own Ctrl+D; the bookmark dialog loses
+      duplicateBlock(selectedId);
+    }
+    if (e.key === 'Delete' && selectedId && !inField) {
       e.preventDefault();
       deleteBlock(selectedId);
     }
