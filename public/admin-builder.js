@@ -1795,6 +1795,7 @@
       pushHistorySnapshot(snap);
       dropInProgress = false;
       finishDrop();
+      flashJustDropped(result.selectedId || state.blockId);
     } catch (err) {
       console.error('Tapuz drop failed, restoring tree', err);
       restoreTree(snap);
@@ -1802,6 +1803,44 @@
       finishDrop();
     }
   }
+
+  /** The landed block wobbles once — feedback that the drop took. */
+  function flashJustDropped(id) {
+    if (!id) return;
+    var el = document.querySelector('.canvas-block[data-id="' + cssEsc(id) + '"]');
+    if (!el) return;
+    el.classList.add('just-dropped');
+    el.addEventListener('animationend', function onEnd() {
+      el.classList.remove('just-dropped');
+      el.removeEventListener('animationend', onEnd);
+    });
+  }
+
+  // ---- drag auto-scroll: the page follows the drag near viewport edges,
+  // so long pages can be built with drag & drop without dropping blind ----
+  var autoScrollVel = 0;
+  var autoScrollRAF = null;
+  function dragAutoScroll(e) {
+    if (!document.body.classList.contains('is-dragging')) { autoScrollVel = 0; return; }
+    var EDGE = 90;
+    var MAX = 26;
+    var y = e.clientY;
+    var vh = window.innerHeight;
+    if (y < EDGE) autoScrollVel = -MAX * (1 - y / EDGE);
+    else if (y > vh - EDGE) autoScrollVel = MAX * (1 - (vh - y) / EDGE);
+    else autoScrollVel = 0;
+    if (autoScrollVel && !autoScrollRAF) {
+      autoScrollRAF = requestAnimationFrame(function step() {
+        autoScrollRAF = null;
+        if (!autoScrollVel || !document.body.classList.contains('is-dragging')) return;
+        window.scrollBy(0, autoScrollVel);
+        autoScrollRAF = requestAnimationFrame(step);
+      });
+    }
+  }
+  document.addEventListener('dragover', dragAutoScroll);
+  document.addEventListener('dragend', function () { autoScrollVel = 0; });
+  document.addEventListener('drop', function () { autoScrollVel = 0; });
 
   function doInsertMove(hint, state) {
     var list = getLiveList(hint.parentId || null, hint.colIndex);
