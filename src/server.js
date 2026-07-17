@@ -3706,6 +3706,10 @@ app.get('/admin/edit/:fullPath', (req, res) => {
       <div class="builder live-page mode-page page-${pageDirection}">
         <aside class="toolbox" aria-label="ארגז מודולים">
           <button type="button" id="toolbox-handle" class="toolbox-handle" aria-label="פתח/סגור ארגז מודולים">🧰 מודולים <span class="th-arrow">▲</span></button>
+          <details id="layers-fold" class="layers-fold">
+            <summary>🧬 שכבות הדף <span id="layers-count" class="layers-count"></span></summary>
+            <div id="layers-tree" class="layers-tree"></div>
+          </details>
           <h4>מודולים</h4>
           <div id="toolbox-mode" class="toolbox-mode">גרור לדף · בחר לעריכה בצד</div>
           <input type="search" id="tool-search" class="tool-search" placeholder="🔎 חיפוש מודול..." autocomplete="off">

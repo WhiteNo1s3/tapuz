@@ -479,6 +479,65 @@ body.builder-screen .save-bar {
 
 /* ---- folding tool categories (E) — closed by default, search cuts across.
    Each family carries an accent aligned with the admin-nav color language. ---- */
+/* ── Layers panel (v0.89) — the page as a clickable outline ── */
+.layers-fold {
+  margin: 0 0 12px;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--r-sm);
+  background: #0b1220;
+  overflow: hidden;
+}
+.layers-fold > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--bc-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+.layers-fold > summary::-webkit-details-marker { display: none; }
+.layers-fold[open] > summary { border-bottom: 1px solid var(--bc-border); }
+.layers-count {
+  margin-inline-start: auto;
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: #64748b;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+.layers-tree { max-height: 260px; overflow: auto; padding: 4px 0; }
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+.layer-row:hover { background: rgba(148, 163, 184, 0.09); }
+.layer-row.active {
+  background: rgba(249, 115, 22, 0.14);
+  box-shadow: inset 3px 0 0 var(--admin-accent, #f97316);
+  color: #fff;
+}
+.layer-row.virtual { cursor: default; color: #64748b; font-size: 0.74rem; }
+.layer-ico { width: 1.25em; text-align: center; flex: none; opacity: 0.85; }
+.layer-label { font-weight: 600; flex: none; }
+.layer-hint {
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.layers-empty { padding: 12px; text-align: center; color: #64748b; font-size: 0.78rem; }
+
 .tool-search {
   width: 100%;
   padding: 8px 10px;
