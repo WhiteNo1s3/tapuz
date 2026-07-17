@@ -1870,6 +1870,36 @@ app.get('/admin/storage', (req, res) => {
 // content/categories.json (visible in the Storage section); membership rides
 // on each page's portable tags. The screen edits the list as one document
 // (like the menus editor) and POSTs the whole array.
+// ── Symbols (v0.91) — saved reusable blocks (the builder's 💠 library) ──
+app.get('/admin/api/symbols', (req, res) => {
+  try {
+    res.json({ ok: true, symbols: require('./symbols').listSymbols() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/symbols', (req, res) => {
+  try {
+    const r = require('./symbols').saveSymbol({
+      name: req.body && req.body.name,
+      block: req.body && req.body.block
+    });
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/admin/api/symbols/delete', (req, res) => {
+  try {
+    const gone = require('./symbols').deleteSymbol(String((req.body && req.body.id) || ''));
+    res.json({ ok: gone, error: gone ? undefined : 'לא נמצא' });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/admin/api/categories', (req, res) => {
   try {
     res.json({ ok: true, categories: require('./categories').listCategories() });
@@ -3727,6 +3757,10 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           <details id="layers-fold" class="layers-fold">
             <summary>🧬 שכבות הדף <span id="layers-count" class="layers-count"></span></summary>
             <div id="layers-tree" class="layers-tree"></div>
+          </details>
+          <details id="symbols-fold" class="layers-fold">
+            <summary>💠 בלוקים שמורים <span id="symbols-count" class="layers-count"></span></summary>
+            <div id="symbols-list" class="symbols-list"></div>
           </details>
           <h4>מודולים</h4>
           <div id="toolbox-mode" class="toolbox-mode">גרור לדף · בחר לעריכה בצד</div>

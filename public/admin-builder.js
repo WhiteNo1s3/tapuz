@@ -447,6 +447,16 @@
     var rspBtn = document.getElementById('btn-responsive');
     if (rspBtn) rspBtn.addEventListener('click', openResponsivePreview);
 
+    // symbols library — load once; fold remembered like layers
+    var symbolsFold = document.getElementById('symbols-fold');
+    if (symbolsFold) {
+      symbolsFold.open = localStorage.getItem('tapuz-symbols-open') === '1';
+      symbolsFold.addEventListener('toggle', function () {
+        localStorage.setItem('tapuz-symbols-open', symbolsFold.open ? '1' : '0');
+      });
+      loadSymbols();
+    }
+
     // layers fold — remembered per browser (closed by default: foolproof first)
     var layersFold = document.getElementById('layers-fold');
     if (layersFold) {
@@ -1198,6 +1208,7 @@
       '<button type="button" data-act="split" title="פצל לשני טורים">⧉</button>' +
       '<button type="button" data-act="replace" title="החלף סוג מודול">⇄</button>' +
       '<button type="button" data-act="dup" title="שכפל">⎘</button>' +
+      '<button type="button" data-act="sym" title="שמור לשימוש חוזר בכל דף">💠</button>' +
       '<button type="button" data-act="del" title="מחק">×</button>';
 
     toolbar.addEventListener('click', function (e) {
@@ -1219,6 +1230,7 @@
         }, 30);
       }
       if (act === 'dup') duplicateBlock(block.id);
+      if (act === 'sym') saveAsSymbol(block.id);
       if (act === 'del') deleteBlock(block.id);
     });
 
@@ -3833,25 +3845,125 @@
       .catch(function () { showToast('שגיאת רשת בהמרה', 'err'); });
   }
 
+  /** Fresh ids for a (deep-copied) block and every nested child — shared by
+   *  duplicate and symbol-insert so a copy can never collide with the page. */
+  function freshIds(b) {
+    b.id = uid(b.type);
+    if (isColumnsContainer(b.type)) {
+      ensureColumns(b).forEach(function (col) {
+        (col.blocks || []).forEach(freshIds);
+      });
+    } else if (isBlocksContainer(b.type)) {
+      ensureBlocks(b).forEach(freshIds);
+    }
+    return b;
+  }
+
   function duplicateBlock(id) {
     var n = findNode(id);
     if (!n) return;
     pushHistory();
-    var copy = JSON.parse(JSON.stringify(n.block));
-    (function reId(b) {
-      b.id = uid(b.type);
-      if (isColumnsContainer(b.type)) {
-        ensureColumns(b).forEach(function (col) {
-          (col.blocks || []).forEach(reId);
-        });
-      } else if (isBlocksContainer(b.type)) {
-        ensureBlocks(b).forEach(reId);
-      }
-    })(copy);
+    var copy = freshIds(JSON.parse(JSON.stringify(n.block)));
     n.list.splice(n.index + 1, 0, copy);
     selectedId = copy.id;
     renderCanvas();
     renderProperties();
+  }
+
+  // ── Symbols (v0.91) — saved reusable blocks: build once, reuse anywhere.
+  //    Insert = UNSYNCED deep copy with fresh ids; the page stays plain .pzn. ──
+  var symbolsCache = [];
+
+  function loadSymbols() {
+    fetch('/admin/api/symbols')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.ok) return;
+        symbolsCache = d.symbols || [];
+        renderSymbols();
+      })
+      .catch(function () {});
+  }
+
+  function renderSymbols() {
+    var list = document.getElementById('symbols-list');
+    if (!list) return;
+    var count = document.getElementById('symbols-count');
+    if (count) count.textContent = symbolsCache.length || '';
+    if (!symbolsCache.length) {
+      list.innerHTML = '<div class="sym-empty">בחרו מודול בדף ולחצו 💠 בסרגל שלו — הוא יישמר כאן לשימוש בכל דף</div>';
+      return;
+    }
+    list.innerHTML = '';
+    symbolsCache.forEach(function (sym) {
+      var row = document.createElement('div');
+      row.className = 'sym-row';
+      row.title = 'לחצו להוספה לדף';
+      var name = document.createElement('span');
+      name.className = 'sym-name';
+      name.textContent = sym.name;
+      var kind = document.createElement('span');
+      kind.className = 'sym-kind';
+      kind.textContent = typeLabel(sym.type);
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'sym-del';
+      del.textContent = '✕';
+      del.title = 'מחיקה מהספרייה (לא נוגע בדפים)';
+      del.onclick = function (e) {
+        e.stopPropagation();
+        if (!confirm('למחוק את «' + sym.name + '» מהספרייה? דפים שכבר משתמשים בו לא ייפגעו.')) return;
+        fetch('/admin/api/symbols/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: sym.id })
+        }).then(function () { loadSymbols(); });
+      };
+      row.appendChild(name); row.appendChild(kind); row.appendChild(del);
+      row.onclick = function () { insertSymbol(sym); };
+      list.appendChild(row);
+    });
+  }
+
+  function insertSymbol(sym) {
+    if (!sym || !sym.block) return;
+    pushHistory();
+    var copy = freshIds(JSON.parse(JSON.stringify(sym.block)));
+    var n = selectedId ? findNode(selectedId) : null;
+    if (n) n.list.splice(n.index + 1, 0, copy); // lands right after the selection
+    else blocks.push(copy);
+    selectedId = copy.id;
+    renderCanvas();
+    renderProperties();
+    showToast('«' + sym.name + '» נוסף לדף 💠', 'ok');
+    var el = document.querySelector('.canvas-block[data-id="' + cssEsc(copy.id) + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function saveAsSymbol(id) {
+    var n = findNode(id);
+    if (!n) return;
+    var d = n.block.data || {};
+    var suggested = (typeLabel(n.block.type) + ' ' + String(d.title || d.text || d.content || '').slice(0, 20)).trim();
+    var name = prompt('שם לבלוק השמור (יופיע בספרייה 💠):', suggested);
+    if (name == null || !String(name).trim()) return;
+    fetch('/admin/api/symbols', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: String(name).trim(), block: n.block })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r && r.ok) {
+          showToast('נשמר לבלוקים השמורים 💠', 'ok');
+          var fold = document.getElementById('symbols-fold');
+          if (fold) fold.open = true;
+          loadSymbols();
+        } else {
+          showToast((r && r.error) || 'שגיאה בשמירה', 'err');
+        }
+      })
+      .catch(function () { showToast('שגיאה בשמירה — בדוק שהשרת רץ', 'err'); });
   }
 
   function moveBlock(id, direction) {

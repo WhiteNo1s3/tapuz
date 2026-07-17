@@ -599,6 +599,47 @@ body.builder-screen .save-bar {
 }
 .layers-empty { padding: 12px; text-align: center; color: #64748b; font-size: 0.78rem; }
 
+/* ── Symbols library (v0.91) — rides the layers-fold shell ── */
+.symbols-list { max-height: 220px; overflow: auto; padding: 4px 0; }
+.sym-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+.sym-row:hover { background: rgba(148, 163, 184, 0.09); }
+.sym-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.sym-kind {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: 0.68rem;
+  color: #64748b;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 99px;
+  padding: 1px 7px;
+}
+.sym-del {
+  flex: none;
+  border: none;
+  background: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.sym-del:hover { color: #fca5a5; background: rgba(239, 68, 68, 0.12); }
+.sym-empty { padding: 12px; text-align: center; color: #64748b; font-size: 0.75rem; line-height: 1.5; }
+
 .tool-search {
   width: 100%;
   padding: 8px 10px;
