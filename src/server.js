@@ -672,7 +672,7 @@ app.get('/admin/login', (req, res) => {
       <input name="password" type="password" autocomplete="current-password" required style="${authInput}">
       <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">התחבר</button>
     </form>`;
-  res.send(layout(authCard(inner), 'כניסה', '#f97316'));
+  res.send(layout(authCard(inner), 'כניסה', '#f97316', { bare: true }));
 });
 
 app.post('/admin/login', (req, res) => {
@@ -689,7 +689,7 @@ app.post('/admin/login', (req, res) => {
     res.setHeader('Retry-After', String(ra));
     const inner = authErr(`נחסמת זמנית עקב ניסיונות כושלים. נסה שוב בעוד ${ra} שניות.`) +
       `<div style="text-align:center"><a href="${base}/login">חזרה לכניסה</a></div>`;
-    return res.status(429).send(layout(authCard(inner), 'נחסם', '#f97316'));
+    return res.status(429).send(layout(authCard(inner), 'נחסם', '#f97316', { bare: true }));
   }
 
   const user = auth.verifyLogin(username, (req.body && req.body.password) || '');
@@ -726,7 +726,7 @@ app.get('/admin/create-account', (req, res) => {
       <input name="confirm" type="password" autocomplete="new-password" required minlength="8" style="${authInput}">
       <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">צור חשבון והתחבר</button>
     </form>`;
-  res.send(layout(authCard(inner), 'יצירת חשבון', '#166534'));
+  res.send(layout(authCard(inner), 'יצירת חשבון', '#166534', { bare: true }));
 });
 
 app.post('/admin/create-account', (req, res) => {
@@ -856,6 +856,10 @@ app.post('/admin/upload-legacy', (req, res) => {
 */
 
 function layout(content, title = 'Tapuz', accent = '#f97316', opts = {}) {
+  // opts.bare skips the command palette (auth screens — pre-session, no nav)
+  const palette = opts.bare ? '' : `
+  <script>window.__TAPUZ_NAV__ = ${paletteBootJson()};</script>
+  <script src="/admin-palette.js" defer></script>`;
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -867,9 +871,44 @@ function layout(content, title = 'Tapuz', accent = '#f97316', opts = {}) {
   <style>:root { --admin-accent: ${accent}; }</style>
 </head>
 <body${opts.bodyClass ? ` class="${opts.bodyClass}"` : ''}>
-  ${content}
+  ${content}${palette}
 </body>
 </html>`;
+}
+
+// ── Command palette boot (v0.88): every nav item + the everyday actions,
+//    serialized once — Ctrl+K's instant results before pages stream in.
+//    English keywords so both שפות reach every command.
+let _paletteJson = null;
+function paletteBootJson() {
+  if (_paletteJson) return _paletteJson;
+  const KEYWORDS = {
+    dashboard: 'dashboard home', pages: 'pages list', import: 'import wordpress html',
+    categories: 'categories tags', inbox: 'inbox leads forms submissions',
+    media: 'media library images uploads', storage: 'storage files disk',
+    theme: 'theme design colors looks', menus: 'menus navigation', 'site-chrome': 'header footer chrome',
+    seo: 'seo google search', sitemap: 'sitemap', analytics: 'analytics stats views visitors',
+    integrations: 'integrations ga4 webhooks', chat: 'ai chat copilot key', agent: 'agent token extension bridge',
+    settings: 'settings config site'
+  };
+  const commands = [];
+  for (const g of ADMIN_NAV_GROUPS) {
+    for (const it of g.items) {
+      commands.push({
+        label: it.label, icon: it.icon, href: it.href,
+        hint: g.label || '', keywords: (KEYWORDS[it.key] || it.key)
+      });
+    }
+  }
+  commands.push(
+    { label: 'דף חדש', icon: '➕', href: '/admin/new', hint: 'פעולה', keywords: 'new page create צור' },
+    { label: 'צפייה באתר', icon: '🌐', href: '/', hint: 'פעולה', newTab: true, keywords: 'view site preview live' },
+    { label: 'ייצוא פניות (CSV)', icon: '⬇', href: '/admin/inbox.csv', hint: 'פעולה', keywords: 'export leads csv excel' },
+    { label: 'ייצוא אנליטיקס (CSV)', icon: '⬇', href: '/admin/analytics.csv?what=daily', hint: 'פעולה', keywords: 'export analytics csv excel' },
+    { label: 'חבילת AI להדבקה', icon: '🎮', href: '/admin/inject', hint: 'פעולה', keywords: 'inject roleplay game pack dictionary' }
+  );
+  _paletteJson = JSON.stringify(commands);
+  return _paletteJson;
 }
 
 // ======================== ROUTES ========================
@@ -963,6 +1002,10 @@ function adminNav(active, sectionTitle, actionsHtml = '') {
           <span class="section-title">${sectionTitle}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button type="button" class="btn secondary" style="padding:7px 12px;font-family:inherit"
+            onclick="window.TapuzPalette&&window.TapuzPalette.open()" title="חיפוש מהיר — קפצו לכל דף, מסך או פעולה">
+            🔍 <kbd style="font:600 .72rem ui-monospace,monospace;background:rgba(148,163,184,.18);border-radius:4px;padding:1px 5px">Ctrl K</kbd>
+          </button>
           <a href="/" target="_blank" class="btn secondary" style="padding:7px 12px">צפה באתר</a>
           ${actionsHtml}
           <form method="POST" action="${auth.getAdminBase()}/logout" style="margin:0">
