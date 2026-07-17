@@ -13,6 +13,7 @@ config/auth.json
 config/agent-tokens.json
 # Copilot build missions — ephemeral BYOT packets the extension pulls (v0.55).
 config/missions.json
+config/ai.json
 # Decompiler vocabulary backlog — running toolGap counts per install (v0.57).
 config/tool-gap.json
 

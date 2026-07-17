@@ -6,7 +6,7 @@
  * and ask this worker to publish; the worker holds the credential. */
 'use strict';
 
-importScripts('extract.js', 'llm.js');
+importScripts('extract.js');
 
 const KEYS = {
   url: 'cms_url',
@@ -156,27 +156,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           return;
         }
         case 'generate': {
-          // BYOK one-shot: user's key -> provider API (direct) -> .pzn -> CMS.
+          // Tier realignment (v0.85): key-based generation moved INTO the CMS
+          // (/admin/chat — the key lives on the user's own server, never in
+          // the browser). The extension is the KEYLESS tier: roleplay inject
+          // + paste + missions against the chat you're already logged into.
           const c = await getConfig();
-          if (!c.url || !c.token) throw new Error('CMS not configured');
-          if (!c.byokKey) throw new Error('לא הוגדר מפתח API — פתחו «מפתח משלכם» והזינו אותו');
-          const brief = String((msg && msg.brief) || '').trim();
-          if (!brief) throw new Error('כתבו מה לבנות (למשל: דף נחיתה למאפייה)');
-          const providers = await fetchProviders(c);
-          const provider = providers.find((p) => p.id === c.byokProvider) || providers[0];
-          if (!provider) throw new Error('לא נמצא ספק — בדקו את חיבור ה‑CMS');
-          // a stored model from a DIFFERENT provider (dropdown switched without
-          // re-saving) would 400 — only honor byokModel if it belongs here.
-          const model = (provider.models || []).includes(c.byokModel) ? c.byokModel : provider.defaultModel;
-          // system prompt = the site-builder game from the CMS (teaches .pzn)
-          const roleRes = await fetch(c.url + '/agent/v1/roleplay?locale=he', { headers: { Authorization: 'Bearer ' + c.token } });
-          if (!roleRes.ok) throw new Error('roleplay HTTP ' + roleRes.status);
-          const system = await roleRes.text();
-          const userText = 'בנה דף שלם ב‑.pzn לפי הבקשה, החזר רק את מסמך ה‑HTML המלא בתוך גדר קוד:\n\n' + brief;
-          const reply = await self.TapuzLLM.generate(provider, c.byokKey, system, userText, model);
-          const published = await publishReply(reply, { publish: c.autoPublish, requireComplete: false });
-          sendResponse({ ok: true, ...published, provider: provider.id, model });
-          return;
+          const chatUrl = (c.url || '') + '/admin/chat';
+          throw new Error('הצ׳אט עם מפתח עבר לממשק הניהול — פתחו ' + chatUrl + ' (המפתח נשמר בשרת שלכם). התוסף ממשיך לעבוד ללא מפתח על הצ׳אט הפתוח שלכם.');
         }
         case 'ping': {
           const r = await cms('/agent/v1/ping');
