@@ -3630,6 +3630,24 @@ app.post('/admin/delete', (req, res) => {
 });
 
 // ======================== VISUAL CANVAS BUILDER ========================
+// Draft preview (v0.90) — the CURRENT DRAFT rendered with the real theme
+// (markup, CSS, media queries — the truth, not the canvas approximation).
+// Feeds the builder's responsive device preview. Admin-gated like all
+// /admin routes; never writes to public/.
+app.get('/admin/preview/:fullPath', (req, res) => {
+  try {
+    const { renderPage } = require('./renderer');
+    const page = getPageByFullPath(decodeURIComponent(req.params.fullPath));
+    if (!page) return res.status(404).send('הדף לא נמצא');
+    // the builder iframes this route — SAMEORIGIN (not the global DENY) keeps
+    // clickjacking protection while letting the admin frame its own preview
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.type('html').send(renderPage(page, { useDraft: true }));
+  } catch (e) {
+    res.status(500).send(e.message);
+  }
+});
+
 app.get('/admin/edit/:fullPath', (req, res) => {
   const fullPath = decodeURIComponent(req.params.fullPath);
   const page = getPageByFullPath(fullPath);
@@ -3731,6 +3749,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
             <span>דף חי · טיוטה</span>
             <span id="block-count">${(draft || []).length} מודולים</span>
             <button type="button" id="btn-page-props" class="page-props-btn">⚙ הגדרות דף</button>
+            <button type="button" id="btn-responsive" class="page-props-btn" title="איך הדף נראה בנייד, בטאבלט ובמחשב — הרינדור האמיתי">📱 רספונסיב</button>
             <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>

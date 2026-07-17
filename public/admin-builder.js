@@ -443,6 +443,10 @@
     var statusEl = document.getElementById('page-status');
     if (statusEl) statusEl.addEventListener('change', markDirty);
 
+    // responsive device preview (v0.90)
+    var rspBtn = document.getElementById('btn-responsive');
+    if (rspBtn) rspBtn.addEventListener('click', openResponsivePreview);
+
     // layers fold — remembered per browser (closed by default: foolproof first)
     var layersFold = document.getElementById('layers-fold');
     if (layersFold) {
@@ -939,6 +943,57 @@
       };
       tree.appendChild(row);
     });
+  }
+
+  // ── Responsive preview (v0.90) — the REAL rendered draft at device widths.
+  //    Not the canvas squeezed: an iframe of /admin/preview/<page> with the
+  //    live theme CSS + media queries — what a phone will actually show. ──
+  var RSP_DEVICES = [
+    { key: 'mobile', label: '📱 נייד', width: 375 },
+    { key: 'tablet', label: '📲 טאבלט', width: 768 },
+    { key: 'laptop', label: '💻 מחשב', width: 1024 },
+    { key: 'full', label: '🖥 מלא', width: 0 }
+  ];
+
+  function openResponsivePreview() {
+    var existing = document.getElementById('rsp-overlay');
+    if (existing) { existing.remove(); return; }
+    var overlay = document.createElement('div');
+    overlay.id = 'rsp-overlay';
+    overlay.className = 'rsp-overlay';
+    var previewUrl = '/admin/preview/' + encodeURIComponent(currentPageFullPath);
+    overlay.innerHTML =
+      '<div class="rsp-bar">' +
+      '<strong>תצוגה רספונסיבית</strong>' +
+      '<span class="rsp-devices">' +
+      RSP_DEVICES.map(function (d, i) {
+        return '<button type="button" data-rsp="' + d.key + '"' + (i === 0 ? ' class="active"' : '') + '>' + d.label +
+          (d.width ? ' <small>' + d.width + '</small>' : '') + '</button>';
+      }).join('') +
+      '</span>' +
+      '<span class="rsp-note">הרינדור האמיתי של הטיוטה</span>' +
+      '<button type="button" class="rsp-close" aria-label="סגור">✕</button>' +
+      '</div>' +
+      '<div class="rsp-stage"><div class="rsp-frame" style="width:375px"><iframe title="תצוגת טיוטה"></iframe></div></div>';
+    document.body.appendChild(overlay);
+
+    var frame = overlay.querySelector('.rsp-frame');
+    var iframe = overlay.querySelector('iframe');
+    overlay.querySelector('.rsp-close').onclick = function () { overlay.remove(); };
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelectorAll('[data-rsp]').forEach(function (btn) {
+      btn.onclick = function () {
+        overlay.querySelectorAll('[data-rsp]').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        var d = RSP_DEVICES.filter(function (x) { return x.key === btn.dataset.rsp; })[0];
+        frame.style.width = d.width ? d.width + 'px' : '100%';
+      };
+    });
+
+    // the preview route renders the SAVED draft — save first so what you see
+    // is what you built this second (foolproof: no stale surprise)
+    var p = savePage({ silent: true });
+    (p && p.then ? p : Promise.resolve()).then(function () { iframe.src = previewUrl; });
   }
 
   function renderCanvas() {
