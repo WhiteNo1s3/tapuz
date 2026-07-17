@@ -68,14 +68,19 @@ function renderField(props = {}, idAttr = '', clsExtra = '') {
  * @param {{ idAttr?: string, cls?: string, dir?: string }} [opts] pre-escaped attrs
  */
 function renderForm(props = {}, fieldsHtml = '', opts = {}) {
-  const action = safeHref(props.action || '');
+  // empty action = the built-in inbox (v0.81): submissions land in
+  // /admin/inbox instead of POSTing into the void of a static page URL
+  const action = safeHref(props.action || '/api/form');
   const actionAttr = action && action !== '#' ? ` action="${escapeAttr(action)}"` : '';
   const method = props.method === 'get' ? 'get' : 'post';
   const submit = escapeHtml(props.submit || 'שליחה');
+  // honeypot: bots fill every field; humans never see this one. The server
+  // pretends success and drops the submission when it arrives non-empty.
+  const honeypot = '<input type="text" name="_hp" class="bent-hp" tabindex="-1" autocomplete="off" aria-hidden="true">';
   // opts.extra is a raw pre-built attr string (block id/class/style) — placed
   // right after the class, matching how renderer container cases thread it.
   return `<form${opts.idAttr || ''} class="bent-form${opts.cls || ''}"${opts.extra || ''}${actionAttr} method="${method}"${opts.dir || ''}>` +
-    fieldsHtml +
+    honeypot + fieldsHtml +
     `<button type="submit" class="bent-form-submit">${submit}</button></form>`;
 }
 

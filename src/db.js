@@ -110,6 +110,19 @@ function initialize() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_pageviews_created ON pageviews(created_at DESC)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_pageviews_path ON pageviews(path, created_at DESC)');
 
+  // Forms inbox (v0.81) — submissions from the FORM module. Privacy-lean:
+  // fields + source page + timestamp, no IP/user-agent (see src/forms.js).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS form_submissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      page TEXT DEFAULT '',
+      fields TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_form_submissions_read ON form_submissions(is_read, id DESC)');
+
   // Holds the current UTC-day salt so a server restart does not re-randomize
   // the visitor hash mid-day. Prior days' salts are discarded (see
   // analytics.getDailySalt) so yesterday's hashes cannot be recomputed.

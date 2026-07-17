@@ -36,6 +36,12 @@ const collectLimiter = new FixedWindowLimiter({
   windowMs: 60 * 1000,
   max: parseInt(process.env.TAPUZ_COLLECT_MAX, 10) || 120
 });
+// v0.81 forms inbox: public capture endpoint — humans submit a contact form
+// a few times a minute at most. TAPUZ_FORM_MAX overrides (smoke determinism).
+const formLimiter = new FixedWindowLimiter({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.TAPUZ_FORM_MAX, 10) || 10
+});
 
 // Client IP for rate-limiting / lockout keys. X-Forwarded-For is client-controllable,
 // so trusting it lets an attacker rotate the header to defeat every per-IP limit
@@ -136,6 +142,67 @@ app.use((err, req, res, next) => {
 });
 
 app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
+
+// ─── Forms inbox capture (v0.81) — PUBLIC, like /_tapuz/collect ───
+// The FORM module's default action. Rate-limited, honeypot-guarded,
+// size-capped in src/forms.js. Page attribution: explicit _page field if the
+// author set one, else the Referer path (static pages can't inject context).
+app.post('/api/form', (req, res) => {
+  const wantsJsonReply = (req.headers.accept || '').includes('application/json');
+  if (!formLimiter.allow('form:' + clientIp(req))) {
+    res.setHeader('Retry-After', String(formLimiter.retryAfter('form:' + clientIp(req))));
+    if (wantsJsonReply) return res.status(429).json({ ok: false, error: 'rate limited' });
+    return res.status(429).send('יותר מדי שליחות. נסו שוב בעוד רגע.');
+  }
+  const body = req.body || {};
+  // honeypot tripped → pretend success, store nothing (bots learn nothing)
+  if (String(body._hp || '').trim()) {
+    if (wantsJsonReply) return res.json({ ok: true });
+    return res.redirect('/form-sent');
+  }
+  let page = String(body._page || '').slice(0, 300);
+  if (!page) {
+    try {
+      // browsers percent-encode the Referer; a raw-bytes Hebrew path (curl,
+      // odd clients) arrives latin1-mangled — recover it before parsing
+      let refStr = String(req.headers.referer || '');
+      if (/[^\x00-\x7f]/.test(refStr)) refStr = Buffer.from(refStr, 'latin1').toString('utf8');
+      const ref = new URL(refStr, 'http://x');
+      page = decodeURIComponent(ref.pathname).replace(/^\/+/, '').replace(/\.html$/, '').slice(0, 300);
+    } catch (e) { /* no referer — the submission still lands, unattributed */ }
+  }
+  const result = require('./forms').saveSubmission({ page, fields: body });
+  if (!result.ok) {
+    if (wantsJsonReply) return res.status(400).json(result);
+    return res.status(400).send('השליחה נדחתה: ' + result.error);
+  }
+  if (wantsJsonReply) return res.json({ ok: true, id: result.id });
+  return res.redirect('/form-sent');
+});
+
+// The thanks page — minimal, RTL, works for every static page on the site.
+app.get('/form-sent', (req, res) => {
+  const site = loadConfig().title || 'האתר';
+  res.send(`<!DOCTYPE html>
+<html lang="he" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ההודעה נשלחה • ${escapeAdmin(site)}</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#f8fafc; color:#0f172a;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0 }
+  .card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:40px 48px;
+          text-align:center; box-shadow:0 10px 30px rgba(2,6,23,.06) }
+  .ok { font-size:2.4rem } h1 { font-size:1.3rem; margin:12px 0 6px } p { color:#64748b; margin:0 0 18px }
+  a { display:inline-block; background:#ea580c; color:#fff; text-decoration:none;
+      padding:10px 22px; border-radius:10px; font-weight:600 }
+</style></head><body>
+<div class="card"><div class="ok">✓</div><h1>ההודעה נשלחה</h1>
+<p>תודה! נחזור אליכם בהקדם.</p>
+<a href="/">חזרה לאתר</a></div>
+</body></html>`);
+});
+
 // Agent bridge payloads (intent / .pzn source) are small — cap them tight,
 // BEFORE the 12mb global parser (which then skips an already-parsed body).
 app.use('/agent', bodyParser.json({ limit: '512kb' }));
@@ -825,7 +892,8 @@ const ADMIN_NAV_GROUPS = [
     items: [
       { key: 'pages', href: '/admin', label: 'דפים', icon: '📄' },
       { key: 'import', href: '/admin/import', label: 'ייבוא', icon: '📥' },
-      { key: 'categories', href: '/admin/categories', label: 'קטגוריות', icon: '🗂️' }
+      { key: 'categories', href: '/admin/categories', label: 'קטגוריות', icon: '🗂️' },
+      { key: 'inbox', href: '/admin/inbox', label: 'תיבת פניות', icon: '📬' }
     ]
   },
   {
@@ -1298,6 +1366,97 @@ app.post('/admin/api/homepage', (req, res) => {
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
+});
+
+// ======================== FORMS INBOX (v0.81) ========================
+app.get('/admin/inbox', (req, res) => {
+  const forms = require('./forms');
+  const items = forms.listSubmissions({ limit: 200 });
+  const unread = forms.unreadCount();
+
+  const rows = items.length === 0
+    ? `<div style="padding:48px;text-align:center;color:#64748b">
+         <div style="font-size:2rem;margin-bottom:8px">📬</div>
+         אין פניות עדיין. כשמישהו ישלח טופס באתר — זה ינחת כאן.<br>
+         <span style="font-size:0.82rem">כל מודול טופס שולח לכאן אוטומטית (אלא אם קבעתם action משלכם).</span>
+       </div>`
+    : items.map((s) => {
+      const fields = Object.entries(s.fields).map(([k, v]) =>
+        `<div style="display:flex;gap:10px;padding:4px 0;border-bottom:1px dashed #f1f5f9">
+           <span style="min-width:110px;font-weight:600;color:#475569">${escapeAdmin(k)}</span>
+           <span style="white-space:pre-wrap;word-break:break-word">${escapeAdmin(v)}</span>
+         </div>`).join('');
+      const when = String(s.created_at || '').replace('T', ' ').slice(0, 16);
+      const pageLink = s.page
+        ? `<a href="/${encodeURIComponent(s.page)}" target="_blank" rel="noopener" style="font-family:monospace;font-size:0.8rem">/${escapeAdmin(s.page)}</a>`
+        : '<span style="color:#94a3b8;font-size:0.8rem">מקור לא ידוע</span>';
+      return `
+      <details style="border:1px solid ${s.is_read ? '#e2e8f0' : '#93c5fd'};border-radius:10px;margin-bottom:8px;background:${s.is_read ? '#fff' : '#eff6ff'}"
+               ${s.is_read ? '' : 'data-unread="1"'} data-sid="${s.id}">
+        <summary style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;list-style:none">
+          <span style="display:flex;align-items:center;gap:8px;min-width:0">
+            ${s.is_read ? '' : '<span style="width:8px;height:8px;border-radius:99px;background:#3b82f6;flex:none"></span>'}
+            <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38ch">
+              ${escapeAdmin(Object.values(s.fields)[0] || 'פנייה')}</strong>
+          </span>
+          <span style="display:flex;align-items:center;gap:10px;flex:none">
+            ${pageLink}
+            <span style="color:#94a3b8;font-size:0.8rem">${when}</span>
+          </span>
+        </summary>
+        <div style="padding:4px 16px 12px">
+          ${fields}
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <form method="POST" action="/admin/inbox/read">
+              <input type="hidden" name="id" value="${s.id}">
+              <input type="hidden" name="read" value="${s.is_read ? '0' : '1'}">
+              <button type="submit" class="btn secondary" style="padding:6px 12px">${s.is_read ? 'סמן כלא נקרא' : 'סמן כנקרא'}</button>
+            </form>
+            <form method="POST" action="/admin/inbox/delete" onsubmit="return confirm('למחוק את הפנייה?')">
+              <input type="hidden" name="id" value="${s.id}">
+              <button type="submit" class="btn secondary" style="padding:6px 12px">מחק</button>
+            </form>
+          </div>
+        </div>
+      </details>`;
+    }).join('');
+
+  const html = `
+    ${adminNav('inbox', 'תיבת פניות')}
+    <div class="container" style="padding-top:30px;max-width:860px;padding-bottom:60px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <p style="color:#64748b;margin:0">כל שליחת טופס מהאתר נוחתת כאן. ${unread ? `<strong style="color:#1d4ed8">${unread} חדשות</strong>` : 'אין חדשות'}.</p>
+      </div>
+      ${rows}
+    </div>
+    <script>
+      // opening an unread submission marks it read — no extra click
+      document.querySelectorAll('details[data-unread]').forEach(function (d) {
+        d.addEventListener('toggle', function () {
+          if (!d.open || d.dataset.marked) return;
+          d.dataset.marked = '1';
+          fetch('/admin/inbox/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: d.dataset.sid, read: '1', silent: true })
+          });
+        }, { once: false });
+      });
+    </script>
+  `;
+  res.send(layout(html, 'תיבת פניות', accentFor('inbox')));
+});
+
+app.post('/admin/inbox/read', (req, res) => {
+  const b = req.body || {};
+  require('./forms').markRead(parseInt(b.id, 10), String(b.read) !== '0');
+  if (b.silent || wantsJson(req)) return res.json({ ok: true });
+  res.redirect('/admin/inbox');
+});
+
+app.post('/admin/inbox/delete', (req, res) => {
+  require('./forms').deleteSubmission(parseInt((req.body || {}).id, 10));
+  res.redirect('/admin/inbox');
 });
 
 // ---- Block registry API (ask C: schema-generated builder UI) ----
