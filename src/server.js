@@ -2299,10 +2299,11 @@ app.get('/admin/analytics', (req, res) => {
       `<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#94a3b8;direction:ltr">` +
       `<span>${escapeAdmin(firstDay)}</span><span>${escapeAdmin(lastDay)}</span></div>`;
 
-    // --- Top pages table ---
+    // --- Top pages table (Hebrew paths shown decoded; the href stays raw) ---
+    const showPath = (p) => { try { return decodeURIComponent(p); } catch (e) { return p; } };
     const topPagesRows = data.topPages.length
       ? data.topPages.map(p =>
-          `<tr><td style="padding:6px 8px;border-bottom:1px solid #f1f5f9"><a href="${escapeAdmin(p.path)}" dir="ltr" target="_blank" style="color:#0f172a">${escapeAdmin(p.path)}</a></td>` +
+          `<tr><td style="padding:6px 8px;border-bottom:1px solid #f1f5f9"><a href="${escapeAdmin(p.path)}" dir="ltr" target="_blank" style="color:#0f172a">${escapeAdmin(showPath(p.path))}</a></td>` +
           `<td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:start;font-weight:600">${nf(p.views)}</td></tr>`
         ).join('')
       : `<tr><td colspan="2" style="padding:14px;color:#94a3b8;text-align:center">אין נתונים בטווח הזה</td></tr>`;
@@ -2362,10 +2363,41 @@ app.get('/admin/analytics', (req, res) => {
             <div style="font-size:2rem;font-weight:800;color:#0f172a">${nf(data.totals.visitors)}</div>
           </div>
           <div style="${card}">
+            <div style="font-size:0.8rem;color:#64748b">פניות מטפסים</div>
+            <div style="font-size:2rem;font-weight:800;color:#0f172a">${nf(data.conversions.total)}${
+              data.conversions.rate != null && data.conversions.total
+                ? ` <span style="font-size:0.95rem;font-weight:700;color:#059669">${(data.conversions.rate * 100).toFixed(1)}% המרה</span>`
+                : ''
+            }</div>
+          </div>
+          <div style="${card}">
             <div style="font-size:0.8rem;color:#64748b">טווח</div>
             <div style="font-size:2rem;font-weight:800;color:#0f172a">${days} <span style="font-size:1rem;font-weight:600;color:#64748b">ימים</span></div>
           </div>
         </div>
+
+        ${data.conversions.pages.length ? `
+        <div style="${card};margin-bottom:18px">
+          <h3 style="margin:0 0 4px;font-size:1rem">המרות — טפסים מול צפיות</h3>
+          <p style="margin:0 0 12px;color:#94a3b8;font-size:0.8rem">אילו דפים מייצרים פניות — <a href="/admin/inbox">כל הפניות בתיבה</a>.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+            <thead><tr>
+              <th style="text-align:start;padding:6px 8px;border-bottom:2px solid #e2e8f0;color:#64748b;font-size:0.8rem">דף</th>
+              <th style="text-align:start;padding:6px 8px;border-bottom:2px solid #e2e8f0;color:#64748b;font-size:0.8rem">צפיות</th>
+              <th style="text-align:start;padding:6px 8px;border-bottom:2px solid #e2e8f0;color:#64748b;font-size:0.8rem">פניות</th>
+              <th style="text-align:start;padding:6px 8px;border-bottom:2px solid #e2e8f0;color:#64748b;font-size:0.8rem">המרה</th>
+            </tr></thead>
+            <tbody>${data.conversions.pages.map(c =>
+              `<tr>
+                <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9">${escapeAdmin(c.page)}</td>
+                <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9">${nf(c.views)}</td>
+                <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-weight:700">${nf(c.submissions)}</td>
+                <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;color:${c.rate != null ? '#059669' : '#94a3b8'};font-weight:600">${
+                  c.rate != null ? (c.rate * 100).toFixed(1) + '%' : '—'
+                }</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>` : ''}
 
         <div style="${card};margin-bottom:18px">
           <h3 style="margin:0 0 12px;font-size:1rem">צפיות לפי יום</h3>

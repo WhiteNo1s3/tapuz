@@ -196,6 +196,61 @@ function deviceBreakdown(days = 30) {
     .all(since);
 }
 
+/** '/%D7%A6…-page.html' ⇄ 'צור-קשר' — one key for both stores. Pageviews
+ *  hold the raw percent-encoded pathname; the forms inbox holds the decoded
+ *  slug without slash/suffix. */
+function normalizePagePath(p) {
+  let s = String(p || '');
+  try { s = decodeURIComponent(s); } catch (e) { /* malformed % — keep raw */ }
+  return s.replace(/^\/+/, '').replace(/\.html$/, '');
+}
+
+/**
+ * Conversions (v0.84): form submissions against pageviews, per page — the
+ * metric an SMB actually acts on ("does my contact page work?"). Computed
+ * entirely from data both stores already hold; nothing new is tracked.
+ */
+function conversions(days = 30) {
+  const d = clampDays(days);
+  let subs = [];
+  try {
+    subs = db
+      .prepare(
+        "SELECT page, COUNT(*) AS submissions FROM form_submissions WHERE created_at >= datetime('now', ?) GROUP BY page"
+      )
+      .all(sinceModifier(d));
+  } catch (e) {
+    return { total: 0, rate: null, pages: [] }; // inbox table not created yet
+  }
+  const views = db
+    .prepare(
+      "SELECT path, COUNT(*) AS views FROM pageviews WHERE created_at >= datetime('now', ?) GROUP BY path"
+    )
+    .all(sinceModifier(d));
+  const viewsByPage = new Map();
+  let totalViews = 0;
+  for (const v of views) {
+    const key = normalizePagePath(v.path);
+    viewsByPage.set(key, (viewsByPage.get(key) || 0) + v.views);
+    totalViews += v.views;
+  }
+  const pages = subs
+    .map((s) => {
+      const key = normalizePagePath(s.page);
+      const pv = viewsByPage.get(key) || 0;
+      return {
+        page: key || '(דף הבית)',
+        views: pv,
+        submissions: s.submissions,
+        rate: pv ? s.submissions / pv : null
+      };
+    })
+    .sort((a, b) => b.submissions - a.submissions)
+    .slice(0, 10);
+  const total = subs.reduce((sum, s) => sum + s.submissions, 0);
+  return { total, rate: totalViews ? total / totalViews : null, pages };
+}
+
 function dashboardData(days = 30) {
   const d = clampDays(days);
   return {
@@ -204,7 +259,8 @@ function dashboardData(days = 30) {
     byDay: pageviewsByDay(d),
     topPages: topPages(d, 10),
     topReferrers: topReferrers(d, 10),
-    devices: deviceBreakdown(d)
+    devices: deviceBreakdown(d),
+    conversions: conversions(d)
   };
 }
 
@@ -223,5 +279,7 @@ module.exports = {
   topPages,
   topReferrers,
   deviceBreakdown,
+  conversions,
+  normalizePagePath,
   clampDays
 };
