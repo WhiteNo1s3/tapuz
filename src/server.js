@@ -2413,6 +2413,22 @@ app.post('/admin/api/site-chrome', (req, res) => {
 // ─── BenTML: source language ↔ JSON blocks (page builder bridge) ───
 const bentml = require('./bentml');
 
+/**
+ * BenTML engine, served to the browser (src/bentml/browser-bundle.js): the
+ * real language runs locally in the admin — instant decompile on every drag,
+ * compile-as-you-type — with zero server roundtrips.
+ */
+const { buildBentmlEngine } = require('./bentml/browser-bundle');
+
+app.get('/admin/bentml-engine.js', (req, res) => {
+  try {
+    res.type('application/javascript').send(buildBentmlEngine());
+  } catch (e) {
+    res.status(500).type('application/javascript')
+      .send('/* BentmlEngine build failed: ' + String(e.message).replace(/\*\//g, '* /') + ' */');
+  }
+});
+
 app.get('/admin/api/bentml/modules', (req, res) => {
   res.json({ modules: bentml.listModules(), version: '0.1' });
 });
@@ -3307,7 +3323,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
         </button>
         <button type="button" data-builder-mode="output" role="tab" class="adv-only">
           קוד BenTML
-          <span class="tab-sub">מתקדם · הראו ל‑AI איך הדף בנוי</span>
+          <span class="tab-sub">מתקדם · שפה חיה — כותבים והדף רוקד</span>
         </button>
         <button type="button" id="btn-toggle-advanced" class="mode-advanced-toggle" title="כלים מתקדמים — קוד BenTML" aria-pressed="false">⚙ מתקדם</button>
       </div>
@@ -3341,13 +3357,14 @@ app.get('/admin/edit/:fullPath', (req, res) => {
           <div id="canvas" class="canvas"></div>
           <div id="bentml-output-dock" class="bentml-output-dock adv-only">
             <div class="bentml-output-dock-head">
-              <strong>פלט BenTML חי</strong>
-              <span class="dock-sub">הקוד נבנה מכללי השפה בזמן שאתם גוררים/עורכים</span>
+              <span class="bentml-live-dot" id="bentml-live-dot" aria-hidden="true"></span>
+              <strong>BenTML חי</strong>
+              <span class="dock-sub">דו־כיווני: גררו — הקוד נכתב · כתבו — הדף רוקד</span>
               <button type="button" class="btn secondary" id="btn-bentml-copy-live">העתק</button>
               <button type="button" class="btn secondary" id="btn-open-output">מסך מלא</button>
               <span id="bentml-live-status" class="bentml-status"></span>
             </div>
-            <textarea id="bentml-live-output" readonly dir="ltr" spellcheck="false" aria-label="Live BenTML output"></textarea>
+            <textarea id="bentml-live-output" dir="ltr" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" wrap="off" aria-label="Live BenTML source"></textarea>
           </div>
         </div>
 
@@ -3374,10 +3391,11 @@ app.get('/admin/edit/:fullPath', (req, res) => {
             <span id="bentml-source-status" class="bentml-status"></span>
           </div>
           <p class="output-explain">
-            זה לא ״ייבוא בלבד״. <strong>כל גרירה ועריכה בבונה מייצרת מחדש את הקוד</strong> לפי כללי BenTML.
-            אפשר גם להדביק כאן מסמך שלם ולהחיל לדף.
+            זה לא ״ייבוא בלבד״. <strong>כל גרירה ועריכה בבונה מייצרת מחדש את הקוד</strong> לפי כללי BenTML —
+            וכל הקלדה כאן מקומפלת חיה ומוחלת לדף. שגיאה מצביעה על השורה המדויקת + תיקון.
+            אפשר גם להדביק מסמך שלם.
           </p>
-          <textarea id="bentml-source" spellcheck="false" dir="ltr" aria-label="BenTML output" placeholder="BENTML 0.1&#10;&#10;META {&#10;  title: &quot;...&quot;&#10;}&#10;&#10;TEXT { ... }"></textarea>
+          <textarea id="bentml-source" spellcheck="false" dir="ltr" autocomplete="off" autocorrect="off" autocapitalize="off" wrap="off" aria-label="BenTML source" placeholder="BENTML 0.1&#10;&#10;META {&#10;  title: &quot;...&quot;&#10;}&#10;&#10;TEXT { ... }"></textarea>
         </div>
       </div>
     </div>
@@ -3435,6 +3453,7 @@ app.get('/admin/edit/:fullPath', (req, res) => {
       })};
     </script>
     <script src="/admin-builder.js"></script>
+    <script src="/admin/bentml-engine.js"></script>
     <script src="/admin-bentml-ui.js"></script>
     <script>
       TapuzBuilder.init({

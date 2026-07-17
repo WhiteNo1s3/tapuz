@@ -68,4 +68,34 @@ RULES OF THUMB: everything has a good zero-param default — omit params you don
   never inside prose. Max nesting depth 4 (content inside 4 containers is the limit).
 ON ERROR: read the message — it names line, construct, and the complete valid alternatives,
   and usually contains the literal fix. Apply exactly the Fix: snippet and recompile.
+
+── SINCE 0.2 — the full builder vocabulary (write "BENTML 0.2" on line 1 to use these) ──
+
+MAP(address: "..." REQUIRED, zoom: 1-20=15, height: sm|md|lg)                ← no braces
+CTA(title: "..." REQUIRED, url: "/x" REQUIRED, text: "...", buttontext: "...",
+    style: primary|secondary|ghost, tone: brand|dark|light, align: start|center|end)
+STATS(columns: 2-4=3) { STAT(value: "120" REQUIRED, label: "לקוחות" REQUIRED) ... }
+LOGOS { LOGO(src: "/x.svg" REQUIRED, alt: "...", url: "https://...") ... }
+FAQ { QA(question: "...?" REQUIRED) { התשובה } ... }
+CONTACT(phone: "...", email: "...", address: "...", hours: "...")            ← no braces
+BANNER(tone: brand|dark|light|warn, align: start|center|end) { טקסט ההודעה }
+SECTION(size: sm|md|lg|xl) { ...any blocks... }     ← מיכל: container, legit empty
+TABS { TAB(label: "לשונית" REQUIRED) { התוכן } ... }
+ACCORDION { FOLD(title: "מגירה" REQUIRED) { התוכן } ... }
+FORM(action: "/api", method: post|get, submit: "שליחה") {
+  FIELD(label: "שם" REQUIRED, name: "name", type: text|email|tel|textarea|select|checkbox,
+        placeholder: "...", required: true|false, options: ["א","ב"])       ← no braces
+}
+CARDS { MEDIACARD(title: "..." REQUIRED, image: "/x.jpg", tag: "חדשות", url: "/a")
+        { התקציר } ... }
+NAV(background: "#0b0f1a", color: "#fff", align: start|center|end)
+  { NAVITEM(url: "/" REQUIRED) { בית } ... }
+TICKER(label: "מבזק", speed: slow|md|fast, background: "...", color: "...")
+  { TICKERITEM(url: "/x") { כותרת המבזק } ... }
+NEWSPOP(label: "מבזקים") { NEWSPOPITEM(time: "12:00", url: "/x") { העדכון } ... }
+VIDEO(src: "/uploads/clip.mp4 or YouTube" REQUIRED, poster: "/x.jpg", caption: "...",
+      controls: true|false, autoplay: true|false, loop: true|false, muted: true|false)
+
+CHROME on any block (optional): id: "anchor", class: "hook",
+  color/background: "#hex", fontsize/padding/radius: sm|md|lg — the theme resolves them.
 ```

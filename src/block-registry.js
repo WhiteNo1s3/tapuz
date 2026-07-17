@@ -824,7 +824,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'טאבים',
     icon: '❐',
     category: 'מבנה',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'תוכן בלשוניות (CSS בלבד)',
     params: [
@@ -846,7 +846,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'אקורדיון',
     icon: '☰',
     category: 'מבנה',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'מגירות נפתחות (CSS בלבד)',
     params: [
@@ -868,7 +868,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'טופס',
     icon: '✉',
     category: 'שילובים',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'טופס יצירת קשר / הרשמה (מודול #1 שהמפרק ביקש)',
     params: [
@@ -904,7 +904,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'רשת כרטיסים',
     icon: '▦',
     category: 'מדיה',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'רשת כרטיסי תוכן (תמונה + כותרת + קישור) — היחידה של אתר תוכן',
     params: [
@@ -934,7 +934,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'תפריט ניווט',
     icon: '≡',
     category: 'מבנה',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'שורת ניווט עם צבעים (רקע + טקסט)',
     params: [
@@ -966,7 +966,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'מבזקים נעים',
     icon: '📰',
     category: 'מדיה',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'שורת מבזקים נעה — כותרות עם קישורים (סגנון וואלה), עם צבעים ומהירות',
     params: [
@@ -1003,7 +1003,7 @@ const BLOCK_REGISTRY = [
     labelHe: 'מבזקים עם שעות',
     icon: '🕐',
     category: 'מדיה',
-    bodyClass: 'none',
+    bodyClass: 'blocks',
     childrenOf: null,
     hintHe: 'מבזקי חדשות עם שעות — עמודה קבועה של "שעה · כותרת" (סגנון וואלה, לא נעה)',
     params: [

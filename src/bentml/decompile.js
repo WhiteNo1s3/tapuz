@@ -12,9 +12,13 @@ const { isGeneratedBlockId } = require('../blocks');
 /**
  * @param {object} page
  * @param {object[]} blocks
- * @returns {string}
+ * @param {{ withMap?: boolean }} [opts] — withMap returns { source, map } where
+ *   map is [{ id, type, start, end }] with 1-based line ranges per top-level
+ *   block in the emitted source. Nested blocks are addressed by their
+ *   `id: "..."` param in the text (they always carry their storage id).
+ * @returns {string | { source: string, map: object[] }}
  */
-function decompile(page = {}, blocks = []) {
+function decompile(page = {}, blocks = [], opts = {}) {
   const lines = [];
   lines.push('BENTML 0.2');
   lines.push('');
@@ -40,23 +44,51 @@ function decompile(page = {}, blocks = []) {
   lines.push('}');
   lines.push('');
 
+  const map = [];
   for (const b of blocks || []) {
-    lines.push(decompileBlock(b, 0));
+    const chunk = decompileBlock(b, 0).split('\n');
+    map.push({ id: b.id, type: b.type, start: lines.length + 1, end: lines.length + chunk.length });
+    lines.push(...chunk);
     lines.push('');
   }
 
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  // Line-aware equivalent of the old `\n{3,} → \n\n` collapse + trim: drop a
+  // blank line that follows a blank line, drop leading/trailing blanks. An
+  // original→new line index keeps the map ranges true through the drops.
+  const out = [];
+  const newIndex = new Array(lines.length + 1);
+  for (let i = 0; i < lines.length; i++) {
+    const blank = lines[i] === '';
+    if (blank && (out.length === 0 || out[out.length - 1] === '')) {
+      newIndex[i + 1] = out.length; // dropped — resolves to the previous kept line
+      continue;
+    }
+    out.push(lines[i]);
+    newIndex[i + 1] = out.length;
+  }
+  while (out.length && out[out.length - 1] === '') out.pop();
+  const last = out.length || 1;
+  for (const m of map) {
+    m.start = Math.min(Math.max(1, newIndex[m.start] || 1), last);
+    m.end = Math.min(Math.max(m.start, newIndex[m.end] || m.start), last);
+  }
+
+  const source = out.join('\n') + '\n';
+  if (opts && opts.withMap) return { source, map };
+  return source;
 }
 
 function uni(params, d, idParams = []) {
+  const has = (name) => params.some((x) => x.startsWith(name + ':'));
   if (d.className) params.push(`class: ${q(d.className)}`);
   // the id: slot holds either the authored anchor (data.id, §7.4) or the
   // nested block's storage id — the anchor is content, so it wins
   if (d.id) params.push(`id: ${q(d.id)}`);
   else params.push(...idParams);
   const s = d.style || {};
-  if (s.color) params.push(`color: ${q(s.color)}`);
-  if (s.background) params.push(`background: ${q(s.background)}`);
+  // never emit a param twice — NAV/TICKER own `background:`/`color:` already
+  if (s.color && !has('color')) params.push(`color: ${q(s.color)}`);
+  if (s.background && !has('background')) params.push(`background: ${q(s.background)}`);
   if (s.fontSize) params.push(`fontsize: ${s.fontSize}`);
   if (s.padding) params.push(`padding: ${s.padding}`);
   if (s.radius) params.push(`radius: ${s.radius}`);
@@ -66,10 +98,13 @@ function decompileBlock(block, indent) {
   const pad = '  '.repeat(indent);
   const type = block.type;
   const d = block.data || {};
-  // Nested blocks carry their storage id as an `id:` param so recompile
-  // preserves identity — top-level blocks can be reconciled by position,
-  // children of CARD/ROW/PARALLAX/BACKDROP cannot.
-  const idParams = indent > 0 && isGeneratedBlockId(block.id) ? [`id: ${q(block.id)}`] : [];
+  // Nested blocks carry their id as an `id:` param so recompile preserves
+  // identity — top-level blocks can be reconciled by position, children of
+  // CARD/ROW/PARALLAX/BACKDROP cannot. Storage-shaped ids are restored as
+  // block identity by compile; authored ids (imported .pzn) live on as the
+  // §7.4 anchor — either way the source names the block, so the builder⇄code
+  // selection dance works for every nested block.
+  const idParams = indent > 0 && block.id ? [`id: ${q(block.id)}`] : [];
 
   switch (type) {
     case 'heading': {
@@ -339,9 +374,133 @@ function decompileBlock(block, indent) {
       uni(params, d, idParams);
       return `${pad}BANNER${paramList(params)} { ${escBody(d.text || '')} }`;
     }
+    case 'section': {
+      const params = [];
+      if (d.size && d.size !== 'md') params.push(`size: ${d.size}`);
+      uni(params, d, idParams);
+      const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
+      return `${pad}SECTION${paramList(params)} {\n${kids || pad + '  '}\n${pad}}`;
+    }
+    case 'tabs': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => childWithBody('TAB', [`label: ${q(it.label || '')}`], it.content, indent))
+        .join('\n');
+      return `${pad}TABS${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'accordion': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => childWithBody('FOLD', [`title: ${q(it.title || '')}`], it.content, indent))
+        .join('\n');
+      return `${pad}ACCORDION${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'form': {
+      const params = [];
+      if (d.action) params.push(`action: ${q(d.action)}`);
+      if (d.method && d.method !== 'post') params.push(`method: ${d.method}`);
+      if (d.submit && d.submit !== 'שליחה') params.push(`submit: ${q(d.submit)}`);
+      uni(params, d, idParams);
+      const kids = (d.fields || [])
+        .map((f) => {
+          const ps = [`label: ${q(f.label || '')}`];
+          if (f.name) ps.push(`name: ${q(f.name)}`);
+          if (f.type && f.type !== 'text') ps.push(`type: ${f.type}`);
+          if (f.placeholder) ps.push(`placeholder: ${q(f.placeholder)}`);
+          if (f.required) ps.push('required: true');
+          if (Array.isArray(f.options) && f.options.length) ps.push(`options: ${JSON.stringify(f.options)}`);
+          return `${pad}  FIELD${paramList(ps)}`;
+        })
+        .join('\n');
+      return `${pad}FORM${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'cards': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`title: ${q(it.title || '')}`];
+          if (it.image) ps.push(`image: ${q(it.image)}`);
+          if (it.tag) ps.push(`tag: ${q(it.tag)}`);
+          if (it.href && it.href !== '#') ps.push(`url: ${q(it.href)}`);
+          return childWithBody('MEDIACARD', ps, it.excerpt, indent);
+        })
+        .join('\n');
+      return `${pad}CARDS${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'nav': {
+      const params = [];
+      if (d.background) params.push(`background: ${q(d.background)}`);
+      if (d.color) params.push(`color: ${q(d.color)}`);
+      if (d.align && d.align !== 'start') params.push(`align: ${d.align}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => `${pad}  NAVITEM(url: ${q(it.href || '#')}) { ${escBody(it.label || '')} }`)
+        .join('\n');
+      return `${pad}NAV${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'ticker': {
+      const params = [];
+      if (d.label) params.push(`label: ${q(d.label)}`);
+      if (d.speed && d.speed !== 'md') params.push(`speed: ${d.speed}`);
+      if (d.background) params.push(`background: ${q(d.background)}`);
+      if (d.color) params.push(`color: ${q(d.color)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [];
+          if (it.href && it.href !== '#') ps.push(`url: ${q(it.href)}`);
+          return `${pad}  TICKERITEM${paramList(ps)} { ${escBody(it.text || '')} }`;
+        })
+        .join('\n');
+      return `${pad}TICKER${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'newspop': {
+      const params = [];
+      if (d.label) params.push(`label: ${q(d.label)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [];
+          if (it.time) ps.push(`time: ${q(it.time)}`);
+          if (it.href && it.href !== '#') ps.push(`url: ${q(it.href)}`);
+          return `${pad}  NEWSPOPITEM${paramList(ps)} { ${escBody(it.text || '')} }`;
+        })
+        .join('\n');
+      return `${pad}NEWSPOP${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'video': {
+      const params = [`src: ${q(d.src || '')}`];
+      if (d.poster) params.push(`poster: ${q(d.poster)}`);
+      if (d.caption) params.push(`caption: ${q(d.caption)}`);
+      if (d.controls === false) params.push('controls: false');
+      if (d.autoplay) params.push('autoplay: true');
+      if (d.loop) params.push('loop: true');
+      if (d.muted) params.push('muted: true');
+      uni(params, d, idParams);
+      return `${pad}VIDEO${paramList(params)}`;
+    }
+    case 'category': {
+      const params = [`slug: ${q(d.slug || '')}`];
+      if (d.limit != null && Number(d.limit) !== 6) params.push(`limit: ${d.limit}`);
+      if (d.showheader === false) params.push('showheader: false');
+      uni(params, d, idParams);
+      return `${pad}CATEGORY${paramList(params)}`;
+    }
     default:
       return `${pad}// unknown block type: ${type} — extend decompiler`;
   }
+}
+
+/** TAB/FOLD/MEDIACARD: params on the keyword, the content as the body. */
+function childWithBody(kw, ps, content, indent) {
+  const pad = '  '.repeat(indent);
+  const body = String(content || '');
+  if (!body) return `${pad}  ${kw}(${ps.join(', ')}) { }`;
+  if (!body.includes('\n')) return `${pad}  ${kw}(${ps.join(', ')}) { ${escBody(body)} }`;
+  return `${pad}  ${kw}(${ps.join(', ')}) {\n${indentBody(body, indent + 2)}\n${pad}  }`;
 }
 
 function paramList(params) {

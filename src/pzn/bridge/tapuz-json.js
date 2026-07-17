@@ -42,10 +42,38 @@ function pickProps(data, keys, renames = {}) {
   return props;
 }
 
+// data.style (the builder's styling object) crosses the bridge as flat
+// `style-*` attributes — prefixed so they can never collide with a module's
+// own props (divider's `style`, nav/ticker's `background`/`color`).
+const STYLE_KEYS = [
+  ['color', 'style-color'],
+  ['background', 'style-background'],
+  ['fontSize', 'style-fontsize'],
+  ['padding', 'style-padding'],
+  ['radius', 'style-radius']
+];
+
+function styleToProps(data, props) {
+  const s = data?.style;
+  if (!s || typeof s !== 'object') return;
+  for (const [key, attr] of STYLE_KEYS) {
+    if (s[key] !== undefined && s[key] !== null && s[key] !== '') props[attr] = s[key];
+  }
+}
+
+function propsToStyle(props, data) {
+  const style = {};
+  for (const [key, attr] of STYLE_KEYS) {
+    if (props[attr] !== undefined && props[attr] !== '') style[key] = props[attr];
+  }
+  if (Object.keys(style).length) data.style = style;
+}
+
 function baseOpts(block, props, extra = {}) {
   const opts = { props, ...extra };
   if (block.id) opts.id = block.id;
   if (block.data?.className) opts.className = block.data.className;
+  styleToProps(block.data, props);
   return opts;
 }
 
@@ -347,6 +375,7 @@ function pickData(props, keys, renames = {}) {
 
 function finishBlock(node, type, data) {
   if (node.className) data.className = node.className;
+  propsToStyle(node.props || {}, data);
   const block = { type, data };
   if (node.id) block.id = node.id;
   return block;
