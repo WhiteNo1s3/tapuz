@@ -10,6 +10,10 @@ const DEFAULT_CONFIG = {
   baseUrl: "",
   defaultTheme: "default",
   language: "he",
+  // The page that owns '/' (full_path). Empty = automatic ranked detection
+  // (scoreHomeCandidate) — the pre-v0.78 behavior. Set explicitly by the
+  // wizard, the pages screen (קבע כדף הבית), or site settings.
+  homepage: "",
   integrations: {
     whatsapp: {
       enabled: false,

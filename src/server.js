@@ -205,7 +205,7 @@ app.get('/sitemap.xml', (req, res) => {
     // (redirects + robots-noindex stay out). Crowning after filtering would
     // let a lookalike page inherit '/' when the real home is excluded.
     const all = require('./pages').listPages({ status: 'published' });
-    const homePath = seo.pickHomePath(all);
+    const homePath = seo.resolveHomePath(all, loadConfig().homepage);
     const pages = all.filter((p) => seo.sitemapEligible(p.meta));
     res.type('application/xml').send(seo.buildSitemapXml(pages, siteBaseUrl(req), homePath));
   } catch (e) {
@@ -1175,14 +1175,36 @@ app.post('/admin/setup', (req, res) => {
 app.get('/admin', (req, res) => {
   if (needsSetup()) return res.redirect('/admin/setup');
   const pages = listPages();
+
+  // Who owns '/' right now — the user's explicit choice, or the ranked
+  // fallback, or nobody (v0.78 homepage flow: nobody = a 404 at the root,
+  // and the screen says so instead of leaving QA to discover it).
+  const config = loadConfig();
+  const published = pages.filter((p) => p.status === 'published');
+  const homePath = require('./seo').resolveHomePath(published, config.homepage);
+  const homeIsExplicit = !!(config.homepage && homePath === config.homepage);
+
   const msg = req.query.built
     ? `<div style="background:#ecfdf5;border:1px solid #10b981;padding:16px 18px;border-radius:12px;margin-bottom:16px;">
          <div style="color:#166534;font-weight:700;margin-bottom:10px">🎉 האתר שלכם חי! מה עכשיו?</div>
          <div style="display:flex;gap:10px;flex-wrap:wrap">
            <a href="/" target="_blank" class="btn" style="background:#166534;border-color:#166534">👀 צפו באתר</a>
-           <a href="/admin/edit/home" class="btn secondary">✏️ ערכו את דף הבית</a>
+           ${homePath ? `<a href="/admin/edit/${encodeURIComponent(homePath)}" class="btn secondary">✏️ ערכו את דף הבית</a>` : ''}
            <a href="/admin/theme" class="btn secondary">🎨 שחקו עם המראה</a>
          </div>
+       </div>`
+    : '';
+
+  const homeSetMsg = req.query.homeset
+    ? `<div style="background:#eff6ff;border:1px solid #3b82f6;color:#1d4ed8;padding:12px 18px;border-radius:12px;margin-bottom:16px;font-weight:600">
+         🏠 דף הבית עודכן — האתר נבנה מחדש והשורש (/) מגיש אותו עכשיו.
+       </div>`
+    : '';
+
+  const noHomeWarning = !homePath && published.length
+    ? `<div style="background:#fef2f2;border:1px solid #ef4444;padding:14px 18px;border-radius:12px;margin-bottom:16px">
+         <div style="color:#b91c1c;font-weight:700;margin-bottom:4px">⚠️ לאתר אין דף בית</div>
+         <div style="color:#7f1d1d;font-size:0.9rem">מי שגולש לכתובת האתר (/) מקבל 404. בחרו דף ולחצו <strong>🏠 קבע כדף הבית</strong> — זה הכל.</div>
        </div>`
     : '';
 
@@ -1192,21 +1214,32 @@ app.get('/admin', (req, res) => {
       const badge = p.status === 'published'
         ? '<span style="background:#dcfce7;color:#166534;font-size:0.75rem;padding:2px 8px;border-radius:999px">פורסם</span>'
         : '<span style="background:#fef3c7;color:#92400e;font-size:0.75rem;padding:2px 8px;border-radius:999px">טיוטה</span>';
+      const isHome = p.full_path === homePath;
+      const homeBadge = isHome
+        ? `<span title="${homeIsExplicit ? 'דף הבית — נקבע ידנית' : 'דף הבית — זיהוי אוטומטי; קיבוע בהגדרות'}" style="background:#dbeafe;color:#1d4ed8;font-size:0.75rem;padding:2px 8px;border-radius:999px">🏠 דף הבית${homeIsExplicit ? '' : ' (אוטו)'}</span>`
+        : '';
       const dirty = p.has_unpublished
         ? '<span style="color:#b45309;font-size:0.75rem;margin-inline-start:6px">• שינויים לא פורסמו</span>'
         : '';
       const updated = p.updated_at
         ? `<span style="font-size:0.78rem;color:#94a3b8;margin-inline-start:10px">עודכן: ${String(p.updated_at).replace('T', ' ').slice(0, 16)}</span>`
         : '';
+      const setHomeBtn = p.status === 'published' && !isHome
+        ? `<form method="POST" action="/admin/homepage">
+             <input type="hidden" name="full_path" value="${escapeAdmin(p.full_path)}">
+             <button type="submit" class="btn secondary" style="padding:8px 14px" title="הדף הזה יוגש בשורש האתר (/)">🏠 קבע כדף הבית</button>
+           </form>`
+        : '';
       return `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:white">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border:1px solid ${isHome ? '#93c5fd' : '#e2e8f0'};border-radius:10px;margin-bottom:8px;background:white">
         <div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <strong>${p.title}</strong>${badge}${dirty}
+            <strong>${p.title}</strong>${badge}${homeBadge}${dirty}
           </div>
           <span style="font-family:monospace;font-size:0.85rem;color:#64748b">/${p.full_path}</span>${updated}
         </div>
         <div style="display:flex;gap:8px">
+          ${setHomeBtn}
           <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn" style="padding:8px 16px">ערוך</a>
           <form method="POST" action="/admin/delete" onsubmit="return confirm('למחוק?')">
             <input type="hidden" name="full_path" value="${p.full_path}">
@@ -1220,10 +1253,51 @@ app.get('/admin', (req, res) => {
     ${adminNav('pages', 'דפים', '<a href="/admin/new" class="btn">+ דף חדש</a>')}
     <div class="container" style="padding-top:30px">
       ${msg}
+      ${homeSetMsg}
+      ${noHomeWarning}
       ${listHtml}
     </div>
   `;
   res.send(layout(html, 'דפים', accentFor('pages')));
+});
+
+// ---- Homepage crowning (v0.78): explicit, one click, rebuilt on the spot ----
+function setHomepage(fullPath) {
+  const page = getPageByFullPath(fullPath);
+  if (!page) throw new Error('הדף לא נמצא: ' + fullPath);
+  if (page.status !== 'published') throw new Error('רק דף מפורסם יכול להיות דף הבית — פרסמו אותו קודם');
+  const config = loadConfig();
+  config.homepage = fullPath;
+  saveConfig(config);
+  // '/' is a static index.html — rebuild now so the crowning is live
+  // immediately (same "publish MEANS live" contract as v0.69).
+  exportAll();
+  return fullPath;
+}
+
+app.post('/admin/homepage', (req, res) => {
+  try {
+    setHomepage(String((req.body || {}).full_path || ''));
+    res.redirect('/admin?homeset=1');
+  } catch (e) {
+    res.status(400).send(layout(
+      `${adminNav('pages', 'דפים')}<div class="container" style="padding-top:30px">
+         <div style="background:#fef2f2;border:1px solid #ef4444;color:#b91c1c;padding:14px 18px;border-radius:12px">${escapeAdmin(e.message)}</div>
+         <p><a href="/admin" class="btn secondary" style="margin-top:14px">חזרה לדפים</a></p>
+       </div>`,
+      'דפים', accentFor('pages')
+    ));
+  }
+});
+
+// JSON twin for the builder's publish flow ("קבע דף זה כדף הבית" toast)
+app.post('/admin/api/homepage', (req, res) => {
+  try {
+    const fullPath = setHomepage(String((req.body || {}).full_path || ''));
+    res.json({ ok: true, homepage: fullPath });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
 });
 
 // ---- Block registry API (ask C: schema-generated builder UI) ----
@@ -1675,6 +1749,13 @@ app.get('/admin/categories', (req, res) => {
 // ======================== SITE SETTINGS ========================
 app.get('/admin/settings', (req, res) => {
   const config = loadConfig();
+  const publishedPages = listPages().filter((p) => p.status === 'published');
+  const autoHome = require('./seo').pickHomePath(publishedPages);
+  const homeOptions = [
+    `<option value="" ${!config.homepage ? 'selected' : ''}>אוטומטי — זיהוי חכם${autoHome ? ` (כרגע: /${escapeAdmin(autoHome)})` : ' (כרגע: אין — 404 בשורש!)'}</option>`
+  ].concat(publishedPages.map((p) =>
+    `<option value="${escapeAdmin(p.full_path)}" ${config.homepage === p.full_path ? 'selected' : ''}>${escapeAdmin(p.title)} — /${escapeAdmin(p.full_path)}</option>`
+  )).join('');
   const html = `
     ${adminNav('settings', 'הגדרות אתר')}
     <div class="container" style="padding-top:28px;max-width:620px;padding-bottom:60px">
@@ -1684,6 +1765,11 @@ app.get('/admin/settings', (req, res) => {
         <input id="st-title" value="${escapeAdmin(config.title)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
         <label style="display:block;font-weight:600;margin-bottom:4px">תיאור האתר</label>
         <textarea id="st-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">${escapeAdmin(config.description)}</textarea>
+        <label style="display:block;font-weight:600;margin-bottom:4px">🏠 דף הבית</label>
+        <select id="st-homepage" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px">
+          ${homeOptions}
+        </select>
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">הדף שמוגש בשורש האתר (/). אפשר גם מרשימת הדפים — כפתור 🏠 קבע כדף הבית.</div>
         <label style="display:block;font-weight:600;margin-bottom:4px">כתובת בסיס (baseUrl)</label>
         <input id="st-baseurl" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://example.co.il" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
         <label style="display:block;font-weight:600;margin-bottom:4px">שפה ראשית</label>
@@ -1705,6 +1791,7 @@ app.get('/admin/settings', (req, res) => {
           body: JSON.stringify({
             title: document.getElementById('st-title').value,
             description: document.getElementById('st-desc').value,
+            homepage: document.getElementById('st-homepage').value,
             baseUrl: document.getElementById('st-baseurl').value,
             language: document.getElementById('st-lang').value
           })
@@ -1725,7 +1812,16 @@ app.post('/admin/api/settings', (req, res) => {
     if (b.description !== undefined) config.description = String(b.description || '');
     if (b.baseUrl !== undefined) config.baseUrl = String(b.baseUrl || '').trim();
     if (b.language !== undefined) config.language = b.language === 'en' ? 'en' : 'he';
+    let homeChanged = false;
+    if (b.homepage !== undefined) {
+      const want = String(b.homepage || '').trim();
+      if (want && !getPageByFullPath(want)) throw new Error('דף הבית שנבחר לא נמצא: ' + want);
+      homeChanged = want !== (config.homepage || '');
+      config.homepage = want;
+    }
     saveConfig(config);
+    // a homepage change moves index.html — rebuild so '/' is right immediately
+    if (homeChanged) exportAll();
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -3542,12 +3638,20 @@ app.post('/admin/publish', (req, res) => {
     // publish MEANS live (v0.69): the static site is rebuilt right here — the
     // admin never needed to know a separate "build" step existed to see the page
     exportAll();
+    // homepage state rides along (v0.78): the builder offers one-click
+    // crowning when the site root would otherwise 404
+    const cfg = loadConfig();
+    const homePath = require('./seo').resolveHomePath(
+      listPages({ status: 'published' }), cfg.homepage
+    );
     res.json({
       ok: true,
       status: page.status,
       hasUnpublished: false,
       full_path: page.full_path,
-      liveUrl: '/' + page.full_path
+      liveUrl: '/' + page.full_path,
+      homePath,
+      homeIsExplicit: !!(cfg.homepage && homePath === cfg.homepage)
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });

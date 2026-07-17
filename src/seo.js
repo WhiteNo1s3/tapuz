@@ -43,6 +43,22 @@ function scoreHomeCandidate(page) {
 }
 
 /**
+ * The homepage, resolved (v0.78): an explicit choice (config.homepage) wins
+ * whenever that page is in the candidate set; otherwise fall back to the
+ * ranked heuristic. One resolver for export, sitemap, and the admin UI —
+ * a renamed article can never steal '/' from a page the user crowned.
+ * @param {object[]} pages   candidate pages (published set)
+ * @param {string} [explicit] config.homepage — a full_path, or '' for auto
+ * @returns {string|null}
+ */
+function resolveHomePath(pages, explicit) {
+  const list = pages || [];
+  const want = String(explicit || '').trim();
+  if (want && list.some((p) => p.full_path === want)) return want;
+  return pickHomePath(list);
+}
+
+/**
  * The published page that owns '/' (highest home score at/above threshold), or
  * null. `scoreHome` is injectable for tests; defaults to the real scorer.
  */
@@ -199,7 +215,7 @@ function jsonLdScript(objects) {
 
 module.exports = {
   // essentials
-  buildSitemapXml, buildRobotsTxt, pickHomePath, xmlEscape, sitemapEligible,
+  buildSitemapXml, buildRobotsTxt, pickHomePath, resolveHomePath, xmlEscape, sitemapEligible,
   // home detection
   scoreHomeCandidate, HOME_SCORE_MIN,
   // head + structured data

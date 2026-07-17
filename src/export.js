@@ -85,12 +85,13 @@ function exportPage(fullPath, outputDir = PUBLIC_DIR) {
   return writePageHtml(page, outputDir, fullPath === crownedHomePath());
 }
 
-/** The one published page that owns '/' right now (ranked), or null. */
+/** The one published page that owns '/' right now, or null. An explicit
+ *  config.homepage wins; otherwise the ranked heuristic (v0.78). */
 function crownedHomePath() {
   const candidates = listPages()
     .filter((p) => p.status === 'published')
     .map((p) => getPageByFullPath(p.full_path) || p);
-  return require('./seo').pickHomePath(candidates);
+  return require('./seo').resolveHomePath(candidates, loadConfig().homepage);
 }
 
 function exportAll(outputDir = PUBLIC_DIR) {
@@ -100,10 +101,11 @@ function exportAll(outputDir = PUBLIC_DIR) {
 
   copyThemeAssets('default');
 
-  // One homepage wins index.html (richest WhiteNo1se home preferred) — same
-  // crowning as exportPage/sitemap: ranked pick, one winner or none.
-  const homePath = require('./seo').pickHomePath(
-    pages.map((p) => getPageByFullPath(p.full_path) || p)
+  // One homepage wins index.html — same crowning as exportPage/sitemap:
+  // the user's explicit choice first, ranked pick as fallback, or none.
+  const homePath = require('./seo').resolveHomePath(
+    pages.map((p) => getPageByFullPath(p.full_path) || p),
+    loadConfig().homepage
   );
 
   for (const p of pages) {

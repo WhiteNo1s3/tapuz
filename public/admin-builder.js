@@ -4275,6 +4275,21 @@
           badge.textContent = 'פורסם';
         }
         updateLiveLink(data.liveUrl || ('/' + (data.full_path || currentPageFullPath)));
+        // the site root would 404 — offer to crown this page right here
+        if (data.homePath === null) {
+          showToast('לאתר עדיין אין דף בית — הכתובת הראשית (/) ריקה', 'warn', {
+            label: '🏠 קבע דף זה כדף הבית',
+            onClick: function () {
+              fetch('/admin/api/homepage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ full_path: currentPageFullPath })
+              }).then(function (r) { return r.json(); }).then(function (d) {
+                showToast(d.ok ? '🏠 נקבע — האתר נפתח בדף הזה' : 'שגיאה: ' + (d.error || ''), d.ok ? 'ok' : 'err');
+              }).catch(function () { showToast('שגיאה בקביעת דף הבית', 'err'); });
+            }
+          });
+        }
       } else {
         showToast('שגיאה: ' + (data.error || ''), 'err');
       }
