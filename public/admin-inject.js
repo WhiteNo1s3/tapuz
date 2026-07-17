@@ -13,11 +13,19 @@
 
   async function copy(text) {
     await navigator.clipboard.writeText(text);
-    $('status').textContent = '✓ הועתק — הדביקו בצ׳אט חדש של ה‑AI';
+    const kb = (text.length / 1000).toFixed(1);
+    $('status').textContent = `✓ הועתק (${kb}K תווים) — הדביקו בצ׳אט חדש של ה‑AI`;
     $('status').className = 'ok-msg';
     setTimeout(() => {
       $('status').textContent = '';
     }, 4000);
+  }
+
+  // free-plan (lite) packs — remembered per browser, appended to pack requests
+  const LITE_KEY = 'tapuz-inject-lite';
+  function packQuery() {
+    const brief = $('brief').value.trim();
+    return (brief ? '&brief=' + encodeURIComponent(brief) : '') + ($('lite').checked ? '&size=lite' : '');
   }
 
   let cache = null;
@@ -36,11 +44,11 @@
       .join('');
   }
 
+  $('lite').checked = localStorage.getItem(LITE_KEY) === '1';
+  $('lite').onchange = () => localStorage.setItem(LITE_KEY, $('lite').checked ? '1' : '0');
+
   $('btn-roleplay').onclick = async () => {
-    const brief = $('brief').value.trim();
-    const text = await api(
-      '/admin/api/inject-pack?format=roleplay' + (brief ? '&brief=' + encodeURIComponent(brief) : '')
-    );
+    const text = await api('/admin/api/inject-pack?format=roleplay' + packQuery());
     await copy(typeof text === 'string' ? text : text.roleplayMarkdown || text.text);
   };
 
@@ -58,10 +66,7 @@
   };
 
   $('btn-preview').onclick = async () => {
-    const brief = $('brief').value.trim();
-    const text = await api(
-      '/admin/api/inject-pack?format=roleplay' + (brief ? '&brief=' + encodeURIComponent(brief) : '')
-    );
+    const text = await api('/admin/api/inject-pack?format=roleplay' + packQuery());
     const t = typeof text === 'string' ? text : text.roleplayMarkdown || text.text;
     $('preview').textContent = t.slice(0, 8000) + (t.length > 8000 ? '\n…' : '');
   };

@@ -13,6 +13,9 @@ const KEYS = {
   token: 'cms_token',
   target: 'target_page',
   autoPublish: 'auto_publish',
+  // v0.86: pack size for the roleplay injection — 'lite' fits a FREE chat
+  // plan's message-length gate (ChatGPT free etc.); 'full' for subscribers.
+  packSize: 'pack_size',
   // BYOK (v0.73): the user's own LLM key + chosen provider/model. The key is
   // read ONLY inside this worker's generate flow and never leaves the browser.
   byokKey: 'byok_key',
@@ -23,13 +26,14 @@ const KEYS = {
 function getConfig() {
   return new Promise((resolve) => {
     chrome.storage.local.get(
-      [KEYS.url, KEYS.token, KEYS.target, KEYS.autoPublish, KEYS.byokKey, KEYS.byokProvider, KEYS.byokModel],
+      [KEYS.url, KEYS.token, KEYS.target, KEYS.autoPublish, KEYS.packSize, KEYS.byokKey, KEYS.byokProvider, KEYS.byokModel],
       (r) => {
         resolve({
           url: (r[KEYS.url] || '').replace(/\/+$/, ''),
           token: r[KEYS.token] || '',
           target: r[KEYS.target] || '__new__',
           autoPublish: r[KEYS.autoPublish] !== false, // default ON
+          packSize: r[KEYS.packSize] === 'lite' ? 'lite' : 'full',
           byokKey: r[KEYS.byokKey] || '',
           byokProvider: r[KEYS.byokProvider] || 'claude',
           byokModel: r[KEYS.byokModel] || ''
@@ -116,6 +120,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // NEVER return the token OR the byok key to callers; only whether set.
           sendResponse({
             ok: true, url: c.url, hasToken: !!c.token, target: c.target, autoPublish: c.autoPublish,
+            packSize: c.packSize,
             hasKey: !!c.byokKey, byokProvider: c.byokProvider, byokModel: c.byokModel
           });
           return;
@@ -132,6 +137,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (typeof msg.token === 'string' && msg.token) patch[KEYS.token] = msg.token.trim();
           if (typeof msg.target === 'string') patch[KEYS.target] = msg.target;
           if (typeof msg.autoPublish === 'boolean') patch[KEYS.autoPublish] = msg.autoPublish;
+          if (msg.packSize === 'lite' || msg.packSize === 'full') patch[KEYS.packSize] = msg.packSize;
           // BYOK: store the user's key/provider/model. Key is write-only from
           // the popup's view (getConfig never reads it back out).
           if (typeof msg.byokKey === 'string' && msg.byokKey) patch[KEYS.byokKey] = msg.byokKey.trim();
@@ -179,12 +185,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           return;
         }
         case 'roleplay': {
-          // The full site-builder game pack — dictionary + tools + role (① teach).
+          // The site-builder game pack — dictionary + tools + role (① teach).
+          // size=lite (v0.86) trims it to fit a FREE chat plan's message gate.
           const c = await getConfig();
           if (!c.url || !c.token) throw new Error('CMS not configured');
           const q = new URLSearchParams();
           if (msg.brief) q.set('brief', String(msg.brief));
           if (msg.locale) q.set('locale', String(msg.locale));
+          const size = msg.size === 'lite' || msg.size === 'full' ? msg.size : c.packSize;
+          if (size === 'lite') q.set('size', 'lite');
           const res = await fetch(c.url + '/agent/v1/roleplay?' + q.toString(), {
             headers: { Authorization: 'Bearer ' + c.token }
           });

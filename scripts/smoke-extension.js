@@ -116,6 +116,17 @@ check('manifest no longer requests provider API hosts (least privilege)',
   !JSON.stringify(manifest.host_permissions).includes('api.anthropic.com') &&
   !JSON.stringify(manifest.host_permissions).includes('api.openai.com'));
 
+// ── Free-plan lite pack (v0.86): the keyless tier must ALSO serve users on
+//    free chat plans — the full pack is rejected at the message-length gate,
+//    so a persisted pack-size choice rides every surface. ─
+check('background persists pack_size + forwards size=lite to the CMS',
+  /pack_size/.test(bg) && /q\.set\('size', 'lite'\)/.test(bg));
+check('popup offers the free-plan lite toggle (persisted via packSize)',
+  /id="lite"/.test(popupHtml) && /packSize/.test(popup));
+check('panel offers the free-plan lite toggle', /tz-lite/.test(content) && /packSize/.test(content));
+check('lite skips the prebuilt full-size mission messages',
+  /!packLite && mission/.test(content));
+
 // ── BYOT roleplay + mission handlers wired (v0.55) ───────────────────
 check('background handles the roleplay game pack', /case 'roleplay'/.test(bg) && /\/agent\/v1\/roleplay/.test(bg));
 check('background handles mission pull + step report', /case 'mission'/.test(bg) && /case 'missionStep'/.test(bg) && /\/agent\/v1\/mission/.test(bg));

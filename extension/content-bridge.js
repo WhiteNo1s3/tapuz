@@ -16,6 +16,7 @@
   let mission = null;
   let panel;
   let autoPublish = true;
+  let packLite = false; // free chat plan → inject the lite pack (fits the message gate)
   let watching = true;
   let lastFingerprint = '';
   let stableTimer = null;
@@ -468,8 +469,11 @@
       </div>
       <div id="tz-watch" style="font-size:11px;margin-bottom:4px;color:#94a3b8">👁 מאתחל מעקב…</div>
       <div id="tz-diag" style="font-size:10px;margin-bottom:8px;color:#64748b">🔎 בודק שדות…</div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px;cursor:pointer">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer">
         <input type="checkbox" id="tz-auto" checked /> פרסום אוטומטי כשה‑‎.pzn מלא
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:8px;cursor:pointer" title="מילון מקוצר שנכנס במגבלת האורך של הודעה בחשבון חינמי">
+        <input type="checkbox" id="tz-lite" /> חשבון חינמי — חבילה חסכונית
       </label>
       <div style="display:flex;flex-direction:column;gap:6px">
         <button type="button" id="tz-mission" style="${btnStyle('#7c3aed')}">⬇ משוך משימה מה‑CMS</button>
@@ -486,6 +490,10 @@
       chrome.runtime.sendMessage({ type: 'setConfig', autoPublish });
       setWatchUi(X.analyzeReply(latestReplyText()));
     };
+    $('tz-lite').onchange = () => {
+      packLite = $('tz-lite').checked;
+      chrome.runtime.sendMessage({ type: 'setConfig', packSize: packLite ? 'lite' : 'full' });
+    };
     $('tz-mission').onclick = pullMission;
     $('tz-teach').onclick = () => injectTeachRoleplay();
     $('tz-build').onclick = () => injectBuild();
@@ -499,7 +507,9 @@
    */
   function injectTeachRoleplay() {
     setStatus('טוען משחק + מילון…');
-    if (mission && mission.teachMessage && mission.teachMessage.length > 200) {
+    // lite mode: the mission's prebuilt teach message is full-size — skip it
+    // and fetch the lite pack, or a free plan rejects the paste.
+    if (!packLite && mission && mission.teachMessage && mission.teachMessage.length > 200) {
       const ok = inject(mission.teachMessage, { send: true });
       if (ok) {
         markStep('build');
@@ -509,13 +519,13 @@
       }
       return;
     }
-    chrome.runtime.sendMessage({ type: 'roleplay', locale: 'he' }, (r) => {
+    chrome.runtime.sendMessage({ type: 'roleplay', locale: 'he', size: packLite ? 'lite' : 'full' }, (r) => {
       if (!r || !r.ok || !r.roleplay) {
         toast((r && r.error) || 'לא ניתן לטעון משחק — בדקו טוקן CMS', false);
         setStatus('שגיאה בטעינת משחק');
         return;
       }
-      if (mission) mission.teachMessage = r.roleplay;
+      if (mission && !packLite) mission.teachMessage = r.roleplay;
       const ok = inject(r.roleplay, { send: true });
       if (ok) {
         if (mission) markStep('build');
@@ -539,7 +549,8 @@
   }
 
   function injectOneShot() {
-    if (mission && mission.oneShot) {
+    // (lite mode skips the prebuilt full-size one-shot — same reason as ①)
+    if (!packLite && mission && mission.oneShot) {
       inject(mission.oneShot, { send: true });
       markStep('watch');
       setStatus('פעם אחת (משחק+משימה) · ממתין ל‑‎.pzn…');
@@ -548,7 +559,7 @@
       return;
     }
     const brief = (mission && mission.description) || '';
-    chrome.runtime.sendMessage({ type: 'roleplay', locale: 'he', brief }, (r) => {
+    chrome.runtime.sendMessage({ type: 'roleplay', locale: 'he', brief, size: packLite ? 'lite' : 'full' }, (r) => {
       if (!r || !r.ok || !r.roleplay) {
         toast((r && r.error) || 'אין הודעת פעם-אחת', false);
         return;
@@ -569,12 +580,17 @@
     setInterval(() => { updateDiag(); onReplyMaybeChanged(); }, POLL_MS);
   }
 
-  // load the autoPublish preference from the worker
+  // load the autoPublish + pack-size preferences from the worker
   chrome.runtime.sendMessage({ type: 'getConfig' }, (c) => {
     if (c && c.ok && typeof c.autoPublish === 'boolean') {
       autoPublish = c.autoPublish;
       const box = $('tz-auto');
       if (box) box.checked = autoPublish;
+    }
+    if (c && c.ok) {
+      packLite = c.packSize === 'lite';
+      const lite = $('tz-lite');
+      if (lite) lite.checked = packLite;
     }
   });
 

@@ -206,9 +206,59 @@ function toMarkdown(dict = buildDictionary()) {
   return lines.join('\n');
 }
 
+/**
+ * Compact grammar — the free-tier injectable. Free chat plans (ChatGPT free
+ * etc.) reject the ~19KB full dictionary at the message-length gate, so this
+ * renders the ENTIRE vocabulary as one line per module: tag, container→children
+ * mapping, props with enum values. Child-only leaves are included — without the
+ * full dictionary a model has no other way to learn `<bent-tab>`/`<bent-trow>`.
+ */
+function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
+  const he = opts.locale !== 'en';
+  const tagOf = {};
+  for (const m of dict.modules) tagOf[m.name] = m.tag;
+
+  const lines = [];
+  lines.push(he ? '## הכלים — דקדוק מקוצר (זה כל המילון)' : '## Tools — compact grammar (this IS the dictionary)');
+  lines.push('');
+  lines.push(he
+    ? 'שורה לכלי: `תג` · ⊃ = אילו ילדים נכנסים בתוכו · props (ערך1|ערך2 = הערכים המותרים, `*` = טקסט הגוף של התג, ↳ = חי רק בתוך מכולה).'
+    : 'One line per tool: `tag` · ⊃ = allowed children · props (a|b = allowed values, `*` = tag body text, ↳ = lives only inside a container).');
+  lines.push('');
+
+  const catOrder = ['content', 'layout', 'data', 'media', 'effects', 'advanced'];
+  const cats = [
+    ...catOrder.filter((c) => dict.categories[c]),
+    ...Object.keys(dict.categories).filter((c) => !catOrder.includes(c))
+  ];
+  for (const cat of cats) {
+    lines.push(`### ${cat}`);
+    for (const m of dict.categories[cat] || []) {
+      const props = Object.entries(m.props || {}).slice(0, 8).map(([k, p]) => {
+        let s = k;
+        if (p.values) s += '=' + p.values.slice(0, 4).join('|') + (p.values.length > 4 ? '|…' : '');
+        if (p.content) s += '*';
+        return s;
+      });
+      // empty accept on a container means "accepts anything" — say so, or the
+      // lite model can't tell section/hero/card nest at all
+      const kids = !m.container ? ''
+        : (m.accept && m.accept.length && m.accept.length <= 6)
+          ? ' ⊃ ' + m.accept.map((n) => tagOf[n] || n).join(',')
+          : (he ? ' ⊃ כל כלי' : ' ⊃ any tool');
+      const mark = m.childOnly ? ' ↳' : '';
+      const label = he ? m.label.he : m.label.en;
+      lines.push(`- \`${m.tag}\`${kids}${mark} ${label}${props.length ? ' · ' + props.join(' ') : ''}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
 module.exports = {
   buildDictionary,
   toMarkdown,
+  toCompactMarkdown,
   toAgentTools,
   HIDDEN
 };
