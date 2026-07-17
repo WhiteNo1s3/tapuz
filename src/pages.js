@@ -190,7 +190,12 @@ function updatePage(full_path, updates = {}) {
   );
 
   // canonical .pzn files (v0.41 storage flip)
-  if (newData.full_path !== full_path) store.renamePagePzn(full_path, newData.full_path);
+  if (newData.full_path !== full_path) {
+    store.renamePagePzn(full_path, newData.full_path);
+    // the homepage crown follows a slug rename (v0.78) — config.homepage must
+    // never point at an address that no longer exists
+    syncHomepageConfig(full_path, newData.full_path);
+  }
   const pageLike = {
     title: newData.title,
     full_path: newData.full_path,
@@ -330,7 +335,21 @@ function deletePage(full_path) {
   const result = db.prepare('DELETE FROM pages WHERE full_path = ?').run(full_path);
   db.prepare('DELETE FROM page_revisions WHERE full_path = ?').run(full_path);
   store.removePagePzn(full_path);
+  // deleting the crowned homepage clears the crown (back to auto-detect);
+  // the pages screen then warns if the site root has no owner
+  syncHomepageConfig(full_path, '');
   return result.changes > 0;
+}
+
+/** Keep config.homepage true through renames/deletes. Never blocks the write. */
+function syncHomepageConfig(oldPath, newPath) {
+  try {
+    const { loadConfig, saveConfig } = require('./config');
+    const config = loadConfig();
+    if ((config.homepage || '') !== oldPath) return;
+    config.homepage = newPath || '';
+    saveConfig(config);
+  } catch (e) { /* config trouble must never block a page write */ }
 }
 
 function restoreRevision(full_path, revisionId) {

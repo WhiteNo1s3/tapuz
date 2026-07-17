@@ -46,6 +46,9 @@ function runSetup(body = {}) {
   config.title = siteTitle;
   config.description = description;
   config.setupDone = true;
+  // The wizard's home page is the homepage, explicitly — never leave the
+  // crowning to the title heuristic (v0.78 homepage flow).
+  if (!config.homepage) config.homepage = 'home';
   saveConfig(config);
 
   saveThemeSettings({
