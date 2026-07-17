@@ -18,6 +18,7 @@ module/feature hunt. Update it every version batch.
 | **Hebrew/RTL first-class** | RTL-first renderer, Hebrew slugs, logical CSS everywhere | RTL as an afterthought | partial | localized but generic |
 | **Zero-JS published pages** | tabs/accordion/carousel/table/ticker all CSS-only; JS only for opt-in analytics | plugin JS soup | theme-dependent | heavy runtime |
 | **Security posture of published sites** | static export, escaped-by-construction, one audited raw-HTML door | the world's most attacked runtime | runtime + patch treadmill | opaque |
+| **OS-grade admin ergonomics** | Ctrl+K command palette on every screen (v0.88) — jump to any page, section, or action from the keyboard, Hebrew or English | none native | none | none |
 
 ## At parity (good enough, keep polishing)
 
@@ -38,7 +39,11 @@ module/feature hunt. Update it every version batch.
    client-side index (lunr-style, build-time) fits the zero-runtime model.
 5. **Multilingual** — Hebrew-first is the moat, but he↔en paired pages would
    beat WPML's complexity with a fraction of the surface.
-6. **Module hunt continues** — timeline, steps, pricing-table sugar
+6. **Builder.io-class builder extras** (Ben's goal, 2026-07-18) — layers/outline
+   panel, responsive breakpoint preview inside the builder, saved reusable
+   blocks ("symbols"), starter templates gallery. The palette (v0.88) was the
+   first "OS-such" step; these are the next.
+7. **Module hunt continues** — timeline, steps, pricing-table sugar
    (CODE stays reserved; INPUT stays a FIELD child).
 
 (~~CSV export~~ — shipped whole in v0.87: `/admin/inbox.csv` +
