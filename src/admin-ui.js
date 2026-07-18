@@ -20,6 +20,35 @@ function escapeAdmin(s) {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * Serialize a value for embedding inside an inline <script> block.
+ *
+ * JSON.stringify alone is NOT safe here: it does not escape `<`, so any string
+ * in the data containing `</script>` closes the element early. That is not a
+ * theoretical case — v1.49 gave authors a raw-HTML block, and the FIRST widget
+ * pasted into it (an analytics snippet) carried `</script>`, which silently
+ * broke the whole page builder: the script died mid-parse and the canvas
+ * rendered zero blocks with no error. It is also an injection: everything after
+ * the breakout runs as script in the ADMIN page, with the admin's session.
+ *
+ * Escaping `<` closes it (`<` is the same string to JSON.parse), and
+ * U+2028/U+2029 are escaped because they are raw line terminators in JS source
+ * and would break a string literal the same way.
+ *
+ * Use this for EVERY JSON value interpolated into a <script> body.
+ */
+function jsonForScript(value) {
+  // Built with fromCharCode so no escape sequence in THIS file can be
+  // mangled by an editor: BS is a single backslash, LS/PS are U+2028/U+2029.
+  var BS = String.fromCharCode(92);
+  var LS = String.fromCharCode(0x2028);
+  var PS = String.fromCharCode(0x2029);
+  return JSON.stringify(value === undefined ? null : value)
+    .split("<").join(BS + "u003c")
+    .split(LS).join(BS + "u2028")
+    .split(PS).join(BS + "u2029");
+}
+
 // Tools sorted into color-coded families instead of one flat pile — every
 // group carries its own hue, and each tool inherits the group identity in the
 // nav, the dashboard hub, and the per-section accent. ONLY real, shipped tools
@@ -186,6 +215,7 @@ function layout(content, title = 'Tapuz', accent = '#f97316', opts = {}) {
 
 module.exports = {
   escapeAdmin,
+  jsonForScript,
   ADMIN_NAV_GROUPS,
   ADMIN_ACCENTS,
   accentFor,

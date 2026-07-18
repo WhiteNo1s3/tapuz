@@ -11,7 +11,7 @@
  */
 
 const express = require('express');
-const { layout, adminNav, accentFor, escapeAdmin } = require('../admin-ui');
+const { layout, adminNav, accentFor, escapeAdmin, jsonForScript } = require('../admin-ui');
 const { loadConfig } = require('../config');
 const { listPages, createPage, updatePage, publishPage, getPageByFullPath, deletePage, generateFullPath } = require('../pages');
 const { exportAll } = require('../export');
@@ -180,7 +180,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
 
   // Builder always edits draft_blocks
   const draft = page.draft_blocks != null ? page.draft_blocks : (page.blocks || []);
-  const initialBlocks = JSON.stringify(draft);
+  const initialBlocks = jsonForScript(draft);
   const safeTitle = escapeAdmin(page.title || '');
   // The settings drawer follows the direction of the PAGE being edited
   const pageDirection = page.direction === 'ltr' ? 'ltr' : 'rtl';
@@ -373,7 +373,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
 
     <script>
       // Block registry — the client generates the settings forms from this
-      window.__TAPUZ_REGISTRY__ = ${JSON.stringify({
+      window.__TAPUZ_REGISTRY__ = ${jsonForScript({
         blocks: blockRegistry.BLOCK_REGISTRY,
         categories: blockRegistry.BLOCK_CATEGORIES,
         universalParams: blockRegistry.UNIVERSAL_PARAMS
@@ -384,14 +384,14 @@ router.get('/admin/edit/:fullPath', (req, res) => {
     <script src="/admin-bentml-ui.js"></script>
     <script>
       TapuzBuilder.init({
-        fullPath: ${JSON.stringify(page.full_path)},
-        slug: ${JSON.stringify(page.slug || page.full_path)},
+        fullPath: ${jsonForScript(page.full_path)},
+        slug: ${jsonForScript(page.slug || page.full_path)},
         blocks: ${initialBlocks},
-        status: ${JSON.stringify(page.status || 'draft')},
+        status: ${jsonForScript(page.status || 'draft')},
         hasUnpublished: ${hasUnpublished ? 'true' : 'false'},
-        direction: ${JSON.stringify(pageDirection)},
-        tags: ${JSON.stringify(page.tags || [])},
-        meta: ${JSON.stringify(page.meta || {})}
+        direction: ${jsonForScript(pageDirection)},
+        tags: ${jsonForScript(page.tags || [])},
+        meta: ${jsonForScript(page.meta || {})}
       });
     </script>
     <script>

@@ -51,3 +51,6 @@ tmp_*.js
 # Optional local uploads (keep folder, ignore files)
 public/assets/*
 !public/assets/.gitkeep
+
+# Auth backups (same secret material as config/auth.json — never commit)
+config/auth.json*

@@ -2341,6 +2341,21 @@
 
   /** Live-update canvas text from side panel without destroying the tree. */
   function liveUpdatePreview(id, key, val) {
+    // The HTML block's text field is `content`, so edits take this fast path
+    // (deliberately — a full renderCanvas per keystroke is the race we avoid).
+    // But its canvas preview is a <pre> of ESCAPED code, not an inline-text
+    // node, so it matched nothing here and sat showing the seed while you
+    // typed: the code looked like it had not registered. Update it in place,
+    // still escaped — the builder must never run an author's markup.
+    if (key === 'content') {
+      var rawPre = document.querySelector(
+        '.canvas-block[data-id="' + cssEsc(id) + '"] .bent-html-raw'
+      );
+      if (rawPre) {
+        var t = String(val || '');
+        rawPre.textContent = t.length > 600 ? t.slice(0, 600) + '\n…' : (t || '(ריק)');
+      }
+    }
     var nodes = document.querySelectorAll(
       '[data-inline-id="' + cssEsc(id) + '"][data-inline-key="' + cssEsc(key) + '"]'
     );

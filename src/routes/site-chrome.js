@@ -11,7 +11,7 @@
 
 const express = require('express');
 const { loadConfig, saveConfig } = require('../config');
-const { layout, adminNav, accentFor, escapeAdmin } = require('../admin-ui');
+const { layout, adminNav, accentFor, escapeAdmin, jsonForScript } = require('../admin-ui');
 
 const router = express.Router();
 
@@ -102,7 +102,7 @@ router.get('/admin/site-chrome', (req, res) => {
     <script>
       (function () {
         var DATA = JSON.parse(document.getElementById('chrome-data').textContent);
-        var inputCss = ${JSON.stringify(inputCss)};
+        var inputCss = ${jsonForScript(inputCss)};
         var colsWrap = document.getElementById('cols-wrap');
         var socialWrap = document.getElementById('social-wrap');
 

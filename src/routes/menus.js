@@ -12,7 +12,7 @@
 const express = require('express');
 const menusLib = require('../menus');
 const { loadMenus, saveMenus, saveMenu } = menusLib;
-const { layout, adminNav, accentFor } = require('../admin-ui');
+const { layout, adminNav, accentFor, jsonForScript } = require('../admin-ui');
 
 const router = express.Router();
 
@@ -106,8 +106,8 @@ router.get('/admin/menus', (req, res) => {
       </div>
     </div>
     <script>
-      window.__TAPUZ_MENUS__ = ${JSON.stringify(menus)};
-      window.__TAPUZ_MENU_LOCATIONS__ = ${JSON.stringify(locations)};
+      window.__TAPUZ_MENUS__ = ${jsonForScript(menus)};
+      window.__TAPUZ_MENU_LOCATIONS__ = ${jsonForScript(locations)};
     </script>
     <script src="/admin-menus.js"></script>
   `;

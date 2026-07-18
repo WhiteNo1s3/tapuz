@@ -110,6 +110,31 @@ function waitUp(tries = 40) {
     const save = await req('POST', '/admin/save', { cookie, body: { full_path: slug, title: 'עמוד חדש', blocks } });
     check('POST /admin/save persists a draft', save.status === 200 && save.json && save.json.ok);
 
+    // ── a raw-HTML block must not be able to break OUT of the builder ──
+    // v1.51: the builder embeds the draft as JSON inside an inline <script>.
+    // JSON.stringify does not escape '<', so an html block containing a literal
+    // </script> closed the element early: the builder's JS died mid-parse and
+    // the canvas rendered ZERO blocks, silently, with the draft intact on disk.
+    // That is also an injection — anything after the breakout runs as script in
+    // the ADMIN page. Not exotic input either: analytics snippets and embeds,
+    // the exact things the raw-HTML tool exists for, all carry </script>.
+    const nasty = '<div>widget</div>' + '<scr' + 'ipt>window.__PWNED=1;</scr' + 'ipt>';
+    const withRaw = [
+      { id: 'h2', type: 'heading', data: { level: 1, text: 'כותרת הבדיקה' } },
+      { id: 'raw1', type: 'html', data: { content: nasty } }
+    ];
+    const saveRaw = await req('POST', '/admin/save', { cookie, body: { full_path: slug, title: 'עמוד חדש', blocks: withRaw } });
+    check('POST /admin/save accepts a raw-HTML block carrying a close-script tag', saveRaw.status === 200 && saveRaw.json && saveRaw.json.ok);
+
+    const reopened = await req('GET', '/admin/edit/' + encodeURIComponent(slug), { cookie });
+    check('the builder still renders after saving that block', reopened.status === 200 && /admin-builder\.js/.test(reopened.text));
+    check('the embedded draft does NOT contain a raw </script> breakout',
+      !/window\.__PWNED=1;<\/script>/.test(reopened.text));
+    check('the payload survives, escaped, so the author does not lose their code',
+      /u003c\/script|u003cscript/i.test(reopened.text));
+    // restore the simple draft for the publish assertions below
+    await req('POST', '/admin/save', { cookie, body: { full_path: slug, title: 'עמוד חדש', blocks } });
+
     // ── server-side preview renders the DRAFT with SAMEORIGIN framing ──
     const preview = await req('GET', '/admin/preview/' + encodeURIComponent(slug), { cookie });
     check('GET /admin/preview/:fullPath renders the draft content', preview.status === 200 && /כותרת הבדיקה/.test(preview.text));
