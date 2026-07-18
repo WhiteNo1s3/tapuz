@@ -25,6 +25,13 @@ function check(name, cond) {
 const registry = require('../src/pzn/modules/registry');
 const { buildCatalog, SPEC_VERSION } = require('../src/pzn/spec');
 
+// Compare CONTENT, not line endings. The generators emit LF, but git checks the
+// committed files out with CRLF on a Windows clone (core.autocrlf), so a byte
+// comparison reported "drift" for a file that was character-for-character
+// correct — green on Linux CI, red for anyone developing on Windows. Normalize
+// before comparing so these guards report real drift only.
+const eol = (s) => s.replace(/\r\n/g, '\n');
+
 const fresh = buildCatalog('smoke');
 const registryModules = registry.listModules();
 
@@ -76,7 +83,7 @@ try {
 } catch (e) { /* leave null → the check below fails loudly */ }
 const committedDict = fs.existsSync(dictMdPath) ? fs.readFileSync(dictMdPath, 'utf8') : '';
 check('docs/SYNTAX-DICTIONARY.md is IN SYNC with block-registry (regenerate with `npm run gen:dictionary` if this fails)',
-  freshDict != null && committedDict === freshDict);
+  freshDict != null && eol(committedDict) === eol(freshDict));
 
 console.log('');
 console.log(fail ? 'SMOKE PZN-SPEC: FAIL' : 'SMOKE PZN-SPEC: PASS');

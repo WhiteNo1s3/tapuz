@@ -22,12 +22,19 @@ function check(name, cond) {
 const { markdown, total, fileCount } = buildRouteMap();
 const mapPath = path.join(__dirname, '..', 'docs', 'ROUTE-MAP.md');
 
+// Compare CONTENT, not line endings. The generator emits LF, but git checks the
+// committed file out with CRLF on a Windows clone (core.autocrlf), so a byte
+// comparison reported "drift" for a file that was character-for-character
+// correct — green on Linux CI, red for anyone developing on Windows. Normalize
+// before comparing so this guard reports real drift only.
+const eol = (s) => s.replace(/\r\n/g, '\n');
+
 check('docs/ROUTE-MAP.md exists (the navigational manifest)', fs.existsSync(mapPath));
 const committed = fs.existsSync(mapPath) ? fs.readFileSync(mapPath, 'utf8') : '';
 
 check('the map covers a real, non-trivial route surface', total > 100 && fileCount > 20);
 check('docs/ROUTE-MAP.md is IN SYNC with the source (regenerate with `npm run gen:route-map` if this fails)',
-  committed === markdown);
+  eol(committed) === eol(markdown));
 
 // sanity: a few known routes must resolve to their owning module in the map
 const owns = (route, file) => new RegExp('\\| `' + route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '` \\| \\w+ \\| `' + file + '`').test(committed);
