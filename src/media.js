@@ -70,9 +70,32 @@ function syncDisk() {
   });
 }
 
-function listMedia(folder) {
+/**
+ * What KIND of thing a stored file is — the vocabulary the picker filters on.
+ *
+ * Derived from the filename, deliberately, NOT from the `mime` column: rows
+ * adopted from disk by syncDisk() are inserted without a mime, so a mime-based
+ * answer would call a perfectly good photo "unknown" and hide it from an image
+ * picker. The extension is the one fact every row has.
+ *
+ * Today uploads are image-only (validateUpload checks magic bytes), so this
+ * returns 'image' for everything in practice. It exists so that the day the
+ * bank accepts documents, every caller that wants photos already says so.
+ * @returns {'image'|'file'}
+ */
+function mediaKind(filename) {
+  return IMG_RE.test(String(filename || '')) ? 'image' : 'file';
+}
+
+/**
+ * @param {string} folder
+ * @param {{ accept?: 'image'|'file'|'all' }} [opts] — 'image' returns photos
+ *   only, which is what every picker bound to an image field should ask for.
+ */
+function listMedia(folder, opts) {
   ensureSchema();
   folder = cleanFolder(folder);
+  const accept = (opts && opts.accept) || 'all';
   const prefix = folder ? folder + '/' : '';
   const folders = db.prepare('SELECT path FROM media_folders ORDER BY path').all()
     .map(r => r.path)
@@ -80,8 +103,9 @@ function listMedia(folder) {
     .map(p => ({ path: p, name: p.slice(prefix.length) }));
   const files = db.prepare('SELECT id, filename, path, alt, size FROM media WHERE folder = ? ORDER BY created_at DESC')
     .all(folder)
-    .map(r => ({ id: r.id, name: r.filename, url: r.path, alt: r.alt || '' }));
-  return { folder: folder, folders: folders, files: files };
+    .map(r => ({ id: r.id, name: r.filename, url: r.path, alt: r.alt || '', kind: mediaKind(r.filename) }))
+    .filter(f => accept === 'all' || f.kind === accept);
+  return { folder: folder, folders: folders, files: files, accept: accept };
 }
 
 /**
@@ -195,6 +219,7 @@ module.exports = {
   ensureSchema,
   syncDisk,
   listMedia,
+  mediaKind,
   listAllMedia,
   createFolder,
   deleteFolder,

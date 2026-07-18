@@ -20,9 +20,15 @@ const router = express.Router();
 const mediaLib = require('../media');
 mediaLib.syncDisk(); // adopt files already on disk
 
+// ?accept=image narrows the bank to photos — what a picker bound to an image
+// field asks for, so the user is never offered a file that cannot go there.
+// Unknown/absent values fall back to 'all' rather than erroring: a stale client
+// asking for something we do not know should still see its media.
 router.get('/admin/media', (req, res) => {
   try {
-    res.json(mediaLib.listMedia(req.query.folder || ''));
+    const raw = String(req.query.accept || 'all');
+    const accept = ['image', 'file', 'all'].includes(raw) ? raw : 'all';
+    res.json(mediaLib.listMedia(req.query.folder || '', { accept }));
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }

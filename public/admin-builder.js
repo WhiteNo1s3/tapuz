@@ -2881,12 +2881,12 @@
       var cardMedia = panel.querySelector('[data-page-card-media]');
       if (cardMedia) {
         cardMedia.addEventListener('click', function () {
-          openMediaGallery(function (picked) {
-            if (picked && picked.length) {
-              pageMeta.cardImage = typeof picked[0] === 'string' ? picked[0] : (picked[0].src || '');
-              markDirty();
-              renderProperties();
-            }
+          // One card image — single-pick, not the gallery's multi-select.
+          openMediaSingle(function (url) {
+            if (!url) return;
+            pageMeta.cardImage = typeof url === 'string' ? url : (url.src || '');
+            markDirty();
+            renderProperties();
           });
         });
       }
@@ -3454,19 +3454,18 @@
     var heroMedia = panel.querySelector('[data-media-hero]');
     if (heroMedia) {
       heroMedia.addEventListener('click', function () {
-        openMediaLibrary(block.id);
-        // reuse: after pick, also set image — openMediaLibrary sets src; for hero we need image key
-        var prev = currentMediaTarget;
-        currentMediaTarget = null;
-        openMediaGallery(function (picked) {
-          if (picked && picked.length) {
-            pushHistory();
-            if (!block.data) block.data = {};
-            block.data.image = typeof picked[0] === 'string' ? picked[0] : picked[0].src;
-            markDirty();
-            renderCanvas();
-            renderProperties();
-          }
+        // A hero background is ONE image. This used to call openMediaLibrary()
+        // and then openMediaGallery() back-to-back: the modal opened twice, the
+        // media list was fetched twice, and it settled in MULTI mode — so
+        // picking a background meant select-then-confirm instead of one click.
+        // openMediaSingle is the mode that already existed for exactly this.
+        openMediaSingle(function (url) {
+          if (!url) return;
+          pushHistory();
+          if (!block.data) block.data = {};
+          block.data.image = typeof url === 'string' ? url : (url.src || '');
+          renderCanvas();
+          renderProperties();
         });
       });
     }
@@ -4106,11 +4105,15 @@
 
   // ---- Media ----
 
-  var mediaState = { folder: '', mode: 'single', selection: [], onPick: null, onPickSingle: null };
+  // `accept` narrows the bank to what the target field can actually hold.
+  // Every picker below feeds an IMAGE field, so they all ask for photos: you
+  // should never be offered a file you cannot put where you are putting it.
+  var mediaState = { folder: '', mode: 'single', accept: 'image', selection: [], onPick: null, onPickSingle: null };
 
-  function openMediaLibrary(targetBlockId) {
+  function openMediaLibrary(targetBlockId, accept) {
     currentMediaTarget = targetBlockId || selectedId || null;
     mediaState.mode = currentMediaTarget && getBlock(currentMediaTarget) ? 'single' : 'browse';
+    mediaState.accept = accept || 'image';
     mediaState.selection = [];
     mediaState.onPick = null;
     mediaState.onPickSingle = null;
@@ -4118,9 +4121,10 @@
   }
 
   /** Multi-select mode for the gallery module. onPick gets [{src, alt}] */
-  function openMediaGallery(onPick) {
+  function openMediaGallery(onPick, accept) {
     currentMediaTarget = null;
     mediaState.mode = 'multi';
+    mediaState.accept = accept || 'image';
     mediaState.selection = [];
     mediaState.onPick = onPick;
     mediaState.onPickSingle = null;
@@ -4128,9 +4132,10 @@
   }
 
   /** Single-pick mode with a callback — used by registry media params and page og:image. */
-  function openMediaSingle(onPick) {
+  function openMediaSingle(onPick, accept) {
     currentMediaTarget = null;
     mediaState.mode = 'single';
+    mediaState.accept = accept || 'image';
     mediaState.selection = [];
     mediaState.onPick = null;
     mediaState.onPickSingle = onPick;
@@ -4149,7 +4154,8 @@
     var list = document.getElementById('media-list');
     if (!list) return;
     list.innerHTML = '<div style="color:#64748b;padding:20px">טוען...</div>';
-    fetch('/admin/media?folder=' + encodeURIComponent(mediaState.folder))
+    fetch('/admin/media?folder=' + encodeURIComponent(mediaState.folder) +
+          '&accept=' + encodeURIComponent(mediaState.accept || 'all'))
       .then(function (r) { return r.json(); })
       .then(renderMediaExplorer)
       .catch(function () {
@@ -4188,13 +4194,24 @@
         '<div class="tile-icon">📁</div><div class="media-name">' + esc(f.name) + '</div></div>';
     });
     (data.files || []).forEach(function (f) {
+      // Only a photo gets a thumbnail. Anything else drew a broken-image tile
+      // before, because every file was rendered as <img> regardless of type.
+      var isImage = (f.kind || 'image') === 'image';
       tiles +=
-        '<div class="media-tile media-item" data-url="' + escAttr(f.url) + '" data-id="' + escAttr(String(f.id)) + '" data-name="' + escAttr(f.name) + '">' +
-        '<img src="' + escAttr(f.url) + '" alt="" loading="lazy">' +
+        '<div class="media-tile media-item" data-url="' + escAttr(f.url) + '" data-id="' + escAttr(String(f.id)) + '" data-name="' + escAttr(f.name) + '" data-kind="' + escAttr(f.kind || 'image') + '">' +
+        (isImage
+          ? '<img src="' + escAttr(f.url) + '" alt="" loading="lazy">'
+          : '<div class="tile-icon">📄</div>') +
         '<div class="media-name">' + esc(f.name) + '</div></div>';
     });
     if (!tiles) {
-      tiles = '<div class="media-empty">תיקייה ריקה — העלה תמונה או צור תיקייה</div>';
+      // The empty state must tell the truth about WHY it is empty: a folder with
+      // documents in it looks identical to an empty one once photos are filtered.
+      tiles = '<div class="media-empty">' +
+        (mediaState.accept === 'image'
+          ? 'אין כאן תמונות — העלה תמונה או פתח תיקייה אחרת'
+          : 'תיקייה ריקה — העלה קובץ או צור תיקייה') +
+        '</div>';
     }
 
     list.innerHTML = bar + '<div class="media-grid">' + tiles + '</div>';

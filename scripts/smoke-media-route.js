@@ -109,6 +109,34 @@ function waitUp(tries = 40) {
     check('/admin/assets (root-scope) does not see a file still inside a subfolder',
       assetsBeforeMove.status === 200 && !assetsBeforeMove.json.some((f) => f.id === fileId));
 
+    // ── accept= (v1.50): a picker bound to an image field must never be
+    // offered a file that cannot go there. Uploads are image-only today
+    // (validateUpload checks magic bytes), so the only way to test the filter
+    // is to PLANT a document the way a future non-image feature would, then
+    // prove it is visible as a file and invisible to an image picker.
+    const docDisk = path.join(ROOT, 'public', 'assets', 'gallery', 'brochure.pdf');
+    fs.mkdirSync(path.dirname(docDisk), { recursive: true });
+    fs.writeFileSync(docDisk, '%PDF-1.4 planted by smoke-media-route');
+    const dbmod = require('../src/db');
+    dbmod.db.prepare('INSERT INTO media (filename, path, folder, size) VALUES (?,?,?,?)')
+      .run('brochure.pdf', '/assets/gallery/brochure.pdf', 'gallery', 34);
+
+    const allKinds = await req('GET', '/admin/media?folder=gallery&accept=all', { cookie });
+    const onlyImages = await req('GET', '/admin/media?folder=gallery&accept=image', { cookie });
+    check('accept=all lists the document alongside the photo',
+      allKinds.status === 200 && allKinds.json.files.some((f) => f.name === 'brochure.pdf'));
+    check('accept=image HIDES the document from an image picker',
+      onlyImages.status === 200 && !onlyImages.json.files.some((f) => f.name === 'brochure.pdf'));
+    check('accept=image still returns the photo',
+      onlyImages.json.files.some((f) => f.id === fileId));
+    check('every file carries a kind, so the client knows what to draw',
+      allKinds.json.files.every((f) => f.kind === 'image' || f.kind === 'file'));
+    check('a bogus accept= falls back to all rather than erroring',
+      (await req('GET', '/admin/media?folder=gallery&accept=nonsense', { cookie })).status === 200);
+
+    dbmod.db.prepare('DELETE FROM media WHERE filename = ?').run('brochure.pdf');
+    fs.unlinkSync(docDisk);
+
     const moved = await req('POST', '/admin/media/move', { cookie, body: { id: fileId, folder: '' } });
     check('POST /admin/media/move relocates the file via the mounted router', moved.status === 200 && moved.json.ok);
     const rootListing = await req('GET', '/admin/media?folder=', { cookie });
