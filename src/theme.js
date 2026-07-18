@@ -238,6 +238,49 @@ function saveThemeSettings(payload) {
   return getThemeSettings();
 }
 
+// ── Theme packages (v0.99) — the ".pzn is our RPM" North Star pillar,
+// first step: a theme becomes a portable file. Deliberately its own small
+// format (not raw .pzn/BenTML, which is page-markup shaped) — unifying
+// site/theme/plugin packages under one container is a real design decision
+// for a future version, not something to redecide unilaterally here. This
+// gives theme sharing SOMETHING concrete today: export what you built,
+// import it into another Tapuz install, both directions validated.
+const THEME_PACKAGE_FORMAT = 'tapuz-theme';
+const THEME_PACKAGE_VERSION = 1;
+
+/** The current theme as a portable, versioned, self-describing package. */
+function exportThemePackage(name) {
+  return {
+    format: THEME_PACKAGE_FORMAT,
+    version: THEME_PACKAGE_VERSION,
+    name: String(name || '').trim().slice(0, 120) || 'ערכת נושא מותאמת',
+    exportedAt: new Date().toISOString(),
+    overrides: loadOverrides()
+  };
+}
+
+/**
+ * Validate + apply an uploaded/pasted theme package. Never trusts the input
+ * shape — a malformed or foreign JSON file throws a clear error rather than
+ * silently corrupting theme-overrides.json. Unknown keys inside `overrides`
+ * are dropped by saveOverrides' mergeDeep (it only ever merges onto
+ * DEFAULT_OVERRIDES's known shape), so a hostile/garbage package can't
+ * inject arbitrary config.
+ */
+function importThemePackage(pkg) {
+  if (!pkg || typeof pkg !== 'object') throw new Error('קובץ ערכת הנושא אינו תקין (לא JSON)');
+  if (pkg.format !== THEME_PACKAGE_FORMAT) {
+    throw new Error('זה לא קובץ ערכת נושא של Tapuz (format שגוי)');
+  }
+  if (typeof pkg.version !== 'number' || pkg.version > THEME_PACKAGE_VERSION) {
+    throw new Error('גרסת קובץ ערכת הנושא חדשה מדי לגרסת Tapuz הזו');
+  }
+  if (!pkg.overrides || typeof pkg.overrides !== 'object') {
+    throw new Error('קובץ ערכת הנושא לא מכיל overrides');
+  }
+  return saveOverrides(pkg.overrides);
+}
+
 module.exports = {
   DEFAULT_OVERRIDES,
   LOOKS,
@@ -245,5 +288,10 @@ module.exports = {
   saveOverrides,
   overridesToCss,
   getThemeSettings,
-  saveThemeSettings
+  saveThemeSettings,
+  // theme packages (v0.99)
+  THEME_PACKAGE_FORMAT,
+  THEME_PACKAGE_VERSION,
+  exportThemePackage,
+  importThemePackage
 };

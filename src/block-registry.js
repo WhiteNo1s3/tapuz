@@ -1023,6 +1023,39 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'pricing',
+    keyword: 'PRICING',
+    labelHe: 'טבלת מחירים',
+    icon: '💳',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'רשת תוכניות מחיר — עד תוכנית אחת מודגשת',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'תוכניות', type: 'list',
+        itemFields: [
+          { name: 'title', labelHe: 'שם התוכנית', type: 'string', required: true },
+          { name: 'price', labelHe: 'מחיר', type: 'string' },
+          { name: 'period', labelHe: 'תדירות', type: 'string' },
+          { name: 'features', labelHe: 'תכונות (שורה לכל תכונה)', type: 'textarea' },
+          { name: 'ctaLabel', labelHe: 'טקסט כפתור', type: 'string' },
+          { name: 'ctaUrl', labelHe: 'קישור כפתור', type: 'string' },
+          { name: 'highlighted', labelHe: 'תוכנית מומלצת', type: 'boolean' }
+        ],
+        hint: 'ב-BenTML: צאצאי PLAN'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { title: 'בסיסי', price: '49', period: '/חודש', features: 'תכונה אחת\nתכונה שנייה', ctaLabel: 'התחילו', ctaUrl: '#', highlighted: false },
+        { title: 'מקצועי', price: '99', period: '/חודש', features: 'הכל בבסיסי\nעוד תכונה\nתמיכה מהירה', ctaLabel: 'התחילו', ctaUrl: '#', highlighted: true },
+        { title: 'עסקי', price: '199', period: '/חודש', features: 'הכל במקצועי\nללא הגבלה\nתמיכה ייעודית', ctaLabel: 'צרו קשר', ctaUrl: '#', highlighted: false }
+      ]
+    }
+  },
+  {
     type: 'nav',
     keyword: 'NAV',
     labelHe: 'תפריט ניווט',

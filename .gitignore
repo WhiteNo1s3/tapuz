@@ -16,6 +16,8 @@ config/missions.json
 config/ai.json
 # Decompiler vocabulary backlog — running toolGap counts per install (v0.57).
 config/tool-gap.json
+# Lead email notification SMTP credentials (v0.94) — the ai.json pattern.
+config/notify.json
 
 # SQLite runtime
 *.db

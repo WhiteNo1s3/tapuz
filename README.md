@@ -2,7 +2,7 @@
 
 **תפוזיאל** — CMS פשוט, יפה, ובעברית. (Tapuz + שאלתיאל = התפוז עם הכנפיים)
 
-**גרסה נוכחית: v0.47-alpha** · המפה המלאה: [docs/ROADMAP.md](docs/ROADMAP.md)
+**גרסה נוכחית: v1.45-alpha** · המפה המלאה: [docs/ROADMAP.md](docs/ROADMAP.md)
 
 - פלט HTML נקי וסמנטי, RTL מלא
 - **אשף התקנה מודרך** — מהרעיון לאתר חי בארבעה צעדים (שם → צבעים → דפים → תפריט)
@@ -65,12 +65,22 @@ TAPUZ_ROOT=/path/to/my-site node src/server.js
 ## בדיקות
 
 ```bash
-node scripts/smoke-drafts.js     # טיוטה/פרסום/שחזור
+npm run test:smoke               # כל חבילת ה-smoke (~99 בדיקות, שער ה-CI)
+npm run test:pzn                 # מנוע ה-.pzn (יחידה, node --test)
+
+node scripts/smoke-drafts.js     # או בדיקה בודדת: טיוטה/פרסום/שחזור
 node scripts/smoke-render.js     # פלט HTML סמנטי
-node scripts/smoke-sitemap.js    # תפריטים וקישורים
-node scripts/smoke-articles.js   # מערכת המאמרים
 node scripts/smoke-wizard.js     # אשף ההתקנה (רץ על תיקייה זמנית)
 ```
+
+## לעורכי הקוד (המניפסט)
+
+הקוד מודולרי: כל משטח ניתוב חי במודול משלו תחת [`src/routes/`](src/routes/),
+ו-`src/server.js` הוא קובץ ההרכבה הרזה. שני מסמכי ניווט מחזיקים את המפה:
+
+- [docs/ROUTE-MAP.md](docs/ROUTE-MAP.md) — **איזה קובץ מחזיק איזה route** (נוצר מהקוד עם
+  `npm run gen:route-map`, שמור מפני drift ב-`smoke-route-map.js`). מחפשים היכן `/admin/X`? כאן.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — סיפור הפירוק המודולרי: הדפוס, כל חילוץ, והשיקולים.
 
 ## Credits
 

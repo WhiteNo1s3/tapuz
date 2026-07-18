@@ -123,6 +123,29 @@ function initialize() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_form_submissions_read ON form_submissions(is_read, id DESC)');
 
+  // Lead pipeline (v1.00): status + private admin notes on each submission —
+  // a form submission graduates into a lead once someone works it.
+  if (!hasColumn('form_submissions', 'status')) {
+    db.exec(`ALTER TABLE form_submissions ADD COLUMN status TEXT DEFAULT 'new'`);
+    db.exec(`UPDATE form_submissions SET status = 'new' WHERE status IS NULL`);
+  }
+  if (!hasColumn('form_submissions', 'notes')) {
+    db.exec(`ALTER TABLE form_submissions ADD COLUMN notes TEXT DEFAULT ''`);
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_form_submissions_status ON form_submissions(status, id DESC)');
+
+  // Deal value + follow-up date (v1.12) — the rest of "advanced CRM
+  // pipeline": a rough deal-size estimate and a date to chase the lead,
+  // both nullable (most leads never get either set — a contact-form
+  // enquiry isn't automatically a sized deal).
+  if (!hasColumn('form_submissions', 'value')) {
+    db.exec(`ALTER TABLE form_submissions ADD COLUMN value REAL`);
+  }
+  if (!hasColumn('form_submissions', 'follow_up_at')) {
+    db.exec(`ALTER TABLE form_submissions ADD COLUMN follow_up_at TEXT`);
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_form_submissions_follow_up ON form_submissions(follow_up_at)');
+
   // Holds the current UTC-day salt so a server restart does not re-randomize
   // the visitor hash mid-day. Prior days' salts are discarded (see
   // analytics.getDailySalt) so yesterday's hashes cannot be recomputed.

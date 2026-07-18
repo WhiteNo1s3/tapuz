@@ -1,12 +1,26 @@
 // Wizard v2 engine — creates the site skeleton from wizard answers.
 // Shared by POST /admin/setup, the CLI, and agents (see docs/cli-agent-support.md).
-const { createPage, getPageByFullPath } = require('./pages');
+const { createPage, getPageByFullPath, listPages } = require('./pages');
 const { saveMenu } = require('./menus');
 const { saveThemeSettings } = require('./theme');
 const { loadConfig, saveConfig } = require('./config');
 const { exportAll } = require('./export');
 
 const PAGE_LABELS = { home: 'דף הבית', about: 'אודות', contact: 'צור קשר', articles: 'מאמרים' };
+
+/**
+ * Is this a pristine install still needing the setup wizard? (v1.30: promoted
+ * from a server.js-local helper + a v1.24 inline copy in dashboard.js to the
+ * single source of truth here, next to runSetup — the state it guards.)
+ * @returns {boolean}
+ */
+function needsSetup() {
+  try {
+    return !loadConfig().setupDone && listPages().length === 0;
+  } catch (e) {
+    return false;
+  }
+}
 
 function isHex(c) {
   return /^#[0-9a-fA-F]{6}$/.test(String(c || ''));
@@ -134,4 +148,4 @@ function runSetup(body = {}) {
   return { pages: wantedPages, menu: items.length };
 }
 
-module.exports = { runSetup, PAGE_LABELS };
+module.exports = { runSetup, needsSetup, PAGE_LABELS };

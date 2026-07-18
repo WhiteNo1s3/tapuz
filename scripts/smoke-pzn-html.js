@@ -66,7 +66,12 @@ const battery = [
   ['iframe', '<iframe src="//evil"></iframe>', /<iframe/i],
   ['style expression', '<div style="width:expression(alert(1))">x</div>', /expression\(/i],
   ['css @import', '<style>@import url(//evil)</style>', /@import/i],
-  ['data:text/html', '<a href="data:text/html,<b>x">c</a>', /data:text\/html/i]
+  ['data:text/html', '<a href="data:text/html,<b>x">c</a>', /data:text\/html/i],
+  // scrubCss also neutralizes the legacy binding vectors and CSS url() schemes
+  // in an inline style — distinct from expression()/@import, so each is pinned:
+  ['style behavior (IE HTC)', '<div style="behavior:url(#x)">x</div>', /(^|[;\s"])behavior\s*:/i],
+  ['style -moz-binding (XBL)', '<div style="-moz-binding:url(//evil.xml)">x</div>', /-moz-binding\s*:/i],
+  ['style url(javascript:)', '<div style="background:url(javascript:alert(1))">x</div>', /url\(\s*["\x27]?\s*javascript:/i]
 ];
 for (const [name, input, leakRe] of battery) {
   const out = sanitizeHtmlFragment(input);

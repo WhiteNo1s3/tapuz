@@ -1645,6 +1645,53 @@ register({
   }
 });
 
+// ─── Pricing table (v1.05) — the module-hunt gap from docs/COMPETITIVE.md
+//     ("pricing-table sugar"). `pricing` container of repeatable `plan`
+//     items, same flat-props-only shape as mediacard/navitem. ───
+register({
+  name: 'plan',
+  tag: 'bent-plan',
+  category: 'layout',
+  label: { he: 'תוכנית מחיר', en: 'Pricing plan' },
+  icon: 'card',
+  container: false,
+  props: {
+    title: { type: 'string', default: '', label: { he: 'שם התוכנית', en: 'Title' } },
+    price: { type: 'string', default: '', optional: true, label: { he: 'מחיר', en: 'Price' } },
+    period: { type: 'string', default: '', optional: true, label: { he: 'תדירות', en: 'Period' } },
+    features: { type: 'string', default: '', optional: true, label: { he: 'תכונות (שורה לכל תכונה)', en: 'Features (one per line)' } },
+    ctaLabel: { type: 'string', default: '', optional: true, label: { he: 'טקסט כפתור', en: 'CTA label' } },
+    ctaUrl: { type: 'url', default: '', optional: true, label: { he: 'קישור כפתור', en: 'CTA link' } },
+    highlighted: { type: 'boolean', default: false, optional: true, label: { he: 'תוכנית מומלצת', en: 'Highlighted' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../pricing-html').renderPlan(node.props || {});
+  }
+});
+
+register({
+  name: 'pricing',
+  tag: 'bent-pricing',
+  category: 'layout',
+  label: { he: 'טבלת מחירים', en: 'Pricing table' },
+  icon: 'grid',
+  container: true,
+  accept: ['plan'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../pricing-html').renderPricing(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 module.exports = {
   register,
   getModule,

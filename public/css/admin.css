@@ -1669,6 +1669,13 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
 .preview-ticker-label { flex-shrink: 0; background: #c0392b; color: #fff; font-weight: 700; font-size: 0.8rem; padding: 8px 12px; display: flex; align-items: center; }
 .preview-ticker-strip { display: flex; gap: 22px; align-items: center; padding: 8px 12px; overflow: hidden; white-space: nowrap; }
 .preview-ticker-link { font-weight: 600; font-size: 0.85rem; color: #e2e8f0; flex-shrink: 0; }
+.preview-pricing { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.preview-plan { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; }
+.preview-plan-highlighted { border-color: #ea580c; box-shadow: 0 0 0 1px #ea580c; }
+.preview-plan-title { font-weight: 700; font-size: 0.9rem; color: #1e293b; }
+.preview-plan-price { font-weight: 800; font-size: 1.1rem; color: #ea580c; margin: 4px 0; }
+.preview-plan-price small { font-weight: 500; font-size: 0.7rem; color: #94a3b8; }
+.preview-plan-features { list-style: none; padding: 0; margin: 6px 0 0; font-size: 0.78rem; color: #475569; display: grid; gap: 3px; }
 .preview-category-head { font-weight: 700; color: #1e293b; padding: 6px 10px; border-right: 4px solid #0a66c2; background: #f8fafc; border-radius: 6px; margin-bottom: 10px; }
 .preview-features { display: grid; gap: 8px; }
 .preview-feature {

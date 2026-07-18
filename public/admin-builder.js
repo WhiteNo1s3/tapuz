@@ -1658,6 +1658,26 @@
       return wrap;
     }
 
+    if (block.type === 'pricing') {
+      var pItems = d.items || [];
+      var plans = pItems.length ? pItems : [
+        { title: 'בסיסי', price: '49', period: '/חודש', features: 'תכונה אחת\nתכונה שנייה' },
+        { title: 'מקצועי', price: '99', period: '/חודש', features: 'הכל בבסיסי\nעוד תכונה', highlighted: true }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-pricing">' +
+        plans.map(function (it) {
+          var feats = String(it.features || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+          return '<div class="preview-plan' + (it.highlighted ? ' preview-plan-highlighted' : '') + '">' +
+            '<div class="preview-plan-title">' + esc(it.title || 'תוכנית') + '</div>' +
+            (it.price ? '<div class="preview-plan-price">' + esc(it.price) + (it.period ? '<small>' + esc(it.period) + '</small>' : '') + '</div>' : '') +
+            (feats.length ? '<ul class="preview-plan-features">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
     if (block.type === 'ticker') {
       var tItems = d.items || [];
       var tStyle = d.background ? 'background:' + esc(d.background) : '';

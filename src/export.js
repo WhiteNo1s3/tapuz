@@ -121,7 +121,34 @@ function exportAll(outputDir = PUBLIC_DIR) {
       console.error('Failed to export', p.full_path, err.message);
     }
   }
+  writeSearchIndex(outputDir);
   return results;
+}
+
+/**
+ * search-index.json (v0.98) — published-site search, the static-export gap
+ * vs. WordPress. Only written when the site owner turned it on
+ * (config.integrations.search.enabled, /admin/integrations); express.static
+ * already serves anything under outputDir, so no dedicated route is needed —
+ * a fresh site with no search-index.json just 404s and the client widget
+ * degrades to an empty result set (see renderer.js renderSearchWidget).
+ */
+function writeSearchIndex(outputDir) {
+  try {
+    const cfg = loadConfig();
+    const enabled = !!(cfg.integrations && cfg.integrations.search && cfg.integrations.search.enabled);
+    const indexPath = path.join(outputDir, 'search-index.json');
+    if (!enabled) {
+      // Toggled off after being on once — don't leave a stale index lying
+      // around answering searches nobody can reach from the (now-hidden) UI.
+      if (fs.existsSync(indexPath)) fs.unlinkSync(indexPath);
+      return;
+    }
+    const index = require('./pages').listSearchable();
+    fs.writeFileSync(indexPath, JSON.stringify(index), 'utf8');
+  } catch (e) {
+    console.error('Failed to write search-index.json', e.message);
+  }
 }
 
 module.exports = {
