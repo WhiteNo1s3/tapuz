@@ -163,6 +163,29 @@ function buildSeoHeadTags({ base, path, title, description, image, siteName, lan
   return tags.join('\n  ');
 }
 
+/**
+ * hreflang alternate links (v1.08 — multilingual pairing). One tag per
+ * translation (self included, the standard SEO practice — Google's own
+ * guidance) so search engines offer readers the page in their language.
+ * Silently empty when there's no baseUrl or fewer than 2 language pages —
+ * a half-set of hreflang tags is worse than none (implies siblings that
+ * don't resolve).
+ * @param {string} base site baseUrl
+ * @param {{lang:string, full_path:string}[]} translations every page in the
+ *   group INCLUDING the current page itself
+ */
+function buildHreflangTags(base, translations) {
+  const withLang = (translations || []).filter((t) => t && t.lang && t.full_path);
+  if (withLang.length < 2) return '';
+  return withLang
+    .map((t) => {
+      const url = pageUrl(base, t.full_path);
+      return url ? `<link rel="alternate" hreflang="${xmlEscape(t.lang)}" href="${xmlEscape(url)}">` : '';
+    })
+    .filter(Boolean)
+    .join('\n  ');
+}
+
 // ── JSON-LD structured data (v0.71) ───────────────────────────────────────
 
 /**
@@ -219,7 +242,7 @@ module.exports = {
   // home detection
   scoreHomeCandidate, HOME_SCORE_MIN,
   // head + structured data
-  buildSeoHeadTags, buildJsonLd, jsonLdScript,
+  buildSeoHeadTags, buildJsonLd, jsonLdScript, buildHreflangTags,
   // helpers
   absolutize, pageUrl, toIsoDate
 };

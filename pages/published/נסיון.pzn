@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+<head>
+<meta charset="utf-8" />
+<title>נסיון</title>
+<meta name="bent-slug" content="נסיון" />
+</head>
+<body>
+
+<bent-nav id="nav1" align="center" background="#0b0f1a" color="#e2e8f0">
+  <bent-navitem id="nv_1" label="מי הייתה דולי" href="#intro" />
+  <bent-navitem id="nv_2" label="התיאוריות" href="#theories" />
+  <bent-navitem id="nv_3" label="גלריה" href="#gal" />
+  <bent-navitem id="nv_4" label="שאלות נפוצות" href="#faq_sec" />
+</bent-nav>
+
+<bent-ticker id="tk1" label="מבזקים" speed="fast" background="#0b0f1a" color="#7dd3fc">
+  <bent-tickeritem id="tk1_a" text="277 ניסיונות — הצלחה אחת" />
+  <bent-tickeritem id="tk1_b" text="נקראה על שם דולי פרטון" />
+  <bent-tickeritem id="tk1_c" text="פוחלצת מוצגת עד היום באדינבורו" />
+  <bent-tickeritem id="tk1_d" text="שלוש אמהות — אף אבא" />
+  <bent-tickeritem id="tk1_e" text="שובטה שוב בסתר? התשובה בהמשך" />
+</bent-ticker>
+
+<bent-hero id="hero1" height="lg" image="/uploads/dolly-hero.jpg" overlay="55" parallax="true">
+  <bent-heading id="hero1_h" level="1" align="center" animate="rise">דולי — הכבשה ששיכפלה את העולם</bent-heading>
+  <bent-text id="hero1_t" align="center" size="lg" lead="true">היונק הראשון ששובט מתא בוגר. מאחורי הפלא המדעי נולדה תעשייה שלמה של שמועות, חשדות ותיאוריות קונספירציה — הנה כולן, לצד מה שבאמת ידוע.</bent-text>
+  <bent-button id="hero1_b" href="#theories" align="center" variant="primary">לתיאוריות ←</bent-button>
+</bent-hero>
+
+<bent-banner id="bn1" tone="light" align="center">התיאוריות בעמוד מובאות כפולקלור רשתי — לצד מה שהמדע באמת יודע.</bent-banner>
+
+<bent-marquee id="mq1" speed="md">✦ שיבוט ✦ טלומרים ✦ קלונים חשאיים ✦ דולי פרטון ✦ מכון רוסלין ✦ 1996 ✦ אדינבורו ✦</bent-marquee>
+
+<bent-section id="intro" kind="content">
+  <bent-heading id="intro_h" level="2" align="center" animate="fade">מי הייתה דולי?</bent-heading>
+  <bent-text id="intro_t" align="start" dropcap="true" maxwidth="md">בחמישה ביולי 1996, במכון רוסלין שבסקוטלנד, נולדה כבשה לבנה שנראתה רגילה לחלוטין — אבל שינתה את ההיסטוריה. דולי הייתה היונק הראשון שנוצר משיבוט של תא גוף בוגר, בשיטה שנקראת "העברת גרעין תא סומטי": גרעין מתא של בלוטת חלב הושתל בביצית שגרעינה הוסר, וזו התפתחה לעובר שלם. הצוות ניסה 277 פעמים לפני שהצליח פעם אחת. השם? על שם דולי פרטון — כי התא נלקח מבלוטת החלב.</bent-text>
+</bent-section>
+
+<bent-image id="img_dolly1" src="/uploads/dolly-portrait.jpg" alt="דולי הכבשה" caption="דולי במכון רוסלין — מקום לתמונה שלך" align="center" width="lg" />
+
+<bent-divider id="dv1" bentstyle="dots" style="solid" />
+
+<bent-section id="facts" kind="content">
+  <bent-heading id="facts_h" level="2" align="center" animate="fade">דולי במספרים</bent-heading>
+  <bent-stats id="stats1" columns="4">
+    <bent-stat id="st_1" value="1996" label="שנת הלידה" />
+    <bent-stat id="st_2" value="277" label="ניסיונות שיבוט" />
+    <bent-stat id="st_3" value="3" label="אמהות ביולוגיות" />
+    <bent-stat id="st_4" value="6.5" label="שנות חיים" />
+  </bent-stats>
+</bent-section>
+
+<bent-section id="qf" kind="content">
+  <bent-heading id="qf_h" level="2" align="center" animate="fade">שלוש עובדות שכדאי לזכור</bent-heading>
+  <bent-features id="feat1" columns="3">
+    <bent-feature id="ft_1" icon="🧬" title="שלוש אמהות">תורמת הגרעין, תורמת הביצית, והאם הפונדקאית — לדולי לא היה אב כלל.</bent-feature>
+    <bent-feature id="ft_2" icon="🎤" title="על שם זמרת">התא נלקח מבלוטת החלב, ומכאן ההשראה לשם דולי פרטון.</bent-feature>
+    <bent-feature id="ft_3" icon="🏛️" title="חיה לנצח">אחרי מותה ב-2003 היא פוחלצה, ומוצגת עד היום במוזיאון הלאומי של סקוטלנד.</bent-feature>
+  </bent-features>
+</bent-section>
+
+<bent-parallax id="theories" image="/uploads/dolly-lab.jpg" overlay="60" height="md">
+  <bent-heading id="theories_h" level="2" align="center" animate="rise">תיאוריות הקונספירציה</bent-heading>
+  <bent-text id="theories_t" align="center" size="lg">שבע הגרסאות שרצות ברשת — מהמסתברת ועד המופרכת לגמרי</bent-text>
+</bent-parallax>
+
+<bent-section id="theories_cards" kind="content">
+  <bent-cards id="cards1">
+    <bent-mediacard id="c_1" tag="תיאוריה 1" title="הכבשה שנולדה זקנה" excerpt="הטלומרים שלה היו קצרים מהצפוי — יש הטוענים שדולי נולדה כבר בגיל של תורמת התא, ושהשיבוט 'משכפל' גם את הגיל." image="/uploads/theory1.jpg" href="#deep" />
+    <bent-mediacard id="c_2" tag="תיאוריה 2" title="השיבוט זויף" excerpt="ספקנים טענו שדולי בכלל לא הייתה קלון אמיתי אלא תאומה מקרית, ושהמדע 'הולבש' על משהו שקורה בטבע." image="/uploads/theory2.jpg" href="#deep" />
+    <bent-mediacard id="c_3" tag="תיאוריה 3" title="בני אדם משובטים" excerpt="אם אפשר לשבט כבשה — למה לא בני אדם? השמועה גורסת שקלונים אנושיים כבר גדלים במעבדות חשאיות." image="/uploads/theory3.jpg" href="#deep" />
+    <bent-mediacard id="c_4" tag="תיאוריה 4" title="צבא הקלונים" excerpt="תוכניות סתר צבאיות לגידול חיילים משובטים — גרסה שחוזרת בכל פעם שמתפרסם מחקר שיבוט חדש." image="/uploads/theory4.jpg" href="#deep" />
+  </bent-cards>
+</bent-section>
+
+<bent-section id="deep" kind="content">
+  <bent-heading id="deep_h" level="2" align="center" animate="fade">צלילה לעומק — כל תיאוריה מול המציאות</bent-heading>
+  <bent-accordion id="acc1">
+    <bent-fold id="f_1" title="🧓 'דולי נולדה זקנה' — תיאוריית הטלומרים">בבדיקות נמצא שהטלומרים (קצות הכרומוזומים שמתקצרים עם הגיל) של דולי היו קצרים מהרגיל לכבשה בגילה, ומכאן צמחה הטענה שהיא 'ירשה' את גיל התא שממנו שובטה. המציאות מורכבת יותר: דולי אכן פיתחה דלקת מפרקים בגיל צעיר, אבל מחקרים מאוחרים על עותקים בריאים שלה לא מצאו הזדקנות מואצת. הטלומרים נותרו חידה מדעית — לא הוכחה לקנוניה.</bent-fold>
+    <bent-fold id="f_2" title="🎭 'הכל זויף' — האם דולי בכלל הייתה קלון?">מכיוון שהניסוי היה חסר תקדים, היו שדרשו הוכחות. בדיקות DNA עצמאיות אישרו שהגרעין של דולי תואם לתורמת התא ולא לאם הפונדקאית — כלומר שיבוט אמיתי. תיאוריית ה'תאומה' קרסה תחת הראיות הגנטיות.</bent-fold>
+    <bent-fold id="f_3" title="👥 'קלונים אנושיים חשאיים'">אין ראיה מדעית לקיומם של בני אדם משובטים. שיבוט אנושי אסור בחוק ברוב מדינות העולם, והמכשולים הביולוגיים עצומים. ההצלחה עם דולי היא שהציתה את הדיון האתי — ומכאן קצרה הדרך לשמועות.</bent-fold>
+    <bent-fold id="f_4" title="🪖 'צבא הקלונים'">רעיון פופולרי בתרבות (מ'מלחמת הכוכבים' ועד סרטי אימה), אבל ללא כל בסיס מתועד. גידול אדם לוקח שנים בדיוק כמו כל אדם אחר — שיבוט אינו קיצור דרך לצבא מוכן.</bent-fold>
+    <bent-fold id="f_5" title="🔪 'החיסול החשאי' — למה דולי מתה?">דולי הומתה בפברואר 2003 לאחר שאובחנה במחלת ריאות נגיפית שנפוצה בכבשים, בשילוב עם דלקת מפרקים. אלה מחלות מוכרות ולא נדירות בעדרים — לא סוד אפל, אלא וטרינריה שגרתית.</bent-fold>
+    <bent-fold id="f_6" title="🐑 'הקלונים הנסתרים' — וזאת דווקא אמת חלקית">בשנת 2016 חשפו חוקרים ארבע כבשות ('דוליז מנוטינגהאם') שנוצרו מאותו קו תאים כמו דולי. הן חיו בריאות והזדקנו כרגיל. אז כן — היו 'דוליז' נוספות, אבל זה היה מחקר גלוי ומפורסם, לא קנוניה.</bent-fold>
+    <bent-fold id="f_7" title="🍔 'שיבוט בצלחת שלך'">יש הטוענים שמוצרי שיבוט כבר מסתננים לשרשרת המזון בשקט. בפועל, מוצרים מבעלי חיים משובטים מפוקחים ומוגבלים ברוב העולם, והשיבוט יקר מדי מכדי להיות כדאי מסחרית בקנה מידה רחב.</bent-fold>
+  </bent-accordion>
+</bent-section>
+
+<bent-section id="quote_sec" kind="content">
+  <bent-quote id="quote1">הטבע, כך התברר, גמיש הרבה יותר ממה שחשבנו — וזה בדיוק מה שהופך את המציאות למפחידה ומרתקת יותר מכל קונספירציה.</bent-quote>
+</bent-section>
+
+<bent-section id="gal" kind="content">
+  <bent-heading id="gal_h" level="2" align="center" animate="fade">גלריה — הוסף כאן את התמונות שלך</bent-heading>
+  <bent-text id="gal_t" align="center">שמרתי מקום לתמונות של דולי, המעבדה או איורים. פשוט החלף את ה-src בקבצים שלך.</bent-text>
+  <bent-gallery id="gallery1" columns="3">
+    <bent-image id="g_1" src="/uploads/dolly-1.jpg" alt="דולי 1" caption="תמונה 1" width="full" />
+    <bent-image id="g_2" src="/uploads/dolly-2.jpg" alt="דולי 2" caption="תמונה 2" width="full" />
+    <bent-image id="g_3" src="/uploads/dolly-3.jpg" alt="דולי 3" caption="תמונה 3" width="full" />
+    <bent-image id="g_4" src="/uploads/dolly-4.jpg" alt="דולי 4" caption="תמונה 4" width="full" />
+    <bent-image id="g_5" src="/uploads/dolly-5.jpg" alt="דולי 5" caption="תמונה 5" width="full" />
+    <bent-image id="g_6" src="/uploads/dolly-6.jpg" alt="דולי 6" caption="תמונה 6" width="full" />
+  </bent-gallery>
+</bent-section>
+
+<bent-divider id="dv2" bentstyle="line" style="solid" />
+
+<bent-section id="faq_sec" kind="content">
+  <bent-heading id="faq_h" level="2" align="center" animate="fade">שאלות נפוצות</bent-heading>
+  <bent-faq id="faq1">
+    <bent-qa id="qa_1" question="דולי הייתה הקלון הראשון בהיסטוריה?">לא הראשון אי פעם — צפרדעים ובעלי חיים אחרים שובטו קודם — אבל היא הייתה היונק הראשון ששובט מתא בוגר, וזה מה שהפך אותה למפורסמת.</bent-qa>
+    <bent-qa id="qa_2" question="למה קראו לה דולי?">כי התא ממנו שובטה נלקח מבלוטת החלב, והצוות התלוצץ שאין בלוטת חלב מפורסמת יותר משל דולי פרטון.</bent-qa>
+    <bent-qa id="qa_3" question="אפשר לראות אותה היום?">כן. הפוחלץ שלה מוצג במוזיאון הלאומי של סקוטלנד באדינבורו.</bent-qa>
+    <bent-qa id="qa_4" question="באמת שיבטו אותה שוב?">כן — ב-2016 נוצרו ארבע כבשות מאותו קו תאים, והן חיו בריאות לחלוטין.</bent-qa>
+  </bent-faq>
+</bent-section>
+
+<bent-spacer id="sp1" size="lg" height="3rem" />
+
+<bent-cta id="cta1" title="רוצים לצלול עוד לתוך עולם השיבוט?" text="מדע אמיתי מרתק לא פחות מכל קונספירציה. המשיכו לחקור — ותגלו שהמציאות תמיד מפתיעה." buttontext="קראו עוד" url="#" variant="primary" tone="brand" align="center" />
+
+</body>
+</html>

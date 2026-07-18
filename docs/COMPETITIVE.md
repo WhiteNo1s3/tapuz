@@ -1,4 +1,4 @@
-# Where Tapuz stands — the parity map (v0.87)
+# Where Tapuz stands — the parity map (v1.41)
 
 The goal: **the easiest CMS of the AI era** — end-to-end, with or without an
 API key, better than what an Israeli SMB gets from WordPress, Drupal, Joomla,
@@ -14,11 +14,12 @@ module/feature hunt. Update it every version batch.
 | **A page language an LLM writes correctly first try** | BenTML — one way per construct, errors carry the literal fix, cheatsheet = the whole language on one screen | shortcode/Gutenberg JSON soup | Twig/templates — dev territory | no exposed language at all |
 | **Visual builder ⇄ code, live both ways** | the canvas and the BenTML source are one page — drag rewrites code, typing recompiles the canvas, click syncs selection | Gutenberg hides its JSON | none | none |
 | **Analytics out of the box** | first-party, private (no IP stored, daily-salted visitor hash), **form-conversion tracking per page**, every card exports as CSV (v0.87) | none — needs Jetpack/plugins + usually GA | none native | basic hit counters |
-| **Leads land in the CMS** | forms inbox (תיבת פניות) with honeypot + rate-limit, dashboard tile, **one-click Excel-ready CSV export** (v0.87 — BOM for Hebrew, formula-injection guarded) | Contact Form 7 + a storage plugin | webform modules | yes — their strongest suit |
+| **Leads land in the CMS — and get worked** | forms inbox (תיבת פניות) with honeypot + rate-limit, dashboard tile, **CSV export** (v0.87), **email notification on every new lead** (v0.94), **a real lead pipeline** — status (new→contacted→qualified→won/lost) + private notes (v1.00), **deal value + follow-up dates** with a pipeline-value summary and an overdue/due-today tile, right in the inbox (v1.12) | Contact Form 7 + a storage plugin (no pipeline, no forecast without a CRM plugin) | webform modules | yes — their strongest suit |
 | **Hebrew/RTL first-class** | RTL-first renderer, Hebrew slugs, logical CSS everywhere | RTL as an afterthought | partial | localized but generic |
 | **Zero-JS published pages** | tabs/accordion/carousel/table/ticker all CSS-only; JS only for opt-in analytics | plugin JS soup | theme-dependent | heavy runtime |
 | **Security posture of published sites** | static export, escaped-by-construction, one audited raw-HTML door | the world's most attacked runtime | runtime + patch treadmill | opaque |
 | **OS-grade admin ergonomics** | Ctrl+K command palette on every screen (v0.88) — jump to any page, section, or action from the keyboard, Hebrew or English | none native | none | none |
+| **Portable, open standard — "our RPM"** | a whole site, a theme, or a page is a portable versioned file: site export/import (v1.06), theme export/import (v0.99), and the `.pzn` page format published as a machine-readable standard anyone can implement (`docs/pzn-schema.json` + `docs/pzn-spec.md`, served live at `/pzn-schema.json`) — regenerated from the module registry and drift-guarded so it never lies to an implementer (v1.36–1.37). No lock-in, no proprietary DB dump. | `.xml`/`.wxr` export (lossy, plugin-shaped, no published page-format standard) | config/entity exports, dev-only | proprietary formats, no portability |
 
 ## At parity (good enough, keep polishing)
 
@@ -29,24 +30,58 @@ module/feature hunt. Update it every version batch.
 
 ## The gaps — the hunt list, in priority order
 
-1. **Email notification on new lead** — the inbox is silent until visited.
-   Needs SMTP config (product decision: whose SMTP). WordPress does this via
-   wp_mail out of the box.
-2. **User roles** — one admin account today. WP/Drupal have editors/authors.
-   For the Red Hat-style support model this matters at the agency tier.
+1. ~~**Email notification on new lead**~~ — shipped in v0.94: `/admin/integrations`
+   gets an "התראת אימייל" section (SMTP host/port/user/pass, gitignored
+   `config/notify.json`, the ai.js key-storage pattern), a "שלח בדיקה" test
+   button, and every successful `/api/form` submission fires a best-effort,
+   never-blocking notification (`src/notify.js`). Bring-your-own-SMTP —
+   Tapuz never operates a shared mail relay.
+2. ~~**User roles**~~ — shipped in v0.95: `auth.js` accounts now carry a
+   `role` (`admin` | `editor`); a new `/admin/team` page (admin-only) invites
+   teammates, changes roles, and removes accounts, guarded so the site can
+   never demote/remove its last admin. `admin` keeps every surface; `editor`
+   is blocked (403, via a new `requireAdmin` middleware) from the
+   security-sensitive ones — integrations/SMTP, AI keys, agent bridge
+   tokens, team management, site settings — everything else (pages, media,
+   menus, forms inbox, analytics, categories, storage) stays open. Legacy
+   single-admin installs upgrade transparently (`roleOf()` treats a
+   role-less stored account as admin). Not done: hiding admin-only nav links
+   from an editor's sidebar (they 403 on click today, correct but not
+   polished) and a finer editor-vs-author split — that's the agency-tier
+   follow-up.
 3. **FOOTER/HEADER as modules vs site-chrome** — design fork, Ben's call.
-4. **Search on the published site** — static export has no search; a tiny
-   client-side index (lunr-style, build-time) fits the zero-runtime model.
-5. **Multilingual** — Hebrew-first is the moat, but he↔en paired pages would
-   beat WPML's complexity with a fraction of the surface.
+4. ~~**Search on the published site**~~ — shipped in v0.98: a build-time
+   `search-index.json` (`pages.listSearchable()`, written by `exportAll()`
+   only when turned on) + a floating client-side search widget
+   (`renderer.js` `renderSearchWidget`, wired the same way the WhatsApp
+   float is — `config.integrations.search.enabled`, toggled on
+   `/admin/integrations`). Substring match over title+excerpt, no server
+   round-trip after the initial index fetch — works on a fully static
+   export (Netlify/S3), not just when Tapuz itself serves the site. The one
+   deliberate JS-by-necessity feature among "zero-JS published pages" —
+   there's no way to search a static export without a client-side index.
+   Not done: fuzzy/typo-tolerant matching (lunr-style) — plain substring is
+   the v1, good enough for a small-SMB page count.
+5. ~~**Multilingual**~~ — shipped in v1.08: `/admin/translations` links two
+   existing pages as translations of each other (`meta.translationGroup` +
+   `meta.lang` on each page — no per-string translation, no URL-prefix
+   routing, WPML's complexity minus ~95% of its surface, exactly as
+   scoped). Ships hreflang `<link>` tags automatically + a zero-JS visible
+   language switcher that appears only on pages that actually have linked
+   siblings. A third+ page can join an existing pair (the group grows,
+   never forks). Not done: auto-suggesting which pages might be
+   translations of each other, RTL/LTR mixed-direction menu rendering
+   polish.
 6. **Builder.io-class builder extras** (Ben's goal, 2026-07-18) — ALL SHIPPED:
    Ctrl+K palette (v0.88), layers/outline panel (v0.89), responsive device
    preview (v0.90), symbols (v0.91), OS keyboard set (v0.92), starter
    templates gallery (v0.93 — /admin/new picks a layout; templates compose
    from registry defaults so they can't drift; neutral placeholder copy
    awaiting Ben's voice). Future tier: synced (live-linked) symbols.
-7. **Module hunt continues** — timeline, steps, pricing-table sugar
-   (CODE stays reserved; INPUT stays a FIELD child).
+7. **Module hunt continues** — timeline, steps remain; ~~pricing-table
+   sugar~~ shipped in v1.05 (`pricing`/`plan`, both the canonical `.pzn`
+   system and the legacy BentML keyword dialect, zero-JS, highlighted-tier
+   support). CODE stays reserved; INPUT stays a FIELD child.
 
 (~~CSV export~~ — shipped whole in v0.87: `/admin/inbox.csv` +
 `/admin/analytics.csv?what=daily|pages|referrers|devices|conversions`,

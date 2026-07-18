@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>צור קשר</title>
+    <meta name="bent-slug" content="צור-קשר" />
+  </head>
+  <body>
+    <bent-heading id="h-g1" level="1">דברו איתנו</bent-heading>
+    <bent-text id="t-g2">נשמח לשמוע מכם.</bent-text>
+    <bent-form id="form-g3" action="/lead" method="post" submit="שליחה">
+      <bent-field label="שם מלא" name="fullname" placeholder="" required="true" type="text" />
+      <bent-field label="אימייל" name="email" placeholder="" required="true" type="email" />
+      <bent-field label="נושא" name="topic" options="מכירות, תמיכה" placeholder="" required="false" type="select" />
+      <bent-field label="הודעה" name="body" placeholder="" required="false" type="textarea" />
+    </bent-form>
+    <bent-hero id="hero_1784330440287_894" height="lg" image="/uploads/dolly-hero.jpg" overlay="55" parallax="true">
+      <bent-heading level="1">דולי — הכבשה ששיכפלה את העולם שב ילד שב</bent-heading>
+      <bent-text>היונק הראשון ששובט מתא בוגר. מאחורי הפלא המדעי נולדה תעשייה שלמה של שמועות, חשדות ותיאוריות קונספירציה — הנה כולן, לצד מה שבאמת ידוע. כגשגדכשדגכשדגכשג</bent-text>
+      <bent-button href="#theories">לתיאוריות ←</bent-button>
+    </bent-hero>
+  </body>
+</html>

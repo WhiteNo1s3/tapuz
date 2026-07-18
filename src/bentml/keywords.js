@@ -397,6 +397,29 @@ const KEYWORDS = {
       url: { type: 'string' }
     }
   },
+  PRICING: {
+    body: 'BLOCK-BODY',
+    jsonType: 'pricing',
+    children: ['PLAN'],
+    params: {}
+  },
+  PLAN: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'PRICING',
+    // param names are single lowercase words in this dialect (parse.js
+    // lowercases every key) — `cta` (button text) + `url` (button link),
+    // matching the existing url-for-a-link convention (NAVITEM/MEDIACARD/
+    // TICKERITEM/etc.) rather than the pzn registry's camelCase ctaLabel/ctaUrl.
+    params: {
+      title: { type: 'string', required: true },
+      price: { type: 'string' },
+      period: { type: 'string' },
+      cta: { type: 'string' },
+      url: { type: 'string' },
+      highlighted: { type: 'boolean', default: false }
+    }
+  },
   NAV: {
     body: 'BLOCK-BODY',
     jsonType: 'nav',

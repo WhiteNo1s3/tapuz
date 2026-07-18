@@ -3,7 +3,7 @@
   "title": "Tapuziel .pzn page language",
   "description": "Constrained-HTML page format (benTML dialect). Body may contain only registered bent-* module tags.",
   "specVersion": "0.1",
-  "generatedFrom": "tapuziel@0.66.0-alpha",
+  "generatedFrom": "tapuziel@1.35.0-alpha",
   "modules": {
     "heading": {
       "tag": "bent-heading",
@@ -363,7 +363,7 @@
     "section": {
       "tag": "bent-section",
       "label": {
-        "he": "סקשן",
+        "he": "מיכל",
         "en": "Section"
       },
       "category": "layout",
@@ -373,6 +373,17 @@
         "kind": {
           "type": "string",
           "default": "content",
+          "optional": true
+        },
+        "size": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "xl"
+          ],
+          "default": "md",
           "optional": true
         }
       }
@@ -941,6 +952,72 @@
       ],
       "props": {}
     },
+    "slide": {
+      "tag": "bent-slide",
+      "label": {
+        "he": "שקופית",
+        "en": "Slide"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "tag": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "excerpt": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "href": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "carousel": {
+      "tag": "bent-carousel",
+      "label": {
+        "he": "קרוסלה",
+        "en": "Carousel"
+      },
+      "category": "media",
+      "container": true,
+      "accept": [
+        "slide"
+      ],
+      "props": {
+        "height": {
+          "type": "enum",
+          "enum": [
+            "sm",
+            "md",
+            "lg"
+          ],
+          "default": "md",
+          "optional": true
+        },
+        "peek": {
+          "type": "boolean",
+          "default": true,
+          "optional": true
+        }
+      }
+    },
     "tickeritem": {
       "tag": "bent-tickeritem",
       "label": {
@@ -1086,6 +1163,32 @@
           "optional": true
         },
         "muted": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        }
+      }
+    },
+    "audio": {
+      "tag": "bent-audio",
+      "label": {
+        "he": "שמע",
+        "en": "Audio"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "src": {
+          "type": "url",
+          "default": ""
+        },
+        "caption": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "loop": {
           "type": "boolean",
           "default": false,
           "optional": true
@@ -1263,7 +1366,7 @@
         },
         "text": {
           "type": "text",
-          "default": "",
+          "default": "הודעה חדשה",
           "content": true
         }
       }
@@ -1397,6 +1500,42 @@
       ],
       "props": {}
     },
+    "trow": {
+      "tag": "bent-trow",
+      "label": {
+        "he": "שורת טבלה",
+        "en": "Table row"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "cells": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "table": {
+      "tag": "bent-table",
+      "label": {
+        "he": "טבלה",
+        "en": "Table"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "trow"
+      ],
+      "props": {
+        "header": {
+          "type": "boolean",
+          "default": true,
+          "optional": true
+        }
+      }
+    },
     "html": {
       "tag": "bent-html",
       "label": {
@@ -1422,6 +1561,65 @@
           "optional": true
         }
       }
+    },
+    "plan": {
+      "tag": "bent-plan",
+      "label": {
+        "he": "תוכנית מחיר",
+        "en": "Pricing plan"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "price": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "period": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "features": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "ctaLabel": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "ctaUrl": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "highlighted": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        }
+      }
+    },
+    "pricing": {
+      "tag": "bent-pricing",
+      "label": {
+        "he": "טבלת מחירים",
+        "en": "Pricing table"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "plan"
+      ],
+      "props": {}
     }
   }
 }

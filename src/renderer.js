@@ -417,6 +417,10 @@ function renderBlock(block, direction = 'rtl') {
     case 'cards':
       return require('./pzn/card-html').renderCardsFromData(block.data || {}, direction, extra);
 
+    case 'pricing':
+      // pricing-table sugar (v1.05) — the module-hunt gap from docs/COMPETITIVE.md
+      return require('./pzn/pricing-html').renderPricingFromData(block.data || {}, direction, extra);
+
     case 'carousel':
       // the cards unit, sliding: zero-JS scroll-snap strip (v0.79)
       return require('./pzn/carousel-html').renderCarouselFromData(block.data || {}, direction, extra);
@@ -598,6 +602,83 @@ function renderWhatsappFloat(config) {
     '<path fill="currentColor" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>' +
     '</svg>';
   return `<a class="whatsapp-float ${posClass}" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="WhatsApp">${icon}</a>`;
+}
+
+/**
+ * Site-wide published-site search (v0.98) — a floating button + overlay that
+ * fetches /search-index.json (written by export.js's exportAll, only when
+ * enabled — see writeSearchIndex) and filters client-side. This is
+ * necessarily JS (unlike tabs/accordion/carousel): there is no zero-JS way
+ * to search a static export. Driven by config.integrations.search.enabled;
+ * returns '' when disabled, matching renderWhatsappFloat's shape. Survives
+ * static export the same way the GA4/analytics snippets do — export.js only
+ * strips <style>, never <script>.
+ */
+function renderSearchWidget(config) {
+  const s = config && config.integrations && config.integrations.search;
+  if (!s || !s.enabled) return '';
+  return `<div class="tapuz-search-float" id="tapuz-search-btn" role="button" tabindex="0" aria-label="חיפוש באתר" title="חיפוש">` +
+    `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 5L20.49 19l-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>` +
+    `</div>
+<div class="tapuz-search-panel" id="tapuz-search-panel">
+  <div class="tapuz-search-box">
+    <input class="tapuz-search-input" id="tapuz-search-input" type="text" placeholder="חיפוש באתר…" autocomplete="off">
+    <div class="tapuz-search-results" id="tapuz-search-results"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var btn = document.getElementById('tapuz-search-btn');
+  var panel = document.getElementById('tapuz-search-panel');
+  var input = document.getElementById('tapuz-search-input');
+  var results = document.getElementById('tapuz-search-results');
+  var index = null;
+  function ensureIndex() {
+    if (index) return Promise.resolve(index);
+    return fetch('/search-index.json').then(function (r) { return r.ok ? r.json() : []; }).then(function (d) {
+      index = Array.isArray(d) ? d : [];
+      return index;
+    }).catch(function () { index = []; return index; });
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function render(items) {
+    if (!items.length) { results.innerHTML = '<div class="tapuz-search-empty">אין תוצאות</div>'; return; }
+    results.innerHTML = items.slice(0, 20).map(function (it) {
+      return '<a class="tapuz-search-result" href="' + esc(it.url) + '"><div class="t">' + esc(it.title)
+        + '</div><div class="e">' + esc(it.excerpt) + '</div></a>';
+    }).join('');
+  }
+  function open() { panel.classList.add('open'); ensureIndex().then(function () { input.focus(); }); }
+  function close() { panel.classList.remove('open'); input.value = ''; results.innerHTML = ''; }
+  btn.addEventListener('click', open);
+  btn.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  panel.addEventListener('click', function (e) { if (e.target === panel) close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  input.addEventListener('input', function () {
+    var q = input.value.trim().toLowerCase();
+    if (!q) { results.innerHTML = ''; return; }
+    ensureIndex().then(function (idx) {
+      render(idx.filter(function (it) {
+        return (it.title || '').toLowerCase().indexOf(q) >= 0 || (it.excerpt || '').toLowerCase().indexOf(q) >= 0;
+      }));
+    });
+  });
+})();
+</script>`;
+}
+
+/**
+ * Language switcher (v1.08 — multilingual pairing). A small floating pill of
+ * language links, shown only when the page actually has translation
+ * siblings (linking two pages together IS the opt-in — no separate site
+ * setting to forget). Zero-JS: plain links to each sibling's real URL.
+ */
+function renderLangSwitcher(entries = []) {
+  if (!entries || entries.length < 2) return '';
+  const links = entries
+    .map((t) => `<a href="/${escapeHtml(t.full_path)}"${t.isCurrent ? ' class="active" aria-current="page"' : ''}>${escapeHtml(String(t.lang || '').toUpperCase())}</a>`)
+    .join('');
+  return `<div class="tapuz-lang-switch">${links}</div>`;
 }
 
 /**
@@ -822,11 +903,6 @@ function renderPage(page, options = {}) {
     }
   }
 
-  // Site-wide extras (WhatsApp click-to-chat float) — injected into the shared
-  // layout path so both live serve and static export emit them.
-  // WhatsApp float (S-integrations) + first-party analytics beacon (S6), both
-  // injected at body-end via {{site_extras}} so serve and static export match.
-  const siteExtras = renderWhatsappFloat(config) + renderAnalyticsBeacon(config);
   const hasExtrasSlot = layout.includes('{{site_extras}}');
 
   let pageTitle = page.meta?.seoTitle || page.title || '';
@@ -863,6 +939,25 @@ function renderPage(page, options = {}) {
     base: seoBase, path: seoPath, title: pageTitle, description: pageDesc,
     image: ogAbs, siteName: config.title || '', lang, isArticle, publishedIso, modifiedIso
   });
+  // v1.08 multilingual pairing — hreflang + the visible switcher, both driven
+  // by the same translation-group lookup, only when the page actually has
+  // linked siblings (lazy require: avoids the pages.js↔export.js cycle, same
+  // pattern as the listArticles calls above).
+  const translationSiblings = require('./pages').getTranslations(page.full_path);
+  let hreflangTags = '';
+  let langSwitcherHtml = '';
+  if (translationSiblings.length) {
+    const selfLang = (page.meta && page.meta.lang) || '';
+    const allLangs = selfLang
+      ? [...translationSiblings, { lang: selfLang, full_path: page.full_path }]
+      : translationSiblings;
+    hreflangTags = seoLib.buildHreflangTags(seoBase, allLangs);
+    langSwitcherHtml = renderLangSwitcher(allLangs.map((t) => ({ ...t, isCurrent: t.full_path === page.full_path })));
+  }
+  // Site-wide extras (WhatsApp float, search, language switcher, first-party
+  // analytics beacon) — injected at body-end via {{site_extras}} so live serve
+  // and static export match.
+  const siteExtras = renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml + renderAnalyticsBeacon(config);
   const seoJsonLd = seoLib.jsonLdScript(seoLib.buildJsonLd({
     title: pageTitle, description: pageDesc, image: ogAbs, isArticle, isHome,
     siteName: config.title || '',
@@ -870,6 +965,7 @@ function renderPage(page, options = {}) {
     base: seoBase, path: seoPath, datePublished: publishedIso, dateModified: modifiedIso
   }));
   if (seoHeadTags) head += '\n  ' + seoHeadTags;
+  if (hreflangTags) head += '\n  ' + hreflangTags;
   if (seoJsonLd) head += '\n  ' + seoJsonLd;
 
   const replacements = {
@@ -919,4 +1015,4 @@ function renderPageToFile(page, outputPath) {
   return outputPath;
 }
 
-module.exports = { renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderGa4Snippet, renderAnalyticsBeacon, pageBackgroundStyle };
+module.exports = { renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderSearchWidget, renderLangSwitcher, renderGa4Snippet, renderAnalyticsBeacon, pageBackgroundStyle };

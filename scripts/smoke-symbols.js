@@ -49,12 +49,20 @@ check('delete removes exactly the one', symbols.deleteSymbol(second.symbol.id) =
 // ── wiring (source asserts) ──
 const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
 const builder = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-builder.js'), 'utf8');
+// The symbols API moved to src/routes/symbols.js in v1.20 (fifteenth
+// route-group extraction) — assert the routes on the router module, and
+// that server.js actually mounts it.
+const symbolsRoute = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'symbols.js'), 'utf8');
 
 check('symbols API routes exist (list/save/delete)',
-  /app\.get\('\/admin\/api\/symbols'/.test(server) &&
-  /app\.post\('\/admin\/api\/symbols'/.test(server) &&
-  /app\.post\('\/admin\/api\/symbols\/delete'/.test(server));
-check('toolbox carries the symbols fold', /id="symbols-fold"/.test(server) && /id="symbols-list"/.test(server));
+  /router\.get\('\/admin\/api\/symbols'/.test(symbolsRoute) &&
+  /router\.post\('\/admin\/api\/symbols'/.test(symbolsRoute) &&
+  /router\.post\('\/admin\/api\/symbols\/delete'/.test(symbolsRoute));
+check('server.js mounts the symbols router', /require\('\.\/routes\/symbols'\)/.test(server));
+// v1.31: the /admin/edit builder page (with the symbols toolbox fold) moved
+// to src/routes/pages-builder.js — that assert reads the builder page now.
+const builderPage = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'pages-builder.js'), 'utf8');
+check('toolbox carries the symbols fold', /id="symbols-fold"/.test(builderPage) && /id="symbols-list"/.test(builderPage));
 check('block toolbar has the 💠 save action',
   /data-act="sym"/.test(server + builder) && /saveAsSymbol\(block\.id\)/.test(builder));
 check('insert = deep copy + freshIds (shared with duplicate — no id collisions)',

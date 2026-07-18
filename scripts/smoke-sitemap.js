@@ -1,4 +1,14 @@
-// E2E: typed menu links + sitemap structure + redirect page
+// E2E: typed menu links + sitemap structure + redirect page.
+// Isolation (v1.41): this test writes real pages (createPage/deletePage), so it
+// runs on a THROWAWAY TAPUZ_ROOT — set BEFORE any src require, because
+// src/paths.js resolves the data dir at module-load time. Without this it wrote
+// into the live site's DB, which is why it was excluded from the CI chain.
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-sitemap-'));
+process.env.TAPUZ_ROOT = tmpRoot;
+
 const { normalizeItems, resolveUrl, saveMenu } = require('../src/menus');
 const { createPage, deletePage, getPageByFullPath } = require('../src/pages');
 const { buildSitemap } = require('../src/sitemap');
@@ -46,4 +56,5 @@ deletePage('sm-orphan');
 saveMenu('main', [{ label: 'דף הבית', type: 'custom', url: '/' }]);
 check('cleanup', !getPageByFullPath('sm-linked'));
 
+try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) { /* best effort */ }
 process.exit(fail ? 1 : 0);

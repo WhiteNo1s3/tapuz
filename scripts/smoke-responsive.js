@@ -34,15 +34,17 @@ check('no draft_blocks → draft falls back to published',
   renderPage({ ...page, draft_blocks: null }, { useDraft: true }).includes('גרסה שפורסמה'));
 
 // ── route + builder wiring (source asserts) ──
-const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
+// v1.31: the preview route + the /admin/edit canvas moved to
+// src/routes/pages-builder.js — these asserts read that module now.
+const builderPage = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'pages-builder.js'), 'utf8');
 const builder = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-builder.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'admin.css'), 'utf8');
 
 check('GET /admin/preview/:fullPath serves renderPage(useDraft)',
-  /app\.get\('\/admin\/preview\/:fullPath'/.test(server) && /renderPage\(page, \{ useDraft: true \}\)/.test(server));
+  /router\.get\('\/admin\/preview\/:fullPath'/.test(builderPage) && /renderPage\(page, \{ useDraft: true \}\)/.test(builderPage));
 check('preview route overrides the global X-Frame-Options DENY with SAMEORIGIN (else the iframe is blank)',
-  /admin\/preview[\s\S]{0,700}X-Frame-Options', 'SAMEORIGIN'/.test(server));
-check('canvas header carries the 📱 רספונסיב button', /id="btn-responsive"/.test(server));
+  /admin\/preview[\s\S]{0,700}X-Frame-Options', 'SAMEORIGIN'/.test(builderPage));
+check('canvas header carries the 📱 רספונסיב button', /id="btn-responsive"/.test(builderPage));
 check('builder ships the four device widths',
   /width: 375/.test(builder) && /width: 768/.test(builder) && /width: 1024/.test(builder) && /width: 0/.test(builder));
 check('preview saves the draft FIRST (no stale surprise)',

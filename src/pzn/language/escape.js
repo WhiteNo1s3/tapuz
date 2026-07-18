@@ -68,9 +68,22 @@ function unescapeHtml(str) {
   );
 }
 
-/** Neutralize executable URL schemes on clickable links. */
+/**
+ * Neutralize executable URL schemes on clickable links (spec rule 9).
+ *
+ * Browsers ignore leading whitespace AND ASCII control chars, and strip
+ * tab/newline/CR from *within* a scheme, when resolving a URL — so a naive
+ * `^javascript:` check is bypassed by `\x01javascript:` (leading control) or
+ * `java\tscript:` / `java\nscript:` (control smuggled into the scheme), both
+ * of which execute. Normalize the same way the browser does — drop every
+ * ASCII control char (0x00–0x1F, 0x7F) and trim — BEFORE the scheme test, and
+ * return that cleaned value so a smuggled scheme is both rejected and stripped.
+ * Legitimate URLs never contain raw control chars, so they are unaffected
+ * (a real tab in a query string would be percent-encoded as %09, which is not
+ * a raw control char and is left intact).
+ */
 function safeHref(url) {
-  const s = String(url == null ? '' : url).trim();
+  const s = String(url == null ? '' : url).replace(/[\x00-\x1F\x7F]/g, '').trim();
   if (/^(?:javascript|data|vbscript):/i.test(s)) return '#';
   return s || '#';
 }

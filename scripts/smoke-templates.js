@@ -52,11 +52,12 @@ for (const t of TEMPLATES) {
 check('templates compose from registry defaults (defaultDataFor), not hand-rolled shapes',
   /defaultDataFor\(type\)/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'templates.js'), 'utf8')));
 
-// wiring
-const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
+// wiring — v1.31: /admin/new + /admin/create moved to
+// src/routes/pages-builder.js; this assert reads that module now.
+const builderPage = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'pages-builder.js'), 'utf8');
 check('/admin/new shows the picker + /admin/create honors it',
-  /listTemplates\(\)/.test(server) && /name="template"/.test(server) &&
-  /templateBlocks\(req\.body\.template, title\)/.test(server));
+  /listTemplates\(\)/.test(builderPage) && /name="template"/.test(builderPage) &&
+  /templateBlocks\(req\.body\.template, title\)/.test(builderPage));
 
 try { fs.rmSync(process.env.TAPUZ_ROOT, { recursive: true, force: true }); } catch (e) {}
 console.log('');

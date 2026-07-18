@@ -1,6 +1,6 @@
 # The `.pzn` page format — standard
 
-**Spec version 0.1** · generated from `tapuziel@0.66.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
+**Spec version 0.1** · generated from `tapuziel@1.35.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
 
 `.pzn` is an open, constrained-HTML page format. A `.pzn` file **is** HTML —
 but the body may contain **only registered `bent-*` module tags**, never raw
@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (49)
+## Modules (56)
 
 ### Category: content
 
@@ -160,13 +160,22 @@ from it directly.
 
   - `tone` · enum · brand \| dark \| light \| warn · default `brand`
   - `align` · enum · start \| center \| end · default `start`
-  - `text` · text · **(body text, not an attribute)**
+  - `text` · text · default `הודעה חדשה` · **(body text, not an attribute)**
+
+#### `<bent-trow>` — שורת טבלה / Table row · leaf
+
+  - `cells` · text · **(body text, not an attribute)**
+
+#### `<bent-table>` — טבלה / Table · container (children: `bent-trow`)
+
+  - `header` · boolean · default `true`
 
 ### Category: layout
 
-#### `<bent-section>` — סקשן / Section · container
+#### `<bent-section>` — מיכל / Section · container
 
   - `kind` · string · default `content`
+  - `size` · enum · sm \| md \| lg \| xl · default `md`
 
 #### `<bent-col>` — עמודה / Column · container
 
@@ -212,6 +221,18 @@ from it directly.
   - `text` · text · **(body text, not an attribute)**
 
 #### `<bent-accordion>` — אקורדיון / Accordion · container (children: `bent-fold`)
+
+#### `<bent-plan>` — תוכנית מחיר / Pricing plan · leaf
+
+  - `title` · string
+  - `price` · string
+  - `period` · string
+  - `features` · string
+  - `ctaLabel` · string
+  - `ctaUrl` · url
+  - `highlighted` · boolean · default `false`
+
+#### `<bent-pricing>` — טבלת מחירים / Pricing table · container (children: `bent-plan`)
 
 ### Category: data
 
@@ -279,6 +300,19 @@ from it directly.
 
 #### `<bent-cards>` — רשת כרטיסים / Card grid · container (children: `bent-mediacard`)
 
+#### `<bent-slide>` — שקופית / Slide · leaf
+
+  - `image` · url
+  - `tag` · string
+  - `title` · string
+  - `excerpt` · string
+  - `href` · url
+
+#### `<bent-carousel>` — קרוסלה / Carousel · container (children: `bent-slide`)
+
+  - `height` · enum · sm \| md \| lg · default `md`
+  - `peek` · boolean · default `true`
+
 #### `<bent-tickeritem>` — מבזק / Ticker headline · leaf
 
   - `text` · string
@@ -310,6 +344,12 @@ from it directly.
   - `autoplay` · boolean · default `false`
   - `loop` · boolean · default `false`
   - `muted` · boolean · default `false`
+
+#### `<bent-audio>` — שמע / Audio · leaf
+
+  - `src` · url
+  - `caption` · string
+  - `loop` · boolean · default `false`
 
 ### Category: effects
 

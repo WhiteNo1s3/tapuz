@@ -40,3 +40,22 @@ jobs:
       - run: npm run test:smoke
       - run: node scripts/smoke-registry.js
       - run: node scripts/smoke-wizard.js
+
+  deps:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci || npm install
+      # Fail on a HIGH/CRITICAL advisory in a PRODUCTION dependency — what
+      # actually ships to a deployed CMS. Dev-only + low/moderate transitive
+      # advisories are surfaced but don't block (they'd churn CI on noise the
+      # deployed site never runs). The tree is clean today (0 vulns, v1.46);
+      # this keeps it that way — a vulnerable prod dep can't slip in unnoticed.
+      - name: audit production dependencies (high+)
+        run: npm audit --omit=dev --audit-level=high
+      - name: report dev/low advisories (non-blocking)
+        run: npm audit || true

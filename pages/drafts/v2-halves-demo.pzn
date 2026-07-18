@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>מבחן חצאים</title>
+    <meta name="bent-slug" content="v2-halves-demo" />
+  </head>
+  <body>
+    <bent-columns id="cols-v25" gap="md" ratio="46:54">
+      <bent-col>
+        <bent-heading id="h-v21" level="2">עיקר</bent-heading>
+        <bent-text id="t-v22">תוכן העיקר</bent-text>
+      </bent-col>
+      <bent-col>
+        <bent-heading id="h-v23" level="2">צד</bent-heading>
+        <bent-text id="t-v24">תיבת צד</bent-text>
+      </bent-col>
+    </bent-columns>
+  </body>
+</html>

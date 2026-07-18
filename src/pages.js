@@ -331,6 +331,67 @@ function listArticles({ tag = 'article', limit = 12 } = {}) {
   return articles;
 }
 
+// ─── Multilingual pairing (v1.08) — "a fraction of WPML's surface" (Ben):
+// no per-string translation, no URL-prefix routing, no locale framework —
+// just page pairing (meta.translationGroup, a shared opaque id + meta.lang
+// per page) and a language switcher. Two existing pages become "the same
+// page in another language" with one link action; that's the whole feature.
+
+/** Sibling pages sharing this page's translationGroup, or []. */
+function getTranslations(full_path) {
+  const page = getPageByFullPath(full_path);
+  const group = page && page.meta && page.meta.translationGroup;
+  if (!group) return [];
+  return listPages()
+    .filter((p) => p.full_path !== full_path)
+    .map((p) => getPageByFullPath(p.full_path))
+    .filter((p) => p && p.meta && p.meta.translationGroup === group)
+    .map((p) => ({ lang: (p.meta && p.meta.lang) || '', full_path: p.full_path, title: p.title, status: p.status }));
+}
+
+/** Link two existing pages as translations of each other (a shared, symmetric group). */
+function linkTranslations(fullPathA, langA, fullPathB, langB) {
+  if (fullPathA === fullPathB) throw new Error('לא ניתן לקשר דף לעצמו');
+  const a = getPageByFullPath(fullPathA);
+  const b = getPageByFullPath(fullPathB);
+  if (!a) throw new Error('דף לא נמצא: ' + fullPathA);
+  if (!b) throw new Error('דף לא נמצא: ' + fullPathB);
+  // Reuse an existing group if either page already belongs to one (so linking
+  // a third page into an existing pair grows the group instead of forking it).
+  const group = (a.meta && a.meta.translationGroup) || (b.meta && b.meta.translationGroup)
+    || 'tg_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  updatePage(fullPathA, { meta: { ...(a.meta || {}), translationGroup: group, lang: String(langA || '').trim() || (a.meta && a.meta.lang) || '' } });
+  updatePage(fullPathB, { meta: { ...(b.meta || {}), translationGroup: group, lang: String(langB || '').trim() || (b.meta && b.meta.lang) || '' } });
+  return group;
+}
+
+/** Remove a page from its translation group (the group itself just shrinks). */
+function unlinkTranslation(full_path) {
+  const page = getPageByFullPath(full_path);
+  if (!page) throw new Error('דף לא נמצא: ' + full_path);
+  const meta = { ...(page.meta || {}) };
+  delete meta.translationGroup;
+  updatePage(full_path, { meta });
+}
+
+/**
+ * Every published page as a lightweight search entry (v0.98 — published-site
+ * search, the static-export gap vs. WordPress). Excerpt: meta.description or
+ * meta.teaser if the author set one, else the same auto-extraction
+ * listArticles uses.
+ */
+function listSearchable() {
+  const rows = db.prepare(`SELECT * FROM pages WHERE status = 'published' ORDER BY updated_at DESC, id DESC`).all();
+  return rows.map((row) => {
+    const page = parsePageRow(row);
+    return {
+      title: page.title,
+      url: publicUrlFor(page.full_path),
+      excerpt: (page.meta && (page.meta.description || page.meta.teaser)) || firstTeaser(page.blocks, 200)
+    };
+  });
+}
+
 function deletePage(full_path) {
   const result = db.prepare('DELETE FROM pages WHERE full_path = ?').run(full_path);
   db.prepare('DELETE FROM page_revisions WHERE full_path = ?').run(full_path);
@@ -516,6 +577,10 @@ module.exports = {
   getPageByFullPath,
   listPages,
   listArticles,
+  listSearchable,
+  getTranslations,
+  linkTranslations,
+  unlinkTranslation,
   publicUrlFor,
   deletePage,
   restoreRevision,

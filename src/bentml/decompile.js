@@ -430,6 +430,22 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}CARDS${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'pricing': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`title: ${q(it.title || '')}`];
+          if (it.price) ps.push(`price: ${q(it.price)}`);
+          if (it.period) ps.push(`period: ${q(it.period)}`);
+          if (it.ctaLabel) ps.push(`cta: ${q(it.ctaLabel)}`);
+          if (it.ctaUrl && it.ctaUrl !== '#') ps.push(`url: ${q(it.ctaUrl)}`);
+          if (it.highlighted) ps.push('highlighted: true');
+          return childWithBody('PLAN', ps, it.features, indent);
+        })
+        .join('\n');
+      return `${pad}PRICING${paramList(params)} {\n${kids}\n${pad}}`;
+    }
     case 'carousel': {
       const params = [];
       if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);

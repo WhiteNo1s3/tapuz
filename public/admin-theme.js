@@ -197,6 +197,37 @@
     }).then(function () { location.reload(); });
   };
 
+  // ── Theme package import (v0.99) — paste an exported file's JSON, apply ──
+  var importBtn = document.getElementById('th-import-apply');
+  if (importBtn) importBtn.onclick = function () {
+    var status = document.getElementById('th-import-status');
+    var raw = (document.getElementById('th-import-text') || {}).value || '';
+    var pkg;
+    try {
+      pkg = JSON.parse(raw);
+    } catch (e) {
+      if (status) { status.textContent = 'לא JSON תקין'; status.style.color = '#b91c1c'; }
+      return;
+    }
+    fetch('/admin/api/theme/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ package: pkg })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!status) return;
+      if (d.ok) {
+        status.textContent = 'הוחל ✓ — טוען מחדש…';
+        status.style.color = '#166534';
+        setTimeout(function () { location.reload(); }, 600);
+      } else {
+        status.textContent = d.error || 'שגיאה';
+        status.style.color = '#b91c1c';
+      }
+    }).catch(function () {
+      if (status) { status.textContent = 'שגיאת רשת'; status.style.color = '#b91c1c'; }
+    });
+  };
+
   renderLooks();
   // Initial preview
   setTimeout(preview, 50);

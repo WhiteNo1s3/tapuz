@@ -37,19 +37,26 @@ check('limit respected', rankCommands('', CMDS, 2).length === 2);
 check('no matches → empty list', rankCommands('qqqq', CMDS).length === 0);
 
 // ── server wiring (source asserts, like smoke-extension) ──
-const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
-check('layout injects the palette boot JSON', /__TAPUZ_NAV__/.test(server) && /paletteBootJson\(\)/.test(server));
-check('layout loads admin-palette.js', /admin-palette\.js/.test(server));
-check('every nav item feeds the palette', /for \(const g of ADMIN_NAV_GROUPS\)[\s\S]{0,200}commands\.push/.test(server));
-check('palette carries the everyday actions', /דף חדש/.test(server) && /inbox\.csv.*hint: 'פעולה'/.test(server));
-check('topbar has the Ctrl+K button', /TapuzPalette\.open\(\)/.test(server) && /Ctrl K/.test(server));
+// v0.96 moved layout()/adminNav()/paletteBootJson()/ADMIN_NAV_GROUPS out of
+// server.js into src/admin-ui.js (docs/ARCHITECTURE.md) — those checks read
+// admin-ui.js now. v1.29 moved the auth screens (login/logout/create-account)
+// out to src/routes/auth-screens.js, so the bare-auth-card check reads THAT
+// module now, not server.js — the same stale-source-assert fix pattern used
+// when symbols moved in v1.20.
+const adminUi = fs.readFileSync(path.join(__dirname, '..', 'src', 'admin-ui.js'), 'utf8');
+const authScreens = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'auth-screens.js'), 'utf8');
+check('layout injects the palette boot JSON', /__TAPUZ_NAV__/.test(adminUi) && /paletteBootJson\(\)/.test(adminUi));
+check('layout loads admin-palette.js', /admin-palette\.js/.test(adminUi));
+check('every nav item feeds the palette', /for \(const g of ADMIN_NAV_GROUPS\)[\s\S]{0,200}commands\.push/.test(adminUi));
+check('palette carries the everyday actions', /דף חדש/.test(adminUi) && /inbox\.csv.*hint: 'פעולה'/.test(adminUi));
+check('topbar has the Ctrl+K button', /TapuzPalette\.open\(\)/.test(adminUi) && /Ctrl K/.test(adminUi));
 check('auth screens are bare (no palette pre-login)',
-  (server.match(/authCard\(inner\), '[^']+', '#\w+', \{ bare: true \}/g) || []).length === 3);
-check('bare skips the palette in layout', /opts\.bare \? ''/.test(server));
+  (authScreens.match(/authCard\(inner\), '[^']+', '#\w+', \{ bare: true \}/g) || []).length === 3);
+check('bare skips the palette in layout', /opts\.bare \? ''/.test(adminUi));
 
 // palette boot JSON is valid and complete (require the builder indirectly:
 // pull the KEYWORDS map keys out and make sure no nav item was orphaned)
-const navKeys = [...server.matchAll(/\{ key: '([\w-]+)', href: '\/admin/g)].map((m) => m[1]);
+const navKeys = [...adminUi.matchAll(/\{ key: '([\w-]+)', href: '\/admin/g)].map((m) => m[1]);
 check('nav has the expected sections', navKeys.includes('pages') && navKeys.includes('analytics') && navKeys.includes('chat'));
 
 console.log('');

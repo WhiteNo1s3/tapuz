@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (34)
+## Modules (39)
 
 ### תוכן
 
@@ -290,6 +290,22 @@ Shape: `VIDEO(params)`
 VIDEO(src: "...")
 ```
 
+#### `AUDIO` → `audio`
+
+🎧 **שמע** — נגן שמע (mp3/ogg) — פודקאסט, מוזיקה, קטע רדיו; קישור יוטיוב הופך להטמעה
+
+Shape: `AUDIO(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `src` | `src` | media | yes |  |
+| `caption` | `caption` | string |  |  |
+| `loop` | `loop` | boolean |  | false |
+
+```bentml
+AUDIO(src: "...")
+```
+
 ### מבנה
 
 #### `ROW` → `columns`
@@ -357,6 +373,22 @@ CARD {
 }
 ```
 
+#### `SECTION` → `section`
+
+▣ **מיכל** — שטח שמור — מלאו עכשיו או אחרי הפרסום
+
+Shape: `SECTION(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `size` | `size` | enum sm\|md\|lg\|xl |  | "md" |
+
+```bentml
+SECTION(size: md) {
+  …
+}
+```
+
 ### שילובים
 
 #### `MAP` → `map`
@@ -377,36 +409,39 @@ MAP(address: "תל אביב", zoom: 14)
 
 ### אפקטים
 
-#### `MARQUEE` → `marquee`
+#### `MOTION` → `marquee`
 
-〰 **טקסט נע** — שורת טקסט שנעה לרוחב המסך
+〰 **טקסט נע** — טקסט שזז — נע לרוחב או נכנס באנימציה
 
-Shape: `MARQUEE(params) { text body }`
+Shape: `MOTION(params) { text body }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
+| `effect` | `effect` | enum marquee\|fade\|slide\|typewriter |  | "marquee" |
 | `speed` | `speed` | enum slow\|md\|fast |  | "md" |
 
 ```bentml
-MARQUEE {
+MOTION {
   …
 }
 ```
 
-#### `PARALLAX` → `parallax`
+#### `BACKDROP` → `parallax`
 
-🏔 **רקע קבוע (פרלקסה)** — תמונה קבועה — התוכן גולל מעליה
+🏔 **רקע קבוע (Backdrop)** — תמונה קבועה — התוכן גולל מעליה
 
-Shape: `PARALLAX(params) { nested modules }`
+Shape: `BACKDROP(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `image` | `image` | media |  |  |
 | `overlay` | `overlay` | integer |  | 0 |
+| `tint` | `tint` | enum none\|dark\|light\|brand |  | "none" |
+| `fade` | `fade` | boolean |  | false |
 | `height` | `height` | enum sm\|md\|lg\|full |  | "md" |
 
 ```bentml
-PARALLAX {
+BACKDROP {
   …
 }
 ```
@@ -437,7 +472,7 @@ CTA(title: "...", url: "...", align: start)
 
 ＃ **מספרים / מדדים** — שורה של מדדים (לקוחות, פרויקטים…)
 
-Shape: `STATS(params)`
+Shape: `STATS(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
@@ -445,7 +480,9 @@ Shape: `STATS(params)`
 | `items` | `—` | list |  |  |
 
 ```bentml
-STATS
+STATS {
+  …
+}
 ```
 
 ### מדיה
@@ -454,14 +491,16 @@ STATS
 
 ▣▣ **לוגואים / לקוחות** — רצועת לוגואים — PLACEHOLDER עד העלאת קבצים
 
-Shape: `LOGOS(params)`
+Shape: `LOGOS(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
 
 ```bentml
-LOGOS
+LOGOS {
+  …
+}
 ```
 
 ### תוכן
@@ -470,14 +509,33 @@ LOGOS
 
 ? **שאלות נפוצות** — רשימת שאלה / תשובה
 
-Shape: `FAQ(params)`
+Shape: `FAQ(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
 
 ```bentml
-FAQ
+FAQ {
+  …
+}
+```
+
+#### `TABLE` → `table`
+
+📋 **טבלה** — שעות פתיחה, מחירון, לו"ז — שורות מופרדות ב-| (ללא JS)
+
+Shape: `TABLE(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `header` | `header` | boolean |  | true |
+| `rows` | `—` | list |  |  |
+
+```bentml
+TABLE {
+  …
+}
 ```
 
 ### מבנה
@@ -486,28 +544,32 @@ FAQ
 
 ❐ **טאבים** — תוכן בלשוניות (CSS בלבד)
 
-Shape: `TABS(params)`
+Shape: `TABS(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
 
 ```bentml
-TABS
+TABS {
+  …
+}
 ```
 
 #### `ACCORDION` → `accordion`
 
 ☰ **אקורדיון** — מגירות נפתחות (CSS בלבד)
 
-Shape: `ACCORDION(params)`
+Shape: `ACCORDION(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
 
 ```bentml
-ACCORDION
+ACCORDION {
+  …
+}
 ```
 
 ### שילובים
@@ -516,7 +578,7 @@ ACCORDION
 
 ✉ **טופס** — טופס יצירת קשר / הרשמה (מודול #1 שהמפרק ביקש)
 
-Shape: `FORM(params)`
+Shape: `FORM(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
@@ -526,7 +588,9 @@ Shape: `FORM(params)`
 | `fields` | `—` | list |  |  |
 
 ```bentml
-FORM
+FORM {
+  …
+}
 ```
 
 ### מדיה
@@ -535,23 +599,59 @@ FORM
 
 ▦ **רשת כרטיסים** — רשת כרטיסי תוכן (תמונה + כותרת + קישור) — היחידה של אתר תוכן
 
-Shape: `CARDS(params)`
+Shape: `CARDS(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
 
 ```bentml
-CARDS
+CARDS {
+  …
+}
+```
+
+#### `CAROUSEL` → `carousel`
+
+🎠 **קרוסלה** — שקופיות בגלילה אופקית (ללא JS) — כרטיסי תוכן שמחליקים
+
+Shape: `CAROUSEL(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `height` | `height` | enum sm\|md\|lg |  | "md" |
+| `peek` | `peek` | boolean |  | true |
+| `items` | `—` | list |  |  |
+
+```bentml
+CAROUSEL {
+  …
+}
 ```
 
 ### מבנה
+
+#### `PRICING` → `pricing`
+
+💳 **טבלת מחירים** — רשת תוכניות מחיר — עד תוכנית אחת מודגשת
+
+Shape: `PRICING(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+
+```bentml
+PRICING {
+  …
+}
+```
 
 #### `NAV` → `nav`
 
 ≡ **תפריט ניווט** — שורת ניווט עם צבעים (רקע + טקסט)
 
-Shape: `NAV(params)`
+Shape: `NAV(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
@@ -561,7 +661,9 @@ Shape: `NAV(params)`
 | `items` | `—` | list |  |  |
 
 ```bentml
-NAV(align: start)
+NAV(align: start) {
+  …
+}
 ```
 
 ### מדיה
@@ -570,7 +672,7 @@ NAV(align: start)
 
 📰 **מבזקים נעים** — שורת מבזקים נעה — כותרות עם קישורים (סגנון וואלה), עם צבעים ומהירות
 
-Shape: `TICKER(params)`
+Shape: `TICKER(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
@@ -581,14 +683,16 @@ Shape: `TICKER(params)`
 | `items` | `—` | list |  |  |
 
 ```bentml
-TICKER
+TICKER {
+  …
+}
 ```
 
 #### `NEWSPOP` → `newspop`
 
 🕐 **מבזקים עם שעות** — מבזקי חדשות עם שעות — עמודה קבועה של "שעה · כותרת" (סגנון וואלה, לא נעה)
 
-Shape: `NEWSPOP(params)`
+Shape: `NEWSPOP(params) { nested modules }`
 
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
@@ -596,7 +700,9 @@ Shape: `NEWSPOP(params)`
 | `items` | `—` | list |  |  |
 
 ```bentml
-NEWSPOP
+NEWSPOP {
+  …
+}
 ```
 
 ### שילובים
@@ -645,6 +751,6 @@ Universal on most keywords: `class`, `id`.
 
 ## Reserved (future advanced modules)
 
-`SECTION`, `INPUT`, `FOOTER`, `HEADER`, `CODE`, `TABLE`, `AUDIO`, `SLIDER`
+`INPUT`, `FOOTER`, `HEADER`, `CODE`
 
 These are **not** implemented yet. Using them in BenTML is an error today.

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>עמוד מוורדפרס</title>
+    <meta name="bent-slug" content="wp-import-test" />
+  </head>
+  <body>
+    <bent-heading id="heading-wp1" level="1">שלום מוורדפרס</bent-heading>
+    <bent-text id="text-wp2">פסקה עם © 2026 ותו — מיוחד.</bent-text>
+    <bent-columns id="columns-wp5" gap="md" ratio="50:50">
+      <bent-col>
+        <bent-text id="text-wp3">טור שמאל</bent-text>
+      </bent-col>
+      <bent-col>
+        <bent-text id="text-wp4">טור ימין</bent-text>
+      </bent-col>
+    </bent-columns>
+  </body>
+</html>

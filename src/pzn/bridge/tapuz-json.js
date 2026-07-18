@@ -267,6 +267,15 @@ function blockToModule(block) {
       return createModule('cards', baseOpts(block, {}, { children }));
     }
 
+    case 'pricing': {
+      const children = (data.items || []).map((it) =>
+        createModule('plan', {
+          props: pickProps(it || {}, ['title', 'price', 'period', 'features', 'ctaLabel', 'ctaUrl', 'highlighted'])
+        })
+      );
+      return createModule('pricing', baseOpts(block, {}, { children }));
+    }
+
     case 'carousel': {
       const children = (data.items || []).map((it) =>
         createModule('slide', {
@@ -591,6 +600,14 @@ function moduleToBlock(node) {
         .filter((c) => c.name === 'mediacard')
         .map((c) => pickData(c.props || {}, ['image', 'tag', 'title', 'excerpt', 'href']));
       return finishBlock(node, 'cards', data);
+    }
+
+    case 'pricing': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'plan')
+        .map((c) => pickData(c.props || {}, ['title', 'price', 'period', 'features', 'ctaLabel', 'ctaUrl', 'highlighted']));
+      return finishBlock(node, 'pricing', data);
     }
 
     case 'carousel': {

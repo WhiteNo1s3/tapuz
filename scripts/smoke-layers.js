@@ -13,7 +13,9 @@ let fail = false;
 const check = (n, c) => { console.log((c ? 'OK  ' : 'FAIL') + ' ' + n); if (!c) fail = true; };
 
 const builder = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-builder.js'), 'utf8');
-const server = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
+// v1.31: the /admin/edit builder page moved out of server.js into
+// src/routes/pages-builder.js — the toolbox-markup asserts read it now.
+const builderPage = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'pages-builder.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'admin.css'), 'utf8');
 
 // ── the walker is registry-driven, both container shapes, virtual columns ──
@@ -40,7 +42,7 @@ check('flatten exposed for QA/debug', /_layersFlatten: flattenLayers/.test(build
 
 // ── the panel exists in the builder screen, styled by the design system ──
 check('toolbox carries the layers fold (tree + count)',
-  /id="layers-fold"/.test(server) && /id="layers-tree"/.test(server) && /id="layers-count"/.test(server));
+  /id="layers-fold"/.test(builderPage) && /id="layers-tree"/.test(builderPage) && /id="layers-count"/.test(builderPage));
 check('layers styles ride the dark-desk system',
   /\.layers-fold \{/.test(css) && /\.layer-row\.active/.test(css) && /--bc-border/.test(css));
 

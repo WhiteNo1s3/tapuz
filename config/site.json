@@ -4,6 +4,7 @@
   "baseUrl": "",
   "defaultTheme": "default",
   "language": "he",
+  "homepage": "home",
   "integrations": {
     "whatsapp": {
       "enabled": false,
@@ -15,6 +16,37 @@
   "seo": {
     "titlePattern": "",
     "defaultOgImage": ""
+  },
+  "header": {
+    "tagline": "",
+    "showLogo": true,
+    "sticky": true,
+    "ctaLabel": "",
+    "ctaUrl": ""
+  },
+  "footer": {
+    "text": "",
+    "columns": [],
+    "social": [],
+    "showCredit": true
+  },
+  "admin": {
+    "path": "/admin"
+  },
+  "analytics": {
+    "firstParty": {
+      "enabled": true,
+      "collectorUrl": "/_tapuz/collect"
+    },
+    "ga4": {
+      "measurementId": ""
+    },
+    "gaDataApi": {
+      "enabled": false,
+      "propertyId": "",
+      "serviceAccountPath": "",
+      "note": "Disabled. Requires @google-analytics/data + a service-account JSON key. See docs/analytics.md."
+    }
   },
   "logo": {
     "type": "text",

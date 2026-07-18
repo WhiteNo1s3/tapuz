@@ -88,8 +88,20 @@ function verifyPassword(password, stored) {
 }
 
 // ---------------------------------------------------------------------------
-// Admin accounts
+// Admin accounts + roles (v0.95 — user roles, the WP/Drupal parity gap)
+//
+// Two roles: 'admin' (everything, incl. security-sensitive settings — SMTP
+// credentials, AI keys, agent bridge tokens, team management) and 'editor'
+// (content/media/pages — the day-to-day site work). Accounts created before
+// roles existed have no `role` field on disk; roleOf() treats that as
+// 'admin' so nobody's access silently narrows on upgrade.
 // ---------------------------------------------------------------------------
+const ROLES = ['admin', 'editor'];
+
+function roleOf(user) {
+  return user && ROLES.includes(user.role) ? user.role : 'admin';
+}
+
 function hasAdmin() {
   return loadAuth().users.length > 0;
 }
@@ -99,9 +111,24 @@ function findUser(username) {
   return loadAuth().users.find(x => x.username.toLowerCase() === u) || null;
 }
 
+function findUserById(id) {
+  const user = loadAuth().users.find(x => x.id === id) || null;
+  return user ? { id: user.id, username: user.username, role: roleOf(user), createdAt: user.createdAt } : null;
+}
+
+/** Every account, newest-created last. Never includes password hashes. */
+function listUsers() {
+  return loadAuth().users.map(u => ({ id: u.id, username: u.username, role: roleOf(u), createdAt: u.createdAt }));
+}
+
+function countAdmins(users) {
+  return users.filter(u => roleOf(u) === 'admin').length;
+}
+
 /**
  * Create an admin account. The USER supplies username + password via the
- * first-run flow — a password is NEVER hardcoded here.
+ * first-run flow — a password is NEVER hardcoded here. Always role 'admin'
+ * (it's the site's first, sole account at the moment this runs).
  */
 function createAdmin(username, password) {
   const name = String(username || '').trim();
@@ -116,11 +143,66 @@ function createAdmin(username, password) {
     id: crypto.randomBytes(8).toString('hex'),
     username: name,
     passwordHash: hashPassword(pw),
+    role: 'admin',
     createdAt: new Date().toISOString()
   };
   data.users.push(user);
   saveAuth(data);
-  return { id: user.id, username: user.username };
+  return { id: user.id, username: user.username, role: user.role };
+}
+
+/**
+ * Invite a teammate (admin-only action, enforced by the caller/route layer).
+ * @param {string} role 'admin' | 'editor' — unrecognized falls back to 'editor'
+ *   (the least-privilege default for anyone this function doesn't recognize).
+ */
+function addTeamMember(username, password, role) {
+  const name = String(username || '').trim();
+  const pw = String(password || '');
+  const r = ROLES.includes(role) ? role : 'editor';
+  if (name.length < 2) throw new Error('שם משתמש קצר מדי');
+  if (pw.length < 8) throw new Error('הסיסמה חייבת להכיל לפחות 8 תווים');
+  const data = loadAuth();
+  if (data.users.some(x => x.username.toLowerCase() === name.toLowerCase())) {
+    throw new Error('שם המשתמש כבר קיים');
+  }
+  const user = {
+    id: crypto.randomBytes(8).toString('hex'),
+    username: name,
+    passwordHash: hashPassword(pw),
+    role: r,
+    createdAt: new Date().toISOString()
+  };
+  data.users.push(user);
+  saveAuth(data);
+  return { id: user.id, username: user.username, role: r };
+}
+
+/** Guards the last admin standing — a site can never lock itself out. */
+function setUserRole(id, role) {
+  if (!ROLES.includes(role)) throw new Error('תפקיד לא מוכר');
+  const data = loadAuth();
+  const user = data.users.find(u => u.id === id);
+  if (!user) throw new Error('משתמש לא נמצא');
+  if (roleOf(user) === 'admin' && role !== 'admin' && countAdmins(data.users) <= 1) {
+    throw new Error('לא ניתן להוריד את המנהל האחרון מתפקידו');
+  }
+  user.role = role;
+  saveAuth(data);
+  return { id: user.id, username: user.username, role };
+}
+
+/** Guards the last admin standing — same invariant as setUserRole. */
+function removeUser(id) {
+  const data = loadAuth();
+  const user = data.users.find(u => u.id === id);
+  if (!user) throw new Error('משתמש לא נמצא');
+  if (roleOf(user) === 'admin' && countAdmins(data.users) <= 1) {
+    throw new Error('לא ניתן למחוק את המנהל האחרון');
+  }
+  data.users = data.users.filter(u => u.id !== id);
+  saveAuth(data);
+  return true;
 }
 
 /** Returns the user record on success, or null. Constant-time on the password. */
@@ -131,7 +213,9 @@ function verifyLogin(username, password) {
     hashPassword(String(password || ''));
     return null;
   }
-  return verifyPassword(password, user.passwordHash) ? { id: user.id, username: user.username } : null;
+  return verifyPassword(password, user.passwordHash)
+    ? { id: user.id, username: user.username, role: roleOf(user) }
+    : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -284,6 +368,14 @@ module.exports = {
   createAdmin,
   verifyLogin,
   findUser,
+  // roles / team (v0.95)
+  ROLES,
+  roleOf,
+  findUserById,
+  listUsers,
+  addTeamMember,
+  setUserRole,
+  removeUser,
   // password primitives (exported for tests)
   hashPassword,
   verifyPassword,

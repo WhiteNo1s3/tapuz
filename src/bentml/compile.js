@@ -447,6 +447,25 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('cards', data);
     }
+    case 'PRICING': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'PLAN')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { title: cp.title || '' };
+          if (cp.price) item.price = cp.price;
+          if (cp.period) item.period = cp.period;
+          const features = singleOrMultiline(c.text || '');
+          if (features) item.features = features;
+          if (cp.cta) item.ctaLabel = cp.cta;
+          if (cp.url) item.ctaUrl = cp.url;
+          if (cp.highlighted === true || cp.highlighted === 'true') item.highlighted = true;
+          return item;
+        });
+      const data = { items };
+      applyChrome(data, p);
+      return createBlock('pricing', data);
+    }
     case 'CAROUSEL': {
       const items = (node.children || [])
         .filter((c) => c.name === 'SLIDE')
@@ -569,6 +588,7 @@ function buildBlock(node, warnings) {
     case 'NAVITEM':
     case 'TICKERITEM':
     case 'NEWSPOPITEM':
+    case 'PLAN':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });
