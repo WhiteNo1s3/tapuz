@@ -1,11 +1,16 @@
 'use strict';
 
 /**
- * v1.35 QA — proves src/routes/ai-paste.js works end-to-end as a mounted
- * Express Router: the two BYO-AI paste-flow pages (GET /admin/ai and
- * GET /admin/inject). No prior route-level coverage existed for these
- * screens; this confirms they render behind the admin gate with their
- * client scripts + mount points intact, and are not reachable unauthenticated.
+ * v1.35/v1.47 QA — proves src/routes/copilot.js works end-to-end as a mounted
+ * Express Router: the whole AI copilot surface, both tiers. Started as
+ * ai-paste coverage (the two BYOT paste-flow pages); grew with the module
+ * when v1.47 absorbed the rest of the cluster.
+ *
+ * Covered: the four admin screens (/admin/agent, /admin/ai, /admin/inject,
+ * /admin/chat) render behind the gate with their client scripts and mount
+ * points intact and are unreachable unauthenticated; the packs they hand out
+ * (inject-pack, syntax-dictionary[.md]) answer with the RIGHT dictionary; and
+ * the BYOK key surface (/admin/api/ai/settings) never leaks the stored key.
  */
 
 const fs = require('fs');
@@ -14,7 +19,7 @@ const os = require('os');
 const http = require('http');
 const { spawn } = require('child_process');
 
-const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-ai-paste-route-'));
+const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-copilot-route-'));
 const PORT = 3994;
 const BASE = `http://127.0.0.1:${PORT}`;
 
@@ -62,7 +67,7 @@ function waitUp(tries = 40) {
   require('../src/db');
   const { runSetup } = require('../src/setup');
   runSetup({
-    title: 'אתר בדיקה', description: 'ai-paste-route smoke',
+    title: 'אתר בדיקה', description: 'copilot-route smoke',
     colors: { primary: '#0a66c2', bg: '#fff', lightBg: '#f0f9ff', text: '#0f172a' },
     menuPlacement: 'top', pages: ['home'], menuPages: ['home'], external: []
   });
@@ -104,17 +109,50 @@ function waitUp(tries = 40) {
     check('GET /admin/api/syntax-dictionary → pzn JSON carrying the agent tools[]',
       dictJson.status === 200 && dict && dict.ok === true && Array.isArray(dict.tools) && dict.tools.length === toAgentTools().length);
 
-    // ── both are behind the admin gate ──
+    // ── /admin/agent (the extension pairing screen) ──
+    const agent = await req('GET', '/admin/agent', { cookie });
+    check('GET /admin/agent → 200 with the token UI + client script',
+      agent.status === 200 && /id="tok-create"/.test(agent.text) && /\/admin-agent\.js/.test(agent.text));
+
+    // ── /admin/chat (the BYOK copilot) ──
+    const chat = await req('GET', '/admin/chat', { cookie });
+    check('GET /admin/chat → 200 with the composer + key panel + client script',
+      chat.status === 200 && /id="btn-send"/.test(chat.text) && /id="ai-key"/.test(chat.text) && /\/admin-chat\.js/.test(chat.text));
+
+    // ── the pack /admin/inject's buttons fetch ──
+    const pack = await req('GET', '/admin/api/inject-pack', { cookie });
+    let bundle = null;
+    try { bundle = JSON.parse(pack.text); } catch (e) { /* leave null → check fails */ }
+    check('GET /admin/api/inject-pack → the JSON bundle the inject page renders',
+      pack.status === 200 && bundle && typeof bundle === 'object');
+    const packRoleplay = await req('GET', '/admin/api/inject-pack?format=roleplay', { cookie });
+    check('inject-pack?format=roleplay → markdown, not JSON',
+      packRoleplay.status === 200 && /markdown/.test(String(packRoleplay.headers['content-type'])) && packRoleplay.text.length > 500);
+
+    // ── the BYOK key surface must never hand the key back ──
+    const aiSettings = await req('GET', '/admin/api/ai/settings', { cookie });
+    let s = null;
+    try { s = JSON.parse(aiSettings.text); } catch (e) { /* leave null → check fails */ }
+    check('GET /admin/api/ai/settings → ok, with providers and NO apiKey echoed back',
+      aiSettings.status === 200 && s && s.ok === true && Array.isArray(s.providers) && !('apiKey' in s));
+
+    // ── all four screens are behind the admin gate ──
     const aiNoAuth = await req('GET', '/admin/ai', {});
     check('/admin/ai is not reachable unauthenticated', aiNoAuth.status !== 200 || !/id="paste-box"/.test(aiNoAuth.text));
     const injectNoAuth = await req('GET', '/admin/inject', {});
     check('/admin/inject is not reachable unauthenticated', injectNoAuth.status !== 200 || !/id="btn-roleplay"/.test(injectNoAuth.text));
+    const agentNoAuth = await req('GET', '/admin/agent', {});
+    check('/admin/agent is not reachable unauthenticated', agentNoAuth.status !== 200 || !/id="tok-create"/.test(agentNoAuth.text));
+    const chatNoAuth = await req('GET', '/admin/chat', {});
+    check('/admin/chat is not reachable unauthenticated', chatNoAuth.status !== 200 || !/id="ai-key"/.test(chatNoAuth.text));
+    const settingsNoAuth = await req('GET', '/admin/api/ai/settings', {});
+    check('/admin/api/ai/settings is not reachable unauthenticated', settingsNoAuth.status !== 200);
   } finally {
     child.kill();
   }
 
   console.log('');
-  console.log(fail ? 'SMOKE AI-PASTE-ROUTE: FAIL' : 'SMOKE AI-PASTE-ROUTE: PASS');
+  console.log(fail ? 'SMOKE COPILOT-ROUTE: FAIL' : 'SMOKE COPILOT-ROUTE: PASS');
   try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch (e) { /* best effort */ }
   process.exit(fail ? 1 : 0);
 })().catch((e) => {

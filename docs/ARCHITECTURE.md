@@ -737,6 +737,31 @@ Hebrew bodies it compares can otherwise be corrupted by a chunk boundary
 splitting a multi-byte character.) With the wedge gone, the BYOK/AI cluster
 noted in v1.19/v1.34/v1.35 as "blocked on this decision" is now extractable.
 
+- **`src/routes/copilot.js`** (v1.47) — the thirtieth and FINAL route-group
+  extraction: the AI copilot surface, taken as the considered group this
+  document called for rather than a page at a time. Four sibling admin
+  screens off one shared concern (how a user's AI reaches this CMS) plus the
+  APIs their client scripts call — `/admin/agent`, `/admin/ai`,
+  `/admin/inject`, `/admin/chat`, `inject-pack`, `syntax-dictionary[.md]`,
+  `ai/settings` (GET+POST), `ai/chat`. Both AI tiers deliberately live in one
+  module: BYOT/keyless (copy the pack into your own chat) and BYOK/key-in-the-
+  CMS are one product decision seen from two sides, and the old split hid
+  that. Done as a `git mv` of v1.35's `ai-paste.js` — which already held two
+  of the four pages — so the large Hebrew HTML blocks moved byte-for-byte
+  rather than being retyped. This group was only movable because v1.37
+  resolved the shadowed-dictionary bug two of its routes were entangled in;
+  the blocker named in v1.19/v1.34/v1.35 was real, and clearing it was what
+  unlocked the finish. `server.js` dropped 690 → **508 lines** (a **90%**
+  reduction from the session-start ~5,252), and with the last admin renderer
+  gone it no longer imports `admin-ui` or `admin-guard` at all — it renders no
+  admin HTML of its own. Verified by `smoke-copilot-route.js`, grown from 4
+  checks to 14: all four screens render with their client scripts and mount
+  points, all four (plus the AI settings API) are unreachable
+  unauthenticated, `inject-pack` answers in both JSON and roleplay-markdown
+  form, the dictionary pin from v1.37 still holds, and `ai/settings` never
+  echoes the stored `apiKey` back to the browser. Route count held at 146
+  across 33 files — nothing lost or duplicated in the move.
+
 ## What's next (candidates, not yet done)
 
 Twenty-nine route-group extractions (including one consolidation in v1.26,
@@ -745,12 +770,16 @@ the marquee site-builder surface in v1.31, the admin home in v1.32, the
 public /agent bridge in v1.33, the BenTML language API in v1.34, and the
 BYO-AI paste-flow pages in v1.35), the auth/CSRF gate, and the pzn/builder
 API surface split (stateless in v1.13, page-mutating in v1.14) are done.
-`server.js` is down to 704 lines from a session-start ~5,252 — an 87%
-reduction. The remaining inline surface is mostly the middleware chain (app
-assembly — legitimately stays) plus the rest of the BYOK/AI copilot area —
-`/admin/agent`, `/admin/ai`, `/admin/inject`, `/admin/chat` and their
-settings/chat APIs, all sharing provider/key state — which should move as
-a considered group (four sibling admin pages off one shared concern), not
-one page at a time, and only AFTER the shadowed-route bug above is
-resolved, since two of those routes are entangled in it. That's a scoping
-pass, not a mechanical pull from a list.
+`server.js` is down to **508 lines** from a session-start ~5,252 — a **90%**
+reduction — and the copilot cluster that was the last named blocker went in
+v1.47. **Route extraction is done.** What remains inline is the middleware
+chain (app assembly — legitimately stays) plus five strays that belong near
+it: `/_tapuz/collect`, `/pzn-schema.json`, `/admin/api/registry`,
+`/admin/bentml-engine.js`, `/admin/api/bentml/modules`. Pulling those would
+be motion, not progress.
+
+The honest next candidates are no longer architectural:
+- **Product QA on the builder** — the flows Ben's sister actually hits.
+- **AI tier realignment** — now that both tiers sit in one module, what BYOT
+  (keyless, media by reference) vs BYOK (key, can create media) may each do
+  is a design question with the code finally in one place to answer it.

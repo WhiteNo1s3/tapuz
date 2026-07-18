@@ -21,7 +21,6 @@ const PORT = process.env.PORT || 3000;
 const { PUBLIC_DIR, ASSETS_DIR } = require('./paths');
 const auth = require('./auth');
 // The admin UI shell (v0.96 — extracted out of this file; see docs/ARCHITECTURE.md)
-const { layout, adminNav, accentFor, escapeAdmin, ADMIN_NAV_GROUPS } = require('./admin-ui');
 const { FixedWindowLimiter } = require('./ratelimit');
 const analytics = require('./analytics');
 
@@ -218,9 +217,9 @@ app.use('/assets', express.static(uploadDir, { setHeaders: staticSecurityHeaders
 app.use(require('./admin-gate').adminGate);
 
 // requireAdmin (the gate for SMTP/AI/agent-token credentials, team management,
-// site settings) now lives in ./admin-guard — imported below with the other
-// early requires — so route modules can use it without reaching into server.js.
-const { requireAdmin } = require('./admin-guard');
+// site settings) lives in ./admin-guard, and every route module imports it
+// from there directly. v1.47: server.js's own last requireAdmin caller left
+// with the copilot cluster, so it no longer imports the guard at all.
 
 // =========================================================================
 // AGENT BRIDGE (v0.45) — /agent/v1/* — bearer-token API for external agents
@@ -264,9 +263,10 @@ app.use(require('./routes/team'));
 app.use(require('./routes/media'));
 
 // ======================== ROUTES ========================
-// (layout / adminNav / accentFor / escapeAdmin / ADMIN_NAV_GROUPS now live in
-// ./admin-ui — imported above. This was the first extraction out of this
-// file; see docs/ARCHITECTURE.md for the pattern.)
+// (layout / adminNav / accentFor / escapeAdmin / ADMIN_NAV_GROUPS live in
+// ./admin-ui — the first extraction out of this file; see
+// docs/ARCHITECTURE.md for the pattern. v1.47: server.js stopped importing
+// them entirely — it renders no admin HTML of its own any more.)
 
 // First-run setup wizard (GET /admin/setup + POST /admin/setup) —
 // extracted to src/routes/setup-wizard.js in v1.30 (twenty-fourth
@@ -457,199 +457,17 @@ app.use(require('./routes/sitemap'));
 // Multilingual pairing (v1.08) — link pages as translations of each other.
 app.use(require('./routes/translations'));
 
-// ─── /admin/agent — pair the browser bridge (agent tokens) ──────────
-app.get('/admin/agent', requireAdmin, (req, res) => {
-  const origin = `${req.protocol}://${req.headers.host}`;
-  const html = `
-    ${adminNav('agent', 'גשר סוכן — Grokin')}
-    <div class="container" style="padding-top:28px;max-width:900px">
-      <p style="color:#64748b;margin-top:0">
-        טוקנים מאובטחים שמחברים סוכן חיצוני (תוסף הדפדפן) ל‑API של תפוזיאל —
-        בלי סיסמה ובלי קובץ Cookie. הטוקן מוצג <b>פעם אחת בלבד</b> ביצירה.
-        נקודת הקצה: <code dir="ltr">${escapeAdmin(origin)}/agent/v1</code>
-      </p>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:18px">
-        <h3 style="margin-top:0">צור טוקן חדש</h3>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <input id="tok-name" placeholder="שם (למשל: Chrome של בן)" style="flex:1;min-width:200px;padding:9px;border:1px solid #e2e8f0;border-radius:8px">
-          <label style="font-size:.9rem"><input type="checkbox" id="tok-write" checked> הרשאת כתיבה (יצירת דפים)</label>
-          <button type="button" id="tok-create" class="btn">צור טוקן</button>
-        </div>
-        <div id="tok-new" style="display:none;margin-top:14px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0">
-          <div style="color:#166534;font-size:.9rem;margin-bottom:6px">העתק עכשיו — לא יוצג שוב:</div>
-          <code id="tok-secret" dir="ltr" style="display:block;word-break:break-all;background:#fff;padding:8px;border-radius:6px;border:1px solid #bbf7d0"></code>
-        </div>
-      </section>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
-        <h3 style="margin-top:0">טוקנים פעילים</h3>
-        <div id="tok-list" style="color:#64748b">טוען…</div>
-      </section>
-    </div>
-    <script src="/admin-agent.js"></script>
-  `;
-  res.send(layout(html, 'גשר סוכן', accentFor('agent')));
-});
-
 // import wizard (/admin/import + /admin/api/import) — extracted to
 // src/routes/import.js in v1.17 (twelfth route-group extraction).
 app.use(require('./routes/import'));
 
-// BYO-AI paste-flow pages (GET /admin/ai + GET /admin/inject) — extracted
-// to src/routes/ai-paste.js in v1.35 (twenty-ninth route-group extraction).
-app.use(require('./routes/ai-paste'));
-
-// Syntax dictionary — single source for agents + humans. v1.37 resolved the
-// v1.19 shadowed-route bug: these were registered TWICE (an older
-// block-registry pair above `bentml-api` won by Express's first-match rule,
-// leaving these dead). The older pair is gone; the pzn dictionary — the one
-// inject-pack, agent-bridge and agent-roleplay already use — now serves the
-// endpoint, so /admin/inject's "copy dictionary" matches its own tool list.
-// (src/syntax-dictionary.js still backs docs/SYNTAX-DICTIONARY.md via
-// `npm run gen:dictionary`; it is no longer an HTTP surface.)
-app.get('/admin/api/syntax-dictionary', (req, res) => {
-  const { buildDictionary, toAgentTools } = require('./pzn/syntax-dictionary');
-  res.json({ ok: true, dictionary: buildDictionary(), tools: toAgentTools() });
-});
-
-app.get('/admin/api/syntax-dictionary.md', (req, res) => {
-  const { buildDictionary, toMarkdown } = require('./pzn/syntax-dictionary');
-  res.type('text/markdown; charset=utf-8').send(toMarkdown(buildDictionary()));
-});
-
-app.get('/admin/api/inject-pack', (req, res) => {
-  const { buildRoleplayPack, buildRoleCard, buildInjectBundle } = require('./pzn/agent-roleplay');
-  const { buildDictionary, toMarkdown } = require('./pzn/syntax-dictionary');
-  const media = require('./media').listAllMedia(40);
-  const brief = req.query.brief ? String(req.query.brief) : '';
-  const locale = req.query.locale === 'en' ? 'en' : 'he';
-  const format = String(req.query.format || 'json');
-  const size = String(req.query.size || '') === 'lite' ? 'lite' : 'full';
-  const opts = { playerBrief: brief, locale, media, size };
-  if (format === 'roleplay') {
-    return res.type('text/markdown; charset=utf-8').send(buildRoleplayPack(opts).text);
-  }
-  if (format === 'card') {
-    return res.type('text/plain; charset=utf-8').send(buildRoleCard(opts));
-  }
-  if (format === 'dictionary' || format === 'dict') {
-    return res.type('text/markdown; charset=utf-8').send(toMarkdown(buildDictionary()));
-  }
-  res.json(buildInjectBundle(opts));
-});
-
-// ─── Tier-1 AI (v0.85): the key lives in the CMS, the chat runs here ───
-// Ben's realignment: key-based chat = CMS feature (server-side calls to the
-// provider's official API); the extension stays the KEYLESS tier.
-app.get('/admin/api/ai/settings', requireAdmin, (req, res) => {
-  try {
-    const ai = require('./ai');
-    res.json({ ok: true, ...ai.getSettings(), providers: ai.listProviders() });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
-app.post('/admin/api/ai/settings', requireAdmin, (req, res) => {
-  try {
-    const b = req.body || {};
-    const settings = require('./ai').saveSettings({
-      provider: b.provider,
-      model: b.model,
-      apiKey: b.apiKey // undefined = keep, '' = clear, value = replace
-    });
-    res.json({ ok: true, ...settings });
-  } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
-  }
-});
-
-// Lead email notifications (v0.94) — extracted into src/routes/integrations.js
-// alongside the rest of /admin/integrations (v1.01).
-
-app.post('/admin/api/ai/chat', async (req, res) => {
-  try {
-    const b = req.body || {};
-    const message = String(b.message || '').trim();
-    if (!message) return res.status(400).json({ ok: false, error: 'הודעה ריקה' });
-    // the same persona every AI on-ramp gets: role + dictionary + REAL media
-    const { buildRoleplayPack } = require('./pzn/agent-roleplay');
-    const media = require('./media').listAllMedia(40);
-    const system = buildRoleplayPack({ locale: 'he', media }).text;
-    const reply = await require('./ai').generate({
-      system,
-      user: message,
-      history: Array.isArray(b.history) ? b.history : []
-    });
-    res.json({ ok: true, reply });
-  } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
-  }
-});
-
-app.get('/admin/chat', (req, res) => {
-  const html = `
-    ${adminNav('chat', 'צ׳אט סוכן — תיאור → BenTML → דף')}
-    <style>
-      .chat-wrap { display:grid; grid-template-columns:1fr 320px; gap:18px; max-width:1120px; margin:0 auto; padding:18px; align-items:start; }
-      @media(max-width:900px){ .chat-wrap{ grid-template-columns:1fr; } }
-      .chat-main { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:16px; display:flex; flex-direction:column; min-height:520px; }
-      #chat-log { flex:1; overflow:auto; display:flex; flex-direction:column; gap:10px; padding-bottom:12px; }
-      .bubble { padding:11px 14px; border-radius:12px; max-width:92%; line-height:1.5; font-size:.92rem; }
-      .bubble.system { background:#f1f5f9; color:#334155; align-self:center; text-align:center; font-size:.86rem; }
-      .bubble.user { background:#0a66c2; color:#fff; align-self:flex-start; }
-      .bubble.assistant { background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; align-self:flex-end; }
-      .bubble .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-      .bubble .act { border:none; border-radius:8px; padding:7px 10px; cursor:pointer; font:600 12px system-ui; background:#e2e8f0; color:#0f172a; }
-      .bubble .act.primary { background:#7c3aed; color:#fff; }
-      .bubble .code { background:#0f172a; color:#e2e8f0; border-radius:8px; padding:8px; font:11px/1.4 ui-monospace,monospace; direction:ltr; text-align:left; white-space:pre-wrap; max-height:220px; overflow:auto; }
-      .chat-compose { border-top:1px solid #e2e8f0; padding-top:12px; }
-      .chat-compose textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:8px; min-height:70px; font-size:.92rem; }
-      .chat-compose .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
-      .chat-side .card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:16px; margin-bottom:14px; }
-      .chat-side .field { margin-bottom:10px; }
-      .chat-side label { display:block; font-size:.82rem; color:#475569; margin-bottom:4px; }
-      .chat-side input, .chat-side select { width:100%; box-sizing:border-box; padding:8px; border:1px solid #cbd5e1; border-radius:8px; }
-      .muted { color:#64748b; }
-    </style>
-    <div class="chat-wrap">
-      <div class="chat-main">
-        <div id="chat-log"></div>
-        <div class="chat-compose">
-          <textarea id="chat-input" placeholder="תארו את הדף שאתם רוצים… (Ctrl+Enter לשליחה)"></textarea>
-          <div class="row">
-            <button type="button" class="btn" id="btn-send">שלח</button>
-            <span id="chat-status" class="muted" style="font-size:.85rem;align-self:center"></span>
-          </div>
-        </div>
-      </div>
-      <aside class="chat-side">
-        <div class="card">
-          <h3 style="margin-top:0">🔑 המפתח שלכם — בתוך ה‑CMS</h3>
-          <p class="muted" style="font-size:.85rem;margin:0 0 10px">הצ׳אט קורא ל‑API הרשמי של הספק מהשרת שלכם, עם המפתח שלכם. המפתח נשמר בשרת בלבד (קובץ מוגן, מחוץ ל‑git) ולעולם לא נשלח לדפדפן.</p>
-          <div class="field"><label>ספק</label><select id="ai-provider"></select></div>
-          <div class="field"><label>מודל</label><select id="ai-model"></select></div>
-          <div class="field"><label>מפתח API <span id="ai-key-state" class="muted"></span></label>
-            <input id="ai-key" type="password" dir="ltr" autocomplete="off" placeholder="sk-…">
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button type="button" class="btn" id="ai-save" style="padding:7px 14px">שמור</button>
-            <span id="ai-settings-status" class="muted" style="font-size:.82rem"></span>
-          </div>
-        </div>
-        <div class="card">
-          <h3 style="margin-top:0">בלי מפתח? יש מסלול</h3>
-          <ul class="muted" style="font-size:.88rem;line-height:1.7;padding-inline-start:18px;margin:0">
-            <li><a href="/admin/inject">מילון · משחק</a> — הדביקו את החבילה בצ׳אט שאתם כבר מנויים עליו</li>
-            <li><a href="/admin/ai">הדבקה ידנית</a> — הדביקו תשובת AI ובנו דף בתוך ה‑CMS</li>
-            <li><a href="/admin/agent">גשר סוכן</a> — התוסף (ללא מפתח) עובד על הצ׳אט הפתוח שלכם</li>
-          </ul>
-        </div>
-      </aside>
-    </div>
-    <script src="/admin-chat.js"></script>
-  `;
-  res.send(layout(html, 'קופיילוט', accentFor('chat')));
-});
+// The AI copilot surface (GET /admin/agent, /admin/ai, /admin/inject,
+// /admin/chat + the inject-pack / syntax-dictionary / ai-settings / ai-chat
+// APIs their client scripts call) — extracted to src/routes/copilot.js in
+// v1.47, the thirtieth and final route-group extraction. It could only move
+// as a group once v1.37 resolved the shadowed-dictionary bug two of its
+// routes were entangled in.
+app.use(require('./routes/copilot'));
 
 // copilot mission ADMIN api (/admin/api/mission/*) — extracted to
 // src/routes/mission.js in v1.18 (thirteenth route-group extraction). The

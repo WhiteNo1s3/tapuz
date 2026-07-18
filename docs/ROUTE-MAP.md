@@ -10,21 +10,13 @@ shows where, so editing is navigation, not a grep hunt.
 
 ## By file (what each module owns)
 
-### `src/server.js` — 13 routes
+### `src/server.js` — 5 routes
 
 - `POST /_tapuz/collect`
 - `GET /pzn-schema.json`
 - `GET /admin/api/registry`
 - `GET /admin/bentml-engine.js`
 - `GET /admin/api/bentml/modules`
-- `GET /admin/agent`
-- `GET /admin/api/syntax-dictionary`
-- `GET /admin/api/syntax-dictionary.md`
-- `GET /admin/api/inject-pack`
-- `GET /admin/api/ai/settings`
-- `POST /admin/api/ai/settings`
-- `POST /admin/api/ai/chat`
-- `GET /admin/chat`
 
 ### `src/routes/admin-home.js` — 1 route
 
@@ -53,11 +45,6 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/agent-tokens`
 - `POST /admin/api/agent-tokens`
 - `DELETE /admin/api/agent-tokens/:id`
-
-### `src/routes/ai-paste.js` — 2 routes
-
-- `GET /admin/ai`
-- `GET /admin/inject`
 
 ### `src/routes/analytics.js` — 2 routes
 
@@ -94,6 +81,19 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/articles`
 - `GET /admin/api/revisions/:fullPath`
 - `POST /admin/api/revisions/restore`
+
+### `src/routes/copilot.js` — 10 routes
+
+- `GET /admin/agent`
+- `GET /admin/ai`
+- `GET /admin/inject`
+- `GET /admin/api/syntax-dictionary`
+- `GET /admin/api/syntax-dictionary.md`
+- `GET /admin/api/inject-pack`
+- `GET /admin/api/ai/settings`
+- `POST /admin/api/ai/settings`
+- `POST /admin/api/ai/chat`
+- `GET /admin/chat`
 
 ### `src/routes/dashboard.js` — 2 routes
 
@@ -261,16 +261,16 @@ shows where, so editing is navigation, not a grep hunt.
 |---|---|---|
 | `/_tapuz/collect` | POST | `src/server.js` |
 | `/admin` | GET | `src/routes/admin-home.js` |
-| `/admin/agent` | GET | `src/server.js` |
-| `/admin/ai` | GET | `src/routes/ai-paste.js` |
+| `/admin/agent` | GET | `src/routes/copilot.js` |
+| `/admin/ai` | GET | `src/routes/copilot.js` |
 | `/admin/analytics` | GET | `src/routes/analytics.js` |
 | `/admin/analytics.csv` | GET | `src/routes/analytics.js` |
 | `/admin/api/agent-tokens` | GET | `src/routes/agent-tokens.js` |
 | `/admin/api/agent-tokens` | POST | `src/routes/agent-tokens.js` |
 | `/admin/api/agent-tokens/:id` | DELETE | `src/routes/agent-tokens.js` |
-| `/admin/api/ai/chat` | POST | `src/server.js` |
-| `/admin/api/ai/settings` | GET | `src/server.js` |
-| `/admin/api/ai/settings` | POST | `src/server.js` |
+| `/admin/api/ai/chat` | POST | `src/routes/copilot.js` |
+| `/admin/api/ai/settings` | GET | `src/routes/copilot.js` |
+| `/admin/api/ai/settings` | POST | `src/routes/copilot.js` |
 | `/admin/api/articles` | GET | `src/routes/content-api.js` |
 | `/admin/api/bentml/agent-pack` | GET | `src/routes/bentml-api.js` |
 | `/admin/api/bentml/apply` | POST | `src/routes/bentml-api.js` |
@@ -284,7 +284,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/categories` | POST | `src/routes/categories.js` |
 | `/admin/api/homepage` | POST | `src/routes/homepage.js` |
 | `/admin/api/import` | POST | `src/routes/import.js` |
-| `/admin/api/inject-pack` | GET | `src/server.js` |
+| `/admin/api/inject-pack` | GET | `src/routes/copilot.js` |
 | `/admin/api/integrations` | GET | `src/routes/integrations.js` |
 | `/admin/api/integrations` | POST | `src/routes/integrations.js` |
 | `/admin/api/menus` | GET | `src/routes/menus.js` |
@@ -325,8 +325,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/symbols` | GET | `src/routes/symbols.js` |
 | `/admin/api/symbols` | POST | `src/routes/symbols.js` |
 | `/admin/api/symbols/delete` | POST | `src/routes/symbols.js` |
-| `/admin/api/syntax-dictionary` | GET | `src/server.js` |
-| `/admin/api/syntax-dictionary.md` | GET | `src/server.js` |
+| `/admin/api/syntax-dictionary` | GET | `src/routes/copilot.js` |
+| `/admin/api/syntax-dictionary.md` | GET | `src/routes/copilot.js` |
 | `/admin/api/team` | POST | `src/routes/team.js` |
 | `/admin/api/team/:id` | DELETE | `src/routes/team.js` |
 | `/admin/api/team/:id/role` | POST | `src/routes/team.js` |
@@ -341,7 +341,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/build` | POST | `src/routes/pages-builder.js` |
 | `/admin/build-redirect` | POST | `src/routes/dashboard.js` |
 | `/admin/categories` | GET | `src/routes/categories.js` |
-| `/admin/chat` | GET | `src/server.js` |
+| `/admin/chat` | GET | `src/routes/copilot.js` |
 | `/admin/create` | POST | `src/routes/pages-builder.js` |
 | `/admin/create-account` | GET | `src/routes/auth-screens.js` |
 | `/admin/create-account` | POST | `src/routes/auth-screens.js` |
@@ -358,7 +358,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/inbox/read` | POST | `src/routes/inbox.js` |
 | `/admin/inbox/status` | POST | `src/routes/inbox.js` |
 | `/admin/inbox/value` | POST | `src/routes/inbox.js` |
-| `/admin/inject` | GET | `src/routes/ai-paste.js` |
+| `/admin/inject` | GET | `src/routes/copilot.js` |
 | `/admin/integrations` | GET | `src/routes/integrations.js` |
 | `/admin/login` | GET | `src/routes/auth-screens.js` |
 | `/admin/login` | POST | `src/routes/auth-screens.js` |
