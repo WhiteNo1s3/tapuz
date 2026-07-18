@@ -1592,10 +1592,17 @@ body:not(.builder-screen) .bentml-status.ok { color: var(--ok-deep); }
 body:not(.builder-screen) .bentml-status.err { color: #b91c1c; }
 body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
 
-/* Provisional raw-HTML block + its "graduate to modules" action (v0.51). */
-.bent-html-card { border: 1px dashed #f59e0b; border-radius: 10px; background: #fffbeb; padding: 12px; }
-.bent-html-badge { font-size: 0.78rem; font-weight: 700; color: #92400e; margin-bottom: 6px; }
-.bent-html-note { font-size: 0.78rem; color: #a16207; margin-bottom: 6px; }
+/* Raw-HTML block + its "graduate to modules" action (v0.51).
+   v1.49: the block graduated from importer-quarantine to a tool authors pick on
+   purpose, so the amber WARNING look moved to `.is-provisional` (still what the
+   importer parks). A block you added deliberately reads as neutral slate — it
+   is a normal tool, not a problem to clean up. */
+.bent-html-card { border: 1px dashed var(--line, #cbd5e1); border-radius: 10px; background: #f8fafc; padding: 12px; }
+.bent-html-card.is-provisional { border-color: #f59e0b; background: #fffbeb; }
+.bent-html-badge { font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 6px; }
+.bent-html-card.is-provisional .bent-html-badge { color: #92400e; }
+.bent-html-note { font-size: 0.78rem; color: #64748b; margin-bottom: 6px; }
+.bent-html-card.is-provisional .bent-html-note { color: #a16207; }
 .bent-html-raw {
   max-height: 160px; overflow: auto; background: #1e293b; color: #e2e8f0;
   border-radius: var(--r-sm); padding: 10px; margin: 0 0 10px;

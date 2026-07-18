@@ -45,17 +45,41 @@ const compiled = pzn.compile(doc);
 check('compile: bent-html div present', /class="bent-html/.test(compiled));
 check('compile: kept legit <h2>', /<h2>מבצע<\/h2>/.test(compiled));
 
-// ── renderer.js (published-site path) sanitizes ─────────────────────
+// ── renderer.js (published-site path) emits AUTHORED html RAW ───────
+// v1.49 INVERTED these three assertions on purpose. They used to prove the
+// render path stripped script; the product decision is now that an author —
+// human or agent — gets a real escape hatch, so authored markup goes out
+// verbatim, script included, exactly like WordPress's Custom HTML block.
+// They are kept (not deleted) and flipped, so the file still PINS the
+// behaviour rather than going quiet about it: if a future change silently
+// re-introduces sanitizing here, these fail and someone has to make the
+// product call again on purpose.
 const dangerous = {
   type: 'html', id: 'x',
   data: { content: '<div>hi</div><script>alert(1)</script><a href="javascript:alert(1)">c</a><img src=x onerror=alert(1)>' }
 };
 const rendered = renderBlock(dangerous, 'rtl');
-check('render: <script> stripped', !/<script/i.test(rendered));
-check('render: onerror stripped', !/onerror/i.test(rendered));
-check('render: javascript: neutralized', !/javascript:/i.test(rendered));
+check('render: authored <script> passes through RAW (deliberate, v1.49)', /<script>alert\(1\)<\/script>/.test(rendered));
+check('render: authored onerror survives', /onerror/i.test(rendered));
+check('render: authored javascript: href survives', /javascript:alert\(1\)/i.test(rendered));
 check('render: kept legit <div>hi', /<div>hi<\/div>/.test(rendered));
 check('render: wrapper carries bent-html class', /class="bent-html/.test(rendered));
+
+// ── but the OUTSIDE-facing path is still scrubbed ───────────────────
+// The line v1.49 drew: trusted AUTHOR raw, untrusted SOURCE scrubbed. The
+// importer faces real third-party markup (its own comment cites yahoo.com), so
+// when graduation cannot decompose a page it parks a SANITIZED fragment. That
+// is a different trust context from an author typing into the HTML tool, and it
+// must not follow the raw decision above.
+const { htmlToBlocks } = require('../src/pzn/graduate');
+if (typeof htmlToBlocks === 'function') {
+  const imported = htmlToBlocks('<div><script>alert("from the web")</script><p>hi</p></div>');
+  const parked = (imported.blocks || []).filter((b) => b.type === 'html');
+  const anyScript = parked.some((b) => /<script/i.test((b.data && b.data.content) || ''));
+  check('import: third-party <script> is NOT parked raw (scrubbed on ingestion)', !anyScript);
+} else {
+  check('import: graduate exposes htmlToBlocks to test the ingestion path', false);
+}
 
 // ── sanitizer adversarial battery (the real guarantee) ──────────────
 const battery = [

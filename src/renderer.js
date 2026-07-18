@@ -5,7 +5,6 @@ const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
 const { getMenuForLocation } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
-const { sanitizeHtmlFragment } = require('./html-sanitize');
 
 function loadTheme(themeSlug = 'default') {
   const themeDir = path.join(THEMES_DIR, themeSlug);
@@ -104,18 +103,31 @@ function renderBlock(block, direction = 'rtl') {
   const style = styleAttr(block.data);
   const extra = extraClass + extraId + style;
 
-  // bent-html escape hatch (v0.49): a pzn-level PROVISIONAL raw-HTML block, not
-  // a Tapuz toolbox block — handled here (not a switch case) so it stays out of
-  // the block registry / keyword language. The sanitizer is the guarantee (the
-  // published CSP allows inline script) — see src/html-sanitize.js.
-  if (block.type === 'html') {
-    const safe = sanitizeHtmlFragment((block.data && block.data.content) || '');
-    const prov = (block.data && block.data.provisional !== false && block.data.provisional !== 'false')
-      ? ' data-bent-provisional="true"' : '';
-    return `<div class="bent-html${extraClass}"${extraId}${style}${prov} dir="${direction}">${safe}</div>`;
-  }
-
   switch (block.type) {
+    // HTML module — the raw-HTML escape hatch (v0.49 as an importer quarantine
+    // bin, graduated to a first-class authoring tool in v1.49; it lived outside
+    // this switch while it was not a real block type).
+    //
+    // The payload is emitted RAW, script included. That is the deliberate
+    // product decision: no CMS ships every widget in the world, so an author —
+    // human or agent — needs a hatch for the thing we have no module for. Same
+    // power WordPress hands an admin through its Custom HTML block.
+    //
+    // SECURITY, stated plainly so nobody "fixes" this by accident: authored raw
+    // HTML is NOT sanitized, and the published CSP allows 'unsafe-inline', so a
+    // <script> written here RUNS on the live site. Anyone who can edit a page
+    // can therefore run script on visitors. What stays scrubbed is content from
+    // OUTSIDE — src/pzn/graduate.js still sanitizes scraped third-party markup
+    // on import. Trusted-author raw, untrusted-source scrubbed: that is the
+    // line, and it is intentional.
+    case 'html': {
+      const raw = (block.data && block.data.content) || '';
+      // v1.49 flipped the default: an author reaching for the HTML tool means
+      // it, so a block is provisional only when something SAYS so (the importer).
+      const flag = block.data && block.data.provisional;
+      const prov = (flag === true || flag === 'true') ? ' data-bent-provisional="true"' : '';
+      return `<div class="bent-html${extraClass}"${extraId}${style}${prov} dir="${direction}">${raw}</div>`;
+    }
     case 'heading': {
       const level = Math.min(Math.max(block.data.level || 2, 1), 6);
       const clsList = [];

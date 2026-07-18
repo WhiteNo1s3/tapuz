@@ -243,7 +243,10 @@ const KEYWORDS = {
       fade: { type: 'boolean', default: false }
     }
   },
-  HTML: { body: 'HTML' },
+  HTML: { body: 'HTML', jsonType: 'html', params: {
+    note: { type: 'string' },
+    provisional: { type: 'boolean' }
+  } },
 
   // Enterprise / company-page modules
   CTA: {

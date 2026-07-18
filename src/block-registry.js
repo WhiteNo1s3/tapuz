@@ -425,6 +425,43 @@ const BLOCK_REGISTRY = [
     seed: { images: [] }
   },
   {
+    // The escape hatch, graduated to a real tool in v1.49. It existed in the
+    // pzn registry since v0.49 but never here — so it had no toolbox entry and
+    // no editor, and the only way to get one was the importer parking markup in
+    // it. Authors and agents now reach for it on purpose: when the CMS has no
+    // module for the thing you want, you write the thing.
+    //
+    // bodyClass 'raw' (↔ the HTML keyword's 'HTML' body) means the payload is
+    // the body, not an escaped attribute — so it reads as real HTML in the .pzn.
+    // NOTE: content compiles UNSANITIZED, script included, by design — see the
+    // security note in src/renderer.js and src/pzn/modules/registry.js.
+    type: 'html',
+    keyword: 'HTML',
+    labelHe: 'HTML גולמי',
+    icon: '<>',
+    category: 'שילובים',
+    bodyClass: 'raw',
+    childrenOf: null,
+    hintHe: 'הדבק HTML משלך — לכל דבר שאין לו מודול',
+    /** Not a beginner tool: it is the hatch you take when the toolbox runs out. */
+    complexity: 'advanced',
+    params: [
+      {
+        name: 'note', labelHe: 'הערה', type: 'string', default: '', omitDefault: true,
+        hint: 'למה נדרש כאן HTML גולמי — עוזר להמיר אותו למודול אמיתי בהמשך'
+      },
+      {
+        name: 'provisional', labelHe: 'זמני (להמרה למודולים)', type: 'boolean',
+        default: false, omitDefault: true,
+        hint: 'מסומן אוטומטית כשייבוא חיצוני לא הצליח להתפרק למודולים'
+      }
+    ],
+    textField: 'content',
+    textFieldLabelHe: 'קוד HTML — נכתב לדף כמו שהוא',
+    textFieldType: 'textarea',
+    seed: { content: '<div class="my-thing">\n  <!-- כאן כותבים HTML חופשי -->\n</div>' }
+  },
+  {
     type: 'embed',
     keyword: 'EMBED',
     labelHe: 'וידאו',

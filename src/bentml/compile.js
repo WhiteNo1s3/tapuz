@@ -273,9 +273,14 @@ function buildBlock(node, warnings) {
         code: 'W_HTML',
         message: 'HTML fence used — raw HTML escape hatch'
       });
-      return createBlock('text', {
-        content: '',
-        rawHtml: node.text || '',
+      // v1.49: this used to mint a `text` block carrying the markup in a
+      // `rawHtml` field. Nothing ever RENDERED that field — renderer.js reads
+      // `content` — so a fence round-tripped through the engine and then
+      // published as an empty paragraph, silently losing the author's HTML.
+      // Now it compiles to the real `html` block, the same one the builder tool
+      // and the pzn `html` module use, so one representation renders everywhere.
+      return createBlock('html', {
+        content: node.text || '',
         className: 'bentml-html-fence'
       });
     }

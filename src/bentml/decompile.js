@@ -115,7 +115,14 @@ function decompileBlock(block, indent) {
       uni(params, d, idParams);
       return `${pad}HEADING${paramList(params)} { ${escBody(d.text || '')} }`;
     }
+    // The raw-HTML escape hatch. The triple-brace fence keeps the payload
+    // readable as real HTML in the source instead of an escaped one-liner.
+    case 'html':
+      return `${pad}HTML {{{\n${d.content || ''}\n${pad}}}}`;
     case 'text': {
+      // Legacy shape: pre-v1.49 the HTML fence compiled to a `text` block with
+      // a `rawHtml` field (which nothing rendered — see src/bentml/compile.js).
+      // Kept so old drafts still decompile, but nothing MINTS this any more.
       if (d.rawHtml) {
         return `${pad}HTML {{{\n${d.rawHtml}\n${pad}}}}`;
       }

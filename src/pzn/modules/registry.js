@@ -1,7 +1,6 @@
 'use strict';
 
 const { escapeHtml, escapeAttr, escapeCssUrl, safeHref } = require('../language/escape');
-const { sanitizeHtmlFragment } = require('../../html-sanitize');
 
 /**
  * Module registry = type system of the page.
@@ -1602,21 +1601,30 @@ register({
   }
 });
 
-// ─── Escape hatch (v0.49) — the pressure valve for off-vocabulary designs ──
+// ─── The escape hatch (v0.49) — graduated to a first-class tool (v1.49) ────
 // A registered tag whose PAYLOAD is arbitrary HTML. The standard stays a
-// registry (this IS a registered module); the payload is unconstrained but
-// sanitized at compile time (src/html-sanitize.js is the guarantee — the
-// published CSP allows inline script, so it is NOT a backstop here).
+// registry (this IS a registered module); the payload is unconstrained.
 //
-// `provisional` marks it as "not yet a real module" — the builder flags it and
-// the repair engine mints it when quarantining raw HTML. The raw markup lives
-// HTML-escaped in the `content` ATTRIBUTE (never the body: raw tags in a body
-// are a parse error by design), so it round-trips through the plain serializer.
+// WHY IT EXISTS: no CMS can ship every widget in the world. When an author —
+// human or agent — needs the thing we have no module for, this is the hatch,
+// rather than the thing not being buildable at all. v0.49 shipped it as a
+// QUARANTINE bin (provisional, sanitized, importer-only); v1.49 graduated it
+// into a real tool authors and agents reach for on purpose.
+//
+// SECURITY — deliberate, do not "fix" this by adding a sanitizer back:
+// the payload compiles RAW, script included, and the published CSP allows
+// 'unsafe-inline', so a <script> written here RUNS. Anyone who can edit a page
+// can run script on visitors. What stays scrubbed is content from OUTSIDE —
+// src/pzn/graduate.js still sanitizes scraped third-party markup on import.
+// Trusted-author raw, untrusted-source scrubbed. That is the line.
+//
+// `provisional` no longer defaults true: it now means "the importer parked
+// this here, graduate it into real modules," which is what the builder flags.
 register({
   name: 'html',
   tag: 'bent-html',
   category: 'advanced',
-  label: { he: 'HTML גולמי (זמני)', en: 'Raw HTML (provisional)' },
+  label: { he: 'HTML גולמי', en: 'Raw HTML' },
   icon: 'code',
   container: false,
   props: {
@@ -1625,7 +1633,7 @@ register({
       label: { he: 'קוד HTML', en: 'HTML code' }
     },
     provisional: {
-      type: 'boolean', default: true, optional: true,
+      type: 'boolean', default: false, optional: true,
       label: { he: 'זמני (להמרה למודולים)', en: 'Provisional (convert to modules)' }
     },
     note: {
@@ -1635,13 +1643,13 @@ register({
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
-  defaults: { content: '', provisional: true },
+  defaults: { content: '', provisional: false },
   compile(node, ctx) {
     const { id, cls } = attrsExtra(node);
-    const safe = sanitizeHtmlFragment(node.props.content || '');
-    const isProvisional = node.props.provisional !== false && node.props.provisional !== 'false';
-    const prov = isProvisional ? ' data-bent-provisional="true"' : '';
-    return `<div${id} class="bent-html${cls}"${prov}${dirAttr(ctx)}>${safe}</div>`;
+    const raw = node.props.content || '';
+    const flag = node.props.provisional;
+    const prov = (flag === true || flag === 'true') ? ' data-bent-provisional="true"' : '';
+    return `<div${id} class="bent-html${cls}"${prov}${dirAttr(ctx)}>${raw}</div>`;
   }
 });
 

@@ -1817,12 +1817,15 @@
       return wrap;
     }
 
-    // Provisional raw-HTML block (the escape hatch) — show it clearly and offer
-    // to graduate it into real modules. Content is shown ESCAPED (never injected
-    // into the admin DOM) so an LLM-steered fragment can't run here.
+    // The raw-HTML escape hatch — a first-class tool since v1.49. Content is
+    // shown ESCAPED here (never injected into the admin DOM): it renders raw on
+    // the PUBLISHED page by design, but the builder must not run an author's or
+    // an LLM-steered fragment's script inside the admin session.
     if (block.type === 'html') {
       var rawContent = d.content || '';
-      var isProv = d.provisional !== false && d.provisional !== 'false';
+      // v1.49: provisional is opt-IN (the importer sets it). A block an author
+      // added on purpose is not "temporary" and must not wear the warning badge.
+      var isProv = d.provisional === true || d.provisional === 'true';
       var escaped = esc(rawContent);
       wrap.innerHTML =
         '<div class="bent-html-card' + (isProv ? ' is-provisional' : '') + '">' +

@@ -115,6 +115,7 @@ const VOCAB_DATA = {
   button: { text: 'לחצו', url: '/x', variant: 'primary' },
   columns: { columns: [{ blocks: [] }, { blocks: [] }], gap: 'md', collapse: 'md', valign: 'top' },
   spacer: { size: 'lg' },
+  html: { content: '<div class="custom"><p>raw</p></div>' },
   divider: { bentStyle: 'dots' },
   list: { ordered: false, items: [{ text: 'פריט' }] },
   quote: { text: 'ציטוט', author: 'מישהו' },

@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (39)
+## Modules (40)
 
 ### תוכן
 
@@ -255,6 +255,27 @@ GALLERY(columns: 3) {
   IMAGE(src: "/uploads/1.jpg", alt: "")
 }
 ```
+
+### שילובים
+
+#### `HTML` → `html`
+
+<> **HTML גולמי** — הדבק HTML משלך — לכל דבר שאין לו מודול
+
+Shape: `HTML {{{ raw }}}`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `note` | `note` | string |  | "" |
+| `provisional` | `provisional` | boolean |  | false |
+
+```bentml
+HTML {
+  …
+}
+```
+
+### מדיה
 
 #### `EMBED` → `embed`
 

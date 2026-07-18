@@ -1231,3 +1231,12 @@ a.bent-newspop-text:hover { text-decoration: underline; }
 .tz-section.is-empty.size-md { min-height: 6rem; }
 .tz-section.is-empty.size-lg { min-height: 12rem; }
 .tz-section.is-empty.size-xl { min-height: 20rem; }
+
+/* ── HTML גולמי (the raw-HTML escape hatch) — v1.49 ──
+   Deliberately almost nothing. This block exists so an author can build the
+   thing the CMS has no module for, so the theme must not impose a look on
+   their markup. We only stop it from breaking the page around it: contain the
+   layout and keep long unbroken strings from forcing a horizontal scrollbar.
+   Anything visual is the author's job, inside their own markup. */
+.bent-html { min-width: 0; max-width: 100%; overflow-wrap: break-word; }
+.bent-html > * { max-width: 100%; }
