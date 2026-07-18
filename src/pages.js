@@ -124,6 +124,14 @@ function updatePage(full_path, updates = {}) {
   const kind = updates.revisionKind || (publish ? 'publish' : 'draft');
   delete updates.revisionKind;
 
+  // Partial updates merge, they never clobber: a caller sending only a slug
+  // (agent bridge, API) must not null out title/blocks because the route
+  // spelled the keys with undefined values. Same forgiving-save contract as
+  // the builder path.
+  for (const k of Object.keys(updates)) {
+    if (updates[k] === undefined) delete updates[k];
+  }
+
   const newData = {
     ...existing,
     ...updates,
@@ -205,6 +213,23 @@ function updatePage(full_path, updates = {}) {
   };
   store.writePagePzn(pageLike, draftBlocks || [], 'draft');
   if (publish) store.writePagePzn(pageLike, publishedBlocks || [], 'published');
+
+  // the static export follows the same transitions the .pzn store just did:
+  // an address that left the published site must stop serving from public/.
+  // Lazy require: export.js requires this module at load time.
+  try {
+    const exportLib = require('./export');
+    if (newData.full_path !== full_path) {
+      exportLib.removePageHtml(full_path);
+      // a rename of a live page moves its export too — published content
+      // keeps serving, at the page's new address, without waiting for the
+      // next publish click
+      if (status === 'published') exportLib.exportPage(newData.full_path);
+    }
+    if (existing.status === 'published' && status !== 'published') {
+      exportLib.removePageHtml(newData.full_path);
+    }
+  } catch (e) { /* export upkeep must never block a page write */ }
 
   const saved = getPageByFullPath(newData.full_path);
 
@@ -399,6 +424,10 @@ function deletePage(full_path) {
   // deleting the crowned homepage clears the crown (back to auto-detect);
   // the pages screen then warns if the site root has no owner
   syncHomepageConfig(full_path, '');
+  // the static export forgets the page too — DB, revisions and .pzn all just
+  // did; without this the dead address keeps serving from public/ forever.
+  // Lazy require: export.js requires this module at load time.
+  try { require('./export').removePageHtml(full_path); } catch (e) { /* never blocks the delete */ }
   return result.changes > 0;
 }
 

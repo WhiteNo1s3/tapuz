@@ -132,6 +132,29 @@ async function main() {
     const btn = (compiled.json.blocks || []).find((b) => b.type === 'button');
     check('url= drift adopted as the button link (prop twins)',
       !!btn && btn.data.url === '/contact');
+
+    // ── the export follows the page's life (v1.52): rename + delete ──
+    // Renaming a LIVE page moves its exported file: the old address stops
+    // serving, the new one answers immediately — no second publish needed.
+    const renamed = await req('POST', '/admin/save', {
+      cookie, body: { full_path: fullPath, slug: 'restaurant-renamed' }
+    });
+    check('slug rename accepted', renamed.status === 200 && renamed.json.ok &&
+      renamed.json.full_path === 'restaurant-renamed');
+    check('old address stops serving after rename',
+      (await req('GET', '/' + fullPath)).status === 404);
+    const moved = await req('GET', '/restaurant-renamed');
+    check('published content serves at the new address without re-publishing',
+      moved.status === 200 && moved.text.includes('מסעדת הבדיקה'));
+
+    // Deleting a page removes its export — the live URL must go dark, not
+    // keep serving a stale file forever (the bug this section pins).
+    const del = await req('POST', '/admin/delete', {
+      cookie, form: { full_path: 'restaurant-renamed' }
+    });
+    check('delete accepted', del.status === 302 || del.status === 200);
+    check('deleted page stops serving (no orphaned export)',
+      (await req('GET', '/restaurant-renamed')).status === 404);
   } finally {
     child.kill();
   }

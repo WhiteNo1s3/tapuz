@@ -694,6 +694,131 @@ button:focus-visible,
 .whatsapp-float.pos-start { inset-inline-start: 1.25rem; }
 .whatsapp-float.pos-end { inset-inline-end: 1.25rem; }
 
+/* ── Published-site search (v0.98) — floating button + overlay, JS by
+   necessity (the one gap "zero-JS published pages" can't close). ── */
+.tapuz-search-float {
+  position: fixed;
+  top: 1.25rem;
+  inset-inline-end: 1.25rem;
+  z-index: 960;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #334155);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.tapuz-search-float:hover { transform: scale(1.07); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24); }
+.tapuz-search-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  z-index: 970;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8vh;
+}
+.tapuz-search-panel.open { display: flex; }
+.tapuz-search-box {
+  background: var(--color-surface, #fff);
+  border-radius: 14px;
+  width: min(560px, 92vw);
+  max-height: 70vh;
+  overflow: auto;
+  padding: 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.tapuz-search-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+.tapuz-search-results { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.tapuz-search-result { display: block; padding: 0.6rem 0.75rem; border-radius: 8px; text-decoration: none; color: inherit; }
+.tapuz-search-result:hover { background: #f1f5f9; }
+.tapuz-search-result .t { font-weight: 700; }
+.tapuz-search-result .e { font-size: 0.85rem; color: #64748b; margin-top: 0.15rem; }
+.tapuz-search-empty { color: #94a3b8; font-size: 0.9rem; padding: 0.5rem; }
+@media (prefers-reduced-motion: reduce) {
+  .tapuz-search-float { transition: none; }
+}
+
+/* ── Language switcher (v1.08) — shown only on pages with linked
+   translation siblings, zero-JS. ── */
+.tapuz-lang-switch {
+  position: fixed;
+  top: 1.25rem;
+  inset-inline-start: 1.25rem;
+  z-index: 960;
+  display: flex;
+  gap: 2px;
+  background: var(--color-surface, #fff);
+  border-radius: 999px;
+  padding: 3px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.tapuz-lang-switch a {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--color-muted, #78716c);
+}
+.tapuz-lang-switch a.active {
+  background: var(--color-primary, #ea580c);
+  color: #fff;
+}
+
+/* ── Pricing table (v1.05) — module-hunt gap, zero-JS ── */
+.bent-pricing {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+  margin: 1rem 0;
+}
+.bent-plan {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  padding: 1.75rem 1.5rem;
+  text-align: center;
+  box-shadow: var(--shadow-1, none);
+}
+.bent-plan-highlighted {
+  border-color: var(--color-primary, #ea580c);
+  box-shadow: 0 0 0 2px var(--color-primary, #ea580c), var(--shadow-2, 0 10px 30px rgba(2, 8, 23, 0.12));
+  transform: scale(1.03);
+}
+.bent-plan-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 0.5rem; }
+.bent-plan-price { margin-bottom: 1rem; }
+.bent-plan-amount { font-size: 2rem; font-weight: 800; color: var(--color-primary, #ea580c); }
+.bent-plan-period { font-size: 0.85rem; color: var(--color-muted, #78716c); margin-inline-start: 0.25rem; }
+.bent-plan-features { list-style: none; padding: 0; margin: 0 0 1.25rem; display: grid; gap: 0.5rem; text-align: start; }
+.bent-plan-features li { padding-inline-start: 1.25rem; position: relative; }
+.bent-plan-features li::before { content: "✓"; position: absolute; inset-inline-start: 0; color: var(--color-primary, #ea580c); font-weight: 700; }
+.bent-plan-cta {
+  display: inline-block;
+  background: var(--accent-bg, var(--color-primary, #ea580c));
+  color: #fff;
+  padding: 0.6rem 1.5rem;
+  border-radius: var(--radius-md, 8px);
+  text-decoration: none;
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .bent-plan-highlighted { transform: none; }
+}
+
 article.feature h3 {
   margin: 0 0 0.35rem;
   font-size: 1.1rem;
@@ -823,6 +948,11 @@ p, li { max-width: 70ch; }
   background: var(--color-accent, #0a66c2); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 .bent-form-submit:hover { filter: brightness(1.06); }
+/* honeypot — visually gone, still in the DOM for bots to trip on */
+.bent-form .bent-hp {
+  position: absolute !important; inline-size: 1px; block-size: 1px;
+  opacity: 0; pointer-events: none; overflow: hidden;
+}
 
 /* card grid (v0.59) — the walla lesson: a content site is a wall of media
    cards. Responsive auto-fit grid, zero JS. */
@@ -845,6 +975,62 @@ a.bent-card:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12)); tr
 }
 .bent-card-title { margin: 0; font-size: 1.05rem; line-height: 1.3; color: var(--color-text, #0f172a); }
 .bent-card-excerpt { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--color-text-muted, #64748b); }
+
+/* table (v0.83) — hours, prices, schedules. The wrapper scrolls (invariant
+   I2): a wide schedule pans in its own container, never the page. */
+.bent-table-wrap { margin: 1.5rem 0; overflow-x: auto; }
+.bent-table { border-collapse: collapse; min-width: 100%; }
+.bent-table th, .bent-table td {
+  padding: 0.6rem 0.9rem; text-align: start;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+.bent-table th {
+  background: var(--color-bg-alt, #f8fafc); font-weight: 700;
+  color: var(--color-text, #0f172a); border-bottom-width: 2px;
+}
+.bent-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--color-bg-alt, #f8fafc) 55%, transparent); }
+.bent-table-empty {
+  padding: 1rem 1.25rem; border: 1px dashed var(--color-border, #cbd5e1);
+  border-radius: var(--radius-md, 10px); color: var(--color-text-muted, #64748b);
+  background: var(--color-bg-alt, #f8fafc);
+}
+
+/* audio (v0.80) — native player, the video figure's little sibling */
+.bent-audio { margin: 1.5rem 0; }
+.bent-audio audio { width: 100%; max-width: 34rem; display: block; }
+.bent-audio-caption { margin-top: 0.4rem; font-size: 0.85rem; color: var(--color-text-muted, #64748b); }
+.bent-audio-empty {
+  padding: 1rem 1.25rem; border: 1px dashed var(--color-border, #cbd5e1);
+  border-radius: var(--radius-md, 10px); color: var(--color-text-muted, #64748b);
+  background: var(--color-bg-alt, #f8fafc);
+}
+
+/* carousel (v0.79) — the cards unit sliding instead of wrapping. Zero JS:
+   CSS scroll-snap, touch-native, RTL-aware via logical properties (the strip
+   starts at inline-start — the right on RTL pages). `peek` keeps the next
+   slide's edge visible so scrollability is self-evident. */
+.bent-carousel { margin: 1.5rem 0; }
+.bent-carousel-track {
+  display: flex; gap: 1rem;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  padding-block-end: 0.5rem; /* room for the scrollbar, no clipped shadows */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.bent-slide {
+  flex: 0 0 80%; max-width: 26rem;
+  scroll-snap-align: start;
+}
+.bent-carousel-full .bent-slide { flex-basis: 100%; max-width: 100%; }
+.bent-slide .bent-card { height: 100%; }
+.bent-carousel-sm .bent-slide .bent-card-media { aspect-ratio: 21 / 9; }
+.bent-carousel-md .bent-slide .bent-card-media { aspect-ratio: 16 / 9; }
+.bent-carousel-lg .bent-slide .bent-card-media { aspect-ratio: 4 / 3; }
+@media (min-width: 768px) {
+  .bent-slide { flex-basis: 44%; }
+  .bent-carousel-full .bent-slide { flex-basis: 100%; }
+}
 
 /* category presentation (v0.64) — a branded header above the category's
    article grid (the grid itself REUSES .bent-cards). Accent color arrives as
@@ -1045,6 +1231,15 @@ a.bent-newspop-text:hover { text-decoration: underline; }
 .tz-section.is-empty.size-md { min-height: 6rem; }
 .tz-section.is-empty.size-lg { min-height: 12rem; }
 .tz-section.is-empty.size-xl { min-height: 20rem; }
+
+/* ── HTML גולמי (the raw-HTML escape hatch) — v1.49 ──
+   Deliberately almost nothing. This block exists so an author can build the
+   thing the CMS has no module for, so the theme must not impose a look on
+   their markup. We only stop it from breaking the page around it: contain the
+   layout and keep long unbroken strings from forcing a horizontal scrollbar.
+   Anything visual is the author's job, inside their own markup. */
+.bent-html { min-width: 0; max-width: 100%; overflow-wrap: break-word; }
+.bent-html > * { max-width: 100%; }
 
 
 /* Tapuz theme overrides */

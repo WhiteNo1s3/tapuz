@@ -45,17 +45,22 @@ function copyThemeAssets(themeSlug = 'default') {
 // export.js from the renderer would be a cycle); re-exported below unchanged.
 const { scoreHomeCandidate } = require('./seo');
 
-function writePageHtml(page, outputDir, isHome) {
-  ensureDir(outputDir);
-  copyThemeAssets(page.theme || 'default');
-
-  // Harden filename so a crafted full_path can never write outside outputDir
-  // (backslash + '..' stripped — matches pages.sanitizeFullPath / pzn-store).
-  const filename = (page.full_path || 'page')
+// Harden filename so a crafted full_path can never write outside outputDir
+// (backslash + '..' stripped — matches pages.sanitizeFullPath / pzn-store).
+// Shared by write AND remove so the two can never disagree on a page's file.
+function publicHtmlName(fullPath) {
+  return (fullPath || 'page')
     .replace(/\s+/g, '-')
     .replace(/[\\/:*?"<>|]/g, '')
     .replace(/\.\.+/g, '.')
     .replace(/^\.+/, '') + '.html';
+}
+
+function writePageHtml(page, outputDir, isHome) {
+  ensureDir(outputDir);
+  copyThemeAssets(page.theme || 'default');
+
+  const filename = publicHtmlName(page.full_path);
 
   const outputPath = path.join(outputDir, filename);
   const siteConfig = loadConfig();
@@ -94,6 +99,36 @@ function crownedHomePath() {
   return require('./seo').resolveHomePath(candidates, loadConfig().homepage);
 }
 
+/**
+ * Remove a page's exported HTML when it leaves the published site (delete /
+ * unpublish / rename). The DB, revisions and .pzn store all follow those
+ * transitions; without this the static export is the one layer that never
+ * forgets, and a dead address keeps serving forever. If the page owned '/'
+ * (its file IS index.html), '/' is handed to the next crowned home — or goes
+ * down with the page when no published page remains.
+ */
+function removePageHtml(fullPath, outputDir = PUBLIC_DIR) {
+  const target = path.join(outputDir, publicHtmlName(fullPath));
+  if (!fs.existsSync(target)) return false;
+  const indexPath = path.join(outputDir, 'index.html');
+  let ownedRoot = false;
+  try {
+    ownedRoot = fs.existsSync(indexPath) &&
+      fs.readFileSync(indexPath, 'utf8') === fs.readFileSync(target, 'utf8');
+  } catch (e) { /* root comparison is best-effort */ }
+  fs.unlinkSync(target);
+  if (ownedRoot) {
+    try {
+      const nextHome = crownedHomePath();
+      if (nextHome && nextHome !== fullPath) exportPage(nextHome, outputDir);
+      else fs.unlinkSync(indexPath);
+    } catch (e) {
+      try { fs.unlinkSync(indexPath); } catch (e2) { /* already gone */ }
+    }
+  }
+  return true;
+}
+
 function exportAll(outputDir = PUBLIC_DIR) {
   // Public build renders published snapshot only (blocks), never draft_blocks
   const pages = listPages().filter(p => p.status === 'published');
@@ -122,6 +157,25 @@ function exportAll(outputDir = PUBLIC_DIR) {
     }
   }
   writeSearchIndex(outputDir);
+
+  // The exported tree mirrors the DB's published set exactly — a page that
+  // left it (deleted / unpublished / renamed) must not keep serving from a
+  // stale file, so every full build reconciles. Top-level *.html is CMS-owned
+  // build output; css/, uploads and search-index.json are untouched. Keyed to
+  // the DB list (not this pass's writes) so a page whose render failed above
+  // keeps its previous good file instead of being taken down.
+  const keep = new Set(pages.map((p) => publicHtmlName(p.full_path)));
+  if (homePath !== null) keep.add('index.html');
+  try {
+    for (const f of fs.readdirSync(outputDir)) {
+      if (!f.endsWith('.html') || keep.has(f)) continue;
+      const stale = path.join(outputDir, f);
+      try {
+        if (fs.statSync(stale).isFile()) fs.unlinkSync(stale);
+      } catch (e) { /* best-effort — a locked file just stays until next build */ }
+    }
+  } catch (e) { /* outputDir unreadable — nothing to prune */ }
+
   return results;
 }
 
@@ -154,6 +208,8 @@ function writeSearchIndex(outputDir) {
 module.exports = {
   exportPage,
   exportAll,
+  removePageHtml,
+  publicHtmlName,
   copyThemeAssets,
   externalizeStyles,
   scoreHomeCandidate
