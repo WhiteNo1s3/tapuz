@@ -7,6 +7,12 @@
       "runtimeArgs": ["src/server.js"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "tapuz-fresh",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["C:\\Users\\<user>\\AppData\\Local\\Temp\\claude\\D--Dev-Tapuz\\67e8dca8-3cc1-4941-9845-a6b040df59eb\\scratchpad\\serve-fresh.js"],
+      "port": 3100
     }
   ]
 }

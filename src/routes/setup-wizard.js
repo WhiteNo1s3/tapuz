@@ -95,7 +95,7 @@ router.get('/admin/setup', (req, res) => {
         <!-- Step 3: default pages -->
         <div class="wiz-panel" data-panel="2">
           <div class="wiz-teach">📄 ניצור לכם את שלד האתר. כל דף נפתח אחר כך בבונה הדפים — מודולים, גרירה, הכל.</div>
-          <label class="wiz-check"><input type="checkbox" checked disabled data-page="home"><span><strong>דף הבית</strong><small>Hero + פתיח — נבנה אוטומטית מהשם שבחרתם</small></span></label>
+          <label class="wiz-check"><input type="checkbox" checked disabled data-page="home"><span><strong>דף הבית</strong><small>סיור צבעוני בארגז הכלים — גלריה, קרוסלה, מבזקים ועוד. כל קטע ניתן לעריכה או למחיקה</small></span></label>
           <label class="wiz-check"><input type="checkbox" checked data-page="about"><span><strong>אודות</strong><small>מי אתם ולמה אתם כאן</small></span></label>
           <label class="wiz-check"><input type="checkbox" checked data-page="contact"><span><strong>צור קשר</strong><small>דף פנייה — טופס יגיע בשלב ה־CRM</small></span></label>
           <label class="wiz-check"><input type="checkbox" checked data-page="articles"><span><strong>מאמרים</strong><small>קוביות מאמרים חכמות (מודול article-list) + מאמר ראשון לדוגמה</small></span></label>
