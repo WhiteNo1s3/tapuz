@@ -29,7 +29,7 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
   )).join('');
   const html = `
     ${adminNav('settings', 'הגדרות אתר')}
-    <div class="container" style="padding-top:28px;max-width:620px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:620px">
       <p class="lead">הגדרות כלליות של האתר. לוגו וצבעים נמצאים ב<a href="/admin/theme">ערכת הנושא</a>.</p>
       <section class="card">
         <label class="field-label">שם האתר</label>
@@ -40,22 +40,22 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
         <select id="st-homepage" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px">
           ${homeOptions}
         </select>
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">הדף שמוגש בשורש האתר (/). אפשר גם מרשימת הדפים — כפתור 🏠 קבע כדף הבית.</div>
+        <div class="faint" style="margin-bottom:14px">הדף שמוגש בשורש האתר (/). אפשר גם מרשימת הדפים — כפתור 🏠 קבע כדף הבית.</div>
         <label class="field-label">כתובת בסיס (baseUrl)</label>
         <input id="st-baseurl" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://example.co.il" class="input mb">
         <label class="field-label">שפה ראשית</label>
-        <select id="st-lang" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px">
+        <select id="st-lang" class="input mb">
           <option value="he" ${config.language !== 'en' ? 'selected' : ''}>עברית</option>
           <option value="en" ${config.language === 'en' ? 'selected' : ''}>English</option>
         </select>
-        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
-          <span id="st-status" style="color:#166534;font-size:0.85rem"></span>
+        <div class="row end">
+          <span id="st-status" class="ok-text"></span>
           <button type="button" class="btn" id="st-save">שמור הגדרות</button>
         </div>
       </section>
 
       <section class="card" style="margin-top:18px">
-        <h3 style="margin-top:0">📦 ייצוא / ייבוא אתר שלם</h3>
+        <h3 class="sub-head">📦 ייצוא / ייבוא אתר שלם</h3>
         <p class="lead">קובץ אחד עם כל הדפים (טיוטה + מפורסם), ערכת הנושא והתפריטים — לגיבוי או להעברה בין התקנות Tapuz. ייבוא לעולם לא דורס דף קיים אלא אם מסמנים "דרוס דפים קיימים".</p>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
           <a class="btn secondary" href="/admin/api/site-package/export" download>⬇ ייצוא האתר</a>
@@ -65,7 +65,7 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:10px">
           <input type="checkbox" id="sp-overwrite"> דרוס דפים קיימים (ברירת מחדל: דילוג על התנגשויות)
         </label>
-        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+        <div class="row end">
           <span id="sp-import-status" style="font-size:0.85rem"></span>
           <button type="button" class="btn secondary" id="sp-import-apply">ייבוא</button>
         </div>

@@ -36,78 +36,76 @@ router.get('/admin/inbox', (req, res) => {
     .join('');
 
   const rows = items.length === 0
-    ? `<div style="padding:48px;text-align:center;color:#64748b">
+    ? `<div class="empty-state">
          <div style="font-size:2rem;margin-bottom:8px">📬</div>
          אין פניות עדיין. כשמישהו ישלח טופס באתר — זה ינחת כאן.<br>
-         <span style="font-size:0.82rem">כל מודול טופס שולח לכאן אוטומטית (אלא אם קבעתם action משלכם).</span>
+         <span class="faint">כל מודול טופס שולח לכאן אוטומטית (אלא אם קבעתם action משלכם).</span>
        </div>`
     : items.map((s) => {
       const fields = Object.entries(s.fields).map(([k, v]) =>
-        `<div style="display:flex;gap:10px;padding:4px 0;border-bottom:1px dashed #f1f5f9">
-           <span style="min-width:110px;font-weight:600;color:#475569">${escapeAdmin(k)}</span>
-           <span style="white-space:pre-wrap;word-break:break-word">${escapeAdmin(v)}</span>
+        `<div class="kv">
+           <span class="kv-k">${escapeAdmin(k)}</span>
+           <span class="kv-v">${escapeAdmin(v)}</span>
          </div>`).join('');
       const when = String(s.created_at || '').replace('T', ' ').slice(0, 16);
       const pageLink = s.page
-        ? `<a href="/${encodeURIComponent(s.page)}" target="_blank" rel="noopener" style="font-family:monospace;font-size:0.8rem">/${escapeAdmin(s.page)}</a>`
-        : '<span style="color:#94a3b8;font-size:0.8rem">מקור לא ידוע</span>';
+        ? `<a href="/${encodeURIComponent(s.page)}" target="_blank" rel="noopener" class="mono">/${escapeAdmin(s.page)}</a>`
+        : '<span class="faint">מקור לא ידוע</span>';
       const status = forms.STATUSES.includes(s.status) ? s.status : 'new';
       const statusColors = { new: '#2563eb', contacted: '#c026d3', qualified: '#d97706', won: '#166534', lost: '#94a3b8' };
-      const statusPill = `<span style="background:${statusColors[status]}1a;color:${statusColors[status]};font-size:0.72rem;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap">${escapeAdmin(forms.STATUS_LABELS[status])}</span>`;
+      const statusPill = `<span class="pill tone" style="--c:${statusColors[status]}">${escapeAdmin(forms.STATUS_LABELS[status])}</span>`;
       const isDue = s.follow_up_at && s.follow_up_at <= today && status !== 'won' && status !== 'lost';
-      const dueBadge = isDue ? `<span style="background:#fee2e2;color:#b91c1c;font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap">⏰ ${s.follow_up_at === today ? 'היום' : 'באיחור'}</span>` : '';
-      const valuePill = s.value != null ? `<span style="color:#166534;font-size:0.78rem;font-weight:700;white-space:nowrap">₪${fmtMoney(s.value)}</span>` : '';
+      const dueBadge = isDue ? `<span class="pill danger">⏰ ${s.follow_up_at === today ? 'היום' : 'באיחור'}</span>` : '';
+      const valuePill = s.value != null ? `<span class="ok-text" style="font-weight:700;white-space:nowrap">₪${fmtMoney(s.value)}</span>` : '';
       return `
-      <details style="border:1px solid ${s.is_read ? '#e2e8f0' : '#93c5fd'};border-radius:10px;margin-bottom:8px;background:${s.is_read ? '#fff' : '#eff6ff'}"
-               ${s.is_read ? '' : 'data-unread="1"'} data-sid="${s.id}">
-        <summary style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;list-style:none">
-          <span style="display:flex;align-items:center;gap:8px;min-width:0">
-            ${s.is_read ? '' : '<span style="width:8px;height:8px;border-radius:99px;background:#3b82f6;flex:none"></span>'}
+      <details class="rec${s.is_read ? '' : ' unread'}" ${s.is_read ? '' : 'data-unread="1"'} data-sid="${s.id}">
+        <summary>
+          <span class="rec-left">
+            ${s.is_read ? '' : '<span class="unread-dot"></span>'}
             ${statusPill}
             ${dueBadge}
-            <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:32ch">
-              ${escapeAdmin(Object.values(s.fields)[0] || 'פנייה')}</strong>
+            <strong class="rec-title">${escapeAdmin(Object.values(s.fields)[0] || 'פנייה')}</strong>
           </span>
-          <span style="display:flex;align-items:center;gap:10px;flex:none">
+          <span class="rec-right">
             ${valuePill}
             ${pageLink}
-            <span style="color:#94a3b8;font-size:0.8rem">${when}</span>
+            <span class="faint">${when}</span>
           </span>
         </summary>
-        <div style="padding:4px 16px 12px">
+        <div class="rec-body">
           ${fields}
-          <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;color:#475569">
+          <div class="row" style="margin-top:12px">
+            <label class="inline-field">
               סטטוס
-              <select class="lead-status" data-id="${s.id}" style="padding:6px 8px;border:1.5px solid #cbd5e1;border-radius:6px">
+              <select class="lead-status" data-id="${s.id}">
                 ${forms.STATUSES.map((st) => `<option value="${st}" ${st === status ? 'selected' : ''}>${escapeAdmin(forms.STATUS_LABELS[st])}</option>`).join('')}
               </select>
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;color:#475569">
+            <label class="inline-field">
               שווי (₪)
-              <input type="number" min="0" step="1" class="lead-value" data-id="${s.id}" value="${s.value != null ? s.value : ''}" placeholder="—" style="width:100px;padding:6px 8px;border:1.5px solid #cbd5e1;border-radius:6px">
+              <input type="number" min="0" step="1" class="lead-value" data-id="${s.id}" value="${s.value != null ? s.value : ''}" placeholder="—">
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:600;color:#475569">
+            <label class="inline-field">
               מעקב הבא
-              <input type="date" class="lead-followup" data-id="${s.id}" value="${escapeAdmin(s.follow_up_at || '')}" style="padding:6px 8px;border:1.5px solid #cbd5e1;border-radius:6px">
+              <input type="date" class="lead-followup" data-id="${s.id}" value="${escapeAdmin(s.follow_up_at || '')}">
             </label>
-            <span class="lead-crm-status" data-id="${s.id}" style="font-size:0.8rem;color:#166534"></span>
+            <span class="lead-crm-status ok-text" data-id="${s.id}"></span>
           </div>
-          <label style="display:block;font-weight:600;font-size:0.85rem;color:#475569;margin-top:12px;margin-bottom:4px">הערות פנימיות (לא נראות ללקוח)</label>
-          <textarea class="lead-notes" data-id="${s.id}" rows="2" placeholder="הערה על הליד…" style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-size:0.85rem">${escapeAdmin(s.notes || '')}</textarea>
-          <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">
-            <span class="lead-notes-status" data-id="${s.id}" style="color:#166534;font-size:0.8rem;align-self:center"></span>
-            <button type="button" class="btn secondary lead-notes-save" data-id="${s.id}" style="padding:6px 12px">שמור הערה</button>
+          <label class="field-label" style="margin-top:12px">הערות פנימיות (לא נראות ללקוח)</label>
+          <textarea class="lead-notes input" data-id="${s.id}" rows="2" placeholder="הערה על הליד…">${escapeAdmin(s.notes || '')}</textarea>
+          <div class="row end" style="margin-top:8px">
+            <span class="lead-notes-status ok-text" data-id="${s.id}"></span>
+            <button type="button" class="btn secondary sm lead-notes-save" data-id="${s.id}">שמור הערה</button>
           </div>
-          <div style="display:flex;gap:8px;margin-top:12px">
+          <div class="row" style="margin-top:12px">
             <form method="POST" action="/admin/inbox/read">
               <input type="hidden" name="id" value="${s.id}">
               <input type="hidden" name="read" value="${s.is_read ? '0' : '1'}">
-              <button type="submit" class="btn secondary" style="padding:6px 12px">${s.is_read ? 'סמן כלא נקרא' : 'סמן כנקרא'}</button>
+              <button type="submit" class="btn secondary sm">${s.is_read ? 'סמן כלא נקרא' : 'סמן כנקרא'}</button>
             </form>
             <form method="POST" action="/admin/inbox/delete" onsubmit="return confirm('למחוק את הפנייה?')">
               <input type="hidden" name="id" value="${s.id}">
-              <button type="submit" class="btn secondary" style="padding:6px 12px">מחק</button>
+              <button type="submit" class="btn secondary sm">מחק</button>
             </form>
           </div>
         </div>
@@ -116,28 +114,28 @@ router.get('/admin/inbox', (req, res) => {
 
   const html = `
     ${adminNav('inbox', 'תיבת פניות')}
-    <div class="container" style="padding-top:30px;max-width:860px;padding-bottom:60px">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px">
-        <div class="card tight">
-          <div style="font-size:0.75rem;color:#94a3b8;font-weight:600">שווי פתוח בצנרת</div>
-          <div style="font-size:1.3rem;font-weight:800;color:#0f172a">₪${fmtMoney(openValue)}</div>
+    <div class="container page-body mid">
+      <div class="stat-grid" style="margin-bottom:16px">
+        <div class="stat">
+          <div class="stat-label">שווי פתוח בצנרת</div>
+          <div class="stat-num" style="font-size:1.5rem">₪${fmtMoney(openValue)}</div>
         </div>
-        <div class="card tight">
-          <div style="font-size:0.75rem;color:#94a3b8;font-weight:600">נסגר בהצלחה</div>
-          <div style="font-size:1.3rem;font-weight:800;color:#166534">₪${fmtMoney(wonValue)}</div>
+        <div class="stat" style="--c:#166534">
+          <div class="stat-label">נסגר בהצלחה</div>
+          <div class="stat-num" style="font-size:1.5rem">₪${fmtMoney(wonValue)}</div>
         </div>
-        <div style="background:#fff;border:1px solid ${dueCount ? '#fecaca' : '#e2e8f0'};border-radius:10px;padding:12px 14px">
-          <div style="font-size:0.75rem;color:#94a3b8;font-weight:600">מטופל היום / באיחור</div>
-          <div style="font-size:1.3rem;font-weight:800;color:${dueCount ? '#b91c1c' : '#0f172a'}">${dueCount}</div>
+        <div class="stat" style="--c:${dueCount ? '#b91c1c' : '#64748b'}">
+          <div class="stat-label">מטופל היום / באיחור</div>
+          <div class="stat-num" style="font-size:1.5rem">${dueCount}</div>
         </div>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-        <p style="color:#64748b;margin:0">כל שליחת טופס מהאתר נוחתת כאן כליד. ${unread ? `<strong style="color:#1d4ed8">${unread} חדשות</strong>` : 'אין חדשות'}.</p>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="inbox-status-filter" style="padding:7px 8px;border:1.5px solid #cbd5e1;border-radius:8px" onchange="location.href='/admin/inbox' + (this.value ? '?status=' + this.value : '')">
+      <div class="row between" style="margin-bottom:16px">
+        <p class="lead" style="margin:0">כל שליחת טופס מהאתר נוחתת כאן כליד. ${unread ? `<strong style="color:var(--accent-ink)">${unread} חדשות</strong>` : 'אין חדשות'}.</p>
+        <div class="row">
+          <select id="inbox-status-filter" class="input compact" onchange="location.href='/admin/inbox' + (this.value ? '?status=' + this.value : '')">
             ${filterOptions}
           </select>
-          ${items.length ? '<a class="btn secondary" href="/admin/inbox.csv" style="padding:7px 14px;white-space:nowrap;text-decoration:none">⬇ ייצוא CSV</a>' : ''}
+          ${items.length ? '<a class="btn secondary sm" href="/admin/inbox.csv" style="white-space:nowrap">⬇ ייצוא CSV</a>' : ''}
         </div>
       </div>
       ${rows}

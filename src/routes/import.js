@@ -57,7 +57,7 @@ router.get('/admin/import', (req, res) => {
       </section>`).join('');
   const html = `
     ${adminNav('import', 'ייבוא — מערכות חיצוניות')}
-    <div class="container" style="padding-top:24px;max-width:920px">
+    <div class="container page-body" style="max-width:920px">
       <p class="lead">
         בוחרים מערכת, מעלים את קובץ הייצוא — ותפוזיאל בונה את הדפים בשפת ה‑<code>.pzn</code> שלנו.
         לכל מערכת קטע נפרד; אין צורך לנחש איזה קובץ העליתם.
@@ -83,7 +83,7 @@ router.get('/admin/import', (req, res) => {
           var pubEl = btn.dataset.publish ? document.getElementById(btn.dataset.publish) : null;
           var out = document.getElementById(btn.dataset.result);
           var f = fileEl && fileEl.files && fileEl.files[0];
-          if(!f){ out.innerHTML = '<span style="color:#b91c1c">בחרו קובץ קודם.</span>'; return; }
+          if(!f){ out.innerHTML = '<span class="err-text">בחרו קובץ קודם.</span>'; return; }
           var label = btn.textContent; btn.disabled = true; btn.textContent = 'מייבא…';
           var reader = new FileReader();
           reader.onload = function(){
@@ -92,12 +92,12 @@ router.get('/admin/import', (req, res) => {
             .then(function(r){return r.json();})
             .then(function(d){
               btn.disabled = false; btn.textContent = label;
-              if(!d.ok){ out.innerHTML = '<span style="color:#b91c1c">שגיאה: '+esc(d.error||'')+'</span>'; return; }
-              if(!d.count){ out.innerHTML = '<span style="color:#64748b">לא נמצאו דפים לייבוא בקובץ.</span>'; return; }
-              var li = d.created.map(function(p){ return '<li><a href="/admin/edit/'+encodeURIComponent(p.fullPath)+'">'+esc(p.title)+'</a> <span style="color:#94a3b8">('+esc(p.fullPath)+')</span></li>'; }).join('');
+              if(!d.ok){ out.innerHTML = '<span class="err-text">שגיאה: '+esc(d.error||'')+'</span>'; return; }
+              if(!d.count){ out.innerHTML = '<span class="muted">לא נמצאו דפים לייבוא בקובץ.</span>'; return; }
+              var li = d.created.map(function(p){ return '<li><a href="/admin/edit/'+encodeURIComponent(p.fullPath)+'">'+esc(p.title)+'</a> <span class="faint">('+esc(p.fullPath)+')</span></li>'; }).join('');
               out.innerHTML = '<div style="color:#166534;margin-bottom:6px">יובאו '+d.count+' דפים:</div><ul style="margin:0;padding-inline-start:18px">'+li+'</ul>';
             })
-            .catch(function(){ btn.disabled=false; btn.textContent=label; out.innerHTML = '<span style="color:#b91c1c">שגיאת רשת.</span>'; });
+            .catch(function(){ btn.disabled=false; btn.textContent=label; out.innerHTML = '<span class="err-text">שגיאת רשת.</span>'; });
           };
           reader.readAsText(f);
         });

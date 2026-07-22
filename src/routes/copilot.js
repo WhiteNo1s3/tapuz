@@ -34,27 +34,27 @@ router.get('/admin/agent', requireAdmin, (req, res) => {
   const origin = `${req.protocol}://${req.headers.host}`;
   const html = `
     ${adminNav('agent', 'גשר סוכן — Grokin')}
-    <div class="container" style="padding-top:28px;max-width:900px">
+    <div class="container page-body" style="max-width:900px">
       <p class="lead">
         טוקנים מאובטחים שמחברים סוכן חיצוני (תוסף הדפדפן) ל‑API של תפוזיאל —
         בלי סיסמה ובלי קובץ Cookie. הטוקן מוצג <b>פעם אחת בלבד</b> ביצירה.
         נקודת הקצה: <code dir="ltr">${escapeAdmin(origin)}/agent/v1</code>
       </p>
       <section class="card">
-        <h3 style="margin-top:0">צור טוקן חדש</h3>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <input id="tok-name" placeholder="שם (למשל: Chrome של בן)" style="flex:1;min-width:200px;padding:9px;border:1px solid #e2e8f0;border-radius:8px">
-          <label style="font-size:.9rem"><input type="checkbox" id="tok-write" checked> הרשאת כתיבה (יצירת דפים)</label>
+        <h3 class="sub-head">צור טוקן חדש</h3>
+        <div class="row">
+          <input id="tok-name" placeholder="שם (למשל: Chrome של בן)" class="input" style="flex:1;min-width:200px">
+          <label class="check-row" style="margin-bottom:0"><input type="checkbox" id="tok-write" checked> הרשאת כתיבה (יצירת דפים)</label>
           <button type="button" id="tok-create" class="btn">צור טוקן</button>
         </div>
-        <div id="tok-new" style="display:none;margin-top:14px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0">
-          <div style="color:#166534;font-size:.9rem;margin-bottom:6px">העתק עכשיו — לא יוצג שוב:</div>
-          <code id="tok-secret" dir="ltr" style="display:block;word-break:break-all;background:#fff;padding:8px;border-radius:6px;border:1px solid #bbf7d0"></code>
+        <div id="tok-new" class="notice ok" style="display:none;margin-top:14px">
+          <div style="margin-bottom:6px">העתק עכשיו — לא יוצג שוב:</div>
+          <code id="tok-secret" class="code-box"></code>
         </div>
       </section>
       <section class="card">
-        <h3 style="margin-top:0">טוקנים פעילים</h3>
-        <div id="tok-list" style="color:#64748b">טוען…</div>
+        <h3 class="sub-head">טוקנים פעילים</h3>
+        <div id="tok-list" class="muted">טוען…</div>
       </section>
     </div>
     <script src="/admin-agent.js"></script>
@@ -66,39 +66,39 @@ router.get('/admin/agent', requireAdmin, (req, res) => {
 router.get('/admin/ai', (req, res) => {
   const html = `
     ${adminNav('chat', 'AI — הדבקה ידנית')}
-    <div class="container" style="padding-top:20px;max-width:1180px">
-      <a href="/admin/chat" style="font-size:.9rem;color:#7c3aed">← חזרה לבונה החכם (צ׳אט)</a>
-      <p style="color:#64748b;margin:8px 0 0">
+    <div class="container page-body" style="max-width:1180px">
+      <a href="/admin/chat" class="back-link">← חזרה לבונה החכם (צ׳אט)</a>
+      <p class="lead" style="margin:8px 0 0">
         משוחחים עם ה‑AI שכבר יש לכם (ChatGPT / Claude / Grok) — בלי מפתחות API ובלי עלות נוספת.
         מעתיקים את המדריך, מבקשים דף, מדביקים את התשובה — והדף קם.
       </p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+      <div class="split-2">
         <section class="card">
-          <h3 style="margin-top:0">1 · למדו את הבוט שלכם</h3>
-          <p style="color:#64748b;font-size:.92rem">העתיקו את המדריך והדביקו בצ'אט של ה‑AI שלכם. הוא ילמד לכתוב דפי תפוזיאל.</p>
+          <h3 class="sub-head">1 · למדו את הבוט שלכם</h3>
+          <p class="lead">העתיקו את המדריך והדביקו בצ'אט של ה‑AI שלכם. הוא ילמד לכתוב דפי תפוזיאל.</p>
           <button type="button" id="copy-primer" class="btn">📋 העתק את המדריך</button>
-          <span id="primer-status" style="margin-inline-start:10px;color:#16a34a;font-size:.9rem"></span>
+          <span id="primer-status" class="ok-text" style="margin-inline-start:10px"></span>
 
           <h3 style="margin-top:26px">2 · הדביקו את התשובה</h3>
-          <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
-            <label style="font-size:.92rem;color:#475569">לאיזה דף?</label>
-            <select id="page-pick" style="flex:1;padding:8px;border:1px solid #e2e8f0;border-radius:8px">
+          <div class="row" style="margin-bottom:10px">
+            <label class="inline-field">לאיזה דף?</label>
+            <select id="page-pick" class="input" style="flex:1">
               <option value="__new__">✨ דף חדש (לפי הכותרת וה-slug שהבוט כתב)</option>
             </select>
           </div>
           <textarea id="paste-box" placeholder="הדביקו כאן את כל תשובת הבוט — אפשר עם הטקסט מסביב, אנחנו נחלץ את הקוד"
-            style="width:100%;min-height:260px;box-sizing:border-box;padding:12px;border:1px solid #e2e8f0;border-radius:8px;font-family:ui-monospace,monospace;font-size:.85rem;direction:ltr;text-align:left"></textarea>
-          <div id="issue-panel" style="display:none;margin-top:10px;padding:12px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.9rem;white-space:pre-wrap"></div>
-          <div style="display:flex;gap:10px;margin-top:14px">
+            class="input code-area"></textarea>
+          <div id="issue-panel" class="notice danger" style="display:none;margin-top:10px;white-space:pre-wrap"></div>
+          <div class="row" style="margin-top:14px">
             <button type="button" id="apply-draft" class="btn" disabled>שמור כטיוטה</button>
             <button type="button" id="apply-publish" class="btn" disabled>שמור ופרסם</button>
           </div>
-          <div id="apply-result" style="display:none;margin-top:12px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:.95rem"></div>
+          <div id="apply-result" class="notice ok" style="display:none;margin-top:12px"></div>
         </section>
         <section class="card">
-          <h3 style="margin-top:0">3 · תצוגה מקדימה חיה</h3>
+          <h3 class="sub-head">3 · תצוגה מקדימה חיה</h3>
           <iframe id="preview-frame" title="תצוגה מקדימה"
-            style="width:100%;height:520px;border:1px solid #e2e8f0;border-radius:8px;background:#fff"></iframe>
+            class="preview-frame"></iframe>
         </section>
       </div>
     </div>
@@ -311,20 +311,20 @@ router.get('/admin/chat', (req, res) => {
       </div>
       <aside class="chat-side">
         <div class="card">
-          <h3 style="margin-top:0">🔑 המפתח שלכם — בתוך ה‑CMS</h3>
+          <h3 class="sub-head">🔑 המפתח שלכם — בתוך ה‑CMS</h3>
           <p class="muted" style="font-size:.85rem;margin:0 0 10px">הצ׳אט קורא ל‑API הרשמי של הספק מהשרת שלכם, עם המפתח שלכם. המפתח נשמר בשרת בלבד (קובץ מוגן, מחוץ ל‑git) ולעולם לא נשלח לדפדפן.</p>
           <div class="field"><label>ספק</label><select id="ai-provider"></select></div>
           <div class="field"><label>מודל</label><select id="ai-model"></select></div>
           <div class="field"><label>מפתח API <span id="ai-key-state" class="muted"></span></label>
             <input id="ai-key" type="password" dir="ltr" autocomplete="off" placeholder="sk-…">
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button type="button" class="btn" id="ai-save" style="padding:7px 14px">שמור</button>
+          <div class="row">
+            <button type="button" class="btn sm" id="ai-save">שמור</button>
             <span id="ai-settings-status" class="muted" style="font-size:.82rem"></span>
           </div>
         </div>
         <div class="card">
-          <h3 style="margin-top:0">בלי מפתח? יש מסלול</h3>
+          <h3 class="sub-head">בלי מפתח? יש מסלול</h3>
           <ul class="muted" style="font-size:.88rem;line-height:1.7;padding-inline-start:18px;margin:0">
             <li><a href="/admin/inject">מילון · משחק</a> — הדביקו את החבילה בצ׳אט שאתם כבר מנויים עליו</li>
             <li><a href="/admin/ai">הדבקה ידנית</a> — הדביקו תשובת AI ובנו דף בתוך ה‑CMS</li>

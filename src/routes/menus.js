@@ -79,7 +79,7 @@ router.get('/admin/menus', (req, res) => {
       .editor-head h3 { margin:0; flex:1; }
       .mini-btn { padding:5px 10px; font-size:.8rem; }
     </style>
-    <div class="container" style="padding-top:28px;max-width:1020px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:1020px">
       <p class="lead">תפריטים הם ישויות עם שם — צרו כמה שתרצו, קננו תתי־פריטים, ושייכו תפריט לכל מיקום באתר. כמו בוורדפרס, רק בלי הכאב.</p>
       <div class="menus-wrap">
         <aside class="menus-side">

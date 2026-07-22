@@ -97,19 +97,19 @@ router.post('/admin/upload', (req, res) => {
 router.get('/admin/media-library', (req, res) => {
   const html = `
     ${adminNav('media', 'ספריית מדיה')}
-    <div class="container" style="padding-top:28px;max-width:960px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:960px">
       <p class="lead">כל התמונות והקבצים של האתר — תיקיות, העלאה ומחיקה. אותה ספרייה שמופיעה בבונה הדפים.</p>
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-          <div id="ml-crumbs" style="font-size:0.95rem;color:#334155"></div>
-          <div style="display:flex;gap:8px">
+        <div class="row between" style="margin-bottom:14px">
+          <div id="ml-crumbs"></div>
+          <div class="row">
             <button type="button" class="btn secondary" id="ml-new-folder">📁+ תיקייה</button>
             <label class="btn" style="cursor:pointer">העלה קובץ
               <input type="file" accept="image/*" id="ml-upload" style="display:none">
             </label>
           </div>
         </div>
-        <div id="ml-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px"></div>
+        <div id="ml-grid" class="file-grid"></div>
       </div>
     </div>
     <script>
@@ -122,35 +122,35 @@ router.get('/admin/media-library', (req, res) => {
             .then(function (r) { return r.json(); })
             .then(render)
             .catch(function () {
-              document.getElementById('ml-grid').innerHTML = '<div style="color:#b91c1c">שגיאה בטעינה</div>';
+              document.getElementById('ml-grid').innerHTML = '<div class="err-text">שגיאה בטעינה</div>';
             });
         }
         function render(data) {
-          var crumbs = '<span class="ml-crumb" data-goto="" style="cursor:pointer;color:#0a66c2">🏠 מדיה</span>';
+          var crumbs = '<span class="ml-crumb crumb" data-goto="">🏠 מדיה</span>';
           var acc = '';
           (folder ? folder.split('/') : []).forEach(function (seg) {
             acc = acc ? acc + '/' + seg : seg;
-            crumbs += ' › <span class="ml-crumb" data-goto="' + esc(acc) + '" style="cursor:pointer;color:#0a66c2">' + esc(seg) + '</span>';
+            crumbs += ' › <span class="ml-crumb crumb" data-goto="' + esc(acc) + '">' + esc(seg) + '</span>';
           });
           document.getElementById('ml-crumbs').innerHTML = crumbs;
 
           var tiles = '';
           (data.folders || []).forEach(function (f) {
-            tiles += '<div class="media-tile" data-folder="' + esc(f.path) + '" style="border:1px solid #e2e8f0;border-radius:10px;padding:10px;cursor:pointer;text-align:center;background:#fff">' +
-              '<div style="font-size:2.4rem;line-height:70px;height:70px">📁</div>' +
-              '<div style="font-size:0.8rem;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.name) + '</div></div>';
+            tiles += '<div class="media-tile file-tile is-folder" data-folder="' + esc(f.path) + '">' +
+              '<div class="file-ico">📁</div>' +
+              '<div class="file-name">' + esc(f.name) + '</div></div>';
           });
           (data.files || []).forEach(function (f) {
-            tiles += '<div style="border:1px solid #e2e8f0;border-radius:10px;padding:8px;text-align:center;background:#fff">' +
-              '<img src="' + esc(f.url) + '" alt="" loading="lazy" style="width:100%;height:88px;object-fit:cover;border-radius:6px">' +
-              '<div style="font-size:0.75rem;color:#475569;margin:5px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(f.name) + '">' + esc(f.name) + '</div>' +
-              '<div style="display:flex;gap:4px;justify-content:center">' +
-              '<button type="button" data-copy="' + esc(f.url) + '" style="border:1px solid #e2e8f0;background:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:0.75rem">🔗 העתק</button>' +
-              '<button type="button" data-del="' + esc(String(f.id)) + '" data-name="' + esc(f.name) + '" style="border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:0.75rem">🗑</button>' +
+            tiles += '<div class="file-tile">' +
+              '<img src="' + esc(f.url) + '" alt="" loading="lazy">' +
+              '<div class="file-name" title="' + esc(f.name) + '">' + esc(f.name) + '</div>' +
+              '<div class="file-acts">' +
+              '<button type="button" data-copy="' + esc(f.url) + '" class="icon-btn">🔗 העתק</button>' +
+              '<button type="button" data-del="' + esc(String(f.id)) + '" data-name="' + esc(f.name) + '" class="icon-btn danger">🗑</button>' +
               '</div></div>';
           });
           var grid = document.getElementById('ml-grid');
-          grid.innerHTML = tiles || '<div style="grid-column:1/-1;color:#64748b;padding:26px;text-align:center">תיקייה ריקה — העלה קובץ או צור תיקייה</div>';
+          grid.innerHTML = tiles || '<div class="empty-state" style="grid-column:1/-1">תיקייה ריקה — העלה קובץ או צור תיקייה</div>';
 
           document.querySelectorAll('.ml-crumb').forEach(function (c) {
             c.addEventListener('click', function () { load(c.dataset.goto); });

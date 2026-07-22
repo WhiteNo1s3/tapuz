@@ -83,7 +83,7 @@ router.get('/admin', (req, res) => {
       const setHomeBtn = p.status === 'published' && !isHome
         ? `<form method="POST" action="/admin/homepage">
              <input type="hidden" name="full_path" value="${escapeAdmin(p.full_path)}">
-             <button type="submit" class="btn secondary" style="padding:8px 14px" title="הדף הזה יוגש בשורש האתר (/)">🏠 קבע כדף הבית</button>
+             <button type="submit" class="btn secondary sm" title="הדף הזה יוגש בשורש האתר (/)">🏠 קבע כדף הבית</button>
            </form>`
         : '';
       return `
@@ -96,10 +96,10 @@ router.get('/admin', (req, res) => {
         </div>
         <div class="row-actions">
           ${setHomeBtn}
-          <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn" style="padding:8px 16px">ערוך</a>
+          <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn sm">ערוך</a>
           <form method="POST" action="/admin/delete" onsubmit="return confirm('למחוק?')">
             <input type="hidden" name="full_path" value="${p.full_path}">
-            <button type="submit" class="btn secondary" style="padding:8px 14px">מחק</button>
+            <button type="submit" class="btn secondary sm">מחק</button>
           </form>
         </div>
       </div>`;

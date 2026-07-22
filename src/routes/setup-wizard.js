@@ -27,7 +27,7 @@ router.get('/admin/setup', (req, res) => {
       .wiz-step-dot.done { background:#dcfce7;color:#166534 }
       .wiz-panel { display:none }
       .wiz-panel.active { display:block }
-      .wiz-card { background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:26px }
+      .wiz-card { background:var(--ws-panel);border:1px solid var(--accent-line);border-radius:var(--r-xl);padding:26px;box-shadow:var(--elev-2) }
       .wiz-input { width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box }
       .wiz-nav { display:flex;justify-content:space-between;gap:10px;margin-top:20px }
       .wiz-teach { background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:10px 14px;font-size:0.85rem;margin-bottom:16px;line-height:1.5 }
@@ -47,11 +47,11 @@ router.get('/admin/setup', (req, res) => {
       .wiz-check small { color:#64748b }
       .wiz-ext-row { display:flex;gap:8px;margin-bottom:8px }
     </style>
-    <div class="container" style="padding-top:36px;max-width:640px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:640px">
       <div style="text-align:center;margin-bottom:18px">
         <div style="font-size:3rem">🍊</div>
         <h1 style="margin:8px 0 4px">ברוכים הבאים ל־Tapuziel</h1>
-        <p style="color:#64748b;margin:0">מהרעיון שבראש — לאתר חי. ארבעה צעדים, הכל ניתן לשינוי אחר כך.</p>
+        <p class="lead">מהרעיון שבראש — לאתר חי. ארבעה צעדים, הכל ניתן לשינוי אחר כך.</p>
       </div>
       <div class="wiz-steps">
         <span class="wiz-step-dot" data-dot="0">1 · שם</span>
@@ -63,7 +63,7 @@ router.get('/admin/setup', (req, res) => {
       <div class="wiz-card">
         <!-- Step 1: name -->
         <div class="wiz-panel" data-panel="0">
-          <label style="font-weight:600;display:block;margin-bottom:6px">איך קוראים לאתר?</label>
+          <label class="field-label">איך קוראים לאתר?</label>
           <input id="wiz-title" class="wiz-input" required maxlength="60" placeholder="השם שיופיע בכותרת">
           <input id="wiz-desc" class="wiz-input" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="margin-top:8px">
         </div>
@@ -84,7 +84,7 @@ router.get('/admin/setup', (req, res) => {
               <label class="wiz-color-row"><input type="color" id="wc-lightBg" value="#fdf1e6"> רקע משני</label>
             </div>
           </details>
-          <label style="font-weight:600;display:block;margin-bottom:6px">איפה התפריט?</label>
+          <label class="field-label">איפה התפריט?</label>
           <select id="wiz-menu-placement" class="wiz-input" style="max-width:220px">
             <option value="top">למעלה (קלאסי)</option>
             <option value="side">בצד</option>

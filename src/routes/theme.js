@@ -68,16 +68,16 @@ router.get('/admin/theme', (req, res) => {
 
   const html = `
     ${adminNav('theme', 'ערכת נושא')}
-    <div class="container" style="padding-top:28px;max-width:920px">
+    <div class="container page-body" style="max-width:920px">
       <p class="lead">שנה צבעים, פונט, לוגו ופריסת תפריט — בלי לגעת בקוד התמה. נשמר כ-overrides.</p>
       <section class="card">
-        <h3 style="margin-top:0">מראות מוכנים</h3>
+        <h3 class="sub-head">מראות מוכנים</h3>
         <p style="color:#64748b;margin:0 0 14px;font-size:.9rem">לחיצה אחת מחליפה את כל האישיות של האתר — צבעים, פינות, צללים וגופנים. אחרי הבחירה הכול נשאר ניתן לכיוון עדין למטה.</p>
         <div id="th-looks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px"></div>
       </section>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <section class="card">
-          <h3 style="margin-top:0">אתר</h3>
+          <h3 class="sub-head">אתר</h3>
           <label class="field-label">כותרת האתר</label>
           <input id="th-title" value="${escAttr(settings.siteTitle)}" class="input mb">
           <label class="field-label">תיאור</label>
@@ -96,7 +96,7 @@ router.get('/admin/theme', (req, res) => {
           </div>
         </section>
         <section class="card">
-          <h3 style="margin-top:0">צבעים</h3>
+          <h3 class="sub-head">צבעים</h3>
           ${colorRow('primary', 'ראשי', o.colors.primary)}
           ${colorRow('secondary', 'משלים (גרדיאנט)', o.colors.secondary)}
           ${colorRow('text', 'טקסט', o.colors.text)}
@@ -107,7 +107,7 @@ router.get('/admin/theme', (req, res) => {
           ${colorRow('surface', 'משטח (כרטיסים)', o.colors.surface)}
         </section>
         <section class="card">
-          <h3 style="margin-top:0">אופי העיצוב</h3>
+          <h3 class="sub-head">אופי העיצוב</h3>
           <label class="field-label">פינות</label>
           <select id="th-radius" class="input mb">
             <option value="sharp" ${o.style.radius === 'sharp' ? 'selected' : ''}>חדות (עיתונאי)</option>
@@ -134,7 +134,7 @@ router.get('/admin/theme', (req, res) => {
           </select>
         </section>
         <section class="card">
-          <h3 style="margin-top:0">טיפוגרפיה ופריסה</h3>
+          <h3 class="sub-head">טיפוגרפיה ופריסה</h3>
           <label class="field-label">גופן</label>
           <input id="th-font" value="${escAttr(o.fonts.family)}" class="input mb">
           <label class="field-label">גודל בסיס</label>
@@ -148,7 +148,7 @@ router.get('/admin/theme', (req, res) => {
           </select>
         </section>
         <section class="card">
-          <h3 style="margin-top:0">תצוגה מקדימה</h3>
+          <h3 class="sub-head">תצוגה מקדימה</h3>
           <div id="th-preview" style="border:1px solid #e2e8f0;border-radius:10px;padding:20px"></div>
         </section>
       </div>
@@ -159,14 +159,14 @@ router.get('/admin/theme', (req, res) => {
       </div>
 
       <section class="card" style="margin-bottom:60px">
-        <h3 style="margin-top:0">📦 ייצוא / ייבוא ערכת נושא</h3>
+        <h3 class="sub-head">📦 ייצוא / ייבוא ערכת נושא</h3>
         <p class="lead">קובץ ניתן להעברה — ייצוא שומר את הצבעים/הפונטים/הפריסה הנוכחיים לקובץ, ייבוא מחיל קובץ כזה מאתר Tapuz אחר. שיתוף ערכות נושא, הצעד הראשון.</p>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
           <a class="btn secondary" href="/admin/api/theme/export" download>⬇ ייצוא ערכת נושא</a>
         </div>
         <label class="field-label">ייבוא — הדביקו את תוכן הקובץ (JSON)</label>
         <textarea id="th-import-text" rows="4" dir="ltr" placeholder='{"format":"tapuz-theme", ...}' style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
-        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+        <div class="row end">
           <span id="th-import-status" style="font-size:0.85rem"></span>
           <button type="button" class="btn secondary" id="th-import-apply">החל ערכת נושא מיובאת</button>
         </div>

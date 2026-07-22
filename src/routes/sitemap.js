@@ -68,7 +68,7 @@ router.get('/admin/sitemap', (req, res) => {
 
   const html = `
     <style>
-      .sm-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:18px}
+      .sm-card{background:var(--ws-panel);border:1px solid var(--accent-line);border-radius:var(--r-lg);padding:20px;margin-bottom:18px;box-shadow:var(--elev-1)}
       .sm-card h3{margin-top:0}
       .sm-list{list-style:none;padding-inline-start:22px;margin:6px 0;border-inline-start:2px solid #e2e8f0}
       .sm-card > .sm-list{border-inline-start:none;padding-inline-start:0}
@@ -83,7 +83,7 @@ router.get('/admin/sitemap', (req, res) => {
       .sm-none{color:#64748b}
     </style>
     ${adminNav('sitemap', 'מפת אתר')}
-    <div class="container" style="padding-top:28px;max-width:860px">
+    <div class="container page-body" style="max-width:860px">
       <p class="lead">המבנה נגזר מהתפריטים. דפים שלא מקושרים מופיעים למטה כיתומים.</p>
       ${menuSections}
       <section class="sm-card"><h3>דפים שלא בתפריט</h3><ul class="sm-list" style="border:none;padding-inline-start:0">${orphanRows}</ul></section>

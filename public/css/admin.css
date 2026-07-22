@@ -437,6 +437,89 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
 .pill.info    { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
 .pill.danger  { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
 .pill.accent  { background: var(--accent-wash-2); color: var(--accent-ink); border-color: var(--accent-line); }
+/* a pill whose hue is data-driven (CRM status, category colour): set --c */
+.pill.tone {
+  background: color-mix(in srgb, var(--c) 12%, #ffffff);
+  color: var(--c);
+  border-color: color-mix(in srgb, var(--c) 30%, #ffffff);
+}
+
+/* ---- disclosure record: a list row that opens (inbox leads) ---- */
+.rec {
+  border: 1px solid var(--ws-border);
+  border-radius: var(--r-md);
+  margin-bottom: 8px;
+  background: var(--ws-panel);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.rec[open], .rec:hover { border-color: var(--accent-line); box-shadow: var(--elev-1); }
+.rec.unread { border-color: #93c5fd; background: linear-gradient(150deg, #eff6ff, var(--ws-panel) 60%); }
+.rec > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.rec > summary::-webkit-details-marker { display: none; }
+.rec-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rec-right { display: flex; align-items: center; gap: 10px; flex: none; }
+.rec-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 32ch; }
+.rec-body { padding: 4px 16px 14px; }
+.unread-dot { width: 8px; height: 8px; border-radius: 99px; background: #3b82f6; flex: none; }
+.kv {
+  display: flex;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--ws-border);
+}
+.kv-k { min-width: 110px; font-weight: 600; color: var(--ws-text-soft); }
+.kv-v { white-space: pre-wrap; word-break: break-word; }
+
+/* a checkbox (or radio) and its label as one clickable row — NOT a heading,
+   which is what the shared flex string it replaces looked like from outside */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--ws-text-soft);
+  cursor: pointer;
+}
+.check-row input[type="checkbox"], .check-row input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex: none;
+  cursor: pointer;
+}
+
+/* a label wrapping its own control on one line */
+.inline-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ws-text-soft);
+}
+.inline-field select, .inline-field input {
+  padding: 6px 8px;
+  border: 1.5px solid var(--ws-border-strong);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: var(--ws-panel);
+  color: var(--ws-text);
+}
+.inline-field input[type="number"] { width: 100px; }
+.ok-text { color: var(--ok-deep); font-size: 0.8rem; }
 
 /* ---- notice: the result / warning banners every screen re-hand-rolled ---- */
 .notice {
@@ -455,6 +538,18 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
 .notice strong, .notice .notice-title { display: block; font-weight: 700; margin-bottom: 3px; }
 .notice p, .notice .notice-text { margin: 0; font-size: 0.9rem; opacity: 0.92; }
 .notice .row { margin-top: 11px; }
+/* one-line status strip — same tones, no title, sits inside a card */
+.notice.slim {
+  display: block;
+  padding: 8px 12px;
+  margin-bottom: 0;
+  font-size: 0.85rem;
+  border-radius: var(--r-sm);
+  box-shadow: none;
+  animation: none;
+}
+.notice.slim + .notice.slim { margin-top: 8px; }
+.notice.neutral { background: var(--ws-well); border-color: var(--ws-border); color: var(--ws-muted); }
 .notice.ok     { background: linear-gradient(140deg, #ecfdf5, #f0fdf4); border-color: #86efac; color: #14532d; }
 .notice.info   { background: linear-gradient(140deg, #eff6ff, #f5f9ff); border-color: #93c5fd; color: #1e3a8a; }
 .notice.warn   { background: linear-gradient(140deg, #fffbeb, #fefce8); border-color: #fcd34d; color: #78350f; }
@@ -503,6 +598,208 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
 .dash-split { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
 @media (max-width: 900px) { .dash-split { grid-template-columns: 1fr; } }
 
+/* narrow single-column screens (settings-style forms, wizard steps) */
+.page-body.narrow { max-width: 620px; }
+.page-body.mid { max-width: 860px; }
+
+/* a heading INSIDE a card that isn't the card's own title */
+.sub-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ws-text);
+}
+
+/* ---- meter: a share-of-total bar (device split, quota, progress) ---- */
+.meter { margin-bottom: 10px; }
+.meter-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+.meter-track {
+  height: 8px;
+  background: var(--ws-well);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ffffff));
+}
+
+/* ---- segmented control: range tabs, view switches ---- */
+.seg { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+
+/* ---- a value the eye should land on (metric readouts) ---- */
+.metric { font-size: 2rem; font-weight: 800; letter-spacing: -1px; color: var(--ws-text); line-height: 1.2; }
+.metric-label { font-size: 0.8rem; font-weight: 600; color: var(--ws-muted); }
+.metric small { font-size: 1rem; font-weight: 600; color: var(--ws-muted); }
+
+/* ---- file grid: the media bank and the storage browser ---- */
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.file-tile {
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-md);
+  padding: 8px;
+  text-align: center;
+  background: var(--ws-panel);
+  box-shadow: var(--elev-1);
+  transition: box-shadow var(--dur), border-color var(--dur), transform var(--dur);
+}
+.file-tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--ws-border));
+  box-shadow: var(--elev-2);
+  transform: translateY(-2px);
+}
+.file-tile.is-folder { padding: 10px; cursor: pointer; }
+.file-tile img { width: 100%; height: 88px; object-fit: cover; border-radius: 6px; display: block; }
+.file-ico { font-size: 2.4rem; line-height: 70px; height: 70px; }
+.file-name {
+  font-size: 0.78rem;
+  color: var(--ws-text-soft);
+  margin: 5px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-acts { display: flex; gap: 4px; justify-content: center; }
+.icon-btn {
+  border: 1px solid var(--ws-border);
+  background: var(--ws-panel);
+  color: var(--ws-text-soft);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  transition: background var(--dur), border-color var(--dur), color var(--dur);
+}
+.icon-btn:hover { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
+.icon-btn.danger { border-color: #fecaca; color: #b91c1c; }
+.icon-btn.danger:hover { background: #fef2f2; border-color: #fca5a5; }
+.crumb { cursor: pointer; color: var(--accent-ink); font-weight: 600; }
+.crumb:hover { text-decoration: underline; }
+.err-text { color: #b91c1c; }
+
+/* ---- storage browser: pages / media / data files as they sit on disk ---- */
+.stg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  margin: 10px 0 26px;
+}
+.stg-card {
+  display: block;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-md);
+  padding: 13px 14px;
+  background: var(--ws-panel);
+  text-decoration: none;
+  color: var(--ws-text);
+  box-shadow: var(--elev-1);
+  transition: border-color var(--dur), box-shadow var(--dur), transform var(--dur);
+}
+a.stg-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--ws-border));
+  box-shadow: var(--elev-2);
+  transform: translateY(-2px);
+}
+.stg-card strong { font-size: 0.95rem; }
+.stg-path { margin: 6px 0; }
+.stg-thumb { width: 100%; height: 82px; object-fit: cover; border-radius: 6px; display: block; }
+.stg-sec {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 8px 0 2px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--accent-ink);
+}
+.stg-sec .n {
+  background: var(--accent-wash-2);
+  color: var(--accent-ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 1px 9px;
+  border-radius: 999px;
+}
+.stg-empty {
+  color: var(--ws-faint);
+  padding: 16px;
+  border: 1px dashed var(--accent-line);
+  border-radius: var(--r-md);
+  background: var(--ws-panel);
+}
+.disk-path {
+  font-size: 0.72rem;
+  background: var(--ws-well);
+  color: var(--ws-text-soft);
+  padding: 1px 6px;
+  border-radius: 5px;
+  direction: ltr;
+  display: inline-block;
+}
+
+/* ---- banner: a coloured hero strip that leads a screen ---- */
+.banner {
+  color: #fff;
+  border-radius: var(--r-lg);
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 82%, #0f172a), var(--accent));
+  box-shadow: var(--elev-2);
+}
+.banner-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 4px; }
+.banner-text { opacity: .92; font-size: 0.9rem; line-height: 1.5; }
+.banner-meta { margin-top: 8px; font-size: 0.8rem; opacity: .85; direction: ltr; }
+.banner code { background: rgba(255, 255, 255, .18); border-radius: 4px; padding: 1px 5px; direction: ltr; }
+
+/* ---- two-column work split (paste-in on one side, preview on the other) ---- */
+.split-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .split-2 { grid-template-columns: 1fr; } }
+.back-link { font-size: 0.9rem; color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+.back-link:hover { text-decoration: underline; }
+.code-area {
+  min-height: 260px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  direction: ltr;
+  text-align: left;
+}
+.preview-frame {
+  width: 100%;
+  height: 520px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-md);
+  background: var(--ws-panel);
+  box-shadow: var(--elev-1);
+}
+
+/* ---- inline code / token readouts ---- */
+.code-box {
+  display: block;
+  direction: ltr;
+  text-align: start;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  background: var(--ws-well);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--r-sm);
+  padding: 9px 11px;
+}
+
 /* ---- stat tile ---- */
 .stat-grid {
   display: grid;
@@ -536,6 +833,7 @@ a > .stat:hover {
   color: var(--c);
 }
 .stat-label { font-size: 0.84rem; font-weight: 600; color: var(--ws-muted); margin-top: 3px; }
+.stat-num small { font-size: 1rem; font-weight: 600; color: var(--ws-muted); }
 
 /* ---- hub card: a tool family as a destination ---- */
 .hub-grid {
@@ -589,6 +887,21 @@ a > .stat:hover {
 .tbl tbody tr { transition: background var(--dur); }
 .tbl tbody tr:hover { background: var(--accent-wash); }
 .tbl tbody tr:last-child td { border-bottom: none; }
+.tbl td a { color: var(--ws-text); }
+.tbl td a:hover { color: var(--accent); }
+.tbl .tbl-empty { padding: 18px; color: var(--ws-faint); text-align: center; }
+.rate-good { color: var(--ok); }
+
+/* the x-axis labels under an inline SVG chart */
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  direction: ltr;
+  font-size: 0.72rem;
+  color: var(--ws-faint);
+}
+.export-row { margin-top: 6px; margin-bottom: 10px; }
+.stat-delta { font-size: 0.95rem; font-weight: 700; color: var(--ok); }
 
 /* ---- layout helpers (the inline flex/grid strings these replace) ---- */
 .stack     { display: flex; flex-direction: column; gap: 16px; }
@@ -612,6 +925,43 @@ a > .stat:hover {
   border: 1.5px dashed var(--accent-line);
   border-radius: var(--r-lg);
 }
+
+/* ---- auth screens: the first thing anyone sees (login / first admin) ---- */
+.auth-stage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--ws-panel);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-xl);
+  padding: 32px 30px;
+  box-shadow: var(--elev-2), 0 24px 60px rgba(15, 23, 42, .10);
+  animation: rise-in var(--dur-slow) var(--pop);
+}
+.auth-brand {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.auth-title { font-size: 1.15rem; text-align: center; margin: 0 0 18px; color: var(--ws-text-soft); }
+.auth-title.tight { margin-bottom: 6px; }
+.auth-sub { text-align: center; color: var(--ws-muted); font-size: 0.86rem; margin: 0 0 18px; }
+.auth-err { margin-bottom: 14px; }
+.auth-input { padding: 11px 12px; border-radius: 9px; font-size: 1rem; }
+.auth-submit { padding: 12px; font-size: 1rem; }
+.auth-foot { text-align: center; }
 
 /* ==========================================================================
    Shared controls
@@ -656,6 +1006,10 @@ a > .stat:hover {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--ws-border));
 }
 .btn.danger { background: linear-gradient(160deg, #ef4444, #dc2626 62%); box-shadow: 0 4px 12px rgba(220,38,38,.24); }
+/* sizes — the per-call padding strings (6px 12px / 6px 14px / 8px 14px …) */
+.btn.sm { padding: 7px 13px; font-size: 0.88rem; }
+.btn.xs { padding: 5px 10px; font-size: 0.8rem; border-radius: 8px; }
+.btn.block { width: 100%; justify-content: center; }
 /* publish family — deliberate green, whatever the section accent is */
 .btn.publish, .btn[data-publish-main] { background: linear-gradient(160deg, #22a355, var(--ok-deep) 68%) !important; }
 .btn.publish-build { background: linear-gradient(160deg, #17703a, #14532d 68%) !important; }

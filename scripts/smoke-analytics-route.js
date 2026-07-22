@@ -111,10 +111,13 @@ function waitUp(tries = 40) {
     check('the admin-path pageview was never recorded (defense in depth survived the move)', !dash.text.includes('/admin/theme<'));
 
     // ── the range selector actually changes the query ──
+    // Matched tag-agnostically: the assertion is about the range the page
+    // reports, not about which element the design system wraps "ימים" in.
+    const rangeStat = (html) => (html.match(/>\s*(\d+)\s*<(?:span|small)[^>]*>ימים</) || [])[1];
     const dash7 = await req('GET', '/admin/analytics?days=7', { cookie });
-    check('?days=7 is honored (range tab reflects the selection)', dash7.status === 200 && /7 <span/.test(dash7.text));
+    check('?days=7 is honored (range tab reflects the selection)', dash7.status === 200 && rangeStat(dash7.text) === '7');
     const dashBad = await req('GET', '/admin/analytics?days=999', { cookie });
-    check('an out-of-range days value falls back to the 30-day default, not a crash', dashBad.status === 200 && /30 <span/.test(dashBad.text));
+    check('an out-of-range days value falls back to the 30-day default, not a crash', dashBad.status === 200 && rangeStat(dashBad.text) === '30');
 
     // ── CSV export — a real table with the seeded data ──
     const csv = await req('GET', '/admin/analytics.csv?what=daily&days=30', { cookie });

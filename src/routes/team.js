@@ -20,7 +20,7 @@ router.get('/admin/team', requireAdmin, (req, res) => {
   const users = auth.listUsers();
   const rows = users.map((u) => `
     <tr data-id="${escapeAdmin(u.id)}">
-      <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9">${escapeAdmin(u.username)}${u.id === req.adminUser.uid ? ' <span style="color:#94a3b8;font-size:0.8rem">(אתה)</span>' : ''}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9">${escapeAdmin(u.username)}${u.id === req.adminUser.uid ? ' <span class="faint">(אתה)</span>' : ''}</td>
       <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9">
         <select class="team-role" style="padding:6px;border:1.5px solid #cbd5e1;border-radius:6px" ${u.id === req.adminUser.uid ? 'disabled title="אי אפשר לשנות את התפקיד של עצמך"' : ''}>
           <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>מנהל</option>
@@ -33,7 +33,7 @@ router.get('/admin/team', requireAdmin, (req, res) => {
     </tr>`).join('');
   const html = `
     ${adminNav('team', 'צוות')}
-    <div class="container" style="padding-top:28px;max-width:680px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:680px">
       <p class="lead">מנהל — גישה מלאה לכל ההגדרות, המפתחות ואישורי ה-SMTP. עורך — עובד על הדפים, המדיה, התפריטים והפניות, בלי גישה להגדרות רגישות.</p>
       <section class="card">
         <table style="width:100%;border-collapse:collapse;font-size:0.92rem">
@@ -44,18 +44,18 @@ router.get('/admin/team', requireAdmin, (req, res) => {
         </table>
       </section>
       <section class="card">
-        <h3 style="margin-top:0">➕ הזמנת חבר צוות</h3>
+        <h3 class="sub-head">➕ הזמנת חבר צוות</h3>
         <label class="field-label">שם משתמש</label>
         <input id="tm-user" class="input mb">
         <label class="field-label">סיסמה (8+ תווים)</label>
         <input id="tm-pass" type="password" class="input mb">
         <label class="field-label">תפקיד</label>
-        <select id="tm-role" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px">
+        <select id="tm-role" class="input mb">
           <option value="editor" selected>עורך</option>
           <option value="admin">מנהל</option>
         </select>
-        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
-          <span id="tm-status" style="color:#166534;font-size:0.85rem"></span>
+        <div class="row end">
+          <span id="tm-status" class="ok-text"></span>
           <button type="button" class="btn" id="tm-add">הוספה</button>
         </div>
       </section>

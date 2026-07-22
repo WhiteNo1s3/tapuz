@@ -42,7 +42,7 @@ router.get('/admin/translations', (req, res) => {
             <button type="button" class="tr-unlink" data-path="${escapeAdmin(p.full_path)}" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:0.85rem" title="הסר מהקבוצה">✕</button>
           </span>`).join('')}
       </div>
-    </div>`).join('') || '<p style="color:#94a3b8">אין עדיין תרגומים מקושרים.</p>';
+    </div>`).join('') || '<p class="faint">אין עדיין תרגומים מקושרים.</p>';
 
   const pageOptions = pages.map((p) =>
     `<option value="${escapeAdmin(p.full_path)}">${escapeAdmin(p.title)} — /${escapeAdmin(p.full_path)}${p.meta.lang ? ' (' + escapeAdmin(p.meta.lang.toUpperCase()) + ')' : ''}</option>`
@@ -50,16 +50,16 @@ router.get('/admin/translations', (req, res) => {
 
   const html = `
     ${adminNav('translations', 'תרגומים')}
-    <div class="container" style="padding-top:28px;max-width:760px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:760px">
       <p class="lead">קשרו שני דפים קיימים כתרגום זה של זה — כמו "אודות" ו-"About". קישור יוצר החלפת שפה אוטומטית וזוגות ‎hreflang‎ ל-SEO. אין שדה שפה גלובלי — כל דף מסמן את השפה שלו ברגע שהוא נכנס לקבוצה.</p>
 
       <section class="card">
-        <h3 style="margin-top:0">קבוצות תרגום קיימות</h3>
+        <h3 class="sub-head">קבוצות תרגום קיימות</h3>
         ${groupRows}
       </section>
 
       <section class="card">
-        <h3 style="margin-top:0">➕ קשר שני דפים</h3>
+        <h3 class="sub-head">➕ קשר שני דפים</h3>
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">
           <div>
             <label class="field-label">דף א׳</label>
@@ -80,11 +80,11 @@ router.get('/admin/translations', (req, res) => {
             <input id="tr-lang-b" dir="ltr" placeholder="en" maxlength="8" class="input">
           </div>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+        <div class="row end">
           <span id="tr-status" style="font-size:0.85rem"></span>
           <button type="button" class="btn" id="tr-link">קשר כתרגומים</button>
         </div>
-        <div style="font-size:0.8rem;color:#94a3b8;margin-top:10px">השינוי נכנס לתוקף באתר אחרי "בנה אתר".</div>
+        <div class="faint" style="margin-top:10px">השינוי נכנס לתוקף באתר אחרי "בנה אתר".</div>
       </section>
     </div>
     <script>

@@ -35,17 +35,15 @@ router.get('/admin/site-chrome', (req, res) => {
       social: Array.isArray(footer.social) ? footer.social : []
     }
   };
-  const inputCss = 'width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box';
-  const cardCss = 'background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px';
   const html = `
     ${adminNav('site-chrome', 'כותרת ותחתית')}
-    <div class="container" style="padding-top:28px;max-width:720px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:720px">
       <p class="lead">הכותרת והתחתית שייכות לכל האתר — כל דף שנבנה בבונה מופיע בתוכן. השינויים חלים באתר הציבורי אחרי "בנה אתר".</p>
 
-      <section style="${cardCss}">
-        <h3 style="margin-top:0">🔝 כותרת עליונה (Header)</h3>
+      <section class="card">
+        <h3 class="sub-head">🔝 כותרת עליונה (Header)</h3>
         <label class="field-label">תת-כותרת ליד הלוגו</label>
-        <input id="h-tagline" value="${escapeAdmin(data.header.tagline)}" placeholder="הבית של המוזיקה" style="${inputCss};margin-bottom:14px">
+        <input id="h-tagline" value="${escapeAdmin(data.header.tagline)}" placeholder="הבית של המוזיקה" class="input mb">
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:12px">
           <input type="checkbox" id="h-showlogo" ${data.header.showLogo ? 'checked' : ''}> הצג לוגו בכותרת
         </label>
@@ -55,43 +53,43 @@ router.get('/admin/site-chrome', (req, res) => {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
             <label class="field-label">כפתור פעולה — טקסט</label>
-            <input id="h-ctalabel" value="${escapeAdmin(data.header.ctaLabel)}" placeholder="צור קשר" style="${inputCss}">
+            <input id="h-ctalabel" value="${escapeAdmin(data.header.ctaLabel)}" placeholder="צור קשר" class="input">
           </div>
           <div>
             <label class="field-label">כפתור פעולה — קישור</label>
-            <input id="h-ctaurl" dir="ltr" value="${escapeAdmin(data.header.ctaUrl)}" placeholder="/contact" style="${inputCss}">
+            <input id="h-ctaurl" dir="ltr" value="${escapeAdmin(data.header.ctaUrl)}" placeholder="/contact" class="input">
           </div>
         </div>
-        <div style="font-size:0.8rem;color:#94a3b8;margin-top:8px">כפתור הפעולה מופיע רק אם מולאו גם טקסט וגם קישור.</div>
+        <div class="faint" style="margin-top:8px">כפתור הפעולה מופיע רק אם מולאו גם טקסט וגם קישור.</div>
       </section>
 
-      <section style="${cardCss}">
-        <h3 style="margin-top:0">🔻 תחתית (Footer)</h3>
+      <section class="card">
+        <h3 class="sub-head">🔻 תחתית (Footer)</h3>
         <label class="field-label">טקסט תחתית חופשי</label>
-        <textarea id="f-text" rows="2" placeholder="רחוב הרצל 1, תל אביב · טל׳ 03-0000000" style="${inputCss};margin-bottom:14px">${escapeAdmin(data.footer.text)}</textarea>
+        <textarea id="f-text" rows="2" placeholder="רחוב הרצל 1, תל אביב · טל׳ 03-0000000" class="input mb">${escapeAdmin(data.footer.text)}</textarea>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px">
           <input type="checkbox" id="f-credit" ${data.footer.showCredit ? 'checked' : ''}> הצג קרדיט "נבנה עם Tapuz"
         </label>
       </section>
 
-      <section style="${cardCss}">
+      <section class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <h3 style="margin:0">🗂️ עמודות קישורים בתחתית</h3>
-          <button type="button" class="btn secondary" id="add-col" style="padding:6px 12px">+ עמודה</button>
+          <button type="button" class="btn secondary sm" id="add-col">+ עמודה</button>
         </div>
         <p class="lead">כל עמודה = כותרת + רשימת קישורים.</p>
         <div id="cols-wrap"></div>
       </section>
 
-      <section style="${cardCss}">
+      <section class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <h3 style="margin:0">🔗 רשתות חברתיות</h3>
-          <button type="button" class="btn secondary" id="add-social" style="padding:6px 12px">+ רשת</button>
+          <button type="button" class="btn secondary sm" id="add-social">+ רשת</button>
         </div>
         <div id="social-wrap"></div>
       </section>
 
-      <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+      <div class="row end">
         <span id="chrome-status" style="color:#166534;font-size:0.9rem"></span>
         <button type="button" class="btn" id="chrome-save">שמור כותרת ותחתית</button>
       </div>
@@ -102,7 +100,6 @@ router.get('/admin/site-chrome', (req, res) => {
     <script>
       (function () {
         var DATA = JSON.parse(document.getElementById('chrome-data').textContent);
-        var inputCss = ${jsonForScript(inputCss)};
         var colsWrap = document.getElementById('cols-wrap');
         var socialWrap = document.getElementById('social-wrap');
 
@@ -113,7 +110,7 @@ router.get('/admin/site-chrome', (req, res) => {
           return e;
         }
         function xrow() {
-          return '<button type="button" class="btn secondary rm" style="padding:6px 10px">✕</button>';
+          return '<button type="button" class="btn secondary rm sm">✕</button>';
         }
 
         // ---- Columns ----
@@ -121,8 +118,8 @@ router.get('/admin/site-chrome', (req, res) => {
           col = col || { title: '', links: [] };
           var box = el('div', { 'class': 'chrome-col', style: 'border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:12px;background:#f8fafc' });
           var head = el('div', { style: 'display:flex;gap:8px;margin-bottom:10px' });
-          var titleInput = el('input', { placeholder: 'כותרת עמודה', style: inputCss + ';flex:1' });
-          titleInput.className = 'col-title';
+          var titleInput = el('input', { placeholder: 'כותרת עמודה', 'class': 'input', style: 'flex:1' });
+          titleInput.classList.add('col-title');
           titleInput.value = col.title || '';
           var rmCol = el('button', { type: 'button', 'class': 'btn secondary', style: 'padding:6px 10px' }, '✕ עמודה');
           rmCol.addEventListener('click', function () { box.remove(); });
@@ -139,10 +136,10 @@ router.get('/admin/site-chrome', (req, res) => {
         }
         function addLinkRow(wrap, link) {
           var row = el('div', { 'class': 'link-row', style: 'display:flex;gap:8px;margin-bottom:8px' });
-          var label = el('input', { placeholder: 'טקסט', style: inputCss + ';flex:1' });
-          label.className = 'link-label'; label.value = link.label || '';
-          var url = el('input', { placeholder: '/page', dir: 'ltr', style: inputCss + ';flex:1' });
-          url.className = 'link-url'; url.value = link.url || '';
+          var label = el('input', { placeholder: 'טקסט', 'class': 'input', style: 'flex:1' });
+          label.classList.add('link-label'); label.value = link.label || '';
+          var url = el('input', { placeholder: '/page', dir: 'ltr', 'class': 'input', style: 'flex:1' });
+          url.classList.add('link-url'); url.value = link.url || '';
           var rm = el('button', { type: 'button', 'class': 'btn secondary', style: 'padding:6px 10px' }, '✕');
           rm.addEventListener('click', function () { row.remove(); });
           row.appendChild(label); row.appendChild(url); row.appendChild(rm);
@@ -153,10 +150,10 @@ router.get('/admin/site-chrome', (req, res) => {
         function addSocial(s) {
           s = s || { network: '', url: '' };
           var row = el('div', { 'class': 'social-row', style: 'display:flex;gap:8px;margin-bottom:8px' });
-          var net = el('input', { placeholder: 'Facebook', style: inputCss + ';flex:1' });
-          net.className = 'social-net'; net.value = s.network || '';
-          var url = el('input', { placeholder: 'https://…', dir: 'ltr', style: inputCss + ';flex:2' });
-          url.className = 'social-url'; url.value = s.url || '';
+          var net = el('input', { placeholder: 'Facebook', 'class': 'input', style: 'flex:1' });
+          net.classList.add('social-net'); net.value = s.network || '';
+          var url = el('input', { placeholder: 'https://…', dir: 'ltr', 'class': 'input', style: 'flex:2' });
+          url.classList.add('social-url'); url.value = s.url || '';
           var rm = el('button', { type: 'button', 'class': 'btn secondary', style: 'padding:6px 10px' }, '✕');
           rm.addEventListener('click', function () { row.remove(); });
           row.appendChild(net); row.appendChild(url); row.appendChild(rm);

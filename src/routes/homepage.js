@@ -36,7 +36,7 @@ router.post('/admin/homepage', (req, res) => {
     res.redirect('/admin?homeset=1');
   } catch (e) {
     res.status(400).send(layout(
-      `${adminNav('pages', 'דפים')}<div class="container" style="padding-top:30px">
+      `${adminNav('pages', 'דפים')}<div class="container page-body">
          <div style="background:#fef2f2;border:1px solid #ef4444;color:#b91c1c;padding:14px 18px;border-radius:12px">${escapeAdmin(e.message)}</div>
          <p><a href="/admin" class="btn secondary" style="margin-top:14px">חזרה לדפים</a></p>
        </div>`,

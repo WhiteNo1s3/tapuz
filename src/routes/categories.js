@@ -35,7 +35,7 @@ router.post('/admin/api/categories', (req, res) => {
 router.get('/admin/categories', (req, res) => {
   const html = `
     <style>
-      .cat-row { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;align-items:center;margin-bottom:8px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px }
+      .cat-row { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;align-items:center;margin-bottom:8px;background:var(--ws-panel);border:1px solid var(--accent-line);border-radius:var(--r-md);padding:10px;box-shadow:var(--elev-1) }
       .cat-row input[type=text] { width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:7px;box-sizing:border-box }
       .cat-row input[type=color] { width:44px;height:34px;border:1px solid #cbd5e1;border-radius:7px;padding:2px }
       .cat-row .cat-del { border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:7px;padding:6px 0;cursor:pointer }
@@ -43,15 +43,15 @@ router.get('/admin/categories', (req, res) => {
       .cat-head { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;font-size:0.75rem;font-weight:700;color:#64748b;padding:0 10px;margin-bottom:4px }
     </style>
     ${adminNav('categories', 'קטגוריות')}
-    <div class="container" style="padding-top:28px;max-width:820px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:820px">
       <p class="lead">קטגוריה = תגית מנוהלת עם מיתוג (שם, צבע, תמונה, תיאור). משייכים דפים לקטגוריה במאפייני הדף בבונה, ומציגים אותה בכל דף עם בלוק "קטגוריה". הרשימה נשמרת כקובץ <code style="direction:ltr">content/categories.json</code> — <a href="/admin/storage">רואים אותו באחסון</a>.</p>
       <div class="card tight">
         <div class="cat-head"><span>slug</span><span>שם תצוגה</span><span>צבע</span><span>תמונת רקע (URL)</span><span></span></div>
         <div id="cat-list"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
           <button type="button" class="btn secondary" id="cat-add">+ קטגוריה</button>
-          <div style="display:flex;gap:10px;align-items:center">
-            <span id="cat-status" style="color:#166534;font-size:0.85rem"></span>
+          <div class="row">
+            <span id="cat-status" class="ok-text"></span>
             <button type="button" class="btn" id="cat-save">שמור</button>
           </div>
         </div>

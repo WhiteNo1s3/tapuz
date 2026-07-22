@@ -44,15 +44,15 @@ router.get('/admin/new', (req, res) => {
       .tpl-name { font-weight:700;font-size:.92rem }
       .tpl-desc { font-size:.75rem;color:#64748b;line-height:1.45 }
     </style>
-    <div class="container" style="max-width:640px;padding-top:40px">
+    <div class="container page-body" style="max-width:640px">
       <h2 style="margin-bottom:20px">דף חדש</h2>
       <form method="POST" action="/admin/create">
         <div style="margin-bottom:14px">
-          <label style="display:block;margin-bottom:4px;font-weight:600">כותרת</label>
+          <label class="field-label">כותרת</label>
           <input id="np-title" name="title" required autofocus class="input">
         </div>
         <div style="margin-bottom:20px">
-          <label style="display:block;margin-bottom:4px;font-weight:600">כתובת הדף (slug)</label>
+          <label class="field-label">כתובת הדף (slug)</label>
           <input id="np-slug" name="slug" placeholder="נוצר אוטומטית מהכותרת" class="input">
           <div style="font-size:0.8rem;color:#64748b;margin-top:4px">נוצר אוטומטית מהכותרת — אפשר לשנות, לא חובה להבין ב-slug</div>
         </div>
@@ -66,10 +66,10 @@ router.get('/admin/new', (req, res) => {
         <p style="color:#64748b;font-size:.88rem;margin:6px 0 12px">
           תפוזיאל יפרק את הדף למודולים שאפשר לערוך בבונה. מה שלא ממופה נשמר כ‑HTML זמני — שום דבר לא הולך לאיבוד.
         </p>
-        <label style="display:block;margin-bottom:4px;font-weight:600;font-size:.9rem">כתובת דף (URL)</label>
+        <label class="field-label">כתובת דף (URL)</label>
         <input id="imp-url" dir="ltr" placeholder="https://example.com/page" class="input">
         <div style="text-align:center;color:#94a3b8;font-size:.8rem;margin:8px 0">— או —</div>
-        <label style="display:block;margin-bottom:4px;font-weight:600;font-size:.9rem">הדביקו HTML</label>
+        <label class="field-label">הדביקו HTML</label>
         <textarea id="imp-html" dir="ltr" rows="5" placeholder="<html>…</html>" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:.82rem"></textarea>
         <button type="button" id="imp-go" class="btn" style="margin-top:12px">🔁 ייבא ופתח בבונה</button>
         <div id="imp-status" style="margin-top:10px;font-size:.88rem;display:none"></div>
@@ -213,7 +213,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
       <div class="container topbar-inner">
         <div class="topbar-left">
           <a href="/admin" class="brand-logo" style="font-size:1.35rem">🍊 Tapuz</a>
-          <button type="button" id="btn-pages-nav" class="btn secondary" style="padding:6px 12px" title="ניווט דפים">☰ דפים</button>
+          <button type="button" id="btn-pages-nav" class="btn secondary sm" title="ניווט דפים">☰ דפים</button>
           <input id="page-title" class="page-title" value="${safeTitle}" placeholder="כותרת הדף">
           <span id="publish-badge" style="font-size:0.8rem;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeFg}">${statusLabel}${badgeExtra}</span>
           <select id="page-status" style="display:none">
@@ -223,12 +223,12 @@ router.get('/admin/edit/:fullPath', (req, res) => {
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button type="button" onclick="TapuzBuilder.openImportAi()" class="btn secondary" style="padding:8px 12px;border-color:#c7d2fe;color:#4338ca">🤖 ייבא מ‑AI</button>
-          <button type="button" onclick="TapuzBuilder.openRevisions()" class="btn secondary" style="padding:8px 12px">היסטוריה</button>
-          <a href="/admin/theme" class="btn secondary" style="padding:8px 12px">ערכת נושא</a>
-          <a href="/" target="_blank" class="btn secondary" style="padding:8px 12px">צפה באתר</a>
-          <button type="button" onclick="TapuzBuilder.savePage()" class="btn" style="padding:8px 14px">שמור טיוטה</button>
-          <button type="button" onclick="TapuzBuilder.publishPage()" class="btn js-publish-btn publish" data-publish-main="1" style="padding:8px 14px">פרסם</button>
-          <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn js-publish-btn publish-build" style="padding:8px 14px">פרסם + בנה</button>
+          <button type="button" onclick="TapuzBuilder.openRevisions()" class="btn secondary sm">היסטוריה</button>
+          <a href="/admin/theme" class="btn secondary sm">ערכת נושא</a>
+          <a href="/" target="_blank" class="btn secondary sm">צפה באתר</a>
+          <button type="button" onclick="TapuzBuilder.savePage()" class="btn sm">שמור טיוטה</button>
+          <button type="button" onclick="TapuzBuilder.publishPage()" class="btn js-publish-btn publish sm" data-publish-main="1">פרסם</button>
+          <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn js-publish-btn publish-build sm">פרסם + בנה</button>
         </div>
       </div>
     </div>
@@ -337,7 +337,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
 
     <div id="media-modal" class="modal" onclick="if (event.target.id === 'media-modal') TapuzBuilder.closeMediaLibrary()">
       <div class="modal-content media-modal-content" onclick="event.stopPropagation()">
-        <h3 style="margin-top:0">🗂 ספריית המדיה</h3>
+        <h3 class="sub-head">🗂 ספריית המדיה</h3>
         <div id="media-list"></div>
         <div class="media-modal-foot">
           <button type="button" class="btn secondary" onclick="TapuzBuilder.closeMediaLibrary()">סגור</button>
@@ -350,7 +350,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
 
     <div id="pages-nav-modal" class="modal" onclick="if (event.target.id === 'pages-nav-modal') TapuzBuilder.closePagesNav()">
       <div class="modal-content" style="max-width:560px" onclick="event.stopPropagation()">
-        <h3 style="margin-top:0">ניווט דפים</h3>
+        <h3 class="sub-head">ניווט דפים</h3>
         <input id="pages-nav-search" type="search" placeholder="חיפוש לפי כותרת או נתיב..." style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
         <div id="pages-nav-list" style="max-height:420px;overflow:auto"></div>
         <div style="margin-top:14px;display:flex;justify-content:space-between;gap:10px">
@@ -362,7 +362,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
 
     <div id="revisions-modal" class="modal" onclick="if (event.target.id === 'revisions-modal') TapuzBuilder.closeRevisions()">
       <div class="modal-content" style="max-width:560px" onclick="event.stopPropagation()">
-        <h3 style="margin-top:0">היסטוריית גרסאות</h3>
+        <h3 class="sub-head">היסטוריית גרסאות</h3>
         <p class="lead">שמירה אוטומטית בכל שמירה/פרסום. שחזור מעתיק לטיוטה בלבד.</p>
         <div id="revisions-list" style="max-height:420px;overflow:auto"></div>
         <div style="margin-top:14px;text-align:left">

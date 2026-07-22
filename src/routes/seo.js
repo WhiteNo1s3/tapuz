@@ -22,26 +22,26 @@ router.get('/admin/seo', (req, res) => {
   const seo = config.seo || {};
   const html = `
     ${adminNav('seo', 'SEO')}
-    <div class="container" style="padding-top:28px;max-width:620px;padding-bottom:60px">
+    <div class="container page-body" style="max-width:620px">
       <p class="lead">ברירות מחדל לכל האתר. לכל דף יש הגדרות SEO משלו — בבונה הדפים, לחיצה על רקע הקנבס פותחת את מאפייני הדף (כותרת, תיאור, og:image, אינדוקס).</p>
       <section class="card">
         <label class="field-label">תבנית כותרת (title pattern)</label>
-        <input id="seo-pattern" dir="ltr" value="${escapeAdmin(seo.titlePattern || '')}" placeholder="{page} · {site}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">‎{page}‎ = כותרת הדף · ‎{site}‎ = שם האתר · ריק = כותרת הדף בלבד</div>
+        <input id="seo-pattern" dir="ltr" value="${escapeAdmin(seo.titlePattern || '')}" placeholder="{page} · {site}" class="input">
+        <div class="faint" style="margin-bottom:14px">‎{page}‎ = כותרת הדף · ‎{site}‎ = שם האתר · ריק = כותרת הדף בלבד</div>
         <label class="field-label">תיאור ברירת מחדל (meta description)</label>
-        <textarea id="seo-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">${escapeAdmin(config.description)}</textarea>
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">משמש כשלדף אין תיאור משלו</div>
+        <textarea id="seo-desc" rows="2" class="input">${escapeAdmin(config.description)}</textarea>
+        <div class="faint" style="margin-bottom:14px">משמש כשלדף אין תיאור משלו</div>
         <label class="field-label">תמונת שיתוף ברירת מחדל (og:image)</label>
         <div style="display:flex;gap:8px;margin-bottom:6px">
           <input id="seo-og" dir="ltr" value="${escapeAdmin(seo.defaultOgImage || '')}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
           <button type="button" class="btn secondary" data-media-pick="seo-og" style="white-space:nowrap">🖼 בחר / העלה</button>
         </div>
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו.</div>
+        <div class="faint" style="margin-bottom:14px">התמונה שתופיע בשיתוף ברשתות כשלדף אין תמונה משלו.</div>
         <label class="field-label">כתובת האתר (base URL)</label>
-        <input id="seo-base" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://www.example.co.il" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
-        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">מפעיל canonical / og:url / נתונים מובנים (JSON-LD) עם כתובות מלאות, וקובע את הכתובות ב-sitemap.xml. ריק = מדלגים על תגיות שדורשות כתובת מלאה.</div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
-          <span id="seo-status" style="color:#166534;font-size:0.85rem"></span>
+        <input id="seo-base" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://www.example.co.il" class="input">
+        <div class="faint" style="margin-bottom:14px">מפעיל canonical / og:url / נתונים מובנים (JSON-LD) עם כתובות מלאות, וקובע את הכתובות ב-sitemap.xml. ריק = מדלגים על תגיות שדורשות כתובת מלאה.</div>
+        <div class="row end">
+          <span id="seo-status" class="ok-text"></span>
           <button type="button" class="btn" id="seo-save">שמור SEO</button>
         </div>
       </section>

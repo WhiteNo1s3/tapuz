@@ -44,7 +44,7 @@ router.get('/admin/dashboard', (req, res) => {
         <strong>${escapeAdmin(p.title)}</strong>
         <span class="faint" style="margin-inline-start:8px">${String(p.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
       </div>
-      <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn" style="padding:6px 14px">ערוך</a>
+      <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn sm">ערוך</a>
     </div>`).join('') || '<p class="muted">אין דפים עדיין</p>';
 
   // The tool families as a colorful hub — same data that drives the nav, so

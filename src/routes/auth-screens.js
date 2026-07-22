@@ -27,21 +27,16 @@ const loginGuard = new LoginGuard();
 // ---- Auth screens (Hebrew / RTL). Exempt from the session requirement. ----
 function authCard(inner) {
   return `
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
-      <div style="width:100%;max-width:400px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:30px;box-shadow:0 12px 40px rgba(15,23,42,0.08)">
-        <div style="text-align:center;margin-bottom:18px">
-          <div style="font-size:1.8rem;font-weight:800;color:#0f172a">Tapuz</div>
-        </div>
+    <div class="auth-stage">
+      <div class="auth-card">
+        <div class="auth-brand">🍊 Tapuz</div>
         ${inner}
       </div>
     </div>`;
 }
 function authErr(msg) {
-  return msg
-    ? `<div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:0.88rem">${escapeAdmin(msg)}</div>`
-    : '';
+  return msg ? `<div class="notice slim danger auth-err">${escapeAdmin(msg)}</div>` : '';
 }
-const authInput = 'width:100%;padding:11px;border:1.5px solid #cbd5e1;border-radius:9px;margin-bottom:14px;box-sizing:border-box;font-size:1rem';
 
 router.get('/admin/login', (req, res) => {
   const base = auth.getAdminBase();
@@ -49,14 +44,14 @@ router.get('/admin/login', (req, res) => {
   if (!auth.hasAdmin()) return res.redirect(base + '/create-account');
   const err = req.query.err === '1' ? 'שם משתמש או סיסמה שגויים' : '';
   const inner = `
-    <h1 style="font-size:1.15rem;text-align:center;margin:0 0 18px;color:#334155">כניסת מנהל</h1>
+    <h1 class="auth-title">כניסת מנהל</h1>
     ${authErr(err)}
     <form method="POST" action="${base}/login">
       <label class="field-label">שם משתמש</label>
-      <input name="username" autocomplete="username" required autofocus style="${authInput}">
+      <input name="username" autocomplete="username" required autofocus class="input mb auth-input">
       <label class="field-label">סיסמה</label>
-      <input name="password" type="password" autocomplete="current-password" required style="${authInput}">
-      <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">התחבר</button>
+      <input name="password" type="password" autocomplete="current-password" required class="input mb auth-input">
+      <button type="submit" class="btn block auth-submit">התחבר</button>
     </form>`;
   res.send(layout(authCard(inner), 'כניסה', '#f97316', { bare: true }));
 });
@@ -74,7 +69,7 @@ router.post('/admin/login', (req, res) => {
     const ra = Math.max(s1.retryAfter || 0, s2.retryAfter || 0);
     res.setHeader('Retry-After', String(ra));
     const inner = authErr(`נחסמת זמנית עקב ניסיונות כושלים. נסה שוב בעוד ${ra} שניות.`) +
-      `<div style="text-align:center"><a href="${base}/login">חזרה לכניסה</a></div>`;
+      `<div class="auth-foot"><a href="${base}/login">חזרה לכניסה</a></div>`;
     return res.status(429).send(layout(authCard(inner), 'נחסם', '#f97316', { bare: true }));
   }
 
@@ -100,17 +95,17 @@ router.get('/admin/create-account', (req, res) => {
   if (auth.hasAdmin()) return res.redirect(base + '/login');
   const err = req.query.err ? decodeURIComponent(req.query.err) : '';
   const inner = `
-    <h1 style="font-size:1.15rem;text-align:center;margin:0 0 6px;color:#334155">יצירת חשבון מנהל</h1>
-    <p style="text-align:center;color:#64748b;font-size:0.86rem;margin:0 0 18px">זהו החשבון הראשון באתר. בחר שם משתמש וסיסמה חזקה.</p>
+    <h1 class="auth-title tight">יצירת חשבון מנהל</h1>
+    <p class="auth-sub">זהו החשבון הראשון באתר. בחר שם משתמש וסיסמה חזקה.</p>
     ${authErr(err)}
     <form method="POST" action="${base}/create-account">
       <label class="field-label">שם משתמש</label>
-      <input name="username" autocomplete="username" required autofocus style="${authInput}">
+      <input name="username" autocomplete="username" required autofocus class="input mb auth-input">
       <label class="field-label">סיסמה (8+ תווים)</label>
-      <input name="password" type="password" autocomplete="new-password" required minlength="8" style="${authInput}">
+      <input name="password" type="password" autocomplete="new-password" required minlength="8" class="input mb auth-input">
       <label class="field-label">אימות סיסמה</label>
-      <input name="confirm" type="password" autocomplete="new-password" required minlength="8" style="${authInput}">
-      <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">צור חשבון והתחבר</button>
+      <input name="confirm" type="password" autocomplete="new-password" required minlength="8" class="input mb auth-input">
+      <button type="submit" class="btn block auth-submit">צור חשבון והתחבר</button>
     </form>`;
   res.send(layout(authCard(inner), 'יצירת חשבון', '#166534', { bare: true }));
 });
