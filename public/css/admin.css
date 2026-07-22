@@ -133,56 +133,144 @@ body {
   outline: 1.5px solid var(--select);
 }
 
-/* Shared CMS navigation (all admin screens) — tools clustered by family,
-   each cluster tinted with its own color so the menu reads as a handful of
-   categories instead of a flat pile of options. */
-.admin-nav {
+/* Shared CMS navigation (all admin screens) — a vertical rail on the inline
+   start edge. Tools stay clustered by family, each cluster tinted with its own
+   color, but stacked: one family per row, one tool per line. Nineteen tools
+   used to wrap into a dense two-row strip that read as a single blur; standing
+   them up gives every family its own horizon line to scan.
+   Screens without the rail (the builder desk, the pre-login screens) simply
+   never render .admin-side, so the offset below stays off. */
+:root { --side-w: 212px; }
+body:has(> .admin-side) { padding-inline-start: var(--side-w); }
+
+.admin-side {
+  box-sizing: border-box;
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--side-w);
+  z-index: 300;
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: stretch;
-  padding: 10px 20px 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 10px 16px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  border-inline-end: 1px solid var(--ws-border);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-.nav-group {
+.side-brand {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 3px 4px;
+  gap: 8px;
+  padding: 2px 8px 8px;
+  font-size: 1.3rem;
+  font-weight: 800;
+  text-decoration: none;
+  letter-spacing: -0.5px;
+  color: #ea580c;
+}
+.side-brand .nav-txt {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.side-brand-mark { font-size: 1.1rem; }
+
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+/* Stacked, a bordered card per family would be seven boxes in a column. The
+   family colour rides a tinted wash plus its own label instead — same colour
+   language, none of the chrome, and all seven fit above the fold. */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 4px 4px;
   border-radius: var(--r-md);
   background: color-mix(in srgb, var(--g) 7%, #ffffff);
-  border: 1px solid color-mix(in srgb, var(--g) 16%, #ffffff);
+  border: 1px solid transparent;
   transition: box-shadow var(--dur), border-color var(--dur);
 }
 .nav-group:hover {
-  border-color: color-mix(in srgb, var(--g) 32%, #ffffff);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--g) 14%, transparent);
+  border-color: color-mix(in srgb, var(--g) 28%, #ffffff);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--g) 12%, transparent);
 }
 .nav-group-label {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 800;
   color: var(--g);
-  padding: 0 8px 0 4px;
-  letter-spacing: 0.3px;
+  padding: 0 7px 2px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 .nav-group a {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 9px;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
   color: var(--ws-text-soft);
   text-decoration: none;
   font-size: 0.86rem;
   font-weight: 600;
+  /* the body's reading line-height would stretch 19 rows past the fold —
+     nav rows are labels, not prose */
+  line-height: 1.4;
+  white-space: nowrap;
   transition: background var(--dur), color var(--dur), transform var(--dur);
 }
-.nav-ico { font-size: 0.9em; }
+.nav-ico { font-size: 0.95em; flex: none; width: 1.2em; text-align: center; }
 .nav-group a:hover { background: color-mix(in srgb, var(--g) 15%, #ffffff); color: var(--ws-text); }
 .nav-group a:active { transform: translateY(1px); }
 .nav-group a.active {
   background: var(--g);
   color: #fff;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--g) 40%, transparent);
+}
+
+/* Tight desktops: keep the rail, drop to icons only (the title attribute
+   carries the name) rather than stealing width from the work area. */
+@media (max-width: 1180px) {
+  :root { --side-w: 62px; }
+  .admin-side { padding: 10px 6px 14px; align-items: stretch; }
+  .side-brand { justify-content: center; padding: 2px 0 8px; }
+  .nav-txt { display: none; }
+  /* A family name shrunk to fit 62px is unreadable noise — the tinted block
+     already says which family a row belongs to. */
+  .nav-group-label { display: none; }
+  .nav-group a { justify-content: center; padding: 6px 4px; line-height: 1.2; }
+  .nav-ico { font-size: 1.1em; width: auto; }
+}
+
+/* Phones: a rail would eat the screen — lay the families out as one swipeable
+   row above the content instead. Still one line, still no wrap, no clutter. */
+@media (max-width: 720px) {
+  :root { --side-w: 0px; }
+  body:has(> .admin-side) { padding-inline-start: 0; }
+  .admin-side {
+    position: static;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-inline-end: none;
+    border-bottom: 1px solid var(--ws-border);
+    overflow-x: auto;
+  }
+  .admin-nav { flex-direction: row; gap: 8px; }
+  .nav-group { flex-direction: row; align-items: center; gap: 2px; padding: 3px 4px; }
+  /* horizontal again — width is no longer the scarce axis, so the names come
+     back (the icon-rail rules above hid them for the 62px column) */
+  .nav-txt { display: inline; }
+  .nav-group-label { display: inline; padding: 0 6px 0 3px; }
+  .nav-group a { padding: 6px 8px; line-height: 1.4; }
 }
 
 /* ==========================================================================
@@ -1066,6 +1154,29 @@ body.is-dragging .canvas-block:hover .split-zone,
 .canvas.drop-hover-root, .canvas.list-drop-active {
   outline: 2px dashed var(--select);
   outline-offset: -4px;
+}
+
+/* Position-aware body drops: the block under the cursor shows exactly where the
+   module lands — a glowing rail on the edge it will join, or a lit frame when
+   it will go INSIDE a container. Aiming replaces hunting for a hairline. */
+.canvas-block.drop-before::before,
+.canvas-block.drop-after::before {
+  content: '';
+  position: absolute;
+  inset-inline: -2px;
+  height: 4px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, var(--select) 14%, var(--select) 86%, transparent);
+  box-shadow: 0 0 12px var(--select-glow), 0 0 0 3px var(--select-glow);
+  z-index: 6;
+  pointer-events: none;
+}
+.canvas-block.drop-before::before { top: -4px; }
+.canvas-block.drop-after::before { bottom: -4px; }
+.canvas-block.drop-into {
+  border-color: var(--select) !important;
+  background: var(--select-soft);
+  box-shadow: inset 0 0 0 2px var(--select), 0 0 0 4px var(--select-glow);
 }
 
 /* columns */

@@ -1150,37 +1150,168 @@
     });
   }
 
+  /**
+   * Has a more specific target INSIDE this list already claimed the pointer?
+   * The test must be scoped to el's own subtree: a nested list lives inside its
+   * container's .canvas-block, so an unscoped `closest('.canvas-block')` matched
+   * that ancestor for every point and killed the fallback outright — the padding
+   * of a container never accepted a drop once it held a child.
+   */
+  function claimedWithin(el, target) {
+    if (!target || !target.closest) return false;
+    var specific = target.closest('.canvas-block, .drop-slot, .split-zone');
+    return !!(specific && specific !== el && el.contains(specific));
+  }
+
+  /**
+   * Where in a rendered list does the pointer sit? Returns the insert index
+   * nearest the cursor, so dropping on a list's padding lands where the user
+   * aimed instead of always appending to the end.
+   */
+  function nearestIndexIn(listEl, clientY) {
+    if (!listEl) return 0;
+    var kids = [];
+    for (var i = 0; i < listEl.children.length; i++) {
+      if (listEl.children[i].classList.contains('canvas-block')) kids.push(listEl.children[i]);
+    }
+    for (var k = 0; k < kids.length; k++) {
+      var r = kids[k].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return k;
+    }
+    return kids.length;
+  }
+
   function bindListSurface(el, parentBlock, colIndex) {
-    // fallback: dropping on empty padding of the list = append
-    el.addEventListener('dragover', function (e) {
-      if (!dragState) return;
-      if (e.target.closest('.canvas-block, .drop-slot, .split-zone')) return;
-      e.preventDefault();
+    function hintAt(e) {
       var live = getLiveList(parentBlock ? parentBlock.id : null, colIndex);
-      if (!live) return;
-      setDropHint({
+      if (!live) return null;
+      return {
         mode: 'insert',
         parentId: parentBlock ? parentBlock.id : null,
         colIndex: colIndex,
-        index: live.length
-      });
+        index: Math.min(nearestIndexIn(el, e.clientY), live.length)
+      };
+    }
+
+    // fallback: dropping on the padding of the list lands at the nearest gap
+    el.addEventListener('dragover', function (e) {
+      if (!dragState) return;
+      if (claimedWithin(el, e.target)) return;
+      var hint = hintAt(e);
+      if (!hint) return;
+      if (dragState.kind === 'block' &&
+          wouldNestIntoSelf(getBlock(dragState.blockId), hint.parentId)) return;
+      e.preventDefault();
+      setDropHint(hint);
       el.classList.add('list-drop-active');
     });
     el.addEventListener('dragleave', function (e) {
       if (!el.contains(e.relatedTarget)) el.classList.remove('list-drop-active');
     });
     el.addEventListener('drop', function (e) {
-      if (e.target.closest('.canvas-block, .drop-slot, .split-zone')) return;
+      if (claimedWithin(el, e.target)) return;
+      var hint = hintAt(e);
+      if (!hint) return;
       e.preventDefault();
+      e.stopPropagation();
       el.classList.remove('list-drop-active');
-      var live = getLiveList(parentBlock ? parentBlock.id : null, colIndex);
-      if (!live) return;
-      commitDrop({
+      commitDrop(hint);
+    });
+  }
+
+  /**
+   * The BODY of a block is a live drop target. Before this, the only surfaces
+   * that accepted a drop were the hairline slots between blocks, the 22px split
+   * strips and the "גרור לכאן" placeholder of an empty container — so releasing
+   * a module over an existing block (where anyone naturally aims) did nothing at
+   * all, and a container that already held one child had no droppable body left.
+   *
+   * Now the pointer's position inside the block decides:
+   *   top / bottom band of a container → land before / after it
+   *   middle of a container            → land INSIDE it, at the gap nearest the cursor
+   *   anything else                    → nearest half (before / after)
+   *
+   * Runs on the bubble phase and yields to any more specific target — slots,
+   * split zones and nested lists call preventDefault first, so defaultPrevented
+   * is the "already claimed" flag and the innermost target always wins.
+   */
+  function bindBlockBody(el, block, opts) {
+    function ownListHint(offset) {
+      return {
         mode: 'insert',
-        parentId: parentBlock ? parentBlock.id : null,
-        colIndex: colIndex,
-        index: live.length
-      });
+        parentId: opts.parent ? opts.parent.id : null,
+        colIndex: opts.colIndex,
+        index: (opts.index || 0) + offset
+      };
+    }
+
+    function resolve(e) {
+      var r = el.getBoundingClientRect();
+      if (!r.height) return null;
+      var half = e.clientY < r.top + r.height / 2 ? 0 : 1;
+      var hint;
+
+      if (!isBlocksContainer(block.type) && !isColumnsContainer(block.type)) {
+        hint = ownListHint(half);
+      } else {
+        var band = Math.max(12, Math.min(34, r.height * 0.28));
+        if (e.clientY < r.top + band) hint = ownListHint(0);
+        else if (e.clientY > r.bottom - band) hint = ownListHint(1);
+        else if (isColumnsContainer(block.type)) {
+          var pane = e.target && e.target.closest ? e.target.closest('.column-pane') : null;
+          hint = pane
+            ? {
+              mode: 'insert',
+              parentId: block.id,
+              colIndex: parseInt(pane.dataset.colIndex, 10) || 0,
+              index: nearestIndexIn(pane.querySelector('.column-list'), e.clientY)
+            }
+            : ownListHint(half);
+        } else {
+          hint = {
+            mode: 'insert',
+            parentId: block.id,
+            colIndex: 'blocks',
+            index: nearestIndexIn(el.querySelector('.column-list'), e.clientY)
+          };
+        }
+      }
+
+      if (dragState.kind === 'block') {
+        // dragging a block onto its own body is a no-op — let the cursor say so
+        if (dragState.blockId === block.id && hint.parentId !== block.id) return null;
+        if (wouldNestIntoSelf(getBlock(dragState.blockId), hint.parentId)) return null;
+      }
+      return hint;
+    }
+
+    el.addEventListener('dragover', function (e) {
+      if (!dragState || e.defaultPrevented) return;
+      var hint = resolve(e);
+      if (!hint) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = dragState.kind === 'toolbox' ? 'copy' : 'move';
+      setDropHint(hint);
+      clearDropClasses();
+      el.classList.add(
+        hint.parentId === block.id ? 'drop-into'
+          : hint.index > (opts.index || 0) ? 'drop-after' : 'drop-before'
+      );
+    });
+
+    el.addEventListener('dragleave', function (e) {
+      if (!el.contains(e.relatedTarget)) {
+        el.classList.remove('drop-before', 'drop-after', 'drop-into');
+      }
+    });
+
+    el.addEventListener('drop', function (e) {
+      if (!dragState || e.defaultPrevented) return;
+      var hint = resolve(e);
+      if (!hint) return;
+      e.preventDefault();
+      e.stopPropagation();
+      commitDrop(hint);
     });
   }
 
@@ -1290,6 +1421,8 @@
     el.appendChild(label);
     el.appendChild(content);
 
+    bindBlockBody(el, block, opts);
+
     el.addEventListener('click', function (e) {
       if (e.target.closest('button, .split-zone')) return;
       var nearest = e.target.closest('.canvas-block');
@@ -1368,7 +1501,8 @@
 
   function clearDropClasses() {
     document.querySelectorAll(
-      '.drop-slot-active, .list-drop-active, .split-active, .split-target, .drop-hover, .drop-hover-root'
+      '.drop-slot-active, .list-drop-active, .split-active, .split-target, .drop-hover,' +
+      ' .drop-hover-root, .drop-before, .drop-after, .drop-into'
     ).forEach(function (el) {
       el.classList.remove(
         'drop-slot-active',
@@ -1376,7 +1510,10 @@
         'split-active',
         'split-target',
         'drop-hover',
-        'drop-hover-root'
+        'drop-hover-root',
+        'drop-before',
+        'drop-after',
+        'drop-into'
       );
     });
   }

@@ -125,20 +125,26 @@ const accentFor = key => ADMIN_ACCENTS[key] || '#f97316';
  * editing a page from the pages list.
  */
 function adminNav(active, sectionTitle, actionsHtml = '') {
+  // Vertical rail: 19 tools across 7 families wrapped into a two-row horizontal
+  // strip and read as one dense blur. Stacked, each family owns a row of its
+  // own and the eye scans a short list instead of parsing a wall.
   const groups = ADMIN_NAV_GROUPS.map(g => {
     const links = g.items.map(item =>
-      `<a href="${item.href}"${item.key === active ? ' class="active"' : ''}><span class="nav-ico">${item.icon}</span>${item.label}</a>`
+      `<a href="${item.href}" title="${escapeAdmin(item.label)}"${item.key === active ? ' class="active"' : ''}>` +
+      `<span class="nav-ico">${item.icon}</span><span class="nav-txt">${item.label}</span></a>`
     ).join('');
     const label = g.label ? `<span class="nav-group-label">${g.label}</span>` : '';
     return `<div class="nav-group" style="--g:${g.color}">${label}${links}</div>`;
   }).join('');
   return `
+    <aside class="admin-side" aria-label="ניווט ראשי">
+      <a href="/admin/dashboard" class="side-brand"><span class="side-brand-mark">🍊</span><span class="nav-txt">Tapuz</span></a>
+      <nav class="admin-nav">${groups}</nav>
+    </aside>
     <div class="topbar">
       <div class="brand-strip"></div>
       <div class="container topbar-inner">
         <div style="display:flex;align-items:center;gap:12px">
-          <a href="/admin/dashboard" class="brand-logo">🍊 Tapuz</a>
-          <span style="color:#cbd5e1">/</span>
           <span class="section-title">${sectionTitle}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -153,7 +159,6 @@ function adminNav(active, sectionTitle, actionsHtml = '') {
           </form>
         </div>
       </div>
-      <div class="container admin-nav">${groups}</div>
     </div>`;
 }
 
