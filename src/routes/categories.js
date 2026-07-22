@@ -36,19 +36,22 @@ router.get('/admin/categories', (req, res) => {
   const html = `
     <style>
       .cat-row { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;align-items:center;margin-bottom:8px;background:var(--ws-panel);border:1px solid var(--accent-line);border-radius:var(--r-md);padding:10px;box-shadow:var(--elev-1) }
-      .cat-row input[type=text] { width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:7px;box-sizing:border-box }
-      .cat-row input[type=color] { width:44px;height:34px;border:1px solid #cbd5e1;border-radius:7px;padding:2px }
-      .cat-row .cat-del { border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:7px;padding:6px 0;cursor:pointer }
+      .cat-row input[type=text] { width:100%;padding:8px;border:1.5px solid var(--ws-border-strong);border-radius:7px;box-sizing:border-box;font:inherit;background:var(--ws-panel);color:var(--ws-text) }
+      .cat-row input[type=text]:focus { outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent) }
+      .cat-row input[type=color] { width:44px;height:34px;border:1.5px solid var(--ws-border-strong);border-radius:7px;padding:2px;cursor:pointer }
+      .cat-row .cat-del { border:1px solid #fecaca;background:var(--ws-panel);color:#b91c1c;border-radius:7px;padding:6px 0;cursor:pointer;transition:background var(--dur),border-color var(--dur) }
+      .cat-row .cat-del:hover { background:#fef2f2;border-color:#fca5a5 }
       .cat-desc { grid-column: 1 / -1; }
-      .cat-head { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;font-size:0.75rem;font-weight:700;color:#64748b;padding:0 10px;margin-bottom:4px }
+      .cat-head { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;font-size:0.72rem;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--accent-ink);padding:0 10px 6px;margin-bottom:8px;border-bottom:1px solid var(--accent-line) }
     </style>
     ${adminNav('categories', 'קטגוריות')}
     <div class="container page-body" style="max-width:820px">
       <p class="lead">קטגוריה = תגית מנוהלת עם מיתוג (שם, צבע, תמונה, תיאור). משייכים דפים לקטגוריה במאפייני הדף בבונה, ומציגים אותה בכל דף עם בלוק "קטגוריה". הרשימה נשמרת כקובץ <code style="direction:ltr">content/categories.json</code> — <a href="/admin/storage">רואים אותו באחסון</a>.</p>
-      <div class="card tight">
+      <div class="card">
+        <div class="card-head"><span class="ico">🗂️</span>הקטגוריות שלך<span class="card-head-sub" id="cat-count"></span></div>
         <div class="cat-head"><span>slug</span><span>שם תצוגה</span><span>צבע</span><span>תמונת רקע (URL)</span><span></span></div>
         <div id="cat-list"></div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+        <div class="row between" style="margin-top:12px">
           <button type="button" class="btn secondary" id="cat-add">+ קטגוריה</button>
           <div class="row">
             <span id="cat-status" class="ok-text"></span>
@@ -63,6 +66,8 @@ router.get('/admin/categories', (req, res) => {
         function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
         function isHex(v) { return /^#[0-9a-fA-F]{6}$/.test(String(v || '')); }
         function render() {
+          var cc = document.getElementById('cat-count');
+          if (cc) cc.textContent = cats.length ? cats.length + ' קטגוריות' : '';
           document.getElementById('cat-list').innerHTML = cats.map(function (c, i) {
             return '<div class="cat-row" data-i="' + i + '">' +
               '<input type="text" data-k="slug" dir="ltr" value="' + esc(c.slug) + '" placeholder="news">' +

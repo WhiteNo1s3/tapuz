@@ -93,8 +93,13 @@ function waitUp(tries = 40) {
     check('GET /admin/sitemap → 200 via the mounted router', page.status === 200);
     check('the main menu section renders with the home page linked', page.text.includes('תפריט ראשי') && page.text.includes('/home'));
     check('the published orphan page appears in the orphans section', page.text.includes('דף יתום') && page.text.includes('/orphan-page'));
-    check('the published orphan carries the "פורסם" badge', /דף יתום[\s\S]{0,200}sm-pub/.test(page.text));
-    check('the draft orphan carries the "טיוטה" badge, not "פורסם"', /טיוטה<\/strong>[\s\S]{0,100}sm-draft/.test(page.text));
+    // Matched on the LABEL the reader sees, not the class that renders it —
+    // the status badges joined the shared .pill family in v1.60 and the check
+    // is about which status shows, not which stylesheet paints it.
+    check('the published orphan carries the "פורסם" badge',
+      /דף יתום[\s\S]{0,220}>פורסם</.test(page.text));
+    check('the draft orphan carries the "טיוטה" badge, not "פורסם"',
+      /טיוטה<\/strong>[\s\S]{0,160}>טיוטה</.test(page.text));
     check('an unauthenticated request is redirected, never leaks the sitemap', (await req('GET', '/admin/sitemap')).status !== 200);
 
     // v1.26: the JSON twin relocated into this same route module — same

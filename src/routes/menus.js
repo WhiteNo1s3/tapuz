@@ -61,20 +61,24 @@ router.get('/admin/menus', (req, res) => {
     <style>
       .menus-wrap { display:grid; grid-template-columns: 250px 1fr; gap:20px; align-items:start; }
       @media(max-width:820px){ .menus-wrap { grid-template-columns: 1fr; } }
-      .menus-side, .menus-editor { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:18px; }
+      /* the two panels use the shared .card surface — see admin.css */
       .menu-chip { display:flex; align-items:center; gap:8px; width:100%; text-align:start; padding:9px 12px;
-        border:1px solid #e2e8f0; background:#fff; border-radius:9px; margin-bottom:6px; cursor:pointer;
-        font:inherit; font-weight:600; color:#334155; transition:border-color .15s, background .15s; }
-      .menu-chip:hover { border-color: var(--admin-accent); }
-      .menu-chip.active { border-color: var(--admin-accent); background: color-mix(in srgb, var(--admin-accent) 8%, #fff); color:#0f172a; }
-      .menu-chip .chip-count { margin-inline-start:auto; font-size:.7rem; color:#64748b; background:#f1f5f9; border-radius:99px; padding:1px 7px; }
+        border:1px solid var(--accent-line); background:var(--ws-panel); border-radius:9px; margin-bottom:6px;
+        cursor:pointer; font:inherit; font-weight:600; color:var(--ws-text-soft);
+        transition:border-color var(--dur), background var(--dur), box-shadow var(--dur); }
+      .menu-chip:hover { border-color: var(--accent); background: var(--accent-wash); box-shadow: var(--elev-1); }
+      .menu-chip.active { border-color: var(--accent); background: var(--accent-wash-2);
+        color: var(--accent-ink); box-shadow: var(--elev-1); }
+      .menu-chip .chip-count { margin-inline-start:auto; font-size:.7rem; color:var(--ws-muted);
+        background:var(--ws-well); border-radius:99px; padding:1px 7px; }
       .menu-chip .chip-loc { font-size:.65rem; color:#166534; background:#dcfce7; border-radius:99px; padding:1px 7px; }
       .loc-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:.9rem; }
-      .loc-row label { flex:1; color:#475569; font-weight:600; }
-      .loc-row select { padding:6px 8px; border:1px solid #cbd5e1; border-radius:7px; font:inherit; }
-      .menus-side h3, .menus-editor h3 { margin-top:0; }
-      .menus-side .side-title { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:#94a3b8; margin:16px 0 8px; }
-      .menu-row.child-row { margin-inline-start:26px; background:#f8fafc; }
+      .loc-row label { flex:1; color:var(--ws-text-soft); font-weight:600; }
+      .loc-row select { padding:6px 8px; border:1.5px solid var(--ws-border-strong); border-radius:7px;
+        font:inherit; background:var(--ws-panel); color:var(--ws-text); }
+      .loc-row select:focus { outline:none; border-color:var(--accent);
+        box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+      .menu-row.child-row { margin-inline-start:26px; background:var(--ws-well); }
       .editor-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
       .editor-head h3 { margin:0; flex:1; }
       .mini-btn { padding:5px 10px; font-size:.8rem; }
@@ -82,7 +86,7 @@ router.get('/admin/menus', (req, res) => {
     <div class="container page-body" style="max-width:1020px">
       <p class="lead">תפריטים הם ישויות עם שם — צרו כמה שתרצו, קננו תתי־פריטים, ושייכו תפריט לכל מיקום באתר. כמו בוורדפרס, רק בלי הכאב.</p>
       <div class="menus-wrap">
-        <aside class="menus-side">
+        <aside class="menus-side card">
           <div class="side-title">התפריטים שלי</div>
           <div id="menu-list"></div>
           <button type="button" class="btn secondary" style="width:100%;margin-top:4px" id="menu-create">+ תפריט חדש</button>
@@ -90,7 +94,7 @@ router.get('/admin/menus', (req, res) => {
           <div class="loc-row"><label>תפריט ראשי (header)</label><select id="loc-main" data-loc="main"></select></div>
           <div class="loc-row"><label>תחתון (footer)</label><select id="loc-footer" data-loc="footer"></select></div>
         </aside>
-        <section class="menus-editor">
+        <section class="menus-editor card">
           <div class="editor-head">
             <h3 id="editor-title">תפריט</h3>
             <button type="button" class="btn secondary mini-btn" id="menu-rename">שנה שם</button>

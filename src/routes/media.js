@@ -99,15 +99,17 @@ router.get('/admin/media-library', (req, res) => {
     ${adminNav('media', 'ספריית מדיה')}
     <div class="container page-body" style="max-width:960px">
       <p class="lead">כל התמונות והקבצים של האתר — תיקיות, העלאה ומחיקה. אותה ספרייה שמופיעה בבונה הדפים.</p>
-      <div class="card">
-        <div class="row between" style="margin-bottom:14px">
-          <div id="ml-crumbs"></div>
-          <div class="row">
-            <button type="button" class="btn secondary" id="ml-new-folder">📁+ תיקייה</button>
-            <label class="btn" style="cursor:pointer">העלה קובץ
-              <input type="file" accept="image/*" id="ml-upload" style="display:none">
-            </label>
-          </div>
+      <div class="card lead-card">
+        <div class="card-head">
+          <span class="ico">🖼️</span>
+          <span id="ml-crumbs">ספריית מדיה</span>
+          <span class="card-head-sub" id="ml-count"></span>
+        </div>
+        <div class="row end" style="margin-bottom:14px">
+          <button type="button" class="btn secondary sm" id="ml-new-folder">📁+ תיקייה</button>
+          <label class="btn sm" style="cursor:pointer">⬆ העלה קובץ
+            <input type="file" accept="image/*" id="ml-upload" style="display:none">
+          </label>
         </div>
         <div id="ml-grid" class="file-grid"></div>
       </div>
@@ -151,6 +153,14 @@ router.get('/admin/media-library', (req, res) => {
           });
           var grid = document.getElementById('ml-grid');
           grid.innerHTML = tiles || '<div class="empty-state" style="grid-column:1/-1">תיקייה ריקה — העלה קובץ או צור תיקייה</div>';
+
+          // what this folder holds, next to its name — a folder with 40 files
+          // and one with none used to look identical until you scrolled
+          var nf = (data.folders || []).length, nx = (data.files || []).length;
+          var parts = [];
+          if (nf) parts.push(nf + ' תיקיות');
+          if (nx) parts.push(nx + ' קבצים');
+          document.getElementById('ml-count').textContent = parts.join(' · ');
 
           document.querySelectorAll('.ml-crumb').forEach(function (c) {
             c.addEventListener('click', function () { load(c.dataset.goto); });

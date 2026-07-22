@@ -646,6 +646,20 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
 .page-body.narrow { max-width: 620px; }
 .page-body.mid { max-width: 860px; }
 
+/* the small uppercase label that opens a group inside a panel — the quietest
+   way to cut one card into sections without stacking more cards */
+.side-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent-ink);
+  margin: 16px 0 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--accent-line);
+}
+.side-title:first-child { margin-top: 0; }
+
 /* a heading INSIDE a card that isn't the card's own title */
 .sub-head {
   display: flex;
