@@ -9,6 +9,33 @@ const { exportAll } = require('./export');
 const PAGE_LABELS = { home: 'דף הבית', about: 'אודות', contact: 'צור קשר', articles: 'מאמרים' };
 
 /**
+ * Copy the showcase page's stand-in art into the SITE's own public/demo/.
+ *
+ * The tiles ship inside the package, and a server run from the package finds
+ * them there — but a site running under TAPUZ_ROOT, or a static export copied
+ * to another host, would greet its first visitor with broken images. Seeding
+ * them as the site's own assets makes the exported tree self-contained (and
+ * makes them deletable like any other upload once real photos land).
+ * exportAll only prunes top-level *.html, so the folder survives every build.
+ */
+function seedDemoAssets() {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const { PACKAGE_ROOT, PUBLIC_DIR } = require('./paths');
+    const from = path.join(PACKAGE_ROOT, 'public', 'demo');
+    const to = path.join(PUBLIC_DIR, 'demo');
+    if (!fs.existsSync(from) || path.resolve(from) === path.resolve(to)) return;
+    if (!fs.existsSync(to)) fs.mkdirSync(to, { recursive: true });
+    for (const f of fs.readdirSync(from)) {
+      if (!/\.svg$/i.test(f)) continue;
+      const dest = path.join(to, f);
+      if (!fs.existsSync(dest)) fs.copyFileSync(path.join(from, f), dest);
+    }
+  } catch (e) { /* art is decorative — a failure here must never block setup */ }
+}
+
+/**
  * Is this a pristine install still needing the setup wizard? (v1.30: promoted
  * from a server.js-local helper + a v1.24 inline copy in dashboard.js to the
  * single source of truth here, next to runSetup — the state it guards.)
@@ -77,10 +104,19 @@ function runSetup(body = {}) {
   const wantedPages = Array.isArray(body.pages) && body.pages.length ? body.pages : ['home'];
   const has = (p) => wantedPages.includes(p);
 
-  const homeBlocks = [
-    { type: 'hero', data: { title: siteTitle, subtitle: description || 'ברוכים הבאים' } },
-    { type: 'text', data: { content: 'זהו דף הבית החדש שלך. לחץ "ערוך" כדי לשנות הכל — כל קטע בדף הוא מודול שאפשר לגרור, להחליף ולערוך.' } }
-  ];
+  // The home page opens on the SHOWCASE (v1.56) — a working, colourful tour of
+  // the toolbox instead of a hero and one silent paragraph. Everything on it is
+  // a real module the owner can edit or delete; the page teaches the builder by
+  // being built with it. `blocks: 'basic'` in the body opts back into the old
+  // two-block seed for anyone who wants the quiet start.
+  const { templateBlocks } = require('./templates');
+  if (body.homeTemplate !== 'basic') seedDemoAssets();
+  const homeBlocks = body.homeTemplate === 'basic'
+    ? [
+      { type: 'hero', data: { title: siteTitle, subtitle: description || 'ברוכים הבאים' } },
+      { type: 'text', data: { content: 'זהו דף הבית החדש שלך. לחץ "ערוך" כדי לשנות הכל — כל קטע בדף הוא מודול שאפשר לגרור, להחליף ולערוך.' } }
+    ]
+    : templateBlocks('showcase', siteTitle);
   if (has('articles')) {
     homeBlocks.push({ type: 'heading', data: { level: 2, text: 'מאמרים אחרונים' } });
     homeBlocks.push({ type: 'article-list', data: { tag: 'article', limit: 3, columns: 3 } });
@@ -142,6 +178,19 @@ function runSetup(body = {}) {
     if (label && /^https?:\/\//i.test(url)) items.push({ label, type: 'custom', target: url, url });
   });
   saveMenu('main', items.length ? items : [{ label: 'דף הבית', type: 'page', target: 'home' }]);
+
+  // A SECOND menu, seeded alongside the first (v1.56). Menus are named lists
+  // and a location points at one — but with only ever a single list in the
+  // table, that design was invisible: nothing to switch between. This one is
+  // the switch made real, and the showcase page's nav section explains it.
+  // The header keeps 'main' until the owner reassigns the location.
+  if (!Object.prototype.hasOwnProperty.call(require('./menus').loadMenus(), 'explore')) {
+    saveMenu('explore', [
+      { label: '✨ מה חדש', type: 'anchor', target: 'tools' },
+      { label: '💬 שאלות נפוצות', type: 'anchor', target: 'faq' },
+      { label: '📬 דברו איתנו', type: 'anchor', target: 'cta' }
+    ]);
+  }
 
   try { exportAll(); } catch (e) {}
 
