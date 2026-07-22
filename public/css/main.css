@@ -436,7 +436,19 @@ hr {
 
 html { scroll-behavior: smooth; }
 
-::selection { background: #dbeafe; }
+/* A highlight has to be SEEN. #dbeafe measured 1.22 contrast against white —
+   selecting text on a light page looked like nothing happened. The site's own
+   primary colour with forced white text is unmistakable, and it follows
+   whatever palette the owner picked instead of a hardcoded blue. */
+::selection {
+  background: var(--color-primary);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+::-moz-selection {
+  background: var(--color-primary);
+  color: #fff;
+}
 
 .skip-link {
   position: absolute;

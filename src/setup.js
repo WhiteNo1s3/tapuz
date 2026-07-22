@@ -118,8 +118,18 @@ function runSetup(body = {}) {
     ]
     : templateBlocks('showcase', siteTitle);
   if (has('articles')) {
-    homeBlocks.push({ type: 'heading', data: { level: 2, text: 'מאמרים אחרונים' } });
-    homeBlocks.push({ type: 'article-list', data: { tag: 'article', limit: 3, columns: 3 } });
+    const articleSection = [
+      { type: 'heading', data: { level: 2, text: '📰 מאמרים אחרונים' } },
+      { type: 'article-list', data: { tag: 'article', limit: 3, columns: 3 } }
+    ];
+    // Land it INSIDE the page, not after the goodbye. The showcase closes with a
+    // call-to-action and a sign-off banner; appending here dropped real content
+    // below the send-off, where it read as an afterthought. Slot it in front of
+    // that closing pair instead, and fall back to append for the basic seed
+    // (which has no cta to aim at).
+    const closing = homeBlocks.findIndex((b) => b.type === 'cta');
+    if (closing === -1) homeBlocks.push(...articleSection);
+    else homeBlocks.splice(closing, 0, ...articleSection);
   }
   if (!getPageByFullPath('home')) {
     createPage({ title: siteTitle, slug: 'home', status: 'published', blocks: homeBlocks });

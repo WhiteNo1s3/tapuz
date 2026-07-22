@@ -67,6 +67,37 @@
     0 14px 34px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+/* ---- text selection ----------------------------------------------------
+   The theme's main.css ships a global `::selection { background:#dbeafe }`
+   and that sheet is linked into the admin too — so every admin screen
+   inherited a highlight measuring 1.14–1.22 contrast against the surfaces
+   people actually copy from (white cards, the #f8fafc code well). It read as
+   "Ctrl+A did nothing", and it was WORSE than no rule at all: it replaced the
+   browser's own strong default with a near-white wash.
+
+   Here the highlight is the screen's own accent, deepened to 70% so white text
+   on it clears WCAG AA for every one of the seven tool-family hues (orange is
+   the binding constraint: it only reaches 4.16 at 78%, 4.71 at 70%). The text
+   colour is forced — including -webkit-text-fill-color, without which
+   gradient-clipped brand marks (.side-brand, .auth-brand) select as an empty
+   rectangle. */
+::selection {
+  background: color-mix(in srgb, var(--accent) 70%, #0f172a);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+::-moz-selection {
+  background: color-mix(in srgb, var(--accent) 70%, #0f172a);
+  color: #fff;
+}
+/* On the builder's dark desk the same deepened accent would sink into the
+   background — go bright there instead. */
+body.builder-screen ::selection {
+  background: color-mix(in srgb, var(--accent) 62%, #ffffff);
+  color: #0b1020;
+  -webkit-text-fill-color: #0b1020;
+}
+
 /* ---- motion vocabulary ---- */
 @keyframes drop-wobble {
   0%   { transform: scale(1.04) rotate(-0.8deg); }
