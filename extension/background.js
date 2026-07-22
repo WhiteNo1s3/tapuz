@@ -15,28 +15,31 @@ const KEYS = {
   autoPublish: 'auto_publish',
   // v0.86: pack size for the roleplay injection — 'lite' fits a FREE chat
   // plan's message-length gate (ChatGPT free etc.); 'full' for subscribers.
-  packSize: 'pack_size',
-  // BYOK (v0.73): the user's own LLM key + chosen provider/model. The key is
-  // read ONLY inside this worker's generate flow and never leaves the browser.
-  byokKey: 'byok_key',
-  byokProvider: 'byok_provider',
-  byokModel: 'byok_model'
+  packSize: 'pack_size'
 };
+
+// v0.73 stored the user's LLM key in this worker. v0.85 moved key-based chat
+// into the CMS and deleted the code that used it — but the KEY ITSELF stayed
+// behind in chrome.storage on every browser that had ever set one, with
+// nothing left to read or clear it. Dead code that once held a secret has to
+// take the secret with it, so the worker sweeps the old entries once on
+// startup. Harmless when they were never set.
+const LEGACY_BYOK_KEYS = ['byok_key', 'byok_provider', 'byok_model'];
+try {
+  chrome.storage.local.remove(LEGACY_BYOK_KEYS, () => { /* best effort */ });
+} catch (e) { /* older runtimes — nothing to purge */ }
 
 function getConfig() {
   return new Promise((resolve) => {
     chrome.storage.local.get(
-      [KEYS.url, KEYS.token, KEYS.target, KEYS.autoPublish, KEYS.packSize, KEYS.byokKey, KEYS.byokProvider, KEYS.byokModel],
+      [KEYS.url, KEYS.token, KEYS.target, KEYS.autoPublish, KEYS.packSize],
       (r) => {
         resolve({
           url: (r[KEYS.url] || '').replace(/\/+$/, ''),
           token: r[KEYS.token] || '',
           target: r[KEYS.target] || '__new__',
           autoPublish: r[KEYS.autoPublish] !== false, // default ON
-          packSize: r[KEYS.packSize] === 'lite' ? 'lite' : 'full',
-          byokKey: r[KEYS.byokKey] || '',
-          byokProvider: r[KEYS.byokProvider] || 'claude',
-          byokModel: r[KEYS.byokModel] || ''
+          packSize: r[KEYS.packSize] === 'lite' ? 'lite' : 'full'
         });
       }
     );
@@ -117,11 +120,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       switch (msg && msg.type) {
         case 'getConfig': {
           const c = await getConfig();
-          // NEVER return the token OR the byok key to callers; only whether set.
+          // NEVER return the token to callers; only whether one is set.
           sendResponse({
-            ok: true, url: c.url, hasToken: !!c.token, target: c.target, autoPublish: c.autoPublish,
-            packSize: c.packSize,
-            hasKey: !!c.byokKey, byokProvider: c.byokProvider, byokModel: c.byokModel
+            ok: true, url: c.url, hasToken: !!c.token, target: c.target,
+            autoPublish: c.autoPublish, packSize: c.packSize
           });
           return;
         }
@@ -138,27 +140,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (typeof msg.target === 'string') patch[KEYS.target] = msg.target;
           if (typeof msg.autoPublish === 'boolean') patch[KEYS.autoPublish] = msg.autoPublish;
           if (msg.packSize === 'lite' || msg.packSize === 'full') patch[KEYS.packSize] = msg.packSize;
-          // BYOK: store the user's key/provider/model. Key is write-only from
-          // the popup's view (getConfig never reads it back out).
-          if (typeof msg.byokKey === 'string' && msg.byokKey) patch[KEYS.byokKey] = msg.byokKey.trim();
-          if (typeof msg.byokProvider === 'string') patch[KEYS.byokProvider] = msg.byokProvider;
-          if (typeof msg.byokModel === 'string') patch[KEYS.byokModel] = msg.byokModel;
           await new Promise((r) => chrome.storage.local.set(patch, r));
           sendResponse({ ok: true });
           return;
         }
-        case 'clearKey': {
-          await new Promise((r) => chrome.storage.local.remove(KEYS.byokKey, r));
-          sendResponse({ ok: true });
-          return;
-        }
         case 'providers': {
+          // The table itself is still useful (it names the chat hosts this
+          // extension knows how to ride) and carries no secret.
           const c = await getConfig();
           if (!c.url || !c.token) throw new Error('CMS not configured');
-          const providers = await fetchProviders(c);
-          // strip nothing sensitive — the table has no secrets — but do not
-          // echo the user's key (it isn't in the table anyway)
-          sendResponse({ ok: true, providers, selected: c.byokProvider, model: c.byokModel });
+          sendResponse({ ok: true, providers: await fetchProviders(c) });
           return;
         }
         case 'generate': {

@@ -46,9 +46,18 @@ function toolsInventoryMarkdown(tools) {
  * Real media manifest (v0.56) — so the agent references images that ACTUALLY
  * exist instead of inventing paths like /uploads/x.jpg. Read-only, no key.
  */
-function mediaInventoryMarkdown(media, he, cap) {
+/**
+ * @param {string} [askWho] the WHOLE "from <someone>" phrase, not just a noun —
+ *   Hebrew glues its preposition to the word (מהשחקן), and "בעל/ת האתר" is
+ *   already definite, so a naive `מה` + noun yields the double-definite
+ *   "מהבעל/ת האתר". The roleplay pack faces a "player" in a game; the
+ *   connected copilot faces the site's owner, and calling the owner a player
+ *   inside their own CMS is the tell that gives away a borrowed prompt.
+ */
+function mediaInventoryMarkdown(media, he, cap, askWho) {
   const list = (media || []).filter((m) => m && m.url);
   if (!list.length) return '';
+  const who = askWho || (he ? 'מהשחקן' : 'the player');
   const shown = cap > 0 ? list.slice(0, cap) : list;
   const lines = [];
   lines.push(he
@@ -62,13 +71,13 @@ function mediaInventoryMarkdown(media, he, cap) {
   }
   if (shown.length < list.length) {
     lines.push(he
-      ? `- (+${list.length - shown.length} תמונות נוספות בספרייה — בקש/י מהשחקן לבחור או להעלות)`
-      : `- (+${list.length - shown.length} more in the library — ask the player to pick or upload)`);
+      ? `- (+${list.length - shown.length} תמונות נוספות בספרייה — בקש/י ${who} לבחור או להעלות)`
+      : `- (+${list.length - shown.length} more in the library — ask ${who} to pick or upload)`);
   }
   lines.push('');
   lines.push(he
-    ? 'אם אין תמונה מתאימה, השאר/י את bent-image בלי src או בקש/י מהשחקן להעלות — אל תמציא/י נתיב.'
-    : 'If nothing fits, leave the bent-image without src or ask the player to upload — never invent a path.');
+    ? `אם אין תמונה מתאימה, השאר/י את bent-image בלי src או בקש/י ${who} להעלות — אל תמציא/י נתיב.`
+    : `If nothing fits, leave the bent-image without src or ask ${who} to upload — never invent a path.`);
   lines.push('');
   return lines.join('\n');
 }
@@ -192,6 +201,135 @@ function buildRoleplayPack(opts = {}) {
 }
 
 /**
+ * The CONNECTED copilot's briefing (v1.58) — a different scenario entirely.
+ *
+ * buildRoleplayPack above is written for a stranger's chat tab: it opens with
+ * "paste this pack into a NEW chat", swears there are "no API keys", and casts
+ * the model as a contestant in a construction game facing a "player". That is
+ * right for BYOT — and every line of it is false for the copilot at
+ * /admin/chat, which arrived through the owner's own API key, is already
+ * inside the CMS, and is talking to the person who owns the site.
+ *
+ * Same vocabulary (one dictionary, one media manifest — they must never
+ * diverge), opposite framing: not a game, a post. The model is told who it
+ * works for, where it is standing, what becomes of its output, and what it can
+ * actually see.
+ */
+function buildCopilotBriefing(opts = {}) {
+  const locale = opts.locale === 'en' ? 'en' : 'he';
+  const he = locale === 'he';
+  const dict = buildDictionary();
+  const tools = toAgentTools(dict);
+  const siteTitle = String(opts.siteTitle || '').trim();
+  const ownerName = String(opts.ownerName || '').trim();
+  const lines = [];
+
+  if (he) {
+    lines.push('# מי את/ה');
+    lines.push('');
+    lines.push('את/ה **העוזר/ת האישי/ת של בעל/ת האתר בתוך Tapuziel** — מערכת ניהול תוכן עברית.');
+    lines.push('לא בוט תמיכה כללי ולא מנוע חיפוש: יש לך תפקיד אחד, ואת/ה טוב/ה בו — **לבנות ולערוך דפים בשפת BenTML**.');
+    lines.push('');
+    lines.push('## איפה את/ה נמצא/ת עכשיו');
+    lines.push('');
+    lines.push('את/ה **בתוך ה‑CMS**, במסך הקופיילוט. בעל/ת האתר חיבר/ה אותך במפתח ה‑API הפרטי שלו/ה,');
+    lines.push('כלומר בחר/ה בך במודע ומשלם/ת על כל תשובה. אין כאן העתקה־הדבקה ואין לשונית צ׳אט אחרת —');
+    lines.push('השיחה הזו היא הממשק. מה שאת/ה כותב/ת מגיע ישירות למערכת.');
+    if (siteTitle) lines.push('');
+    if (siteTitle) lines.push('**האתר שאת/ה עובד/ת עליו:** ' + siteTitle);
+    if (ownerName) lines.push('**מי מולך:** ' + ownerName + ' — בעל/ת האתר.');
+    lines.push('');
+    lines.push('## מה קורה למה שאת/ה כותב/ת');
+    lines.push('');
+    lines.push('כשתשובה שלך מכילה מסמך `.pzn` שלם, המערכת מזהה אותו ומציעה כפתור אחד:');
+    lines.push('**"צור דף"**. לחיצה אחת והוא הופך ל**טיוטה אמיתית** באתר, פתוחה בבונה הויזואלי,');
+    lines.push('שם אפשר לגרור, לערוך ולפרסם. לכן מסמך חצוי הוא לא "כמעט" — הוא כפתור שלא נדלק.');
+    lines.push('');
+    lines.push('## איך לעבוד');
+    lines.push('');
+    lines.push('- **שאל/י כשחסר מידע.** עדיף שאלה קצרה אחת מאשר דף שלם שנבנה על ניחוש.');
+    lines.push('- **עברית ו‑RTL כברירת מחדל** — האתר עברי אלא אם נאמר אחרת.');
+    lines.push('- **רק מודולים מהמלאי למטה.** אין HTML חופשי ואין תגיות שהומצאו; מה שלא במילון לא יעבור.');
+    lines.push('- **מסמך אחד שלם** בכל תשובה שבונה דף — מ‑`<!DOCTYPE html>` ועד `</html>`, בתוך fence של html.');
+    lines.push('- **טקסט אמיתי, לא "לורם איפסום".** כתב/י תוכן שאפשר לפרסם כמו שהוא.');
+    lines.push('- **אל תמציא/י נתיבי תמונה.** יש רשימת מדיה אמיתית למטה; אם אין מתאימה — אמור/י זאת.');
+    lines.push('- לשאלות שאינן בניית דף (איך משנים צבע, איפה התפריטים) — פשוט ענה/י בעברית, בלי fence.');
+    lines.push('');
+  } else {
+    lines.push('# Who you are');
+    lines.push('');
+    lines.push("You are **the site owner's personal assistant inside Tapuziel**, a Hebrew-first CMS.");
+    lines.push('Not a general support bot: you have one job and you are good at it — **building and editing pages in BenTML**.');
+    lines.push('');
+    lines.push('## Where you are standing');
+    lines.push('');
+    lines.push('You are **inside the CMS**, on the copilot screen. The owner connected you with their own');
+    lines.push('API key — they chose you deliberately and pay for every reply. There is no copy-paste and no');
+    lines.push('other chat tab: this conversation IS the interface, and what you write reaches the system directly.');
+    if (siteTitle) lines.push('');
+    if (siteTitle) lines.push('**The site you are working on:** ' + siteTitle);
+    if (ownerName) lines.push('**Who you are talking to:** ' + ownerName + ' — the owner.');
+    lines.push('');
+    lines.push('## What happens to what you write');
+    lines.push('');
+    lines.push('When a reply contains a complete `.pzn` document the CMS detects it and offers one button:');
+    lines.push('**Create page**. One click turns it into a real draft, open in the visual builder, ready to');
+    lines.push('drag, edit and publish. A half-finished document is not "almost" — it is a button that never lights up.');
+    lines.push('');
+    lines.push('## How to work');
+    lines.push('');
+    lines.push('- **Ask when something is missing.** One short question beats a whole page built on a guess.');
+    lines.push('- **Hebrew and RTL by default** unless told otherwise.');
+    lines.push('- **Only modules from the inventory below.** No free HTML, no invented tags.');
+    lines.push('- **One complete document** per page-building reply — `<!DOCTYPE html>` through `</html>`, in an html fence.');
+    lines.push('- **Real copy, never lorem ipsum.** Write text that could ship as-is.');
+    lines.push('- **Never invent image paths.** A real media list follows; if nothing fits, say so.');
+    lines.push('- For non-building questions (how to change a colour, where menus live) just answer plainly, no fence.');
+    lines.push('');
+  }
+
+  lines.push(he ? '## השפה: BenTML / `.pzn`' : '## The language: BenTML / `.pzn`');
+  lines.push('');
+  lines.push(he
+    ? 'BenTML הוא HTML מוגבל: רק תגיות `bent-*` רשומות. ההגבלה היא התכונה — כל דף הוא קובץ `.pzn` אמיתי'
+    : 'BenTML is constrained HTML: only registered `bent-*` tags. The constraint IS the feature — every page is a real `.pzn` file');
+  lines.push(he
+    ? 'על הדיסק, קריא לאדם ולמכונה, והבונה הויזואלי מציג בדיוק את אותו מבנה.'
+    : 'on disk, readable by human and machine, and the visual builder shows exactly the same structure.');
+  lines.push('');
+
+  lines.push(toolsInventoryMarkdown(tools));
+
+  const mediaMd = mediaInventoryMarkdown(opts.media, he, 0, he ? 'מבעל/ת האתר' : 'the owner');
+  if (mediaMd) lines.push(mediaMd);
+
+  lines.push(he ? '## דוגמה למסמך שלם' : '## A complete document');
+  lines.push('');
+  lines.push('```html');
+  lines.push('<!DOCTYPE html>');
+  lines.push('<html lang="he" dir="rtl" bent-version="0.1">');
+  lines.push('<head><meta charset="utf-8"/><title>סטודיו אור</title>');
+  lines.push('<meta name="bent-slug" content="studio"/></head>');
+  lines.push('<body>');
+  lines.push('  <bent-hero id="hero1">');
+  lines.push('    <bent-heading id="hero1_h" level="1">סטודיו אור</bent-heading>');
+  lines.push('    <bent-text id="hero1_t">צילום אירועים בתל אביב</bent-text>');
+  lines.push('    <bent-button id="hero1_b" href="/contact" variant="primary">דברו איתנו</bent-button>');
+  lines.push('  </bent-hero>');
+  lines.push('</body></html>');
+  lines.push('```');
+  lines.push('');
+  lines.push(COMPLETION_CONTRACT);
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  lines.push(toMarkdown(dict));
+
+  const text = lines.join('\n');
+  return { text, tools, moduleCount: dict.count, locale, chars: text.length };
+}
+
+/**
  * Short "system card" for agents that already have context.
  */
 function buildRoleCard(opts = {}) {
@@ -234,6 +372,7 @@ function buildInjectBundle(opts = {}) {
 
 module.exports = {
   buildRoleplayPack,
+  buildCopilotBriefing,
   buildRoleCard,
   buildInjectBundle,
   toolsInventoryMarkdown,

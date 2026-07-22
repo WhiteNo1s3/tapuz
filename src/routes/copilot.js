@@ -259,10 +259,15 @@ router.post('/admin/api/ai/chat', async (req, res) => {
     const b = req.body || {};
     const message = String(b.message || '').trim();
     if (!message) return res.status(400).json({ ok: false, error: 'הודעה ריקה' });
-    // the same persona every AI on-ramp gets: role + dictionary + REAL media
-    const { buildRoleplayPack } = require('../pzn/agent-roleplay');
+    // The CONNECTED copilot gets its own briefing, not the paste-into-a-chat
+    // roleplay pack: it arrived through the owner's API key, it is already
+    // inside the CMS, and it is talking to the person who owns the site. Same
+    // dictionary and same real media manifest — only the framing differs.
+    const { buildCopilotBriefing } = require('../pzn/agent-roleplay');
     const media = require('../media').listAllMedia(40);
-    const system = buildRoleplayPack({ locale: 'he', media }).text;
+    let siteTitle = '';
+    try { siteTitle = String(require('../config').loadConfig().title || ''); } catch (e) { /* unnamed site */ }
+    const system = buildCopilotBriefing({ locale: 'he', media, siteTitle }).text;
     const reply = await require('../ai').generate({
       system,
       user: message,

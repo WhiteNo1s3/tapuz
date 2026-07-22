@@ -117,6 +117,47 @@ check('listProviders exposes claude/chatgpt/grok/gemini',
 check('dictionary markdown renders tools + completion',
   /## Tools \(modules\)/.test(toMarkdown(dict)) && /## Completion/.test(toMarkdown(dict)));
 
+
+// ── v1.58: the CONNECTED copilot is briefed, not roleplayed ────────────────
+// buildRoleplayPack is written for a stranger's chat tab and every line of it
+// is false for the copilot at /admin/chat, which arrived through the owner's
+// API key. The two share a dictionary and a media manifest but must never
+// share a framing, so the split is pinned here: a regression that points the
+// copilot back at the game pack would otherwise be invisible.
+{
+  const { buildCopilotBriefing } = require('../src/pzn/agent-roleplay');
+  const media = [{ url: '/demo/tile-1.svg', alt: 'x' }];
+  const brief = buildCopilotBriefing({ locale: 'he', siteTitle: 'הבית של המוזיקה', media });
+  const pack = buildRoleplayPack({ locale: 'he', media });
+
+  check('briefing knows whose assistant it is', /העוזר\/ת האישי\/ת של בעל\/ת האתר/.test(brief.text));
+  check('briefing says where it is standing (inside the CMS, connected by key)',
+    /בתוך ה‑CMS/.test(brief.text) && /מפתח ה‑API/.test(brief.text));
+  check('briefing names the actual site it is working on', brief.text.includes('הבית של המוזיקה'));
+  check('briefing explains what becomes of its output (one click → real draft)',
+    /טיוטה אמיתית/.test(brief.text));
+  for (const lie of ['משחק', 'שחקן', 'מהלך מנצח', 'אין מפתחות API']) {
+    check(`briefing does NOT carry the game framing: "${lie}"`, !brief.text.includes(lie));
+  }
+  check('briefing still carries the FULL vocabulary (same dictionary as the pack)',
+    brief.moduleCount === pack.moduleCount && brief.moduleCount > 30);
+  check('briefing still carries the real media manifest', brief.text.includes('/demo/tile-1.svg'));
+  check('briefing asks the OWNER for a missing picture, in grammatical Hebrew',
+    brief.text.includes('מבעל/ת האתר') && !brief.text.includes('מהבעל/ת'));
+  check('the BYOT pack keeps its own voice (player + paste), untouched',
+    pack.text.includes('שחקן') && pack.text.includes('הדבק') && !pack.text.includes('מבעל/ת האתר'));
+
+  const wired = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'src', 'routes', 'copilot.js'), 'utf8');
+  check('/admin/api/ai/chat sends the BRIEFING, not the roleplay pack',
+    /buildCopilotBriefing\(\{[^}]*siteTitle/.test(wired) &&
+    !/const system = buildRoleplayPack/.test(wired));
+}
+
 console.log('');
 console.log(fail ? 'SMOKE ROLEPLAY: FAIL' : 'SMOKE ROLEPLAY: PASS');
 process.exit(fail ? 1 : 0);
+
+console.log('');
+console.log(fail ? 'SMOKE ROLEPLAY: FAIL' : 'SMOKE ROLEPLAY: PASS');
+process.exit(fail ? 1 : 0);
