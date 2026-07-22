@@ -197,10 +197,194 @@ async function generate({ system = '', user = '', history = [] } = {}) {
   return text;
 }
 
+// ── the tool loop ───────────────────────────────────────────────────────
+//
+// One turn can take several round-trips: the model asks to look at something,
+// we answer, it asks again, and eventually it either replies in words or asks
+// to WRITE. A write is where the loop stops dead and hands control back to the
+// owner — see ai-tools.js for why that line is drawn there.
+//
+// The conversation state stays on the SERVER between the proposal and the
+// approval (pendings, below). The browser only ever holds an opaque id, so a
+// page that gets tampered with cannot rewrite what the model was asked to do.
+
+const MAX_TOOL_HOPS = 6;          // a model that needs more is looping
+const PENDING_TTL_MS = 10 * 60 * 1000;
+const pendings = new Map();
+
+function putPending(state) {
+  const id = 'pend_' + require('crypto').randomBytes(12).toString('hex');
+  pendings.set(id, { ...state, at: Date.now() });
+  // opportunistic sweep — this map must never become a memory leak
+  for (const [k, v] of pendings) if (Date.now() - v.at > PENDING_TTL_MS) pendings.delete(k);
+  return id;
+}
+function takePending(id) {
+  const s = pendings.get(String(id || ''));
+  if (!s) return null;
+  pendings.delete(id);
+  if (Date.now() - s.at > PENDING_TTL_MS) return null;
+  return s;
+}
+
+/** Pull tool calls + text out of either provider's reply shape. */
+function readReply(style, data) {
+  if (style === 'openai-chat') {
+    const m = (((data || {}).choices || [])[0] || {}).message || {};
+    const calls = (m.tool_calls || []).map((c) => {
+      let input = {};
+      try { input = JSON.parse((c.function && c.function.arguments) || '{}'); } catch (e) { /* malformed */ }
+      return { id: c.id, name: (c.function || {}).name, input };
+    });
+    return { text: m.content || '', calls, raw: m };
+  }
+  const content = ((data || {}).content) || [];
+  const text = content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+  const calls = content.filter((c) => c.type === 'tool_use')
+    .map((c) => ({ id: c.id, name: c.name, input: c.input || {} }));
+  return { text, calls, raw: content };
+}
+
+/** Append the assistant turn + our tool answers, in the provider's shape. */
+function appendToolTurn(style, turns, reply, results) {
+  if (style === 'openai-chat') {
+    turns.push({ role: 'assistant', content: reply.raw.content || null, tool_calls: reply.raw.tool_calls });
+    results.forEach((r) => turns.push({
+      role: 'tool', tool_call_id: r.id, content: JSON.stringify(r.output)
+    }));
+    return turns;
+  }
+  turns.push({ role: 'assistant', content: reply.raw });
+  turns.push({
+    role: 'user',
+    content: results.map((r) => ({
+      type: 'tool_result', tool_use_id: r.id, content: JSON.stringify(r.output), is_error: !!r.isError
+    }))
+  });
+  return turns;
+}
+
+/**
+ * A turn that may use tools.
+ * @returns {Promise<{reply?: string, pending?: {id, tool, summary, input}, used: string[]}>}
+ */
+async function converse({ system = '', user = '', history = [], approve = null } = {}) {
+  const tools = require('./ai-tools');
+  const s = load();
+  const provider = getProvider(s.provider || 'claude');
+  if (!provider) throw new Error('ספק לא מוגדר');
+  const style = (provider.body && provider.body.style) || 'anthropic-messages';
+  const used = [];
+
+  // Resuming an approved write, or starting fresh.
+  let turns;
+  if (approve && approve.id) {
+    const pend = takePending(approve.id);
+    if (!pend) throw new Error('הבקשה פגה — בקשו מהקופיילוט לנסות שוב');
+    if (!approve.ok) {
+      // Refusal is information: tell the model so it can offer something else
+      // instead of silently repeating the same proposal.
+      turns = appendToolTurn(style, pend.turns, pend.reply,
+        [{ id: pend.call.id, output: { refused: true, reason: 'בעל/ת האתר דחה/תה את הפעולה' }, isError: true }]);
+    } else {
+      let output;
+      let isError = false;
+      try { output = tools.getTool(pend.call.name).run(pend.call.input); }
+      catch (e) { output = { error: e.message }; isError = true; }
+      used.push(pend.call.name);
+      turns = appendToolTurn(style, pend.turns, pend.reply, [{ id: pend.call.id, output, isError }]);
+    }
+    system = pend.system;
+  } else {
+    turns = (Array.isArray(history) ? history : [])
+      .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
+      .slice(-12)
+      .map((t) => ({ role: t.role, content: String(t.content).slice(0, 12000) }));
+    turns.push({ role: 'user', content: String(user) });
+  }
+
+  for (let hop = 0; hop < MAX_TOOL_HOPS; hop++) {
+    const data = await callProvider(provider, system, turns, tools.toolsForProvider(style));
+    const reply = readReply(style, data);
+    if (!reply.calls.length) return { reply: reply.text || '', used };
+
+    // A write stops the loop. Read calls in the same batch still run — they
+    // are free — but the write is proposed, never performed.
+    const write = reply.calls.find((c) => (tools.getTool(c.name) || {}).mutates);
+    if (write) {
+      const id = putPending({ turns, reply, call: write, system });
+      return {
+        pending: { id, tool: write.name, summary: tools.describeCall(write.name, write.input), input: write.input },
+        reply: reply.text || '',
+        used
+      };
+    }
+
+    const results = reply.calls.map((c) => {
+      const t = tools.getTool(c.name);
+      if (!t) return { id: c.id, output: { error: 'כלי לא מוכר: ' + c.name }, isError: true };
+      used.push(c.name);
+      try { return { id: c.id, output: t.run(c.input) }; }
+      catch (e) { return { id: c.id, output: { error: e.message }, isError: true }; }
+    });
+    turns = appendToolTurn(style, turns, reply, results);
+  }
+  return { reply: 'עצרתי אחרי יותר מדי צעדים — נסחו את הבקשה מחדש בבקשה.', used };
+}
+
+/** One raw provider round-trip (shared by generate + converse). */
+async function callProvider(provider, system, turns, toolDefs) {
+  const s = load();
+  const key = String(s.apiKey || '');
+  if (!key && !provider.keyOptional) throw new Error('לא הוגדר מפתח API — הגדירו אותו בצ׳אט (ההגדרות בצד)');
+  let endpoint = provider.endpoint;
+  if (provider.id === 'local') {
+    endpoint = resolveLocalEndpoint(s.baseUrl);
+    if (!endpoint) throw new Error('כתובת המודל המקומי חייבת להיות מקומית (127.0.0.1 / localhost) — נדחתה');
+  }
+  if (!endpointAllowed(endpoint)) {
+    throw new Error('כתובת הספק אינה ברשימת ההיתר של השרת — מסרב לשלוח את המפתח');
+  }
+  const model = provider.openModel
+    ? (String(s.model || '').trim() || provider.defaultModel)
+    : ((provider.models || []).includes(s.model) ? s.model : provider.defaultModel);
+
+  const style = (provider.body && provider.body.style) || 'anthropic-messages';
+  const headers = { 'Content-Type': 'application/json' };
+  if (key || !provider.keyOptional) {
+    if (provider.authScheme === 'bearer') headers[provider.authHeader || 'Authorization'] = 'Bearer ' + key;
+    else headers[provider.authHeader || 'x-api-key'] = key;
+  }
+  Object.assign(headers, provider.extraHeaders || {});
+
+  const body = style === 'openai-chat'
+    ? { model, max_tokens: provider.maxTokens || 4096, messages: [{ role: 'system', content: system }, ...turns] }
+    : { model, max_tokens: provider.maxTokens || 4096, system, messages: turns };
+  if (toolDefs && toolDefs.length) body.tools = toolDefs;
+
+  let res;
+  try {
+    res = await fetch(endpoint, { method: provider.method || 'POST', headers, body: JSON.stringify(body) });
+  } catch (e) {
+    if (provider.id === 'local') {
+      throw new Error('לא הצלחתי להתחבר למודל המקומי ב-' + endpoint + ' — ודאו שהשרת המקומי דולק. פרטים: ' + e.message);
+    }
+    throw new Error('קריאה לספק נכשלה (רשת): ' + e.message);
+  }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* non-json */ }
+  if (!res.ok) {
+    const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + res.status);
+    throw new Error('שגיאת ספק: ' + msg);
+  }
+  return data;
+}
+
 module.exports = {
   getSettings,
   saveSettings,
   generate,
+  converse,
   buildRequest,
   endpointAllowed,
   ALLOWED_API_HOSTS,

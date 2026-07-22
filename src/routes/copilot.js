@@ -258,7 +258,12 @@ router.post('/admin/api/ai/chat', async (req, res) => {
   try {
     const b = req.body || {};
     const message = String(b.message || '').trim();
-    if (!message) return res.status(400).json({ ok: false, error: 'הודעה ריקה' });
+    // An approval carries no message — it resumes a proposal the model already
+    // made and the owner just accepted (or refused).
+    const approve = b.approve && b.approve.id
+      ? { id: String(b.approve.id), ok: b.approve.ok === true }
+      : null;
+    if (!message && !approve) return res.status(400).json({ ok: false, error: 'הודעה ריקה' });
     // The CONNECTED copilot gets its own briefing, not the paste-into-a-chat
     // roleplay pack: it arrived through the owner's API key, it is already
     // inside the CMS, and it is talking to the person who owns the site. Same
@@ -268,12 +273,13 @@ router.post('/admin/api/ai/chat', async (req, res) => {
     let siteTitle = '';
     try { siteTitle = String(require('../config').loadConfig().title || ''); } catch (e) { /* unnamed site */ }
     const system = buildCopilotBriefing({ locale: 'he', media, siteTitle }).text;
-    const reply = await require('../ai').generate({
+    const out = await require('../ai').converse({
       system,
       user: message,
-      history: Array.isArray(b.history) ? b.history : []
+      history: Array.isArray(b.history) ? b.history : [],
+      approve
     });
-    res.json({ ok: true, reply });
+    res.json({ ok: true, reply: out.reply || '', pending: out.pending || null, used: out.used || [] });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }

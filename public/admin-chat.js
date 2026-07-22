@@ -129,6 +129,59 @@
     }
   }
 
+  /* One assistant turn: what it said, what it looked at, and — if it wants to
+     WRITE — the approval gate. The server has already stopped short of doing
+     anything; this is the only thing that lets it through. */
+  function renderTurn(d) {
+    const looked = (d.used || []).filter((t) => t === 'list_pages' || t === 'read_page');
+    if (looked.length) {
+      bubble('system', '🔎 הקופיילוט קרא מהאתר: ' + esc(looked.join(', ')));
+    }
+    if (d.reply) {
+      const b = bubble('assistant',
+        '<div style="white-space:pre-wrap;word-break:break-word;direction:rtl">' + esc(d.reply) + '</div>' +
+        replyActions(d.reply));
+      wireActions(b, d.reply);
+    }
+    if (d.pending) renderApproval(d.pending);
+  }
+
+  function renderApproval(p) {
+    const b = bubble('system',
+      '<div style="font-weight:700;margin-bottom:6px">✋ הקופיילוט מבקש רשות</div>' +
+      '<div style="margin-bottom:4px">' + esc(p.summary) + '</div>' +
+      '<div class="faint" style="font-size:.78rem;margin-bottom:8px">שום דבר לא נשמר עדיין. אישור יוצר/יעדכן <b>טיוטה</b> בלבד — הדף החי לא משתנה.</div>' +
+      '<div class="actions">' +
+      '<button type="button" class="act primary" data-ok="1">✓ אשר</button>' +
+      '<button type="button" class="act" data-ok="0">✕ לא עכשיו</button>' +
+      '</div>');
+    b.querySelectorAll('[data-ok]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const ok = btn.dataset.ok === '1';
+        b.querySelectorAll('[data-ok]').forEach((x) => { x.disabled = true; });
+        btn.textContent = ok ? 'מבצע…' : 'נדחה';
+        setStatus(ok ? 'מבצע…' : '');
+        try {
+          const d = await api('/admin/api/ai/chat', {
+            method: 'POST',
+            body: JSON.stringify({ approve: { id: p.id, ok } })
+          });
+          if (ok) {
+            const slug = (p.input && p.input.slug) || '';
+            bubble('system', 'בוצע ✓ ' + (slug
+              ? '<a href="/admin/edit/' + encodeURIComponent(slug) + '">פתחו בבונה</a>'
+              : 'הטיוטה נשמרה'));
+          }
+          if (d.reply) history.push({ role: 'assistant', content: d.reply });
+          renderTurn(d);
+        } catch (e) {
+          bubble('system', 'שגיאה: ' + esc(e.message));
+        }
+        setStatus('');
+      });
+    });
+  }
+
   function replyActions(reply) {
     // a reply that carries a page offers one-click creation
     if (!/<bent-|<!DOCTYPE html/i.test(reply)) return '';
@@ -154,11 +207,8 @@
         method: 'POST',
         body: JSON.stringify({ message, history })
       });
-      history.push({ role: 'user', content: message }, { role: 'assistant', content: d.reply });
-      const b = bubble('assistant',
-        '<div style="white-space:pre-wrap;word-break:break-word;direction:rtl">' + esc(d.reply) + '</div>' +
-        replyActions(d.reply));
-      wireActions(b, d.reply);
+      history.push({ role: 'user', content: message }, { role: 'assistant', content: d.reply || '' });
+      renderTurn(d);
       setStatus('');
     } catch (e) {
       bubble('system', 'שגיאה: ' + esc(e.message));
