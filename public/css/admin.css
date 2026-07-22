@@ -80,22 +80,35 @@
    the binding constraint: it only reaches 4.16 at 78%, 4.71 at 70%). The text
    colour is forced — including -webkit-text-fill-color, without which
    gradient-clipped brand marks (.side-brand, .auth-brand) select as an empty
-   rectangle. */
+   rectangle.
+
+   `background-color`, not the `background` shorthand: only the longhand is on
+   the list of properties ::selection is specified to honour, and a shorthand
+   that gets dropped while `color:#fff` survives leaves white text on a white
+   page — text that vanishes when you select it, which is worse than no rule. */
 ::selection {
-  background: color-mix(in srgb, var(--accent) 70%, #0f172a);
+  background-color: color-mix(in srgb, var(--accent) 70%, #0f172a);
   color: #fff;
   -webkit-text-fill-color: #fff;
 }
 ::-moz-selection {
-  background: color-mix(in srgb, var(--accent) 70%, #0f172a);
+  background-color: color-mix(in srgb, var(--accent) 70%, #0f172a);
   color: #fff;
 }
-/* On the builder's dark desk the same deepened accent would sink into the
-   background — go bright there instead. */
+/* The builder is dark FURNITURE around a white page. The deepened accent
+   sinks into the desk, so the chrome goes bright — but the page sheet itself
+   is white like every other screen and keeps the deep default. Scoping this to
+   `body.builder-screen` alone painted the white sheet with the dark-desk
+   colour, which is most of why selection still looked washed out in there. */
 body.builder-screen ::selection {
-  background: color-mix(in srgb, var(--accent) 62%, #ffffff);
+  background-color: color-mix(in srgb, var(--accent) 62%, #ffffff);
   color: #0b1020;
   -webkit-text-fill-color: #0b1020;
+}
+body.builder-screen .canvas ::selection {
+  background-color: color-mix(in srgb, var(--accent) 70%, #0f172a);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
 }
 
 /* ---- motion vocabulary ---- */
@@ -2327,7 +2340,26 @@ details.agent-snip-details summary { cursor: pointer; }
   resize: vertical;
   overflow: auto;
 }
-.bentml-editor .bentml-input::selection { background: rgba(125, 211, 252, 0.22); }
+/* The code editor is a TRANSPARENT textarea lying on top of the highlighted
+   <pre>: the glyphs you read belong to the layer underneath, and the textarea's
+   own text is `color: transparent`. Two consequences the generic rule gets
+   wrong, and both were live —
+     · a selection colour makes the textarea's invisible glyphs VISIBLE, so the
+       selected code renders twice, offset and unreadable. The global builder
+       rule was doing exactly that (it forced #0b1020 in here), so selecting
+       code to copy garbled it.
+     · only the BAND can carry the highlight, and it has to stay translucent or
+       it hides the code it is highlighting — but 0.22 over #0b1220 was so faint
+       it read as no selection at all. 0.42 is visible and still see-through. */
+.bentml-editor .bentml-input::selection {
+  background-color: rgba(125, 211, 252, 0.42);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.bentml-editor .bentml-input::-moz-selection {
+  background-color: rgba(125, 211, 252, 0.42);
+  color: transparent;
+}
 .bentml-editor .bentml-input:focus { outline: none; box-shadow: inset 0 0 0 1.5px rgba(253, 186, 116, 0.35); }
 .bentml-editor .bentml-input::placeholder { color: #475569; }
 

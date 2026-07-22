@@ -440,13 +440,17 @@ html { scroll-behavior: smooth; }
    selecting text on a light page looked like nothing happened. The site's own
    primary colour with forced white text is unmistakable, and it follows
    whatever palette the owner picked instead of a hardcoded blue. */
+/* background-COLOR, not the shorthand: only the longhand is on the list of
+   properties ::selection is specified to honour, and a browser that drops the
+   shorthand while keeping `color:#fff` would render selected text white on a
+   white page — invisible, which is the failure this rule exists to fix. */
 ::selection {
-  background: var(--color-primary);
+  background-color: var(--color-primary);
   color: #fff;
   -webkit-text-fill-color: #fff;
 }
 ::-moz-selection {
-  background: var(--color-primary);
+  background-color: var(--color-primary);
   color: #fff;
 }
 
