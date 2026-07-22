@@ -43,12 +43,48 @@
 
   /* ── settings card ── */
 
+  function currentProvider() {
+    return providers.find((x) => x.id === $('ai-provider').value) || providers[0] || {};
+  }
+
   function fillModels() {
-    const p = providers.find((x) => x.id === $('ai-provider').value) || providers[0];
+    const p = currentProvider();
     const sel = $('ai-model');
-    sel.innerHTML = (p ? p.models : []).map((m) =>
+    // A local runtime serves whatever model it has loaded, so its name is a
+    // free-text field, not a list we could possibly know ahead of time.
+    if (p.openModel) {
+      sel.innerHTML = '';
+      sel.hidden = true;
+      $('ai-model-free').hidden = false;
+      $('ai-model-free').value = settings.model || '';
+      $('ai-model-free').placeholder = p.defaultModel || 'שם המודל שטעון';
+      return;
+    }
+    sel.hidden = false;
+    $('ai-model-free').hidden = true;
+    sel.innerHTML = (p.models || []).map((m) =>
       '<option value="' + esc(m) + '"' + (m === settings.model ? ' selected' : '') + '>' + esc(m) + '</option>'
     ).join('');
+  }
+
+  /** Everything that depends on WHICH provider is selected right now. Split
+   *  out of renderSettings because picking a provider must update the whole
+   *  card immediately — rebuilding the <select> here would snap the choice
+   *  back to the saved one before the user has saved it. */
+  function syncProviderUI() {
+    fillModels();
+    const p = currentProvider();
+    // The base-URL row belongs to the local provider alone; the public ones
+    // have a fixed endpoint the server will not let anyone repoint.
+    $('ai-local-row').hidden = !p.baseUrlDefault;
+    $('ai-base').value = settings.baseUrl || '';
+    $('ai-base').placeholder = p.baseUrlDefault || '';
+    $('ai-key-state').textContent = p.keyOptional
+      ? '· לרוב לא נדרש למודל מקומי'
+      : (settings.hasKey ? '· מוגדר (…' + settings.keyTail + ')' : '· לא מוגדר');
+    $('ai-key').placeholder = settings.hasKey
+      ? 'להחלפה — הדביקו מפתח חדש'
+      : (p.keyHint || 'sk-…');
   }
 
   function renderSettings() {
@@ -56,15 +92,16 @@
     provSel.innerHTML = providers.map((p) =>
       '<option value="' + esc(p.id) + '"' + (p.id === settings.provider ? ' selected' : '') + '>' + esc(p.label) + '</option>'
     ).join('');
-    fillModels();
-    $('ai-key-state').textContent = settings.hasKey ? '· מוגדר (…' + settings.keyTail + ')' : '· לא מוגדר';
-    $('ai-key').placeholder = settings.hasKey
-      ? 'להחלפה — הדביקו מפתח חדש'
-      : ((providers.find((p) => p.id === settings.provider) || {}).keyHint || 'sk-…');
+    syncProviderUI();
   }
 
   async function saveSettings() {
-    const body = { provider: $('ai-provider').value, model: $('ai-model').value };
+    const p = currentProvider();
+    const body = {
+      provider: $('ai-provider').value,
+      model: p.openModel ? $('ai-model-free').value.trim() : $('ai-model').value
+    };
+    if (p.baseUrlDefault) body.baseUrl = $('ai-base').value.trim();
     const key = $('ai-key').value.trim();
     if (key) body.apiKey = key; // empty field = keep the stored key
     $('ai-settings-status').textContent = 'שומר…';
@@ -74,7 +111,8 @@
       $('ai-key').value = '';
       renderSettings();
       $('ai-settings-status').textContent = 'נשמר ✓';
-      if (d.hasKey) welcome(true);
+      // a local runtime needs no key, so the chat is ready the moment it is picked
+      if (d.hasKey || currentProvider().keyOptional) welcome(true);
     } catch (e) {
       $('ai-settings-status').textContent = 'שגיאה: ' + e.message;
     }
@@ -173,7 +211,7 @@
     }
     welcome(false);
 
-    $('ai-provider').addEventListener('change', fillModels);
+    $('ai-provider').addEventListener('change', syncProviderUI);
     $('ai-save').addEventListener('click', saveSettings);
     $('btn-send').addEventListener('click', send);
     input.addEventListener('keydown', (e) => {

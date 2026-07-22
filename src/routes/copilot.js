@@ -245,7 +245,8 @@ router.post('/admin/api/ai/settings', requireAdmin, (req, res) => {
     const settings = require('../ai').saveSettings({
       provider: b.provider,
       model: b.model,
-      apiKey: b.apiKey // undefined = keep, '' = clear, value = replace
+      apiKey: b.apiKey, // undefined = keep, '' = clear, value = replace
+      baseUrl: b.baseUrl // local runtime address; saveSettings refuses non-loopback
     });
     res.json({ ok: true, ...settings });
   } catch (e) {
@@ -314,7 +315,19 @@ router.get('/admin/chat', (req, res) => {
           <h3 class="sub-head">🔑 המפתח שלכם — בתוך ה‑CMS</h3>
           <p class="muted" style="font-size:.85rem;margin:0 0 10px">הצ׳אט קורא ל‑API הרשמי של הספק מהשרת שלכם, עם המפתח שלכם. המפתח נשמר בשרת בלבד (קובץ מוגן, מחוץ ל‑git) ולעולם לא נשלח לדפדפן.</p>
           <div class="field"><label>ספק</label><select id="ai-provider"></select></div>
-          <div class="field"><label>מודל</label><select id="ai-model"></select></div>
+          <div class="field"><label>מודל</label>
+            <select id="ai-model"></select>
+            <input id="ai-model-free" class="input" dir="ltr" autocomplete="off" hidden
+                   placeholder="שם המודל שטעון" title="מודל מקומי מגיש את מה שטעון בו — הקלידו את שמו">
+          </div>
+          <div class="field" id="ai-local-row" hidden>
+            <label>כתובת המודל המקומי</label>
+            <input id="ai-base" class="input" dir="ltr" autocomplete="off" placeholder="http://127.0.0.1:1234/v1">
+            <div class="faint" style="margin-top:4px">
+              LM Studio: הפעילו את <b>Local Server</b> (ברירת מחדל 1234) · Ollama: 11434.
+              מותרות רק כתובות של המחשב הזה — השרת ידחה כל כתובת חיצונית.
+            </div>
+          </div>
           <div class="field"><label>מפתח API <span id="ai-key-state" class="muted"></span></label>
             <input id="ai-key" type="password" dir="ltr" autocomplete="off" placeholder="sk-…">
           </div>
