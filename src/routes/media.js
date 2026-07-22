@@ -98,8 +98,8 @@ router.get('/admin/media-library', (req, res) => {
   const html = `
     ${adminNav('media', 'ספריית מדיה')}
     <div class="container" style="padding-top:28px;max-width:960px;padding-bottom:60px">
-      <p style="color:#64748b;margin-top:0">כל התמונות והקבצים של האתר — תיקיות, העלאה ומחיקה. אותה ספרייה שמופיעה בבונה הדפים.</p>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+      <p class="lead">כל התמונות והקבצים של האתר — תיקיות, העלאה ומחיקה. אותה ספרייה שמופיעה בבונה הדפים.</p>
+      <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
           <div id="ml-crumbs" style="font-size:0.95rem;color:#334155"></div>
           <div style="display:flex;gap:8px">

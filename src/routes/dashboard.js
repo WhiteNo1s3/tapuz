@@ -33,19 +33,19 @@ router.get('/admin/dashboard', (req, res) => {
   } catch (e) { /* inbox table may not exist yet */ }
 
   const statCard = (num, label, color) => `
-    <div class="stat-card" style="--c:${color}">
+    <div class="stat" style="--c:${color}">
       <div class="stat-num">${num}</div>
       <div class="stat-label">${label}</div>
     </div>`;
 
   const recent = pages.slice(0, 5).map(p => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:6px;background:#fff">
-      <div>
+    <div class="row-item">
+      <div class="row-main">
         <strong>${escapeAdmin(p.title)}</strong>
-        <span style="font-size:0.75rem;color:#94a3b8;margin-inline-start:8px">${String(p.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
+        <span class="faint" style="margin-inline-start:8px">${String(p.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
       </div>
       <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn" style="padding:6px 14px">ערוך</a>
-    </div>`).join('') || '<p style="color:#64748b">אין דפים עדיין</p>';
+    </div>`).join('') || '<p class="muted">אין דפים עדיין</p>';
 
   // The tool families as a colorful hub — same data that drives the nav, so
   // the dashboard can never advertise a tool that doesn't exist.
@@ -60,50 +60,8 @@ router.get('/admin/dashboard', (req, res) => {
 
   const html = `
     ${adminNav('dashboard', 'דשבורד', '<a href="/admin/new" class="btn">+ דף חדש</a>')}
-    <style>
-      .stat-card {
-        background: linear-gradient(160deg, color-mix(in srgb, var(--c) 10%, #fff), #fff 60%);
-        border: 1px solid color-mix(in srgb, var(--c) 22%, #fff);
-        border-radius: 14px;
-        padding: 18px 20px;
-        text-align: center;
-      }
-      .stat-num { font-size: 2rem; font-weight: 800; color: var(--c); }
-      .stat-label { color: #64748b; font-size: 0.88rem; margin-top: 4px; }
-      .hub-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        gap: 14px;
-        margin-bottom: 30px;
-      }
-      .hub-card {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-top: 4px solid var(--g);
-        border-radius: 14px;
-        padding: 16px 18px;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-        transition: box-shadow .15s, transform .15s;
-      }
-      .hub-card:hover { box-shadow: 0 8px 24px rgba(15, 23, 42, 0.09); transform: translateY(-2px); }
-      .hub-card-title { font-weight: 800; color: var(--g); font-size: 1.02rem; }
-      .hub-card-desc { color: #64748b; font-size: 0.82rem; margin: 4px 0 12px; }
-      .hub-card-links { display: flex; flex-wrap: wrap; gap: 6px; }
-      .hub-card-links a {
-        text-decoration: none;
-        font-size: 0.84rem;
-        font-weight: 600;
-        color: #334155;
-        background: color-mix(in srgb, var(--g) 8%, #fff);
-        border: 1px solid color-mix(in srgb, var(--g) 18%, #fff);
-        border-radius: 999px;
-        padding: 5px 12px;
-        transition: background .12s, color .12s;
-      }
-      .hub-card-links a:hover { background: var(--g); color: #fff; }
-    </style>
-    <div class="container" style="padding-top:28px;max-width:1080px;padding-bottom:60px">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px">
+    <div class="container page-body" style="max-width:1080px">
+      <div class="stat-grid" style="margin-bottom:26px">
         ${statCard(pages.length, 'דפים', '#2563eb')}
         ${statCard(published, 'פורסמו', '#059669')}
         ${statCard(drafts, 'טיוטות', '#f97316')}
@@ -111,21 +69,21 @@ router.get('/admin/dashboard', (req, res) => {
         ${statCard(mediaCount, 'קבצי מדיה', '#0d9488')}
         <a href="/admin/inbox" style="text-decoration:none">${statCard(unreadInbox, unreadInbox ? 'פניות חדשות 📬' : 'פניות חדשות', unreadInbox ? '#dc2626' : '#64748b')}</a>
       </div>
-      <h3 style="margin:0 0 12px">ארגז הכלים</h3>
-      <div class="hub-grid">${hubCards}</div>
-      <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
+      <h3 class="hub-heading">ארגז הכלים</h3>
+      <div class="hub-grid" style="margin-bottom:30px">${hubCards}</div>
+      <div class="dash-split">
         <section>
-          <h3 style="margin-top:0">דפים אחרונים</h3>
+          <h3 class="hub-heading">דפים אחרונים</h3>
           ${recent}
         </section>
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px;height:fit-content">
-          <h3 style="margin-top:0">קיצורי דרך</h3>
-          <div style="display:flex;flex-direction:column;gap:8px">
+        <section class="card" style="height:fit-content">
+          <div class="card-head"><span class="ico">⚡</span>קיצורי דרך</div>
+          <div class="stack" style="gap:8px">
             <a href="/admin/new" class="btn">+ דף חדש</a>
             <a href="/admin/import" class="btn secondary">📥 ייבוא דף קיים</a>
             <a href="/admin/chat" class="btn secondary">✨ לבנות עם AI</a>
             <form method="POST" action="/admin/build-redirect" style="margin:0">
-              <button type="submit" class="btn" style="background:#059669;width:100%">🚀 בנה את האתר</button>
+              <button type="submit" class="btn publish" style="width:100%;justify-content:center">🚀 בנה את האתר</button>
             </form>
           </div>
         </section>

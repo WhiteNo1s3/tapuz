@@ -30,20 +30,20 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
   const html = `
     ${adminNav('settings', 'הגדרות אתר')}
     <div class="container" style="padding-top:28px;max-width:620px;padding-bottom:60px">
-      <p style="color:#64748b;margin-top:0">הגדרות כלליות של האתר. לוגו וצבעים נמצאים ב<a href="/admin/theme">ערכת הנושא</a>.</p>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px">
-        <label style="display:block;font-weight:600;margin-bottom:4px">שם האתר</label>
-        <input id="st-title" value="${escapeAdmin(config.title)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">תיאור האתר</label>
-        <textarea id="st-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">${escapeAdmin(config.description)}</textarea>
-        <label style="display:block;font-weight:600;margin-bottom:4px">🏠 דף הבית</label>
+      <p class="lead">הגדרות כלליות של האתר. לוגו וצבעים נמצאים ב<a href="/admin/theme">ערכת הנושא</a>.</p>
+      <section class="card">
+        <label class="field-label">שם האתר</label>
+        <input id="st-title" value="${escapeAdmin(config.title)}" class="input mb">
+        <label class="field-label">תיאור האתר</label>
+        <textarea id="st-desc" rows="2" class="input mb">${escapeAdmin(config.description)}</textarea>
+        <label class="field-label">🏠 דף הבית</label>
         <select id="st-homepage" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px">
           ${homeOptions}
         </select>
         <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:14px">הדף שמוגש בשורש האתר (/). אפשר גם מרשימת הדפים — כפתור 🏠 קבע כדף הבית.</div>
-        <label style="display:block;font-weight:600;margin-bottom:4px">כתובת בסיס (baseUrl)</label>
-        <input id="st-baseurl" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://example.co.il" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">שפה ראשית</label>
+        <label class="field-label">כתובת בסיס (baseUrl)</label>
+        <input id="st-baseurl" dir="ltr" value="${escapeAdmin(config.baseUrl || '')}" placeholder="https://example.co.il" class="input mb">
+        <label class="field-label">שפה ראשית</label>
         <select id="st-lang" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px">
           <option value="he" ${config.language !== 'en' ? 'selected' : ''}>עברית</option>
           <option value="en" ${config.language === 'en' ? 'selected' : ''}>English</option>
@@ -54,13 +54,13 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
         </div>
       </section>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-top:18px">
+      <section class="card" style="margin-top:18px">
         <h3 style="margin-top:0">📦 ייצוא / ייבוא אתר שלם</h3>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">קובץ אחד עם כל הדפים (טיוטה + מפורסם), ערכת הנושא והתפריטים — לגיבוי או להעברה בין התקנות Tapuz. ייבוא לעולם לא דורס דף קיים אלא אם מסמנים "דרוס דפים קיימים".</p>
+        <p class="lead">קובץ אחד עם כל הדפים (טיוטה + מפורסם), ערכת הנושא והתפריטים — לגיבוי או להעברה בין התקנות Tapuz. ייבוא לעולם לא דורס דף קיים אלא אם מסמנים "דרוס דפים קיימים".</p>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
           <a class="btn secondary" href="/admin/api/site-package/export" download>⬇ ייצוא האתר</a>
         </div>
-        <label style="display:block;font-weight:600;margin-bottom:4px">ייבוא — הדביקו את תוכן הקובץ (JSON)</label>
+        <label class="field-label">ייבוא — הדביקו את תוכן הקובץ (JSON)</label>
         <textarea id="sp-import-text" rows="4" dir="ltr" placeholder='{"format":"tapuz-site", ...}' style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:10px">
           <input type="checkbox" id="sp-overwrite"> דרוס דפים קיימים (ברירת מחדל: דילוג על התנגשויות)

@@ -69,33 +69,33 @@ router.get('/admin/theme', (req, res) => {
   const html = `
     ${adminNav('theme', 'ערכת נושא')}
     <div class="container" style="padding-top:28px;max-width:920px">
-      <p style="color:#64748b;margin-top:0">שנה צבעים, פונט, לוגו ופריסת תפריט — בלי לגעת בקוד התמה. נשמר כ-overrides.</p>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px">
+      <p class="lead">שנה צבעים, פונט, לוגו ופריסת תפריט — בלי לגעת בקוד התמה. נשמר כ-overrides.</p>
+      <section class="card">
         <h3 style="margin-top:0">מראות מוכנים</h3>
         <p style="color:#64748b;margin:0 0 14px;font-size:.9rem">לחיצה אחת מחליפה את כל האישיות של האתר — צבעים, פינות, צללים וגופנים. אחרי הבחירה הכול נשאר ניתן לכיוון עדין למטה.</p>
         <div id="th-looks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px"></div>
       </section>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <section class="card">
           <h3 style="margin-top:0">אתר</h3>
-          <label style="display:block;font-weight:600;margin-bottom:4px">כותרת האתר</label>
-          <input id="th-title" value="${escAttr(settings.siteTitle)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
-          <label style="display:block;font-weight:600;margin-bottom:4px">תיאור</label>
-          <textarea id="th-desc" rows="2" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">${escAttr(settings.description)}</textarea>
-          <label style="display:block;font-weight:600;margin-bottom:4px">סוג לוגו</label>
-          <select id="th-logo-type" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label class="field-label">כותרת האתר</label>
+          <input id="th-title" value="${escAttr(settings.siteTitle)}" class="input mb">
+          <label class="field-label">תיאור</label>
+          <textarea id="th-desc" rows="2" class="input mb">${escAttr(settings.description)}</textarea>
+          <label class="field-label">סוג לוגו</label>
+          <select id="th-logo-type" class="input mb">
             <option value="text" ${logo.type !== 'image' ? 'selected' : ''}>טקסט</option>
             <option value="image" ${logo.type === 'image' ? 'selected' : ''}>תמונה</option>
           </select>
-          <label style="display:block;font-weight:600;margin-bottom:4px">טקסט לוגו</label>
-          <input id="th-logo-text" value="${escAttr(logo.text)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
-          <label style="display:block;font-weight:600;margin-bottom:4px">תמונת לוגו</label>
+          <label class="field-label">טקסט לוגו</label>
+          <input id="th-logo-text" value="${escAttr(logo.text)}" class="input mb">
+          <label class="field-label">תמונת לוגו</label>
           <div style="display:flex;gap:8px;margin-bottom:12px">
             <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
             <button type="button" class="btn secondary" data-media-pick="th-logo-image" style="white-space:nowrap">🖼 בחר / העלה</button>
           </div>
         </section>
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <section class="card">
           <h3 style="margin-top:0">צבעים</h3>
           ${colorRow('primary', 'ראשי', o.colors.primary)}
           ${colorRow('secondary', 'משלים (גרדיאנט)', o.colors.secondary)}
@@ -106,48 +106,48 @@ router.get('/admin/theme', (req, res) => {
           ${colorRow('lightBg', 'רקע בהיר', o.colors.lightBg)}
           ${colorRow('surface', 'משטח (כרטיסים)', o.colors.surface)}
         </section>
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <section class="card">
           <h3 style="margin-top:0">אופי העיצוב</h3>
-          <label style="display:block;font-weight:600;margin-bottom:4px">פינות</label>
-          <select id="th-radius" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label class="field-label">פינות</label>
+          <select id="th-radius" class="input mb">
             <option value="sharp" ${o.style.radius === 'sharp' ? 'selected' : ''}>חדות (עיתונאי)</option>
             <option value="soft" ${o.style.radius === 'soft' || !o.style.radius ? 'selected' : ''}>רכות</option>
             <option value="round" ${o.style.radius === 'round' ? 'selected' : ''}>עגולות</option>
           </select>
-          <label style="display:block;font-weight:600;margin-bottom:4px">צללים</label>
-          <select id="th-shadow" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label class="field-label">צללים</label>
+          <select id="th-shadow" class="input mb">
             <option value="flat" ${o.style.shadow === 'flat' ? 'selected' : ''}>שטוח</option>
             <option value="soft" ${o.style.shadow === 'soft' || !o.style.shadow ? 'selected' : ''}>עדין</option>
             <option value="deep" ${o.style.shadow === 'deep' ? 'selected' : ''}>עמוק</option>
           </select>
-          <label style="display:block;font-weight:600;margin-bottom:4px">צבע הדגשה</label>
-          <select id="th-accent" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+          <label class="field-label">צבע הדגשה</label>
+          <select id="th-accent" class="input mb">
             <option value="solid" ${o.style.accent !== 'gradient' ? 'selected' : ''}>אחיד</option>
             <option value="gradient" ${o.style.accent === 'gradient' ? 'selected' : ''}>גרדיאנט (ראשי ← משלים)</option>
           </select>
-          <label style="display:block;font-weight:600;margin-bottom:4px">גופן כותרות</label>
-          <select id="th-font-heading" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <label class="field-label">גופן כותרות</label>
+          <select id="th-font-heading" class="input">
             <option value="" ${!o.fonts.headingFamily ? 'selected' : ''}>כמו גופן הטקסט</option>
             <option value='Georgia, "Times New Roman", "Noto Serif Hebrew", serif' ${(o.fonts.headingFamily || '').includes('Georgia') ? 'selected' : ''}>סריפית קלאסית</option>
             <option value='"Arial Black", "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif' ${(o.fonts.headingFamily || '').includes('Arial Black') ? 'selected' : ''}>שמנה מודגשת</option>
             <option value='Tahoma, Arial, "Noto Sans Hebrew", sans-serif' ${(o.fonts.headingFamily || '').includes('Tahoma') ? 'selected' : ''}>קומפקטית</option>
           </select>
         </section>
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <section class="card">
           <h3 style="margin-top:0">טיפוגרפיה ופריסה</h3>
-          <label style="display:block;font-weight:600;margin-bottom:4px">גופן</label>
-          <input id="th-font" value="${escAttr(o.fonts.family)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
-          <label style="display:block;font-weight:600;margin-bottom:4px">גודל בסיס</label>
-          <input id="th-font-size" value="${escAttr(o.fonts.baseSize)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
-          <label style="display:block;font-weight:600;margin-bottom:4px">רוחב מקסימלי</label>
-          <input id="th-maxw" value="${escAttr(o.layout.maxWidth)}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
-          <label style="display:block;font-weight:600;margin-bottom:4px">מיקום תפריט</label>
-          <select id="th-menu-place" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <label class="field-label">גופן</label>
+          <input id="th-font" value="${escAttr(o.fonts.family)}" class="input mb">
+          <label class="field-label">גודל בסיס</label>
+          <input id="th-font-size" value="${escAttr(o.fonts.baseSize)}" class="input mb">
+          <label class="field-label">רוחב מקסימלי</label>
+          <input id="th-maxw" value="${escAttr(o.layout.maxWidth)}" class="input mb">
+          <label class="field-label">מיקום תפריט</label>
+          <select id="th-menu-place" class="input">
             <option value="top" ${o.layout.menuPlacement !== 'side' ? 'selected' : ''}>עליון (אופקי)</option>
             <option value="side" ${o.layout.menuPlacement === 'side' ? 'selected' : ''}>צד (אנכי)</option>
           </select>
         </section>
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <section class="card">
           <h3 style="margin-top:0">תצוגה מקדימה</h3>
           <div id="th-preview" style="border:1px solid #e2e8f0;border-radius:10px;padding:20px"></div>
         </section>
@@ -158,13 +158,13 @@ router.get('/admin/theme', (req, res) => {
         <button type="button" class="btn" id="th-save-build" style="background:#166534">שמור + בנה אתר</button>
       </div>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:60px">
+      <section class="card" style="margin-bottom:60px">
         <h3 style="margin-top:0">📦 ייצוא / ייבוא ערכת נושא</h3>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">קובץ ניתן להעברה — ייצוא שומר את הצבעים/הפונטים/הפריסה הנוכחיים לקובץ, ייבוא מחיל קובץ כזה מאתר Tapuz אחר. שיתוף ערכות נושא, הצעד הראשון.</p>
+        <p class="lead">קובץ ניתן להעברה — ייצוא שומר את הצבעים/הפונטים/הפריסה הנוכחיים לקובץ, ייבוא מחיל קובץ כזה מאתר Tapuz אחר. שיתוף ערכות נושא, הצעד הראשון.</p>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
           <a class="btn secondary" href="/admin/api/theme/export" download>⬇ ייצוא ערכת נושא</a>
         </div>
-        <label style="display:block;font-weight:600;margin-bottom:4px">ייבוא — הדביקו את תוכן הקובץ (JSON)</label>
+        <label class="field-label">ייבוא — הדביקו את תוכן הקובץ (JSON)</label>
         <textarea id="th-import-text" rows="4" dir="ltr" placeholder='{"format":"tapuz-theme", ...}' style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
         <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
           <span id="th-import-status" style="font-size:0.85rem"></span>

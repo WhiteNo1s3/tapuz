@@ -52,9 +52,9 @@ router.get('/admin/login', (req, res) => {
     <h1 style="font-size:1.15rem;text-align:center;margin:0 0 18px;color:#334155">כניסת מנהל</h1>
     ${authErr(err)}
     <form method="POST" action="${base}/login">
-      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">שם משתמש</label>
+      <label class="field-label">שם משתמש</label>
       <input name="username" autocomplete="username" required autofocus style="${authInput}">
-      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">סיסמה</label>
+      <label class="field-label">סיסמה</label>
       <input name="password" type="password" autocomplete="current-password" required style="${authInput}">
       <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">התחבר</button>
     </form>`;
@@ -104,11 +104,11 @@ router.get('/admin/create-account', (req, res) => {
     <p style="text-align:center;color:#64748b;font-size:0.86rem;margin:0 0 18px">זהו החשבון הראשון באתר. בחר שם משתמש וסיסמה חזקה.</p>
     ${authErr(err)}
     <form method="POST" action="${base}/create-account">
-      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">שם משתמש</label>
+      <label class="field-label">שם משתמש</label>
       <input name="username" autocomplete="username" required autofocus style="${authInput}">
-      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">סיסמה (8+ תווים)</label>
+      <label class="field-label">סיסמה (8+ תווים)</label>
       <input name="password" type="password" autocomplete="new-password" required minlength="8" style="${authInput}">
-      <label style="display:block;font-weight:600;margin-bottom:4px;font-size:0.9rem">אימות סיסמה</label>
+      <label class="field-label">אימות סיסמה</label>
       <input name="confirm" type="password" autocomplete="new-password" required minlength="8" style="${authInput}">
       <button type="submit" class="btn" style="width:100%;padding:12px;font-size:1rem">צור חשבון והתחבר</button>
     </form>`;

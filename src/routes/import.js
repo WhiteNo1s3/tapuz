@@ -51,18 +51,18 @@ router.get('/admin/import', (req, res) => {
     ['Camilyo', 'ייצוא Camilyo'],
     ['Mobeart', 'ייצוא Mobeart']
   ].map((v) => `
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:14px;opacity:.65">
+      <section class="card tight" style="opacity:.65">
         <h3 style="margin:0 0 4px">${v[0]} <span style="font-size:.72rem;background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:999px;vertical-align:middle">בקרוב</span></h3>
         <p style="color:#94a3b8;margin:0;font-size:.9rem">${v[1]} — נוסף בקרוב.</p>
       </section>`).join('');
   const html = `
     ${adminNav('import', 'ייבוא — מערכות חיצוניות')}
     <div class="container" style="padding-top:24px;max-width:920px">
-      <p style="color:#64748b;margin-top:0">
+      <p class="lead">
         בוחרים מערכת, מעלים את קובץ הייצוא — ותפוזיאל בונה את הדפים בשפת ה‑<code>.pzn</code> שלנו.
         לכל מערכת קטע נפרד; אין צורך לנחש איזה קובץ העליתם.
       </p>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px;margin-bottom:14px">
+      <section class="card tight">
         <h3 style="margin:0 0 4px">וורדפרס / Elementor <span style="font-size:.72rem;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;vertical-align:middle">פעיל</span></h3>
         <p style="color:#64748b;margin:0 0 12px;font-size:.9rem">קובץ ייצוא <b>WXR</b> (ב‑WordPress: כלים ← ייצוא ← כל התוכן).</p>
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">

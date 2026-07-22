@@ -40,11 +40,11 @@ router.get('/admin/site-chrome', (req, res) => {
   const html = `
     ${adminNav('site-chrome', 'כותרת ותחתית')}
     <div class="container" style="padding-top:28px;max-width:720px;padding-bottom:60px">
-      <p style="color:#64748b;margin-top:0">הכותרת והתחתית שייכות לכל האתר — כל דף שנבנה בבונה מופיע בתוכן. השינויים חלים באתר הציבורי אחרי "בנה אתר".</p>
+      <p class="lead">הכותרת והתחתית שייכות לכל האתר — כל דף שנבנה בבונה מופיע בתוכן. השינויים חלים באתר הציבורי אחרי "בנה אתר".</p>
 
       <section style="${cardCss}">
         <h3 style="margin-top:0">🔝 כותרת עליונה (Header)</h3>
-        <label style="display:block;font-weight:600;margin-bottom:4px">תת-כותרת ליד הלוגו</label>
+        <label class="field-label">תת-כותרת ליד הלוגו</label>
         <input id="h-tagline" value="${escapeAdmin(data.header.tagline)}" placeholder="הבית של המוזיקה" style="${inputCss};margin-bottom:14px">
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:12px">
           <input type="checkbox" id="h-showlogo" ${data.header.showLogo ? 'checked' : ''}> הצג לוגו בכותרת
@@ -54,11 +54,11 @@ router.get('/admin/site-chrome', (req, res) => {
         </label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
-            <label style="display:block;font-weight:600;margin-bottom:4px">כפתור פעולה — טקסט</label>
+            <label class="field-label">כפתור פעולה — טקסט</label>
             <input id="h-ctalabel" value="${escapeAdmin(data.header.ctaLabel)}" placeholder="צור קשר" style="${inputCss}">
           </div>
           <div>
-            <label style="display:block;font-weight:600;margin-bottom:4px">כפתור פעולה — קישור</label>
+            <label class="field-label">כפתור פעולה — קישור</label>
             <input id="h-ctaurl" dir="ltr" value="${escapeAdmin(data.header.ctaUrl)}" placeholder="/contact" style="${inputCss}">
           </div>
         </div>
@@ -67,7 +67,7 @@ router.get('/admin/site-chrome', (req, res) => {
 
       <section style="${cardCss}">
         <h3 style="margin-top:0">🔻 תחתית (Footer)</h3>
-        <label style="display:block;font-weight:600;margin-bottom:4px">טקסט תחתית חופשי</label>
+        <label class="field-label">טקסט תחתית חופשי</label>
         <textarea id="f-text" rows="2" placeholder="רחוב הרצל 1, תל אביב · טל׳ 03-0000000" style="${inputCss};margin-bottom:14px">${escapeAdmin(data.footer.text)}</textarea>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px">
           <input type="checkbox" id="f-credit" ${data.footer.showCredit ? 'checked' : ''}> הצג קרדיט "נבנה עם Tapuz"
@@ -79,7 +79,7 @@ router.get('/admin/site-chrome', (req, res) => {
           <h3 style="margin:0">🗂️ עמודות קישורים בתחתית</h3>
           <button type="button" class="btn secondary" id="add-col" style="padding:6px 12px">+ עמודה</button>
         </div>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">כל עמודה = כותרת + רשימת קישורים.</p>
+        <p class="lead">כל עמודה = כותרת + רשימת קישורים.</p>
         <div id="cols-wrap"></div>
       </section>
 

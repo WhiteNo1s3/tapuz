@@ -84,7 +84,7 @@ router.get('/admin/sitemap', (req, res) => {
     </style>
     ${adminNav('sitemap', 'מפת אתר')}
     <div class="container" style="padding-top:28px;max-width:860px">
-      <p style="color:#64748b;margin-top:0">המבנה נגזר מהתפריטים. דפים שלא מקושרים מופיעים למטה כיתומים.</p>
+      <p class="lead">המבנה נגזר מהתפריטים. דפים שלא מקושרים מופיעים למטה כיתומים.</p>
       ${menuSections}
       <section class="sm-card"><h3>דפים שלא בתפריט</h3><ul class="sm-list" style="border:none;padding-inline-start:0">${orphanRows}</ul></section>
     </div>

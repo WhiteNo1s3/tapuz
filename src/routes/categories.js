@@ -44,8 +44,8 @@ router.get('/admin/categories', (req, res) => {
     </style>
     ${adminNav('categories', 'קטגוריות')}
     <div class="container" style="padding-top:28px;max-width:820px;padding-bottom:60px">
-      <p style="color:#64748b;margin-top:0">קטגוריה = תגית מנוהלת עם מיתוג (שם, צבע, תמונה, תיאור). משייכים דפים לקטגוריה במאפייני הדף בבונה, ומציגים אותה בכל דף עם בלוק "קטגוריה". הרשימה נשמרת כקובץ <code style="direction:ltr">content/categories.json</code> — <a href="/admin/storage">רואים אותו באחסון</a>.</p>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px">
+      <p class="lead">קטגוריה = תגית מנוהלת עם מיתוג (שם, צבע, תמונה, תיאור). משייכים דפים לקטגוריה במאפייני הדף בבונה, ומציגים אותה בכל דף עם בלוק "קטגוריה". הרשימה נשמרת כקובץ <code style="direction:ltr">content/categories.json</code> — <a href="/admin/storage">רואים אותו באחסון</a>.</p>
+      <div class="card tight">
         <div class="cat-head"><span>slug</span><span>שם תצוגה</span><span>צבע</span><span>תמונת רקע (URL)</span><span></span></div>
         <div id="cat-list"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">

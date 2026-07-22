@@ -29,19 +29,19 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
   const html = `
     ${adminNav('integrations', 'אינטגרציות')}
     <div class="container" style="padding-top:28px;max-width:620px;padding-bottom:60px">
-      <p style="color:#64748b;margin-top:0">חיבורים מוכנים — בלי לכתוב HTML. מודול המפה (Google Maps) נמצא בארגז הכלים של בונה הדפים.</p>
+      <p class="lead">חיבורים מוכנים — בלי לכתוב HTML. מודול המפה (Google Maps) נמצא בארגז הכלים של בונה הדפים.</p>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+      <section class="card">
         <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">💬 WhatsApp — כפתור צ׳אט צף</h3>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">כפתור ירוק צף שמופיע בכל דפי האתר הציבורי ופותח שיחת WhatsApp. לא מופיע בממשק הניהול.</p>
+        <p class="lead">כפתור ירוק צף שמופיע בכל דפי האתר הציבורי ופותח שיחת WhatsApp. לא מופיע בממשק הניהול.</p>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:14px">
           <input type="checkbox" id="wa-enabled" ${wa.enabled ? 'checked' : ''}> הפעל את הכפתור באתר
         </label>
-        <label style="display:block;font-weight:600;margin-bottom:4px">מספר טלפון (בפורמט בינלאומי)</label>
-        <input id="wa-phone" dir="ltr" value="${escapeAdmin(wa.phone || '')}" placeholder="972501234567" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">הודעה פותחת (לא חובה)</label>
-        <input id="wa-message" value="${escapeAdmin(wa.message || '')}" placeholder="היי! הגעתי מהאתר" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">מיקום הכפתור</label>
+        <label class="field-label">מספר טלפון (בפורמט בינלאומי)</label>
+        <input id="wa-phone" dir="ltr" value="${escapeAdmin(wa.phone || '')}" placeholder="972501234567" class="input mb">
+        <label class="field-label">הודעה פותחת (לא חובה)</label>
+        <input id="wa-message" value="${escapeAdmin(wa.message || '')}" placeholder="היי! הגעתי מהאתר" class="input mb">
+        <label class="field-label">מיקום הכפתור</label>
         <select id="wa-position" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px">
           <option value="start" ${wa.position !== 'end' ? 'selected' : ''}>התחלה (ימין בדף עברי)</option>
           <option value="end" ${wa.position === 'end' ? 'selected' : ''}>סוף (שמאל בדף עברי)</option>
@@ -53,38 +53,38 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
         <div style="font-size:0.8rem;color:#94a3b8;margin-top:10px">השינוי נכנס לתוקף באתר אחרי "בנה אתר" (או פרסום + בנייה מהבונה).</div>
       </section>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+      <section class="card">
         <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">🔎 חיפוש באתר</h3>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">כפתור חיפוש צף שמופיע בכל דפי האתר — מחפש בכותרות ובתקצירים של כל הדפים המפורסמים, בצד הלקוח, בלי שרת נוסף. אין ייצוא סטטי? החיפוש לא יעבוד עד ל"בנה אתר" הבא.</p>
+        <p class="lead">כפתור חיפוש צף שמופיע בכל דפי האתר — מחפש בכותרות ובתקצירים של כל הדפים המפורסמים, בצד הלקוח, בלי שרת נוסף. אין ייצוא סטטי? החיפוש לא יעבוד עד ל"בנה אתר" הבא.</p>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600">
           <input type="checkbox" id="srch-enabled" ${srch.enabled ? 'checked' : ''}> הפעל כפתור חיפוש באתר
         </label>
         <div style="font-size:0.8rem;color:#94a3b8;margin-top:10px">השינוי נכנס לתוקף באתר אחרי "בנה אתר" (או פרסום + בנייה מהבונה) — זה הרגע שבו אינדקס החיפוש נכתב.</div>
       </section>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+      <section class="card">
         <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">📧 התראת אימייל על פנייה חדשה</h3>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">כשמישהו שולח טופס באתר, תיבת הפניות כבר שומרת אותו — כאן אפשר גם לקבל התראה במייל ברגע שזה קורה, דרך שרת SMTP משלכם (Gmail, ספק אחסון, וכו׳). ללא הגדרה — הכל ממשיך לעבוד כרגיל, ההתראה פשוט לא נשלחת.</p>
+        <p class="lead">כשמישהו שולח טופס באתר, תיבת הפניות כבר שומרת אותו — כאן אפשר גם לקבל התראה במייל ברגע שזה קורה, דרך שרת SMTP משלכם (Gmail, ספק אחסון, וכו׳). ללא הגדרה — הכל ממשיך לעבוד כרגיל, ההתראה פשוט לא נשלחת.</p>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:14px">
           <input type="checkbox" id="nf-enabled" ${nf.enabled ? 'checked' : ''}> שלחו לי מייל על כל פנייה חדשה
         </label>
-        <label style="display:block;font-weight:600;margin-bottom:4px">אימייל לקבלת ההתראות</label>
-        <input id="nf-to" dir="ltr" value="${escapeAdmin(nf.to || '')}" placeholder="owner@example.com" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">אימייל שולח (אופציונלי — ברירת מחדל: שם המשתמש)</label>
-        <input id="nf-from" dir="ltr" value="${escapeAdmin(nf.from || '')}" placeholder="site@example.com" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
+        <label class="field-label">אימייל לקבלת ההתראות</label>
+        <input id="nf-to" dir="ltr" value="${escapeAdmin(nf.to || '')}" placeholder="owner@example.com" class="input mb">
+        <label class="field-label">אימייל שולח (אופציונלי — ברירת מחדל: שם המשתמש)</label>
+        <input id="nf-from" dir="ltr" value="${escapeAdmin(nf.from || '')}" placeholder="site@example.com" class="input mb">
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px">
           <div>
-            <label style="display:block;font-weight:600;margin-bottom:4px">שרת SMTP</label>
-            <input id="nf-host" dir="ltr" value="${escapeAdmin(nf.host || '')}" placeholder="smtp.gmail.com" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+            <label class="field-label">שרת SMTP</label>
+            <input id="nf-host" dir="ltr" value="${escapeAdmin(nf.host || '')}" placeholder="smtp.gmail.com" class="input">
           </div>
           <div>
-            <label style="display:block;font-weight:600;margin-bottom:4px">פורט</label>
-            <input id="nf-port" dir="ltr" type="number" value="${Number(nf.port) || 587}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+            <label class="field-label">פורט</label>
+            <input id="nf-port" dir="ltr" type="number" value="${Number(nf.port) || 587}" class="input">
           </div>
         </div>
-        <label style="display:block;font-weight:600;margin-bottom:4px">שם משתמש</label>
-        <input id="nf-user" dir="ltr" value="${escapeAdmin(nf.user || '')}" placeholder="user@example.com" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">סיסמה${nf.hasPass ? ' (מוגדרת — השאירו ריק כדי לשמור)' : ''}</label>
+        <label class="field-label">שם משתמש</label>
+        <input id="nf-user" dir="ltr" value="${escapeAdmin(nf.user || '')}" placeholder="user@example.com" class="input mb">
+        <label class="field-label">סיסמה${nf.hasPass ? ' (מוגדרת — השאירו ריק כדי לשמור)' : ''}</label>
         <input id="nf-pass" dir="ltr" type="password" placeholder="${nf.hasPass ? '••••••••' : ''}" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:14px">
           <input type="checkbox" id="nf-secure" ${nf.secure ? 'checked' : ''}> חיבור מאובטח (SSL — לרוב פורט 465)
@@ -96,36 +96,36 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
         </div>
       </section>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+      <section class="card">
         <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">📍 Google Maps — מודול מפה</h3>
         <p style="color:#64748b;font-size:0.9rem;margin:0">זמין בארגז הכלים של בונה הדפים (קטגוריית "שילובים"): כתובת + זום + גובה — בלי מפתח API ובלי קוד. <a href="/admin">פתח דף לעריכה</a> וגרור את מודול "מפה".</p>
       </section>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+      <section class="card">
         <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">📊 Google Analytics 4</h3>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">מזהה מדידה (Measurement ID) בפורמט <code dir="ltr">G-XXXXXXXXXX</code>. הוא ציבורי (לא סוד), ומוזרק לכל דפי האתר הציבורי — כך Google אוסף נתונים. השינוי נכנס לתוקף אחרי "בנה אתר".</p>
-        <label style="display:block;font-weight:600;margin-bottom:4px">Measurement ID</label>
+        <p class="lead">מזהה מדידה (Measurement ID) בפורמט <code dir="ltr">G-XXXXXXXXXX</code>. הוא ציבורי (לא סוד), ומוזרק לכל דפי האתר הציבורי — כך Google אוסף נתונים. השינוי נכנס לתוקף אחרי "בנה אתר".</p>
+        <label class="field-label">Measurement ID</label>
         <input id="ga4-id" dir="ltr" value="${escapeAdmin(ga4.measurementId || '')}" placeholder="G-XXXXXXXXXX" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
         <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:4px">להשארה ריק — לא מוזרק שום קוד מעקב.</div>
       </section>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+      <section class="card">
         <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">🔒 אנליטיקס פנימי (Tapuz)</h3>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">איסוף סטטיסטיקות פרטי, ללא צד שלישי, ללא שמירת כתובות IP. הצפייה בנתונים: <a href="/admin/analytics">לוח האנליטיקס</a>.</p>
+        <p class="lead">איסוף סטטיסטיקות פרטי, ללא צד שלישי, ללא שמירת כתובות IP. הצפייה בנתונים: <a href="/admin/analytics">לוח האנליטיקס</a>.</p>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:14px">
           <input type="checkbox" id="fp-enabled" ${fp.enabled ? 'checked' : ''}> הפעל איסוף פנימי
         </label>
-        <label style="display:block;font-weight:600;margin-bottom:4px">כתובת האספן (Collector URL)</label>
+        <label class="field-label">כתובת האספן (Collector URL)</label>
         <input id="fp-url" dir="ltr" value="${escapeAdmin(fp.collectorUrl || '/_tapuz/collect')}" placeholder="/_tapuz/collect" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:6px;box-sizing:border-box">
         <div class="chat-float-notice" style="margin-top:6px">שים לב: איסוף פנימי עובד רק כשהאתר מוגש על-ידי שרת Tapuz פעיל. אם ייצאת אתר סטטי ומארח אותו במקום אחר (Netlify / S3 / nginx), חובה להזין כאן כתובת <b>מלאה</b> לשרת Tapuz פעיל — אחרת האיסוף הפנימי לא ירשום דבר (Google Analytics ימשיך לעבוד). פרטים: <code dir="ltr">docs/analytics.md</code>.</div>
       </section>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px;opacity:0.8">
+      <section class="card" style="opacity:.8">
         <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">📥 קריאת נתוני GA בחזרה (GA Data API) <span style="font-size:0.7rem;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:999px">לא פעיל</span></h3>
         <p style="color:#64748b;font-size:0.9rem;margin:0 0 10px">שאיבת הסטטיסטיקות מ-Google אל תוך Tapuz דורשת סוד: קובץ JSON של Service Account, מזהה Property מספרי, והתקנת התלות <code dir="ltr">@google-analytics/data</code>. Tapuz לא מטפל בסוד הזה עבורך — יש להזין נתיב לקובץ ששמור <b>מחוץ</b> לתיקיית האתר/הייצוא. מדריך מלא: <code dir="ltr">docs/analytics.md</code>.</p>
-        <label style="display:block;font-weight:600;margin-bottom:4px">Property ID (מספרי)</label>
+        <label class="field-label">Property ID (מספרי)</label>
         <input id="gda-prop" dir="ltr" value="${escapeAdmin(gda.propertyId || '')}" placeholder="123456789" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">נתיב לקובץ Service Account JSON</label>
+        <label class="field-label">נתיב לקובץ Service Account JSON</label>
         <input id="gda-path" dir="ltr" value="${escapeAdmin(gda.serviceAccountPath || '')}" placeholder="/secure/ga-service-account.json" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box">
         <label style="display:flex;align-items:center;gap:8px;font-weight:600">
           <input type="checkbox" id="gda-enabled" ${gda.enabled ? 'checked' : ''}> אפשר קריאה בחזרה (ידרוש התקנת התלות)

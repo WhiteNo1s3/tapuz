@@ -118,11 +118,11 @@ router.get('/admin/inbox', (req, res) => {
     ${adminNav('inbox', 'תיבת פניות')}
     <div class="container" style="padding-top:30px;max-width:860px;padding-bottom:60px">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px">
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px">
+        <div class="card tight">
           <div style="font-size:0.75rem;color:#94a3b8;font-weight:600">שווי פתוח בצנרת</div>
           <div style="font-size:1.3rem;font-weight:800;color:#0f172a">₪${fmtMoney(openValue)}</div>
         </div>
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px">
+        <div class="card tight">
           <div style="font-size:0.75rem;color:#94a3b8;font-weight:600">נסגר בהצלחה</div>
           <div style="font-size:1.3rem;font-weight:800;color:#166534">₪${fmtMoney(wonValue)}</div>
         </div>

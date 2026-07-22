@@ -35,12 +35,12 @@ router.get('/admin/agent', requireAdmin, (req, res) => {
   const html = `
     ${adminNav('agent', 'גשר סוכן — Grokin')}
     <div class="container" style="padding-top:28px;max-width:900px">
-      <p style="color:#64748b;margin-top:0">
+      <p class="lead">
         טוקנים מאובטחים שמחברים סוכן חיצוני (תוסף הדפדפן) ל‑API של תפוזיאל —
         בלי סיסמה ובלי קובץ Cookie. הטוקן מוצג <b>פעם אחת בלבד</b> ביצירה.
         נקודת הקצה: <code dir="ltr">${escapeAdmin(origin)}/agent/v1</code>
       </p>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:18px">
+      <section class="card">
         <h3 style="margin-top:0">צור טוקן חדש</h3>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
           <input id="tok-name" placeholder="שם (למשל: Chrome של בן)" style="flex:1;min-width:200px;padding:9px;border:1px solid #e2e8f0;border-radius:8px">
@@ -52,7 +52,7 @@ router.get('/admin/agent', requireAdmin, (req, res) => {
           <code id="tok-secret" dir="ltr" style="display:block;word-break:break-all;background:#fff;padding:8px;border-radius:6px;border:1px solid #bbf7d0"></code>
         </div>
       </section>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+      <section class="card">
         <h3 style="margin-top:0">טוקנים פעילים</h3>
         <div id="tok-list" style="color:#64748b">טוען…</div>
       </section>
@@ -73,7 +73,7 @@ router.get('/admin/ai', (req, res) => {
         מעתיקים את המדריך, מבקשים דף, מדביקים את התשובה — והדף קם.
       </p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <section class="card">
           <h3 style="margin-top:0">1 · למדו את הבוט שלכם</h3>
           <p style="color:#64748b;font-size:.92rem">העתיקו את המדריך והדביקו בצ'אט של ה‑AI שלכם. הוא ילמד לכתוב דפי תפוזיאל.</p>
           <button type="button" id="copy-primer" class="btn">📋 העתק את המדריך</button>
@@ -95,7 +95,7 @@ router.get('/admin/ai', (req, res) => {
           </div>
           <div id="apply-result" style="display:none;margin-top:12px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;font-size:.95rem"></div>
         </section>
-        <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+        <section class="card">
           <h3 style="margin-top:0">3 · תצוגה מקדימה חיה</h3>
           <iframe id="preview-frame" title="תצוגה מקדימה"
             style="width:100%;height:520px;border:1px solid #e2e8f0;border-radius:8px;background:#fff"></iframe>

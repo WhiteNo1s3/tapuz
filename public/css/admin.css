@@ -38,16 +38,33 @@
   --warn: #b45309;
   --danger: #dc2626;
 
+  /* The section accent, pre-mixed at the strengths the components use. Every
+     screen inherits its family hue from ADMIN_NAV_GROUPS, so a single token
+     swap re-tints the whole surface — no per-screen hexes. */
+  --accent-ink: color-mix(in srgb, var(--accent) 78%, #0f172a);
+  --accent-line: color-mix(in srgb, var(--accent) 26%, var(--ws-border));
+  --accent-wash: color-mix(in srgb, var(--accent) 9%, #ffffff);
+  --accent-wash-2: color-mix(in srgb, var(--accent) 16%, #ffffff);
+
   /* shape & motion */
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
+  --r-xl: 20px;
   --dur: .16s;
   --dur-slow: .3s;
   --pop: cubic-bezier(.34, 1.56, .64, 1);
   --shadow-1: 0 1px 3px rgba(15, 23, 42, .08);
   --shadow-2: 0 8px 24px rgba(15, 23, 42, .10);
   --shadow-lift: 0 12px 32px rgba(15, 23, 42, .16);
+  /* Depth carried by the section hue rather than grey — the difference
+     between a surface that sits on the page and one that floats above it. */
+  --elev-1:
+    0 1px 2px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 4px 14px color-mix(in srgb, var(--accent) 8%, transparent);
+  --elev-2:
+    0 2px 6px color-mix(in srgb, var(--accent) 14%, transparent),
+    0 14px 34px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 /* ---- motion vocabulary ---- */
@@ -74,10 +91,16 @@
    ========================================================================== */
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif;
-  /* soft wash of the section color fading into the workspace */
+  /* The workspace is TINTED, not white: two soft pools of the section hue at
+     the top corners over a cool base. White cards then read as objects lifted
+     off a coloured ground instead of white shapes lost on a white page —
+     the earlier 7% single wash was invisible and everything flattened. */
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, var(--ws-bg)) 0%, var(--ws-bg) 280px);
+    radial-gradient(120% 58% at 86% -14%, color-mix(in srgb, var(--accent) 34%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 46% at 2% 2%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 56%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 17%, var(--ws-bg)), color-mix(in srgb, var(--accent) 10%, var(--ws-bg)));
   background-color: var(--ws-bg);
+  background-attachment: fixed;
   margin: 0;
   color: var(--ws-text);
 }
@@ -101,13 +124,19 @@ body {
 .section-title { font-weight: 700; color: var(--accent); }
 
 .topbar {
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--ws-border);
-  padding: 0 0 10px;
+  background: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.82));
+  backdrop-filter: blur(14px) saturate(1.4);
+  border-bottom: 1px solid var(--accent-line);
+  padding: 0 0 12px;
   position: sticky;
   top: 0;
   z-index: 200;
+}
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.7px;
+  color: var(--accent-ink);
 }
 .topbar .topbar-inner { padding-top: 10px; }
 .topbar-inner {
@@ -274,6 +303,317 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
 }
 
 /* ==========================================================================
+   Surface & content components (v1.54)
+
+   Before this the admin screens were built from ~650 inline style="" strings —
+   the same card, label, input and pill re-typed per route, each with its own
+   hardcoded hex. There was nothing to theme, so nothing carried colour and no
+   surface separated from any other. These are the shared parts; every one
+   inherits --accent, so a screen's family hue reaches its whole surface.
+   ========================================================================== */
+
+/* ---- card: the standard content surface ---- */
+.card {
+  position: relative;
+  background: var(--ws-panel);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-lg);
+  padding: 22px;
+  box-shadow: var(--elev-1);
+  transition: box-shadow var(--dur), border-color var(--dur), transform var(--dur);
+}
+.card { margin-bottom: 16px; }
+.card:last-child { margin-bottom: 0; }
+.card.tight { padding: 16px 18px; }
+.card.flush { padding: 0; overflow: hidden; }
+/* a card that reacts — for rows that are really links/targets */
+.card.interactive:hover {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--ws-border));
+  box-shadow: var(--elev-2);
+  transform: translateY(-1px);
+}
+/* the section hue as a top rail — for the one or two cards that lead a screen */
+.card.lead-card::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 3px;
+  border-start-start-radius: var(--r-lg);
+  border-start-end-radius: var(--r-lg);
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 25%, transparent));
+}
+
+/* ---- card heading ---- */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--accent-ink);
+}
+.card-head .ico {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--accent-wash-2);
+  font-size: 0.95rem;
+}
+.card-head .card-head-sub {
+  margin-inline-start: auto;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ws-muted);
+}
+
+/* ---- text roles ---- */
+.lead { margin: 0 0 16px; color: var(--ws-muted); font-size: 0.95rem; line-height: 1.6; }
+.muted { color: var(--ws-muted); }
+.faint { color: var(--ws-faint); font-size: 0.82rem; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
+
+/* ---- form fields ---- */
+.field { margin-bottom: 14px; }
+.field-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+  color: var(--ws-text-soft);
+}
+/* Looks are shared with every control inside a card; WIDTH is opt-in via
+   .input only — a blanket width:100% would stretch the compact fields that
+   sit inline inside a card row. */
+.card select, .card textarea, .card input[type="text"], .card input[type="url"],
+.card input[type="email"], .card input[type="password"], .card input[type="number"],
+.card input[type="search"], .input {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1.5px solid var(--ws-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--ws-panel);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 0.95rem;
+  transition: border-color var(--dur), box-shadow var(--dur), background var(--dur);
+}
+.input { width: 100%; }
+.card select:hover, .card textarea:hover, .input:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--ws-border-strong));
+}
+.card select:focus, .card textarea:focus, .input:focus,
+.card input[type="text"]:focus, .card input[type="url"]:focus, .card input[type="email"]:focus,
+.card input[type="password"]:focus, .card input[type="number"]:focus, .card input[type="search"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.input.compact { width: auto; }
+.input.mb { margin-bottom: 14px; }
+
+/* ---- pill: status, counts, tags ---- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.7;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--ws-faint) 18%, #ffffff);
+  color: var(--ws-text-soft);
+  border: 1px solid color-mix(in srgb, var(--ws-faint) 26%, #ffffff);
+}
+.pill.ok      { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.pill.warn    { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.pill.info    { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+.pill.danger  { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+.pill.accent  { background: var(--accent-wash-2); color: var(--accent-ink); border-color: var(--accent-line); }
+
+/* ---- notice: the result / warning banners every screen re-hand-rolled ---- */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 18px;
+  border-radius: var(--r-md);
+  margin-bottom: 16px;
+  border: 1px solid;
+  box-shadow: var(--shadow-1);
+  animation: rise-in var(--dur-slow) var(--pop);
+}
+.notice .notice-ico { font-size: 1.1rem; line-height: 1.4; flex: none; }
+.notice .notice-body { min-width: 0; flex: 1; }
+.notice strong, .notice .notice-title { display: block; font-weight: 700; margin-bottom: 3px; }
+.notice p, .notice .notice-text { margin: 0; font-size: 0.9rem; opacity: 0.92; }
+.notice .row { margin-top: 11px; }
+.notice.ok     { background: linear-gradient(140deg, #ecfdf5, #f0fdf4); border-color: #86efac; color: #14532d; }
+.notice.info   { background: linear-gradient(140deg, #eff6ff, #f5f9ff); border-color: #93c5fd; color: #1e3a8a; }
+.notice.warn   { background: linear-gradient(140deg, #fffbeb, #fefce8); border-color: #fcd34d; color: #78350f; }
+.notice.danger { background: linear-gradient(140deg, #fef2f2, #fff5f5); border-color: #fca5a5; color: #7f1d1d; }
+
+/* ---- row list: repeated records (pages, files, leads, members) ---- */
+.row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--ws-panel);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-md);
+  margin-bottom: 10px;
+  box-shadow: var(--elev-1);
+  transition: box-shadow var(--dur), border-color var(--dur), transform var(--dur);
+}
+.row-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--ws-border));
+  box-shadow: var(--elev-2);
+  transform: translateY(-1px);
+}
+.row-main { min-width: 0; }
+.row-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-weight: 700; flex-wrap: wrap; }
+.row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* the page serving '/' is the one row that should be findable at a glance */
+.row-item.is-home {
+  border-color: #93c5fd;
+  background: linear-gradient(150deg, #f5f9ff, var(--ws-panel) 55%);
+}
+
+/* every screen's content well — replaces the per-route padding-top string */
+.page-body { padding-top: 28px; padding-bottom: 48px; }
+
+/* a heading that leads a block of cards */
+.hub-heading {
+  margin: 0 0 12px;
+  font-size: 1.12rem;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--accent-ink);
+}
+.dash-split { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .dash-split { grid-template-columns: 1fr; } }
+
+/* ---- stat tile ---- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+/* --c lets a single tile carry its own meaning-colour (published green,
+   drafts orange, unread red); it falls back to the screen accent. */
+.stat {
+  --c: var(--accent);
+  position: relative;
+  padding: 18px 20px;
+  border-radius: var(--r-lg);
+  text-align: center;
+  background: linear-gradient(155deg, color-mix(in srgb, var(--c) 16%, #ffffff), var(--ws-panel) 68%);
+  border: 1px solid color-mix(in srgb, var(--c) 28%, #ffffff);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--c) 14%, transparent),
+              0 6px 18px color-mix(in srgb, var(--c) 10%, transparent);
+  transition: box-shadow var(--dur), transform var(--dur);
+}
+a > .stat:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--c) 20%, transparent),
+              0 14px 30px color-mix(in srgb, var(--c) 18%, transparent);
+}
+.stat-num {
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+  line-height: 1.12;
+  color: var(--c);
+}
+.stat-label { font-size: 0.84rem; font-weight: 600; color: var(--ws-muted); margin-top: 3px; }
+
+/* ---- hub card: a tool family as a destination ---- */
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+}
+.hub-card {
+  --g: var(--accent);
+  background: linear-gradient(170deg, color-mix(in srgb, var(--g) 8%, #ffffff), var(--ws-panel) 58%);
+  border: 1px solid color-mix(in srgb, var(--g) 22%, #ffffff);
+  border-top: 4px solid var(--g);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--g) 14%, transparent);
+  transition: box-shadow var(--dur), transform var(--dur);
+}
+.hub-card:hover {
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--g) 22%, transparent);
+  transform: translateY(-2px);
+}
+.hub-card-title { font-weight: 800; color: var(--g); font-size: 1.02rem; letter-spacing: -0.2px; }
+.hub-card-desc { color: var(--ws-muted); font-size: 0.82rem; margin: 4px 0 12px; }
+.hub-card-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.hub-card-links a {
+  text-decoration: none;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ws-text-soft);
+  background: color-mix(in srgb, var(--g) 8%, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--g) 20%, #ffffff);
+  border-radius: 999px;
+  padding: 5px 12px;
+  transition: background var(--dur), color var(--dur), transform var(--dur);
+}
+.hub-card-links a:hover { background: var(--g); color: #fff; transform: translateY(-1px); }
+
+/* ---- table ---- */
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th {
+  text-align: start;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--accent-line);
+  color: var(--accent-ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+}
+.tbl td { padding: 9px 10px; border-bottom: 1px solid var(--ws-border); }
+.tbl tbody tr { transition: background var(--dur); }
+.tbl tbody tr:hover { background: var(--accent-wash); }
+.tbl tbody tr:last-child td { border-bottom: none; }
+
+/* ---- layout helpers (the inline flex/grid strings these replace) ---- */
+.stack     { display: flex; flex-direction: column; gap: 16px; }
+.row       { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.row.end   { justify-content: flex-end; }
+.row.between { justify-content: space-between; }
+.grid-2    { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.page-head { margin: 22px 0 18px; }
+.page-head h1 {
+  margin: 0 0 6px;
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  color: var(--ws-text);
+}
+.empty-state {
+  padding: 44px 24px;
+  text-align: center;
+  color: var(--ws-muted);
+  background: var(--accent-wash);
+  border: 1.5px dashed var(--accent-line);
+  border-radius: var(--r-lg);
+}
+
+/* ==========================================================================
    Shared controls
    ========================================================================== */
 .btn {
@@ -281,7 +621,9 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
   align-items: center;
   gap: 8px;
   padding: 9px 16px;
-  background: var(--accent);
+  /* a lit edge rather than a flat fill — the accent reads as a surface with
+     light on it, which is most of what separates 2026 chrome from 2018 chrome */
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 88%, #ffffff), var(--accent) 62%);
   color: white;
   border: none;
   border-radius: 10px;
@@ -289,26 +631,34 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
   font-size: 0.95rem;
   text-decoration: none;
   cursor: pointer;
-  box-shadow: 0 1px 3px var(--accent-glow);
+  box-shadow: 0 1px 2px var(--accent-glow), 0 4px 12px color-mix(in srgb, var(--accent) 22%, transparent);
   transition: filter var(--dur), transform var(--dur), box-shadow var(--dur);
 }
 .btn:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: 0 2px 4px var(--accent-glow), 0 8px 22px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 .btn:active { transform: translateY(0); }
-.btn:not(.secondary) { background: var(--accent); border-color: var(--accent); }
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent), var(--elev-1);
+}
 .btn.secondary {
   background: var(--ws-panel);
   color: var(--ws-text-soft);
-  border: 1px solid var(--ws-border);
+  border: 1px solid var(--accent-line);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
-.btn.secondary:hover { background: var(--ws-well); color: var(--ws-text); }
+.btn.secondary:hover {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--ws-border));
+}
+.btn.danger { background: linear-gradient(160deg, #ef4444, #dc2626 62%); box-shadow: 0 4px 12px rgba(220,38,38,.24); }
 /* publish family — deliberate green, whatever the section accent is */
-.btn.publish, .btn[data-publish-main] { background: var(--ok-deep) !important; border-color: var(--ok-deep) !important; }
-.btn.publish-build { background: #14532d !important; border-color: #14532d !important; }
+.btn.publish, .btn[data-publish-main] { background: linear-gradient(160deg, #22a355, var(--ok-deep) 68%) !important; }
+.btn.publish-build { background: linear-gradient(160deg, #17703a, #14532d 68%) !important; }
 
 /* Dirty-state publish button:
    neutral/disabled when the page is clean, prominent when modified */

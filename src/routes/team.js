@@ -34,8 +34,8 @@ router.get('/admin/team', requireAdmin, (req, res) => {
   const html = `
     ${adminNav('team', 'צוות')}
     <div class="container" style="padding-top:28px;max-width:680px;padding-bottom:60px">
-      <p style="color:#64748b;margin-top:0">מנהל — גישה מלאה לכל ההגדרות, המפתחות ואישורי ה-SMTP. עורך — עובד על הדפים, המדיה, התפריטים והפניות, בלי גישה להגדרות רגישות.</p>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+      <p class="lead">מנהל — גישה מלאה לכל ההגדרות, המפתחות ואישורי ה-SMTP. עורך — עובד על הדפים, המדיה, התפריטים והפניות, בלי גישה להגדרות רגישות.</p>
+      <section class="card">
         <table style="width:100%;border-collapse:collapse;font-size:0.92rem">
           <thead><tr style="text-align:right;color:#64748b;font-size:0.8rem">
             <th style="padding:0 8px 8px">שם משתמש</th><th style="padding:0 8px 8px">תפקיד</th><th></th>
@@ -43,13 +43,13 @@ router.get('/admin/team', requireAdmin, (req, res) => {
           <tbody id="team-rows">${rows}</tbody>
         </table>
       </section>
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px">
+      <section class="card">
         <h3 style="margin-top:0">➕ הזמנת חבר צוות</h3>
-        <label style="display:block;font-weight:600;margin-bottom:4px">שם משתמש</label>
-        <input id="tm-user" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">סיסמה (8+ תווים)</label>
-        <input id="tm-pass" type="password" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px;box-sizing:border-box">
-        <label style="display:block;font-weight:600;margin-bottom:4px">תפקיד</label>
+        <label class="field-label">שם משתמש</label>
+        <input id="tm-user" class="input mb">
+        <label class="field-label">סיסמה (8+ תווים)</label>
+        <input id="tm-pass" type="password" class="input mb">
+        <label class="field-label">תפקיד</label>
         <select id="tm-role" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:14px">
           <option value="editor" selected>עורך</option>
           <option value="admin">מנהל</option>

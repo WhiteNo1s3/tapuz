@@ -49,11 +49,11 @@ router.get('/admin/new', (req, res) => {
       <form method="POST" action="/admin/create">
         <div style="margin-bottom:14px">
           <label style="display:block;margin-bottom:4px;font-weight:600">כותרת</label>
-          <input id="np-title" name="title" required autofocus style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <input id="np-title" name="title" required autofocus class="input">
         </div>
         <div style="margin-bottom:20px">
           <label style="display:block;margin-bottom:4px;font-weight:600">כתובת הדף (slug)</label>
-          <input id="np-slug" name="slug" placeholder="נוצר אוטומטית מהכותרת" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <input id="np-slug" name="slug" placeholder="נוצר אוטומטית מהכותרת" class="input">
           <div style="font-size:0.8rem;color:#64748b;margin-top:4px">נוצר אוטומטית מהכותרת — אפשר לשנות, לא חובה להבין ב-slug</div>
         </div>
         <label style="display:block;margin-bottom:8px;font-weight:600">מתחילים מ…</label>
@@ -61,13 +61,13 @@ router.get('/admin/new', (req, res) => {
         <button type="submit" class="btn">צור דף והתחל לערוך</button>
       </form>
 
-      <details style="margin-top:26px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:6px 16px 16px">
+      <details class="card" style="margin-top:26px;padding:6px 16px 16px">
         <summary style="cursor:pointer;font-weight:600;padding:10px 0">🔁 יש לכם כבר דף? ייבאו אותו (מכתובת או מ‑HTML)</summary>
         <p style="color:#64748b;font-size:.88rem;margin:6px 0 12px">
           תפוזיאל יפרק את הדף למודולים שאפשר לערוך בבונה. מה שלא ממופה נשמר כ‑HTML זמני — שום דבר לא הולך לאיבוד.
         </p>
         <label style="display:block;margin-bottom:4px;font-weight:600;font-size:.9rem">כתובת דף (URL)</label>
-        <input id="imp-url" dir="ltr" placeholder="https://example.com/page" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+        <input id="imp-url" dir="ltr" placeholder="https://example.com/page" class="input">
         <div style="text-align:center;color:#94a3b8;font-size:.8rem;margin:8px 0">— או —</div>
         <label style="display:block;margin-bottom:4px;font-weight:600;font-size:.9rem">הדביקו HTML</label>
         <textarea id="imp-html" dir="ltr" rows="5" placeholder="<html>…</html>" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:.82rem"></textarea>
@@ -363,7 +363,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
     <div id="revisions-modal" class="modal" onclick="if (event.target.id === 'revisions-modal') TapuzBuilder.closeRevisions()">
       <div class="modal-content" style="max-width:560px" onclick="event.stopPropagation()">
         <h3 style="margin-top:0">היסטוריית גרסאות</h3>
-        <p style="color:#64748b;font-size:0.9rem;margin-top:0">שמירה אוטומטית בכל שמירה/פרסום. שחזור מעתיק לטיוטה בלבד.</p>
+        <p class="lead">שמירה אוטומטית בכל שמירה/פרסום. שחזור מעתיק לטיוטה בלבד.</p>
         <div id="revisions-list" style="max-height:420px;overflow:auto"></div>
         <div style="margin-top:14px;text-align:left">
           <button type="button" class="btn secondary" onclick="TapuzBuilder.closeRevisions()">סגור</button>

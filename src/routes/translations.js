@@ -51,33 +51,33 @@ router.get('/admin/translations', (req, res) => {
   const html = `
     ${adminNav('translations', 'תרגומים')}
     <div class="container" style="padding-top:28px;max-width:760px;padding-bottom:60px">
-      <p style="color:#64748b;margin-top:0">קשרו שני דפים קיימים כתרגום זה של זה — כמו "אודות" ו-"About". קישור יוצר החלפת שפה אוטומטית וזוגות ‎hreflang‎ ל-SEO. אין שדה שפה גלובלי — כל דף מסמן את השפה שלו ברגע שהוא נכנס לקבוצה.</p>
+      <p class="lead">קשרו שני דפים קיימים כתרגום זה של זה — כמו "אודות" ו-"About". קישור יוצר החלפת שפה אוטומטית וזוגות ‎hreflang‎ ל-SEO. אין שדה שפה גלובלי — כל דף מסמן את השפה שלו ברגע שהוא נכנס לקבוצה.</p>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;margin-bottom:18px">
+      <section class="card">
         <h3 style="margin-top:0">קבוצות תרגום קיימות</h3>
         ${groupRows}
       </section>
 
-      <section style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px">
+      <section class="card">
         <h3 style="margin-top:0">➕ קשר שני דפים</h3>
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">
           <div>
-            <label style="display:block;font-weight:600;margin-bottom:4px">דף א׳</label>
-            <select id="tr-page-a" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">${pageOptions}</select>
+            <label class="field-label">דף א׳</label>
+            <select id="tr-page-a" class="input">${pageOptions}</select>
           </div>
           <div>
-            <label style="display:block;font-weight:600;margin-bottom:4px">שפה</label>
-            <input id="tr-lang-a" dir="ltr" placeholder="he" maxlength="8" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+            <label class="field-label">שפה</label>
+            <input id="tr-lang-a" dir="ltr" placeholder="he" maxlength="8" class="input">
           </div>
         </div>
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px">
           <div>
-            <label style="display:block;font-weight:600;margin-bottom:4px">דף ב׳</label>
-            <select id="tr-page-b" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">${pageOptions}</select>
+            <label class="field-label">דף ב׳</label>
+            <select id="tr-page-b" class="input">${pageOptions}</select>
           </div>
           <div>
-            <label style="display:block;font-weight:600;margin-bottom:4px">שפה</label>
-            <input id="tr-lang-b" dir="ltr" placeholder="en" maxlength="8" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box">
+            <label class="field-label">שפה</label>
+            <input id="tr-lang-b" dir="ltr" placeholder="en" maxlength="8" class="input">
           </div>
         </div>
         <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
