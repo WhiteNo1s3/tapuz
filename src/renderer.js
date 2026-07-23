@@ -97,9 +97,25 @@ function renderInlineMarks(raw) {
   return out;
 }
 
+/**
+ * The block's DOM anchor (v1.64). The .pzn compiler has always emitted the
+ * block's `id=""` straight into the DOM (attrsExtra) — on the file side an id
+ * IS an anchor. Here the JSON renderer says the same thing: any HUMAN id
+ * (`tools`, `hero1`) becomes the DOM id that `#tools` links and menu anchors
+ * point at, while machine ids (`heading_tpl…_3`, `hero_1783…_736` — always
+ * `type_`-prefixed) stay identity-only and out of the HTML. `data.id` is the
+ * legacy spelling (pre-adoption saves) and still wins when present.
+ */
+function anchorId(block) {
+  const v = block.data?.id || block.id;
+  if (!v) return '';
+  return String(v).indexOf(block.type + '_') === 0 ? '' : v;
+}
+
 function renderBlock(block, direction = 'rtl') {
   const extraClass = block.data?.className ? ` ${escapeHtml(block.data.className)}` : '';
-  const extraId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
+  const anchor = anchorId(block);
+  const extraId = anchor ? ` id="${escapeHtml(anchor)}"` : '';
   const style = styleAttr(block.data);
   const extra = extraClass + extraId + style;
 
@@ -134,7 +150,7 @@ function renderBlock(block, direction = 'rtl') {
       if (ANIMATE_VALUES.has(block.data.animate)) clsList.push(`anim-${block.data.animate}`);
       if (block.data.className) clsList.push(escapeHtml(block.data.className));
       const clsAttr = clsList.length ? ` class="${clsList.join(' ')}"` : '';
-      const hId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
+      const hId = extraId;
       return `<h${level}${hId}${clsAttr}${style} dir="${direction}">${renderInlineMarks(block.data.text || '')}</h${level}>`;
     }
     case 'text': {
@@ -147,7 +163,7 @@ function renderBlock(block, direction = 'rtl') {
       if (ANIMATE_VALUES.has(d.animate)) classes.push(`anim-${d.animate}`);
       if (d.className) classes.push(escapeHtml(d.className));
       const classAttr = ` class="${escapeHtml(classes.join(' '))}"`;
-      const idAttr = d.id ? ` id="${escapeHtml(d.id)}"` : '';
+      const idAttr = extraId;
       const paras = String(d.content || '').split(/\n\n+/);
       const inner = paras
         .map((p) => `<p dir="${direction}">${renderInlineMarks(p).replace(/\n/g, '<br>')}</p>`)
@@ -158,7 +174,7 @@ function renderBlock(block, direction = 'rtl') {
       const { src = '', alt = '', caption = '', width = 'full' } = block.data || {};
       const wClass = width && width !== 'full' ? ` img-w-${escapeHtml(width)}` : '';
       const figClass = ` class="bent-image${wClass}${extraClass}"`;
-      const figId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
+      const figId = extraId;
       const imgTitle = block.data?.title ? ` title="${escapeHtml(block.data.title)}"` : '';
       let h = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${imgTitle} loading="lazy">`;
       if (caption) h += `<figcaption>${escapeHtml(caption)}</figcaption>`;
@@ -167,7 +183,7 @@ function renderBlock(block, direction = 'rtl') {
     case 'button': {
       const { text = '', url = '#', variant = 'primary' } = block.data;
       const btnClass = ` class="btn btn-${escapeHtml(variant)}${extraClass}"`;
-      const btnId = block.data?.id ? ` id="${escapeHtml(block.data.id)}"` : '';
+      const btnId = extraId;
       const seo = require('./pzn/link-attrs').linkSeoAttrs(block.data || {});
       return `<a${btnId}${btnClass}${style} href="${escapeHtml(safeHref(url))}"${seo} dir="${direction}">${escapeHtml(text)}</a>`;
     }

@@ -54,6 +54,39 @@ function parsePageRow(row) {
   };
 }
 
+/**
+ * An explicit anchor IS the block's identity (v1.64).
+ *
+ * Two id worlds used to coexist: the machine block id (`heading_tpl…_3`) owned
+ * the .pzn `id=""` attribute, while the human anchor (`data.id: "tools"` — what
+ * `#tools` links and the explore menu point at) lived only in the JSON model.
+ * The bridge never carried data.id, so every save-through-file silently killed
+ * the page's anchors — exactly how the showcase's in-page nav died in the DB
+ * rebuild. On the pzn side there was never a distinction: `id=""` compiles
+ * straight to the DOM id (attrsExtra), i.e. the attribute already IS the
+ * anchor. This walk makes the model agree: at save, a block that declares an
+ * anchor adopts it as its id, so DB, .pzn and rendered DOM all say "tools".
+ * data.id is then CLEARED — one field, one home: keeping both would need the
+ * bridge to reconstruct data.id from the file, which is unknowable (a file id
+ * can't say whether it was born in data.id or typed straight into the file)
+ * and broke the roundtrip for every hand-authored page that never had one.
+ */
+function adoptAnchorIds(list) {
+  if (!Array.isArray(list)) return list;
+  for (const b of list) {
+    if (!b || typeof b !== 'object') continue;
+    if (b.data && typeof b.data.id === 'string' && b.data.id.trim()) {
+      b.id = b.data.id.trim();
+      delete b.data.id;
+    }
+    if (b.data && Array.isArray(b.data.blocks)) adoptAnchorIds(b.data.blocks);
+    if (b.data && Array.isArray(b.data.columns)) {
+      for (const col of b.data.columns) adoptAnchorIds(col && col.blocks);
+    }
+  }
+  return list;
+}
+
 function createPage({
   title,
   slug,
@@ -65,6 +98,7 @@ function createPage({
   status = 'draft'
 }) {
   const full_path = generateFullPath(path_prefix, slug);
+  adoptAnchorIds(blocks);
   const blocksJson = JSON.stringify(blocks);
   // New pages: draft holds content; published blocks only if status is published
   const publishedJson = status === 'published' ? blocksJson : '[]';
@@ -153,6 +187,7 @@ function updatePage(full_path, updates = {}) {
   if (updates.draft_blocks !== undefined) {
     draftBlocks = updates.draft_blocks;
   }
+  adoptAnchorIds(draftBlocks);
 
   let publishedBlocks = existing.blocks;
   let status = updates.status !== undefined ? updates.status : existing.status;

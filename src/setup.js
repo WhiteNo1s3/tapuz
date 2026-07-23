@@ -207,4 +207,4 @@ function runSetup(body = {}) {
   return { pages: wantedPages, menu: items.length };
 }
 
-module.exports = { runSetup, needsSetup, PAGE_LABELS };
+module.exports = { runSetup, needsSetup, seedDemoAssets, PAGE_LABELS };

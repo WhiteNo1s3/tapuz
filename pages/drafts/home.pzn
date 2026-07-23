@@ -6,10 +6,102 @@
     <meta name="bent-slug" content="home" />
   </head>
   <body>
-    <bent-hero id="hero_1783729929555_736">
-      <bent-heading level="1">Tapuziel Demo</bent-heading>
-      <bent-text>CMS in Hebrew</bent-text>
+    <bent-hero id="hero_tplmrwujseg_1" height="lg">
+      <bent-heading level="1">WhiteNo1se</bent-heading>
+      <bent-text>האתר שלכם כבר חי. כל מה שאתם רואים כאן הוא מודול אמיתי — גררו, ערכו או מחקו. זה שלכם.</bent-text>
+      <bent-button href="#tools">התחילו לערוך</bent-button>
     </bent-hero>
-    <bent-text id="text_1783729929555_406">זהו דף הבית החדש שלך. לחץ &quot;ערוך&quot; כדי לשנות הכל.</bent-text>
+    <bent-marquee id="marquee_tplmrwujseg_2">גררו ✦ ערכו ✦ מחקו ✦ פרסמו ✦ הכל בעברית ✦ הכל שלכם ✦</bent-marquee>
+    <bent-heading id="tools" level="2">👋 ברוכים הבאים — הנה מה שיש בארגז</bent-heading>
+    <bent-text id="text_tplmrwujseg_4">
+      כל קטע בדף הזה הוא דוגמה חיה למודול מארגז הכלים. אהבתם? השאירו. לא? לחצו על הקטע ואז על ✕ והוא נעלם.
+      
+      רוצים להתחיל מדף נקי? צרו @B{דף חדש} ובחרו בתבנית &quot;ריק לגמרי&quot;.
+    </bent-text>
+    <bent-features id="features_tplmrwujseg_5" columns="3">
+      <bent-feature icon="🧱" title="בונה ויזואלי">גוררים מודול, משחררים איפה שרוצים — הדף נבנה מול העיניים</bent-feature>
+      <bent-feature icon="🇮🇱" title="עברית מלאה">RTL אמיתי מהיסוד, לא תוסף שהודבק בסוף</bent-feature>
+      <bent-feature icon="📂" title="הקבצים שלכם">כל דף הוא קובץ .pzn אמיתי על הדיסק — אתם הבעלים</bent-feature>
+    </bent-features>
+    <bent-stats id="stats_tplmrwujseg_6" columns="4">
+      <bent-stat label="מודולים בארגז" value="40+" />
+      <bent-stat label="עברית ו-RTL" value="100%" />
+      <bent-stat label="תוספים להתקין" value="0" />
+      <bent-stat label="דפים שתבנו" value="∞" />
+    </bent-stats>
+    <bent-heading id="heading_tplmrwujseg_7" level="2">📦 מיכלים — הדף מורכב מקופסאות</bent-heading>
+    <bent-section id="section_tplmrwujseg_11" size="md">
+      <bent-heading id="heading_tplmrwujseg_8" level="3">זהו מיכל</bent-heading>
+      <bent-text id="text_tplmrwujseg_9">
+        מיכל מחזיק מודולים אחרים. גררו לתוכו כל דבר מארגז הכלים — טקסט, תמונה, אפילו מיכל נוסף.
+        
+        רוצים שני טורים? יש מודול @B{עמודות} בדיוק לזה.
+      </bent-text>
+      <bent-button id="button_tplmrwujseg_10" href="#" rel="" target="_self" title="" variant="primary">כפתור בתוך מיכל</bent-button>
+    </bent-section>
+    <bent-columns id="columns_tplmrwujseg_15" collapse="md" gap="md" valign="top">
+      <bent-col>
+        <bent-heading id="heading_tplmrwujseg_12" level="3">טור ימין</bent-heading>
+        <bent-text id="text_tplmrwujseg_13">שני טורים, כל אחד עם התוכן שלו. במסך צר הם נערמים אוטומטית — לא צריך לעשות כלום.</bent-text>
+      </bent-col>
+      <bent-col>
+        <bent-image id="image_tplmrwujseg_14" alt="דוגמה" caption="תמונה בתוך טור" src="/demo/tile-2.svg" title="" width="full" />
+      </bent-col>
+    </bent-columns>
+    <bent-heading id="heading_tplmrwujseg_16" level="2">🖼️ מדיה — גלריה, קרוסלה, כרטיסים</bent-heading>
+    <bent-text id="text_tplmrwujseg_17">התמונות כאן הן ממלאי מקום. לחצו על גלריה ← @B{בחר מהספרייה} כדי לשים את התמונות שלכם.</bent-text>
+    <bent-gallery id="gallery_tplmrwujseg_18" columns="3">
+      <bent-image alt="תמונת דוגמה 1" src="/demo/tile-1.svg" />
+      <bent-image alt="תמונת דוגמה 2" src="/demo/tile-2.svg" />
+      <bent-image alt="תמונת דוגמה 3" src="/demo/tile-3.svg" />
+      <bent-image alt="תמונת דוגמה 4" src="/demo/tile-4.svg" />
+      <bent-image alt="תמונת דוגמה 5" src="/demo/tile-5.svg" />
+      <bent-image alt="תמונת דוגמה 6" src="/demo/tile-6.svg" />
+    </bent-gallery>
+    <bent-carousel id="carousel_tplmrwujseg_19" height="md" peek="true">
+      <bent-slide excerpt="גלילה חלקה, עובדת גם בנייד." href="#" image="/demo/tile-7.svg" tag="גררו הצידה" title="קרוסלה בלי שורת JavaScript" />
+      <bent-slide excerpt="החליפו בשתי לחיצות." href="#" image="/demo/tile-4.svg" tag="תמונות" title="כל תמונה מהספרייה שלכם" />
+      <bent-slide excerpt="ערכו ישירות על הדף." href="#" image="/demo/tile-6.svg" tag="טקסט" title="כותרת ותקציר לכל שקופית" />
+    </bent-carousel>
+    <bent-cards id="cards_tplmrwujseg_20">
+      <bent-mediacard excerpt="דפים ← + דף חדש ← בוחרים תבנית. זהו." href="/admin" image="/demo/tile-3.svg" tag="מדריך" title="איך מוסיפים דף" />
+      <bent-mediacard excerpt="עיצוב ← ערכת נושא ← בוחרים מראה." href="/admin/theme" image="/demo/tile-5.svg" tag="עיצוב" title="איך משנים צבעים" />
+      <bent-mediacard excerpt="עיצוב ← תפריטים ← גוררים פריטים." href="/admin/menus" image="/demo/tile-8.svg" tag="תפריט" title="איך מסדרים תפריט" />
+    </bent-cards>
+    <bent-heading id="heading_tplmrwujseg_21" level="2">🧭 תפריטים — יש לכם יותר מאחד</bent-heading>
+    <bent-section id="section_tplmrwujseg_24" size="md">
+      <bent-text id="text_tplmrwujseg_22">
+        התפריט @B{הראשי} כבר יושב בראש האתר — הוא נבחר אוטומטית בהתקנה. אבל תפריט הוא פשוט רשימה, ואפשר להחזיק כמה שרוצים.
+        
+        למטה יושב תפריט @B{שני} עם פריטים אחרים לגמרי. רוצים שהוא יהיה זה שבראש? עיצוב ← @B{תפריטים} ← משנים איזה תפריט יושב במיקום &quot;ראשי&quot;.
+      </bent-text>
+      <bent-nav id="nav_tplmrwujseg_23" align="center" background="" color="">
+        <bent-navitem href="#" label="✨ מה חדש" />
+        <bent-navitem href="#" label="📚 מדריכים" />
+        <bent-navitem href="#faq" label="💬 שאלות נפוצות" />
+        <bent-navitem href="#cta" label="📬 דברו איתנו" />
+      </bent-nav>
+    </bent-section>
+    <bent-heading id="heading_tplmrwujseg_25" level="2">📰 טקסט נע — מבזקים ורצועות</bent-heading>
+    <bent-ticker id="ticker_tplmrwujseg_26" background="" color="" label="מבזק" speed="md">
+      <bent-tickeritem href="#" text="הדף הזה נוצר אוטומטית כשהאתר נולד" />
+      <bent-tickeritem href="#" text="כל מודול כאן ניתן לעריכה או למחיקה" />
+      <bent-tickeritem href="/admin" text="רוצים להתחיל מאפס? צרו דף חדש ריק" />
+    </bent-ticker>
+    <bent-newspop id="newspop_tplmrwujseg_27" label="עדכונים">
+      <bent-newspopitem href="#" text="האתר שלכם עלה לאוויר" time="09:00" />
+      <bent-newspopitem href="#" text="הדף הזה מחכה שתערכו אותו" time="09:01" />
+      <bent-newspopitem href="#" text="התפריט הראשי כבר מסודר" time="09:02" />
+    </bent-newspop>
+    <bent-heading id="faq" level="2">💬 שאלות שכולם שואלים</bent-heading>
+    <bent-faq id="faq_tplmrwujseg_29">
+      <bent-qa question="איך אני מוחק את הדוגמאות האלה?">לוחצים על הקטע בבונה ואז על ✕ בסרגל שנפתח מעליו. אפשר גם למחוק את כל הדף ולהתחיל מחדש.</bent-qa>
+      <bent-qa question="אפשר להשתמש בדף הזה כדף הבית שלי?">בהחלט. החליפו את הטקסטים והתמונות בשלכם — המבנה כבר עובד.</bent-qa>
+      <bent-qa question="איפה משנים צבעים וגופנים?">עיצוב ← ערכת נושא. בוחרים מראה מוכן או מכווננים ידנית, עם תצוגה חיה.</bent-qa>
+      <bent-qa question="איך מוסיפים דף נוסף?">דפים ← + דף חדש. בוחרים תבנית (דף נחיתה, מאמר, צור קשר או ריק) ומתחילים.</bent-qa>
+    </bent-faq>
+    <bent-testimonial id="testimonial_tplmrwujseg_30" author="המשתמש הבא" role="זה יכול להיות אתם">בניתי אתר שלם בערב אחד, בעברית, בלי לגעת בשורת קוד.</bent-testimonial>
+    <bent-cta id="cta" buttontext="לעריכת הדף" title="מוכנים להפוך את זה לאתר שלכם?" tone="brand" url="/admin" variant="primary">החליפו את הטקסטים, שימו את התמונות שלכם, ומחקו כל מה שלא צריך.</bent-cta>
+    <bent-banner id="banner_tplmrwujseg_32" tone="brand">טיפ אחרון: כל מה שבדף הזה נמחק בלחיצה אחת — אל תפחדו להתנסות.</bent-banner>
   </body>
 </html>

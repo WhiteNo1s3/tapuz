@@ -3430,7 +3430,11 @@
         '</select>'
       ) +
       field('מחלקת CSS (מתקדם מאוד)', '<input data-key="className" value="' + escAttr(d.className || '') + '" placeholder="my-class" dir="ltr">') +
-      field('מזהה ID', '<input data-key="id" value="' + escAttr(d.id || '') + '" dir="ltr">') +
+      // the anchor's saved home is block.id (v1.64: an explicit anchor IS the
+      // block's identity); d.id only holds an edit not yet saved. Machine ids
+      // (type_-prefixed) are identity-only noise and never shown as an anchor.
+      field('מזהה ID', '<input data-key="id" value="' + escAttr(d.id ||
+        (block.id && block.id.indexOf(block.type + '_') !== 0 ? block.id : '')) + '" dir="ltr">') +
       '</details>';
 
     html +=
