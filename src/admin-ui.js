@@ -153,13 +153,19 @@ function adminNav(active, sectionTitle, actionsHtml = '') {
             🔍 <kbd style="font:600 .72rem ui-monospace,monospace;background:rgba(148,163,184,.18);border-radius:4px;padding:1px 5px">Ctrl K</kbd>
           </button>
           <a href="/" target="_blank" class="btn secondary" style="padding:7px 12px">צפה באתר</a>
-          ${actionsHtml}
+          <span class="topbar-actions">${actionsHtml}</span>
           <form method="POST" action="${auth.getAdminBase()}/logout" style="margin:0">
             <button type="submit" class="btn secondary" style="padding:7px 12px" title="התנתק">התנתק</button>
           </form>
         </div>
       </div>
-    </div>`;
+    </div>
+    <div class="nav-progress" id="nav-progress" aria-hidden="true"></div>
+    <main id="admin-main" class="admin-main" data-admin-main>`;
+  // NB: the <main> is left OPEN on purpose — layout() closes it once the page
+  // content has been concatenated after this nav. The shell (sidebar + topbar)
+  // stays OUTSIDE it, so client-side navigation swaps only #admin-main and the
+  // fixed rail never repaints — no jump. See public/admin-nav.js.
 }
 
 // ── Command palette boot (v0.88): every nav item + the everyday actions,
@@ -202,6 +208,15 @@ function layout(content, title = 'Tapuz', accent = '#f97316', opts = {}) {
   const palette = opts.bare ? '' : `
   <script>window.__TAPUZ_NAV__ = ${paletteBootJson()};</script>
   <script src="/admin-palette.js" defer></script>`;
+  // adminNav() opens <main id="admin-main"> and never closes it; close it here
+  // when the sentinel is present. Pages that skip adminNav (auth, the builder,
+  // the wizard) never opened one, so nothing is closed for them. The
+  // navigation layer (admin-nav.js) swaps ONLY #admin-main between sidebar
+  // screens, so the fixed rail never repaints — Ben's "site jumps" is a full
+  // reload of a fixed shell; this removes the reload.
+  const hasMain = content.includes('data-admin-main');
+  const closeMain = hasMain ? '</main>' : '';
+  const nav = hasMain ? '\n  <script src="/admin-nav.js" defer></script>' : '';
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -213,7 +228,7 @@ function layout(content, title = 'Tapuz', accent = '#f97316', opts = {}) {
   <style>:root { --admin-accent: ${accent}; }</style>
 </head>
 <body${opts.bodyClass ? ` class="${opts.bodyClass}"` : ''}>
-  ${content}${palette}
+  ${content}${closeMain}${palette}${nav}
 </body>
 </html>`;
 }

@@ -133,6 +133,15 @@ body.builder-screen .canvas ::selection {
 /* ==========================================================================
    Base chrome (light workspace)
    ========================================================================== */
+/* Reserve the scrollbar gutter ALWAYS. The sidebar is position:fixed to the
+   inline-start edge; when a short page has no vertical scrollbar and the next
+   has one, the viewport width changes and — in RTL — the fixed rail slides by
+   the scrollbar's width. On a full reload that read as part of the flash; with
+   client navigation the shell is otherwise dead-steady, so this ~15px shift
+   became the only thing that still moved. A stable gutter freezes it.
+   admin.css loads on admin screens only, so the public site is untouched. */
+html { scrollbar-gutter: stable; }
+
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif;
   /* The workspace is TINTED, not white: two soft pools of the section hue at
@@ -182,6 +191,43 @@ body {
   letter-spacing: -0.7px;
   color: var(--accent-ink);
 }
+/* ---- client navigation (admin-nav.js): swap content, keep the shell ----
+   A sidebar click swaps only #admin-main; the fixed rail never repaints, so
+   the "jump" of a full reload is gone. The only feedback needed is a slim top
+   bar while the next screen is fetched, and a one-beat settle when it lands. */
+.nav-progress {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  height: 3px;
+  z-index: 400;
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: inline-start;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #ffffff));
+  transition: transform .18s ease, opacity .18s ease;
+}
+body.nav-loading .nav-progress {
+  opacity: 1;
+  /* indeterminate: rush to most of the way, then wait for the swap to finish it */
+  animation: nav-progress-fill 1.2s ease-out forwards;
+}
+@keyframes nav-progress-fill {
+  0%   { transform: scaleX(0); }
+  60%  { transform: scaleX(.7); }
+  100% { transform: scaleX(.92); }
+}
+body.nav-loading #admin-main { opacity: .6; transition: opacity .12s; }
+.admin-main { animation: nav-settle .22s var(--pop); }
+@keyframes nav-settle {
+  from { opacity: .55; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-main { animation: none; }
+  body.nav-loading .nav-progress { animation: none; transform: scaleX(.9); }
+}
+
 .topbar .topbar-inner { padding-top: 10px; }
 .topbar-inner {
   display: flex;

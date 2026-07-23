@@ -9,6 +9,13 @@
 // fires an 'input' event so live previews react.
 (function () {
   'use strict';
+  // The client navigation layer (admin-nav.js) re-runs page scripts when it
+  // swaps content, and this file binds a document-level click listener. Guard
+  // it so a second run can't stack a second listener — which is exactly the
+  // "two pickers open at once" bug from v1.50, this time via navigation.
+  if (window.__tapuzMediaPickerInit) return;
+  window.__tapuzMediaPickerInit = true;
+
   var overlay = null;
   var currentCb = null;
   var folder = '';
