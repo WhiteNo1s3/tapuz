@@ -1,10 +1,55 @@
-# Where Tapuz stands — the parity map (v1.41)
+# Where Tapuz stands — the parity map (v1.67)
 
 The goal: **the easiest CMS of the AI era** — end-to-end, with or without an
 API key, better than what an Israeli SMB gets from WordPress, Drupal, Joomla,
 or Camilyo/Mobeart-style site builders. This map is the honest scoreboard:
 what we already do better, where we're at parity, and the gaps that feed the
 module/feature hunt. Update it every version batch.
+
+## Builder.io — the named competitor (benchmarked 2026-07)
+
+Ben's goal names builder.io as competition #1, so it gets its own honest
+section, grounded in what they actually ship in mid-2026 (not what their
+name suggests). **Builder.io is a visual development platform for dev
+teams**: Fusion (an AI agent that edits a visual canvas, writes real code
+against your design system, and opens PRs), Figma-to-code, a headless CMS,
+and A/B testing — priced by **seats + metered "agent credits"** (free ≈75
+credits/mo; Pro ≈$19/user/mo + $25 per 500 extra credits; Enterprise custom).
+It presumes you HAVE a frontend codebase, a design system, and a Git review
+loop.
+
+**Where they win — and we don't chase (different customer):**
+
+- **Fusion-class codegen into YOUR repo** — design-to-PR against an existing
+  React/Vue codebase. Our customer has no repo; Tapuz IS the site.
+- **Figma-to-code** — no Figma story in Tapuz today (see hunt list).
+- **A/B testing** — real experimentation engine; we have first-party
+  analytics + conversions but no split testing (hunt list).
+- **Enterprise headless delivery** — multi-framework SDKs, CDN-edge content
+  API. Deliberately not our fight at alpha.
+
+**Where we win — the actual wedge:**
+
+| Axis | Tapuz | builder.io |
+|---|---|---|
+| **What you get** | a complete, running site + CMS + CRM inbox, self-hosted, one `node src/server.js` | a platform that plugs into the site your devs must already have |
+| **AI cost model** | keyless tier (BYOT roleplay / extension / paste) = **no meter, ever**; BYOK = your key, your rate | seats + metered agent credits — the better it works, the more you pay |
+| **Who can drive it** | a business owner, walked through by the builder itself (v1.66 guided tour; drop-by-intent; inline text edit) | tuned for product/design/dev teams with a Git workflow |
+| **Hebrew/RTL** | first-class: RTL renderer, Hebrew slugs, logical CSS, Hebrew admin | generic i18n |
+| **Openness** | `.pzn` published as a machine-readable standard ("our RPM") + full site/theme export — leave any time, take everything | proprietary platform; content lives in their cloud |
+| **Published-page weight** | static export, zero-JS modules, escaped-by-construction | SDK runtime + content API calls |
+| **Data** | your server, your SQLite file, first-party analytics with no IP stored | their cloud, their telemetry |
+
+**Positioning sentence (draft for Ben):** builder.io sells AI-assisted
+development to teams that own code; Tapuz gives the site itself — walked
+through in Hebrew, AI-authored without a meter, exportable to a standard —
+to owners who never want to see code. We do not out-Fusion them; we make
+their entire category unnecessary for the SMB.
+
+Sources: [builder.io Fusion launch](https://www.builder.io/news/fusion),
+[visual development platform explainer](https://www.builder.io/m/explainers/visual-development-platform),
+[2026 pricing guide](https://vitara.ai/builder-io-pricing-explained/),
+[UI Bakery 2026 overview](https://uibakery.io/blog/builder-io-overview).
 
 ## Where we're ahead
 
@@ -82,6 +127,15 @@ module/feature hunt. Update it every version batch.
    sugar~~ shipped in v1.05 (`pricing`/`plan`, both the canonical `.pzn`
    system and the legacy BentML keyword dialect, zero-JS, highlighted-tier
    support). CODE stays reserved; INPUT stays a FIELD child.
+8. **From the builder.io benchmark (2026-07, Ben to prioritize):**
+   - **A/B split testing** — we track conversions per page already; the
+     missing half is serving variant A/B and attributing. Feasible on the
+     static export via a tiny opt-in script (same pattern as search).
+   - **Figma import** — likely via the decompiler road (Figma → HTML export
+     → our HTML shredder) rather than a native plugin. Unscoped.
+   - **Design tokens as a first-class concept** — our themes have LOOKS;
+     builder.io's token-aware editing suggests exposing theme tokens inside
+     the builder's properties panel (pick "primary" not "#0ea5e9").
 
 (~~CSV export~~ — shipped whole in v0.87: `/admin/inbox.csv` +
 `/admin/analytics.csv?what=daily|pages|referrers|devices|conversions`,

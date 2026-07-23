@@ -1,6 +1,6 @@
 {
   "name": "tapuziel",
-  "version": "1.66.0-alpha",
+  "version": "1.67.0-alpha",
   "description": "Tapuziel — a Hebrew-first (RTL) modular CMS with a visual builder. תפוזיאל: הטפוז עם הכנפיים.",
   "main": "src/server.js",
   "bin": {
