@@ -369,6 +369,10 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
 .card { margin-bottom: 16px; }
 .card:last-child { margin-bottom: 0; }
 .card.tight { padding: 16px 18px; }
+/* a card for something not built yet — dimmed, but still a real section so the
+   roadmap of what's coming reads as clearly as what's live */
+.card.is-soon { opacity: .62; }
+.card.is-soon:hover { opacity: .82; }
 .card.flush { padding: 0; overflow: hidden; }
 /* a card that reacts — for rows that are really links/targets */
 .card.interactive:hover {
@@ -669,6 +673,27 @@ body:has(> .admin-side) { padding-inline-start: var(--side-w); }
   font-size: 1rem;
   font-weight: 700;
   color: var(--ws-text);
+}
+
+/* a heading that leads a LIST (not a card) with its controls on the far side —
+   the row that turns a bare stack of records into a titled section */
+.section-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent-line);
+}
+.section-bar .sub-head { gap: 10px; }
+.section-bar .sub-head .faint {
+  background: var(--accent-wash-2);
+  color: var(--accent-ink);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 0.8rem;
 }
 
 /* ---- meter: a share-of-total bar (device split, quota, progress) ---- */

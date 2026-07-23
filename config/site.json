@@ -3,7 +3,7 @@
   "description": "WhiteNo1se — אתר הבית",
   "baseUrl": "",
   "defaultTheme": "default",
-  "language": "he",
+  "language": "en",
   "homepage": "home",
   "integrations": {
     "whatsapp": {

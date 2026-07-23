@@ -129,8 +129,9 @@ router.get('/admin/inbox', (req, res) => {
           <div class="stat-num" style="font-size:1.5rem">${dueCount}</div>
         </div>
       </div>
-      <div class="row between" style="margin-bottom:16px">
-        <p class="lead" style="margin:0">כל שליחת טופס מהאתר נוחתת כאן כליד. ${unread ? `<strong style="color:var(--accent-ink)">${unread} חדשות</strong>` : 'אין חדשות'}.</p>
+      <p class="lead" style="margin:0 0 14px">כל שליחת טופס מהאתר נוחתת כאן כליד. ${unread ? `<strong style="color:var(--accent-ink)">${unread} חדשות</strong>` : 'אין חדשות'}.</p>
+      <div class="section-bar">
+        <div class="sub-head" style="margin:0"><span>📥 הפניות${statusFilter ? ' · ' + escapeAdmin(forms.STATUS_LABELS[statusFilter] || statusFilter) : ''}</span><span class="faint" style="font-weight:600">${items.length}</span></div>
         <div class="row">
           <select id="inbox-status-filter" class="input compact" onchange="location.href='/admin/inbox' + (this.value ? '?status=' + this.value : '')">
             ${filterOptions}
