@@ -280,6 +280,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
             <button type="button" id="btn-page-props" class="page-props-btn">⚙ הגדרות דף</button>
             <button type="button" id="btn-responsive" class="page-props-btn" title="איך הדף נראה בנייד, בטאבלט ובמחשב — הרינדור האמיתי">📱 רספונסיב</button>
             <button type="button" id="btn-prompt-builder" class="page-props-btn" title="פרומפט מלא לצ׳אט ה-AI שלכם — כולל הדף הנוכחי, בלי מפתח">🧠 פרומפט AI</button>
+            <button type="button" id="btn-copilot" class="page-props-btn" title="הקופיילוט המחובר — רואה את הדף והפריט המסומן, עורך באישורכם (מפתח או מודל מקומי)">🤖 קופיילוט</button>
             <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>
@@ -385,6 +386,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
     <script src="/admin-bentml-ui.js"></script>
     <script src="/admin-builder-tour.js"></script>
     <script src="/admin-prompt-builder.js"></script>
+    <script src="/admin-copilot-panel.js"></script>
     <script>
       TapuzBuilder.init({
         fullPath: ${jsonForScript(page.full_path)},

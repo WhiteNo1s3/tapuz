@@ -272,7 +272,27 @@ router.post('/admin/api/ai/chat', async (req, res) => {
     const media = require('../media').listAllMedia(40);
     let siteTitle = '';
     try { siteTitle = String(require('../config').loadConfig().title || ''); } catch (e) { /* unnamed site */ }
-    const system = buildCopilotBriefing({ locale: 'he', media, siteTitle }).text;
+    let system = buildCopilotBriefing({ locale: 'he', media, siteTitle }).text;
+    // Situational awareness (v1.71, Ben: "grasp the situation of being the
+    // helper in CMS… adding text to a selected item, help in the page
+    // builder"). When the chat arrives FROM the builder it carries context:
+    // which page is open and which module is selected — so "the selected
+    // item" means that exact block, and edits target the open page.
+    const ctx = b.context && typeof b.context === 'object' ? b.context : null;
+    if (ctx && ctx.page) {
+      const pageSlug = String(ctx.page).slice(0, 200);
+      let situation = '\n\n---\n\n## המצב עכשיו — בעל/ת האתר בתוך בונה הדפים\n' +
+        'הדף הפתוח בבונה: `' + pageSlug + '`. כשמבקשים ממך לערוך "את הדף" — זה הדף. ' +
+        'השתמש/י ב-edit_page עם ה-slug הזה והחזר/י את המסמך המלא עם השינויים המבוקשים בלבד.\n';
+      const sel = ctx.selected && typeof ctx.selected === 'object' ? ctx.selected : null;
+      if (sel && sel.type) {
+        situation += '\n**הפריט המסומן כרגע:** מודול `' + String(sel.type).slice(0, 40) + '`' +
+          (sel.id ? ' (id: `' + String(sel.id).slice(0, 60) + '`)' : '') +
+          (sel.text ? ' — הטקסט הנוכחי שלו: "' + String(sel.text).slice(0, 280) + '"' : '') +
+          '. כשמבקשים "הוסף טקסט לפריט המסומן" או "שנה את זה" — הכוונה לבלוק הזה בדיוק, לא לדף אחר ולא לבלוק אחר.\n';
+      }
+      system += situation;
+    }
     const out = await require('../ai').converse({
       system,
       user: message,

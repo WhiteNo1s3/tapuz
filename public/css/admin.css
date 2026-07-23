@@ -2929,6 +2929,75 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
 /* The prompt builder (v1.69) is a desktop-and-mobile tool for the same
    reason: the copy-paste AI flow is the ecosystem's front door. */
 #btn-prompt-builder { display: inline-flex; }
+#btn-copilot { display: inline-flex; }
+
+/* ── The copilot drawer (v1.71) — the connected helper INSIDE the builder ── */
+#copilot-drawer {
+  position: fixed;
+  inset-inline-start: 16px;
+  bottom: 76px; /* above the save-bar */
+  width: 360px;
+  max-width: 94vw;
+  height: 460px;
+  max-height: 70vh;
+  display: none;
+  flex-direction: column;
+  background: linear-gradient(160deg, #0f172a, #1e293b);
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, .5);
+  z-index: 900;
+  font-size: .9rem;
+}
+#copilot-drawer.open { display: flex; }
+#copilot-drawer .cp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #334155;
+}
+#copilot-drawer .cp-sub { font-size: .68rem; color: #94a3b8; flex: 1; }
+#copilot-drawer #cp-close {
+  border: none; background: none; color: #94a3b8; cursor: pointer; font-size: .9rem;
+}
+#copilot-drawer #cp-log {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+#copilot-drawer .cp-bubble { padding: 8px 11px; border-radius: 10px; line-height: 1.5; max-width: 94%; }
+#copilot-drawer .cp-system { background: #1e293b; color: #94a3b8; align-self: center; text-align: center; font-size: .78rem; }
+#copilot-drawer .cp-user { background: #0a66c2; color: #fff; align-self: flex-start; }
+#copilot-drawer .cp-assistant { background: #172554; border: 1px solid #1e40af; color: #dbeafe; align-self: flex-end; }
+#copilot-drawer .cp-approve {
+  border: 1px solid #b45309;
+  background: #451a03;
+  color: #fde68a;
+  border-radius: 10px;
+  padding: 10px;
+}
+#copilot-drawer .cp-approve-row { display: flex; gap: 8px; margin-top: 8px; }
+#copilot-drawer .cp-ok, #copilot-drawer .cp-no {
+  border: none; border-radius: 8px; padding: 7px 10px; cursor: pointer; font: 600 12px system-ui;
+}
+#copilot-drawer .cp-ok { background: #059669; color: #fff; }
+#copilot-drawer .cp-no { background: #334155; color: #e2e8f0; }
+#copilot-drawer #cp-status { padding: 0 12px 4px; font-size: .74rem; color: #fbbf24; min-height: 16px; }
+#copilot-drawer .cp-compose { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #334155; }
+#copilot-drawer #cp-input {
+  flex: 1; resize: none; border: 1px solid #334155; border-radius: 8px;
+  background: #0f172a; color: #e2e8f0; padding: 8px; font: inherit; font-size: .85rem;
+}
+#copilot-drawer #cp-send {
+  border: none; border-radius: 8px; background: #7c3aed; color: #fff;
+  padding: 0 16px; cursor: pointer; font-weight: 700;
+}
+#copilot-drawer #cp-send:disabled { opacity: .5; cursor: default; }
 
 @media (max-width: 1100px) {
   .builder, .builder.page-ltr { grid-template-columns: 200px minmax(0, 1fr); }

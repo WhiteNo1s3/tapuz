@@ -4990,6 +4990,9 @@
     openImportAi: openImportAi,
     // layers outline (v0.89) — flatten exposed for QA/debug
     _layersFlatten: flattenLayers,
+    // the copilot drawer (v1.71) reads WHAT the owner has selected, so
+    // "add text to the selected item" can mean exactly that block
+    _getSelected: function () { return selectedId ? getBlock(selectedId) : null; },
     // BenTML language bridge (used by admin-bentml-ui.js)
     _getBlocks: function () { return blocks; },
     _setBlocks: function (next, opts) {

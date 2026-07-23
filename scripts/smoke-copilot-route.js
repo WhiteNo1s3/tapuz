@@ -45,6 +45,30 @@ function check(name, cond) {
   check('local runtime counts as ready without a key', /p\.keyOptional \|\| \(p\.id === settings\.provider && settings\.hasKey\)/.test(chatJs));
   check('off rows stay clickable (no disabled attr)', !/disabled/.test(chatJs.match(/renderSettings[\s\S]*?syncProviderUI\(\);\s*\}/)[0]));
   check('screen title dropped the Grokin label', !/Grokin/.test(copilotSrc.match(/adminNav\([^)]*\)/g).join(' ')));
+
+  // ── the copilot drawer in the builder (v1.71, Ben: "grasp the situation…
+  //    adding text to a selected item, help in the page builder") ──
+  const panel = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-copilot-panel.js'), 'utf8');
+  const builderRoute = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'pages-builder.js'), 'utf8');
+  const builderJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-builder.js'), 'utf8');
+  try { new Function(panel); check('admin-copilot-panel.js parses', true); }
+  catch (e) { check('admin-copilot-panel.js parses (' + e.message + ')', false); }
+  check('builder has the 🤖 button + loads the drawer',
+    /id="btn-copilot"/.test(builderRoute) && /<script src="\/admin-copilot-panel\.js">/.test(builderRoute));
+  check('chat route accepts builder context (page + selected item)',
+    /b\.context/.test(copilotSrc) && /המצב עכשיו/.test(copilotSrc) && /הפריט המסומן/.test(copilotSrc));
+  check('context strings are length-capped (no prompt-stuffing)',
+    /slice\(0, 200\)/.test(copilotSrc) && /slice\(0, 280\)/.test(copilotSrc));
+  check('drawer sends page + selection context each turn',
+    /context: ctx/.test(panel) && /ctx\.selected = sel/.test(panel) && /pageFullPath\(\)/.test(panel));
+  check('builder exposes the selection to the drawer',
+    /_getSelected/.test(builderJs) && /_getSelected/.test(panel));
+  check('canvas is autosaved BEFORE the copilot reads/edits',
+    /savePage\(\{ silent: true \}\)/.test(panel));
+  check('writes stop at the approve card; approval reloads the draft',
+    /renderApproval/.test(panel) && /approve: \{ id: p\.id, ok: ok \}/.test(panel) && /location\.reload\(\)/.test(panel));
+  check('drawer talks only to our own chat endpoint',
+    !/https?:\/\//.test(panel) && /\/admin\/api\/ai\/chat/.test(panel));
 }
 
 function req(method, urlPath, { form, cookie } = {}) {
