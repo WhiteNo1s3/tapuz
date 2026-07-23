@@ -133,7 +133,7 @@ router.get('/admin/inbox', (req, res) => {
       <div class="section-bar">
         <div class="sub-head" style="margin:0"><span>📥 הפניות${statusFilter ? ' · ' + escapeAdmin(forms.STATUS_LABELS[statusFilter] || statusFilter) : ''}</span><span class="faint" style="font-weight:600">${items.length}</span></div>
         <div class="row">
-          <select id="inbox-status-filter" class="input compact" onchange="location.href='/admin/inbox' + (this.value ? '?status=' + this.value : '')">
+          <select id="inbox-status-filter" class="input compact" onchange="var u='/admin/inbox'+(this.value?'?status='+this.value:'');window.TapuzNav?TapuzNav.navigate(u):location.href=u">
             ${filterOptions}
           </select>
           ${items.length ? '<a class="btn secondary sm" href="/admin/inbox.csv" style="white-space:nowrap">⬇ ייצוא CSV</a>' : ''}
