@@ -44,7 +44,8 @@
   /* ── settings card ── */
 
   function currentProvider() {
-    return providers.find((x) => x.id === $('ai-provider').value) || providers[0] || {};
+    const checked = document.querySelector('input[name="ai-provider"]:checked');
+    return providers.find((x) => x.id === (checked && checked.value)) || providers[0] || {};
   }
 
   function fillModels() {
@@ -88,17 +89,29 @@
   }
 
   function renderSettings() {
-    const provSel = $('ai-provider');
-    provSel.innerHTML = providers.map((p) =>
-      '<option value="' + esc(p.id) + '"' + (p.id === settings.provider ? ' selected' : '') + '>' + esc(p.label) + '</option>'
-    ).join('');
+    // Radios, not a <select> (v1.70): each provider row carries its readiness.
+    // "Ready" = local runtime (no key needed) or the saved provider with its
+    // key. Not-ready rows are toned down (.is-off) but stay clickable —
+    // choosing one is exactly how you get to configure it.
+    const box = $('ai-provider-radios');
+    box.innerHTML = providers.map((p) => {
+      const ready = p.keyOptional || (p.id === settings.provider && settings.hasKey);
+      const chip = p.keyOptional
+        ? 'מקומי · ללא מפתח'
+        : (ready ? 'מוגדר ✓' : 'דורש מפתח');
+      return '<label class="provider-radio' + (ready ? '' : ' is-off') + '">' +
+        '<input type="radio" name="ai-provider" value="' + esc(p.id) + '"' +
+        (p.id === settings.provider ? ' checked' : '') + '>' +
+        '<span class="pr-label">' + esc(p.label) + '</span>' +
+        '<span class="pr-chip">' + chip + '</span></label>';
+    }).join('');
     syncProviderUI();
   }
 
   async function saveSettings() {
     const p = currentProvider();
     const body = {
-      provider: $('ai-provider').value,
+      provider: p.id,
       model: p.openModel ? $('ai-model-free').value.trim() : $('ai-model').value
     };
     if (p.baseUrlDefault) body.baseUrl = $('ai-base').value.trim();
@@ -261,7 +274,7 @@
     }
     welcome(false);
 
-    $('ai-provider').addEventListener('change', syncProviderUI);
+    $('ai-provider-radios').addEventListener('change', syncProviderUI);
     $('ai-save').addEventListener('click', saveSettings);
     $('btn-send').addEventListener('click', send);
     input.addEventListener('keydown', (e) => {

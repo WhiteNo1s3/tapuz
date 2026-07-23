@@ -2112,6 +2112,30 @@
       }
     });
 
+    // "+ טור" (v1.70, Ben: "we add another column on a press of a button").
+    // Two columns are the split minimum; this grows the row up to four —
+    // the new column joins with an equal share and the drag handles rebalance.
+    if (cols.length < 4) {
+      var addCol = document.createElement('button');
+      addCol.type = 'button';
+      addCol.className = 'row-add-column';
+      addCol.textContent = '+';
+      addCol.title = 'הוסף טור (עד 4) — גררו את הקו שביניהם לשינוי הרוחב';
+      addCol.addEventListener('click', function (e) {
+        e.stopPropagation();
+        pushHistory();
+        var ratios = parseColumnRatios(block);
+        ensureColumns(block).push({ blocks: [] });
+        var avg = ratios.reduce(function (a, b) { return a + b; }, 0) / ratios.length;
+        setColumnRatios(block, ratios.concat(avg));
+        markDirty();
+        renderCanvas();
+        if (selectedId === block.id) renderProperties();
+      });
+      row.style.position = 'relative';
+      row.appendChild(addCol);
+    }
+
     return row;
   }
 

@@ -29,6 +29,24 @@ function check(name, cond) {
   if (!cond) fail = true;
 }
 
+// ── static: provider choice is RADIOS with honest readiness (v1.70, Ben:
+//    "options that are not working should be greyed out… make a radio") ──
+{
+  const copilotSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'copilot.js'), 'utf8');
+  const chatJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-chat.js'), 'utf8');
+  check('provider picker is a radio group, not a <select>',
+    /id="ai-provider-radios"/.test(copilotSrc) && !/<select id="ai-provider">/.test(copilotSrc));
+  check('not-ready providers are toned down (.is-off styled)',
+    /\.provider-radio\.is-off \{ opacity:\.55; \}/.test(copilotSrc.replace(/\s+/g, ' ')) ||
+    /provider-radio\.is-off/.test(copilotSrc));
+  check('the checked row is never faded', /:has\(input:checked\)/.test(copilotSrc));
+  check('client renders readiness chips (מוגדר/דורש מפתח/מקומי)',
+    /דורש מפתח/.test(chatJs) && /מקומי · ללא מפתח/.test(chatJs) && /מוגדר ✓/.test(chatJs));
+  check('local runtime counts as ready without a key', /p\.keyOptional \|\| \(p\.id === settings\.provider && settings\.hasKey\)/.test(chatJs));
+  check('off rows stay clickable (no disabled attr)', !/disabled/.test(chatJs.match(/renderSettings[\s\S]*?syncProviderUI\(\);\s*\}/)[0]));
+  check('screen title dropped the Grokin label', !/Grokin/.test(copilotSrc.match(/adminNav\([^)]*\)/g).join(' ')));
+}
+
 function req(method, urlPath, { form, cookie } = {}) {
   return new Promise((resolve, reject) => {
     let data = null;

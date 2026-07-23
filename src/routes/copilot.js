@@ -309,6 +309,16 @@ router.get('/admin/chat', (req, res) => {
       .chat-side label { display:block; font-size:.82rem; color:#475569; margin-bottom:4px; }
       .chat-side input, .chat-side select { width:100%; box-sizing:border-box; padding:8px; border:1px solid #cbd5e1; border-radius:8px; }
       .muted { color:#64748b; }
+      /* Provider choice as RADIOS (v1.70, Ben). An option that is not ready is
+         toned down — still clickable (picking it is HOW you configure it),
+         but honest about not working yet. */
+      .provider-radios { display:flex; flex-direction:column; gap:6px; }
+      .provider-radio { display:flex; align-items:center; gap:8px; padding:7px 10px; border:1px solid #e2e8f0; border-radius:8px; cursor:pointer; font-size:.88rem; }
+      .provider-radio input { width:auto; margin:0; }
+      .provider-radio .pr-chip { margin-inline-start:auto; font-size:.72rem; color:#059669; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:999px; padding:2px 8px; white-space:nowrap; }
+      .provider-radio.is-off { opacity:.55; }
+      .provider-radio.is-off .pr-chip { color:#92400e; background:#fffbeb; border-color:#fde68a; }
+      .provider-radio:has(input:checked) { border-color:#7c3aed; background:#f5f3ff; opacity:1; }
     </style>
     <div class="chat-wrap">
       <div class="chat-main">
@@ -325,7 +335,7 @@ router.get('/admin/chat', (req, res) => {
         <div class="card">
           <h3 class="sub-head">🔑 המפתח שלכם — בתוך ה‑CMS</h3>
           <p class="muted" style="font-size:.85rem;margin:0 0 10px">הצ׳אט קורא ל‑API הרשמי של הספק מהשרת שלכם, עם המפתח שלכם. המפתח נשמר בשרת בלבד (קובץ מוגן, מחוץ ל‑git) ולעולם לא נשלח לדפדפן.</p>
-          <div class="field"><label>ספק</label><select id="ai-provider"></select></div>
+          <div class="field"><label>ספק</label><div id="ai-provider-radios" class="provider-radios"></div></div>
           <div class="field"><label>מודל</label>
             <select id="ai-model"></select>
             <input id="ai-model-free" class="input" dir="ltr" autocomplete="off" hidden

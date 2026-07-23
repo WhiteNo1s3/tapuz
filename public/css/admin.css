@@ -2146,16 +2146,62 @@ body.is-col-resizing .column-head {
   width: 3px;
   border-radius: 2px;
   background: linear-gradient(180deg, #93c5fd, var(--select));
-  opacity: 0;
+  /* v1.70 (Ben asked for a feature that already existed — meaning nobody
+     could SEE it): the cut line is always faintly present, not hover-only. */
+  opacity: .3;
+  transition: opacity .12s;
+}
+/* the grip dot — a visible "take me" affordance at mid-height */
+.col-resize-handle::before {
+  content: '⋮';
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  transform: translateY(-50%);
+  font-size: 14px;
+  line-height: 1;
+  color: var(--select);
+  background: var(--bc-panel-2, #1e293b);
+  border: 1px solid var(--select);
+  border-radius: 6px;
+  padding: 4px 2px;
+  opacity: .75;
   transition: opacity .12s;
 }
 .column-pane:hover .col-resize-handle::after,
-body.is-col-resizing .col-resize-handle::after {
+body.is-col-resizing .col-resize-handle::after,
+.column-pane:hover .col-resize-handle::before,
+body.is-col-resizing .col-resize-handle::before {
   opacity: 1;
 }
 body.is-col-resizing {
   cursor: col-resize !important;
   user-select: none;
+}
+/* "+ טור" — grows the row by one column (v1.70). Sits on the row's
+   inline-end edge, vertically centered, out of the panes' way. */
+.row-add-column {
+  position: absolute;
+  inset-inline-end: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--select);
+  background: var(--bc-panel-2, #1e293b);
+  color: var(--select);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 6;
+  opacity: .55;
+  transition: opacity .12s, transform .12s;
+}
+.row-add-column:hover {
+  opacity: 1;
+  transform: translateY(-50%) scale(1.12);
 }
 .col-ratio-label {
   font-size: 0.68rem;

@@ -100,6 +100,22 @@ for (const cls of ['drop-before', 'drop-after', 'drop-into']) {
   check('admin.css styles .' + cls, new RegExp('\\.canvas-block\\.' + cls).test(css));
 }
 
+// ---- 5. columns: movable cut + grow-by-button (v1.70) ----------------------
+// Ben asked for a resize that ALREADY existed — meaning nobody could see it.
+// The grip is now always faintly visible, and a row can grow to 4 columns.
+
+check('column resize handle is bound (mousedown drag)', /bindColumnResize/.test(builderSrc) && /col-resize-handle/.test(builderSrc));
+check('resize grip is visible without hover (opacity > 0 at rest)',
+  /col-resize-handle::after[^}]*opacity:\s*\.3/.test(css.replace(/\n/g, ' ')));
+check('grip dot affordance exists (::before)', /col-resize-handle::before/.test(css));
+check('"+ טור" button grows the row', /row-add-column/.test(builderSrc) && /הוסף טור/.test(builderSrc));
+check('add-column caps at 4', /cols\.length < 4/.test(builderSrc));
+check('new column joins with an equal share + history push',
+  /ensureColumns\(block\)\.push\(\{ blocks: \[\] \}\)/.test(builderSrc) &&
+  /setColumnRatios\(block, ratios\.concat\(avg\)\)/.test(builderSrc) &&
+  /pushHistory\(\);\s*var ratios/.test(builderSrc.replace(/\n/g, ' ')));
+check('admin.css styles .row-add-column', /\.row-add-column\s*\{/.test(css));
+
 try { new Function(builderSrc); check('admin-builder.js parses', true); }
 catch (e) { check('admin-builder.js parses (' + e.message + ')', false); }
 
