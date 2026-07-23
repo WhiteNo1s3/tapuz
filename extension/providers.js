@@ -1,12 +1,13 @@
-/* Tapuziel Bridge — per-LLM-site selectors (scrape + inject into the user's session).
-   The admin's OWN logged-in session is the brain; we only read/write the chat DOM
-   they already control. Selectors are provider-specific and fragile by nature —
-   when a site redesigns, update the entry here. UMD for smoke tests.
+/* Tapuziel Bridge — per-LLM-site selectors (READ the user's session; never write).
+   The admin's OWN logged-in session is the brain; we only read the chat DOM they
+   already control. Selectors are provider-specific and fragile by nature — when a
+   site redesigns, update the entry here. UMD for smoke tests.
 
    assistant — latest reply blocks (last match = newest)
    streaming — present while the model is still generating (hold off publishing)
-   composer  — editable input for injection (contenteditable or textarea)
-   send      — optional send button (else we synthesize Enter) */
+   composer / send — retained for diagnostics only. INJECTION IS RETIRED (v1.69,
+   Ben: "we draw on their sites… it's a rejection — the user pastes, we don't").
+   copyFirst on EVERY provider: delivery is clipboard + human paste, always. */
 (function (root, factory) {
   const api = factory();
   root.TapuzProviders = api;
@@ -23,7 +24,8 @@
       streaming: '[data-is-streaming="true"], [data-is-streaming]',
       composer:
         'div[contenteditable="true"].ProseMirror, div[contenteditable="true"][data-testid], fieldset div[contenteditable="true"]',
-      send: 'button[aria-label="Send Message"], button[aria-label="Send message"]'
+      send: 'button[aria-label="Send Message"], button[aria-label="Send message"]',
+      copyFirst: true
     },
     {
       id: 'chatgpt',
@@ -44,7 +46,8 @@
       assistant: '.response-content-markdown, [data-testid="grok-response"]',
       streaming: '[data-testid="stop-generating"], button[aria-label*="Stop"]',
       composer: 'textarea, div[contenteditable="true"]',
-      send: 'button[type="submit"], button[aria-label*="Send"]'
+      send: 'button[type="submit"], button[aria-label*="Send"]',
+      copyFirst: true
     },
     {
       id: 'gemini',

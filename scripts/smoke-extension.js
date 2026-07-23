@@ -47,11 +47,10 @@ check('chatgpt.com maps to chatgpt', forHost('chatgpt.com') && forHost('chatgpt.
 check('gemini maps', forHost('gemini.google.com') && forHost('gemini.google.com').id === 'gemini');
 check('unknown host → null', forHost('evil.example.com') === null);
 
-// ── Copy-first delivery (v1.65): ChatGPT + Gemini ignore (or freeze on)
-//    synthetic composer writes — ①/② deliver via clipboard + human paste
-//    there. Claude/Grok keep direct inject. Scrape/auto-publish unchanged. ─
-check('chatgpt + gemini are copy-first', forHost('chatgpt.com').copyFirst === true && forHost('gemini.google.com').copyFirst === true);
-check('claude + grok keep direct inject', !forHost('claude.ai').copyFirst && !forHost('grok.com').copyFirst);
+// ── Injection RETIRED (v1.69, Ben's call: "we draw on their sites… it's a
+//    rejection — the user pastes"). EVERY provider is copy-first: ①/② deliver
+//    via clipboard + human paste; the extension only READS replies. ─
+check('every provider is copy-first (injection retired)', PROVIDERS.every((p) => p.copyFirst === true));
 
 // ── manifest.json (valid MV3) ────────────────────────────────────────
 const manifest = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));

@@ -53,15 +53,14 @@ popup will ask Chrome for permission to reach that origin when you click **שמ�
 3. The extension extracts the `.pzn` and publishes it to your CMS; a toast links
    to the live page. Target a specific page or "new page" from the popup.
 
-### Delivery modes (per host)
+### Delivery model: the user pastes, we never type (v1.69)
 
-- **Claude / Grok** — the ①/② panel buttons inject the roleplay pack straight
-  into the composer and send.
-- **ChatGPT / Gemini** (`copyFirst` in `providers.js`) — these sites ignore (or
-  freeze on) synthetic composer writes, so ①/② **copy the pack to the
-  clipboard** and the panel tells you to paste (Ctrl+V) and send. Everything
-  after that — watching the reply, extracting the `.pzn`, publishing to your
-  CMS — is identical on all four hosts and needs no injection.
+Injection is **retired on every host** (`copyFirst` on all providers). Chat
+sites treat synthetic composer writes as automation — they ignore them,
+freeze, or worse. So the ①/② panel buttons **copy the pack to the clipboard**
+and you paste (Ctrl+V) and send yourself. The extension only ever *reads*
+the reply — watching for a complete `.pzn`, extracting it, and publishing to
+your CMS — which needs no injection and rides every host identically.
 
 ## Tuning selectors
 

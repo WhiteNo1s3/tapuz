@@ -107,9 +107,13 @@
 
   // Tier realignment (v0.85): key-based generation lives in the CMS now
   // (/admin/chat — the key on the user own server). This popup stays the
-  // KEYLESS tier; the card links to the copilot.
+  // KEYLESS tier; the card links to the copilot. The ecosystem link (v1.69)
+  // points at the page builder, where 🧠 בונה הפרומפטים lives.
   send({ type: 'getConfig' }).then((c) => {
+    if (!(c && c.ok && c.url)) return;
     const link = $('byok-cms-link');
-    if (link && c && c.ok && c.url) link.href = c.url + '/admin/chat';
+    if (link) link.href = c.url + '/admin/chat';
+    const pb = $('prompt-builder-link');
+    if (pb) pb.href = c.url + '/admin';
   });
 })();

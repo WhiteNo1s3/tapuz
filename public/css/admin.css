@@ -2880,6 +2880,9 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
    (#btn-page-props stays mobile-only: on desktop the side rail already shows
    page settings whenever nothing is selected.) */
 #btn-responsive { display: inline-flex; }
+/* The prompt builder (v1.69) is a desktop-and-mobile tool for the same
+   reason: the copy-paste AI flow is the ecosystem's front door. */
+#btn-prompt-builder { display: inline-flex; }
 
 @media (max-width: 1100px) {
   .builder, .builder.page-ltr { grid-template-columns: 200px minmax(0, 1fr); }

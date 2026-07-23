@@ -33,7 +33,7 @@ const router = express.Router();
 router.get('/admin/agent', requireAdmin, (req, res) => {
   const origin = `${req.protocol}://${req.headers.host}`;
   const html = `
-    ${adminNav('agent', 'גשר סוכן — Grokin')}
+    ${adminNav('agent', 'גשר סוכן')}
     <div class="container page-body" style="max-width:900px">
       <p class="lead">
         טוקנים מאובטחים שמחברים סוכן חיצוני (תוסף הדפדפן) ל‑API של תפוזיאל —

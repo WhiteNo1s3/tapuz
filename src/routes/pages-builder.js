@@ -279,6 +279,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
             <span id="block-count">${(draft || []).length} מודולים</span>
             <button type="button" id="btn-page-props" class="page-props-btn">⚙ הגדרות דף</button>
             <button type="button" id="btn-responsive" class="page-props-btn" title="איך הדף נראה בנייד, בטאבלט ובמחשב — הרינדור האמיתי">📱 רספונסיב</button>
+            <button type="button" id="btn-prompt-builder" class="page-props-btn" title="פרומפט מלא לצ׳אט ה-AI שלכם — כולל הדף הנוכחי, בלי מפתח">🧠 פרומפט AI</button>
             <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>
@@ -383,6 +384,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
     <script src="/admin/bentml-engine.js"></script>
     <script src="/admin-bentml-ui.js"></script>
     <script src="/admin-builder-tour.js"></script>
+    <script src="/admin-prompt-builder.js"></script>
     <script>
       TapuzBuilder.init({
         fullPath: ${jsonForScript(page.full_path)},

@@ -10,9 +10,10 @@
   const X = self.TapuzExtract;
   if (!provider || !X) return;
 
-  // Copy-first hosts (ChatGPT/Gemini): direct injection no-ops or spooks the
-  // site, so ①/② deliver via clipboard + human paste. Verbs gender-agree:
-  // משחק הוזרק/הועתק (m) · בנייה נשלחה/הועתקה (f).
+  // Injection is RETIRED (v1.69). Every provider is copyFirst: chat sites
+  // treat synthetic composer writes as automation and break — so ①/② deliver
+  // via clipboard and the USER pastes. We read replies; we never write their
+  // DOM. The verbs stay computed so a future opt-in host needs one flag flip.
   const DELIVER_M = provider.copyFirst ? 'הועתק ללוח — הדביקו (Ctrl+V) ושלחו' : 'הוזרק';
   const DELIVER_F = provider.copyFirst ? 'הועתקה ללוח — הדביקו (Ctrl+V) ושלחו' : 'נשלחה';
 
