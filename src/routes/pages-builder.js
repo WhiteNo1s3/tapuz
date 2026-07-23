@@ -382,6 +382,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
     <script src="/admin-builder.js"></script>
     <script src="/admin/bentml-engine.js"></script>
     <script src="/admin-bentml-ui.js"></script>
+    <script src="/admin-builder-tour.js"></script>
     <script>
       TapuzBuilder.init({
         fullPath: ${jsonForScript(page.full_path)},
