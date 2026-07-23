@@ -47,6 +47,12 @@ check('chatgpt.com maps to chatgpt', forHost('chatgpt.com') && forHost('chatgpt.
 check('gemini maps', forHost('gemini.google.com') && forHost('gemini.google.com').id === 'gemini');
 check('unknown host → null', forHost('evil.example.com') === null);
 
+// ── Copy-first delivery (v1.65): ChatGPT + Gemini ignore (or freeze on)
+//    synthetic composer writes — ①/② deliver via clipboard + human paste
+//    there. Claude/Grok keep direct inject. Scrape/auto-publish unchanged. ─
+check('chatgpt + gemini are copy-first', forHost('chatgpt.com').copyFirst === true && forHost('gemini.google.com').copyFirst === true);
+check('claude + grok keep direct inject', !forHost('claude.ai').copyFirst && !forHost('grok.com').copyFirst);
+
 // ── manifest.json (valid MV3) ────────────────────────────────────────
 const manifest = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
 check('manifest is MV3', manifest.manifest_version === 3);
@@ -132,6 +138,10 @@ check('background handles the roleplay game pack', /case 'roleplay'/.test(bg) &&
 check('background handles mission pull + step report', /case 'mission'/.test(bg) && /case 'missionStep'/.test(bg) && /\/agent\/v1\/mission/.test(bg));
 check('background publish gates on completeness', /requireComplete/.test(bg) && /analyzeReply/.test(bg));
 check('content panel injects into the composer + asks worker to publish', /findComposer|setComposerText/.test(content) && /type: 'publish'/.test(content));
+// inject() must branch to the clipboard BEFORE touching the composer on
+// copy-first hosts (touching it is exactly what spooks those sites).
+check('inject() honors copyFirst before the composer', /function inject\([\s\S]{0,200}?provider\.copyFirst[\s\S]{0,400}?findComposer\(\)/.test(content));
+check('copy-first still surfaces reply-reader health', /provider\.copyFirst \? h\.assistant/.test(content));
 // v0.56 injection hardening — React-controlled inputs need the native setter,
 // else onChange never fires and the composer stays empty on ChatGPT/Grok.
 check('composer inject uses the native value setter (React-safe)', /setNativeValue/.test(content) && /getOwnPropertyDescriptor/.test(content));

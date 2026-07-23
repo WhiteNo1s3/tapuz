@@ -10,6 +10,12 @@
   const X = self.TapuzExtract;
   if (!provider || !X) return;
 
+  // Copy-first hosts (ChatGPT/Gemini): direct injection no-ops or spooks the
+  // site, so ①/② deliver via clipboard + human paste. Verbs gender-agree:
+  // משחק הוזרק/הועתק (m) · בנייה נשלחה/הועתקה (f).
+  const DELIVER_M = provider.copyFirst ? 'הועתק ללוח — הדביקו (Ctrl+V) ושלחו' : 'הוזרק';
+  const DELIVER_F = provider.copyFirst ? 'הועתקה ללוח — הדביקו (Ctrl+V) ושלחו' : 'נשלחה';
+
   const STABLE_MS = 1600; // text must stop changing before we publish
   const POLL_MS = 400;
 
@@ -258,6 +264,17 @@
   }
 
   function inject(text, { send } = {}) {
+    if (provider.copyFirst) {
+      const copied = copyToClipboard(text);
+      toast(
+        copied
+          ? '📋 הועתק ללוח — הדביקו בצ׳אט (Ctrl+V) ושלחו'
+          : 'העתקה נכשלה — סמנו והעתיקו ידנית',
+        copied,
+        20000
+      );
+      return copied;
+    }
     const c = findComposer();
     if (!c) {
       // Graceful degradation: put the text on the clipboard so "paste manually"
@@ -335,9 +352,12 @@
     if (!el) return;
     const h = selectorHealth();
     const mark = (b) => (b ? '✓' : '✗');
-    el.textContent = `🔎 שדה הקלדה: ${mark(h.composer)} · תשובה: ${mark(h.assistant)} · שליחה: ${mark(h.send)}`;
-    // composer + assistant are the two that matter for inject + auto-publish.
-    el.style.color = h.composer && h.assistant ? '#64748b' : '#f87171';
+    el.textContent = provider.copyFirst
+      ? `🔎 מסירה: 📋 לוח (העתק-הדבק) · תשובה: ${mark(h.assistant)}`
+      : `🔎 שדה הקלדה: ${mark(h.composer)} · תשובה: ${mark(h.assistant)} · שליחה: ${mark(h.send)}`;
+    // what matters for THIS host's delivery mode + auto-publish:
+    // copy-first needs only the reply reader; inject needs composer too.
+    el.style.color = (provider.copyFirst ? h.assistant : h.composer && h.assistant) ? '#64748b' : '#f87171';
   }
 
   function simpleHash(s) {
@@ -477,8 +497,8 @@
       </label>
       <div style="display:flex;flex-direction:column;gap:6px">
         <button type="button" id="tz-mission" style="${btnStyle('#7c3aed')}">⬇ משוך משימה מה‑CMS</button>
-        <button type="button" id="tz-teach" style="${btnStyle('#0891b2')}">① הזרק משחק + מילון</button>
-        <button type="button" id="tz-build" style="${btnStyle('#d97706')}">② הזרק תיאור + בנייה</button>
+        <button type="button" id="tz-teach" style="${btnStyle('#0891b2')}">① ${provider.copyFirst ? 'העתק' : 'הזרק'} משחק + מילון</button>
+        <button type="button" id="tz-build" style="${btnStyle('#d97706')}">② ${provider.copyFirst ? 'העתק' : 'הזרק'} תיאור + בנייה</button>
         <button type="button" id="tz-oneshot" style="${btnStyle('#334155')}">①+② בפעם אחת (משחק+משימה)</button>
         <button type="button" id="tz-publish" style="${btnStyle('#059669')}">③ פרסם עכשיו (ידני)</button>
       </div>
@@ -513,8 +533,8 @@
       const ok = inject(mission.teachMessage, { send: true });
       if (ok) {
         markStep('build');
-        setStatus('🎮 משחק+מילון הוזרק · אחרי אישור → ②');
-        toast('משחק בונה-האתרים הוזרק לצ׳אט', true);
+        setStatus('🎮 משחק+מילון ' + DELIVER_M + ' · אחרי אישור → ②');
+        if (!provider.copyFirst) toast('משחק בונה-האתרים הוזרק לצ׳אט', true);
         lastPublishedHash = '';
       }
       return;
@@ -529,8 +549,8 @@
       const ok = inject(r.roleplay, { send: true });
       if (ok) {
         if (mission) markStep('build');
-        setStatus('🎮 משחק+מילון הוזרק (' + (r.length || r.roleplay.length) + ' תווים) · → ②');
-        toast('משחק בונה-האתרים + מילון הוזרק', true);
+        setStatus('🎮 משחק+מילון ' + DELIVER_M + ' (' + (r.length || r.roleplay.length) + ' תווים) · → ②');
+        if (!provider.copyFirst) toast('משחק בונה-האתרים + מילון הוזרק', true);
         lastPublishedHash = '';
       }
     });
@@ -543,7 +563,7 @@
     }
     inject(mission.buildMessage, { send: true });
     markStep('watch');
-    setStatus('בנייה נשלחה · ממתין ל‑‎.pzn מלא…');
+    setStatus('בנייה ' + DELIVER_F + ' · ממתין ל‑‎.pzn מלא…');
     lastPublishedHash = '';
     watching = true;
   }

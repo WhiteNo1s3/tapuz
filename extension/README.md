@@ -53,6 +53,16 @@ popup will ask Chrome for permission to reach that origin when you click **שמ�
 3. The extension extracts the `.pzn` and publishes it to your CMS; a toast links
    to the live page. Target a specific page or "new page" from the popup.
 
+### Delivery modes (per host)
+
+- **Claude / Grok** — the ①/② panel buttons inject the roleplay pack straight
+  into the composer and send.
+- **ChatGPT / Gemini** (`copyFirst` in `providers.js`) — these sites ignore (or
+  freeze on) synthetic composer writes, so ①/② **copy the pack to the
+  clipboard** and the panel tells you to paste (Ctrl+V) and send. Everything
+  after that — watching the reply, extracting the `.pzn`, publishing to your
+  CMS — is identical on all four hosts and needs no injection.
+
 ## Tuning selectors
 
 `providers.js` holds per-site CSS selectors for the assistant message. LLM sites

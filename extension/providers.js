@@ -32,7 +32,10 @@
       assistant: '[data-message-author-role="assistant"]',
       streaming: 'button[aria-label="Stop streaming"], button[data-testid="stop-button"]',
       composer: '#prompt-textarea, div[contenteditable="true"]#prompt-textarea, textarea[data-id]',
-      send: 'button[data-testid="send-button"], button[aria-label="Send prompt"]'
+      send: 'button[data-testid="send-button"], button[aria-label="Send prompt"]',
+      // Synthetic composer writes get ignored (or freeze the tab) here — the
+      // reliable delivery is clipboard + human paste. Scrape/publish unaffected.
+      copyFirst: true
     },
     {
       id: 'grok',
@@ -50,7 +53,9 @@
       assistant: 'message-content .model-response-text, .model-response-text',
       streaming: 'button[aria-label*="Stop"], .stop-button',
       composer: 'div[contenteditable="true"], rich-textarea div[contenteditable="true"], textarea',
-      send: 'button[aria-label*="Send"], button.send-button'
+      send: 'button[aria-label*="Send"], button.send-button',
+      // Same as ChatGPT: rich-textarea rejects synthetic input — copy-first.
+      copyFirst: true
     }
   ];
 
