@@ -474,6 +474,13 @@ app.use(require('./routes/copilot'));
 // copilot PULL side (/agent/v1/mission*, bearer-token) stays above.
 app.use(require('./routes/mission'));
 
+// CRM admin screens (/admin/crm/*) — v1.77, phase 1 of the lab integration
+// (docs/CRM-INTEGRATION.md). A SEPARATE PRODUCT that mounts here: every route
+// is requireAdmin, and with config.crm.enabled off each screen offers to turn
+// it on instead of rendering. The CMS's own paths call the CRM only through
+// the guarded seam in src/crm/index.js, never into these routes.
+app.use(require('./routes/crm'));
+
 // Terminal error handler — NEVER leak a stack trace to a client. Without this,
 // a body-parser error (e.g. an oversized/malformed body on the public /agent
 // surface) is handled by Express's default finalhandler, which in a non-prod

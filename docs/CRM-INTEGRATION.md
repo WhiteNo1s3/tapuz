@@ -1,6 +1,6 @@
 # CRM integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** planned (not started) · **Lab reviewed at:** `9350fd9` · **Target:** Tapuziel v1.76+
+**Status:** phase 0–1 **shipped** (v1.77) · **Lab reviewed at:** `9350fd9` · **Next:** phase 2
 
 The lab is a **specification and reference implementation**, not a merge source.
 Every module lands here rebuilt to our bar — the rule the lab's own README states.
@@ -70,21 +70,36 @@ That seam is what makes the "different product" claim real rather than a label.
 Each phase ends green on **both** suites plus its own new smoke script, and is a
 separate commit. Nothing in a later phase is needed to make an earlier one useful.
 
-### Phase 0 — pre-flight
-- Rebase the lab reference onto v1.76; regenerate `ROUTE-MAP.md` (clears the one
-  failing guard).
-- Add `config.crm.enabled` (default **off**) before any code reads it.
+### ~~Phase 0 — pre-flight~~ · **shipped v1.77**
+- `config.crm.enabled`, default **off**, added before any code read it.
+- `ROUTE-MAP.md` regenerated (24 CRM routes registered, drift guard green).
 
-### Phase 1 — the spine · *no public surface, no external calls*
-`src/db.js` schema (additive), then `src/crm/`: `contacts`, `Customer`,
-`events`, `relations`, `segments`, `lists`, `stats`, `geo`.
-Admin screens `/admin/crm/*`, all behind `requireAdmin`.
+### ~~Phase 1 — the spine~~ · **shipped v1.77** · *no public surface, no external calls*
+`src/db.js` schema (+7 tables, additive), then `src/crm/`: `contacts`,
+`Customer`, `events`, `relations`, `segments`, `lists`, and `index.js` — **the
+seam**. Admin screens `/admin/crm/*`, all `requireAdmin`.
 
-`Customer` is the OOP model to hold the line on — it is the datasheet the rest
-of the subsystem reads. Rebuild it first and let the others follow its shape.
+Rebuilt, not copied. What we changed from the lab's shape:
 
-**Risk:** low — nothing outside admin can reach it.
-**Acceptance:** the lab's `smoke-crm-lab` assertions, rewritten against our build.
+- **The seam is explicit.** `src/crm/index.js` is the only module the CMS may
+  call, and every hook on it is wrapped by `safe()`: flag off → returns null and
+  touches nothing; anything throws → logged, returns null. A test proves it by
+  breaking `upsertContact` and asserting the hook still does not throw.
+- **Identity is non-destructive.** A blank incoming field can never erase a
+  stored one (a later form that omits the name keeps the name); tags accumulate;
+  consent is a latch. Admin edits *can* clear, because a human meant it.
+- **Identity is Hebrew-first.** `+972-50-…` and `050-…` resolve to one person.
+- **An address is never stolen.** If an incoming identity already belongs to
+  someone else, the upsert resolves to its owner rather than violating the
+  partial unique index.
+- **Segment rules compile from a whitelist**, values always bound — a rule is
+  admin-authored JSON that becomes SQL, so it is the one place injection could
+  live. Tested with a hostile value.
+- **Retention exists from day one** (`events.pruneOlderThan`), keeping any event
+  that anchors a record elsewhere.
+
+**Acceptance (met):** `smoke-crm-contacts` (48 checks) + `smoke-crm-route`
+(19 HTTP checks), both in the CI chain; full suite green.
 
 ### Phase 2 — passive capture · *touches our hot paths*
 The six surgical edits: `form-capture.js` (upsert a contact on submit),

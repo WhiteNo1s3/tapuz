@@ -26,6 +26,13 @@ const DEFAULT_CONFIG = {
     titlePattern: "",     // e.g. "{page} · {site}" — empty = page title only
     defaultOgImage: ""    // fallback og:image when a page has none
   },
+  // CRM (v1.77). A SEPARATE PRODUCT that integrates, not a CMS feature: the
+  // CMS calls into it through a handful of hooks and never the reverse, and
+  // this single flag turns the whole subsystem off. Off = the CMS behaves
+  // exactly as it did before the CRM existed. See docs/CRM-INTEGRATION.md.
+  crm: {
+    enabled: false
+  },
   // S3: CMS-managed site chrome. The header/footer belong to the whole website
   // and wrap EVERY public page (serve + static export). Empty values fall back
   // to today's behavior so nothing regresses.

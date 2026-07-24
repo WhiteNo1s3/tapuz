@@ -17,6 +17,9 @@
     "titlePattern": "",
     "defaultOgImage": ""
   },
+  "crm": {
+    "enabled": true
+  },
   "header": {
     "tagline": "",
     "showLogo": true,

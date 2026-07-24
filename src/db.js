@@ -156,7 +156,121 @@ function initialize() {
     )
   `);
 
+  initializeCrm();
+
   console.log('Database initialized successfully.');
+}
+
+/**
+ * CRM schema (v1.77, phase 1 of docs/CRM-INTEGRATION.md).
+ *
+ * Purely additive and `crm_`-namespaced: the tables are created whether or not
+ * config.crm.enabled is on (an empty table costs nothing and means flipping the
+ * flag never needs a migration), but NOTHING writes to them while the flag is
+ * off. Dropping the CRM is dropping these tables — no CMS table is touched.
+ *
+ * Layering: `form_submissions` stays the record of a SUBMISSION (what someone
+ * sent, once). `crm_contacts` is the record of a PERSON, identified across many
+ * submissions and visits. One person, many submissions — so contacts sit ABOVE
+ * the inbox rather than replacing it, and the existing lead pipeline keeps
+ * working untouched.
+ */
+function initializeCrm() {
+  // A person. Identity is email-or-phone; both are optional because an
+  // anonymous visitor can earn a contact row from behaviour alone.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_contacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT,
+      phone TEXT,
+      name TEXT DEFAULT '',
+      company TEXT DEFAULT '',
+      status TEXT DEFAULT 'lead',
+      source TEXT DEFAULT '',
+      tags TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      country TEXT DEFAULT '',
+      consent INTEGER DEFAULT 0,
+      search_blob TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  // Identity uniqueness is PARTIAL: many contacts may have no email (NULL is
+  // distinct in SQLite), but a given address belongs to exactly one person.
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_contacts_email
+           ON crm_contacts(email) WHERE email IS NOT NULL AND email <> ''`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_contacts_phone
+           ON crm_contacts(phone) WHERE phone IS NOT NULL AND phone <> ''`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_contacts_status ON crm_contacts(status, updated_at DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_contacts_updated ON crm_contacts(updated_at DESC)');
+
+  // The timeline. Every typed thing a person did; `ref_id` points at the row in
+  // whichever table owns the detail (a form_submissions.id, later a send id).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contact_id INTEGER,
+      type TEXT NOT NULL,
+      path TEXT DEFAULT '',
+      title TEXT DEFAULT '',
+      ref_id INTEGER,
+      meta TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_events_contact ON crm_events(contact_id, id DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_events_type ON crm_events(type, created_at DESC)');
+
+  // The graph: who knows whom. Directed edges, deduped per (from, to, kind).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_relations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_id INTEGER NOT NULL,
+      to_id INTEGER NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'knows',
+      note TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (from_id) REFERENCES crm_contacts(id) ON DELETE CASCADE,
+      FOREIGN KEY (to_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_relations_edge ON crm_relations(from_id, to_id, kind)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_relations_to ON crm_relations(to_id)');
+
+  // Saved audiences. `rules` is JSON evaluated at read time, so a segment is
+  // always live rather than a stale materialized list.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_segments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      rules TEXT NOT NULL DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Named lists — explicit membership, unlike a rule-driven segment.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_lists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_list_members (
+      list_id INTEGER NOT NULL,
+      contact_id INTEGER NOT NULL,
+      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (list_id, contact_id),
+      FOREIGN KEY (list_id) REFERENCES crm_lists(id) ON DELETE CASCADE,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_list_members_contact ON crm_list_members(contact_id)');
 }
 
 // Export BEFORE auto-init: initialize() requires modules that require db back

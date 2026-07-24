@@ -84,6 +84,16 @@ const ADMIN_NAV_GROUPS = [
     ]
   },
   {
+    // CRM (v1.77) — its own group because it is its own product: the CMS runs
+    // without it, and one flag (config.crm.enabled) turns the whole group off.
+    key: 'crm', label: 'לקוחות', color: '#ea580c', desc: 'האנשים מאחורי הפניות — מי הם, מה עשו ואיך לפלח אותם',
+    items: [
+      { key: 'crm-contacts', href: '/admin/crm', label: 'אנשי קשר', icon: '👥' },
+      { key: 'crm-segments', href: '/admin/crm/segments', label: 'פילוחים', icon: '🎯' },
+      { key: 'crm-lists', href: '/admin/crm/lists', label: 'רשימות דיוור', icon: '📋' }
+    ]
+  },
+  {
     key: 'growth', label: 'קידום', color: '#059669', desc: 'להיראות בגוגל ולדעת מי נכנס',
     items: [
       { key: 'seo', href: '/admin/seo', label: 'SEO', icon: '🔍' },

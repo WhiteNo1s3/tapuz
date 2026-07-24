@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**146 routes across 33 files.**
+**158 routes across 34 files.**
 
 ## By file (what each module owns)
 
@@ -94,6 +94,21 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/ai/settings`
 - `POST /admin/api/ai/chat`
 - `GET /admin/chat`
+
+### `src/routes/crm.js` — 12 routes
+
+- `POST /admin/crm/settings`
+- `GET /admin/crm/segments`
+- `POST /admin/crm/segments`
+- `POST /admin/crm/segments/:id/delete`
+- `GET /admin/crm/lists`
+- `POST /admin/crm/lists`
+- `POST /admin/crm/lists/:id/delete`
+- `GET /admin/crm`
+- `GET /admin/crm/:id`
+- `POST /admin/crm/:id/update`
+- `POST /admin/crm/:id/note`
+- `POST /admin/crm/:id/delete`
 
 ### `src/routes/dashboard.js` — 2 routes
 
@@ -345,6 +360,18 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/create` | POST | `src/routes/pages-builder.js` |
 | `/admin/create-account` | GET | `src/routes/auth-screens.js` |
 | `/admin/create-account` | POST | `src/routes/auth-screens.js` |
+| `/admin/crm` | GET | `src/routes/crm.js` |
+| `/admin/crm/:id` | GET | `src/routes/crm.js` |
+| `/admin/crm/:id/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/:id/note` | POST | `src/routes/crm.js` |
+| `/admin/crm/:id/update` | POST | `src/routes/crm.js` |
+| `/admin/crm/lists` | GET | `src/routes/crm.js` |
+| `/admin/crm/lists` | POST | `src/routes/crm.js` |
+| `/admin/crm/lists/:id/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/segments` | GET | `src/routes/crm.js` |
+| `/admin/crm/segments` | POST | `src/routes/crm.js` |
+| `/admin/crm/segments/:id/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/settings` | POST | `src/routes/crm.js` |
 | `/admin/dashboard` | GET | `src/routes/dashboard.js` |
 | `/admin/delete` | POST | `src/routes/pages-builder.js` |
 | `/admin/edit/:fullPath` | GET | `src/routes/pages-builder.js` |
