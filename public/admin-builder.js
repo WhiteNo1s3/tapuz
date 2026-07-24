@@ -174,6 +174,29 @@
     return String(s).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
   }
 
+  /** Client mirror of the server's renderInlineMarks (v1.76) — the BenTML
+   *  inline language (@B/@I/@CODE/@LINK/@BREAK) rendered SAFELY for canvas
+   *  and editor previews: everything escaped, marks become real tags, links
+   *  become styled spans (the canvas must never navigate). */
+  function renderMarksPreview(raw) {
+    var s = String(raw == null ? '' : raw);
+    var tokens = [];
+    var hold = function (html) {
+      tokens.push(html);
+      return '§§TAPUZ' + (tokens.length - 1) + '§§';
+    };
+    s = s.replace(/@BREAK\b/gi, function () { return hold('<br>'); });
+    s = s.replace(/@B\{([^{}]*)\}/gi, function (_, inner) { return hold('<strong>' + esc(inner) + '</strong>'); });
+    s = s.replace(/@I\{([^{}]*)\}/gi, function (_, inner) { return hold('<em>' + esc(inner) + '</em>'); });
+    s = s.replace(/@CODE\{([^{}]*)\}/gi, function (_, inner) { return hold('<code>' + esc(inner) + '</code>'); });
+    s = s.replace(/@LINK\s*\(\s*url\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi, function (_, url, label) {
+      return hold('<span class="preview-link" title="' + escAttr(url) + '">' + esc(label) + '</span>');
+    });
+    var out = esc(s);
+    out = out.replace(/§§TAPUZ(\d+)§§/g, function (_, i) { return tokens[Number(i)] || ''; });
+    return out;
+  }
+
   function uid(type) {
     return (type || 'block') + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
   }
@@ -1560,7 +1583,7 @@
     if (block.type === 'text') {
       wrap.innerHTML =
         '<div data-inline-key="content" class="inline-text" style="line-height:1.6;color:#334155;min-height:1.4em">' +
-        esc(d.content || 'טקסט — לחצו לכתיבה ישירה').replace(/\n/g, '<br>') +
+        renderMarksPreview(d.content || 'טקסט — לחיצה כפולה לעריכה').replace(/\n/g, '<br>') +
         '</div>';
       wireInlineEditable(wrap, block);
       return wrap;
@@ -2556,7 +2579,9 @@
     nodes.forEach(function (target) {
       if (target.isContentEditable) return;
       if (key === 'content') {
-        target.innerHTML = esc(val || '').replace(/\n/g, '<br>');
+        // marks render in the preview too (v1.76) — Word-like means you see
+        // the bold, not the @B{} mark
+        target.innerHTML = renderMarksPreview(val || '').replace(/\n/g, '<br>');
       } else {
         target.textContent = val || '';
       }
@@ -2617,13 +2642,26 @@
     var original = block.data[key] != null ? String(block.data[key]) : '';
     var overlay = document.createElement('div');
     overlay.className = 'text-editor-modal';
+    // The Word tools (v1.76, Ben: "there are no tools in text box like word
+    // that I requested") — buttons emit the BenTML inline marks the server
+    // already renders (@B/@I/@CODE/@LINK): real formatting, zero new attack
+    // surface. The code editor keeps NO word options, by design.
     overlay.innerHTML =
       '<div class="text-editor-box' + (isHtml ? ' is-code' : '') + '">' +
       '<div class="te-head"><span>' +
       (isHtml ? '🧾 עורך HTML — קוד בלבד' : '📝 עריכת טקסט') +
       '</span><button type="button" class="te-close" aria-label="סגור">✕</button></div>' +
+      (isHtml ? '' :
+        '<div class="te-toolbar">' +
+        '<button type="button" data-fmt="B" title="מודגש (Ctrl+B)"><strong>B</strong></button>' +
+        '<button type="button" data-fmt="I" title="נטוי (Ctrl+I)"><em>I</em></button>' +
+        '<button type="button" data-fmt="CODE" title="קוד">&lt;/&gt;</button>' +
+        '<button type="button" data-fmt="LINK" title="קישור (Ctrl+K)">🔗</button>' +
+        '<span class="te-hint">שורה ריקה = פסקה חדשה</span>' +
+        '</div>') +
       '<textarea class="te-input" dir="' + (isHtml ? 'ltr' : 'auto') + '"' +
       (isHtml ? ' spellcheck="false"' : '') + '></textarea>' +
+      (isHtml ? '' : '<div class="te-preview" dir="auto"></div>') +
       '<div class="te-actions">' +
       '<button type="button" class="btn te-save">שמור (Ctrl+Enter)</button>' +
       '<button type="button" class="btn secondary te-cancel">ביטול (Esc)</button>' +
@@ -2631,6 +2669,36 @@
     document.body.appendChild(overlay);
     var ta = overlay.querySelector('.te-input');
     ta.value = original;
+
+    // live rendered preview — the "Word" half: you SEE the bold, not the mark
+    var pv = overlay.querySelector('.te-preview');
+    function refreshPreview() {
+      if (!pv) return;
+      var parts = String(ta.value || '').split(/\n\n+/);
+      pv.innerHTML = parts.map(function (p) {
+        return '<p>' + renderMarksPreview(p).replace(/\n/g, '<br>') + '</p>';
+      }).join('');
+    }
+    refreshPreview();
+    ta.addEventListener('input', refreshPreview);
+
+    function wrapMark(fmt) {
+      var start = ta.selectionStart || 0;
+      var end = ta.selectionEnd || 0;
+      var sel = ta.value.slice(start, end) || 'טקסט';
+      var ins = fmt === 'B' ? '@B{' + sel + '}'
+        : fmt === 'I' ? '@I{' + sel + '}'
+        : fmt === 'CODE' ? '@CODE{' + sel + '}'
+        : '@LINK(url: "https://"){' + sel + '}';
+      ta.value = ta.value.slice(0, start) + ins + ta.value.slice(end);
+      var pos = start + ins.length;
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+      refreshPreview();
+    }
+    overlay.querySelectorAll('[data-fmt]').forEach(function (b) {
+      b.addEventListener('click', function () { wrapMark(b.dataset.fmt); });
+    });
 
     function close() { overlay.remove(); }
     function save() {
@@ -2650,6 +2718,12 @@
     ta.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { e.preventDefault(); close(); }
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
+      if (!isHtml && (e.ctrlKey || e.metaKey)) {
+        var k = String(e.key || '').toLowerCase();
+        if (k === 'b') { e.preventDefault(); wrapMark('B'); }
+        else if (k === 'i') { e.preventDefault(); wrapMark('I'); }
+        else if (k === 'k') { e.preventDefault(); wrapMark('LINK'); }
+      }
     });
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);

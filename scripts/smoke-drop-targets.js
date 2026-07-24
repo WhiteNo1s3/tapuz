@@ -151,6 +151,22 @@ check('the HTML block gets the raw code editor', /isHtml = block\.type === 'html
 check('editor saves through history + dirty', /function save\(\) \{[\s\S]{0,200}?pushHistory\(\);[\s\S]{0,120}?markDirty\(\);/.test(builderSrc));
 check('editor modal styled as fixed overlay', /\.text-editor-modal \{[^}]*position: fixed/.test(css.replace(/\n/g, ' ')) && /\.text-editor-box\.is-code/.test(css));
 
+// ---- 9. Word tools in the editor window (v1.76) ----------------------------
+// The buttons emit BenTML inline marks (@B/@I/@CODE/@LINK) — the language the
+// server already renders. The HTML code editor keeps NO word options.
+
+check('editor window has the Word tools row (B/I/CODE/LINK)',
+  /te-toolbar/.test(builderSrc) && /data-fmt="B"/.test(builderSrc) && /data-fmt="LINK"/.test(builderSrc));
+check('tools emit BenTML marks, not raw HTML',
+  /'@B\{' \+ sel \+ '\}'/.test(builderSrc) && /@LINK\(url: "https:\/\/"\)/.test(builderSrc));
+check('the code editor keeps no word options', /\(isHtml \? '' :\s*'<div class="te-toolbar">/.test(builderSrc));
+check('editor shows a live rendered preview', /te-preview/.test(builderSrc) && /refreshPreview/.test(builderSrc));
+check('client marks renderer mirrors the server, escaped', /function renderMarksPreview/.test(builderSrc) && /§§TAPUZ/.test(builderSrc));
+check('canvas link previews never navigate (span, not anchor)', /preview-link/.test(builderSrc) && !/<a href.*preview-link/.test(builderSrc));
+check('keyboard shortcuts Ctrl+B/I/K', /k === 'b'/.test(builderSrc) && /k === 'k'/.test(builderSrc));
+check('canvas text preview renders marks', /renderMarksPreview\(d\.content/.test(builderSrc) && /renderMarksPreview\(val/.test(builderSrc));
+check('admin.css styles the toolbar + preview', /\.te-toolbar/.test(css) && /\.te-preview/.test(css) && /\.preview-link/.test(css));
+
 try { new Function(builderSrc); check('admin-builder.js parses', true); }
 catch (e) { check('admin-builder.js parses (' + e.message + ')', false); }
 

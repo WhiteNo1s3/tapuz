@@ -2460,6 +2460,52 @@ details.agent-snip-details summary { cursor: pointer; }
   border-top: 1px solid #e2e8f0;
   background: #f8fafc;
 }
+/* the Word tools row (v1.76) — emits BenTML inline marks */
+.text-editor-box .te-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.text-editor-box .te-toolbar button {
+  min-width: 32px;
+  height: 30px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+  font-size: .9rem;
+  color: #1e293b;
+}
+.text-editor-box .te-toolbar button:hover {
+  border-color: var(--select, #0a66c2);
+  color: var(--select, #0a66c2);
+}
+.text-editor-box .te-hint {
+  margin-inline-start: auto;
+  font-size: .72rem;
+  color: #94a3b8;
+}
+/* live rendered preview under the textarea — see the bold, not the mark */
+.text-editor-box .te-preview {
+  max-height: 160px;
+  overflow: auto;
+  padding: 10px 20px;
+  border-top: 1px dashed #e2e8f0;
+  background: #fcfcfd;
+  color: #334155;
+  font-size: .92rem;
+  line-height: 1.6;
+}
+.text-editor-box .te-preview p { margin: 0 0 .5em; }
+/* canvas link preview — looks like a link, never navigates */
+.preview-link {
+  color: #0a66c2;
+  text-decoration: underline;
+  cursor: default;
+}
 
 .inline-editable {
   cursor: text;
