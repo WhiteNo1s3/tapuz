@@ -31,8 +31,10 @@ check('renderCanvas repaints the outline on BOTH exits',
   (builder.match(/renderLayers\(\);/g) || []).length >= 3);
 check('selectBlock keeps the outline highlight when the canvas is skipped',
   /else renderLayers\(\); \/\/ canvas skipped/.test(builder));
-check('row click selects the block and scrolls the canvas to it',
-  /selectBlock\(r\.id\)/.test(builder) && /scrollIntoView\(\{ behavior: 'smooth'/.test(builder));
+// v1.75: the jump is INSTANT ('auto') — animated seeking was the screen-shake
+// Ben banned; deliberate navigation still centers the block.
+check('row click selects the block and centers the canvas on it (instant, not animated)',
+  /selectBlock\(r\.id\)/.test(builder) && /scrollIntoView\(\{ behavior: 'auto', block: 'center'/.test(builder));
 check('row labels come from the module catalog, text via textContent (no markup injection)',
   /MODULE_META\[r\.type\]/.test(builder) && /label\.textContent/.test(builder) && /hint\.textContent/.test(builder));
 check('empty page shows guidance', /הדף ריק — גררו מודול מהארגז/.test(builder));

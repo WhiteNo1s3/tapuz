@@ -2399,6 +2399,68 @@ details.agent-snip-details summary { cursor: pointer; }
    ========================================================================== */
 /* Foolproof inline editing: a persistent faint underline signals "this text
    is editable — just click", so no one has to discover double-click. */
+/* ── The centered editor window (v1.75) — dblclick on text opens it.
+   FIXED overlay: opening it never scrolls or shakes the page. ── */
+.text-editor-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(15, 23, 42, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.text-editor-box {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .35);
+  width: 640px;
+  max-width: 96vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.text-editor-box .te-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-weight: 700;
+  color: #1e293b;
+  border-bottom: 1px solid #e2e8f0;
+}
+.text-editor-box .te-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #64748b;
+  font-size: .95rem;
+}
+.text-editor-box .te-input {
+  border: none;
+  outline: none;
+  resize: vertical;
+  min-height: 240px;
+  padding: 18px 20px;
+  font: 400 1.02rem/1.7 system-ui, sans-serif;
+  color: #0f172a;
+}
+/* the HTML block gets a CODE editor — no word options, just the markup */
+.text-editor-box.is-code .te-input {
+  font: 400 .88rem/1.6 ui-monospace, 'Cascadia Code', Consolas, monospace;
+  background: #0f172a;
+  color: #e2e8f0;
+  min-height: 300px;
+}
+.text-editor-box .te-actions {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
 .inline-editable {
   cursor: text;
   outline: 1px dashed transparent;

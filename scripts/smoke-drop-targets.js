@@ -139,6 +139,18 @@ check('renderCanvas pins and restores the scroll position',
 check('builder topbar brand says Tapuziel', /brand-logo[^>]*>🍊 Tapuziel</.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'pages-builder.js'), 'utf8')));
 check('no leftover מכולות plural', !/מכולות/.test(builderSrc));
 
+// ---- 8. no seek, no shake (v1.75) ------------------------------------------
+// Single click = select only. Double click = a CENTERED editor window (fixed
+// overlay — opening it cannot scroll the page). No smooth scrolling anywhere;
+// deliberate jumps (layers, symbol insert) center instantly.
+
+check('no smooth scrolling remains', !/behavior: 'smooth'/.test(builderSrc));
+check('single click no longer starts inline editing (startInlineEdit is gone)', !/startInlineEdit/.test(builderSrc));
+check('dblclick opens the centered editor window', /openTextEditor\(block\.id, key\)/.test(builderSrc));
+check('the HTML block gets the raw code editor', /isHtml = block\.type === 'html' && key === 'content'/.test(builderSrc));
+check('editor saves through history + dirty', /function save\(\) \{[\s\S]{0,200}?pushHistory\(\);[\s\S]{0,120}?markDirty\(\);/.test(builderSrc));
+check('editor modal styled as fixed overlay', /\.text-editor-modal \{[^}]*position: fixed/.test(css.replace(/\n/g, ' ')) && /\.text-editor-box\.is-code/.test(css));
+
 try { new Function(builderSrc); check('admin-builder.js parses', true); }
 catch (e) { check('admin-builder.js parses (' + e.message + ')', false); }
 

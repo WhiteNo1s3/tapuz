@@ -949,7 +949,9 @@
       row.onclick = function () {
         selectBlock(r.id);
         var el = document.querySelector('.canvas-block[data-id="' + cssEsc(r.id) + '"]');
-        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // deliberate navigation (layers jump): center it INSTANTLY — animated
+        // seeking is the screen-shake Ben banned (v1.75)
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'auto', block: 'center' });
       };
       tree.appendChild(row);
     });
@@ -1444,12 +1446,11 @@
     });
 
     el.addEventListener('dblclick', function (e) {
-      // Inline text fields handle their own dblclick; otherwise focus settings
+      // Inline text fields handle their own dblclick; otherwise just select —
+      // the old scroll-to-panel was another shake source (v1.75)
       if (e.target.closest('[data-inline-key]')) return;
       e.stopPropagation();
       selectBlock(block.id);
-      var panel = document.getElementById('properties-panel');
-      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
 
     handle.addEventListener('dragstart', function (e) {
@@ -2582,142 +2583,76 @@
    * Double-click to write directly in the container.
    * Commits to block.data and refreshes the side settings text.
    */
-  function startInlineEdit(blockId, key, evt) {
-    var block = getBlock(blockId);
-    if (!block) return;
-    if (!block.data) block.data = {};
-    var wasSelected = selectedId === blockId;
-    selectedId = blockId;
-    // Only rebuild the canvas when the SELECTION actually changed \u2014 clicking to
-    // edit an already-selected block edits in place (no flicker, no lost caret).
-    if (!wasSelected) renderCanvas();
-    renderProperties();
-    syncToolboxMode();
-
-    var el = document.querySelector(
-      '[data-inline-id="' + cssEsc(blockId) + '"][data-inline-key="' + cssEsc(key) + '"]'
-    );
-    if (!el) return;
-
-    // The inline key IS the data field for every editable module \u2014 one path for
-    // hero/heading/text/quote/testimonial AND the generic registry textFields
-    // (cta/banner/marquee/\u2026). Only 'content' is multi-line.
-    var multiline = key === 'content';
-    var original = block.data[key] != null ? String(block.data[key]) : '';
-
-    el.contentEditable = 'true';
-    el.classList.add('inline-editing');
-    el.focus();
-    // Never nuke real content (v0.82): clicking into text puts the caret AT
-    // THE CLICK \u2014 what every editor does. Select-all happens ONLY while the
-    // text is still the untouched seed placeholder (type-to-replace). The old
-    // always-select-all made the first keystroke swallow the whole text.
-    var seed = '';
-    try {
-      var dd = defaultData(block.type) || {};
-      if (dd[key] != null) seed = String(dd[key]);
-    } catch (e) {}
-    var isPlaceholder = original !== '' && original === seed;
-    try {
-      var sel = window.getSelection();
-      sel.removeAllRanges();
-      var range = null;
-      if (isPlaceholder) {
-        range = document.createRange();
-        range.selectNodeContents(el);
-      } else {
-        var cx = evt && evt.clientX;
-        var cy = evt && evt.clientY;
-        if (cx != null && cy != null) {
-          // the coords survive the renderCanvas rebuild \u2014 same layout, new node
-          if (document.caretRangeFromPoint) {
-            var cr = document.caretRangeFromPoint(cx, cy);
-            if (cr && el.contains(cr.startContainer)) range = cr;
-          } else if (document.caretPositionFromPoint) {
-            var pos = document.caretPositionFromPoint(cx, cy);
-            if (pos && el.contains(pos.offsetNode)) {
-              range = document.createRange();
-              range.setStart(pos.offsetNode, pos.offset);
-            }
-          }
-        }
-        if (!range) {
-          // no usable point (keyboard entry, padding click) \u2192 caret at the end
-          range = document.createRange();
-          range.selectNodeContents(el);
-        }
-        // point-ranges are already collapsed; the end-fallback collapses here
-        range.collapse(false);
-      }
-      sel.addRange(range);
-    } catch (e) {}
-
-    var done = false;
-    function commit(save) {
-      if (done) return;
-      done = true;
-      el.contentEditable = 'false';
-      el.classList.remove('inline-editing');
-      if (save) {
-        var text = (el.innerText || '').replace(/\u00a0/g, ' ');
-        if (text !== original) {
-          pushHistory();
-          block.data[key] = text;
-          markDirty();
-        }
-        renderProperties();
-        if (multiline) el.innerHTML = esc(text).replace(/\n/g, '<br>');
-        else el.textContent = text;
-      } else {
-        if (multiline) el.innerHTML = esc(original).replace(/\n/g, '<br>');
-        else el.textContent = original;
-      }
-    }
-
-    el.onblur = function () {
-      commit(true);
-    };
-    el.onkeydown = function (e) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        commit(false);
-        el.blur();
-      }
-      // single-line fields: Enter commits
-      if (e.key === 'Enter' && !multiline) {
-        e.preventDefault();
-        el.blur();
-      }
-      // live mirror to the side panel field while typing
-      if (e.key !== 'Escape') {
-        setTimeout(function () {
-          var panelInput = document.querySelector('#properties-panel [data-key="' + key + '"]');
-          if (panelInput && document.activeElement !== panelInput) {
-            panelInput.value = (el.innerText || '').replace(/\u00a0/g, ' ');
-          }
-        }, 0);
-      }
-    };
-  }
 
   function wireInlineEditable(root, block) {
     if (!root) return;
     root.querySelectorAll('[data-inline-key]').forEach(function (el) {
       el.setAttribute('data-inline-id', block.id);
       el.classList.add('inline-editable');
-      el.title = 'לחצו כדי לכתוב — עריכה ישירה על הדף';
+      el.title = 'לחיצה כפולה = עריכה בחלון';
       var key = el.getAttribute('data-inline-key');
-      // Foolproof: a SINGLE click starts editing (double-click kept for habit).
-      // Once editing, clicks fall through so the caret can be placed normally.
-      var start = function (e) {
-        if (el.isContentEditable) return;
+      // Ben's design (v1.75): a SINGLE click only SELECTS (the calm class-move
+      // path — no rebuild, no focus, no scroll-seek, no shake). DOUBLE click
+      // opens a centered editor window: Word-like box for text, a raw code
+      // editor for the HTML block (like the BenTML source view). The old
+      // in-place contenteditable focused the element, and focus() made the
+      // browser scroll-seek — the shake Ben wanted gone.
+      el.addEventListener('dblclick', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        startInlineEdit(block.id, key, e);
-      };
-      el.addEventListener('click', start);
-      el.addEventListener('dblclick', start);
+        openTextEditor(block.id, key);
+      });
     });
+  }
+
+  /** Centered editor window (v1.75). The modal is FIXED — opening it never
+   *  scrolls the page. type 'html' + content → raw code editor, no word
+   *  options; everything else → a clean document-like textbox. */
+  function openTextEditor(blockId, key) {
+    var block = getBlock(blockId);
+    if (!block) return;
+    if (!block.data) block.data = {};
+    selectBlock(blockId); // calm path — highlight + panel follow, no jump
+    var isHtml = block.type === 'html' && key === 'content';
+    var original = block.data[key] != null ? String(block.data[key]) : '';
+    var overlay = document.createElement('div');
+    overlay.className = 'text-editor-modal';
+    overlay.innerHTML =
+      '<div class="text-editor-box' + (isHtml ? ' is-code' : '') + '">' +
+      '<div class="te-head"><span>' +
+      (isHtml ? '🧾 עורך HTML — קוד בלבד' : '📝 עריכת טקסט') +
+      '</span><button type="button" class="te-close" aria-label="סגור">✕</button></div>' +
+      '<textarea class="te-input" dir="' + (isHtml ? 'ltr' : 'auto') + '"' +
+      (isHtml ? ' spellcheck="false"' : '') + '></textarea>' +
+      '<div class="te-actions">' +
+      '<button type="button" class="btn te-save">שמור (Ctrl+Enter)</button>' +
+      '<button type="button" class="btn secondary te-cancel">ביטול (Esc)</button>' +
+      '</div></div>';
+    document.body.appendChild(overlay);
+    var ta = overlay.querySelector('.te-input');
+    ta.value = original;
+
+    function close() { overlay.remove(); }
+    function save() {
+      if (ta.value !== original) {
+        pushHistory();
+        block.data[key] = ta.value;
+        markDirty();
+        renderCanvas(); // scroll-pinned since v1.74 — repaint without a jump
+        renderProperties();
+      }
+      close();
+    }
+    overlay.querySelector('.te-save').addEventListener('click', save);
+    overlay.querySelector('.te-cancel').addEventListener('click', close);
+    overlay.querySelector('.te-close').addEventListener('click', close);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    ta.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
+    });
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
   }
 
   function field(label, inputHtml) {
@@ -4171,7 +4106,8 @@
     renderProperties();
     showToast('«' + sym.name + '» נוסף לדף 💠', 'ok');
     var el = document.querySelector('.canvas-block[data-id="' + cssEsc(copy.id) + '"]');
-    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // instant center — no animated seek (v1.75)
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'auto', block: 'center' });
   }
 
   function saveAsSymbol(id) {
