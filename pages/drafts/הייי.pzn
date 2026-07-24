@@ -14,8 +14,11 @@
     <bent-section id="about-coca-section" size="lg">
       <bent-heading id="about-coca-title" level="2" style-color="#870118">הסיפור של קוקה קולה</bent-heading>
       <bent-text id="about-coca-info-1" size="md">קוקה קולה היא אחת מהמשקאות המוכרים בעולם, עם מסורת ארוכה של יצירת רגעים משותפים, חוויות ורעננות.</bent-text>
+      <bent-cta id="cta_1784902789968_499" buttontext="צרו קשר" title="מוכנים להתחיל?" tone="brand" url="/contact" variant="primary">צוות Shaltiel Enterprises כאן בשבילכם.</bent-cta>
+      <bent-article-list id="article-list_1784902786330_13" columns="3" limit="6" tag="article" />
       <bent-text id="about-coca-info-2" size="md">המותג מזוהה עם טעם ייחודי, עיצוב אייקוני ויכולת לחבר בין אנשים בכל מקום בעולם.</bent-text>
     </bent-section>
+    <bent-category id="category_1784902783514_844" limit="6" showheader="true" slug="" />
     <bent-gallery id="coca-gallery-1" columns="3">
       <bent-image alt="פחית קוקה קולה קלאסית" src="/uploads/coke-can-1.jpg" />
       <bent-image alt="מארז פחיות קוקה קולה" src="/uploads/coke-can-2.jpg" />

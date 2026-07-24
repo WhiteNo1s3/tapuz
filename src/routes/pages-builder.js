@@ -212,7 +212,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
       <div class="brand-strip"></div>
       <div class="container topbar-inner">
         <div class="topbar-left">
-          <a href="/admin" class="brand-logo" style="font-size:1.35rem">🍊 Tapuz</a>
+          <a href="/admin" class="brand-logo" style="font-size:1.35rem">🍊 Tapuziel</a>
           <button type="button" id="btn-pages-nav" class="btn secondary sm" title="ניווט דפים">☰ דפים</button>
           <input id="page-title" class="page-title" value="${safeTitle}" placeholder="כותרת הדף">
           <span id="publish-badge" style="font-size:0.8rem;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeFg}">${statusLabel}${badgeExtra}</span>

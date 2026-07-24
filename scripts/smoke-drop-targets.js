@@ -125,6 +125,20 @@ check('.preview-card.is-container speaks the container language (dashed, unclipp
 check('the shipping-container word (מכולה) is gone from the builder UI', !/מכולה/.test(builderSrc));
 check('container head never stutters (מיכל מיכל)', /contBadge === 'מיכל' \? ''/.test(builderSrc));
 
+// ---- 7. click must not jump (v1.74) ----------------------------------------
+// Every click ran renderCanvas() -> innerHTML='' -> the document collapsed for
+// a frame and the browser clamped the scroll. Selection now MOVES a class.
+
+check('selectBlock moves the .selected class instead of rebuilding',
+  /prevEl\.classList\.remove\('selected'\)/.test(builderSrc) &&
+  /nextEl\.classList\.add\('selected'\)/.test(builderSrc));
+check('full render remains the fallback for un-rendered blocks', /renderCanvas\(\);\s*\}\s*\}\s*else renderLayers\(\)/.test(builderSrc.replace(/\/\/[^\n]*/g, '')));
+check('renderCanvas pins and restores the scroll position',
+  /keepScroll = scroller\.scrollTop/.test(builderSrc) &&
+  (builderSrc.match(/scroller\.scrollTop = keepScroll/g) || []).length >= 2);
+check('builder topbar brand says Tapuziel', /brand-logo[^>]*>🍊 Tapuziel</.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'pages-builder.js'), 'utf8')));
+check('no leftover מכולות plural', !/מכולות/.test(builderSrc));
+
 try { new Function(builderSrc); check('admin-builder.js parses', true); }
 catch (e) { check('admin-builder.js parses (' + e.message + ')', false); }
 

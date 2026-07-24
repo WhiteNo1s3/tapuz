@@ -52,7 +52,7 @@
     { type: 'stats', label: 'מדדים', hint: 'מספרים', icon: '＃', group: 'תוכן', keyword: 'STATS' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
     { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
-    { type: 'columns', label: 'עמודות', hint: 'מכולות + resize', icon: '▥', group: 'מבנה', keyword: 'ROW' },
+    { type: 'columns', label: 'עמודות', hint: 'מיכלים + resize', icon: '▥', group: 'מבנה', keyword: 'ROW' },
     { type: 'card', label: 'כרטיס', hint: 'קופסת מודולים', icon: '▢', group: 'מבנה', keyword: 'CARD' },
     { type: 'spacer', label: 'רווח', hint: 'sm–xl', icon: '↕', group: 'מבנה', keyword: 'SPACE' },
     { type: 'divider', label: 'קו מפריד', hint: 'line/dots', icon: '—', group: 'מבנה', keyword: 'DIVIDER' },
@@ -1006,9 +1006,19 @@
     (p && p.then ? p : Promise.resolve()).then(function () { iframe.src = previewUrl; });
   }
 
+  /** The canvas-block element for a block id (null when not rendered yet). */
+  function canvasBlockEl(id) {
+    return document.querySelector('.canvas-block[data-id="' + cssEsc(id) + '"]');
+  }
+
   function renderCanvas() {
     var canvas = document.getElementById('canvas');
     if (!canvas) return;
+    // A rebuild collapses the document for a frame; the browser clamps the
+    // scroll and the view jumps. Pin the position and put it back (guards
+    // every rebuild path: drops, undo, deselect, source swaps).
+    var scroller = document.scrollingElement || document.documentElement;
+    var keepScroll = scroller.scrollTop;
     canvas.innerHTML = '';
     canvas.classList.add('block-stack');
 
@@ -1029,19 +1039,21 @@
       empty.className = 'empty-canvas';
       empty.innerHTML =
         '<div style="font-size:1.05rem;font-weight:700;color:#334155;margin-bottom:8px">בנו את הדף כאן</div>' +
-        '<div>גררו מודולים מהסרגל · הזיזו מכולות · לחצו לבחירה</div>' +
+        '<div>גררו מודולים מהסרגל · הזיזו מיכלים · לחצו לבחירה</div>' +
         '<div style="margin-top:10px;font-size:0.8rem;color:#94a3b8">לחיצה כפולה על טקסט = כתיבה ישירה במיכל</div>' +
         '<div style="margin-top:6px;font-size:0.8rem;color:#94a3b8">בצד — הגדרות המודול + עיצוב מתקדם</div>';
       canvas.appendChild(empty);
       bindListSurface(canvas, null, null);
       updateCount();
       renderLayers();
+      scroller.scrollTop = keepScroll;
       return;
     }
 
     renderListInto(canvas, blocks, null, null);
     updateCount();
     renderLayers();
+    scroller.scrollTop = keepScroll;
   }
 
   function updateCount() {
@@ -2489,8 +2501,25 @@
 
   function selectBlock(id, opts) {
     opts = opts || {};
+    var prev = selectedId;
     selectedId = id;
-    if (!opts.skipCanvas) renderCanvas();
+    if (!opts.skipCanvas) {
+      // Selection is a CLASS, not a document. Rebuilding the canvas on every
+      // click wiped innerHTML, collapsed the page height for a frame, and the
+      // browser clamped the scroll — the "jump when you press on text" (Ben's
+      // report, v1.74). Move the class between elements; fall back to a full
+      // render only when the target isn't in the DOM yet (fresh drop, source
+      // swap).
+      var prevEl = prev != null ? canvasBlockEl(prev) : null;
+      var nextEl = id != null ? canvasBlockEl(id) : null;
+      if ((prev == null || prevEl) && (id == null || nextEl)) {
+        if (prevEl) prevEl.classList.remove('selected');
+        if (nextEl) nextEl.classList.add('selected');
+        renderLayers(); // the outline's highlight stays honest
+      } else {
+        renderCanvas();
+      }
+    }
     else renderLayers(); // canvas skipped — keep the outline's highlight honest
     if (!opts.skipProps) renderProperties();
     syncToolboxMode();
