@@ -29,7 +29,7 @@ function authCard(inner) {
   return `
     <div class="auth-stage">
       <div class="auth-card">
-        <div class="auth-brand">🍊 Tapuz</div>
+        <div class="auth-brand">🍊 Tapuziel</div>
         ${inner}
       </div>
     </div>`;

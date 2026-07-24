@@ -68,7 +68,7 @@ router.get('/admin/site-chrome', (req, res) => {
         <label class="field-label">טקסט תחתית חופשי</label>
         <textarea id="f-text" rows="2" placeholder="רחוב הרצל 1, תל אביב · טל׳ 03-0000000" class="input mb">${escapeAdmin(data.footer.text)}</textarea>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px">
-          <input type="checkbox" id="f-credit" ${data.footer.showCredit ? 'checked' : ''}> הצג קרדיט "נבנה עם Tapuz"
+          <input type="checkbox" id="f-credit" ${data.footer.showCredit ? 'checked' : ''}> הצג קרדיט "נבנה עם Tapuziel"
         </label>
       </section>
 

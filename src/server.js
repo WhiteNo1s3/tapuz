@@ -493,7 +493,7 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(PORT, () => {
   const base = auth.getAdminBase();
-  console.log(`✅ Tapuz Visual Builder: http://localhost:${PORT}${base}`);
+  console.log(`✅ Tapuziel Visual Builder: http://localhost:${PORT}${base}`);
   if (!auth.hasAdmin()) {
     console.log(`   ↳ אין עדיין חשבון מנהל — היכנס ל־${base} כדי ליצור אותו.`);
   }

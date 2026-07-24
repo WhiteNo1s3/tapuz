@@ -816,7 +816,7 @@ function renderSiteChrome(config, direction) {
   // --- Footer: CMS credit (on by default; a toggle turns it off) ---
   const footerCredit = footer.showCredit === false
     ? ''
-    : `<p class="footer-credit">נבנה עם Tapuz</p>`;
+    : `<p class="footer-credit">נבנה עם Tapuziel</p>`;
 
   return { headerTagline, headerClass, headerCta, footerColumns, footerText, footerSocial, footerCredit };
 }

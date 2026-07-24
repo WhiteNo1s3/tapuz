@@ -67,10 +67,10 @@ function exportSitePackage(name) {
 function importSitePackage(pkg, opts = {}) {
   if (!pkg || typeof pkg !== 'object') throw new Error('קובץ האתר אינו תקין (לא JSON)');
   if (pkg.format !== SITE_PACKAGE_FORMAT) {
-    throw new Error('זה לא קובץ אתר של Tapuz (format שגוי)');
+    throw new Error('זה לא קובץ אתר של Tapuziel (format שגוי)');
   }
   if (typeof pkg.version !== 'number' || pkg.version > SITE_PACKAGE_VERSION) {
-    throw new Error('גרסת קובץ האתר חדשה מדי לגרסת Tapuz הזו');
+    throw new Error('גרסת קובץ האתר חדשה מדי לגרסת Tapuziel הזו');
   }
   const overwrite = opts.overwrite === true;
 

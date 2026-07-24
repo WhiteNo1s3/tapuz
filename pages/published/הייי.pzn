@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>הייי</title>
+    <meta name="bent-slug" content="הייי" />
+  </head>
+  <body>
+    <bent-hero id="hero-coca-1" height="lg" image="/uploads/coca-cola-hero.jpg" overlay="2">
+      <bent-heading level="1">קוקה קולה - הרגע המרענן שלכם</bent-heading>
+      <bent-text>פחיות קוקה קולה קרות ומרעננות שמביאות איתן טעם מוכר, אנרגיה ורגעים בלתי נשכחים.</bent-text>
+      <bent-button href="#buy">הזמינו עכשיו</bent-button>
+    </bent-hero>
+    <bent-section id="about-coca-section" size="lg">
+      <bent-heading id="about-coca-title" level="2">הסיפור של קוקה קולה</bent-heading>
+      <bent-text id="about-coca-info-1" size="md">קוקה קולה היא אחת מהמשקאות המוכרים בעולם, עם מסורת ארוכה של יצירת רגעים משותפים, חוויות ורעננות.</bent-text>
+      <bent-text id="about-coca-info-2" size="md">המותג מזוהה עם טעם ייחודי, עיצוב אייקוני ויכולת לחבר בין אנשים בכל מקום בעולם.</bent-text>
+    </bent-section>
+    <bent-gallery id="coca-gallery-1" columns="3">
+      <bent-image alt="פחית קוקה קולה קלאסית" src="/uploads/coke-can-1.jpg" />
+      <bent-image alt="מארז פחיות קוקה קולה" src="/uploads/coke-can-2.jpg" />
+      <bent-image alt="פחית קוקה קולה קרה" src="/uploads/coke-can-3.jpg" />
+    </bent-gallery>
+    <bent-columns id="coca-features-columns" gap="medium">
+      <bent-col id="coca-feature-col-1" width="1/2">
+        <bent-heading id="coca-feature-title-1" level="2">למה לבחור בקוקה קולה?</bent-heading>
+        <bent-list id="coca-benefits-list" ordered="false">
+          <bent-item>טעם קלאסי ואהוב לאורך שנים</bent-item>
+          <bent-item>מושלם לארוחות, אירועים ורגעי הפסקה</bent-item>
+          <bent-item>עיצוב מוכר שמתאים לכל שולחן</bent-item>
+        </bent-list>
+      </bent-col>
+      <bent-col id="coca-feature-col-2" width="1/2">
+        <bent-image id="coca-product-image" alt="מוצרי קוקה קולה" src="/uploads/coca-product.jpg" width="full" />
+      </bent-col>
+    </bent-columns>
+    <bent-section id="coca-details-section" size="md">
+      <bent-heading id="coca-details-title" level="2">מידע על המוצר</bent-heading>
+      <bent-text id="coca-details-text-1">פחיות קוקה קולה מגיעות בפורמט נוח לשתייה אישית, לאחסון קל ולהגשה באירוח.</bent-text>
+      <bent-text id="coca-details-text-2">הפחיות נשמרות בצורה מיטבית כשהן מקוררות ומוכנות לפתיחה בכל רגע.</bent-text>
+    </bent-section>
+    <bent-features id="coca-features-grid" columns="3">
+      <bent-feature icon="sparkle" title="טעם מוכר" />
+      <bent-feature icon="cold" title="רעננות בכל לגימה" />
+      <bent-feature icon="share" title="מתאים לשיתוף" />
+    </bent-features>
+    <bent-cta id="coca-buy-cta" align="center" buttontext="קנו עכשיו" title="מוכנים ליהנות מקוקה קולה?" tone="brand" url="#" variant="primary" />
+    <bent-section id="coca-contact-section" size="md">
+      <bent-heading id="coca-contact-title" level="2">צרו קשר להזמנות</bent-heading>
+      <bent-contact-info id="coca-contact-info" address="" email="" hours="" phone="" />
+    </bent-section>
+  </body>
+</html>

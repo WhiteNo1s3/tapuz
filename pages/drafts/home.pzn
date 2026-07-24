@@ -37,9 +37,10 @@
         
         רוצים שני טורים? יש מודול @B{עמודות} בדיוק לזה.
       </bent-text>
+      <bent-heading id="heading_1784813245062_829" level="2">היי אני בן</bent-heading>
       <bent-button id="button_tplmrwujseg_10" href="#" rel="" target="_self" title="" variant="primary">כפתור בתוך מיכל</bent-button>
     </bent-section>
-    <bent-columns id="columns_tplmrwujseg_15" collapse="md" gap="md" valign="top">
+    <bent-columns id="columns_tplmrwujseg_15" collapse="md" gap="md" ratio="2:3" valign="top">
       <bent-col>
         <bent-heading id="heading_tplmrwujseg_12" level="3">טור ימין</bent-heading>
         <bent-text id="text_tplmrwujseg_13">שני טורים, כל אחד עם התוכן שלו. במסך צר הם נערמים אוטומטית — לא צריך לעשות כלום.</bent-text>

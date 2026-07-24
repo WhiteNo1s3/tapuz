@@ -138,7 +138,7 @@ function adminNav(active, sectionTitle, actionsHtml = '') {
   }).join('');
   return `
     <aside class="admin-side" aria-label="ניווט ראשי">
-      <a href="/admin/dashboard" class="side-brand"><span class="side-brand-mark">🍊</span><span class="nav-txt">Tapuz</span></a>
+      <a href="/admin/dashboard" class="side-brand"><span class="side-brand-mark">🍊</span><span class="nav-txt">Tapuziel</span></a>
       <nav class="admin-nav">${groups}</nav>
     </aside>
     <div class="topbar">
@@ -203,7 +203,10 @@ function paletteBootJson() {
   return _paletteJson;
 }
 
-function layout(content, title = 'Tapuz', accent = '#f97316', opts = {}) {
+// Product name: Tapuziel — final (Ben, 2026-07-24: "Tapuz is taken by many
+// organizations, we are to avoid that"). Repo/CLI internals may say tapuz;
+// anything a USER reads says Tapuziel.
+function layout(content, title = 'Tapuziel', accent = '#f97316', opts = {}) {
   // opts.bare skips the command palette (auth screens — pre-session, no nav)
   const palette = opts.bare ? '' : `
   <script>window.__TAPUZ_NAV__ = ${paletteBootJson()};</script>
@@ -222,7 +225,7 @@ function layout(content, title = 'Tapuz', accent = '#f97316', opts = {}) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} • Tapuz</title>
+  <title>${title} • Tapuziel</title>
   <link rel="stylesheet" href="/css/main.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>:root { --admin-accent: ${accent}; }</style>

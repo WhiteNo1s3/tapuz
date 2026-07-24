@@ -5,8 +5,8 @@ const fs = require('fs');
 const CONFIG_PATH = path.join(require('./paths').CONFIG_DIR, 'site.json');
 
 const DEFAULT_CONFIG = {
-  title: "Tapuz",
-  description: "אתר בנוי עם Tapuz CMS",
+  title: "Tapuziel",
+  description: "אתר בנוי עם Tapuziel CMS",
   baseUrl: "",
   defaultTheme: "default",
   language: "he",
@@ -40,7 +40,7 @@ const DEFAULT_CONFIG = {
     text: "",             // free footer text (line breaks preserved)
     columns: [],          // [{ title, links: [{ label, url }] }]
     social: [],           // [{ network, url }]
-    showCredit: true      // show the small "נבנה עם Tapuz" credit line
+    showCredit: true      // show the small "נבנה עם Tapuziel" credit line
   },
   admin: {
     // URL path of the admin area (S2). Change to a hard-to-guess value for a
