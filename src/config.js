@@ -31,7 +31,19 @@ const DEFAULT_CONFIG = {
   // this single flag turns the whole subsystem off. Off = the CMS behaves
   // exactly as it did before the CRM existed. See docs/CRM-INTEGRATION.md.
   crm: {
-    enabled: false
+    enabled: false,
+    // Marketing pixels (v1.79, phase 3). Every one of these ships OFF, and
+    // `requireConsent` defaults ON: a tracker that loads before the visitor
+    // agrees is the default we refuse to ship, whatever the law says this week.
+    pixels: {
+      enabled: false,
+      requireConsent: true,
+      banner: true,            // use our built-in consent bar (off = wire your own)
+      meta: { pixelId: '' },
+      googleAds: { conversionId: '', conversionLabel: '' },
+      tiktok: { pixelId: '' },
+      linkedin: { partnerId: '' }
+    }
   },
   // S3: CMS-managed site chrome. The header/footer belong to the whole website
   // and wrap EVERY public page (serve + static export). Empty values fall back
@@ -106,9 +118,22 @@ function loadConfig() {
       };
       // CRM: its own stanza per this file's rule, so a site.json written before
       // a future crm subkey existed still exposes the full default shape.
+      // `pixels` needs a nested stanza of its own for the same reason — and
+      // each vendor block below it, so a partial write can never leave a vendor
+      // key undefined where the renderer would read it.
+      const dc = data.crm || {};
+      const dp = dc.pixels || {};
       merged.crm = {
         ...clone(DEFAULT_CONFIG.crm),
-        ...(data.crm || {})
+        ...dc,
+        pixels: {
+          ...clone(DEFAULT_CONFIG.crm.pixels),
+          ...dp,
+          meta: { ...clone(DEFAULT_CONFIG.crm.pixels.meta), ...(dp.meta || {}) },
+          googleAds: { ...clone(DEFAULT_CONFIG.crm.pixels.googleAds), ...(dp.googleAds || {}) },
+          tiktok: { ...clone(DEFAULT_CONFIG.crm.pixels.tiktok), ...(dp.tiktok || {}) },
+          linkedin: { ...clone(DEFAULT_CONFIG.crm.pixels.linkedin), ...(dp.linkedin || {}) }
+        }
       };
       // Each nested default needs its own merge stanza (the top-level spread is
       // shallow), otherwise a partial site.json drops new default subkeys.

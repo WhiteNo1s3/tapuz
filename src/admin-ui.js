@@ -90,7 +90,8 @@ const ADMIN_NAV_GROUPS = [
     items: [
       { key: 'crm-contacts', href: '/admin/crm', label: 'אנשי קשר', icon: '👥' },
       { key: 'crm-segments', href: '/admin/crm/segments', label: 'פילוחים', icon: '🎯' },
-      { key: 'crm-lists', href: '/admin/crm/lists', label: 'רשימות דיוור', icon: '📋' }
+      { key: 'crm-lists', href: '/admin/crm/lists', label: 'רשימות דיוור', icon: '📋' },
+      { key: 'crm-pixels', href: '/admin/crm/pixels', label: 'פיקסלים', icon: '📡' }
     ]
   },
   {

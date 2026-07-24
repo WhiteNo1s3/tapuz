@@ -985,7 +985,12 @@ function renderPage(page, options = {}) {
   // Site-wide extras (WhatsApp float, search, language switcher, first-party
   // analytics beacon) — injected at body-end via {{site_extras}} so live serve
   // and static export match.
-  const siteExtras = renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml + renderAnalyticsBeacon(config);
+  // Marketing pixels (v1.79) ride the body-end extras rather than <head>: the
+  // consent bar is real markup (invalid in <head>), and a consent-gated tracker
+  // gains nothing from loading earlier. Returns '' when pixels are off, so a
+  // site without them renders byte-for-byte what it always did.
+  const siteExtras = renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
+    renderAnalyticsBeacon(config) + require('./crm/pixels').renderPixels(config);
   const seoJsonLd = seoLib.jsonLdScript(seoLib.buildJsonLd({
     title: pageTitle, description: pageDesc, image: ogAbs, isArticle, isHome,
     siteName: config.title || '',

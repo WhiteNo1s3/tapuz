@@ -18,7 +18,25 @@
     "defaultOgImage": ""
   },
   "crm": {
-    "enabled": true
+    "enabled": true,
+    "pixels": {
+      "enabled": false,
+      "requireConsent": true,
+      "banner": true,
+      "meta": {
+        "pixelId": ""
+      },
+      "googleAds": {
+        "conversionId": "",
+        "conversionLabel": ""
+      },
+      "tiktok": {
+        "pixelId": ""
+      },
+      "linkedin": {
+        "partnerId": ""
+      }
+    }
   },
   "header": {
     "tagline": "",

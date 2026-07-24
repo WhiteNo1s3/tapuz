@@ -185,6 +185,81 @@ router.post('/admin/crm/lists/:id/delete', requireAdmin, (req, res) => {
   res.redirect('/admin/crm/lists');
 });
 
+// ─── pixels (declared BEFORE /:id) ───────────────────────────────────
+router.get('/admin/crm/pixels', requireAdmin, requireCrm('crm-pixels', 'פיקסלים'), (req, res) => {
+  const cfg = require('../config').loadConfig();
+  const p = (cfg.crm && cfg.crm.pixels) || {};
+  const on = (v) => (v ? 'checked' : '');
+  const val = (v) => esc(v || '');
+
+  page(res, 'crm-pixels', 'פיקסלים', `
+    <div class="card">
+      <div class="card-head">📡 פיקסלים — מדידה של מערכות פרסום</div>
+      <p class="lead">
+        כאן מדביקים את מזהי הפיקסל של מערכות הפרסום. הקוד שלהן ירוץ אצל המבקרים
+        <strong>רק</strong> אחרי שיאשרו — וכיבוי מחזיר את האתר בדיוק למה שהוגש קודם.
+      </p>
+      <form method="POST" action="/admin/crm/pixels" class="stack">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="enabled" value="1" ${on(p.enabled)}> הפעל פיקסלים
+        </label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="requireConsent" value="1" ${on(p.requireConsent !== false)}>
+          בקש אישור מהמבקר לפני טעינה <strong>(מומלץ מאוד)</strong>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="banner" value="1" ${on(p.banner !== false)}>
+          הצג את סרגל האישור שלנו (כבו אם יש לכם סרגל משלכם)
+        </label>
+
+        <div class="side-title">מזהים</div>
+        <label>Meta / Facebook Pixel ID
+          <input name="metaPixelId" class="input" dir="ltr" value="${val(p.meta && p.meta.pixelId)}" placeholder="123456789012345"></label>
+        <label>Google Ads Conversion ID
+          <input name="googleAdsId" class="input" dir="ltr" value="${val(p.googleAds && p.googleAds.conversionId)}" placeholder="AW-123456789"></label>
+        <label>Google Ads Conversion Label
+          <input name="googleAdsLabel" class="input" dir="ltr" value="${val(p.googleAds && p.googleAds.conversionLabel)}"></label>
+        <label>TikTok Pixel ID
+          <input name="tiktokPixelId" class="input" dir="ltr" value="${val(p.tiktok && p.tiktok.pixelId)}"></label>
+        <label>LinkedIn Partner ID
+          <input name="linkedinPartnerId" class="input" dir="ltr" value="${val(p.linkedin && p.linkedin.partnerId)}"></label>
+
+        <button class="btn" type="submit">שמור</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-head">איך זה מתנהג</div>
+      <ul class="muted" style="font-size:.88rem;line-height:1.9;padding-inline-start:18px;margin:0">
+        <li>מבקר ששלח Do-Not-Track — שום פיקסל לא ייטען, גם אם אישר.</li>
+        <li>עד שהמבקר מאשר, קוד הספקים <strong>לא נמצא בכלל</strong> בעמוד — רק כטקסט שממתין.</li>
+        <li>אפשר לחבר סרגל אישור משלכם: <code>window.tapuzConsent.grant()</code> / <code>.deny()</code>.</li>
+        <li>בלי מזהים, או עם הפיקסלים כבויים — הדף מוגש בדיוק כמו קודם.</li>
+      </ul>
+    </div>`);
+});
+
+router.post('/admin/crm/pixels', requireAdmin, (req, res) => {
+  const config = require('../config');
+  const cfg = config.loadConfig();
+  const b = req.body || {};
+  cfg.crm = Object.assign({}, cfg.crm, {
+    pixels: {
+      enabled: !!b.enabled,
+      requireConsent: !!b.requireConsent,
+      banner: !!b.banner,
+      meta: { pixelId: String(b.metaPixelId || '').trim() },
+      googleAds: {
+        conversionId: String(b.googleAdsId || '').trim(),
+        conversionLabel: String(b.googleAdsLabel || '').trim()
+      },
+      tiktok: { pixelId: String(b.tiktokPixelId || '').trim() },
+      linkedin: { partnerId: String(b.linkedinPartnerId || '').trim() }
+    }
+  });
+  config.saveConfig(cfg);
+  res.redirect('/admin/crm/pixels');
+});
+
 // ─── contacts: the list ──────────────────────────────────────────────
 router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קשר'), (req, res) => {
   const { contacts, Customer } = require('../crm');

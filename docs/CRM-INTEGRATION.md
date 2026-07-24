@@ -1,6 +1,6 @@
 # CRM integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phase 0–2 **shipped** (v1.77–v1.78) · **Lab reviewed at:** `9350fd9` · **Next:** phase 3
+**Status:** phase 0–3a **shipped** (v1.77–v1.79) · **Lab reviewed at:** `9350fd9` · **Next:** phase 3b (server-side conversions), then 3c (campaigns)
 
 The lab is a **specification and reference implementation**, not a merge source.
 Every module lands here rebuilt to our bar — the rule the lab's own README states.
@@ -126,15 +126,42 @@ is still saved**. Also pinned: DNT/GPC wins even for a known person, a forged
 token resolves to nobody, and with the flag off there is no contact, no cookie
 and no event.
 
-### Phase 3 — outbound · *external network, PII leaves the box*
-Pixels (`renderer.js` head injection), Meta CAPI, GA4 MP, campaigns/SMTP with
-open-and-click tracking.
+Phase 3 split in delivery — the browser-side and server-side halves are
+independently useful and independently risky:
 
-**Risk:** medium-high. Requirements: every integration **opt-in, default off**;
-consent-gated; all outbound calls timeout-bounded and failure-isolated (a dead
-CAPI endpoint must not slow a page render); PII hashing verified against Meta's
-spec with a fixture test.
-**Acceptance:** a render with all pixels off is byte-identical to today's output.
+### ~~Phase 3a — marketing pixels~~ · **shipped v1.79**
+Meta / Google Ads / TikTok / LinkedIn, rendered into the body-end extras.
+Opt-in, default off, **consent-required by default**: until the visitor agrees
+the vendor code is not live markup at all — it waits as a JSON string the
+loader injects on consent. DNT/GPC outranks consent. Ids are charset-filtered
+per vendor and length-capped; a built-in RTL consent bar ships, and a site with
+its own banner can suppress ours and drive `window.tapuzConsent.grant()/.deny()`.
+
+**What live testing caught that unit tests could not.** The site's own CSP
+withholds `'unsafe-eval'`, so the obvious loader — `eval` a snippet string —
+was **silently blocked in production while appearing to work in DevTools**,
+which is exempt from CSP. Two real defects, both fixed: the loader now injects
+a `<script>` *element* (covered by the existing `'unsafe-inline'`), and the CSP
+is widened by **exactly the origins the configured vendors need** — Meta alone
+adds only `connect.facebook.net` + `www.facebook.com`, and an unconfigured
+vendor adds nothing. `'unsafe-eval'` is never granted. The silent `catch` that
+hid the failure now logs one console warning per failing vendor.
+
+**Acceptance (met):** `smoke-crm-pixels` (25 checks) including the plan's bar —
+a real `renderPage` with pixels off is **byte-identical** to the pre-feature
+output — plus id-injection resistance and the CSP minimal-privilege rules.
+Verified live: consent bar → grant → Facebook's script actually loads, zero CSP
+violations; toggling pixels off restores the original CSP header character for
+character.
+
+### Phase 3b — server-side conversions · *next*
+Meta CAPI + GA4 Measurement Protocol, sharing an `event_id` with the browser
+pixel for deduplication. PII hashed to Meta's spec (trim → lowercase → SHA-256,
+digits-only phones) with a fixture test. Timeout-bounded and failure-isolated: a
+dead CAPI endpoint must not slow a form submission.
+
+### Phase 3c — campaigns
+Named-list sends over SMTP with open/click tracking.
 
 ### Phase 4 — customer-service chat · *public + paid*
 `cs-chat` + `tz-cs-chat.js` widget, **last**, and only with:

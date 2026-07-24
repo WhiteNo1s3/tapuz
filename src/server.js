@@ -156,18 +156,28 @@ app.use((req, res, next) => {
   if (exempt) return next();
   const isPage = req.method === 'GET' && (p === '/' || p.endsWith('.html') || !path.extname(p));
   if (isPage) {
+    // Marketing pixels (v1.79) run third-party code, which this policy exists
+    // to stop. So the policy is widened by EXACTLY the vendors the owner
+    // configured, and only while pixels are enabled — a site with no pixels
+    // gets the original policy, character for character. Note we still never
+    // grant 'unsafe-eval': the pixel loader injects <script> elements, which
+    // 'unsafe-inline' already covers.
+    let px = { script: [], img: [], connect: [], frame: [] };
+    try { px = require('./crm/pixels').cspSources(require('./config').loadConfig()); }
+    catch (e) { /* a CSP must never fail open on a config error */ }
+    const src = (base, extra) => (extra.length ? base + ' ' + [...new Set(extra)].join(' ') : base);
     res.setHeader('Content-Security-Policy', [
       "default-src 'self'",
       // 'unsafe-inline' scripts: the first-party analytics beacon + optional
       // gtag init are inline and must survive static export. Authored content
       // cannot inject <script> (raw HTML in body is forbidden; values escaped),
       // so residual risk is low; hashing these is a tracked follow-up.
-      "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
+      src("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com", px.script),
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
+      src("img-src 'self' data: https:", px.img),
       "font-src 'self' data:",
-      "frame-src 'self' https://www.youtube.com https://www.google.com",
-      "connect-src 'self'",
+      src("frame-src 'self' https://www.youtube.com https://www.google.com", px.frame),
+      src("connect-src 'self'", px.connect),
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
