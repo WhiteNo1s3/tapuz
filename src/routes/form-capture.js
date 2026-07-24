@@ -63,6 +63,13 @@ router.post('/api/form', (req, res) => {
   try {
     require('../notify').sendLeadNotification({ id: result.id, page, fields: body }).catch(() => {});
   } catch (e) { /* notify module itself must never break the form endpoint */ }
+  // CRM (v1.77 phase 2): resolve the PERSON behind this submission and link
+  // their browser. Same discipline as notify above — the submission is already
+  // saved, so this runs after the point of no return and the guarded seam
+  // swallows anything that goes wrong. A CRM fault must never cost a lead.
+  require('../crm').captureForm({
+    fields: body, page, submissionId: result.id, req, res
+  });
   if (wantsJsonReply) return res.json({ ok: true, id: result.id });
   return res.redirect('/form-sent');
 });

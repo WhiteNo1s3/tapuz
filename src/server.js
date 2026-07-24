@@ -109,6 +109,14 @@ app.post('/_tapuz/collect', express.json({ limit: '2kb', type: ['application/jso
 
     const ref = typeof b.ref === 'string' ? b.ref.slice(0, 1024) : '';
     analytics.recordPageview({ path: p, referrer: ref, ip, userAgent: ua });
+    // CRM (v1.77 phase 2): if this browser was linked to a person by an earlier
+    // form submission, the visit also joins their timeline. An UNLINKED visitor
+    // records nothing here — they stay anonymous in `pageviews` alone, which is
+    // the whole point of keeping the two systems apart. Runs after the
+    // analytics write and behind the guarded seam, so it cannot cost a
+    // pageview; DNT/GPC and the bot filter above already excluded this request
+    // long before we reach it.
+    require('./crm').capturePageview({ req, path: p });
   } catch (e) {
     // Never surface collector errors to anonymous callers.
   }

@@ -26,6 +26,7 @@ const events = require('./events');
 const relations = require('./relations');
 const segments = require('./segments');
 const lists = require('./lists');
+const visitors = require('./visitors');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -75,10 +76,14 @@ function identityFromFields(fields = {}) {
 }
 
 /**
- * HOOK — a form was submitted (phase 2 call site: routes/form-capture.js).
- * Resolves or creates the person and records the submission on their timeline.
+ * HOOK — a form was submitted (call site: routes/form-capture.js).
  *
- * @param {{fields:object, page?:string, submissionId?:number, country?:string}} input
+ * Resolves or creates the person, records the submission on their timeline,
+ * and — because they just chose to identify themselves — links this browser to
+ * them so their later visits have somewhere to land. Passing `req`/`res` is
+ * optional: without them the person is still recorded, just not linked.
+ *
+ * @param {{fields:object, page?:string, submissionId?:number, country?:string, req?:object, res?:object}} input
  * @returns {{contact:object, created:boolean}|null}
  */
 const captureForm = safe('captureForm', (input = {}) => {
@@ -94,24 +99,33 @@ const captureForm = safe('captureForm', (input = {}) => {
     title: identity.name || identity.email || identity.phone || '',
     refId: input.submissionId != null ? input.submissionId : null
   });
+  if (input.req && input.res) visitors.link(input.req, input.res, contact.id);
   return { contact, created };
 });
 
 /**
- * HOOK — a page was viewed (phase 2 call site: server.js beacon).
- * Only recorded against a KNOWN person: an anonymous pageview already lives in
- * `pageviews`, and duplicating it here would grow the timeline without adding
- * knowledge.
+ * HOOK — a page was viewed (call site: the /_tapuz/collect beacon).
+ *
+ * Recorded ONLY against a browser already linked to a person. An anonymous
+ * visit is already counted in `pageviews`; copying it here would grow the
+ * timeline without adding knowledge, and would quietly turn an anonymous
+ * analytics event into a personal one. Unlinked visitor → null, nothing stored.
+ *
+ * @param {{req:object, path?:string, title?:string}} input
  */
 const capturePageview = safe('capturePageview', (input = {}) => {
-  if (input.contactId == null) return null;
+  const contactId = input.contactId != null ? input.contactId : visitors.contactIdFor(input.req);
+  if (contactId == null) return null;
   return events.record({
-    contactId: input.contactId,
+    contactId,
     type: 'pageview',
     path: input.path || '',
     title: input.title || ''
   });
 });
+
+/** Which person is this browser, if any? Null is the normal answer. */
+const contactIdForRequest = safe('contactIdForRequest', (req) => visitors.contactIdFor(req));
 
 /** HOOK — free-text note against a person (admin/copilot). */
 const note = safe('note', (contactId, text) =>
@@ -135,6 +149,7 @@ module.exports = {
   // hooks the CMS may call
   captureForm,
   capturePageview,
+  contactIdForRequest,
   note,
   summary,
   identityFromFields,
@@ -144,5 +159,6 @@ module.exports = {
   relations,
   segments,
   lists,
+  visitors,
   Customer
 };

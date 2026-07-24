@@ -104,6 +104,12 @@ function loadConfig() {
         ...clone(DEFAULT_CONFIG.seo),
         ...(data.seo || {})
       };
+      // CRM: its own stanza per this file's rule, so a site.json written before
+      // a future crm subkey existed still exposes the full default shape.
+      merged.crm = {
+        ...clone(DEFAULT_CONFIG.crm),
+        ...(data.crm || {})
+      };
       // Each nested default needs its own merge stanza (the top-level spread is
       // shallow), otherwise a partial site.json drops new default subkeys.
       merged.admin = {

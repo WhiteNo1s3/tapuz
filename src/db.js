@@ -271,6 +271,26 @@ function initializeCrm() {
     )
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_list_members_contact ON crm_list_members(contact_id)');
+
+  // Browser → person (v1.77 phase 2). The analytics `pageviews` table is
+  // deliberately anonymous: its visitor hash is re-salted daily and prior
+  // salts are discarded, so it CANNOT be used to follow someone over time —
+  // a privacy property we will not trade away for a CRM feature.
+  //
+  // So attribution gets its own opt-in link: a random token in a first-party
+  // cookie, minted only when a visitor VOLUNTARILY identifies themselves (a
+  // form submission) and only while the CRM is enabled. One person may hold
+  // several tokens (many browsers); a token maps to exactly one person.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_visitors (
+      token TEXT PRIMARY KEY,
+      contact_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_visitors_contact ON crm_visitors(contact_id)');
 }
 
 // Export BEFORE auto-init: initialize() requires modules that require db back

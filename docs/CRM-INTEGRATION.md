@@ -1,6 +1,6 @@
 # CRM integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phase 0–1 **shipped** (v1.77) · **Lab reviewed at:** `9350fd9` · **Next:** phase 2
+**Status:** phase 0–2 **shipped** (v1.77–v1.78) · **Lab reviewed at:** `9350fd9` · **Next:** phase 3
 
 The lab is a **specification and reference implementation**, not a merge source.
 Every module lands here rebuilt to our bar — the rule the lab's own README states.
@@ -101,15 +101,30 @@ Rebuilt, not copied. What we changed from the lab's shape:
 **Acceptance (met):** `smoke-crm-contacts` (48 checks) + `smoke-crm-route`
 (19 HTTP checks), both in the CI chain; full suite green.
 
-### Phase 2 — passive capture · *touches our hot paths*
-The six surgical edits: `form-capture.js` (upsert a contact on submit),
-`analytics.js` + `server.js` (pageview → `crm_events`), `admin-ui.js` (nav).
+### ~~Phase 2 — passive capture~~ · **shipped v1.78** · *touches our hot paths*
+Two call sites, three lines each: `routes/form-capture.js` (a submission
+resolves the person behind it) and the `/_tapuz/collect` beacon in `server.js`
+(a linked visit joins their timeline). Both call the guarded seam, both run
+*after* the CMS's own write, so neither can cost a lead or a pageview.
 
-**Risk:** medium — these are our live paths. Every CRM call goes in a
-`try/catch` that swallows and logs; a CRM error must never cost a lead.
-**Acceptance:** `smoke-form`, `smoke-forms-inbox`, `smoke-analytics`,
-`smoke-conversions` unchanged and green + a new test proving a *throwing* CRM
-still lets a form submit succeed.
+**Attribution needed a mechanism, and the obvious one was refused.** The
+`pageviews` table re-salts its visitor hash daily and destroys the old salt, so
+it cannot follow anyone across days — a deliberate privacy property, and not
+something to trade away for a CRM feature. So attribution got its own narrower
+link (`crm_visitors`): a random token in a first-party `HttpOnly` cookie, minted
+**only** when someone voluntarily identifies themselves by sending a form, and
+**only** while the CRM is on. An anonymous visitor stays anonymous forever; a
+person who wrote to you gets a timeline — which is what they already expected
+when they typed their phone number in. A cookie already bound to someone else
+(shared computer) is never reassigned: the new person earns a fresh token.
+
+**Acceptance (met):** `smoke-form`, `smoke-forms-inbox`, `smoke-analytics`,
+`smoke-conversions`, `smoke-form-capture-route` all unchanged and green, plus
+`smoke-crm-capture` (24 checks) — whose centrepiece drops `crm_contacts` out
+from under the running server and proves a form submission **still succeeds and
+is still saved**. Also pinned: DNT/GPC wins even for a known person, a forged
+token resolves to nobody, and with the flag off there is no contact, no cookie
+and no event.
 
 ### Phase 3 — outbound · *external network, PII leaves the box*
 Pixels (`renderer.js` head injection), Meta CAPI, GA4 MP, campaigns/SMTP with
