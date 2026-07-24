@@ -2130,6 +2130,22 @@ body.is-col-resizing .column-head {
   min-height: 80px;
   padding: 6px;
 }
+/* Flat-blocks containers (card, parallax, section…) speak the SAME container
+   language as columns (v1.72). They were wearing .preview-card — the
+   ARTICLE-card look (solid grey, radius 9, pad 0, overflow:hidden) — so on
+   canvas an "old" container read as a random clipped white box, and its
+   overflow:hidden CUT the drop highlights whenever a drag approached. */
+.preview-card.is-container {
+  border: 2px dashed #c7d2fe;
+  border-radius: var(--r-md);
+  background: #f8faff;
+  padding: 8px;
+  overflow: visible;
+  min-height: 60px;
+}
+.preview-card.is-container > .column-head {
+  margin-bottom: 6px;
+}
 
 .col-resize-handle {
   width: 10px;

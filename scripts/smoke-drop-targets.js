@@ -116,6 +116,15 @@ check('new column joins with an equal share + history push',
   /pushHistory\(\);\s*var ratios/.test(builderSrc.replace(/\n/g, ' ')));
 check('admin.css styles .row-add-column', /\.row-add-column\s*\{/.test(css));
 
+// ---- 6. container canvas language (v1.72 fine-tuning) ----------------------
+// Flat-blocks containers were wearing the ARTICLE-card look; its
+// overflow:hidden clipped the drop highlights whenever a drag approached.
+
+check('.preview-card.is-container speaks the container language (dashed, unclipped)',
+  /\.preview-card\.is-container \{[^}]*dashed[^}]*overflow: visible/.test(css.replace(/\n/g, ' ')));
+check('the shipping-container word (מכולה) is gone from the builder UI', !/מכולה/.test(builderSrc));
+check('container head never stutters (מיכל מיכל)', /contBadge === 'מיכל' \? ''/.test(builderSrc));
+
 try { new Function(builderSrc); check('admin-builder.js parses', true); }
 catch (e) { check('admin-builder.js parses (' + e.message + ')', false); }
 

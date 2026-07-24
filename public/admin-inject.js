@@ -38,7 +38,7 @@
       .map(
         (t) =>
           `<li><code>${t.tool}</code> <span class="muted">${t.title}</span> ${
-            t.kind === 'container' ? '<span class="tag">מכולה</span>' : ''
+            t.kind === 'container' ? '<span class="tag">מיכל</span>' : ''
           }</li>`
       )
       .join('');

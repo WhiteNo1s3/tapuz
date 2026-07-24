@@ -1030,7 +1030,7 @@
       empty.innerHTML =
         '<div style="font-size:1.05rem;font-weight:700;color:#334155;margin-bottom:8px">בנו את הדף כאן</div>' +
         '<div>גררו מודולים מהסרגל · הזיזו מכולות · לחצו לבחירה</div>' +
-        '<div style="margin-top:10px;font-size:0.8rem;color:#94a3b8">לחיצה כפולה על טקסט = כתיבה ישירה במכולה</div>' +
+        '<div style="margin-top:10px;font-size:0.8rem;color:#94a3b8">לחיצה כפולה על טקסט = כתיבה ישירה במיכל</div>' +
         '<div style="margin-top:6px;font-size:0.8rem;color:#94a3b8">בצד — הגדרות המודול + עיצוב מתקדם</div>';
       canvas.appendChild(empty);
       bindListSurface(canvas, null, null);
@@ -1369,7 +1369,7 @@
     label.className = 'block-label';
     // Language keyword first — agents/humans see BenTML, not a mystery list label
     var kw = bentmlKeywordFor(block.type);
-    // Nested tag names the container: "בטור" for columns, "ב<שם המכולה>"
+    // Nested tag names the container: "בטור" for columns, "ב<שם המיכל>"
     // for card / parallax / any blocks-container.
     var nestTag = '';
     if (nested) {
@@ -1727,7 +1727,10 @@
       contInner.className = 'preview-card is-container';
       var contBadge = esc((contDef && contDef.labelHe) || typeLabel(block.type));
       contInner.innerHTML =
-        '<div class="column-head"><span class="container-badge">' + contBadge + '</span> מכולה</div>';
+        // the badge names the TYPE; the suffix says "container" — except when
+        // the type is literally the מיכל tool, where it would stutter
+        '<div class="column-head"><span class="container-badge">' + contBadge + '</span>' +
+        (contBadge === 'מיכל' ? '' : ' מיכל') + '</div>';
       var contList = document.createElement('div');
       contList.className = 'column-list';
       var contKids = ensureBlocks(block);
@@ -2059,7 +2062,7 @@
       head.className = 'column-head';
       var pct = Math.round((ratios[colIndex] / ratios.reduce(function (a, b) { return a + b; }, 0)) * 100);
       head.innerHTML =
-        '<span class="container-badge">מכולה</span> טור ' +
+        '<span class="container-badge">מיכל</span> טור ' +
         (colIndex + 1) +
         ' <span class="col-ratio-label">' +
         pct +
@@ -3126,7 +3129,7 @@
       '<span class="prop-type-icon">' + esc(typeIcon(block.type)) + '</span>' +
       '<div>' +
       '<div class="prop-type-name">' + esc(typeLabel(block.type)) + '</div>' +
-      '<div class="prop-type-sub">בחרת מכולה · ערוך כאן או לחיצה כפולה על הטקסט בדף</div>' +
+      '<div class="prop-type-sub">בחרת מיכל · ערוך כאן או לחיצה כפולה על הטקסט בדף</div>' +
       '</div></div>' +
       '<div class="prop-section-label">תוכן</div>';
 
@@ -3145,9 +3148,9 @@
       var innerCount = (block.data && Array.isArray(block.data.blocks)) ? block.data.blocks.length : 0;
       html +=
         '<div class="prop-hint">' + esc(typeLabel(block.type)) +
-        ' = מכולה. גררו מודולים פנימה מהסרגל (או הוסיפו למטה). ' +
+        ' = מיכל. גררו מודולים פנימה מהסרגל (או הוסיפו למטה). ' +
         innerCount + ' מודולים בפנים.</div>';
-      html += '<button type="button" class="btn" data-container-add-text="1">+ טקסט במכולה</button>';
+      html += '<button type="button" class="btn" data-container-add-text="1">+ טקסט במיכל</button>';
     } else if (regDef && !HAND_WRITTEN[block.type]) {
       html += renderSchemaForm(regDef, block);
       if (block.type === 'spacer') {
