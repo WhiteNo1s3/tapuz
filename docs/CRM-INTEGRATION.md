@@ -1,6 +1,6 @@
 # CRM integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phase 0–3b **shipped** (v1.77–v1.80) · **Lab reviewed at:** `9350fd9` · **Next:** phase 3c (campaigns), then phase 5 hygiene
+**Status:** phase 0–3 **complete** (v1.77–v1.81) · **Lab reviewed at:** `9350fd9` · **Next:** phase 5 hygiene (retention, FTS5, subject export/delete)
 
 The lab is a **specification and reference implementation**, not a merge source.
 Every module lands here rebuilt to our bar — the rule the lab's own README states.
@@ -182,8 +182,38 @@ thank-you page carries the same event id the redirect issued, a forged `?e=`
 renders nothing, and a submission with a real outbound call to Meta on a bogus
 token returned in **94 ms** with the lead saved — the visitor never waits.
 
-### Phase 3c — campaigns
-Named-list sends over SMTP with open/click tracking.
+### ~~Phase 3c — campaigns~~ · **shipped v1.81**
+Named-list sends over SMTP with open/click tracking, plus the three obligations
+that come with marketing email:
+
+- **Consent is the recipient list**, not the list. Only contacts with
+  `consent = 1` and an address are sent to; the skips are counted and shown, so
+  the owner sees *why* their audience is smaller than their list.
+- **Every message carries an unsubscribe** — in the body and in the RFC 8058
+  `List-Unsubscribe` / `List-Unsubscribe-Post` headers mail clients turn into a
+  one-click button. Unsubscribing clears consent, which also stops phase-3b
+  conversion reporting for that person: one refusal, honoured everywhere.
+- **Click tracking cannot become an open redirect.** Links are extracted at send
+  time and frozen onto the campaign; the tracked URL carries an *index* into
+  that list, never a destination, so a request cannot name where it wants to go.
+  A `?u=https://evil.example` on a tracked link is ignored.
+
+Also: each recipient gets their own unguessable token (one value serves the open
+pixel, every tracked link and the unsubscribe URL — no address or id in a URL);
+the open pixel returns a **byte-identical** response for real and fake tokens so
+it cannot be used to discover which tokens exist; a sent campaign is frozen
+against edits because it is the record of what actually went out; sending runs
+in the background with a gap between messages, so a slow SMTP server never holds
+a request open; and SMTP stays owned by `notify.js` — campaigns never touch
+nodemailer.
+
+**Acceptance (met):** `smoke-crm-campaigns` (40 checks, fake transport — nothing
+leaves the machine) + `smoke-crm-track-route` (19 HTTP checks against the public
+endpoints). Verified live: the send panel reports "1 will receive · 1 on the list
+did not consent". *En route, one real defect: `parseInt('0x0', 10)` returns `0`,
+so a malformed link index silently resolved to a valid link — not exploitable
+(the destination still came from the frozen list) but sloppy; the index is now
+required to be a clean digit string.*
 
 ### Phase 4 — customer-service chat · *public + paid*
 `cs-chat` + `tz-cs-chat.js` widget, **last**, and only with:

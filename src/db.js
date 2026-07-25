@@ -291,6 +291,48 @@ function initializeCrm() {
     )
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_visitors_contact ON crm_visitors(contact_id)');
+
+  // Campaigns (v1.81 phase 3c). `links` is the JSON array of URLs extracted
+  // from the body at send time — click tracking redirects by INDEX into that
+  // frozen list, never to a URL supplied in the request, so the tracker can
+  // never become an open redirect.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_campaigns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      subject TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      list_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'draft',
+      links TEXT DEFAULT '[]',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      sent_at DATETIME,
+      FOREIGN KEY (list_id) REFERENCES crm_lists(id) ON DELETE SET NULL
+    )
+  `);
+
+  // One row per recipient. `token` is the unguessable handle that appears in
+  // the open pixel, every tracked link and the unsubscribe URL — so a single
+  // random value identifies the send without ever putting an email address or
+  // a contact id in a URL.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_campaign_sends (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      contact_id INTEGER NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      error TEXT,
+      sent_at DATETIME,
+      opened_at DATETIME,
+      clicked_at DATETIME,
+      click_count INTEGER DEFAULT 0,
+      FOREIGN KEY (campaign_id) REFERENCES crm_campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_sends_campaign ON crm_campaign_sends(campaign_id, status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_sends_contact ON crm_campaign_sends(contact_id)');
 }
 
 // Export BEFORE auto-init: initialize() requires modules that require db back

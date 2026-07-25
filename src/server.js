@@ -139,6 +139,13 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
 // parsed) and before the static mounts. Order is load-bearing.
 app.use(require('./routes/form-capture'));
 
+// Public CRM email tracking (open pixel / tracked link / unsubscribe) — v1.81,
+// phase 3c. PUBLIC and unauthenticated, because a recipient's mail client is
+// what calls them. MOUNTED HERE for the same reason as form capture: before the
+// static mounts, so /crm/* resolves to these handlers rather than a 404. Inert
+// while the CRM is off, and rate-limited per IP.
+app.use(require('./routes/crm-track'));
+
 // Agent bridge payloads (intent / .pzn source) are small — cap them tight,
 // BEFORE the 12mb global parser (which then skips an already-parsed body).
 app.use('/agent', bodyParser.json({ limit: '512kb' }));

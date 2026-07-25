@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**162 routes across 34 files.**
+**172 routes across 35 files.**
 
 ## By file (what each module owns)
 
@@ -95,7 +95,14 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/ai/chat`
 - `GET /admin/chat`
 
-### `src/routes/crm.js` — 16 routes
+### `src/routes/crm-track.js` — 4 routes
+
+- `GET /crm/o/:token.gif`
+- `GET /crm/c/:token/:index`
+- `GET /crm/u/:token`
+- `POST /crm/u/:token`
+
+### `src/routes/crm.js` — 22 routes
 
 - `POST /admin/crm/settings`
 - `GET /admin/crm/segments`
@@ -106,6 +113,12 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/crm/lists/:id/delete`
 - `GET /admin/crm/pixels`
 - `POST /admin/crm/pixels`
+- `GET /admin/crm/campaigns`
+- `POST /admin/crm/campaigns`
+- `GET /admin/crm/campaigns/:id`
+- `POST /admin/crm/campaigns/:id/update`
+- `POST /admin/crm/campaigns/:id/send`
+- `POST /admin/crm/campaigns/:id/delete`
 - `GET /admin/crm/conversions`
 - `POST /admin/crm/conversions`
 - `GET /admin/crm`
@@ -369,6 +382,12 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/:id/delete` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/note` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/update` | POST | `src/routes/crm.js` |
+| `/admin/crm/campaigns` | GET | `src/routes/crm.js` |
+| `/admin/crm/campaigns` | POST | `src/routes/crm.js` |
+| `/admin/crm/campaigns/:id` | GET | `src/routes/crm.js` |
+| `/admin/crm/campaigns/:id/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/campaigns/:id/send` | POST | `src/routes/crm.js` |
+| `/admin/crm/campaigns/:id/update` | POST | `src/routes/crm.js` |
 | `/admin/crm/conversions` | GET | `src/routes/crm.js` |
 | `/admin/crm/conversions` | POST | `src/routes/crm.js` |
 | `/admin/crm/lists` | GET | `src/routes/crm.js` |
@@ -436,6 +455,10 @@ shows where, so editing is navigation, not a grep hunt.
 | `/agent/v1/source` | POST | `src/routes/agent-bridge.js` |
 | `/agent/v1/toolbox` | GET | `src/routes/agent-bridge.js` |
 | `/api/form` | POST | `src/routes/form-capture.js` |
+| `/crm/c/:token/:index` | GET | `src/routes/crm-track.js` |
+| `/crm/o/:token.gif` | GET | `src/routes/crm-track.js` |
+| `/crm/u/:token` | GET | `src/routes/crm-track.js` |
+| `/crm/u/:token` | POST | `src/routes/crm-track.js` |
 | `/form-sent` | GET | `src/routes/form-capture.js` |
 | `/pzn-schema.json` | GET | `src/server.js` |
 | `/robots.txt` | GET | `src/routes/seo-files.js` |

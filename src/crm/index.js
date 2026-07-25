@@ -28,6 +28,7 @@ const segments = require('./segments');
 const lists = require('./lists');
 const visitors = require('./visitors');
 const conversions = require('./conversions');
+const campaigns = require('./campaigns');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -178,5 +179,6 @@ module.exports = {
   lists,
   visitors,
   conversions,
+  campaigns,
   Customer
 };

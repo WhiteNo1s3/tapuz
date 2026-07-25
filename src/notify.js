@@ -115,12 +115,43 @@ async function sendLeadNotification(lead) {
   }
 }
 
+/**
+ * Send an arbitrary message through the configured SMTP transport (v1.80).
+ *
+ * SMTP belongs to exactly one module, and this is it — the CRM's campaign
+ * sender goes through here rather than reaching for nodemailer itself, so
+ * credentials, transport construction and the test hook all stay in one place.
+ *
+ * @param {{to:string, subject:string, html?:string, text?:string, headers?:object}} message
+ * @returns {Promise<{ok:boolean, error?:string}>} never throws
+ */
+async function sendMail(message) {
+  const raw = load();
+  if (!isConfigured(raw)) return { ok: false, error: 'not configured' };
+  if (!message || !message.to) return { ok: false, error: 'no recipient' };
+  try {
+    const transport = transportFactory
+      ? transportFactory(raw)
+      : require('nodemailer').createTransport({
+          host: raw.host,
+          port: raw.port,
+          secure: !!raw.secure,
+          auth: { user: raw.user, pass: raw.pass }
+        });
+    await transport.sendMail(Object.assign({ from: raw.from || raw.user }, message));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 module.exports = {
   getSettings,
   saveSettings,
   isConfigured,
   buildMessage,
   sendLeadNotification,
+  sendMail,
   _setTransportFactory,
   STORE_PATH
 };

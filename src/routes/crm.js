@@ -260,6 +260,181 @@ router.post('/admin/crm/pixels', requireAdmin, (req, res) => {
   res.redirect('/admin/crm/pixels');
 });
 
+// ─── campaigns (declared BEFORE /:id) ────────────────────────────────
+router.get('/admin/crm/campaigns', requireAdmin, requireCrm('crm-campaigns', 'קמפיינים'), (req, res) => {
+  const { campaigns, lists } = require('../crm');
+  const rows = campaigns.listCampaigns();
+  const allLists = lists.listAll();
+  const smtp = require('../notify').getSettings();
+
+  const statusPill = (s) => s === 'sent'
+    ? '<span class="pill">נשלח</span>'
+    : s === 'sending' ? '<span class="pill" style="background:#fffbeb;color:#92400e;border-color:#fde68a">שולח…</span>'
+      : '<span class="pill" style="background:#f1f5f9;color:#475569;border-color:#e2e8f0">טיוטה</span>';
+
+  const list = rows.length
+    ? rows.map((c) => `
+        <a class="rec" href="/admin/crm/campaigns/${c.id}" style="display:flex;align-items:center;gap:12px;text-decoration:none">
+          <div style="flex:1">
+            <strong>${esc(c.name)}</strong>
+            <div class="muted" style="font-size:.82rem">${esc(c.subject || 'ללא נושא')}</div>
+          </div>
+          ${c.status === 'sent' || c.status === 'sending'
+            ? `<span class="muted" style="font-size:.8rem">${c.sent_count} נשלחו · ${c.opened_count} נפתחו · ${c.clicked_count} הקליקו${c.failed_count ? ' · ' + c.failed_count + ' נכשלו' : ''}</span>`
+            : ''}
+          ${statusPill(c.status)}
+        </a>`).join('')
+    : '<div class="empty-state">אין עדיין קמפיינים.</div>';
+
+  page(res, 'crm-campaigns', 'קמפיינים', `
+    ${smtp.enabled && smtp.host ? '' : `
+    <div class="card" style="border-color:#fde68a;background:#fffbeb">
+      <strong>שרת המייל לא מוגדר</strong>
+      <p class="muted" style="margin:6px 0 0;font-size:.88rem">
+        אפשר להכין קמפיין, אבל שליחה תיכשל עד שתגדירו SMTP ב־<a href="/admin/settings">הגדרות</a>.
+      </p>
+    </div>`}
+    <div class="card">
+      <div class="card-head">✉️ קמפיינים</div>
+      <p class="lead">
+        דיוור לרשימה — ואז רואים מי פתח ומי הקליק. נשלח <strong>רק</strong> למי שנתן
+        הסכמה לדיוור, וכל הודעה כוללת קישור הסרה בלחיצה אחת.
+      </p>
+      ${list}
+    </div>
+    <div class="card">
+      <div class="card-head">קמפיין חדש</div>
+      <form method="POST" action="/admin/crm/campaigns" class="stack">
+        <label>שם פנימי<input name="name" class="input" required placeholder="ניוזלטר יולי"></label>
+        <label>נושא המייל<input name="subject" class="input" placeholder="מה חדש אצלנו"></label>
+        <label>רשימת נמענים
+          <select name="listId" class="input">
+            <option value="">— בחרו רשימה —</option>
+            ${allLists.map((l) => `<option value="${l.id}">${esc(l.name)} (${l.members})</option>`).join('')}
+          </select>
+        </label>
+        <label>תוכן (HTML)
+          <textarea name="body" class="input" rows="8" dir="auto"
+            placeholder="שלום {{name}}, ...">‏</textarea></label>
+        <div class="prop-hint">אפשר להשתמש ב־<code>{{name}}</code> ו־<code>{{email}}</code>. קישורים יעברו מעקב הקלקות אוטומטית.</div>
+        <button class="btn" type="submit">צור טיוטה</button>
+      </form>
+    </div>`);
+});
+
+router.post('/admin/crm/campaigns', requireAdmin, (req, res) => {
+  const { campaigns } = require('../crm');
+  const b = req.body || {};
+  try {
+    const c = campaigns.createCampaign({
+      name: b.name, subject: b.subject, body: b.body, listId: b.listId
+    });
+    return res.redirect('/admin/crm/campaigns/' + c.id);
+  } catch (e) {
+    return res.redirect('/admin/crm/campaigns');
+  }
+});
+
+router.get('/admin/crm/campaigns/:id', requireAdmin, requireCrm('crm-campaigns', 'קמפיין'), (req, res) => {
+  const { campaigns, lists } = require('../crm');
+  const c = campaigns.getCampaign(req.params.id);
+  if (!c) return res.status(404).send(layout('<div class="container">קמפיין לא נמצא</div>', 'לא נמצא', ACCENT));
+  const audience = campaigns.audienceFor(c);
+  const sends = campaigns.sendsFor(c.id);
+  const allLists = lists.listAll();
+  const isDraft = c.status === 'draft';
+
+  const results = sends.length
+    ? sends.map((s) => `
+        <div class="rec" style="display:flex;gap:10px;align-items:center">
+          <span style="flex:1">${esc(s.name || s.email)}</span>
+          ${s.status === 'failed'
+            ? `<span class="pill" style="background:#fef2f2;color:#b91c1c;border-color:#fecaca">נכשל</span>`
+            : ''}
+          ${s.opened_at ? '<span class="pill">נפתח</span>' : ''}
+          ${s.clicked_at ? `<span class="pill">הקליק ×${s.click_count}</span>` : ''}
+        </div>`).join('')
+    : '';
+
+  page(res, 'crm-campaigns', c.name, `
+    <div class="card">
+      <div class="section-bar">
+        <div class="card-head">✉️ ${esc(c.name)}</div>
+        <a class="btn secondary sm" href="/admin/crm/campaigns">← לרשימה</a>
+      </div>
+      ${isDraft ? `
+      <form method="POST" action="/admin/crm/campaigns/${c.id}/update" class="stack">
+        <label>שם פנימי<input name="name" class="input" value="${esc(c.name)}"></label>
+        <label>נושא המייל<input name="subject" class="input" value="${esc(c.subject)}"></label>
+        <label>רשימת נמענים
+          <select name="listId" class="input">
+            <option value="">— בחרו רשימה —</option>
+            ${allLists.map((l) =>
+              `<option value="${l.id}" ${l.id === c.list_id ? 'selected' : ''}>${esc(l.name)} (${l.members})</option>`).join('')}
+          </select>
+        </label>
+        <label>תוכן (HTML)<textarea name="body" class="input" rows="10" dir="auto">${esc(c.body)}</textarea></label>
+        <button class="btn secondary" type="submit">שמור טיוטה</button>
+      </form>` : `
+        <p class="muted">נושא: <strong>${esc(c.subject)}</strong> · נשלח ב־${esc(c.sent_at || '')}</p>
+        <p class="muted" style="font-size:.85rem">קמפיין שנשלח נעול — הוא הרשומה של מה שיצא בפועל.</p>`}
+    </div>
+
+    ${isDraft ? `
+    <div class="card">
+      <div class="card-head">📤 שליחה</div>
+      <p class="lead">
+        ${audience.recipients.length} נמענים יקבלו את הדיוור.
+        ${audience.skippedNoConsent ? `<br><strong>${audience.skippedNoConsent}</strong> ברשימה לא נתנו הסכמה לדיוור — הם לא יקבלו.` : ''}
+        ${audience.skippedNoEmail ? `<br>${audience.skippedNoEmail} ברשימה בלי כתובת מייל.` : ''}
+      </p>
+      ${audience.recipients.length ? `
+      <form method="POST" action="/admin/crm/campaigns/${c.id}/send"
+            onsubmit="return confirm('לשלוח ל-${audience.recipients.length} נמענים? אין דרך לבטל.')">
+        <button class="btn" type="submit">שלח עכשיו ל-${audience.recipients.length} נמענים</button>
+      </form>` : '<p class="muted">אין נמענים עם הסכמה — אין מה לשלוח.</p>'}
+    </div>` : ''}
+
+    ${results ? `
+    <div class="card">
+      <div class="card-head">📊 תוצאות</div>
+      ${results}
+    </div>` : ''}
+
+    ${isDraft ? `
+    <div class="card">
+      <div class="card-head">🗑 מחיקה</div>
+      <form method="POST" action="/admin/crm/campaigns/${c.id}/delete"
+            onsubmit="return confirm('למחוק את הקמפיין?')">
+        <button class="btn secondary" type="submit">מחק קמפיין</button>
+      </form>
+    </div>` : ''}`);
+});
+
+router.post('/admin/crm/campaigns/:id/update', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  require('../crm').campaigns.updateCampaign(req.params.id, {
+    name: b.name, subject: b.subject, body: b.body, listId: b.listId
+  });
+  res.redirect('/admin/crm/campaigns/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/campaigns/:id/send', requireAdmin, (req, res) => {
+  const { campaigns } = require('../crm');
+  // The public base URL has to be absolute — it ends up in someone's inbox,
+  // where a relative path means nothing.
+  const cfg = require('../config').loadConfig();
+  const baseUrl = String(cfg.baseUrl || '').replace(/\/+$/, '') ||
+    (req.protocol + '://' + req.get('host'));
+  campaigns.startSend(req.params.id, { baseUrl });
+  res.redirect('/admin/crm/campaigns/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/campaigns/:id/delete', requireAdmin, (req, res) => {
+  require('../crm').campaigns.deleteCampaign(req.params.id);
+  res.redirect('/admin/crm/campaigns');
+});
+
 // ─── server-side conversions (declared BEFORE /:id) ──────────────────
 router.get('/admin/crm/conversions', requireAdmin, requireCrm('crm-conversions', 'המרות בשרת'), (req, res) => {
   const cfg = require('../config').loadConfig();
