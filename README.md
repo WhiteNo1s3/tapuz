@@ -73,7 +73,9 @@ TAPUZ_ROOT=/path/to/my-site node src/server.js
 ## בדיקות
 
 ```bash
-npm run test:smoke               # כל חבילת ה-smoke (~99 בדיקות, שער ה-CI)
+npm run qa                       # דוח QA מלא בפкודה אחת (מראה CI + CRM/WhatsApp)
+npm run qa:quick                 # pzn + CRM/WA + route-map בלי full smoke
+npm run test:smoke               # כל חבילת ה-smoke (שער ה-CI)
 npm run test:pzn                 # מנוע ה-.pzn (יחידה, node --test)
 
 node scripts/smoke-drafts.js     # או בדיקה בודדת: טיוטה/פרסום/שחזור

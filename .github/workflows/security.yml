@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm ci || npm install
       - run: npm run test:pzn
       - run: npm run test:smoke
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm ci || npm install
       # Fail on a HIGH/CRITICAL advisory in a PRODUCTION dependency — what
       # actually ships to a deployed CMS. Dev-only + low/moderate transitive
