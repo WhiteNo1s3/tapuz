@@ -179,6 +179,19 @@ campaigns.startSend(camp.id, { baseUrl: 'https://x.example', sender: () => Promi
   check('their campaign sends are gone',
     db.prepare('SELECT COUNT(*) AS n FROM crm_campaign_sends WHERE contact_id = ?').get(dana.id).n === 0);
   check('they are gone from the search index', contacts.listContacts({ q: 'כהן' }).length === 0);
+  // v1.83: a support transcript holds the person's OWN words, so an erasure
+  // request takes it too — the FK's SET NULL would have left it behind.
+  check('their support chat transcript is gone, not just unlinked', (() => {
+    const cs = require('../src/crm/cs');
+    const p = contacts.upsertContact({ email: 'chatty@example.com', name: 'שוחח' }).contact;
+    const conv = cs.startConversation();
+    db.prepare('UPDATE crm_cs_conversations SET contact_id = ? WHERE id = ?').run(p.id, conv.id);
+    cs.addMessage(conv.id, 'user', 'הטלפון שלי 050-1234567');
+    subject.eraseContact(p.id);
+    const convRows = db.prepare('SELECT COUNT(*) AS n FROM crm_cs_conversations WHERE id = ?').get(conv.id).n;
+    const msgRows = db.prepare('SELECT COUNT(*) AS n FROM crm_cs_messages WHERE conversation_id = ?').get(conv.id).n;
+    return convRows === 0 && msgRows === 0;
+  })());
   check('erasing an unknown person is a clean no-op', subject.eraseContact(999999).ok === false);
 
   check('by default the submissions stay — they are business records', (() => {

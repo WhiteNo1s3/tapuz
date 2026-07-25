@@ -31,7 +31,14 @@ const PERSONAL_TABLES = [
   { table: 'crm_relations', column: 'to_id', label: 'relations (incoming)' },
   { table: 'crm_list_members', column: 'contact_id', label: 'list memberships' },
   { table: 'crm_visitors', column: 'contact_id', label: 'browser links' },
-  { table: 'crm_campaign_sends', column: 'contact_id', label: 'campaign sends' }
+  { table: 'crm_campaign_sends', column: 'contact_id', label: 'campaign sends' },
+  // Added in v1.83 — and found by this module's OWN drift guard rather than by
+  // remembering. Note the FK is ON DELETE SET NULL, which is right for keeping a
+  // support history when a contact record is merged away, but WRONG for an
+  // erasure request: nulling the link would leave a transcript full of the
+  // person's own words, quite possibly including the address they typed. So the
+  // erase path below deletes these rows explicitly instead of relying on the FK.
+  { table: 'crm_cs_conversations', column: 'contact_id', label: 'support chats' }
 ];
 
 function rowsFor(table, column, contactId) {
@@ -109,6 +116,13 @@ function eraseContact(contactId, { deleteSubmissions = false } = {}) {
 
   let submissionsDeleted = 0;
   const run = db.transaction(() => {
+    // Support chats first, and EXPLICITLY: their FK is ON DELETE SET NULL, so
+    // the cascade would leave the transcript behind with the person's own
+    // messages in it. An erasure request means the words go too.
+    try {
+      db.prepare('DELETE FROM crm_cs_conversations WHERE contact_id = ?').run(id);
+    } catch (e) { /* table may not exist on an older database */ }
+
     if (deleteSubmissions) {
       const ids = db
         .prepare("SELECT ref_id AS id FROM crm_events WHERE contact_id = ? AND type = 'form' AND ref_id IS NOT NULL")

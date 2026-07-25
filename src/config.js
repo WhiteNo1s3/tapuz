@@ -62,6 +62,17 @@ const DEFAULT_CONFIG = {
     // pruned, whatever this says.
     retention: {
       eventDays: 0
+    },
+    // Customer-service chat (v1.83). The ONLY CRM surface where an anonymous
+    // visitor can spend the owner's money, so it ships off and every limit has
+    // a conservative default. `dailyMessageCap` is the hard stop: exact,
+    // countable, and enforced before the model is ever called.
+    cs: {
+      enabled: false,
+      dailyMessageCap: 100,
+      perSessionCap: 20,
+      greeting: 'שלום! אני העוזר של האתר. איך אפשר לעזור?',
+      businessInfo: ''
     }
   },
   // S3: CMS-managed site chrome. The header/footer belong to the whole website
@@ -160,7 +171,8 @@ function loadConfig() {
           meta: { ...clone(DEFAULT_CONFIG.crm.conversions.meta), ...(dv.meta || {}) },
           ga4: { ...clone(DEFAULT_CONFIG.crm.conversions.ga4), ...(dv.ga4 || {}) }
         },
-        retention: { ...clone(DEFAULT_CONFIG.crm.retention), ...(dc.retention || {}) }
+        retention: { ...clone(DEFAULT_CONFIG.crm.retention), ...(dc.retention || {}) },
+        cs: { ...clone(DEFAULT_CONFIG.crm.cs), ...(dc.cs || {}) }
       };
       // Each nested default needs its own merge stanza (the top-level spread is
       // shallow), otherwise a partial site.json drops new default subkeys.

@@ -113,4 +113,95 @@ function unsubscribeHandler(req, res) {
 router.get('/crm/u/:token', unsubscribeHandler);
 router.post('/crm/u/:token', unsubscribeHandler);
 
+// ─── customer-service chat (v1.83) ───────────────────────────────────
+//
+// PUBLIC and unauthenticated, and it costs the owner money — so the order of
+// checks below matters more than the feature. Cheap refusals first (off, rate
+// limit, body size), then the session, and only then the model, which
+// src/crm/cs.js gates behind an atomically-reserved daily cap.
+
+// A tighter window than the tracking pixels: this one spends money.
+const csLimiter = new FixedWindowLimiter({
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.TAPUZ_CS_MAX, 10) || 12
+});
+
+function csEnabled() {
+  try {
+    const cfg = require('../config').loadConfig();
+    return require('../crm/cs').getSettings(cfg).enabled;
+  } catch (e) { return false; }
+}
+
+/** The widget script. Served only while the chat is on. */
+router.get('/tz-cs-chat.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  if (!csEnabled()) return res.end('/* chat disabled */');
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.end(require('../crm/cs-widget').script());
+});
+
+router.get('/crm/cs/v1/config', (req, res) => {
+  if (!csEnabled()) return res.json({ ok: true, enabled: false });
+  const cfg = require('../config').loadConfig();
+  const s = require('../crm/cs').getSettings(cfg);
+  // Only what the widget needs to draw itself. No caps, no business info —
+  // knowing the remaining budget would just tell an abuser when to strike.
+  res.json({ ok: true, enabled: true, greeting: s.greeting });
+});
+
+router.post('/crm/cs/v1/session', express.json({ limit: '4kb' }), (req, res) => {
+  if (!csEnabled()) return res.status(404).json({ ok: false });
+  if (!csLimiter.allow('cs:' + clientIp(req))) {
+    res.setHeader('Retry-After', String(csLimiter.retryAfter('cs:' + clientIp(req))));
+    return res.status(429).json({ ok: false, error: 'rate limited' });
+  }
+  const cs = require('../crm/cs');
+  const conv = cs.startConversation();
+  res.json({ ok: true, token: conv.token });
+});
+
+router.post('/crm/cs/v1/message', express.json({ limit: '8kb' }), async (req, res) => {
+  if (!csEnabled()) return res.status(404).json({ ok: false });
+  const ip = clientIp(req);
+  if (!csLimiter.allow('cs-msg:' + ip)) {
+    res.setHeader('Retry-After', String(csLimiter.retryAfter('cs-msg:' + ip)));
+    return res.status(429).json({ ok: false, error: 'rate limited' });
+  }
+
+  const cs = require('../crm/cs');
+  const b = req.body || {};
+  const conversation = cs.findConversation(b.token);
+  if (!conversation || conversation.status !== 'open') {
+    return res.status(400).json({ ok: false, error: 'session' });
+  }
+
+  const cfg = require('../config').loadConfig();
+  let out;
+  try {
+    out = await cs.answer({ config: cfg, conversation, text: b.text });
+  } catch (e) {
+    // Nothing about a chat failure should reach an anonymous caller.
+    console.error('[crm-cs] answer failed:', e.message);
+    return res.status(200).json({ ok: false, message: 'משהו נתקע כאן. נסו שוב בעוד רגע.' });
+  }
+
+  if (out.ok) {
+    // If they volunteered an address, remember who this was.
+    try { cs.linkContactFromText(conversation.id, b.text); } catch (e) { /* bonus only */ }
+    return res.json({ ok: true, reply: out.reply });
+  }
+
+  // Every refusal answers like a person, never with a status code the visitor
+  // has to interpret — and never reveals which limit was hit or how much is left.
+  const human = {
+    'daily-limit': 'הצ׳אט עמוס כרגע. השאירו כתובת מייל או טלפון ונחזור אליכם.',
+    'session-limit': 'הגענו לסוף השיחה הזו. השאירו פרטים ונמשיך מכאן.',
+    'model-error': 'לא הצלחתי לענות עכשיו. נסו שוב, או השאירו פרטים.',
+    'empty': 'לא קיבלתי שאלה.',
+    'no-session': 'צריך להתחיל שיחה חדשה.'
+  }[out.reason] || 'לא הצלחתי לענות עכשיו.';
+  return res.json({ ok: false, message: human });
+});
+
 module.exports = router;

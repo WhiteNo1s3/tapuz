@@ -990,7 +990,8 @@ function renderPage(page, options = {}) {
   // gains nothing from loading earlier. Returns '' when pixels are off, so a
   // site without them renders byte-for-byte what it always did.
   const siteExtras = renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
-    renderAnalyticsBeacon(config) + require('./crm/pixels').renderPixels(config);
+    renderAnalyticsBeacon(config) + require('./crm/pixels').renderPixels(config) +
+    require('./crm/cs-widget').renderTag(config);
   const seoJsonLd = seoLib.jsonLdScript(seoLib.buildJsonLd({
     title: pageTitle, description: pageDesc, image: ogAbs, isArticle, isHome,
     siteName: config.title || '',

@@ -257,7 +257,168 @@ router.post('/admin/crm/pixels', requireAdmin, (req, res) => {
     }
   });
   config.saveConfig(cfg);
+  // Same reason as the chat toggle: pixels are injected at render time, so the
+  // live site would keep serving the previous markup until a rebuild.
+  try { require('../export').exportAll(); } catch (e) { console.error('[crm] rebuild after pixel change failed:', e.message); }
   res.redirect('/admin/crm/pixels');
+});
+
+// ─── customer-service chat (declared BEFORE /:id) ────────────────────
+router.get('/admin/crm/chat', requireAdmin, requireCrm('crm-cs', 'צ׳אט שירות'), (req, res) => {
+  const cfg = require('../config').loadConfig();
+  const cs = require('../crm/cs');
+  const s = cs.getSettings(cfg);
+  const used = cs.usageToday();
+  const cost = cs.costEstimate(cfg);
+  const history = cs.usageHistory(7);
+  const convos = cs.listConversations({ limit: 50 });
+  const ai = require('../ai').getSettings();
+
+  const bar = s.dailyMessageCap
+    ? Math.min(100, Math.round((used.messages / s.dailyMessageCap) * 100))
+    : 0;
+
+  const rows = convos.length
+    ? convos.map((c) => `
+        <a class="rec" href="/admin/crm/chat/${c.id}" style="display:flex;gap:12px;align-items:center;text-decoration:none">
+          <div style="flex:1">
+            <strong>${esc(c.contact_name || c.contact_email || 'מבקר אנונימי')}</strong>
+            <div class="muted" style="font-size:.82rem">${esc((c.first_question || '').slice(0, 80))}</div>
+          </div>
+          <span class="pill">${c.message_count} שאלות</span>
+          <span class="muted" style="font-size:.76rem">${esc(c.last_message_at || '')}</span>
+        </a>`).join('')
+    : '<div class="empty-state">אין עדיין שיחות.</div>';
+
+  page(res, 'crm-cs', 'צ׳אט שירות', `
+    ${ai.hasKey || ai.provider === 'local' ? '' : `
+    <div class="card" style="border-color:#fde68a;background:#fffbeb">
+      <strong>אין מודל מחובר</strong>
+      <p class="muted" style="margin:6px 0 0;font-size:.88rem">
+        הצ׳אט צריך מודל — הגדירו מפתח או מודל מקומי ב־<a href="/admin/chat">קופיילוט</a>.
+        עד אז הוא לא יענה למבקרים.
+      </p>
+    </div>`}
+
+    <div class="card">
+      <div class="card-head">💰 התקציב היומי — הדבר החשוב כאן</div>
+      <p class="lead">
+        זה המשטח היחיד שבו <strong>מבקר אנונימי מוציא לכם כסף</strong>.
+        לכן יש תקרה קשה: כשהיא נגמרת, המודל לא נקרא בכלל — המבקר מקבל תשובה
+        אנושית ובקשה להשאיר פרטים.
+      </p>
+      <div style="background:#f1f5f9;border-radius:10px;height:12px;overflow:hidden;margin:10px 0">
+        <div style="height:100%;width:${bar}%;background:${bar >= 90 ? '#dc2626' : bar >= 60 ? '#f59e0b' : '#059669'}"></div>
+      </div>
+      <p class="muted" style="font-size:.9rem">
+        היום: <strong>${used.messages}</strong> מתוך ${s.dailyMessageCap} תשובות
+        ${used.refusals ? ` · ${used.refusals} בקשות נדחו אחרי שהתקרה נגמרה` : ''}
+        · הערכת טוקנים: ${used.est_tokens.toLocaleString('he-IL')}
+      </p>
+      <p class="muted" style="font-size:.85rem">
+        <strong>במקרה הגרוע</strong> התקרה הזו שווה בערך ${cost.worstCaseTokens.toLocaleString('he-IL')}
+        טוקנים ביום — כ-$${cost.worstCaseUsd} לפי מחיר טיפוסי. ${esc(cost.note)}.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">⚙ הגדרות</div>
+      <form method="POST" action="/admin/crm/chat" class="stack">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="enabled" value="1" ${s.enabled ? 'checked' : ''}>
+          הפעל צ׳אט שירות באתר
+        </label>
+        <label>תקרת תשובות ליום (עד ${cs.MAX_DAILY_CAP})
+          <input type="number" name="dailyMessageCap" class="input" min="1" max="${cs.MAX_DAILY_CAP}"
+                 value="${s.dailyMessageCap}"></label>
+        <label>תקרה לשיחה בודדת (עד ${cs.MAX_SESSION_CAP})
+          <input type="number" name="perSessionCap" class="input" min="1" max="${cs.MAX_SESSION_CAP}"
+                 value="${s.perSessionCap}"></label>
+        <label>הודעת פתיחה<input name="greeting" class="input" value="${esc(s.greeting)}"></label>
+        <label>מה מותר לו לומר — המידע על העסק
+          <textarea name="businessInfo" class="input" rows="8"
+            placeholder="שעות פתיחה, מה אנחנו מציעים, אזורי שירות, מה לא לענות עליו…">${esc(s.businessInfo)}</textarea></label>
+        <div class="prop-hint">
+          מה שלא כתוב כאן — הוא יגיד שאינו יודע ויבקש פרטים. הוא לא ממציא מחירים או התחייבויות.
+        </div>
+        <button class="btn" type="submit">שמור</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-head">🛡 מה הוא לא יכול לעשות</div>
+      <ul class="muted" style="font-size:.88rem;line-height:1.9;padding-inline-start:18px;margin:0">
+        <li>אין לו כלים — הוא מחזיר טקסט בלבד. לא קורא דפים, לא כותב, לא משנה הגדרות, לא שולח כלום.</li>
+        <li>טקסט מהמבקר הוא שאלה, לא הוראה — ניסיון "התעלם מההנחיות" נדחה.</li>
+        <li>הוא לא מבקש סיסמאות או אשראי, ומבקש לא לשלוח כאלה.</li>
+        <li>התשובה מוצגת כטקסט בדפדפן, לא כקוד.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-head">💬 שיחות</div>
+      ${rows}
+    </div>
+
+    ${history.length > 1 ? `
+    <div class="card">
+      <div class="card-head">📅 שבעה ימים אחרונים</div>
+      ${history.map((h) => `<div class="rec" style="display:flex;gap:10px">
+        <span style="flex:1">${esc(h.day)}</span>
+        <span class="muted">${h.messages} תשובות${h.refusals ? ` · ${h.refusals} נדחו` : ''}</span>
+      </div>`).join('')}
+    </div>` : ''}`);
+});
+
+router.post('/admin/crm/chat', requireAdmin, (req, res) => {
+  const config = require('../config');
+  const cs = require('../crm/cs');
+  const cfg = config.loadConfig();
+  const b = req.body || {};
+  const num = (v, def, max) => {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n > 0 ? Math.min(n, max) : def;
+  };
+  cfg.crm = Object.assign({}, cfg.crm, {
+    cs: {
+      enabled: !!b.enabled,
+      dailyMessageCap: num(b.dailyMessageCap, 100, cs.MAX_DAILY_CAP),
+      perSessionCap: num(b.perSessionCap, 20, cs.MAX_SESSION_CAP),
+      greeting: String(b.greeting || '').slice(0, 300),
+      businessInfo: String(b.businessInfo || '').slice(0, 4000)
+    }
+  });
+  config.saveConfig(cfg);
+  // The widget tag is injected at RENDER time, so the published site keeps
+  // serving the old markup until it is rebuilt. An owner who flips a site-wide
+  // switch and sees no change on their site concludes it is broken — so rebuild
+  // here rather than making them find "בנה אתר" first.
+  try { require('../export').exportAll(); } catch (e) { console.error('[crm] rebuild after chat toggle failed:', e.message); }
+  res.redirect('/admin/crm/chat');
+});
+
+router.get('/admin/crm/chat/:id', requireAdmin, requireCrm('crm-cs', 'שיחה'), (req, res) => {
+  const cs = require('../crm/cs');
+  const conv = cs.getConversation(req.params.id);
+  if (!conv) return res.status(404).send(layout('<div class="container">שיחה לא נמצאה</div>', 'לא נמצא', ACCENT));
+  const msgs = cs.messagesFor(conv.id);
+  const contact = conv.contact_id ? require('../crm').contacts.getContact(conv.contact_id) : null;
+
+  page(res, 'crm-cs', 'שיחה', `
+    <div class="card">
+      <div class="section-bar">
+        <div class="card-head">💬 שיחה #${conv.id}</div>
+        <a class="btn secondary sm" href="/admin/crm/chat">← לשיחות</a>
+      </div>
+      ${contact
+        ? `<p class="muted">מקושר ל־<a href="/admin/crm/${contact.id}">${esc(contact.name || contact.email)}</a></p>`
+        : '<p class="muted">מבקר אנונימי — לא השאיר פרטים.</p>'}
+      ${msgs.map((m) => `
+        <div class="rec" style="display:flex;gap:10px">
+          <span class="pill">${m.role === 'user' ? 'מבקר' : 'עוזר'}</span>
+          <span style="flex:1;white-space:pre-wrap">${esc(m.text)}</span>
+        </div>`).join('') || '<div class="empty-state">אין הודעות.</div>'}
+    </div>`);
 });
 
 // ─── privacy: retention + subject rights (declared BEFORE /:id) ──────

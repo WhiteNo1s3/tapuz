@@ -48,6 +48,16 @@
         "measurementId": "",
         "apiSecret": ""
       }
+    },
+    "retention": {
+      "eventDays": 0
+    },
+    "cs": {
+      "enabled": false,
+      "dailyMessageCap": 100,
+      "perSessionCap": 20,
+      "greeting": "שלום! אני העוזר של האתר. איך אפשר לעזור?",
+      "businessInfo": ""
     }
   },
   "header": {

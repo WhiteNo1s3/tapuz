@@ -334,7 +334,57 @@ function initializeCrm() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_sends_campaign ON crm_campaign_sends(campaign_id, status)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_sends_contact ON crm_campaign_sends(contact_id)');
 
+  initializeCrmCs();
   initializeCrmSearch();
+}
+
+/**
+ * Customer-service chat (v1.83, the lab's held-back module).
+ *
+ * This is the only CRM surface where an ANONYMOUS visitor can cause the owner
+ * to spend money, so the ledger is part of the schema rather than an
+ * afterthought: `crm_cs_budget` holds one row per UTC day, and the send path
+ * refuses before calling the model once the day's row hits the cap.
+ */
+function initializeCrmCs() {
+  // One row per UTC day. `messages` is the number that is actually enforced —
+  // it is exact and countable. `est_tokens` is an estimate shown to the owner
+  // for context and never used as a gate (see src/crm/cs.js).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_cs_budget (
+      day TEXT PRIMARY KEY,
+      messages INTEGER NOT NULL DEFAULT 0,
+      est_tokens INTEGER NOT NULL DEFAULT 0,
+      refusals INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_cs_conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token TEXT NOT NULL UNIQUE,
+      contact_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'open',
+      message_count INTEGER NOT NULL DEFAULT 0,
+      started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE SET NULL
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_cs_conv_status ON crm_cs_conversations(status, last_message_at DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_cs_conv_contact ON crm_cs_conversations(contact_id)');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_cs_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      text TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES crm_cs_conversations(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_cs_msg_conv ON crm_cs_messages(conversation_id, id)');
 }
 
 /**

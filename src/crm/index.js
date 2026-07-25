@@ -30,6 +30,7 @@ const visitors = require('./visitors');
 const conversions = require('./conversions');
 const campaigns = require('./campaigns');
 const subject = require('./subject');
+const cs = require('./cs');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -203,5 +204,6 @@ module.exports = {
   conversions,
   campaigns,
   subject,
+  cs,
   Customer
 };

@@ -1,6 +1,6 @@
 # CRM integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** **all phases complete** (v1.77–v1.82) · **Lab reviewed at:** `9350fd9` · The lab’s one blocker (public LLM chat) remains deliberately unshipped — see §1.
+**Status:** **complete, including the held-back chat** (v1.77–v1.83) · **Lab reviewed at:** `9350fd9`
 
 The lab is a **specification and reference implementation**, not a merge source.
 Every module lands here rebuilt to our bar — the rule the lab's own README states.
@@ -31,13 +31,18 @@ browser pixel for dedup; GA4 MP pairs with the public gtag; geo comes from CDN
 headers, never raw IP; pixel IDs are character-class-filtered, length-capped,
 and `</script` is escaped.
 
-### The one blocker
+### ~~The one blocker~~ · **resolved in v1.83**
 
-`POST /crm/cs/v1/message` is a **public, unauthenticated endpoint that calls
-`ai.generate()` on the owner's API key** (`src/routes/cs-chat.js:364`).
-It is rate-limited to 30/min **per IP** with **no global or daily cap**, and
-defaults to enabled. Distributed abuse spends the owner's money.
-**This module ships last, and only behind a budget guard (below).**
+`POST /crm/cs/v1/message` was a **public, unauthenticated endpoint calling
+`ai.generate()` on the owner's API key**, rate-limited 30/min per IP with **no
+global cap**, defaulting to enabled — so distributed abuse spent the owner's
+money. Per-IP limits are not an answer when the caller has many IPs.
+
+Rebuilt with the bill as the starting point (see Phase 4 below): a **hard daily
+cap reserved atomically before any spend**, a per-session cap, a question-length
+cap, hard ceilings the owner cannot configure past, **no tools at all**, and off
+by default. The owner sees the cap expressed as worst-case money, not as a
+message count.
 
 ### Lesser findings
 
@@ -215,15 +220,55 @@ so a malformed link index silently resolved to a valid link — not exploitable
 (the destination still came from the frozen list) but sloppy; the index is now
 required to be a clean digit string.*
 
-### Phase 4 — customer-service chat · *public + paid*
-`cs-chat` + `tz-cs-chat.js` widget, **last**, and only with:
-- a **global daily token/message budget** that hard-stops at the cap,
-- default **off**,
-- per-session message cap on top of the per-IP window,
-- the owner shown a live spend counter in admin.
+### ~~Phase 4 — customer-service chat~~ · **shipped v1.83** · *public + paid*
 
-**Risk:** high (cost, abuse). This is the one place where the lab's prototype
-posture is not shippable as-is.
+The module held back through the whole integration, because it is the only CRM
+surface where an **anonymous visitor can spend the owner's money**.
+
+**The cap is the feature.** `crm.cs.dailyMessageCap` is enforced by an *atomic*
+reserve-before-you-spend step — the check and the increment are one transaction,
+so simultaneous visitors cannot both take the last slot (a read-then-decide cap
+leaks under exactly the load that matters). Over the cap the model is **never
+called**; the visitor gets a human sentence and an invitation to leave details.
+A failed or empty model call **refunds** its slot — an error is not a sale.
+Layered on top: a per-session cap so one chat cannot eat the day, a
+question-length cap, a bounded history replay so cost per call cannot grow with
+conversation length, a tighter per-IP window than the tracking pixels, and hard
+ceilings (2000/day, 100/session) the owner cannot configure past — a mis-typed
+`100000` must not become a five-figure invoice.
+
+**Least power.** It calls plain `generate`, never the tool-running `converse`:
+this bot returns text and cannot read pages, write drafts, change settings or
+send anything. Its prompt is written defensively — told what it may discuss,
+told to refuse rather than invent prices or promises, and told that instructions
+arriving inside a visitor's message are questions, not instructions. The widget
+writes every remote string with `textContent`, so a reply is never parsed as
+markup. `/crm/cs/v1/config` exposes only the greeting: revealing the remaining
+budget would tell an abuser when to strike.
+
+**The owner sees money.** The admin screen leads with a usage bar and the
+worst-case daily cost in dollars, because "100 messages" means nothing until it
+is a number on an invoice. Refusals are counted and shown.
+
+**What the drift guard caught.** Adding `crm_cs_conversations.contact_id` made
+`smoke-crm-privacy` fail immediately — a new table of personal data that erasure
+did not know about. Worth more than the catch itself: that FK is
+`ON DELETE SET NULL`, which is right for merging a contact away but **wrong for
+an erasure request**, because nulling the link leaves a transcript full of the
+person's own words (quite possibly the phone number they typed). Erasure now
+deletes support chats explicitly rather than trusting the cascade.
+
+**Acceptance (met):** `smoke-crm-cs` (41 checks, stubbed model — nothing spends)
+including the cap holding when 50 requests race for 10 slots, plus
+`smoke-crm-cs-route` (24 HTTP checks). Verified live: enabling it republished the
+site with the widget; with no provider configured a question returned a polite
+refusal that leaked no provider detail **and consumed no budget**; with the
+budget filled the endpoint refused without calling the model, and the admin bar
+showed 3/3 in red with 2 refusals.
+
+**Also fixed here:** toggling the chat (and pixels) now **republishes the site**,
+because both inject at render time — an owner who flips a site-wide switch and
+sees nothing change on their live site concludes it is broken.
 
 ### ~~Phase 5 — hygiene~~ · **shipped v1.82**
 
