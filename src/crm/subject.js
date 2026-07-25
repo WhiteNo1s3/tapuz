@@ -38,8 +38,24 @@ const PERSONAL_TABLES = [
   // erasure request: nulling the link would leave a transcript full of the
   // person's own words, quite possibly including the address they typed. So the
   // erase path below deletes these rows explicitly instead of relying on the FK.
-  { table: 'crm_cs_conversations', column: 'contact_id', label: 'support chats' }
+  { table: 'crm_cs_conversations', column: 'contact_id', label: 'support chats' },
+  // WhatsApp (v1.86, phase W1). Same trap as the support chats: the FK is
+  // SET NULL and the body column holds the person's own words, so erasure
+  // deletes explicitly. NOTE: crm_wa_optins and crm_wa_windows are keyed by
+  // PHONE, not contact_id — the drift guard cannot see them, so they are
+  // handled by phone in eraseContact below and pinned by their own test.
+  { table: 'crm_wa_messages', column: 'contact_id', label: 'whatsapp messages' }
 ];
+
+/** Phone-keyed WhatsApp tables — reached through the contact's phone. */
+const WA_PHONE_TABLES = ['crm_wa_optins', 'crm_wa_windows', 'crm_wa_messages'];
+
+/** The contact's phone in wa-id form, for phone-keyed lookups. */
+function waIdFor(contact) {
+  try {
+    return require('./wa-ledger').normalizeToWaId(contact && contact.phone);
+  } catch (e) { return ''; }
+}
 
 function rowsFor(table, column, contactId) {
   try {
@@ -80,10 +96,24 @@ function exportContact(contactId) {
       .all(contact.id);
   } catch (e) { submissions = []; }
 
+  // WhatsApp rows keyed by phone (the drift guard cannot see these, so they
+  // are included explicitly — an export that misses a channel is not "all of it")
+  const whatsapp = {};
+  const waId = waIdFor(contact);
+  if (waId) {
+    for (const table of WA_PHONE_TABLES) {
+      try {
+        const rows = db.prepare(`SELECT * FROM ${table} WHERE phone = ?`).all(waId);
+        if (rows.length) whatsapp[table] = rows;
+      } catch (e) { /* table may not exist on an older database */ }
+    }
+  }
+
   return {
     exportedAt: new Date().toISOString(),
     subject: contact,
     submissions,
+    whatsapp,
     related,
     note:
       'This file contains everything stored about this person in the CRM. ' +
@@ -122,6 +152,19 @@ function eraseContact(contactId, { deleteSubmissions = false } = {}) {
     try {
       db.prepare('DELETE FROM crm_cs_conversations WHERE contact_id = ?').run(id);
     } catch (e) { /* table may not exist on an older database */ }
+
+    // WhatsApp: messages by contact_id AND everything by phone — opt-ins and
+    // windows have no contact_id, and a message sent before the person became
+    // a contact carries the phone only.
+    const waId = waIdFor(contact);
+    if (waId) {
+      for (const table of WA_PHONE_TABLES) {
+        try { db.prepare(`DELETE FROM ${table} WHERE phone = ?`).run(waId); }
+        catch (e) { /* older database */ }
+      }
+    }
+    try { db.prepare('DELETE FROM crm_wa_messages WHERE contact_id = ?').run(id); }
+    catch (e) { /* older database */ }
 
     if (deleteSubmissions) {
       const ids = db

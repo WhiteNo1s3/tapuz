@@ -1,6 +1,6 @@
 # WhatsApp integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phase W0 **shipped** (v1.84) · **Lab commit:** `99274e7` (on lab `main`)
+**Status:** phases W0–W1 **shipped** (v1.84–v1.86) · **Lab commit:** `99274e7` (on lab `main`)
 **Prerequisite:** the CRM (v1.77–v1.83) — WhatsApp is a channel *on* the CRM, not
 a thing beside it.
 
@@ -106,7 +106,7 @@ turning the CRM off turns this off too). The Graph host becomes a hardcoded
 constant. Secrets to `config/whatsapp.json`, gitignored, redaction pattern copied
 from `conversions.js`.
 
-### Phase W1 — the ledger and the gate · *no network, admin-only*
+### ~~Phase W1 — the ledger and the gate~~ · **shipped v1.86** · *no network, admin-only*
 `crm_wa_optins`, `crm_wa_windows`, `crm_wa_messages`, plus the DB-backed tier
 counter that replaces the in-memory `Map`. Port `decideSend` as a **pure
 function** — it is the best-tested thing in the lab and deserves to stay pure.

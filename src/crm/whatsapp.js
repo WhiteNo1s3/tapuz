@@ -34,6 +34,9 @@ const GRAPH_HOST = 'https://graph.facebook.com';
 const API_VERSIONS = ['v21.0', 'v20.0', 'v19.0'];
 const DEFAULT_API_VERSION = 'v21.0';
 
+/** Meta's messaging-limit tiers (W1). The ledger derives the ceiling from this. */
+const TIERS = ['TIER_250', 'TIER_1K', 'TIER_10K', 'TIER_100K', 'TIER_UNLIMITED'];
+
 function load() {
   try {
     if (fs.existsSync(STORE_PATH)) {
@@ -79,6 +82,7 @@ function getSettings() {
     phoneNumberId: String(s.phoneNumberId || ''),
     wabaId: String(s.wabaId || ''),
     displayPhoneNumber: String(s.displayPhoneNumber || ''),
+    messagingLimitTier: TIERS.includes(s.messagingLimitTier) ? s.messagingLimitTier : 'TIER_250',
     hasToken: !!String(s.accessToken || '').trim(),
     tokenTail: tail(s.accessToken),
     hasAppSecret: !!String(s.appSecret || '').trim(),
@@ -116,6 +120,10 @@ function saveSettings(patch = {}) {
   if (patch.displayPhoneNumber !== undefined) {
     s.displayPhoneNumber = String(patch.displayPhoneNumber || '').replace(/[^\d+]/g, '').slice(0, 32);
   }
+  if (patch.messagingLimitTier !== undefined) {
+    const t = String(patch.messagingLimitTier || '').toUpperCase();
+    s.messagingLimitTier = TIERS.includes(t) ? t : 'TIER_250';
+  }
   // Secrets: keep-on-undefined, clear-on-empty-string.
   if (patch.accessToken !== undefined) s.accessToken = String(patch.accessToken || '').trim();
   if (patch.appSecret !== undefined) s.appSecret = String(patch.appSecret || '').trim();
@@ -145,7 +153,7 @@ function endpointFor(pathSuffix) {
 }
 
 module.exports = {
-  GRAPH_HOST, API_VERSIONS, DEFAULT_API_VERSION, STORE_PATH,
+  GRAPH_HOST, API_VERSIONS, DEFAULT_API_VERSION, TIERS, STORE_PATH,
   isEnabled, isConfigured, getSettings, saveSettings, normalizeApiVersion, endpointFor,
   _load: load
 };

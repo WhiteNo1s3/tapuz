@@ -421,6 +421,83 @@ router.get('/admin/crm/chat/:id', requireAdmin, requireCrm('crm-cs', 'שיחה')
     </div>`);
 });
 
+// ─── WhatsApp channel (declared BEFORE /:id) ─────────────────────────
+router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp'), (req, res) => {
+  const wa = require('../crm/whatsapp');
+  const ledger = require('../crm/wa-ledger');
+  const s = wa.getSettings();
+  const sum = ledger.summary();
+  const recent = ledger.recentMessages({ limit: 30 });
+  const tierPct = sum.tier.limit === Infinity ? 0
+    : Math.min(100, Math.round((sum.tier.used / sum.tier.limit) * 100));
+
+  const rows = recent.length
+    ? recent.map((m) => `
+        <div class="rec" style="display:flex;gap:10px;align-items:baseline">
+          <span class="pill">${m.direction === 'in' ? '⬅ נכנס' : '➡ יוצא'}</span>
+          <span dir="ltr" class="muted">${esc(m.phone)}</span>
+          <span style="flex:1">${esc((m.body || m.template_category || m.msg_type || '').slice(0, 60))}</span>
+          ${m.billable ? '<span class="pill" style="background:#fffbeb;color:#92400e;border-color:#fde68a">בתשלום</span>' : ''}
+          <span class="muted" style="font-size:.74rem">${esc(m.status || '')}</span>
+        </div>`).join('')
+    : '<div class="empty-state">אין עדיין הודעות — שליחה וקבלה מגיעות בשלבים הבאים.</div>';
+
+  page(res, 'crm-wa', 'WhatsApp', `
+    ${s.configured ? '' : `
+    <div class="card" style="border-color:#fde68a;background:#fffbeb">
+      <strong>הערוץ עוד לא מחובר</strong>
+      <p class="muted" style="margin:6px 0 0;font-size:.88rem">
+        צריך Phone Number ID, Access Token ו-App Secret מ-Meta. עד אז המסך הזה
+        מנהל רק הסכמות ותיעוד.
+      </p>
+    </div>`}
+
+    <div class="card">
+      <div class="card-head">📗 WhatsApp — מצב הערוץ</div>
+      <p class="muted" style="font-size:.9rem">
+        ${sum.messages} הודעות בתיעוד · ${sum.billable} בתשלום ·
+        ${sum.activeOptIns} הסכמות פעילות · ${sum.openWindows} חלונות שירות פתוחים
+      </p>
+      <div class="side-title">תקרת נמענים מחוץ לחלון (24 שעות)</div>
+      <div style="background:#f1f5f9;border-radius:10px;height:12px;overflow:hidden;margin:8px 0">
+        <div style="height:100%;width:${tierPct}%;background:${tierPct >= 90 ? '#dc2626' : tierPct >= 60 ? '#f59e0b' : '#059669'}"></div>
+      </div>
+      <p class="muted" style="font-size:.85rem">
+        ${sum.tier.used} מתוך ${sum.tier.limit === Infinity ? '∞' : sum.tier.limit}
+        (${esc(s.messagingLimitTier)}) — נספר מתוך התיעוד עצמו, כך שהוא שורד הפעלה מחדש.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">✅ הסכמות שיווק (opt-in)</div>
+      <p class="lead">
+        תבנית שיווקית נשלחת <strong>רק</strong> למי שנתן הסכמה מפורשת — נאכף אצלנו,
+        לפני מטא. ההסכמה הזו נפרדת מהסכמת המייל: ביטול דיוור במייל לא מבטל אותה.
+      </p>
+      <form method="POST" action="/admin/crm/whatsapp/optin" class="stack" style="max-width:460px">
+        <label>טלפון<input name="phone" class="input" dir="ltr" placeholder="050-123-4567" required></label>
+        <label>הערה (איך התקבלה ההסכמה)<input name="note" class="input" placeholder="טופס באתר / בעל־פה בחנות…"></label>
+        <div style="display:flex;gap:8px">
+          <button class="btn" type="submit" name="action" value="grant">רשום הסכמה</button>
+          <button class="btn secondary" type="submit" name="action" value="revoke">בטל הסכמה</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-head">💬 הודעות אחרונות</div>
+      ${rows}
+    </div>`);
+});
+
+router.post('/admin/crm/whatsapp/optin', requireAdmin, (req, res) => {
+  const ledger = require('../crm/wa-ledger');
+  const b = req.body || {};
+  if (b.action === 'revoke') ledger.revokeOptIn(b.phone, 'marketing');
+  else ledger.grantOptIn(b.phone, 'marketing', b.note);
+  res.redirect('/admin/crm/whatsapp');
+});
+
 // ─── privacy: retention + subject rights (declared BEFORE /:id) ──────
 router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרטיות ושמירה'), (req, res) => {
   const cfg = require('../config').loadConfig();

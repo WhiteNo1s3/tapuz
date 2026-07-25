@@ -348,7 +348,79 @@ function initializeCrm() {
   `);
 
   initializeCrmCs();
+  initializeCrmWa();
   initializeCrmSearch();
+}
+
+/**
+ * WhatsApp channel ledger (v1.86, phase W1 of docs/WHATSAPP-INTEGRATION.md).
+ *
+ * Three tables, keyed by the wa-id phone (972…), because that is WhatsApp's
+ * identity — `contact_id` rides along on messages so a chat joins the person's
+ * timeline, but a phone with no CRM contact yet must still have opt-ins and a
+ * window.
+ *
+ * The tier counter the lab kept in a process Map lives HERE, derived from
+ * `crm_wa_messages` by query (distinct outside-window recipients, rolling 24h).
+ * Meta's tier limit is account-level: a counter that resets on restart
+ * undercounts, and then Meta enforces the limit instead of us — a blocked
+ * number instead of a refused send.
+ */
+function initializeCrmWa() {
+  // Consent per category. Marketing is the one that legally matters; a row is
+  // live when revoked_at IS NULL. History is kept (grant → revoke → grant is
+  // three facts, not one flag).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_wa_optins (
+      phone TEXT NOT NULL,
+      category TEXT NOT NULL,
+      granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      revoked_at DATETIME,
+      note TEXT DEFAULT '',
+      PRIMARY KEY (phone, category)
+    )
+  `);
+
+  // The 24h customer-service window, opened by an INBOUND message.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_wa_windows (
+      phone TEXT PRIMARY KEY,
+      opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      fep_expires_at DATETIME
+    )
+  `);
+
+  // Every message, both directions. `outside_csw` marks an outbound send that
+  // counted against the tier; `body` holds the person's words, which is why
+  // this table is in subject.PERSONAL_TABLES and why erasure deletes rows
+  // rather than trusting the SET NULL.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_wa_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phone TEXT NOT NULL,
+      contact_id INTEGER,
+      direction TEXT NOT NULL,
+      msg_type TEXT NOT NULL DEFAULT 'text',
+      template_category TEXT,
+      pricing_category TEXT,
+      pricing_type TEXT,
+      billable INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'accepted',
+      wa_message_id TEXT,
+      outside_csw INTEGER DEFAULT 0,
+      body TEXT DEFAULT '',
+      error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      delivered_at DATETIME,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE SET NULL
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_wa_msg_phone ON crm_wa_messages(phone, id DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_wa_msg_contact ON crm_wa_messages(contact_id)');
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_crm_wa_msg_tier
+           ON crm_wa_messages(outside_csw, created_at) WHERE outside_csw = 1`);
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_crm_wa_msg_waid ON crm_wa_messages(wa_message_id) WHERE wa_message_id IS NOT NULL');
 }
 
 /**
