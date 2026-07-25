@@ -13,9 +13,30 @@
  * name cannot erase the name we already had.
  */
 
-const { db } = require('../db');
+const { db, crmSearchReady } = require('../db');
 
 const STATUSES = ['lead', 'active', 'customer', 'archived'];
+
+/**
+ * Turn what someone typed into a safe FTS5 query (v1.82).
+ *
+ * FTS5 has its own query language — `"`, `*`, `-`, `:`, `(`, `AND`/`OR`/`NOT`
+ * are all operators — so raw input either throws a syntax error or silently
+ * means something the user did not ask for. Every token is therefore reduced to
+ * word characters, quoted as a literal, and given a `*` so partial names match:
+ * `דנה כה` becomes `"דנה"* "כה"*`, which is an implicit AND of two prefixes.
+ *
+ * @returns {string} an FTS5 MATCH expression, or '' when nothing usable remains
+ */
+function toFtsQuery(raw) {
+  const tokens = String(raw == null ? '' : raw)
+    .split(/\s+/)
+    .map((t) => t.replace(/["*\-:^(){}[\]]/g, '').trim())
+    .filter(Boolean)
+    .slice(0, 10);
+  if (!tokens.length) return '';
+  return tokens.map((t) => '"' + t + '"*').join(' ');
+}
 
 /** Email identity: case and spacing are not identity, so they are normalized away. */
 function normalizeEmail(raw) {
@@ -215,38 +236,65 @@ function deleteContact(id) {
  * List / search. `q` matches the denormalized blob; status narrows.
  * (LIKE is honest at this scale; FTS5 is phase 5 in docs/CRM-INTEGRATION.md.)
  */
-function listContacts({ q = '', status = '', limit = 50, offset = 0 } = {}) {
-  const where = [];
+/**
+ * Build the FROM/WHERE for a search, preferring the FTS5 index.
+ *
+ * Falls back to LIKE when full-text search is unavailable OR when the query
+ * reduced to nothing usable — so a search for `***` still behaves, and a SQLite
+ * without FTS5 still finds people, just more slowly.
+ */
+function searchClause({ q = '', status = '' } = {}) {
   const args = {};
-  if (String(q).trim()) {
-    where.push('search_blob LIKE @q');
-    args.q = '%' + String(q).trim().toLowerCase() + '%';
+  const where = [];
+  let from = 'crm_contacts c';
+
+  const text = String(q == null ? '' : q).trim();
+  if (text) {
+    const fts = crmSearchReady() ? toFtsQuery(text) : '';
+    if (fts) {
+      from = 'crm_contacts c JOIN crm_contacts_fts f ON f.rowid = c.id';
+      where.push('crm_contacts_fts MATCH @fts');
+      args.fts = fts;
+    } else {
+      where.push('c.search_blob LIKE @like');
+      args.like = '%' + text.toLowerCase() + '%';
+    }
   }
   if (STATUSES.includes(status)) {
-    where.push('status = @status');
+    where.push('c.status = @status');
     args.status = status;
   }
-  const clause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  return { from, clause: where.length ? 'WHERE ' + where.join(' AND ') : '', args };
+}
+
+function listContacts({ q = '', status = '', limit = 50, offset = 0 } = {}) {
+  const { from, clause, args } = searchClause({ q, status });
   args.limit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500);
   args.offset = Math.max(parseInt(offset, 10) || 0, 0);
-  return db
-    .prepare(`SELECT * FROM crm_contacts ${clause} ORDER BY updated_at DESC LIMIT @limit OFFSET @offset`)
-    .all(args);
+  try {
+    return db
+      .prepare(`SELECT c.* FROM ${from} ${clause} ORDER BY c.updated_at DESC LIMIT @limit OFFSET @offset`)
+      .all(args);
+  } catch (e) {
+    // A malformed MATCH must degrade to a working search, never to a 500.
+    console.warn('[crm] search fell back to LIKE:', e.message);
+    const like = { like: '%' + String(q).trim().toLowerCase() + '%', limit: args.limit, offset: args.offset };
+    const st = STATUSES.includes(status) ? 'AND status = @status' : '';
+    if (st) like.status = status;
+    return db
+      .prepare(`SELECT * FROM crm_contacts WHERE search_blob LIKE @like ${st}
+                ORDER BY updated_at DESC LIMIT @limit OFFSET @offset`)
+      .all(like);
+  }
 }
 
 function countContacts({ q = '', status = '' } = {}) {
-  const where = [];
-  const args = {};
-  if (String(q).trim()) {
-    where.push('search_blob LIKE @q');
-    args.q = '%' + String(q).trim().toLowerCase() + '%';
+  const { from, clause, args } = searchClause({ q, status });
+  try {
+    return db.prepare(`SELECT COUNT(*) AS n FROM ${from} ${clause}`).get(args).n;
+  } catch (e) {
+    return 0;
   }
-  if (STATUSES.includes(status)) {
-    where.push('status = @status');
-    args.status = status;
-  }
-  const clause = where.length ? 'WHERE ' + where.join(' AND ') : '';
-  return db.prepare(`SELECT COUNT(*) AS n FROM crm_contacts ${clause}`).get(args).n;
 }
 
 /** Contacts per status — the shape the admin header needs. */

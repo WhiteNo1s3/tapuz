@@ -53,6 +53,15 @@ const DEFAULT_CONFIG = {
       enabled: false,
       meta: { pixelId: '', accessToken: '', testEventCode: '' },
       ga4: { measurementId: '', apiSecret: '' }
+    },
+    // Retention (v1.82, phase 5). Behaviour data grows without limit, and
+    // keeping it forever is a liability rather than an asset. 0 = keep
+    // everything (the default, because silently deleting an owner's data would
+    // be worse than growth); set a day count to prune older behaviour events.
+    // Events that anchor a record elsewhere — a form submission — are never
+    // pruned, whatever this says.
+    retention: {
+      eventDays: 0
     }
   },
   // S3: CMS-managed site chrome. The header/footer belong to the whole website
@@ -150,7 +159,8 @@ function loadConfig() {
           ...dv,
           meta: { ...clone(DEFAULT_CONFIG.crm.conversions.meta), ...(dv.meta || {}) },
           ga4: { ...clone(DEFAULT_CONFIG.crm.conversions.ga4), ...(dv.ga4 || {}) }
-        }
+        },
+        retention: { ...clone(DEFAULT_CONFIG.crm.retention), ...(dc.retention || {}) }
       };
       // Each nested default needs its own merge stanza (the top-level spread is
       // shallow), otherwise a partial site.json drops new default subkeys.

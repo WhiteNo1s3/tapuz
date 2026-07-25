@@ -529,6 +529,15 @@ const server = app.listen(PORT, () => {
   if (!auth.hasAdmin()) {
     console.log(`   ↳ אין עדיין חשבון מנהל — היכנס ל־${base} כדי ליצור אותו.`);
   }
+  // CRM retention (v1.82, phase 5): enforce the policy on boot, then once a
+  // day. `unref()` so this timer can never be the reason the process refuses
+  // to exit — a housekeeping job must not outrank a shutdown.
+  try {
+    const crm = require('./crm');
+    crm.runRetention();
+    const daily = setInterval(() => crm.runRetention(), 24 * 60 * 60 * 1000);
+    if (daily.unref) daily.unref();
+  } catch (e) { /* housekeeping must never block startup */ }
 });
 
 // S4: slow-loris / slow-request mitigation. Cap how long a client may take to

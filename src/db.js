@@ -333,11 +333,96 @@ function initializeCrm() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_sends_campaign ON crm_campaign_sends(campaign_id, status)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_sends_contact ON crm_campaign_sends(contact_id)');
+
+  initializeCrmSearch();
+}
+
+/**
+ * Full-text contact search (v1.82, phase 5).
+ *
+ * `LIKE '%term%'` cannot use an index and scans every row — fine for a lab,
+ * wrong for a CRM that is supposed to hold a real customer base. FTS5 gives an
+ * actual inverted index, and its `unicode61` tokenizer handles Hebrew, so
+ * "דנה" finds דנה כהן.
+ *
+ * This is an EXTERNAL CONTENT table: the index stores no copy of the data, it
+ * points at `crm_contacts` rows. Triggers keep it in step with every write.
+ *
+ * FTS5 is a compile-time SQLite option. It is present in the better-sqlite3
+ * builds we ship, but if a future environment lacks it, everything here fails
+ * softly and `contacts.listContacts` falls back to LIKE — a slower search is a
+ * far better outcome than a CMS that will not start.
+ */
+let CRM_FTS_READY = false;
+
+function crmSearchReady() {
+  return CRM_FTS_READY;
+}
+
+function initializeCrmSearch() {
+  try {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS crm_contacts_fts USING fts5(
+        search_blob,
+        content='crm_contacts',
+        content_rowid='id',
+        tokenize='unicode61'
+      )
+    `);
+
+    // Keep the index in step. With an external content table the delete side
+    // must be written as the 'delete' command carrying the OLD value.
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS crm_contacts_fts_ai AFTER INSERT ON crm_contacts BEGIN
+        INSERT INTO crm_contacts_fts(rowid, search_blob) VALUES (new.id, new.search_blob);
+      END
+    `);
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS crm_contacts_fts_ad AFTER DELETE ON crm_contacts BEGIN
+        INSERT INTO crm_contacts_fts(crm_contacts_fts, rowid, search_blob)
+          VALUES ('delete', old.id, old.search_blob);
+      END
+    `);
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS crm_contacts_fts_au AFTER UPDATE ON crm_contacts BEGIN
+        INSERT INTO crm_contacts_fts(crm_contacts_fts, rowid, search_blob)
+          VALUES ('delete', old.id, old.search_blob);
+        INSERT INTO crm_contacts_fts(rowid, search_blob) VALUES (new.id, new.search_blob);
+      END
+    `);
+
+    // An existing install has contacts the index has never seen, so the index
+    // needs one rebuild on upgrade.
+    //
+    // TRAP (found live in v1.82): `SELECT COUNT(*) FROM crm_contacts_fts` does
+    // NOT count the index. On an external-content table that query is answered
+    // from the CONTENT table — so comparing it against crm_contacts compares
+    // crm_contacts to itself, always agrees, and the rebuild never runs. The
+    // index then stays empty on precisely the databases that needed it, while a
+    // fresh install looks fine because the triggers fill it as rows arrive.
+    //
+    // `_docsize` is the index's own per-document shadow table, so it reports
+    // what is really indexed.
+    const contacts = db.prepare('SELECT COUNT(*) AS n FROM crm_contacts').get().n;
+    let indexed = null;
+    try {
+      indexed = db.prepare('SELECT COUNT(*) AS n FROM crm_contacts_fts_docsize').get().n;
+    } catch (e) {
+      indexed = null; // shadow table missing → rebuild rather than guess
+    }
+    if (indexed === null || indexed !== contacts) {
+      db.exec("INSERT INTO crm_contacts_fts(crm_contacts_fts) VALUES('rebuild')");
+    }
+    CRM_FTS_READY = true;
+  } catch (e) {
+    CRM_FTS_READY = false;
+    console.warn('[crm] full-text search unavailable, falling back to LIKE:', e.message);
+  }
 }
 
 // Export BEFORE auto-init: initialize() requires modules that require db back
 // (revisions/menus). Exporting first breaks the circular-dependency deadlock.
-module.exports = { db, initialize };
+module.exports = { db, initialize, crmSearchReady };
 
 // Auto-migrate on require so server/CLI always have schema
 try {

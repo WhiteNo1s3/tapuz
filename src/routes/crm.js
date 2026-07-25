@@ -260,6 +260,65 @@ router.post('/admin/crm/pixels', requireAdmin, (req, res) => {
   res.redirect('/admin/crm/pixels');
 });
 
+// ─── privacy: retention + subject rights (declared BEFORE /:id) ──────
+router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרטיות ושמירה'), (req, res) => {
+  const cfg = require('../config').loadConfig();
+  const days = (cfg.crm && cfg.crm.retention && cfg.crm.retention.eventDays) || 0;
+  const { db } = require('../db');
+  const eventCount = db.prepare('SELECT COUNT(*) AS n FROM crm_events').get().n;
+  const anchored = db.prepare('SELECT COUNT(*) AS n FROM crm_events WHERE ref_id IS NOT NULL').get().n;
+  const searchOn = require('../db').crmSearchReady();
+
+  page(res, 'crm-privacy', 'פרטיות ושמירה', `
+    <div class="card">
+      <div class="card-head">🗓 שמירת נתוני התנהגות</div>
+      <p class="lead">
+        צפיות בדפים נערמות בלי סוף. נתון שלא צריך יותר הוא סיכון, לא נכס —
+        אפשר לקבוע כמה זמן לשמור.
+      </p>
+      <p class="muted" style="font-size:.88rem">
+        כרגע ${eventCount} אירועים, מהם ${anchored} מקושרים לפנייה אמיתית —
+        <strong>אלה לא נמחקים לעולם</strong>, בלי קשר להגדרה כאן.
+      </p>
+      <form method="POST" action="/admin/crm/privacy" class="stack">
+        <label>שמור אירועי התנהגות (בימים) — 0 = לשמור הכול
+          <input type="number" name="eventDays" class="input" min="0" max="3650" value="${Number(days) || 0}"></label>
+        <button class="btn" type="submit">שמור מדיניות</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-head">🔎 חיפוש</div>
+      <p class="muted" style="font-size:.9rem">
+        ${searchOn
+          ? 'חיפוש אנשי קשר עובד על אינדקס טקסט מלא (FTS5) — מהיר גם עם הרבה אנשי קשר, ותומך בעברית.'
+          : 'האינדקס אינו זמין בסביבה הזו — החיפוש עובד, אבל סורק את כל הרשומות (איטי יותר).'}
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">👤 זכויות של אנשים</div>
+      <p class="lead">
+        אדם רשאי לבקש לראות מה יש עליכם עליו, ולבקש שתמחקו. שתי הפעולות
+        נמצאות בדף של כל איש קשר — ייצוא מלא בלחיצה, ומחיקה שנבדקת אחרי עצמה.
+      </p>
+      <a class="btn secondary" href="/admin/crm">לרשימת אנשי הקשר</a>
+    </div>`);
+});
+
+router.post('/admin/crm/privacy', requireAdmin, (req, res) => {
+  const config = require('../config');
+  const cfg = config.loadConfig();
+  const n = parseInt((req.body || {}).eventDays, 10);
+  cfg.crm = Object.assign({}, cfg.crm, {
+    retention: { eventDays: Number.isFinite(n) && n > 0 ? Math.min(n, 3650) : 0 }
+  });
+  config.saveConfig(cfg);
+  // apply immediately, so the number the owner just typed means something now
+  try { require('../crm').runRetention(); } catch (e) { /* reported inside */ }
+  res.redirect('/admin/crm/privacy');
+});
+
 // ─── campaigns (declared BEFORE /:id) ────────────────────────────────
 router.get('/admin/crm/campaigns', requireAdmin, requireCrm('crm-campaigns', 'קמפיינים'), (req, res) => {
   const { campaigns, lists } = require('../crm');
@@ -625,12 +684,27 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
     </div>
 
     <div class="card">
+      <div class="card-head">👤 זכויות של האדם הזה</div>
+      <p class="muted" style="font-size:.88rem">
+        אם ביקש/ה לראות מה שמור עליו/ה — הורידו את הקובץ ושלחו. אם ביקש/ה מחיקה —
+        השתמשו במחיקה למטה; היא מוחקת גם את ציר הזמן, הקשרים, החברות ברשימות
+        והמעקב, ואז <strong>בודקת שלא נשאר כלום</strong>.
+      </p>
+      <a class="btn secondary" href="/admin/crm/${d.id}/export.json">⬇ ייצוא כל הנתונים (JSON)</a>
+    </div>
+
+    <div class="card">
       <div class="card-head">🗑 מחיקה</div>
       <p class="muted" style="font-size:.88rem">
-        מחיקת איש קשר מוחקת גם את ציר הזמן והקשרים שלו. הפניות עצמן נשארות בתיבה.
+        ברירת המחדל משאירה את הפניות עצמן בתיבה — הן מסמך עסקי.
+        סמנו את התיבה כדי למחוק גם אותן (מחיקה מלאה, בלי דרך חזרה).
       </p>
       <form method="POST" action="/admin/crm/${d.id}/delete"
-            onsubmit="return confirm('למחוק את ${esc(d.displayName)}?')">
+            onsubmit="return confirm('למחוק את ${esc(d.displayName)}? אין דרך לבטל.')">
+        <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <input type="checkbox" name="deleteSubmissions" value="1">
+          למחוק גם את הפניות שלו/ה מתיבת הפניות
+        </label>
         <button class="btn secondary" type="submit">מחק איש קשר</button>
       </form>
     </div>`);
@@ -654,8 +728,26 @@ router.post('/admin/crm/:id/note', requireAdmin, (req, res) => {
   res.redirect('/admin/crm/' + encodeURIComponent(req.params.id));
 });
 
+// The subject's own copy of their data. A file, not a screen — the owner has to
+// be able to send it to the person who asked.
+router.get('/admin/crm/:id/export.json', requireAdmin, (req, res) => {
+  const data = require('../crm').subject.exportContact(req.params.id);
+  if (!data) return res.status(404).json({ ok: false, error: 'not found' });
+  const name = 'contact-' + String(req.params.id).replace(/\D/g, '') + '.json';
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + name + '"');
+  res.send(JSON.stringify(data, null, 2));
+});
+
 router.post('/admin/crm/:id/delete', requireAdmin, (req, res) => {
-  require('../crm').contacts.deleteContact(req.params.id);
+  // Erasure goes through the subject module, which verifies afterwards that
+  // nothing survived rather than trusting the cascade.
+  const result = require('../crm').subject.eraseContact(req.params.id, {
+    deleteSubmissions: !!(req.body || {}).deleteSubmissions
+  });
+  if (result && result.leftovers && result.leftovers.length) {
+    console.error('[crm] erase left rows behind:', result.leftovers.join(', '));
+  }
   res.redirect('/admin/crm');
 });
 

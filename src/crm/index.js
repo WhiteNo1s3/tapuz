@@ -29,6 +29,7 @@ const lists = require('./lists');
 const visitors = require('./visitors');
 const conversions = require('./conversions');
 const campaigns = require('./campaigns');
+const subject = require('./subject');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -150,6 +151,26 @@ const note = safe('note', (contactId, text) =>
   events.record({ contactId, type: 'note', title: String(text || '').slice(0, 300) })
 );
 
+/**
+ * HOOK — enforce the retention policy (call site: server.js, on boot and daily).
+ *
+ * Prunes behaviour events older than `crm.retention.eventDays`. Events that
+ * anchor a record elsewhere (a form submission) are kept regardless, because
+ * deleting the link to someone's own message is not hygiene, it is data loss.
+ * 0 days means keep everything — the default, since quietly deleting an owner's
+ * history would be worse than letting it grow.
+ *
+ * @returns {{pruned:number, days:number}|null}
+ */
+const runRetention = safe('runRetention', () => {
+  const cfg = require('../config').loadConfig();
+  const days = parseInt((cfg.crm && cfg.crm.retention && cfg.crm.retention.eventDays) || 0, 10);
+  if (!days || days < 1) return { pruned: 0, days: 0 };
+  const pruned = events.pruneOlderThan(days);
+  if (pruned) console.log('[crm] retention pruned ' + pruned + ' events older than ' + days + ' days');
+  return { pruned, days };
+});
+
 /** Headline numbers for the admin dashboard. Null when the CRM is off. */
 const summary = safe('summary', () => {
   const counts = contacts.statusCounts();
@@ -169,6 +190,7 @@ module.exports = {
   capturePageview,
   contactIdForRequest,
   note,
+  runRetention,
   summary,
   identityFromFields,
   // the subsystem, for the CRM's own admin surfaces
@@ -180,5 +202,6 @@ module.exports = {
   visitors,
   conversions,
   campaigns,
+  subject,
   Customer
 };

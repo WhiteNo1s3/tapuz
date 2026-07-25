@@ -1,6 +1,6 @@
 # CRM integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phase 0–3 **complete** (v1.77–v1.81) · **Lab reviewed at:** `9350fd9` · **Next:** phase 5 hygiene (retention, FTS5, subject export/delete)
+**Status:** **all phases complete** (v1.77–v1.82) · **Lab reviewed at:** `9350fd9` · The lab’s one blocker (public LLM chat) remains deliberately unshipped — see §1.
 
 The lab is a **specification and reference implementation**, not a merge source.
 Every module lands here rebuilt to our bar — the rule the lab's own README states.
@@ -225,8 +225,49 @@ required to be a clean digit string.*
 **Risk:** high (cost, abuse). This is the one place where the lab's prototype
 posture is not shippable as-is.
 
-### Phase 5 — hygiene
-`crm_events` retention, FTS5 contact search, subject export/delete.
+### ~~Phase 5 — hygiene~~ · **shipped v1.82**
+
+**Retention.** `crm.retention.eventDays` (0 = keep everything, the default —
+silently deleting an owner's history would be worse than growth). Enforced on
+boot and once a day (`unref()`ed, so housekeeping can never hold the process
+open) and immediately when the policy is saved. Events that anchor a real record
+— a form submission — are never pruned, whatever the number says.
+
+**Full-text search.** `LIKE '%term%'` cannot use an index and scans every row.
+An external-content FTS5 table over `search_blob` with `unicode61` replaces it,
+kept in step by insert/update/delete triggers. Hebrew prefix search works
+(`דנ` → דנה כהן). User input is reduced to quoted prefix tokens, so FTS5's own
+operators (`"`, `*`, `-`, `:`, `NEAR`, `OR`) can neither throw a syntax error nor
+silently change the query. If FTS5 is ever missing, everything degrades to LIKE
+rather than failing to start.
+
+**Subject rights.** Per-contact `export.json` (the person's whole record, their
+submissions included, as a downloadable file the owner can actually send) and an
+erase that verifies itself: it counts what existed, deletes, then re-checks every
+personal table and reports leftovers instead of trusting the cascade. Form
+submissions survive by default as business records; deleting them too is an
+explicit tick-box.
+
+**The guard that keeps it true.** `smoke-crm-privacy` reads the LIVE SCHEMA for
+every `crm_*` table with a `contact_id`/`from_id`/`to_id` column and fails if
+`subject.PERSONAL_TABLES` does not list it. A future phase cannot add personal
+data and quietly leave it behind when someone asks to be forgotten.
+
+**A real bug this phase found — on the upgrade path only.** `SELECT COUNT(*) FROM
+crm_contacts_fts` does **not** count the index: on an external-content table that
+query is answered from the *content* table. So the "have we indexed everything?"
+guard compared `crm_contacts` to itself, always agreed, and the rebuild never
+ran — leaving the index empty on exactly the databases that needed it, while a
+fresh install looked perfect because the triggers fill it as rows arrive. Caught
+by searching the live dev site and getting nothing. The check now reads the
+index's own `_docsize` shadow table, and a regression test reproduces the
+pre-upgrade database (verified to fail without the fix: *"index has 0 docs for
+3 contacts"*).
+
+**Acceptance (met):** `smoke-crm-privacy` (36 checks). Verified live: Hebrew
+prefix search returns both matching contacts, `contact-1.json` downloads as an
+attachment with the timeline and submission included, and the privacy screen
+reports "5 events, 1 anchored to a real enquiry — never pruned".
 
 ---
 

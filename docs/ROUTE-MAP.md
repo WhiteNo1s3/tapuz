@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**172 routes across 35 files.**
+**175 routes across 35 files.**
 
 ## By file (what each module owns)
 
@@ -102,7 +102,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /crm/u/:token`
 - `POST /crm/u/:token`
 
-### `src/routes/crm.js` — 22 routes
+### `src/routes/crm.js` — 25 routes
 
 - `POST /admin/crm/settings`
 - `GET /admin/crm/segments`
@@ -113,6 +113,8 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/crm/lists/:id/delete`
 - `GET /admin/crm/pixels`
 - `POST /admin/crm/pixels`
+- `GET /admin/crm/privacy`
+- `POST /admin/crm/privacy`
 - `GET /admin/crm/campaigns`
 - `POST /admin/crm/campaigns`
 - `GET /admin/crm/campaigns/:id`
@@ -125,6 +127,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/crm/:id`
 - `POST /admin/crm/:id/update`
 - `POST /admin/crm/:id/note`
+- `GET /admin/crm/:id/export.json`
 - `POST /admin/crm/:id/delete`
 
 ### `src/routes/dashboard.js` — 2 routes
@@ -380,6 +383,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm` | GET | `src/routes/crm.js` |
 | `/admin/crm/:id` | GET | `src/routes/crm.js` |
 | `/admin/crm/:id/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/:id/export.json` | GET | `src/routes/crm.js` |
 | `/admin/crm/:id/note` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/update` | POST | `src/routes/crm.js` |
 | `/admin/crm/campaigns` | GET | `src/routes/crm.js` |
@@ -395,6 +399,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/lists/:id/delete` | POST | `src/routes/crm.js` |
 | `/admin/crm/pixels` | GET | `src/routes/crm.js` |
 | `/admin/crm/pixels` | POST | `src/routes/crm.js` |
+| `/admin/crm/privacy` | GET | `src/routes/crm.js` |
+| `/admin/crm/privacy` | POST | `src/routes/crm.js` |
 | `/admin/crm/segments` | GET | `src/routes/crm.js` |
 | `/admin/crm/segments` | POST | `src/routes/crm.js` |
 | `/admin/crm/segments/:id/delete` | POST | `src/routes/crm.js` |
