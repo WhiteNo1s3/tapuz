@@ -63,6 +63,15 @@ const DEFAULT_CONFIG = {
     retention: {
       eventDays: 0
     },
+    // Progressive customer cards: open a provisional card on first legitimate
+    // first-party visit (DNT already excluded at the collector), stitch with
+    // cookie `tz_v`, enrich from email/name/paths, then forget quiet ghosts.
+    // Not surveillance — service. See src/crm/cards.js.
+    cards: {
+      progressive: true,
+      quietDays: 5,     // no touch → status garbage
+      garbageDays: 3    // then hard erase (full subject wipe)
+    },
     // Customer-service chat (v1.83). The ONLY CRM surface where an anonymous
     // visitor can spend the owner's money, so it ships off and every limit has
     // a conservative default. `dailyMessageCap` is the hard stop: exact,
@@ -179,6 +188,7 @@ function loadConfig() {
           ga4: { ...clone(DEFAULT_CONFIG.crm.conversions.ga4), ...(dv.ga4 || {}) }
         },
         retention: { ...clone(DEFAULT_CONFIG.crm.retention), ...(dc.retention || {}) },
+        cards: { ...clone(DEFAULT_CONFIG.crm.cards), ...(dc.cards || {}) },
         cs: { ...clone(DEFAULT_CONFIG.crm.cs), ...(dc.cs || {}) },
         whatsapp: { ...clone(DEFAULT_CONFIG.crm.whatsapp), ...(dc.whatsapp || {}) }
       };

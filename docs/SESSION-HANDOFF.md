@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (after QA checklist + body-parser/Node 24).
+> **Last updated:** 2026-07-26 (progressive customer cards — stitch + quiet purge).
 
 ---
 
@@ -136,20 +136,37 @@ npm run test:crm
 
 ---
 
-## 6. Open / next (when resuming)
+## 6. Progressive customer cards (shipped this session)
+
+**Idea:** legit first-party pixel/visit → open a **customer card**; email/name/pages enrich **one** card; stitch with first-party cookie `tz_v` (no raw IP store); quiet provisional → garbage → erase. Service, not surveillance.
+
+| Piece | Path |
+|-------|------|
+| Core | `src/crm/cards.js` |
+| Statuses | `provisional`, `garbage` on `crm_contacts` |
+| Seam | `capturePageview` opens/touches card when progressive on; needs `res` for cookie |
+| Form | enriches same card or merges ghost → known identity |
+| Lifecycle | `quietDays` default **5** → garbage; `garbageDays` default **3** → hard erase |
+| Config | `config.crm.cards.{ progressive, quietDays, garbageDays }` |
+| Smoke | `npm run test:crm-cards` / `scripts/smoke-crm-cards.js` |
+
+Reachable people (email/phone) are **not** auto-deleted by the quiet timer — only empty provisional ghosts.
+
+## 7. Open / next (when resuming)
 
 Pick **one** deep thread (lesson of the lab):
 
-1. **Tapuz product** — continue ROADMAP (builder, CRM polish on main, WhatsApp production readiness). Run `npm run qa` before/after.
-2. **Pixel on real WP** — install lab/plugin on Hostinger WhiteNo1se site with a public Tapuziel CRM base URL; prove `site_id` in admin. (Was planned, not finished on live WP.)
-3. **Israeli invoicing** — separate finance design round.
-4. **Hygiene** — Actions still warn that some **action packages** use Node 20 runtime (unrelated to our `node-version: 24` for app tests).
+1. **Admin UI** for progressive cards (show interests, garbage bin, knobs for quietDays).
+2. **Mail lists** driven by interest tags without spam (segments).
+3. **Pixel on real WP** — Hostinger WhiteNo1se + public CRM base.
+4. **Israeli invoicing** — finance round, separate.
+5. **Hygiene** — Actions action-runtime Node 20 deprecation noise.
 
 Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified without browser/CMS install.
 
 ---
 
-## 7. Honesty log (don’t overclaim)
+## 8. Honesty log (don’t overclaim)
 
 | Claim | Truth |
 |-------|--------|
@@ -163,7 +180,7 @@ Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified witho
 
 ---
 
-## 8. Update protocol (future agents / future you)
+## 9. Update protocol (future agents / future you)
 
 When you finish a real chunk of work:
 
@@ -177,7 +194,7 @@ If the conversation dies mid-task: read this file first, then `git log -15 --one
 
 ---
 
-## 9. Quick identity
+## 10. Quick identity
 
 - **Product name users see:** Tapuziel (not “Tapuz” in UI).
 - **Org credit:** Shaltiel Industries · made by WhiteNo1se / WhiteNo1s3 on GitHub.

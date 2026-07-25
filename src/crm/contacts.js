@@ -15,7 +15,9 @@
 
 const { db, crmSearchReady } = require('../db');
 
-const STATUSES = ['lead', 'active', 'customer', 'archived'];
+// provisional = progressive card before they gave an address (cookie-stitched)
+// garbage    = quiet provisional, pending hard erase (see cards.runCardLifecycle)
+const STATUSES = ['provisional', 'lead', 'active', 'customer', 'archived', 'garbage'];
 
 /**
  * Turn what someone typed into a safe FTS5 query (v1.82).
@@ -116,9 +118,11 @@ function upsertContact(input = {}) {
   const existing = resolve({ email, phone });
 
   if (!existing) {
-    // Nothing to identify them by and nothing to say about them — refuse
-    // rather than create an anonymous empty row on every stray call.
-    if (!email && !phone && !String(input.name || '').trim()) {
+    // Progressive cards (status=provisional) may open with no address yet —
+    // stitched only by first-party cookie. Every other caller still needs a
+    // name or identifier so we never mint empty rows from noise.
+    const wantProvisional = input.status === 'provisional';
+    if (!email && !phone && !String(input.name || '').trim() && !wantProvisional) {
       return { contact: null, created: false };
     }
     const row = {
@@ -307,6 +311,13 @@ function statusCounts() {
   return out;
 }
 
+/** Bump updated_at — "last interaction" for progressive cards lifecycle. */
+function touchActivity(id) {
+  const n = Number(id);
+  if (!n) return false;
+  return db.prepare('UPDATE crm_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(n).changes > 0;
+}
+
 module.exports = {
   STATUSES,
   normalizeEmail,
@@ -322,5 +333,6 @@ module.exports = {
   deleteContact,
   listContacts,
   countContacts,
-  statusCounts
+  statusCounts,
+  touchActivity
 };

@@ -31,6 +31,7 @@ const conversions = require('./conversions');
 const campaigns = require('./campaigns');
 const subject = require('./subject');
 const cs = require('./cs');
+const cards = require('./cards');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -92,10 +93,54 @@ function identityFromFields(fields = {}) {
  */
 const captureForm = safe('captureForm', (input = {}) => {
   const identity = identityFromFields(input.fields || {});
-  const { contact, created } = contacts.upsertContact(
-    Object.assign({}, identity, { source: input.page || 'form', country: input.country || '' })
-  );
+  // Progressive card already open on this browser? Prefer enriching THAT card
+  // so we never mint a second person for one visitor.
+  const priorId = input.req ? visitors.contactIdFor(input.req) : null;
+  const prior = priorId ? contacts.getContact(priorId) : null;
+  let contact = null;
+  let created = false;
+
+  const resolved = contacts.resolve({ email: identity.email, phone: identity.phone });
+
+  if (prior && (prior.status === 'provisional' || prior.status === 'garbage')) {
+    if (resolved && resolved.id !== prior.id) {
+      // Form identity already belongs to someone else → merge ghost into them.
+      cards.mergeCards(prior.id, resolved.id);
+      contact = contacts.getContact(resolved.id);
+      created = false;
+      // apply any new name etc.
+      contacts.upsertContact(
+        Object.assign({}, identity, { source: input.page || 'form', country: input.country || '' })
+      );
+      contact = contacts.getContact(resolved.id) || contact;
+    } else {
+      // Enrich the same provisional card in place.
+      const patch = {
+        status: identity.email || identity.phone ? 'lead' : prior.status
+      };
+      if (identity.email) patch.email = identity.email;
+      if (identity.phone) patch.phone = identity.phone;
+      if (identity.name) patch.name = identity.name;
+      if (identity.company) patch.company = identity.company;
+      if (input.country) patch.country = input.country;
+      contacts.updateContact(prior.id, patch);
+      contact = contacts.getContact(prior.id);
+      created = false;
+    }
+  } else {
+    const up = contacts.upsertContact(
+      Object.assign({}, identity, {
+        source: input.page || 'form',
+        country: input.country || '',
+        status: identity.email || identity.phone ? 'lead' : undefined
+      })
+    );
+    contact = up.contact;
+    created = up.created;
+  }
+
   if (!contact) return null;
+
   events.record({
     contactId: contact.id,
     type: 'form',
@@ -104,6 +149,7 @@ const captureForm = safe('captureForm', (input = {}) => {
     refId: input.submissionId != null ? input.submissionId : null
   });
   if (input.req && input.res) visitors.link(input.req, input.res, contact.id);
+  contacts.touchActivity(contact.id);
 
   // Server-side conversion (v1.80). Fire-and-forget on purpose: the visitor's
   // redirect must not wait on Meta or Google. The eventId travels back to the
@@ -126,16 +172,31 @@ const captureForm = safe('captureForm', (input = {}) => {
 /**
  * HOOK — a page was viewed (call site: the /_tapuz/collect beacon).
  *
- * Recorded ONLY against a browser already linked to a person. An anonymous
- * visit is already counted in `pageviews`; copying it here would grow the
- * timeline without adding knowledge, and would quietly turn an anonymous
- * analytics event into a personal one. Unlinked visitor → null, nothing stored.
+ * With progressive cards (default when CRM is on): open or touch a customer
+ * card stitched by first-party cookie, record the path as interest, append
+ * timeline. Without progressive cards (or before cookie): only browsers already
+ * linked by a form get timeline rows — classic phase-2 behaviour.
  *
- * @param {{req:object, path?:string, title?:string}} input
+ * Anonymous analytics still live only in `pageviews` (daily hash, no cross-day
+ * follow). We never write raw IP onto the card.
+ *
+ * @param {{req:object, res?:object, path?:string, title?:string, contactId?:number}} input
  */
 const capturePageview = safe('capturePageview', (input = {}) => {
-  const contactId = input.contactId != null ? input.contactId : visitors.contactIdFor(input.req);
+  let contactId = input.contactId != null ? input.contactId : null;
+  if (contactId == null && input.req) {
+    contactId = visitors.contactIdFor(input.req);
+  }
+  // Progressive: first legitimate visit can open a provisional card.
+  if (contactId == null && input.req && input.res) {
+    contactId = cards.openOrTouch(input.req, input.res);
+  } else if (contactId != null && input.req) {
+    visitors.touchFor(input.req);
+    contacts.touchActivity(contactId);
+  }
   if (contactId == null) return null;
+
+  cards.noteInterest(contactId, input.path || '');
   return events.record({
     contactId,
     type: 'pageview',
@@ -166,10 +227,14 @@ const note = safe('note', (contactId, text) =>
 const runRetention = safe('runRetention', () => {
   const cfg = require('../config').loadConfig();
   const days = parseInt((cfg.crm && cfg.crm.retention && cfg.crm.retention.eventDays) || 0, 10);
-  if (!days || days < 1) return { pruned: 0, days: 0 };
-  const pruned = events.pruneOlderThan(days);
-  if (pruned) console.log('[crm] retention pruned ' + pruned + ' events older than ' + days + ' days');
-  return { pruned, days };
+  let pruned = 0;
+  if (days && days >= 1) {
+    pruned = events.pruneOlderThan(days);
+    if (pruned) console.log('[crm] retention pruned ' + pruned + ' events older than ' + days + ' days');
+  }
+  // Progressive cards: quiet provisional → garbage → hard erase (not forever).
+  const cardsLife = cards.runCardLifecycle();
+  return { pruned, days: days || 0, cards: cardsLife };
 });
 
 /** Headline numbers for the admin dashboard. Null when the CRM is off. */
@@ -205,5 +270,6 @@ module.exports = {
   campaigns,
   subject,
   cs,
+  cards,
   Customer
 };

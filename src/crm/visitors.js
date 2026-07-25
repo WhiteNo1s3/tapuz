@@ -98,6 +98,13 @@ function touch(token) {
   db.prepare('UPDATE crm_visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE token = ?').run(token);
 }
 
+/** Touch by request cookie, if present. */
+function touchFor(req) {
+  const token = readToken(req);
+  if (token) touch(token);
+  return token;
+}
+
 /** Forget this browser (used when a person is deleted, or on request). */
 function unlink(token) {
   return db.prepare('DELETE FROM crm_visitors WHERE token = ?').run(String(token || '')).changes > 0;
@@ -107,4 +114,4 @@ function countForContact(contactId) {
   return db.prepare('SELECT COUNT(*) AS n FROM crm_visitors WHERE contact_id = ?').get(Number(contactId)).n;
 }
 
-module.exports = { COOKIE, readToken, link, contactIdFor, touch, unlink, countForContact };
+module.exports = { COOKIE, readToken, link, contactIdFor, touch, touchFor, unlink, countForContact };

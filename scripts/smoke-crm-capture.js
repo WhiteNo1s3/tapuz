@@ -151,23 +151,28 @@ function visitorCookie(res) {
     check('a linked visit joins the person\'s timeline',
       crm.events.listForContact(person.id).some((e) => e.type === 'pageview' && e.path === '/pricing'));
 
-    // ── and an unlinked visitor stays anonymous ──
+    // ── progressive cards (default): first-party visit may open a provisional card ──
+    // Analytics still always records; CRM gets a cookie-stitched ghost, not raw IP.
     const before = crm.events.listRecent({ limit: 500 }).length;
-    await req('POST', '/_tapuz/collect', { body: { path: '/anonymous-visit' } });
-    check('an UNLINKED visit records nothing in the CRM (they stay anonymous)',
-      crm.events.listRecent({ limit: 500 }).length === before);
-    check('the anonymous visit is still counted in analytics as always', (() => {
+    const anon = await req('POST', '/_tapuz/collect', { body: { path: '/anonymous-visit' } });
+    check('a first-party visit answers 204', anon.status === 204);
+    check('progressive cards: a new visit can open a provisional CRM timeline row',
+      crm.events.listRecent({ limit: 500 }).length >= before);
+    check('the visit is still counted in analytics as always', (() => {
       const rows = require('../src/db').db
         .prepare("SELECT COUNT(*) AS n FROM pageviews WHERE path = '/anonymous-visit'").get();
       return rows.n === 1;
     })());
+    check('provisional card is not attached to the known form person',
+      !crm.events.listForContact(person.id).some((e) => e.path === '/anonymous-visit'));
 
-    // ── a forged cookie resolves to nobody, and does not crash the beacon ──
+    // ── a forged cookie must not attach to the KNOWN person ──
     const forged = await req('POST', '/_tapuz/collect', {
       body: { path: '/forged' }, cookie: 'tz_v=' + 'f'.repeat(32)
     });
-    check('a forged visitor token is simply unknown (204, nothing recorded)',
-      forged.status === 204 && !crm.events.listRecent({ limit: 500 }).some((e) => e.path === '/forged'));
+    check('a forged visitor token still answers 204 (no crash)', forged.status === 204);
+    check('a forged token never joins the known person\'s timeline',
+      !crm.events.listForContact(person.id).some((e) => e.path === '/forged'));
 
     // ── DNT still wins over everything ──
     const dnt = await req('POST', '/_tapuz/collect', {

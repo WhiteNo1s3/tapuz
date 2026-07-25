@@ -116,7 +116,8 @@ app.post('/_tapuz/collect', express.json({ limit: '2kb', type: ['application/jso
     // analytics write and behind the guarded seam, so it cannot cost a
     // pageview; DNT/GPC and the bot filter above already excluded this request
     // long before we reach it.
-    require('./crm').capturePageview({ req, path: p });
+    // Pass `res` so progressive cards can set the first-party stitch cookie.
+    require('./crm').capturePageview({ req, res, path: p });
   } catch (e) {
     // Never surface collector errors to anonymous callers.
   }

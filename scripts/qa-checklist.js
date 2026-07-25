@@ -169,6 +169,7 @@ function main() {
   head('5/6  CRM + WhatsApp spot');
   const spots = [
     ['crm-contacts', 'scripts/smoke-crm-contacts.js'],
+    ['crm-cards', 'scripts/smoke-crm-cards.js'],
     ['crm-capture', 'scripts/smoke-crm-capture.js'],
     ['crm-cs', 'scripts/smoke-crm-cs.js'],
     ['whatsapp', 'scripts/smoke-whatsapp.js'],
