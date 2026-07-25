@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**189 routes across 36 files.**
+**191 routes across 36 files.**
 
 ## By file (what each module owns)
 
@@ -270,10 +270,12 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/sitemap`
 - `GET /admin/sitemap`
 
-### `src/routes/storage.js` — 2 routes
+### `src/routes/storage.js` — 4 routes
 
 - `GET /admin/api/storage`
 - `GET /admin/storage`
+- `POST /admin/db/backup`
+- `GET /admin/db/backup/:name`
 
 ### `src/routes/symbols.js` — 3 routes
 
@@ -431,6 +433,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/whatsapp/send` | POST | `src/routes/crm.js` |
 | `/admin/crm/whatsapp/settings` | POST | `src/routes/crm.js` |
 | `/admin/dashboard` | GET | `src/routes/dashboard.js` |
+| `/admin/db/backup` | POST | `src/routes/storage.js` |
+| `/admin/db/backup/:name` | GET | `src/routes/storage.js` |
 | `/admin/delete` | POST | `src/routes/pages-builder.js` |
 | `/admin/edit/:fullPath` | GET | `src/routes/pages-builder.js` |
 | `/admin/homepage` | POST | `src/routes/homepage.js` |

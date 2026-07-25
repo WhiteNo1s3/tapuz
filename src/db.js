@@ -10,6 +10,19 @@ const dbPath = path.join(dbDir, 'tapuz.db');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
+// ── v1.90 "premium db": the pragmas that make declared behavior REAL ──
+// The schema has declared FOREIGN KEYs since the CRM landed (v1.77), but
+// SQLite enforces them per-connection and DEFAULTS OFF — until now they were
+// documentation. On: a child row cannot name a parent that is not there, and
+// ON DELETE CASCADE / SET NULL actually fire. (Enforcement is write-time
+// only, so pre-existing rows never block an upgrade.)
+db.pragma('foreign_keys = ON');
+// Cross-process access (route smokes spawn a second server on this file)
+// waits up to 5s for a writer instead of throwing SQLITE_BUSY on collision.
+db.pragma('busy_timeout = 5000');
+// The WAL-safe durability setting: fsync at checkpoint, not every
+// transaction. Same corruption safety under WAL, far less disk thrash.
+db.pragma('synchronous = NORMAL');
 
 function hasColumn(table, column) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all();
@@ -555,9 +568,92 @@ function initializeCrmSearch() {
   }
 }
 
+// ── v1.90 premium db: health, the backup shelf, integrity ────────────
+// The storage screen's promise — "your content is real files on disk" —
+// extended to the database itself: SQLite IS a file you own, in an open
+// format, and now it comes with a shelf of consistent snapshots.
+
+const BACKUP_KEEP = 7;
+
+function backupDir() {
+  const d = path.join(dbDir, 'backups');
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+  return d;
+}
+
+/** Newest first, with sizes — the shelf as the admin sees it. */
+function listBackups() {
+  try {
+    return fs.readdirSync(backupDir())
+      .filter((f) => /^tapuz-[\w.-]+\.sqlite$/.test(f))
+      .map((name) => {
+        const st = fs.statSync(path.join(backupDir(), name));
+        return { name, size: st.size, mtime: st.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+  } catch (e) { return []; }
+}
+
+/**
+ * A consistent point-in-time snapshot via VACUUM INTO — WAL-safe (readers
+ * and the writer are unaffected), compacted, and a plain SQLite file anyone
+ * can open anywhere. The shelf keeps the newest BACKUP_KEEP and prunes the
+ * rest; a same-second name collision gets a suffix rather than an error.
+ */
+function backupNow() {
+  const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+  let file = path.join(backupDir(), `tapuz-${stamp}.sqlite`);
+  for (let n = 2; fs.existsSync(file); n++) {
+    file = path.join(backupDir(), `tapuz-${stamp}-${n}.sqlite`);
+  }
+  db.prepare('VACUUM INTO ?').run(file);
+  for (const old of listBackups().slice(BACKUP_KEEP)) {
+    try { fs.unlinkSync(path.join(backupDir(), old.name)); } catch (e) { /* pruning is best effort */ }
+  }
+  return { file, name: path.basename(file), size: fs.statSync(file).size };
+}
+
+/**
+ * The boot/daily hook: snapshot only when the newest one has aged out, so a
+ * day of dev restarts is one backup, not a shelf full of the same morning.
+ */
+function backupIfStale(hours = 20) {
+  const newest = listBackups()[0];
+  if (newest && Date.now() - newest.mtime < hours * 3600 * 1000) {
+    return { skipped: true, newest: newest.name };
+  }
+  return backupNow();
+}
+
+/** PRAGMA quick_check — seconds, not minutes, and catches real corruption. */
+function integrityCheck() {
+  const rows = db.pragma('quick_check');
+  const ok = rows.length === 1 && String(rows[0].quick_check) === 'ok';
+  return { ok, detail: rows.map((r) => String(r.quick_check)).join('; ') };
+}
+
+/** What the admin card shows: the settings that are ACTUALLY in effect. */
+function dbHealth() {
+  const sz = (p) => { try { return fs.statSync(p).size; } catch (e) { return 0; } };
+  return {
+    path: dbPath,
+    size: sz(dbPath),
+    walSize: sz(dbPath + '-wal'),
+    journalMode: String(db.pragma('journal_mode', { simple: true })),
+    foreignKeys: !!db.pragma('foreign_keys', { simple: true }),
+    busyTimeoutMs: Number(db.pragma('busy_timeout', { simple: true })),
+    synchronous: Number(db.pragma('synchronous', { simple: true })), // 1 = NORMAL
+    backups: listBackups(),
+    backupKeep: BACKUP_KEEP
+  };
+}
+
 // Export BEFORE auto-init: initialize() requires modules that require db back
 // (revisions/menus). Exporting first breaks the circular-dependency deadlock.
-module.exports = { db, initialize, crmSearchReady };
+module.exports = {
+  db, initialize, crmSearchReady,
+  dbHealth, integrityCheck, backupNow, backupIfStale, listBackups
+};
 
 // Auto-migrate on require so server/CLI always have schema
 try {

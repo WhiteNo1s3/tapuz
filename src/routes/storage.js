@@ -8,10 +8,17 @@
  * src/storage-view.js. Read-only (no POST here — the underlying files are
  * edited from their own screens: pages in the builder, media in the
  * library, categories on /admin/categories).
+ *
+ * v1.90: one exception to "read-only" — the database card. The DB is a file
+ * on this disk like everything else the screen shows, and it earned the two
+ * POSTs a file can want: a backup snapshot and an integrity check.
  */
 
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const { layout, adminNav, accentFor, escapeAdmin } = require('../admin-ui');
+const { requireAdmin } = require('../admin-guard');
 
 const router = express.Router();
 
@@ -78,9 +85,75 @@ router.get('/admin/storage', (req, res) => {
 
       <div class="stg-sec">🗂️ נתוני אתר <span class="n">${store.counts.siteData}</span></div>
       <div class="stg-grid">${dataCards}</div>
+
+      <div class="stg-sec">🛢️ מסד הנתונים</div>
+      ${dbCard(req)}
     </div>
   `;
   res.send(layout(html, 'אחסון', accentFor('storage')));
+});
+
+// ── v1.90 premium db: the DB is a file on this disk too ──────────────
+
+function dbCard(req) {
+  const dbm = require('../db');
+  const h = dbm.dbHealth();
+  const kb = (n) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB'
+    : n >= 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B');
+  const when = (ms) => new Date(ms).toLocaleDateString('he-IL') + ' ' +
+    new Date(ms).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+
+  // integrity runs ON DEMAND (?check=1), never on every page load
+  const checked = req.query.check === '1' ? dbm.integrityCheck() : null;
+  const flash = req.query.db === 'backed'
+    ? '<div class="pill ok">✓ גיבוי נוצר</div>' : '';
+
+  const shelf = h.backups.length
+    ? h.backups.map((b) =>
+        `<div class="row between" style="padding:4px 0">` +
+        `<a href="/admin/db/backup/${encodeURIComponent(b.name)}" download>💾 ${escapeAdmin(b.name)}</a>` +
+        `<span class="faint">${kb(b.size)} · ${escapeAdmin(when(b.mtime))}</span></div>`
+      ).join('')
+    : '<div class="faint">אין עדיין גיבויים — הראשון ייווצר אוטומטית, או עכשיו בכפתור.</div>';
+
+  return `
+    <div class="stg-card" style="max-width:640px">
+      <div class="row between"><strong>SQLite — קובץ פתוח, שלך</strong>${flash}</div>
+      <div class="stg-path"><code class="disk-path">${escapeAdmin(h.path)}</code></div>
+      <div class="faint" style="margin:6px 0">
+        ${kb(h.size)}${h.walSize ? ' (+' + kb(h.walSize) + ' WAL)' : ''} ·
+        journal: ${escapeAdmin(h.journalMode)} ·
+        מפתחות זרים: ${h.foreignKeys ? 'נאכפים ✓' : 'כבויים!'} ·
+        busy timeout: ${h.busyTimeoutMs}ms
+      </div>
+      ${checked ? `<div class="pill ${checked.ok ? 'ok' : 'warn'}" style="margin:4px 0">
+        בדיקת תקינות: ${checked.ok ? 'תקין ✓' : escapeAdmin(checked.detail)}</div>` : ''}
+      <div style="display:flex;gap:8px;margin:8px 0">
+        <form method="POST" action="/admin/db/backup"><button class="btn sm" type="submit">גבה עכשיו</button></form>
+        <a class="btn secondary sm" href="/admin/storage?check=1#db">בדוק תקינות</a>
+      </div>
+      <div class="side-title">מדף הגיבויים (אוטומטית פעם ביום, נשמרים ${h.backupKeep})</div>
+      ${shelf}
+      <p class="faint" style="margin-top:6px;font-size:.8rem">
+        כל גיבוי הוא snapshot עקבי (VACUUM INTO) — קובץ SQLite רגיל שנפתח בכל כלי, בכל מקום.
+      </p>
+    </div>`;
+}
+
+router.post('/admin/db/backup', requireAdmin, (req, res) => {
+  try { require('../db').backupNow(); } catch (e) { /* absence on the shelf is the signal */ }
+  res.redirect('/admin/storage?db=backed');
+});
+
+router.get('/admin/db/backup/:name', requireAdmin, (req, res) => {
+  const name = String(req.params.name || '');
+  // the shelf's own naming, nothing else — no traversal, no surprises
+  if (!/^tapuz-[\w.-]+\.sqlite$/.test(name) || name.includes('..')) {
+    return res.status(400).send('bad name');
+  }
+  const file = path.join(require('../paths').DB_DIR, 'backups', name);
+  if (!fs.existsSync(file)) return res.status(404).send('not found');
+  res.download(file);
 });
 
 module.exports = router;

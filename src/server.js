@@ -543,7 +543,13 @@ const server = app.listen(PORT, () => {
   try {
     const crm = require('./crm');
     crm.runRetention();
-    const daily = setInterval(() => crm.runRetention(), 24 * 60 * 60 * 1000);
+    // v1.90 premium db: a daily snapshot on a keep-7 shelf. Stale-checked so
+    // dev restarts don't churn the shelf; VACUUM INTO is WAL-consistent.
+    try { require('./db').backupIfStale(); } catch (e) { /* a backup must never block startup */ }
+    const daily = setInterval(() => {
+      crm.runRetention();
+      try { require('./db').backupIfStale(); } catch (e) { /* keep the timer alive */ }
+    }, 24 * 60 * 60 * 1000);
     if (daily.unref) daily.unref();
   } catch (e) { /* housekeeping must never block startup */ }
 });
