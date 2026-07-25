@@ -1,6 +1,6 @@
 # WhatsApp integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phases W0–W3 **shipped** (v1.84–v1.88) · **Lab commit:** `99274e7` (on lab `main`)
+**Status:** ALL PHASES **shipped** — W0–W4 (v1.84–v1.89), the integration is complete · **Lab commit:** `99274e7` (on lab `main`)
 **Prerequisite:** the CRM (v1.77–v1.83) — WhatsApp is a channel *on* the CRM, not
 a thing beside it.
 
@@ -157,10 +157,17 @@ endpoint cannot hold a request open (`smoke-wa-send`, 25 checks). Admin send
 form with per-refusal Hebrew explanations; template variable components are a
 later phase.
 
-### Phase W4 — inbound as CRM material
-An inbound message becomes a timeline event on the resolved contact, through the
-guarded seam, so a WhatsApp conversation and a web enquiry sit on one person's
-history. This is the phase that makes the channel worth having.
+### ~~Phase W4 — inbound as CRM material~~ · **shipped v1.89**
+An inbound message from an unknown number becomes a **person**: the webhook
+resolves the sender's profile name and `ensureContact` creates the contact
+through the CRM's own upsert — so a later web-form submission with the same
+phone *merges* instead of making a twin, and the message lands on one shared
+history. The rules pinned by `smoke-wa-inbound` (12 checks): an existing
+contact is never renamed by a WhatsApp display name (anyone can set theirs to
+anything); **consent is not implied** — the marketing gate still refuses the
+new person; orphaned pre-W4 ledger rows are adopted ("ledger first, contact
+later" — this is the later); a status callback never creates anybody; and
+erasure removes the whole WhatsApp life of a WA-born contact.
 
 ---
 

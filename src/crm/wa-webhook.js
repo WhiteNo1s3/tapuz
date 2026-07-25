@@ -80,22 +80,32 @@ function extractTextBody(msg) {
   return msg.type ? '[' + msg.type + ']' : '';
 }
 
+/** The sender's display name, from the webhook's contacts[] sidecar. */
+function profileNameFor(from, value) {
+  const arr = Array.isArray(value && value.contacts) ? value.contacts : [];
+  const hit = arr.find((c) => c && ledger.normalizeToWaId(c.wa_id) === from);
+  return hit && hit.profile && hit.profile.name ? String(hit.profile.name) : '';
+}
+
 /**
- * One inbound message → one ledger row. recordMessage does the rest of W1's
- * work for free: dedup by wamid (Meta retries until it sees a 2xx), opening
- * the customer-service window, and joining a KNOWN contact's timeline.
- * Creating a contact from the WhatsApp profile is deliberately W4.
+ * One inbound message → one ledger row — and (W4) one PERSON. The phone is
+ * resolved to a contact first, created from the WhatsApp profile if unknown,
+ * so recordMessage links the row and joins the timeline in the same breath:
+ * a WhatsApp conversation and a web enquiry sit on one person's history.
+ * recordMessage still does W1's work: wamid dedup (Meta retries until it
+ * sees a 2xx) and opening the customer-service window.
  */
-function processInbound(msg) {
+function processInbound(msg, value) {
   const from = ledger.normalizeToWaId(msg && (msg.from || msg.wa_id));
   if (!from) return { ok: false, error: 'invalid_from' };
+  const contactId = ledger.ensureContact(from, profileNameFor(from, value));
   const id = ledger.recordMessage({
     phone: from,
     direction: 'in',
     body: extractTextBody(msg),
     waMessageId: msg.id ? String(msg.id) : null
   });
-  return { ok: id != null, id };
+  return { ok: id != null, id, contactId };
 }
 
 /**
@@ -139,7 +149,7 @@ function processWebhookBody(body) {
       if (ch.field && ch.field !== 'messages') continue;
       const value = (ch && ch.value) || {};
       if (Array.isArray(value.messages)) {
-        for (const msg of value.messages) if (processInbound(msg).ok) inbound++;
+        for (const msg of value.messages) if (processInbound(msg, value).ok) inbound++;
       }
       if (Array.isArray(value.statuses)) {
         for (const st of value.statuses) if (processStatus(st).ok) statuses++;

@@ -225,6 +225,43 @@ function decideSend({ phone, msgType = 'text', templateCategory = 'UTILITY' } = 
 // ── the ledger ───────────────────────────────────────────────────────
 
 /**
+ * W4: an inbound message may introduce a NEW person. Resolve the phone to a
+ * contact, creating one from the WhatsApp profile if unknown — through the
+ * CRM's own upsert, so a later web-form submission with the same phone merges
+ * into this person instead of making a twin. An EXISTING contact is never
+ * touched: their curated name must not be overwritten by a WhatsApp display
+ * name anyone can set to anything.
+ *
+ * Consent is NOT implied: messaging a business is service contact, not a
+ * marketing opt-in — the contact is created with consent 0 and no wa opt-in,
+ * so the marketing gate still refuses until a real opt-in is recorded.
+ *
+ * Also adopts any earlier orphaned ledger rows for the phone ("ledger first,
+ * contact later" — this is the "later").
+ */
+function ensureContact(phone, name = '') {
+  const p = normalizeToWaId(phone);
+  if (!p) return null;
+  let person = null;
+  try { person = contacts.findByPhone(p); } catch (e) { person = null; }
+  if (!person) {
+    try {
+      const up = contacts.upsertContact({
+        phone: p,
+        name: String(name || '').trim().slice(0, 200),
+        source: 'whatsapp'
+      });
+      person = up && up.contact;
+    } catch (e) { person = null; }
+  }
+  if (person) {
+    db.prepare('UPDATE crm_wa_messages SET contact_id = ? WHERE phone = ? AND contact_id IS NULL')
+      .run(person.id, p);
+  }
+  return person ? person.id : null;
+}
+
+/**
  * Record a message (either direction). An INBOUND message also opens the
  * window and — through the guarded seam — joins the person's timeline.
  */
@@ -364,6 +401,6 @@ module.exports = {
   openWindow, getWindow, openWindows,
   tierLimit, outsideCswRecipients24h,
   classifyPricing, decideSend,
-  recordMessage, updateStatus, messagesFor, recentMessages, summary,
+  ensureContact, recordMessage, updateStatus, messagesFor, recentMessages, summary,
   PRICE_USD, spendEstimate
 };

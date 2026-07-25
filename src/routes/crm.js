@@ -457,6 +457,7 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
     ? recent.map((m) => `
         <div class="rec" style="display:flex;gap:10px;align-items:baseline">
           <span class="pill">${m.direction === 'in' ? '⬅ נכנס' : '➡ יוצא'}</span>
+          ${m.contact_id ? `<a class="pill" href="/admin/crm/${m.contact_id}" title="לכרטיס איש הקשר">👤</a>` : ''}
           <span dir="ltr" class="muted">${esc(m.phone)}</span>
           <span style="flex:1">${esc((m.body || m.template_category || m.msg_type || '').slice(0, 60))}</span>
           ${m.billable ? '<span class="pill" style="background:#fffbeb;color:#92400e;border-color:#fde68a">בתשלום</span>' : ''}
