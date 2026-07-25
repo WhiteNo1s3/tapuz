@@ -106,13 +106,21 @@ function dbCard(req) {
   // integrity runs ON DEMAND (?check=1), never on every page load
   const checked = req.query.check === '1' ? dbm.integrityCheck() : null;
   const flash = req.query.db === 'backed'
-    ? '<div class="pill ok">✓ גיבוי נוצר</div>' : '';
+    ? '<div class="pill ok">✓ גיבוי נוצר</div>'
+    : req.query.db === 'restored'
+      ? '<div class="pill ok">✓ שוחזר — התוכן הוחלף; גיבוי בטיחות מהרגע שלפני נוסף למדף</div>'
+      : req.query.db === 'restorefail'
+        ? '<div class="pill warn">השחזור נכשל — התוכן לא נגע (הכול-או-כלום)</div>' : '';
 
   const shelf = h.backups.length
     ? h.backups.map((b) =>
-        `<div class="row between" style="padding:4px 0">` +
+        `<div class="row between" style="padding:4px 0;gap:8px;align-items:center">` +
         `<a href="/admin/db/backup/${encodeURIComponent(b.name)}" download>💾 ${escapeAdmin(b.name)}</a>` +
-        `<span class="faint">${kb(b.size)} · ${escapeAdmin(when(b.mtime))}</span></div>`
+        `<span class="faint">${kb(b.size)} · ${escapeAdmin(when(b.mtime))}</span>` +
+        `<form method="POST" action="/admin/db/restore" style="margin:0" ` +
+        `onsubmit="return confirm('לשחזר את מסד הנתונים מהגיבוי הזה? התוכן הנוכחי יוחלף — נוצר גיבוי בטיחות קודם.')">` +
+        `<input type="hidden" name="name" value="${escapeAdmin(b.name)}">` +
+        `<button class="btn secondary sm" type="submit">שחזר</button></form></div>`
       ).join('')
     : '<div class="faint">אין עדיין גיבויים — הראשון ייווצר אוטומטית, או עכשיו בכפתור.</div>';
 
@@ -131,18 +139,91 @@ function dbCard(req) {
       <div style="display:flex;gap:8px;margin:8px 0">
         <form method="POST" action="/admin/db/backup"><button class="btn sm" type="submit">גבה עכשיו</button></form>
         <a class="btn secondary sm" href="/admin/storage?check=1#db">בדוק תקינות</a>
+        <a class="btn secondary sm" href="/admin/db/export.pzn" download>ייצוא ‎.pzn</a>
       </div>
       <div class="side-title">מדף הגיבויים (אוטומטית פעם ביום, נשמרים ${h.backupKeep})</div>
       ${shelf}
       <p class="faint" style="margin-top:6px;font-size:.8rem">
         כל גיבוי הוא snapshot עקבי (VACUUM INTO) — קובץ SQLite רגיל שנפתח בכל כלי, בכל מקום.
+        הייצוא הוא חבילת <code>tapuz-db</code> ‎(.pzn)‎ — אותו תוכן כ-JSON קריא, טבלה-טבלה,
+        בשביל המשחק: כמו שחבילת <code>tapuz-site</code> נושאת את האתר, זו נושאת את מסד הנתונים.
       </p>
+      <div class="side-title" style="margin-top:10px">ייבוא חבילת ‎.pzn</div>
+      <textarea id="dbp-text" rows="3" dir="ltr" placeholder='{"format":"tapuz-db", ...}'
+        style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:monospace;font-size:.8rem"></textarea>
+      <div class="row between" style="margin-top:6px">
+        <span id="dbp-status" class="faint"></span>
+        <button type="button" class="btn secondary sm" id="dbp-apply">ייבוא (מחליף הכול)</button>
+      </div>
+      <script>
+        document.getElementById('dbp-apply').addEventListener('click', function () {
+          var status = document.getElementById('dbp-status');
+          var pkg;
+          try { pkg = JSON.parse(document.getElementById('dbp-text').value || ''); }
+          catch (e) { status.textContent = 'לא JSON תקין'; status.style.color = '#b91c1c'; return; }
+          if (!confirm('ייבוא מחליף את כל תוכן מסד הנתונים. נוצר גיבוי בטיחות קודם. להמשיך?')) return;
+          status.textContent = 'מייבא…'; status.style.color = '#166534';
+          fetch('/admin/api/db/import-pzn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ package: pkg })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) { window.location = '/admin/storage?db=restored'; }
+            else { status.style.color = '#b91c1c'; status.textContent = d.error || 'שגיאה'; }
+          }).catch(function () { status.style.color = '#b91c1c'; status.textContent = 'שגיאת רשת'; });
+        });
+      </script>
     </div>`;
 }
 
 router.post('/admin/db/backup', requireAdmin, (req, res) => {
   try { require('../db').backupNow(); } catch (e) { /* absence on the shelf is the signal */ }
   res.redirect('/admin/storage?db=backed');
+});
+
+router.post('/admin/db/restore', requireAdmin, (req, res) => {
+  const name = String((req.body || {}).name || '');
+  if (!/^tapuz-[\w.-]+\.sqlite$/.test(name) || name.includes('..')) {
+    return res.redirect('/admin/storage?db=restorefail');
+  }
+  const file = path.join(require('../paths').DB_DIR, 'backups', name);
+  if (!fs.existsSync(file)) return res.redirect('/admin/storage?db=restorefail');
+  // Copy the target ASIDE first: the safety backup below prunes the shelf,
+  // and restoring the OLDEST snapshot must not see its own file pruned away.
+  const tmp = file + '.restoring';
+  try {
+    fs.copyFileSync(file, tmp);
+    require('../db').backupNow(); // the moment before the replace, kept
+    const r = require('../db-restore').restoreFromSnapshot(tmp);
+    return res.redirect('/admin/storage?db=' + (r.ok ? 'restored' : 'restorefail'));
+  } catch (e) {
+    return res.redirect('/admin/storage?db=restorefail');
+  } finally {
+    try { fs.unlinkSync(tmp); } catch (e) { /* best effort */ }
+  }
+});
+
+// The database as a .pzn package — `tapuz-db`, the same family as
+// `tapuz-site`: everything portable in Tapuziel is a documented package.
+router.get('/admin/db/export.pzn', requireAdmin, (req, res) => {
+  try {
+    const pkg = require('../db-restore').exportDbPackage();
+    const filename = 'tapuziel-db-' + new Date().toISOString().slice(0, 10) + '.pzn';
+    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.type('application/json').send(JSON.stringify(pkg, null, 2));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/db/import-pzn', requireAdmin, (req, res) => {
+  try {
+    require('../db').backupNow(); // safety net before the replace
+    const r = require('../db-restore').importDbPackage((req.body || {}).package);
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: String(e.message || e) });
+  }
 });
 
 router.get('/admin/db/backup/:name', requireAdmin, (req, res) => {

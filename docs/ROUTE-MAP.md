@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**191 routes across 36 files.**
+**194 routes across 36 files.**
 
 ## By file (what each module owns)
 
@@ -270,11 +270,14 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/sitemap`
 - `GET /admin/sitemap`
 
-### `src/routes/storage.js` — 4 routes
+### `src/routes/storage.js` — 7 routes
 
 - `GET /admin/api/storage`
 - `GET /admin/storage`
 - `POST /admin/db/backup`
+- `POST /admin/db/restore`
+- `GET /admin/db/export.pzn`
+- `POST /admin/api/db/import-pzn`
 - `GET /admin/db/backup/:name`
 
 ### `src/routes/symbols.js` — 3 routes
@@ -336,6 +339,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/bentml/primer` | GET | `src/routes/bentml-api.js` |
 | `/admin/api/categories` | GET | `src/routes/categories.js` |
 | `/admin/api/categories` | POST | `src/routes/categories.js` |
+| `/admin/api/db/import-pzn` | POST | `src/routes/storage.js` |
 | `/admin/api/homepage` | POST | `src/routes/homepage.js` |
 | `/admin/api/import` | POST | `src/routes/import.js` |
 | `/admin/api/inject-pack` | GET | `src/routes/copilot.js` |
@@ -435,6 +439,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/dashboard` | GET | `src/routes/dashboard.js` |
 | `/admin/db/backup` | POST | `src/routes/storage.js` |
 | `/admin/db/backup/:name` | GET | `src/routes/storage.js` |
+| `/admin/db/export.pzn` | GET | `src/routes/storage.js` |
+| `/admin/db/restore` | POST | `src/routes/storage.js` |
 | `/admin/delete` | POST | `src/routes/pages-builder.js` |
 | `/admin/edit/:fullPath` | GET | `src/routes/pages-builder.js` |
 | `/admin/homepage` | POST | `src/routes/homepage.js` |
