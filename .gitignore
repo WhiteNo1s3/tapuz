@@ -18,6 +18,10 @@ config/ai.json
 config/tool-gap.json
 # Lead email notification SMTP credentials (v0.94) — the ai.json pattern.
 config/notify.json
+# WhatsApp Cloud API credentials (v1.84): access token, app secret, verify token.
+# Same pattern — a long-lived token that can send on the owner's behalf never
+# belongs in the repo.
+config/whatsapp.json
 
 # SQLite runtime
 *.db

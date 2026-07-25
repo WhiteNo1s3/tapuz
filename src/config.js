@@ -73,6 +73,13 @@ const DEFAULT_CONFIG = {
       perSessionCap: 20,
       greeting: 'שלום! אני העוזר של האתר. איך אפשר לעזור?',
       businessInfo: ''
+    },
+    // WhatsApp Business Cloud API (v1.84, phase W0 of docs/WHATSAPP-INTEGRATION.md).
+    // A CHANNEL on the CRM, so it sits under the CRM flag: turning the CRM off
+    // turns this off too. Credentials live in config/whatsapp.json (gitignored),
+    // never here — this block holds only the switch.
+    whatsapp: {
+      enabled: false
     }
   },
   // S3: CMS-managed site chrome. The header/footer belong to the whole website
@@ -172,7 +179,8 @@ function loadConfig() {
           ga4: { ...clone(DEFAULT_CONFIG.crm.conversions.ga4), ...(dv.ga4 || {}) }
         },
         retention: { ...clone(DEFAULT_CONFIG.crm.retention), ...(dc.retention || {}) },
-        cs: { ...clone(DEFAULT_CONFIG.crm.cs), ...(dc.cs || {}) }
+        cs: { ...clone(DEFAULT_CONFIG.crm.cs), ...(dc.cs || {}) },
+        whatsapp: { ...clone(DEFAULT_CONFIG.crm.whatsapp), ...(dc.whatsapp || {}) }
       };
       // Each nested default needs its own merge stanza (the top-level spread is
       // shallow), otherwise a partial site.json drops new default subkeys.

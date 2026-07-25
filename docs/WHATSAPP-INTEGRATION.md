@@ -1,6 +1,6 @@
 # WhatsApp integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** reviewed, not started · **Lab commit:** `99274e7` (on lab `main`)
+**Status:** phase W0 **shipped** (v1.84) · **Lab commit:** `99274e7` (on lab `main`)
 **Prerequisite:** the CRM (v1.77–v1.83) — WhatsApp is a channel *on* the CRM, not
 a thing beside it.
 
@@ -100,7 +100,7 @@ Ordered by risk, and — applying the phase-5 lesson — **privacy is not a late
 phase**. Every phase that creates a table teaches `subject.PERSONAL_TABLES` about
 it in the same commit, because the drift guard will otherwise fail the build.
 
-### Phase W0 — pre-flight
+### ~~Phase W0 — pre-flight~~ · **shipped v1.84**
 `config.crm.whatsapp.enabled`, default **off**, under the existing CRM flag (so
 turning the CRM off turns this off too). The Graph host becomes a hardcoded
 constant. Secrets to `config/whatsapp.json`, gitignored, redaction pattern copied

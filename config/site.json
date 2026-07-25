@@ -58,6 +58,9 @@
       "perSessionCap": 20,
       "greeting": "שלום! אני העוזר של האתר. איך אפשר לעזור?",
       "businessInfo": ""
+    },
+    "whatsapp": {
+      "enabled": false
     }
   },
   "header": {
