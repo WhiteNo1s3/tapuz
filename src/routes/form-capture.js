@@ -67,16 +67,23 @@ router.post('/api/form', (req, res) => {
   // their browser. Same discipline as notify above — the submission is already
   // saved, so this runs after the point of no return and the guarded seam
   // swallows anything that goes wrong. A CRM fault must never cost a lead.
-  require('../crm').captureForm({
+  const captured = require('../crm').captureForm({
     fields: body, page, submissionId: result.id, req, res
   });
   if (wantsJsonReply) return res.json({ ok: true, id: result.id });
-  return res.redirect('/form-sent');
+  // The thank-you page fires the BROWSER half of the conversion with the same
+  // event id the server just reported, so the vendor counts one event, not two.
+  const ev = captured && captured.eventId ? '?e=' + encodeURIComponent(captured.eventId) : '';
+  return res.redirect('/form-sent' + ev);
 });
 
 // The thanks page — minimal, RTL, works for every static page on the site.
 router.get('/form-sent', (req, res) => {
-  const site = loadConfig().title || 'האתר';
+  const cfg = loadConfig();
+  const site = cfg.title || 'האתר';
+  // Browser half of the deduplicated conversion. Returns '' unless pixels are
+  // on AND the id looks like one of ours, so a hand-typed ?e= does nothing.
+  const conversionPixel = require('../crm/pixels').renderConversionPixel(cfg, (req.query || {}).e);
   res.send(`<!DOCTYPE html>
 <html lang="he" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -94,6 +101,7 @@ router.get('/form-sent', (req, res) => {
 <div class="card"><div class="ok">✓</div><h1>ההודעה נשלחה</h1>
 <p>תודה! נחזור אליכם בהקדם.</p>
 <a href="/">חזרה לאתר</a></div>
+${require('../crm/pixels').renderPixels(cfg)}${conversionPixel}
 </body></html>`);
 });
 

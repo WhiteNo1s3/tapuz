@@ -95,6 +95,11 @@ check('the loader exposes a public consent API for a custom banner',
 check('Do-Not-Track / GPC is checked before anything fires',
   gated.includes('doNotTrack') && gated.includes('globalPrivacyControl'));
 check('consent is remembered between visits', gated.includes('localStorage'));
+// v1.80: the server sends conversions too, so it must be able to read the same
+// answer — the decision is mirrored into a cookie, not locked in localStorage.
+check('the consent decision is mirrored to a cookie the SERVER can read',
+  gated.includes('document.cookie=KEY') && gated.includes('SameSite=Lax'));
+check('the consent cookie is Secure on https', gated.includes("location.protocol==='https:'"));
 
 // ── id validation: nothing unvalidated reaches a script ──────────────
 check('a Meta id survives as digits ONLY (every markup character is stripped)', (() => {

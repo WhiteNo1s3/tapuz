@@ -260,6 +260,85 @@ router.post('/admin/crm/pixels', requireAdmin, (req, res) => {
   res.redirect('/admin/crm/pixels');
 });
 
+// ─── server-side conversions (declared BEFORE /:id) ──────────────────
+router.get('/admin/crm/conversions', requireAdmin, requireCrm('crm-conversions', 'המרות בשרת'), (req, res) => {
+  const cfg = require('../config').loadConfig();
+  const s = require('../crm/conversions').describeSettings(cfg);
+  const pixelsOn = !!(cfg.crm && cfg.crm.pixels && cfg.crm.pixels.enabled);
+
+  page(res, 'crm-conversions', 'המרות בשרת', `
+    <div class="card">
+      <div class="card-head">🛰 המרות בשרת (Conversions API)</div>
+      <p class="lead">
+        חוסמי פרסומות עוצרים את הפיקסל בדפדפן — דיווח מהשרת עובר.
+        שתי הדיווחים נושאים <strong>אותו מזהה אירוע</strong>, כך שהספק סופר אירוע אחד.
+      </p>
+      ${pixelsOn ? '' : `<div class="pill" style="background:#fffbeb;color:#92400e;border-color:#fde68a">
+        הפיקסלים כבויים — בלי הצד הדפדפני לא יהיה כפל לניכוי, אבל הדיווח מהשרת יעבוד</div>`}
+      <form method="POST" action="/admin/crm/conversions" class="stack">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="enabled" value="1" ${s.enabled ? 'checked' : ''}> הפעל דיווח מהשרת
+        </label>
+
+        <div class="side-title">Meta — Conversions API</div>
+        <label>Pixel ID<input name="metaPixelId" class="input" dir="ltr" value="${esc(s.meta.pixelId)}"></label>
+        <label>Access Token ${s.meta.hasToken ? `<span class="muted">· מוגדר (…${esc(s.meta.tokenTail)})</span>` : '<span class="muted">· לא מוגדר</span>'}
+          <input name="metaAccessToken" class="input" dir="ltr" type="password" autocomplete="off"
+                 placeholder="${s.meta.hasToken ? 'להחלפה — הדביקו טוקן חדש' : 'EAAG…'}"></label>
+        <label>Test Event Code (לבדיקה בלבד)<input name="metaTestEventCode" class="input" dir="ltr" value="${esc(s.meta.testEventCode)}"></label>
+
+        <div class="side-title">Google Analytics 4 — Measurement Protocol</div>
+        <label>Measurement ID<input name="ga4MeasurementId" class="input" dir="ltr" value="${esc(s.ga4.measurementId)}" placeholder="G-XXXXXXX"></label>
+        <label>API Secret ${s.ga4.hasSecret ? `<span class="muted">· מוגדר (…${esc(s.ga4.secretTail)})</span>` : '<span class="muted">· לא מוגדר</span>'}
+          <input name="ga4ApiSecret" class="input" dir="ltr" type="password" autocomplete="off"
+                 placeholder="${s.ga4.hasSecret ? 'להחלפה — הדביקו סוד חדש' : ''}"></label>
+
+        <button class="btn" type="submit">שמור</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-head">מה נשלח, ומתי לא</div>
+      <ul class="muted" style="font-size:.88rem;line-height:1.9;padding-inline-start:18px;margin:0">
+        <li>מייל וטלפון נשלחים <strong>מגובבים</strong> (SHA-256) — לעולם לא גלויים.</li>
+        <li>מבקר שדחה את בקשת האישור — <strong>לא נשלח עליו כלום</strong>, גם לא מהשרת.</li>
+        <li>Do-Not-Track עוצר הכול, לפני כל בדיקה אחרת.</li>
+        <li>הכתובות של הספקים קבועות בקוד — שום הגדרה לא יכולה להסיט את הטוקן ליעד אחר.</li>
+        <li>שליחה איטית לא מעכבת את המבקר: יש תקרת זמן, והשליחה רצה ברקע.</li>
+        <li>הסודות נשמרים בשרת בלבד ולעולם לא מוחזרים לדפדפן.</li>
+      </ul>
+    </div>`);
+});
+
+router.post('/admin/crm/conversions', requireAdmin, (req, res) => {
+  const config = require('../config');
+  const cfg = config.loadConfig();
+  const b = req.body || {};
+  const prev = (cfg.crm && cfg.crm.conversions) || {};
+  const prevMeta = prev.meta || {};
+  const prevGa4 = prev.ga4 || {};
+  // An empty secret field means "keep what is stored" — never "clear it".
+  const keep = (incoming, stored) => {
+    const v = String(incoming || '').trim();
+    return v || String(stored || '');
+  };
+  cfg.crm = Object.assign({}, cfg.crm, {
+    conversions: {
+      enabled: !!b.enabled,
+      meta: {
+        pixelId: String(b.metaPixelId || '').trim(),
+        accessToken: keep(b.metaAccessToken, prevMeta.accessToken),
+        testEventCode: String(b.metaTestEventCode || '').trim()
+      },
+      ga4: {
+        measurementId: String(b.ga4MeasurementId || '').trim(),
+        apiSecret: keep(b.ga4ApiSecret, prevGa4.apiSecret)
+      }
+    }
+  });
+  config.saveConfig(cfg);
+  res.redirect('/admin/crm/conversions');
+});
+
 // ─── contacts: the list ──────────────────────────────────────────────
 router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קשר'), (req, res) => {
   const { contacts, Customer } = require('../crm');

@@ -27,6 +27,7 @@ const relations = require('./relations');
 const segments = require('./segments');
 const lists = require('./lists');
 const visitors = require('./visitors');
+const conversions = require('./conversions');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -100,7 +101,23 @@ const captureForm = safe('captureForm', (input = {}) => {
     refId: input.submissionId != null ? input.submissionId : null
   });
   if (input.req && input.res) visitors.link(input.req, input.res, contact.id);
-  return { contact, created };
+
+  // Server-side conversion (v1.80). Fire-and-forget on purpose: the visitor's
+  // redirect must not wait on Meta or Google. The eventId travels back to the
+  // caller so the thank-you page can fire the BROWSER pixel with the same id —
+  // that shared id is what makes the vendor treat two reports as one event.
+  const eventId = conversions.newEventId();
+  try {
+    const cfg = require('../config').loadConfig();
+    conversions.sendConversion({
+      config: cfg, contact, eventId, req: input.req,
+      page: input.page, eventName: 'Lead'
+    }).catch(() => { /* reported inside; never surfaces here */ });
+  } catch (e) {
+    console.error('[crm] conversion dispatch failed:', e.message);
+  }
+
+  return { contact, created, eventId };
 });
 
 /**
@@ -160,5 +177,6 @@ module.exports = {
   segments,
   lists,
   visitors,
+  conversions,
   Customer
 };

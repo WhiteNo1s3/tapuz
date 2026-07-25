@@ -1,6 +1,6 @@
 # CRM integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phase 0–3a **shipped** (v1.77–v1.79) · **Lab reviewed at:** `9350fd9` · **Next:** phase 3b (server-side conversions), then 3c (campaigns)
+**Status:** phase 0–3b **shipped** (v1.77–v1.80) · **Lab reviewed at:** `9350fd9` · **Next:** phase 3c (campaigns), then phase 5 hygiene
 
 The lab is a **specification and reference implementation**, not a merge source.
 Every module lands here rebuilt to our bar — the rule the lab's own README states.
@@ -154,11 +154,33 @@ Verified live: consent bar → grant → Facebook's script actually loads, zero 
 violations; toggling pixels off restores the original CSP header character for
 character.
 
-### Phase 3b — server-side conversions · *next*
-Meta CAPI + GA4 Measurement Protocol, sharing an `event_id` with the browser
-pixel for deduplication. PII hashed to Meta's spec (trim → lowercase → SHA-256,
-digits-only phones) with a fixture test. Timeout-bounded and failure-isolated: a
-dead CAPI endpoint must not slow a form submission.
+### ~~Phase 3b — server-side conversions~~ · **shipped v1.80**
+Meta CAPI + GA4 Measurement Protocol. A form submission mints one `eventId`:
+the server reports the conversion with it, the redirect carries it to
+`/form-sent`, and the thank-you page fires the browser pixel with the **same**
+id — so the vendor collapses two reports into one event. Better measurement,
+not double counting.
+
+**Consent had to become server-readable.** The browser's answer lived only in
+`localStorage`, which the server cannot see — so a "refuse" would have stopped
+the pixel while the server kept reporting. That is not consent, it is theatre.
+The loader now mirrors the decision into a cookie, and the server refuses to
+send for anyone who did not grant. DNT/GPC outranks even a granted consent.
+
+**Rules held:** PII hashed to Meta's spec (verified against digests computed
+independently with `openssl`, not with the code under test); ip/user-agent sent
+raw because Meta requires them so for matching, and nothing else is; vendor
+hosts are **hardcoded constants** so no setting can redirect an access token;
+every call is `AbortSignal.timeout`-bounded and fire-and-forget; secrets are
+never echoed back to the browser (readiness + last-4 only), and an empty secret
+field means *keep*, never *clear*.
+
+**Acceptance (met):** `smoke-crm-conversions` (30 checks, fully offline — every
+path is gated or unconfigured, so nothing hits a real vendor in CI). Verified
+live: settings round-trip with the token never appearing in the page, the
+thank-you page carries the same event id the redirect issued, a forged `?e=`
+renders nothing, and a submission with a real outbound call to Meta on a bogus
+token returned in **94 ms** with the lead saved — the visitor never waits.
 
 ### Phase 3c — campaigns
 Named-list sends over SMTP with open/click tracking.

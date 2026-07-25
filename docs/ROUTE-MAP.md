@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**160 routes across 34 files.**
+**162 routes across 34 files.**
 
 ## By file (what each module owns)
 
@@ -95,7 +95,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/ai/chat`
 - `GET /admin/chat`
 
-### `src/routes/crm.js` — 14 routes
+### `src/routes/crm.js` — 16 routes
 
 - `POST /admin/crm/settings`
 - `GET /admin/crm/segments`
@@ -106,6 +106,8 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/crm/lists/:id/delete`
 - `GET /admin/crm/pixels`
 - `POST /admin/crm/pixels`
+- `GET /admin/crm/conversions`
+- `POST /admin/crm/conversions`
 - `GET /admin/crm`
 - `GET /admin/crm/:id`
 - `POST /admin/crm/:id/update`
@@ -367,6 +369,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/:id/delete` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/note` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/update` | POST | `src/routes/crm.js` |
+| `/admin/crm/conversions` | GET | `src/routes/crm.js` |
+| `/admin/crm/conversions` | POST | `src/routes/crm.js` |
 | `/admin/crm/lists` | GET | `src/routes/crm.js` |
 | `/admin/crm/lists` | POST | `src/routes/crm.js` |
 | `/admin/crm/lists/:id/delete` | POST | `src/routes/crm.js` |

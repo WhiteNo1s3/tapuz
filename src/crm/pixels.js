@@ -145,8 +145,15 @@ function renderPixels(config) {
     `var KEY=${JSON.stringify(CONSENT_KEY)},NEED=${needConsent},SNIPS=${payload},fired=false;` +
     // Do-Not-Track / GPC is an explicit refusal — never load a tracker over it.
     `function dnt(){try{return navigator.doNotTrack=='1'||window.doNotTrack=='1'||navigator.msDoNotTrack=='1'||navigator.globalPrivacyControl===true}catch(e){return false}}` +
-    `function read(){try{return localStorage.getItem(KEY)}catch(e){return null}}` +
-    `function write(v){try{localStorage.setItem(KEY,v)}catch(e){}}` +
+    // The decision is mirrored into a cookie as well as localStorage, because
+    // the SERVER has to honour the same answer: phase 3b sends conversions
+    // server-side, and a visitor who refused here must be refused there too.
+    // localStorage stays the source of truth for the browser (survives cookie
+    // clearing policies); the cookie is how the server learns the answer.
+    `function read(){try{var v=localStorage.getItem(KEY);if(v)return v}catch(e){}` +
+    `try{var m=document.cookie.match(/(?:^|;\\s*)tz_consent=([^;]*)/);return m?m[1]:null}catch(e){return null}}` +
+    `function write(v){try{localStorage.setItem(KEY,v)}catch(e){}` +
+    `try{document.cookie=KEY+'='+v+';Path=/;Max-Age=31536000;SameSite=Lax'+(location.protocol==='https:'?';Secure':'')}catch(e){}}` +
     // Vendor code is injected as a real <script> element, NOT eval'd. Our CSP
     // allows 'unsafe-inline' (the analytics beacon needs it) but deliberately
     // withholds 'unsafe-eval' — so an eval-based loader is silently blocked on
@@ -177,6 +184,33 @@ function renderPixels(config) {
 
   const banner = p.requireConsent && p.banner ? bannerMarkup() : '';
   return banner + loader;
+}
+
+/**
+ * The BROWSER half of a deduplicated conversion (v1.80).
+ *
+ * The server already reported this conversion via the Conversions API with
+ * `eventId`; firing the same event here with the same id lets Meta collapse the
+ * two into one. Consent still governs — this waits for `tapuzConsent` just like
+ * the pageview pixel, so a refused visitor reports nothing from either side.
+ *
+ * @param {object} config site config
+ * @param {string} eventId the id the server used — hex, from newEventId()
+ * @returns {string} markup, or '' when pixels are off / the id is not ours
+ */
+function renderConversionPixel(config, eventId) {
+  const p = getPixels(config);
+  if (!p.enabled || !p.meta) return '';
+  if (!/^[a-f0-9]{16,64}$/.test(String(eventId || ''))) return '';
+  const id = JSON.stringify(String(eventId));
+  return (
+    `<script>(function(){function go(){try{` +
+    `if(window.fbq)fbq('track','Lead',{},{eventID:${id}})` +
+    `}catch(e){}}` +
+    // the loader may not have run yet; poll briefly rather than race it
+    `var n=0,t=setInterval(function(){if(window.fbq||n++>40){clearInterval(t);go()}},100);` +
+    `})();</script>`
+  );
 }
 
 /**
@@ -218,4 +252,7 @@ function cspSources(config) {
   return out;
 }
 
-module.exports = { CONSENT_KEY, getPixels, hasAnyPixel, vendorSnippets, renderPixels, cspSources };
+module.exports = {
+  CONSENT_KEY, getPixels, hasAnyPixel, vendorSnippets,
+  renderPixels, renderConversionPixel, cspSources
+};

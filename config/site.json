@@ -36,6 +36,18 @@
       "linkedin": {
         "partnerId": ""
       }
+    },
+    "conversions": {
+      "enabled": false,
+      "meta": {
+        "pixelId": "",
+        "accessToken": "",
+        "testEventCode": ""
+      },
+      "ga4": {
+        "measurementId": "",
+        "apiSecret": ""
+      }
     }
   },
   "header": {

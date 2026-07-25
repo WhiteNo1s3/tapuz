@@ -43,6 +43,16 @@ const DEFAULT_CONFIG = {
       googleAds: { conversionId: '', conversionLabel: '' },
       tiktok: { pixelId: '' },
       linkedin: { partnerId: '' }
+    },
+    // Server-side conversions (v1.80, phase 3b). The browser pixel can be
+    // blocked; a server-to-server event cannot. Both fire for the SAME
+    // conversion and carry the same eventId so the vendor deduplicates them.
+    // Off by default, and gated on the visitor's consent exactly like the
+    // browser side — a refusal must mean refused everywhere.
+    conversions: {
+      enabled: false,
+      meta: { pixelId: '', accessToken: '', testEventCode: '' },
+      ga4: { measurementId: '', apiSecret: '' }
     }
   },
   // S3: CMS-managed site chrome. The header/footer belong to the whole website
@@ -123,6 +133,7 @@ function loadConfig() {
       // key undefined where the renderer would read it.
       const dc = data.crm || {};
       const dp = dc.pixels || {};
+      const dv = dc.conversions || {};
       merged.crm = {
         ...clone(DEFAULT_CONFIG.crm),
         ...dc,
@@ -133,6 +144,12 @@ function loadConfig() {
           googleAds: { ...clone(DEFAULT_CONFIG.crm.pixels.googleAds), ...(dp.googleAds || {}) },
           tiktok: { ...clone(DEFAULT_CONFIG.crm.pixels.tiktok), ...(dp.tiktok || {}) },
           linkedin: { ...clone(DEFAULT_CONFIG.crm.pixels.linkedin), ...(dp.linkedin || {}) }
+        },
+        conversions: {
+          ...clone(DEFAULT_CONFIG.crm.conversions),
+          ...dv,
+          meta: { ...clone(DEFAULT_CONFIG.crm.conversions.meta), ...(dv.meta || {}) },
+          ga4: { ...clone(DEFAULT_CONFIG.crm.conversions.ga4), ...(dv.ga4 || {}) }
         }
       };
       // Each nested default needs its own merge stanza (the top-level spread is
