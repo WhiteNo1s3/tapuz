@@ -1,0 +1,186 @@
+# Session handoff — Tapuziel (read this if the chat died)
+
+> **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
+> Update this file whenever a big milestone lands or direction changes.
+> **Last updated:** 2026-07-26 (after QA checklist + body-parser/Node 24).
+
+---
+
+## 0. Where to work (worktrees)
+
+| Path | Branch | Role |
+|------|--------|------|
+| `/home/<user>/projects/tapuz` | `main` | **Main gig — Tapuziel CMS** (`WhiteNo1s3/tapuz`) |
+| `/home/<user>/.grok/worktrees/tapuz/handoff` | `session/handoff` | Crash-recovery worktree (same tip as main when created) |
+| `/home/<user>/projects/tapuziel-crm-lab` | `main` | CRM lab prototype (`WhiteNo1s3/tapuziel-crm-lab`) |
+| `/home/<user>/.grok/worktrees/tapuziel-crm-lab/continue` | `lab/continue` | Older lab worktree (may lag main) |
+
+```bash
+# Resume Tapuz main
+cd /home/<user>/projects/tapuz && git pull && npm run qa:quick
+
+# Resume from this handoff worktree
+cd /home/<user>/.grok/worktrees/tapuz/handoff && git fetch && git merge origin/main
+```
+
+**Product rule:** Tapuz main is the source of truth. Lab ideas return *rebuilt*, not raw-merged.
+
+---
+
+## 1. Product north star
+
+**Tapuziel** (תפוזיאל) — Hebrew-first RTL CMS with visual builder, `.pzn`, agents, and growing CRM/WhatsApp surfaces.
+
+**Two-product competition story (Ben):**
+
+1. **Tapuziel CMS** — beat Elementor / theme grind (authoring).
+2. **Tapuziel CRM** — pixel + contacts + messaging that can ride **on** WordPress/Builder until sites migrate.
+
+Hostinger WP sandbox (portfolio):  
+`https://<wp-sandbox>`  
+- Site title **WhiteNo1se**, Elementor + Pro, **Coming Soon** when logged out.  
+- Themes: WhiteNo1se Child (active), Grokskin, Paz Sketch, PazView, …  
+- **Tapuziel Pixel plugin was NOT installed there** when last checked.  
+- Password was shared in chat once → **user if not already**.
+
+**Brand:** citrus orange `#f97316` / `#ea580c`, fruit icon (`public/tapuziel-icon.png` on lab; extension icons on main), credit **Shaltiel Industries · made by WhiteNo1se**.
+
+---
+
+## 2. Git tips (as of handoff write)
+
+### Tapuz main (`WhiteNo1s3/tapuz`)
+
+| | |
+|---|---|
+| Tip when handoff written | `ac86870` — *v1.88.1: one-command QA report, body-parser 1.20.6, Actions Node 24* |
+| Recent line | v1.77 CRM spine → v1.83 CS chat → v1.84–1.88 WhatsApp W0–W3 → v1.90 premium DB → v1.91 restore/.pzn DB → **v1.88.1 QA tooling** (on top of 1.91 tree after rebase) |
+| Package version field | Was `1.91.0-alpha` in package.json at merge time |
+| CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
+| Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
+
+### CRM lab (`WhiteNo1s3/tapuziel-crm-lab`)
+
+| | |
+|---|---|
+| Tip | `c1682fc` — ROUTE-MAP regen (fixed CI drift after pixel routes) |
+| Pixel embed | `docs/PIXEL-EMBED-SPEC.md`, `/tz-pixel.js`, WP plugin under `integrations/wordpress/tapuziel-pixel/` |
+| Live wire proof | `npm run test:pixel-live` (Builder + WP **shaped** beacons → `crm_events.site_id`) — **not** a real WP activation |
+| Branding | Lab admin shell uses Tapuziel icon + Shaltiel credit |
+
+---
+
+## 3. What was built / decided this multi-session arc
+
+### A. CRM lab (then partly ported to main)
+
+- Contacts, lists, campaigns, pixels, CAPI, GA MP, segments, social gadget, CS chat, enterprise pixel.
+- **WhatsApp Cloud API spike (lab):** `docs/WHATSAPP-SPEC.md`, `src/crm/whatsapp*.js`, send + webhook + opt-in.
+- **Pixel embed (any CMS):** golden path `tz-pixel.js` + CORS collect + `site_id`; thin WP plugin + Builder README.
+- Lesson: **one deep integration at a time** (don’t ship four toys before the spine works).
+
+### B. Tapuz main (current focus)
+
+WhatsApp phases W0–W3 (config/ledger/webhook/send), CRM phases on main, CS widget, premium DB, restore-as-.pzn, etc.  
+**Do not re-port lab blindly** — main has its own modules (`wa-ledger`, `wa-send`, `wa-webhook`, smokes).
+
+### C. Explicitly parked
+
+- **Israeli invoicing** (Green Invoice / iCount / Rivhit, חשבונית מס vs קבלה, allocation numbers) = **finance surface**, own round later. Not CRM.
+
+---
+
+## 4. QA — one command (do this first after crash)
+
+```bash
+cd /home/<user>/projects/tapuz
+npm install          # if node_modules missing; allow better-sqlite3 native build
+npm run qa           # full report (~50s) — mirrors CI + CRM/WA spots
+npm run qa:quick     # faster path
+```
+
+Script: `scripts/qa-checklist.js`  
+Report gates: `test:pzn`, `test:smoke`, registry, wizard, CRM/WA spot (7), route-map, npm audit high+.
+
+```bash
+# Lab only if needed
+cd /home/<user>/projects/tapuziel-crm-lab
+npm run test:pixel-embed
+npm run test:pixel-live
+npm run test:crm
+```
+
+---
+
+## 5. Important paths (Tapuz main)
+
+| Area | Path |
+|------|------|
+| Server assembly | `src/server.js` |
+| CRM | `src/crm/*`, `src/routes/crm.js`, `src/routes/crm-track.js` |
+| WhatsApp | `src/crm/whatsapp.js`, `wa-ledger.js`, `wa-send.js`, `wa-webhook.js`, `src/routes/wa-webhook.js` |
+| Specs | `docs/WHATSAPP-INTEGRATION.md`, `docs/ROADMAP.md`, `docs/ROUTE-MAP.md` |
+| Smokes | `scripts/smoke-*.js` (CRM + `smoke-wa-*` + `smoke-whatsapp.js`) |
+| Secrets (gitignored) | `config/whatsapp.json`, `config/auth.json`, `config/ai.json`, … |
+| CI | `.github/workflows/security.yml` |
+
+### Lab-only (not necessarily on main)
+
+| Area | Path |
+|------|------|
+| Pixel embed admin | `/admin/crm/pixel-embed` |
+| Loader | `public/tz-pixel.js` |
+| Spec | `docs/PIXEL-EMBED-SPEC.md` |
+| WP plugin | `integrations/wordpress/tapuziel-pixel/` |
+| Builder recipe | `integrations/builder.io/README.md` |
+
+---
+
+## 6. Open / next (when resuming)
+
+Pick **one** deep thread (lesson of the lab):
+
+1. **Tapuz product** — continue ROADMAP (builder, CRM polish on main, WhatsApp production readiness). Run `npm run qa` before/after.
+2. **Pixel on real WP** — install lab/plugin on Hostinger WhiteNo1se site with a public Tapuziel CRM base URL; prove `site_id` in admin. (Was planned, not finished on live WP.)
+3. **Israeli invoicing** — separate finance design round.
+4. **Hygiene** — Actions still warn that some **action packages** use Node 20 runtime (unrelated to our `node-version: 24` for app tests).
+
+Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified without browser/CMS install.
+
+---
+
+## 7. Honesty log (don’t overclaim)
+
+| Claim | Truth |
+|-------|--------|
+| WP Hostinger explored | **Yes** — logged into admin, themes/plugins/pages listed |
+| Tapuziel Pixel live on that WP | **No** |
+| Builder.io space tested | **No** — recipes + HTTP wire only |
+| Pixel `site_id` → CRM | **Yes** via `test:pixel-live` simulated Origins |
+| Tapuz CI green after QA tooling | **Yes** at handoff write |
+| body-parser ≥ 1.20.6 | **Yes** |
+| Chat context permanent | **No** — **this file is the memory** |
+
+---
+
+## 8. Update protocol (future agents / future you)
+
+When you finish a real chunk of work:
+
+1. Bump the **Last updated** date at the top.
+2. Refresh **§2 Git tips** (commit hash + one-line version log).
+3. Move done items out of **§6 Open/next** into **§3 What was built**.
+4. Add any new **Honesty log** lines.
+5. Commit: `docs: session handoff — <short why>` and push `main` (or update `session/handoff` then merge).
+
+If the conversation dies mid-task: read this file first, then `git log -15 --oneline`, then `npm run qa:quick`.
+
+---
+
+## 9. Quick identity
+
+- **Product name users see:** Tapuziel (not “Tapuz” in UI).
+- **Org credit:** Shaltiel Industries · made by WhiteNo1se / WhiteNo1s3 on GitHub.
+- **Repos:** `WhiteNo1s3/tapuz` (main), `WhiteNo1s3/tapuziel-crm-lab` (lab).
+
+*End of handoff. Prefer updating over inventing history.*
