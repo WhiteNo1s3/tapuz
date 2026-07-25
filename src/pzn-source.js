@@ -46,6 +46,10 @@ function pznSourceToBlocks(rawSource) {
   // the model's obvious intent lands instead of silently dropping
   const twinChanges = require('./pzn/repair').adoptPropTwins(doc);
   if (twinChanges.length) changes = changes.concat(twinChanges);
+  // telemetry (v1.85): every AI-authored document that lands here answers the
+  // "is the syntax a problem?" question — including the clean ones, which are
+  // the denominator. Guarded inside; can never affect the parse.
+  require('./pzn-repair-stats').record({ changes, repaired });
   const view = pznApi.toTapuzPage(doc);
   return { view, doc, repaired, changes };
 }

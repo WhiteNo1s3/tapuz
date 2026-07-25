@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**182 routes across 35 files.**
+**183 routes across 35 files.**
 
 ## By file (what each module owns)
 
@@ -82,11 +82,12 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/revisions/:fullPath`
 - `POST /admin/api/revisions/restore`
 
-### `src/routes/copilot.js` — 10 routes
+### `src/routes/copilot.js` — 11 routes
 
 - `GET /admin/agent`
 - `GET /admin/ai`
 - `GET /admin/inject`
+- `GET /admin/api/pzn/repair-stats`
 - `GET /admin/api/syntax-dictionary`
 - `GET /admin/api/syntax-dictionary.md`
 - `GET /admin/api/inject-pack`
@@ -348,6 +349,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/pzn/preview` | POST | `src/routes/pzn-tools.js` |
 | `/admin/api/pzn/primer` | GET | `src/routes/pzn-tools.js` |
 | `/admin/api/pzn/repair` | POST | `src/routes/pzn-tools.js` |
+| `/admin/api/pzn/repair-stats` | GET | `src/routes/copilot.js` |
 | `/admin/api/pzn/source` | GET | `src/routes/pzn-pages.js` |
 | `/admin/api/pzn/source` | POST | `src/routes/pzn-pages.js` |
 | `/admin/api/pzn/to-blocks` | POST | `src/routes/pzn-tools.js` |

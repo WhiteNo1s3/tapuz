@@ -334,6 +334,19 @@ function initializeCrm() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_sends_campaign ON crm_campaign_sends(campaign_id, status)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_sends_contact ON crm_campaign_sends(contact_id)');
 
+  // BenTML repair telemetry (v1.85): which repair codes fire, per element —
+  // the number that answers "is the syntax a problem for models?". Only codes
+  // and element names are stored, never document content.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pzn_repair_stats (
+      code TEXT NOT NULL,
+      element TEXT NOT NULL DEFAULT '',
+      count INTEGER NOT NULL DEFAULT 0,
+      last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (code, element)
+    )
+  `);
+
   initializeCrmCs();
   initializeCrmSearch();
 }

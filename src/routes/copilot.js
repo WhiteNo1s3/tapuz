@@ -116,6 +116,27 @@ router.get('/admin/ai', (req, res) => {
 // All handlers below inherit the global /admin session + Origin-CSRF gate.
 // =========================================================================
 router.get('/admin/inject', (req, res) => {
+  // Repair telemetry (v1.85) — the number that answers "is BenTML a problem
+  // for models?". Rendered server-side; the card is honest when empty.
+  const stats = require('../pzn-repair-stats').summary();
+  const fixRows = stats.topFixes.length
+    ? stats.topFixes.map((f) =>
+        `<li><code>${escapeAdmin(f.code)}</code>${f.element ? ' · bent-' + escapeAdmin(f.element) : ''}` +
+        `<span style="float:left;font-weight:700">${f.count}</span></li>`).join('')
+    : '<li class="muted">עדיין אין נתונים — הם ייאספו מכל הדבקה של AI.</li>';
+  const statsCard = `
+        <div class="inj-card" style="margin-top:14px">
+          <h3>🩺 מה המודלים מפספסים בשפה</h3>
+          ${stats.documents
+            ? `<p class="muted"><strong>${stats.cleanRate}%</strong> מהמסמכים (${stats.clean}/${stats.documents})
+               הגיעו תקינים בלי שום תיקון. השאר תוקנו אוטומטית — ואלה התיקונים:</p>`
+            : `<p class="muted">כל מסמך ‎.pzn שמודל מחבר נמדד כאן: כמה הגיעו נקיים, ומה בדיוק תוקן.
+               המספרים האלה הם התשובה לשאלה "האם צריך לשנות את התחביר".</p>`}
+          <ul class="tool-list">${fixRows}</ul>
+          ${stats.documents ? `<p class="muted" style="font-size:.78rem;margin-bottom:0">
+            PROP_ALIAS/ALIAS = בעיית מילון (לתקן הסבר, לא תחביר) ·
+            QUARANTINE = מודול שחסר לנו · E_* = בעיית תחביר אמיתית</p>` : ''}
+        </div>`;
   const html = `
     ${adminNav('chat', 'מילון השפה · משחק בונה האתרים')}
     <style>
@@ -161,6 +182,7 @@ router.get('/admin/inject', (req, res) => {
           <h3>תצוגת החבילה</h3>
           <pre id="preview">לחצו «תצוגה»…</pre>
         </div>
+        ${statsCard}
       </div>
       <div>
         <div class="inj-card">
@@ -196,6 +218,11 @@ router.get('/admin/inject', (req, res) => {
 // endpoint, so /admin/inject's "copy dictionary" matches its own tool list.
 // (src/syntax-dictionary.js still backs docs/SYNTAX-DICTIONARY.md via
 // `npm run gen:dictionary`; it is no longer an HTTP surface.)
+// Repair telemetry, machine-readable (v1.85) — same numbers as the card.
+router.get('/admin/api/pzn/repair-stats', requireAdmin, (req, res) => {
+  res.json(Object.assign({ ok: true }, require('../pzn-repair-stats').summary()));
+});
+
 router.get('/admin/api/syntax-dictionary', (req, res) => {
   const { buildDictionary, toAgentTools } = require('../pzn/syntax-dictionary');
   res.json({ ok: true, dictionary: buildDictionary(), tools: toAgentTools() });

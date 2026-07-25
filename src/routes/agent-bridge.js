@@ -244,6 +244,9 @@ router.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) =>
       repaired = true;
       changes = r.changes;
     }
+    // telemetry (v1.85): this is the extension's publish path — the richest
+    // stream of model-authored documents. Clean parses count too (denominator).
+    require('../pzn-repair-stats').record({ changes, repaired });
     // same empty-template guard as the admin paste route (v0.72): an agent
     // reply with zero modules must not create a placeholder-titled page.
     if (!pznApi.toTapuzPage(doc).blocks.length) {
