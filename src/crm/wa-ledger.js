@@ -230,7 +230,7 @@ function decideSend({ phone, msgType = 'text', templateCategory = 'UTILITY' } = 
  */
 function recordMessage({
   phone, direction, msgType = 'text', templateCategory = null,
-  pricing = null, outsideCsw = false, body = '', waMessageId = null, status
+  pricing = null, outsideCsw = false, body = '', waMessageId = null, status, error = null
 } = {}) {
   const p = normalizeToWaId(phone);
   if (!p || (direction !== 'in' && direction !== 'out')) return null;
@@ -256,9 +256,9 @@ function recordMessage({
   const info = db.prepare(`
     INSERT INTO crm_wa_messages
       (phone, contact_id, direction, msg_type, template_category,
-       pricing_category, pricing_type, billable, status, wa_message_id, outside_csw, body)
+       pricing_category, pricing_type, billable, status, wa_message_id, outside_csw, body, error)
     VALUES (@phone, @contact_id, @direction, @msg_type, @template_category,
-            @pricing_category, @pricing_type, @billable, @status, @wa_message_id, @outside_csw, @body)
+            @pricing_category, @pricing_type, @billable, @status, @wa_message_id, @outside_csw, @body, @error)
   `).run({
     phone: p,
     contact_id: contactId,
@@ -271,7 +271,8 @@ function recordMessage({
     status: status || (direction === 'in' ? 'received' : 'accepted'),
     wa_message_id: waMessageId ? String(waMessageId).slice(0, 100) : null,
     outside_csw: outsideCsw ? 1 : 0,
-    body: String(body || '').slice(0, 4000)
+    body: String(body || '').slice(0, 4000),
+    error: error != null ? String(error).slice(0, 300) : null
   });
 
   // inbound joins the timeline through the seam (flag-gated, never throws)
@@ -313,6 +314,38 @@ function recentMessages({ limit = 50 } = {}) {
   return db.prepare('SELECT * FROM crm_wa_messages ORDER BY id DESC LIMIT ?').all(n);
 }
 
+// ── money (W3): the cap and the count mean nothing until they are money ──
+
+/**
+ * Meta's per-message PMP rates for Israel, USD — an ESTIMATE for display
+ * (the admin says so): the binding price is what Meta bills. Service
+ * conversations and in-window utility are free and never counted here.
+ */
+const PRICE_USD = { marketing: 0.0353, utility: 0.0053, authentication: 0.0159 };
+
+/**
+ * Estimated spend from DELIVERED billable rows — because Meta charges at
+ * delivery, which is exactly what the W2 webhook refines. An accepted-but-
+ * undelivered message costs nothing yet, and a failed one never will.
+ */
+function spendEstimate() {
+  const count = (where) => db.prepare(`
+    SELECT pricing_category cat, COUNT(*) n FROM crm_wa_messages
+    WHERE direction = 'out' AND billable = 1 AND delivered_at IS NOT NULL ${where}
+    GROUP BY pricing_category`).all();
+  const tally = (rows) => {
+    let usd = 0; let n = 0;
+    for (const r of rows) { usd += (PRICE_USD[r.cat] || 0) * r.n; n += r.n; }
+    return { n, usd: Math.round(usd * 10000) / 10000 };
+  };
+  return {
+    month: tally(count("AND strftime('%Y-%m', delivered_at) = strftime('%Y-%m', 'now')")),
+    total: tally(count('')),
+    prices: PRICE_USD,
+    note: 'הערכה לפי תעריפי WhatsApp לישראל — החיוב בפועל נקבע על ידי מטא בעת המסירה'
+  };
+}
+
 /** Headline numbers for the admin screen. */
 function summary() {
   return {
@@ -331,5 +364,6 @@ module.exports = {
   openWindow, getWindow, openWindows,
   tierLimit, outsideCswRecipients24h,
   classifyPricing, decideSend,
-  recordMessage, updateStatus, messagesFor, recentMessages, summary
+  recordMessage, updateStatus, messagesFor, recentMessages, summary,
+  PRICE_USD, spendEstimate
 };

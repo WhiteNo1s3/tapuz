@@ -430,6 +430,25 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
   const cfg = require('../config').loadConfig();
   const waOn = !!(cfg.crm && cfg.crm.whatsapp && cfg.crm.whatsapp.enabled);
   const hookUrl = req.protocol + '://' + req.get('host') + '/crm/wa/webhook';
+  const spend = ledger.spendEstimate();
+  const usd = (v) => '$' + (Math.round(v * 100) / 100).toFixed(2);
+
+  // send-form outcome, carried through the redirect (never the message itself)
+  const SEND_ERR_HE = {
+    invalid_phone: 'המספר לא תקין.',
+    marketing_opt_in_required: 'תבנית שיווקית נשלחת רק למי שנתן הסכמה — רשמו אותה בכרטיס ההסכמות.',
+    csw_closed_use_template: 'חלון השירות סגור — טקסט חופשי אפשרי רק 24 שעות אחרי הודעה נכנסת. השתמשו בתבנית.',
+    messaging_limit_reached: 'הגעתם לתקרת הנמענים של דרגת השליחה ל-24 השעות האלה.',
+    whatsapp_disabled: 'הערוץ כבוי או שחסרים פרטי חיבור — בדקו את כרטיס החיבור.',
+    invalid_message: 'חסר תוכן — טקסט חופשי צריך הודעה, תבנית צריכה שם.',
+    graph_error: 'מטא סירבה או לא ענתה — הניסיון נרשם בתיעוד עם הסיבה.'
+  };
+  const flash = req.query.sent
+    ? `<div class="card" style="border-color:#86efac;background:#f0fdf4">✅ ההודעה נשלחה${
+      req.query.billable === '1' ? ' — תחויב על ידי מטא בעת המסירה.' : ' — בחינם (שיחת שירות).'}</div>`
+    : req.query.err
+      ? `<div class="card" style="border-color:#fecaca;background:#fef2f2">⚠️ ${esc(SEND_ERR_HE[req.query.err] || 'השליחה נכשלה.')}</div>`
+      : '';
   const recent = ledger.recentMessages({ limit: 30 });
   const tierPct = sum.tier.limit === Infinity ? 0
     : Math.min(100, Math.round((sum.tier.used / sum.tier.limit) * 100));
@@ -446,6 +465,7 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
     : '<div class="empty-state">אין עדיין הודעות — שליחה וקבלה מגיעות בשלבים הבאים.</div>';
 
   page(res, 'crm-wa', 'WhatsApp', `
+    ${flash}
     ${s.configured ? '' : `
     <div class="card" style="border-color:#fde68a;background:#fffbeb">
       <strong>הערוץ עוד לא מחובר</strong>
@@ -468,6 +488,19 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
       <p class="muted" style="font-size:.85rem">
         ${sum.tier.used} מתוך ${sum.tier.limit === Infinity ? '∞' : sum.tier.limit}
         (${esc(s.messagingLimitTier)}) — נספר מתוך התיעוד עצמו, כך שהוא שורד הפעלה מחדש.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">💰 הוצאה — בכסף, לא בהודעות</div>
+      <p style="font-size:1.05rem;margin:6px 0">
+        החודש: <strong>${usd(spend.month.usd)}</strong> (${spend.month.n} מסירות בתשלום)
+        · סה"כ: <strong>${usd(spend.total.usd)}</strong> (${spend.total.n})
+      </p>
+      <p class="muted" style="font-size:.82rem">
+        ${esc(spend.note)}. שיווק ${usd(spend.prices.marketing)} ·
+        אימות ${usd(spend.prices.authentication)} · תפעולי מחוץ לחלון ${usd(spend.prices.utility)} —
+        שיחות שירות וטקסט בתוך החלון: חינם.
       </p>
     </div>
 
@@ -525,8 +558,36 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
       </p>
       <p class="muted" style="font-size:.85rem">
         סטטוס מסירה מעדכן את התיעוד (החיוב נקבע במסירה, לפי מודל PMP);
-        הודעה נכנסת נרשמת ופותחת חלון שירות של 24 שעות. שליחה — בשלב הבא.
+        הודעה נכנסת נרשמת ופותחת חלון שירות של 24 שעות.
       </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">✉️ שליחת הודעה</div>
+      <p class="lead">
+        כל בקשה עוברת את השער <strong>לפני</strong> שהיא יוצאת: טקסט חופשי רק
+        בחלון פתוח, שיווק רק עם הסכמה, ותקרת הדרגה נאכפת אצלנו — סירוב הוא
+        מקומי וללא עלות.
+      </p>
+      <form method="POST" action="/admin/crm/whatsapp/send" class="stack" style="max-width:520px">
+        <label>טלפון<input name="phone" class="input" dir="ltr" placeholder="050-123-4567" required></label>
+        <label>סוג
+          <select name="msgType" class="input">
+            <option value="text">טקסט חופשי — רק בחלון שירות פתוח (חינם)</option>
+            <option value="template">תבנית מאושרת</option>
+          </select></label>
+        <label>טקסט ההודעה (לטקסט חופשי)
+          <textarea name="body" class="input" rows="3" maxlength="4096"></textarea></label>
+        <label>שם תבנית (לתבנית)<input name="templateName" class="input" dir="ltr" placeholder="order_update"></label>
+        <label>שפת תבנית<input name="templateLanguage" class="input" dir="ltr" value="he"></label>
+        <label>קטגוריית תבנית
+          <select name="templateCategory" class="input">
+            <option value="UTILITY">UTILITY — תפעולית (חינם בחלון פתוח, אחרת ${usd(spend.prices.utility)})</option>
+            <option value="MARKETING">MARKETING — שיווקית (דורשת הסכמה · ${usd(spend.prices.marketing)})</option>
+            <option value="AUTHENTICATION">AUTHENTICATION — אימות (${usd(spend.prices.authentication)})</option>
+          </select></label>
+        <button class="btn" type="submit">שלח</button>
+      </form>
     </div>
 
     <div class="card">
@@ -574,6 +635,29 @@ router.post('/admin/crm/whatsapp/settings', requireAdmin, (req, res) => {
     verifyToken: secret(b.verifyToken)
   });
   res.redirect('/admin/crm/whatsapp');
+});
+
+router.post('/admin/crm/whatsapp/send', requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const r = await require('../crm/wa-send').sendMessage({
+      phone: b.phone,
+      msgType: b.msgType === 'template' ? 'template' : 'text',
+      body: b.body,
+      templateName: b.templateName,
+      templateLanguage: b.templateLanguage,
+      templateCategory: b.templateCategory
+    });
+    if (r.ok) {
+      return res.redirect('/admin/crm/whatsapp?sent=1&billable=' +
+        (r.pricing && r.pricing.billable ? '1' : '0'));
+    }
+    return res.redirect('/admin/crm/whatsapp?err=' + encodeURIComponent(r.error || 'graph_error'));
+  } catch (e) {
+    // sendMessage never throws by contract; this is the route keeping that
+    // promise to the browser anyway.
+    return res.redirect('/admin/crm/whatsapp?err=graph_error');
+  }
 });
 
 router.post('/admin/crm/whatsapp/optin', requireAdmin, (req, res) => {

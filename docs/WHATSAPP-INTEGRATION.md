@@ -1,6 +1,6 @@
 # WhatsApp integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phases W0–W2 **shipped** (v1.84–v1.87) · **Lab commit:** `99274e7` (on lab `main`)
+**Status:** phases W0–W3 **shipped** (v1.84–v1.88) · **Lab commit:** `99274e7` (on lab `main`)
 **Prerequisite:** the CRM (v1.77–v1.83) — WhatsApp is a channel *on* the CRM, not
 a thing beside it.
 
@@ -135,15 +135,27 @@ secrets with keep-on-empty semantics, plus the webhook URL card.
 `401`, short header no-throw, missing app secret refuses everything
 (`smoke-wa-webhook`, 27 checks).
 
-### Phase W3 — sending · *money leaves the building*
-Templates, free-form inside the window, pricing classification, delivery-time
-charging from the status webhook. Off by default; timeout-bounded and
-failure-isolated like `conversions.js`. The owner sees spend the way the CS chat
-shows it — **in money, not message counts**.
+### ~~Phase W3 — sending~~ · **shipped v1.88** · *money leaves the building*
+`wa-send.js` is the only module with a network path to Meta, and it holds no
+URL of its own — the destination comes exclusively from `endpointFor()` on the
+hardcoded host (grepped by test). W1's pure gate runs **before** the transport
+on every call; the suite proves each refusal fires with zero network by
+injecting a recording transport and asserting it stayed empty. Timeout-bounded
+and never-throwing like `conversions.js` — a hanging endpoint is cut by
+`AbortSignal.timeout`, proven against a real never-answering local server.
 
-**Acceptance:** free-form outside the window is refused locally; marketing
-without opt-in is refused; the tier ceiling refuses before Meta does; a dead
-Graph endpoint cannot hold a request open.
+**The two books rules W3 added:** a FAILED call sent nothing, so its audit row
+carries the why but `outside_csw = 0` and no pricing — a failure can neither
+burn tier quota nor look billable; and spend is estimated from **delivered**
+billable rows only, because Meta charges at delivery (which is exactly what the
+W2 webhook refines). The owner sees it in money: the 💰 card shows this month
+and total in USD with per-category rates, labeled an estimate.
+
+**Acceptance met:** free-form outside the window refused locally; marketing
+without opt-in refused; the tier ceiling refuses before Meta does; a dead Graph
+endpoint cannot hold a request open (`smoke-wa-send`, 25 checks). Admin send
+form with per-refusal Hebrew explanations; template variable components are a
+later phase.
 
 ### Phase W4 — inbound as CRM material
 An inbound message becomes a timeline event on the resolved contact, through the
