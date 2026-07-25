@@ -235,6 +235,15 @@ function recordMessage({
   const p = normalizeToWaId(phone);
   if (!p || (direction !== 'in' && direction !== 'out')) return null;
 
+  // Meta RETRIES a webhook until it sees a 2xx, so the same wamid arriving
+  // twice must resolve to the one existing row — silently, before it can
+  // trip the UNIQUE index or re-extend the window (v1.87, W2).
+  if (waMessageId) {
+    const dup = db.prepare('SELECT id FROM crm_wa_messages WHERE wa_message_id = ?')
+      .get(String(waMessageId).slice(0, 100));
+    if (dup) return dup.id;
+  }
+
   if (direction === 'in') openWindow(p);
 
   // resolve the person, if we know them — identity shared with the whole CRM
@@ -277,13 +286,15 @@ function recordMessage({
   return info.lastInsertRowid;
 }
 
-/** Delivery/status update from a (future W2) webhook — also refines pricing. */
-function updateStatus(waMessageId, { status, pricingType, billable } = {}) {
+/** Delivery/status update from the W2 webhook — also refines pricing. */
+function updateStatus(waMessageId, { status, pricingType, pricingCategory, billable, error } = {}) {
   const sets = ["status = @status"];
   const args = { id: String(waMessageId || ''), status: String(status || '').slice(0, 30) };
   if (status === 'delivered') sets.push('delivered_at = CURRENT_TIMESTAMP');
   if (pricingType !== undefined) { sets.push('pricing_type = @pt'); args.pt = String(pricingType).slice(0, 40); }
+  if (pricingCategory !== undefined) { sets.push('pricing_category = @pc'); args.pc = String(pricingCategory).slice(0, 30); }
   if (billable !== undefined) { sets.push('billable = @b'); args.b = billable ? 1 : 0; }
+  if (error !== undefined) { sets.push('error = @err'); args.err = String(error).slice(0, 300); }
   const info = db.prepare(
     `UPDATE crm_wa_messages SET ${sets.join(', ')} WHERE wa_message_id = @id`
   ).run(args);

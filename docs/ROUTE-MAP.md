@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**185 routes across 35 files.**
+**188 routes across 36 files.**
 
 ## By file (what each module owns)
 
@@ -107,7 +107,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /crm/cs/v1/session`
 - `POST /crm/cs/v1/message`
 
-### `src/routes/crm.js` — 30 routes
+### `src/routes/crm.js` — 31 routes
 
 - `POST /admin/crm/settings`
 - `GET /admin/crm/segments`
@@ -122,6 +122,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/crm/chat`
 - `GET /admin/crm/chat/:id`
 - `GET /admin/crm/whatsapp`
+- `POST /admin/crm/whatsapp/settings`
 - `POST /admin/crm/whatsapp/optin`
 - `GET /admin/crm/privacy`
 - `POST /admin/crm/privacy`
@@ -300,6 +301,11 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/translations/link`
 - `POST /admin/api/translations/unlink`
 
+### `src/routes/wa-webhook.js` — 2 routes
+
+- `GET /crm/wa/webhook`
+- `POST /crm/wa/webhook`
+
 ## Alphabetical (find a route → its file)
 
 | Route | Method | File |
@@ -421,6 +427,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/settings` | POST | `src/routes/crm.js` |
 | `/admin/crm/whatsapp` | GET | `src/routes/crm.js` |
 | `/admin/crm/whatsapp/optin` | POST | `src/routes/crm.js` |
+| `/admin/crm/whatsapp/settings` | POST | `src/routes/crm.js` |
 | `/admin/dashboard` | GET | `src/routes/dashboard.js` |
 | `/admin/delete` | POST | `src/routes/pages-builder.js` |
 | `/admin/edit/:fullPath` | GET | `src/routes/pages-builder.js` |
@@ -484,6 +491,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/crm/o/:token.gif` | GET | `src/routes/crm-track.js` |
 | `/crm/u/:token` | GET | `src/routes/crm-track.js` |
 | `/crm/u/:token` | POST | `src/routes/crm-track.js` |
+| `/crm/wa/webhook` | GET | `src/routes/wa-webhook.js` |
+| `/crm/wa/webhook` | POST | `src/routes/wa-webhook.js` |
 | `/form-sent` | GET | `src/routes/form-capture.js` |
 | `/pzn-schema.json` | GET | `src/server.js` |
 | `/robots.txt` | GET | `src/routes/seo-files.js` |

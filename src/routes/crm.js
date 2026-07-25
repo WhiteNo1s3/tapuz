@@ -427,6 +427,9 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
   const ledger = require('../crm/wa-ledger');
   const s = wa.getSettings();
   const sum = ledger.summary();
+  const cfg = require('../config').loadConfig();
+  const waOn = !!(cfg.crm && cfg.crm.whatsapp && cfg.crm.whatsapp.enabled);
+  const hookUrl = req.protocol + '://' + req.get('host') + '/crm/wa/webhook';
   const recent = ledger.recentMessages({ limit: 30 });
   const tierPct = sum.tier.limit === Infinity ? 0
     : Math.min(100, Math.round((sum.tier.used / sum.tier.limit) * 100));
@@ -447,8 +450,8 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
     <div class="card" style="border-color:#fde68a;background:#fffbeb">
       <strong>הערוץ עוד לא מחובר</strong>
       <p class="muted" style="margin:6px 0 0;font-size:.88rem">
-        צריך Phone Number ID, Access Token ו-App Secret מ-Meta. עד אז המסך הזה
-        מנהל רק הסכמות ותיעוד.
+        צריך Phone Number ID, Access Token ו-App Secret מ-Meta — מלאו אותם
+        בכרטיס החיבור למטה. עד אז המסך מנהל רק הסכמות ותיעוד.
       </p>
     </div>`}
 
@@ -465,6 +468,64 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
       <p class="muted" style="font-size:.85rem">
         ${sum.tier.used} מתוך ${sum.tier.limit === Infinity ? '∞' : sum.tier.limit}
         (${esc(s.messagingLimitTier)}) — נספר מתוך התיעוד עצמו, כך שהוא שורד הפעלה מחדש.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">🔌 חיבור ל-Meta</div>
+      <form method="POST" action="/admin/crm/whatsapp/settings" class="stack" style="max-width:520px">
+        <label style="display:flex;gap:8px;align-items:center;font-weight:600">
+          <input type="checkbox" name="channelEnabled" value="1" ${waOn ? 'checked' : ''}>
+          הערוץ פעיל (ה-webhook עונה רק כשמסומן)
+        </label>
+        <label>Phone Number ID<input name="phoneNumberId" class="input" dir="ltr" value="${esc(s.phoneNumberId)}"></label>
+        <label>WABA ID<input name="wabaId" class="input" dir="ltr" value="${esc(s.wabaId)}"></label>
+        <label>גרסת Graph API
+          <select name="apiVersion" class="input">
+            ${wa.API_VERSIONS.map((v) => `<option value="${v}" ${v === s.apiVersion ? 'selected' : ''}>${v}</option>`).join('')}
+          </select>
+        </label>
+        <label>דרגת שליחה (messaging limit tier)
+          <select name="messagingLimitTier" class="input">
+            ${wa.TIERS.map((t) => `<option value="${t}" ${t === s.messagingLimitTier ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+        </label>
+        <label>Access Token ${s.hasToken ? `<span class="muted">· מוגדר (…${esc(s.tokenTail)})</span>` : '<span class="muted">· לא מוגדר</span>'}
+          <input name="accessToken" class="input" dir="ltr" type="password" autocomplete="off"
+                 placeholder="${s.hasToken ? 'להחלפה — הדביקו טוקן חדש' : 'EAAG…'}"></label>
+        <label>App Secret ${s.hasAppSecret ? `<span class="muted">· מוגדר (…${esc(s.appSecretTail)})</span>` : '<span class="muted">· לא מוגדר</span>'}
+          <input name="appSecret" class="input" dir="ltr" type="password" autocomplete="off"
+                 placeholder="${s.hasAppSecret ? 'להחלפה — הדביקו ערך חדש' : 'מהגדרות האפליקציה ב-Meta'}"></label>
+        <label>Verify Token ${s.hasVerifyToken ? '<span class="muted">· מוגדר</span>' : '<span class="muted">· לא מוגדר</span>'}
+          <input name="verifyToken" class="input" dir="ltr" type="password" autocomplete="off"
+                 placeholder="${s.hasVerifyToken ? 'להחלפה' : 'מחרוזת שאתם ממציאים — אותו ערך מוזן אצל Meta'}"></label>
+        <button class="btn" type="submit">שמור חיבור</button>
+      </form>
+      <p class="muted" style="font-size:.82rem;margin-top:10px">
+        הסודות נשמרים ב-<code dir="ltr">config/whatsapp.json</code> (מחוץ ל-git)
+        ולעולם לא מוצגים חזרה; שדה ריק משאיר את הערך הקיים. הכתובת שאליה
+        נשלחות בקשות היא קבועה בקוד — <code dir="ltr">${esc(s.graphHost)}</code> —
+        ואינה ניתנת להגדרה, בכוונה.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">📡 Webhook — קבלת אירועים מ-Meta</div>
+      <p class="lead">
+        הדביקו את הכתובת ואת ה-Verify Token במסך WhatsApp ← Configuration של
+        האפליקציה ב-Meta. אירוע מתקבל <strong>רק</strong> עם חתימת
+        <code dir="ltr">X-Hub-Signature-256</code> תקפה (על בסיס ה-App Secret) —
+        כל השאר נדחה.
+      </p>
+      <div class="rec" dir="ltr" style="font-family:monospace;user-select:all">${esc(hookUrl)}</div>
+      <p class="muted" style="font-size:.85rem">
+        ${waOn ? '🟢 הערוץ פעיל' : '⚪ הערוץ כבוי — ה-webhook עונה 404'} ·
+        Verify Token: ${s.hasVerifyToken ? 'מוגדר ✓' : 'חסר'} ·
+        App Secret: ${s.hasAppSecret ? 'מוגדר ✓' : 'חסר'}
+      </p>
+      <p class="muted" style="font-size:.85rem">
+        סטטוס מסירה מעדכן את התיעוד (החיוב נקבע במסירה, לפי מודל PMP);
+        הודעה נכנסת נרשמת ופותחת חלון שירות של 24 שעות. שליחה — בשלב הבא.
       </p>
     </div>
 
@@ -488,6 +549,31 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
       <div class="card-head">💬 הודעות אחרונות</div>
       ${rows}
     </div>`);
+});
+
+router.post('/admin/crm/whatsapp/settings', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  // The channel flag lives in site config, nested under the CRM flag it
+  // depends on; the credentials live in config/whatsapp.json (W0 store).
+  const config = require('../config');
+  const cfg = config.loadConfig();
+  cfg.crm = Object.assign({}, cfg.crm, {
+    whatsapp: Object.assign({}, (cfg.crm || {}).whatsapp, { enabled: !!b.channelEnabled })
+  });
+  config.saveConfig(cfg);
+  // An empty secret field means "keep what is stored" — saveSettings clears
+  // only on an explicit '', so pass undefined instead (conversions pattern).
+  const secret = (v) => { const t = String(v || '').trim(); return t || undefined; };
+  require('../crm/whatsapp').saveSettings({
+    phoneNumberId: b.phoneNumberId,
+    wabaId: b.wabaId,
+    apiVersion: b.apiVersion,
+    messagingLimitTier: b.messagingLimitTier,
+    accessToken: secret(b.accessToken),
+    appSecret: secret(b.appSecret),
+    verifyToken: secret(b.verifyToken)
+  });
+  res.redirect('/admin/crm/whatsapp');
 });
 
 router.post('/admin/crm/whatsapp/optin', requireAdmin, (req, res) => {

@@ -1,6 +1,6 @@
 # WhatsApp integration plan — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** phases W0–W1 **shipped** (v1.84–v1.86) · **Lab commit:** `99274e7` (on lab `main`)
+**Status:** phases W0–W2 **shipped** (v1.84–v1.87) · **Lab commit:** `99274e7` (on lab `main`)
 **Prerequisite:** the CRM (v1.77–v1.83) — WhatsApp is a channel *on* the CRM, not
 a thing beside it.
 
@@ -117,15 +117,23 @@ rows in the export, and erasure deleting message bodies rather than unlinking.
 **Acceptance:** the lab's 66 checks rewritten against our build, plus
 `smoke-crm-privacy` still green (it will fail first — that is the point).
 
-### Phase W2 — the webhook · *public, HMAC-gated, no spend*
-`GET` verify handshake + `POST` events. Port the signature verification
-essentially as-is; it is correct. Keep the mount **before** the global JSON
-parser and add a test that would catch a future reordering, because that failure
-is silent.
+### ~~Phase W2 — the webhook~~ · **shipped v1.87** · *public, HMAC-gated, no spend*
+`GET` verify handshake + `POST` events. The signature verification ported
+essentially as-is (it was correct); the route mounts **before** every body
+parser, and the reordering failure — which is silent in production — is caught
+two ways: a source-position assertion, and a behavioral proof (a valid
+signature over a *non-canonically spaced* body must be accepted; a re-serialized
+body can never verify).
 
-**Acceptance:** a valid signature is accepted, a forged one is `401`, a
-re-serialized body is `401` (proving raw-body handling), a short header does not
-throw, and a missing app secret refuses everything.
+**Shipped with:** status callbacks refining ledger rows (PMP pricing lands at
+delivery, `failed` records why), inbound messages ledgered through W1's
+`recordMessage` (window opened, known contact's timeline joined) with retry
+dedup by wamid, and — because W0 built the credential *store* but no UI — the
+connection form on `/admin/crm/whatsapp`: channel flag, ids, tier, and the three
+secrets with keep-on-empty semantics, plus the webhook URL card.
+**Acceptance met:** valid signature accepted, forged `401`, re-serialized body
+`401`, short header no-throw, missing app secret refuses everything
+(`smoke-wa-webhook`, 27 checks).
 
 ### Phase W3 — sending · *money leaves the building*
 Templates, free-form inside the window, pricing classification, delivery-time

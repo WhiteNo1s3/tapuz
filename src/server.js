@@ -131,6 +131,14 @@ app.use((err, req, res, next) => {
   return next(err);
 });
 
+// WhatsApp Cloud API webhook (v1.87, W2) — the one route that needs the RAW
+// request bytes: X-Hub-Signature-256 is an HMAC over the exact bytes Meta
+// sent, so this MUST mount before every body parser below (urlencoded AND
+// json). Reordering fails silently — signatures just stop matching — which is
+// why smoke-wa-webhook.js proves the order behaviorally (a non-canonically
+// spaced body must verify) on top of asserting the mount position.
+app.use(require('./routes/wa-webhook'));
+
 app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
 
 // Public form capture (POST /api/form + GET /form-sent) — extracted to
