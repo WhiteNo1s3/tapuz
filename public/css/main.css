@@ -1286,3 +1286,14 @@ a.bent-newspop-text:hover { text-decoration: underline; }
   --accent-bg: linear-gradient(135deg, #ea580c, #f59e0b);
 }
 html { font-size: 17px; }
+
+body.menu-side .site-header .header-inner {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+body.menu-side .main-nav ul {
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}

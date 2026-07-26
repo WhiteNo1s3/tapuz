@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>אודות</title>
+    <meta name="bent-slug" content="about" />
+  </head>
+  <body>
+    <bent-heading level="1">אודות</bent-heading>
+    <bent-text>כאן מספרים מי אתם, מה אתם עושים ולמה. פתחו את הדף בבונה והחליפו את הטקסט הזה בסיפור שלכם.</bent-text>
+  </body>
+</html>

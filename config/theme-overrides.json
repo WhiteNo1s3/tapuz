@@ -1,0 +1,26 @@
+{
+  "colors": {
+    "primary": "#ea580c",
+    "secondary": "#f59e0b",
+    "text": "#1c1917",
+    "muted": "#78716c",
+    "border": "#ece5df",
+    "bg": "#fffbf7",
+    "lightBg": "#fdf1e6",
+    "surface": "#ffffff"
+  },
+  "fonts": {
+    "family": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans Hebrew\", sans-serif",
+    "headingFamily": "",
+    "baseSize": "17px"
+  },
+  "style": {
+    "radius": "soft",
+    "shadow": "soft",
+    "accent": "gradient"
+  },
+  "layout": {
+    "maxWidth": "900px",
+    "menuPlacement": "side"
+  }
+}

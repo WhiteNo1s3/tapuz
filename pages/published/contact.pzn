@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>צור קשר</title>
+    <meta name="bent-slug" content="contact" />
+  </head>
+  <body>
+    <bent-heading level="1">צור קשר</bent-heading>
+    <bent-text>כאן שמים דרכי התקשרות — טלפון, מייל, כתובת. טופס לידים אמיתי יגיע בשלב ה־CRM.</bent-text>
+  </body>
+</html>

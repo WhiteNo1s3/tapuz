@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>המאמר הראשון שלך</title>
+    <meta name="bent-slug" content="first-article" />
+    <meta name="bent-tags" content="article" />
+    <meta name="bent-teaser" content="ככה נראית קוביית מאמר. כתבו מאמר חדש, סמנו אותו כ&quot;דף מאמר&quot; — והוא יופיע כאן לבד." />
+  </head>
+  <body>
+    <bent-heading level="1">המאמר הראשון שלך</bent-heading>
+    <bent-text>כל דף שמסומן כ&quot;דף מאמר&quot; (במאפייני הדף בבונה) מופיע אוטומטית בקוביות המאמרים — התמונה והתקציר נלקחים מהדף עצמו. מחקו את המאמר הזה כשיש לכם תוכן אמיתי.</bent-text>
+  </body>
+</html>

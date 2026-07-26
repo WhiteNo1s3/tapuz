@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>מאמרים</title>
+    <meta name="bent-slug" content="articles" />
+  </head>
+  <body>
+    <bent-heading level="1">המאמרים שלנו</bent-heading>
+    <bent-article-list columns="3" limit="12" tag="article" />
+  </body>
+</html>

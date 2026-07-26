@@ -30,9 +30,27 @@
   "main": [
     {
       "label": "דף הבית",
-      "url": "/",
-      "type": "custom",
-      "target": ""
+      "url": "/home.html",
+      "type": "page",
+      "target": "home"
+    },
+    {
+      "label": "אודות",
+      "url": "/about.html",
+      "type": "page",
+      "target": "about"
+    },
+    {
+      "label": "צור קשר",
+      "url": "/contact.html",
+      "type": "page",
+      "target": "contact"
+    },
+    {
+      "label": "מאמרים",
+      "url": "/articles.html",
+      "type": "page",
+      "target": "articles"
     }
   ]
 }

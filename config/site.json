@@ -1,6 +1,6 @@
 {
-  "title": "WhiteNo1se",
-  "description": "WhiteNo1se — אתר הבית",
+  "title": "תפוז - הצגת יכולות",
+  "description": "האתר הינו הצגת יכולות של מערכת CMS שלמה, הנותנת שירות לכל בעלי המנויים של צ'אטים ועוזרים דיגיטאלים, CRM ועוד.....",
   "baseUrl": "",
   "defaultTheme": "default",
   "language": "he",
@@ -52,6 +52,11 @@
     "retention": {
       "eventDays": 0
     },
+    "cards": {
+      "progressive": true,
+      "quietDays": 5,
+      "garbageDays": 3
+    },
     "cs": {
       "enabled": false,
       "dailyMessageCap": 100,
@@ -100,5 +105,6 @@
     "image": "",
     "width": 180,
     "height": 50
-  }
+  },
+  "setupDone": true
 }
