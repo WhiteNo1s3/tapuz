@@ -19,6 +19,20 @@ const { db, crmSearchReady } = require('../db');
 // garbage    = quiet provisional, pending hard erase (see cards.runCardLifecycle)
 const STATUSES = ['provisional', 'lead', 'active', 'customer', 'archived', 'garbage'];
 
+/** Hebrew labels for admin UI — the product voice, not the enum key. */
+const STATUS_LABELS = {
+  provisional: 'כרטיס זמני',
+  lead: 'ליד',
+  active: 'פעיל',
+  customer: 'לקוח',
+  archived: 'בארכיון',
+  garbage: 'ממתין למחיקה'
+};
+
+function statusLabel(s) {
+  return STATUS_LABELS[s] || String(s || '');
+}
+
 /**
  * Turn what someone typed into a safe FTS5 query (v1.82).
  *
@@ -320,6 +334,8 @@ function touchActivity(id) {
 
 module.exports = {
   STATUSES,
+  STATUS_LABELS,
+  statusLabel,
   normalizeEmail,
   normalizePhone,
   parseTags,

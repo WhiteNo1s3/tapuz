@@ -161,5 +161,22 @@ const none = crm.capturePageview({ req: jarD.req(), res: jarD.res(), path: '/alo
 check('progressive off → unlinked pageview records nothing on CRM', none == null);
 check('progressive off → no cookie card', !jarD.cookie);
 
+// interest segment (mail without spam-all)
+config.saveConfig(
+  Object.assign(config.loadConfig(), {
+    crm: { enabled: true, cards: { progressive: true, quietDays: 5, garbageDays: 3 } }
+  })
+);
+const segments = require('../src/crm/segments');
+const jarE = makeJar();
+const intId = cards.openOrTouch(jarE.req(), jarE.res());
+crm.capturePageview({ req: jarE.req(), res: jarE.res(), path: '/services/wedding-packages' });
+contacts.updateContact(intId, { email: 'bride@example.com', status: 'lead' });
+const hit = segments.evaluate({ interest: 'wedding-packages', hasEmail: true });
+check('interest segment finds the interested person', hit.some((r) => r.id === intId));
+const miss = segments.evaluate({ interest: 'industrial-pipes', hasEmail: true });
+check('interest segment does not include unrelated people', !miss.some((r) => r.id === intId));
+check('Hebrew status label for provisional', contacts.statusLabel('provisional') === 'כרטיס זמני');
+
 console.log(fail ? '\nSMOKE CRM-CARDS: FAIL' : '\nSMOKE CRM-CARDS: PASS');
 process.exit(fail ? 1 : 0);

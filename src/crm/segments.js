@@ -61,6 +61,25 @@ const RULES = {
     return { sql: '(' + parts.join(' AND ') + ')', args };
   },
 
+  /**
+   * Progressive-card interest (from page paths). Accepts `wedding-packages` or
+   * full `interest:wedding-packages`. Matches one interest tag for mail audiences
+   * without blasting everyone.
+   */
+  interest: (v) => {
+    let t = String(v || '').trim().toLowerCase().replace(/^interest:/, '');
+    t = t.replace(/[^a-z0-9\u0590-\u05ff._-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    if (!t) return null;
+    const full = 'interest:' + t;
+    return {
+      sql: "(',' || tags || ',') LIKE @r_interest",
+      args: { r_interest: '%,' + full + ',%' }
+    };
+  },
+
+  /** Anyone who earned at least one interest:* tag from browsing. */
+  hasInterest: (v) => (v ? { sql: "tags LIKE '%interest:%'", args: {} } : null),
+
   /** Seen within the last N days. */
   activeWithinDays: (v) => {
     const d = parseInt(v, 10);

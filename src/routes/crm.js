@@ -36,21 +36,38 @@ function page(res, activeKey, title, body) {
 /** The screen a disabled CRM shows — an offer, not an error. */
 function offerToEnable(res, activeKey, title) {
   page(res, activeKey, title, `
-    <div class="card" style="max-width:620px;margin:40px auto;text-align:center">
+    <div class="card" style="max-width:640px;margin:40px auto;text-align:center">
       <div style="font-size:2.6rem;margin-bottom:10px">👥</div>
       <h2 class="sub-head" style="justify-content:center">מערכת הלקוחות כבויה</h2>
       <p class="lead">
-        כשתפעילו אותה, כל פנייה מטופס תזוהה מול <strong>אדם</strong> — לא עוד שורה בודדת.
-        תראו מי חזר, מה הוא עשה באתר, ותוכלו לפלח ולדוור.
+        כשתפעילו אותה, האתר הופך לקלט ל־CRM: ביקור לגיטימי פותח
+        <strong>כרטיס לקוח</strong>, מייל ושם מעשירים אותו, ודפים שביקרו בהם
+        הופכים לתחומי עניין — כדי שתוכלו לדוור רלוונטי, לא ספאם.
       </p>
-      <p class="muted" style="font-size:.88rem">
-        כיבוי מחזיר את המערכת בדיוק למצב הקודם — שום דבר באתר לא משתנה.
+      <p class="muted" style="font-size:.88rem;line-height:1.55">
+        בלי להרגיש «מעקב»: עוגייה בצד הראשון בלבד, בלי IP גולמי, וכרטיסים
+        זמניים שנשכחים לבד אם אין אינטראקציה. כיבוי מחזיר את האתר כמו שהיה.
       </p>
       <form method="POST" action="/admin/crm/settings" style="margin-top:16px">
         <input type="hidden" name="enabled" value="1">
         <button type="submit" class="btn">הפעילו את מערכת הלקוחות</button>
       </form>
     </div>`);
+}
+
+function statusPill(status) {
+  const { contacts } = require('../crm');
+  const label = contacts.statusLabel(status);
+  const tones = {
+    provisional: 'background:#fff7ed;color:#c2410c;border-color:#fed7aa',
+    lead: '',
+    active: 'background:#ecfdf5;color:#047857;border-color:#a7f3d0',
+    customer: 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe',
+    archived: 'background:#f1f5f9;color:#475569;border-color:#e2e8f0',
+    garbage: 'background:#fef2f2;color:#b91c1c;border-color:#fecaca'
+  };
+  const style = tones[status] ? ` style="${tones[status]}"` : '';
+  return `<span class="pill"${style}>${esc(label)}</span>`;
 }
 
 /** Guard every CRM screen behind the product flag. */
@@ -89,26 +106,41 @@ router.get('/admin/crm/segments', requireAdmin, requireCrm('crm-segments', 'פי
         </div>`).join('')
     : '<div class="empty-state">אין עדיין פילוחים — צרו את הראשון למטה.</div>';
 
+  const { contacts } = require('../crm');
   page(res, 'crm-segments', 'פילוחים', `
     <div class="card">
       <div class="card-head">🎯 פילוחים — קהלים חיים</div>
-      <p class="lead">פילוח הוא <strong>כלל</strong>, לא רשימה קפואה: מי שעונה עליו נמצא בו — תמיד עכשיו.</p>
+      <p class="lead">
+        פילוח הוא <strong>כלל</strong>, לא רשימה קפואה: מי שעונה עליו נמצא בו — תמיד עכשיו.
+        השתמשו ב<strong>תחום עניין</strong> (מדפי האתר) כדי לדוור רק למי שזה רלוונטי לו — לא לכל הרשימה.
+      </p>
       ${list}
     </div>
     <div class="card">
       <div class="card-head">פילוח חדש</div>
       <form method="POST" action="/admin/crm/segments" class="stack">
-        <label>שם<input name="name" class="input" required placeholder="לידים ישראלים עם מייל"></label>
+        <label>שם<input name="name" class="input" required placeholder="מתעניינים בחתונות · עם מייל"></label>
         <label>סטטוס
           <select name="status" class="input">
             <option value="">כל הסטטוסים</option>
-            ${require('../crm').contacts.STATUSES.map((s) => `<option value="${s}">${esc(s)}</option>`).join('')}
+            ${contacts.STATUSES.map((s) =>
+              `<option value="${s}">${esc(contacts.statusLabel(s))}</option>`).join('')}
           </select>
         </label>
+        <label>תחום עניין (מדף באתר)
+          <input name="interest" class="input" dir="ltr" placeholder="wedding-packages"
+                 title="מקטע נתיב אחרי ביקור — למשל /services/wedding-packages">
+        </label>
+        <p class="muted" style="font-size:.8rem;margin:0">
+          נוצר אוטומטית מצפיות (תגית interest:…). השאירו ריק אם לא רלוונטי.
+        </p>
         <label>מדינה (קוד דו-אותי)<input name="country" class="input" maxlength="2" placeholder="IL"></label>
         <label>תגיות (מופרדות בפסיק)<input name="tags" class="input" placeholder="vip,newsletter"></label>
         <label style="display:flex;gap:8px;align-items:center">
-          <input type="checkbox" name="hasEmail" value="1"> רק מי שיש לו מייל
+          <input type="checkbox" name="hasEmail" value="1"> רק מי שיש לו מייל (מתאים לדיוור)
+        </label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="hasInterest" value="1"> רק מי שיש לו לפחות תחום עניין אחד
         </label>
         <label style="display:flex;gap:8px;align-items:center">
           <input type="checkbox" name="consent" value="1"> רק מי שנתן הסכמה לדיוור
@@ -125,7 +157,9 @@ router.post('/admin/crm/segments', requireAdmin, (req, res) => {
   if (b.status) rules.status = String(b.status);
   if (b.country) rules.country = String(b.country);
   if (b.tags) rules.tags = String(b.tags);
+  if (b.interest) rules.interest = String(b.interest);
   if (b.hasEmail) rules.hasEmail = true;
+  if (b.hasInterest) rules.hasInterest = true;
   if (b.consent) rules.consent = true;
   try {
     segments.createSegment(b.name, rules);
@@ -673,12 +707,41 @@ router.post('/admin/crm/whatsapp/optin', requireAdmin, (req, res) => {
 router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרטיות ושמירה'), (req, res) => {
   const cfg = require('../config').loadConfig();
   const days = (cfg.crm && cfg.crm.retention && cfg.crm.retention.eventDays) || 0;
+  const cardsCfg = (cfg.crm && cfg.crm.cards) || {};
+  const quietDays = cardsCfg.quietDays != null ? cardsCfg.quietDays : 5;
+  const garbageDays = cardsCfg.garbageDays != null ? cardsCfg.garbageDays : 3;
+  const progressive = cardsCfg.progressive !== false;
   const { db } = require('../db');
   const eventCount = db.prepare('SELECT COUNT(*) AS n FROM crm_events').get().n;
   const anchored = db.prepare('SELECT COUNT(*) AS n FROM crm_events WHERE ref_id IS NOT NULL').get().n;
+  const counts = require('../crm').contacts.statusCounts();
   const searchOn = require('../db').crmSearchReady();
 
   page(res, 'crm-privacy', 'פרטיות ושמירה', `
+    <div class="card">
+      <div class="card-head">🪪 כרטיסי לקוח מתקדמים (לגיטימי, לא צללים)</div>
+      <p class="lead">
+        ביקור באתר פותח <strong>כרטיס זמני</strong> (עוגייה ראשונה בלבד), מייל/שם מעשירים אותו,
+        דפים הופכים לתחומי עניין. בלי אינטראקציה — הכרטיס נשכח. לא שומרים נתונים «בשביל הספורט».
+      </p>
+      <p class="muted" style="font-size:.88rem">
+        עכשיו: ${counts.provisional || 0} כרטיסים זמניים · ${counts.garbage || 0} ממתינים למחיקה ·
+        ${counts.lead || 0} לידים · ${counts.customer || 0} לקוחות.
+      </p>
+      <form method="POST" action="/admin/crm/privacy" class="stack">
+        <input type="hidden" name="section" value="cards">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="progressive" value="1" ${progressive ? 'checked' : ''}>
+          לפתוח כרטיס זמני בביקור ראשון (מומלץ)
+        </label>
+        <label>ימים בלי אינטראקציה עד «ממתין למחיקה» (כרטיס בלי מייל/טלפון)
+          <input type="number" name="quietDays" class="input" min="1" max="90" value="${Number(quietDays) || 5}"></label>
+        <label>ימים נוספים עד מחיקה מוחלטת
+          <input type="number" name="garbageDays" class="input" min="1" max="90" value="${Number(garbageDays) || 3}"></label>
+        <button class="btn" type="submit">שמור מדיניות כרטיסים</button>
+      </form>
+    </div>
+
     <div class="card">
       <div class="card-head">🗓 שמירת נתוני התנהגות</div>
       <p class="lead">
@@ -690,9 +753,10 @@ router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרט
         <strong>אלה לא נמחקים לעולם</strong>, בלי קשר להגדרה כאן.
       </p>
       <form method="POST" action="/admin/crm/privacy" class="stack">
+        <input type="hidden" name="section" value="events">
         <label>שמור אירועי התנהגות (בימים) — 0 = לשמור הכול
           <input type="number" name="eventDays" class="input" min="0" max="3650" value="${Number(days) || 0}"></label>
-        <button class="btn" type="submit">שמור מדיניות</button>
+        <button class="btn" type="submit">שמור מדיניות אירועים</button>
       </form>
     </div>
 
@@ -718,10 +782,24 @@ router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרט
 router.post('/admin/crm/privacy', requireAdmin, (req, res) => {
   const config = require('../config');
   const cfg = config.loadConfig();
-  const n = parseInt((req.body || {}).eventDays, 10);
-  cfg.crm = Object.assign({}, cfg.crm, {
-    retention: { eventDays: Number.isFinite(n) && n > 0 ? Math.min(n, 3650) : 0 }
-  });
+  const b = req.body || {};
+  const section = String(b.section || 'events');
+  if (section === 'cards') {
+    const q = parseInt(b.quietDays, 10);
+    const g = parseInt(b.garbageDays, 10);
+    cfg.crm = Object.assign({}, cfg.crm, {
+      cards: {
+        progressive: !!b.progressive,
+        quietDays: Number.isFinite(q) && q >= 1 ? Math.min(q, 90) : 5,
+        garbageDays: Number.isFinite(g) && g >= 1 ? Math.min(g, 90) : 3
+      }
+    });
+  } else {
+    const n = parseInt(b.eventDays, 10);
+    cfg.crm = Object.assign({}, cfg.crm, {
+      retention: { eventDays: Number.isFinite(n) && n > 0 ? Math.min(n, 3650) : 0 }
+    });
+  }
   config.saveConfig(cfg);
   // apply immediately, so the number the owner just typed means something now
   try { require('../crm').runRetention(); } catch (e) { /* reported inside */ }
@@ -990,39 +1068,59 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
   const rows = contacts.listContacts({ q, status, limit: 100 });
   const counts = contacts.statusCounts();
 
-  const tiles = ['lead', 'active', 'customer', 'archived'].map((s) => `
+  const tileOrder = ['provisional', 'lead', 'active', 'customer', 'archived', 'garbage'];
+  const tiles = tileOrder.map((s) => `
     <a class="stat-tile" href="/admin/crm?status=${s}">
       <div class="stat-num">${counts[s] || 0}</div>
-      <div class="stat-label">${esc(s)}</div>
-    </a>`).join('');
+      <div class="stat-label">${esc(contacts.statusLabel(s))}</div>
+    </a>`).join('') + `
+    <a class="stat-tile" href="/admin/crm">
+      <div class="stat-num">${counts.total || 0}</div>
+      <div class="stat-label">הכול</div>
+    </a>`;
 
   const body = rows.length
     ? rows.map((row) => {
         const c = new Customer(row);
+        const interestPills = c.interests.slice(0, 3).map((t) =>
+          `<span class="pill" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa">${esc(t)}</span>`
+        ).join('');
         return `
         <a class="rec" href="/admin/crm/${c.id}" style="display:flex;align-items:center;gap:12px;text-decoration:none">
           <div style="flex:1">
             <strong>${esc(c.displayName)}</strong>
             <div class="muted" style="font-size:.82rem">
-              ${esc([c.email, c.phone, c.company].filter(Boolean).join(' · '))}
+              ${esc([c.email, c.phone, c.company].filter(Boolean).join(' · ') || 'עדיין בלי פרטי קשר — כרטיס מביקור')}
             </div>
           </div>
-          ${c.tags.slice(0, 3).map((t) => `<span class="pill">${esc(t)}</span>`).join('')}
-          <span class="pill">${esc(c.status)}</span>
+          ${interestPills}
+          ${statusPill(c.status)}
         </a>`;
       }).join('')
     : `<div class="empty-state">
          <div style="font-size:2rem;margin-bottom:8px">👥</div>
-         ${q || status ? 'אין תוצאות לחיפוש הזה.' : 'עדיין אין אנשי קשר — הם ייווצרו מהפניות שיגיעו.'}
+         ${q || status
+           ? 'אין תוצאות לחיפוש הזה.'
+           : 'עדיין אין אנשי קשר — הם ייווצרו מהפניות שיגיעו, או מביקור באתר (כרטיס זמני).'}
        </div>`;
 
   page(res, 'crm-contacts', 'אנשי קשר', `
+    <p class="lead" style="margin-top:0">
+      כרטיס אחד לכל אדם: ביקור → כרטיס זמני, מייל/שם → העשרה, דפים → תחומי עניין.
+      כך אפשר לדוור רלוונטי — לא להציף.
+    </p>
     <div class="stat-row">${tiles}</div>
     <div class="card">
       <div class="section-bar">
         <div class="card-head">👥 אנשי קשר · ${counts.total}</div>
-        <form method="GET" action="/admin/crm" style="display:flex;gap:8px">
+        <form method="GET" action="/admin/crm" style="display:flex;gap:8px;flex-wrap:wrap">
           <input name="q" class="input" value="${esc(q)}" placeholder="חיפוש שם, מייל, טלפון…">
+          <select name="status" class="input" style="width:auto" onchange="this.form.submit()">
+            <option value="">כל הסטטוסים</option>
+            ${contacts.STATUSES.map((s) =>
+              `<option value="${s}" ${s === status ? 'selected' : ''}>${esc(contacts.statusLabel(s))}</option>`
+            ).join('')}
+          </select>
           <button class="btn secondary sm" type="submit">חפש</button>
           ${q || status ? '<a class="btn secondary sm" href="/admin/crm">נקה</a>' : ''}
         </form>
@@ -1048,16 +1146,32 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
     : '<div class="empty-state">עדיין אין פעילות.</div>';
 
   const reasons = d.scoreReasons.map((r) => `<li>${esc(r.why)} — ${r.points}</li>`).join('');
+  const interestBlock = (d.interests && d.interests.length)
+    ? d.interests.map((t) =>
+        `<a class="pill" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;text-decoration:none"
+            href="/admin/crm/segments?hint=${encodeURIComponent(t)}">${esc(t)}</a>`
+      ).join(' ')
+    : '<span class="muted" style="font-size:.88rem">עדיין אין — יתווספו מצפיות בדפים (למשל /services/…).</span>';
 
   page(res, 'crm-contacts', d.displayName, `
     <div class="card">
       <div class="section-bar">
         <div class="card-head">👤 ${esc(d.displayName)}</div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${statusPill(d.status)}
           <span class="pill">ציון ${d.score}</span>
           <a class="btn secondary sm" href="/admin/crm">← לרשימה</a>
         </div>
       </div>
+      ${d.status === 'provisional' ? `
+        <p class="muted" style="font-size:.88rem;line-height:1.5">
+          כרטיס זמני מביקור באתר — מחובר לעוגייה ראשונה בלבד.
+          כשיזינו מייל או שם, הכרטיס יתעשר; בלי אינטראקציה יישכח אוטומטית.
+        </p>` : ''}
+      ${d.status === 'garbage' ? `
+        <p class="muted" style="font-size:.88rem;color:#b91c1c">
+          ממתין למחיקה אוטומטית (שקט ארוך, בלי פרטי קשר). אפשר לשחזר ידנית לסטטוס «ליד» אם טעיתם.
+        </p>` : ''}
       <form method="POST" action="/admin/crm/${d.id}/update" class="stack">
         <label>שם<input name="name" class="input" value="${esc(d.name)}"></label>
         <label>מייל<input name="email" class="input" dir="ltr" value="${esc(d.email)}"></label>
@@ -1066,16 +1180,25 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
         <label>סטטוס
           <select name="status" class="input">
             ${contacts.STATUSES.map((s) =>
-              `<option value="${s}" ${s === d.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+              `<option value="${s}" ${s === d.status ? 'selected' : ''}>${esc(contacts.statusLabel(s))}</option>`).join('')}
           </select>
         </label>
-        <label>תגיות<input name="tags" class="input" value="${esc(d.tags.join(','))}"></label>
+        <label>תגיות<input name="tags" class="input" value="${esc(d.tags.join(','))}"
+          placeholder="vip,newsletter — תחומי עניין (interest:…) מנוהלים אוטומטית"></label>
         <label>הערות<textarea name="notes" class="input" rows="3">${esc(d.notes)}</textarea></label>
         <label style="display:flex;gap:8px;align-items:center">
           <input type="checkbox" name="consent" value="1" ${d.consent ? 'checked' : ''}> הסכמה לדיוור
         </label>
         <button class="btn" type="submit">שמור</button>
       </form>
+    </div>
+
+    <div class="card">
+      <div class="card-head">💡 תחומי עניין (מהאתר)</div>
+      <p class="muted" style="font-size:.88rem;margin-top:0">
+        נגזרים מדפים שביקרו בהם — בסיס לפילוח דיוור בלי להציף את כולם.
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${interestBlock}</div>
     </div>
 
     <div class="card">

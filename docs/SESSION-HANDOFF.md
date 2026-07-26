@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (progressive customer cards — stitch + quiet purge).
+> **Last updated:** 2026-07-26 (cards admin UI + interest segments + Hebrew CRM copy).
 
 ---
 
@@ -152,15 +152,22 @@ npm run test:crm
 
 Reachable people (email/phone) are **not** auto-deleted by the quiet timer — only empty provisional ghosts.
 
-## 7. Open / next (when resuming)
+## 7. Cards admin + interest segments (shipped after 1.92)
 
-Pick **one** deep thread (lesson of the lab):
+| Surface | What owners see |
+|---------|-----------------|
+| CRM enable offer | Hebrew copy: site → CRM, no shady tracking |
+| `/admin/crm` | Tiles: כרטיס זמני / ליד / … / ממתין למחיקה; interest pills |
+| Contact sheet | Status pills HE, interests block, provisional/garbage explainers |
+| `/admin/crm/privacy` | progressive toggle + quietDays + garbageDays |
+| `/admin/crm/segments` | **interest** + hasInterest rules for relevant mail |
 
-1. **Admin UI** for progressive cards (show interests, garbage bin, knobs for quietDays).
-2. **Mail lists** driven by interest tags without spam (segments).
-3. **Pixel on real WP** — Hostinger WhiteNo1se + public CRM base.
-4. **Israeli invoicing** — finance round, separate.
-5. **Hygiene** — Actions action-runtime Node 20 deprecation noise.
+## 8. Open / next (when resuming)
+
+1. **Campaign from segment** — one-click “send only to this audience”.
+2. **Pixel on real WP** — Hostinger WhiteNo1se + public CRM base.
+3. **Israeli invoicing** — finance round, separate.
+4. **Hygiene** — Actions action-runtime Node 20 deprecation noise.
 
 Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified without browser/CMS install.
 

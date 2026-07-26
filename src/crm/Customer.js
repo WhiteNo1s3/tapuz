@@ -53,9 +53,21 @@ class Customer {
   get hasConsent() { return !!this.row.consent; }
   get tags() { return contacts.parseTags(this.row.tags); }
 
+  /** Page-derived interests (progressive cards) — without the interest: prefix. */
+  get interests() {
+    return this.tags
+      .filter((t) => String(t).startsWith('interest:'))
+      .map((t) => t.slice('interest:'.length));
+  }
+
   /** Never blank: falls back to whatever identifies them, then to the id. */
   get displayName() {
-    return this.name || this.email || this.phone || ('#' + this.id);
+    if (this.name) return this.name;
+    if (this.email) return this.email;
+    if (this.phone) return this.phone;
+    if (this.status === 'provisional') return 'מבקר · #' + this.id;
+    if (this.status === 'garbage') return 'למחיקה · #' + this.id;
+    return '#' + this.id;
   }
 
   /** True once we can actually reach them. */
@@ -169,6 +181,8 @@ class Customer {
       status: this.status,
       country: this.country,
       tags: this.tags,
+      interests: this.interests,
+      statusLabel: contacts.statusLabel(this.status),
       notes: this.row.notes || '',
       consent: this.hasConsent,
       reachable: this.isReachable,
