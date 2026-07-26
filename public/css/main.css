@@ -1175,19 +1175,23 @@ a.bent-newspop-text:hover { text-decoration: underline; }
   to { transform: translateX(100%); }
 }
 
-/* entrance animations — scroll-driven where supported, one-shot elsewhere */
+/* entrance animations — scroll-driven where supported, one-shot elsewhere.
+   Universal since v1.97: any module may carry animate= (fade | rise | zoom) */
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
     .anim-fade { animation: tapuz-fade both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
     .anim-rise { animation: tapuz-rise both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
+    .anim-zoom { animation: tapuz-zoom both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
   }
   @supports not (animation-timeline: view()) {
     .anim-fade { animation: tapuz-fade 0.8s ease-out both; }
     .anim-rise { animation: tapuz-rise 0.8s ease-out both; }
+    .anim-zoom { animation: tapuz-zoom 0.8s ease-out both; }
   }
 }
 @keyframes tapuz-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes tapuz-rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes tapuz-zoom { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
 
 /* fixed backgrounds are janky on touch devices (any size — tablets, big
    phones, landscape) — key on the input type, not just a width breakpoint */
@@ -1199,7 +1203,7 @@ a.bent-newspop-text:hover { text-decoration: underline; }
 }
 @media (prefers-reduced-motion: reduce) {
   .marquee-track { animation: none; }
-  .anim-fade, .anim-rise { animation: none; }
+  .anim-fade, .anim-rise, .anim-zoom { animation: none; }
 }
 
 /* MOTION entrance effects (effect: fade | slide | typewriter) — the text is

@@ -174,9 +174,11 @@ main#main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
 @media (prefers-reduced-motion: no-preference) {
   .anim-fade { animation: pzn-fade 0.8s ease-out both; }
   .anim-rise { animation: pzn-rise 0.8s ease-out both; }
+  .anim-zoom { animation: pzn-zoom 0.8s ease-out both; }
 }
 @keyframes pzn-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pzn-rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes pzn-zoom { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
 @media (hover: none) and (pointer: coarse) {
   .hero.hero-parallax, .parallax-section { background-attachment: scroll; }
 }

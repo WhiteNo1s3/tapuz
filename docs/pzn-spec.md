@@ -1,6 +1,6 @@
 # The `.pzn` page format — standard
 
-**Spec version 0.1** · generated from `tapuziel@1.71.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
+**Spec version 0.1** · generated from `tapuziel@1.97.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
 
 `.pzn` is an open, constrained-HTML page format. A `.pzn` file **is** HTML —
 but the body may contain **only registered `bent-*` module tags**, never raw
@@ -53,23 +53,24 @@ from it directly.
 
 #### `<bent-heading>` — כותרת / Heading · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `level` · integer · 1–6 · default `2`
   - `align` · enum · start \| center \| end · default `start`
-  - `animate` · enum · none \| fade \| rise · default `none`
   - `text` · text · default `כותרת חדשה` · **(body text, not an attribute)**
 
 #### `<bent-text>` — טקסט / Text · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `text` · text · default `פסקה חדשה` · **(body text, not an attribute)**
   - `align` · enum · start \| center \| end · default `start`
   - `size` · enum · sm \| md \| lg · default `md`
   - `lead` · boolean · default `false`
   - `dropcap` · boolean · default `false`
   - `maxwidth` · enum · sm \| md \| lg \| full · default `full`
-  - `animate` · enum · none \| fade \| rise · default `none`
 
 #### `<bent-image>` — תמונה / Image · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `src` · url
   - `alt` · string
   - `title` · string
@@ -79,6 +80,7 @@ from it directly.
 
 #### `<bent-button>` — כפתור / Button · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `href` · url · default `#`
   - `variant` · enum · primary \| secondary \| outline · default `primary`
   - `align` · enum · start \| center \| end · default `start`
@@ -89,49 +91,59 @@ from it directly.
 
 #### `<bent-item>` — פריט רשימה / List item · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `text` · text · default `פריט` · **(body text, not an attribute)**
 
 #### `<bent-list>` — רשימה / List · container (children: `bent-item`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `ordered` · boolean · default `false`
 
 #### `<bent-quote>` — ציטוט / Quote · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `author` · string
   - `text` · text · default `ציטוט` · **(body text, not an attribute)**
 
 #### `<bent-spacer>` — רווח / Spacer · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `height` · string · default `2rem`
   - `size` · enum · sm \| md \| lg \| xl · default `md`
 
 #### `<bent-divider>` — קו מפריד / Divider · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `style` · enum · solid \| dashed \| none · default `solid`
   - `bentstyle` · enum · line \| dots \| thick · default `line`
 
 #### `<bent-embed>` — הטמעה / Embed · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `url` · url
 
 #### `<bent-testimonial>` — המלצה / Testimonial · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `author` · string
   - `role` · string
   - `text` · text · **(body text, not an attribute)**
 
 #### `<bent-feature>` — תכונה / Feature · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `title` · string
   - `icon` · string
   - `text` · text · **(body text, not an attribute)**
 
 #### `<bent-features>` — תכונות / Features · container (children: `bent-feature`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `columns` · integer · 1–4 · default `3`
 
 #### `<bent-cta>` — קריאה לפעולה / CTA · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `title` · string
   - `buttontext` · string
   - `url` · url · default `#`
@@ -142,47 +154,58 @@ from it directly.
 
 #### `<bent-stat>` — מדד / Stat · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `value` · string
   - `label` · string
 
 #### `<bent-stats>` — מספרים / מדדים / Stats · container (children: `bent-stat`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `columns` · integer · 2–4 · default `3`
 
 #### `<bent-qa>` — שאלה ותשובה / Q&A · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `question` · string
   - `text` · text · **(body text, not an attribute)**
 
 #### `<bent-faq>` — שאלות נפוצות / FAQ · container (children: `bent-qa`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
 #### `<bent-banner>` — באנר / Banner · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `tone` · enum · brand \| dark \| light \| warn · default `brand`
   - `align` · enum · start \| center \| end · default `start`
   - `text` · text · default `הודעה חדשה` · **(body text, not an attribute)**
 
 #### `<bent-trow>` — שורת טבלה / Table row · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `cells` · text · **(body text, not an attribute)**
 
 #### `<bent-table>` — טבלה / Table · container (children: `bent-trow`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `header` · boolean · default `true`
 
 ### Category: layout
 
 #### `<bent-section>` — מיכל / Section · container
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `kind` · string · default `content`
   - `size` · enum · sm \| md \| lg \| xl · default `md`
 
 #### `<bent-col>` — עמודה / Column · container
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `width` · enum · 1/1 \| 1/2 \| 1/3 \| 2/3 \| 1/4 \| 3/4 · default `1/2`
 
 #### `<bent-columns>` — עמודות / Columns · container (children: `bent-col`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `gap` · enum · none \| sm \| md \| lg \| small \| medium \| large · default `medium`
   - `ratio` · string
   - `collapse` · enum · sm \| md \| lg \| never · default `md`
@@ -190,6 +213,7 @@ from it directly.
 
 #### `<bent-hero>` — הירו / Hero · container
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `image` · url
   - `height` · enum · sm \| md \| lg \| full · default `md`
   - `overlay` · integer · 0–80 · default `0`
@@ -197,33 +221,44 @@ from it directly.
 
 #### `<bent-card>` — כרטיס / Card · container
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
 #### `<bent-navitem>` — קישור ניווט / Nav link · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `label` · string
   - `href` · url
 
 #### `<bent-nav>` — תפריט ניווט / Nav menu · container (children: `bent-navitem`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `background` · string
   - `color` · string
   - `align` · enum · start \| center \| end · default `start`
 
 #### `<bent-tab>` — טאב / Tab · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `label` · string · default `טאב`
   - `text` · text · **(body text, not an attribute)**
 
 #### `<bent-tabs>` — טאבים / Tabs · container (children: `bent-tab`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
 #### `<bent-fold>` — מגירה / Fold · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `title` · string · default `כותרת`
   - `text` · text · **(body text, not an attribute)**
 
 #### `<bent-accordion>` — אקורדיון / Accordion · container (children: `bent-fold`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
 #### `<bent-plan>` — תוכנית מחיר / Pricing plan · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `title` · string
   - `price` · string
   - `period` · string
@@ -234,32 +269,39 @@ from it directly.
 
 #### `<bent-pricing>` — טבלת מחירים / Pricing table · container (children: `bent-plan`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
 ### Category: data
 
 #### `<bent-gallery>` — גלריה / Gallery · container (children: `bent-image`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `columns` · integer · 1–4 · default `3`
 
 #### `<bent-article-list>` — רשימת מאמרים / Article list · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `tag` · string · default `article`
   - `limit` · integer · 1–48 · default `6`
   - `columns` · integer · 1–4 · default `3`
 
 #### `<bent-map>` — מפה / Map · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `address` · string
   - `zoom` · integer · 1–20 · default `15`
   - `height` · enum · sm \| md \| lg · default `md`
 
 #### `<bent-category>` — קטגוריה / Category · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `slug` · string
   - `limit` · integer · 1–48 · default `6`
   - `showheader` · boolean · default `true`
 
 #### `<bent-field>` — שדה טופס / Form field · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `label` · string
   - `name` · string
   - `type` · enum · text \| email \| tel \| textarea \| select \| checkbox · default `text`
@@ -269,12 +311,14 @@ from it directly.
 
 #### `<bent-form>` — טופס / Form · container (children: `bent-field`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `action` · string
   - `method` · enum · post \| get · default `post`
   - `submit` · string · default `שליחה`
 
 #### `<bent-contact-info>` — פרטי קשר / Contact info · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `phone` · string
   - `email` · string
   - `address` · string
@@ -284,14 +328,18 @@ from it directly.
 
 #### `<bent-logo>` — לוגו / Logo · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `src` · url
   - `alt` · string
   - `url` · url
 
 #### `<bent-logos>` — לוגואים / לקוחות / Logos · container (children: `bent-logo`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
 #### `<bent-mediacard>` — כרטיס תוכן / Media card · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `image` · url
   - `tag` · string
   - `title` · string
@@ -300,8 +348,11 @@ from it directly.
 
 #### `<bent-cards>` — רשת כרטיסים / Card grid · container (children: `bent-mediacard`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
 #### `<bent-slide>` — שקופית / Slide · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `image` · url
   - `tag` · string
   - `title` · string
@@ -310,16 +361,19 @@ from it directly.
 
 #### `<bent-carousel>` — קרוסלה / Carousel · container (children: `bent-slide`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `height` · enum · sm \| md \| lg · default `md`
   - `peek` · boolean · default `true`
 
 #### `<bent-tickeritem>` — מבזק / Ticker headline · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `text` · string
   - `href` · url
 
 #### `<bent-ticker>` — מבזקים נעים / News ticker · container (children: `bent-tickeritem`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `label` · string
   - `speed` · enum · slow \| md \| fast · default `md`
   - `background` · string
@@ -327,16 +381,19 @@ from it directly.
 
 #### `<bent-newspopitem>` — עדכון / News update · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `time` · string
   - `text` · string
   - `href` · url
 
 #### `<bent-newspop>` — מבזקים עם שעות / News feed · container (children: `bent-newspopitem`)
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `label` · string
 
 #### `<bent-video>` — וידאו / Video · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `src` · url
   - `poster` · url
   - `caption` · string
@@ -347,6 +404,7 @@ from it directly.
 
 #### `<bent-audio>` — שמע / Audio · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `src` · url
   - `caption` · string
   - `loop` · boolean · default `false`
@@ -355,11 +413,13 @@ from it directly.
 
 #### `<bent-marquee>` — טקסט נע / Marquee · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `speed` · enum · slow \| md \| fast · default `md`
   - `text` · text · default `ברוכים הבאים ✦` · **(body text, not an attribute)**
 
 #### `<bent-parallax>` — רקע קבוע (פרלקסה) / Parallax · container
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `image` · url
   - `overlay` · integer · 0–80 · default `0`
   - `height` · enum · sm \| md \| lg \| full · default `md`
@@ -368,6 +428,7 @@ from it directly.
 
 #### `<bent-html>` — HTML גולמי / Raw HTML · leaf
 
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `content` · text
   - `provisional` · boolean · default `false`
   - `note` · string

@@ -38,8 +38,28 @@ const { escapeHtml, escapeAttr, escapeCssUrl, safeHref } = require('../language/
 /** @type {Map<string, ModuleDef>} */
 const REGISTRY = new Map();
 
+/** Entrance-animation values. Canonical names; the repair layer aliases the
+ * common drifts (slide-up → rise, zoom-in → zoom) instead of snapping them
+ * to none — grok's demo wrote them, the game must honour them. */
+const ANIMATE_VALUES = ['none', 'fade', 'rise', 'zoom'];
+
+/**
+ * v1.97: props EVERY module accepts, injected at registration like id/class
+ * are — grok's game writes `animate=` on anything, and it was silently
+ * dropped on modules that didn't declare it (validate skips undeclared
+ * props, compile ignores them: the worst kind of bug, the invisible kind).
+ * A def that declares its own version keeps it.
+ */
+const UNIVERSAL_PROPS = {
+  animate: {
+    type: 'enum', values: ANIMATE_VALUES, default: 'none', optional: true,
+    label: { he: 'אנימציית כניסה', en: 'Entrance animation' }
+  }
+};
+
 function register(def) {
   if (!def.name || !def.tag) throw new Error('module requires name and tag');
+  def.props = Object.assign({}, UNIVERSAL_PROPS, def.props || {});
   REGISTRY.set(def.name, def);
   return def;
 }
@@ -63,7 +83,11 @@ function moduleNames() {
 
 function attrsExtra(node) {
   const id = node.id ? ` id="${escapeAttr(node.id)}"` : '';
-  const cls = node.className ? ` ${escapeAttr(node.className)}` : '';
+  // the universal entrance animation rides the same class slot as class= —
+  // one seam, every module animates (v1.97)
+  const anim = node.props && ANIMATE_VALUES.includes(node.props.animate) && node.props.animate !== 'none'
+    ? ` anim-${node.props.animate}` : '';
+  const cls = (node.className ? ` ${escapeAttr(node.className)}` : '') + anim;
   return { id, cls, idAttr: id };
 }
 
@@ -89,10 +113,7 @@ register({
       type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
       label: { he: 'יישור', en: 'Align' }
     },
-    animate: {
-      type: 'enum', values: ['none', 'fade', 'rise'], default: 'none', optional: true,
-      label: { he: 'אנימציית כניסה', en: 'Entrance animation' }
-    },
+    // animate is UNIVERSAL since v1.97 — injected by register(), zoom included
     text: {
       type: 'text', content: true, default: 'כותרת חדשה',
       label: { he: 'טקסט', en: 'Text' }
@@ -103,10 +124,9 @@ register({
   defaults: { level: 2, text: 'כותרת חדשה' },
   compile(node, ctx) {
     const level = Math.min(Math.max(parseInt(node.props.level, 10) || 2, 1), 6);
-    const { id, cls } = attrsExtra(node);
+    const { id, cls } = attrsExtra(node); // cls carries anim-* since v1.97
     const alignCls = node.props.align && node.props.align !== 'start' ? ` align-${escapeAttr(node.props.align)}` : '';
-    const animCls = node.props.animate && node.props.animate !== 'none' ? ` anim-${escapeAttr(node.props.animate)}` : '';
-    return `<h${level}${id} class="bent-heading${alignCls}${animCls}${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</h${level}>`;
+    return `<h${level}${id} class="bent-heading${alignCls}${cls}"${dirAttr(ctx)}>${escapeHtml(node.text)}</h${level}>`;
   }
 });
 
@@ -142,10 +162,7 @@ register({
       type: 'enum', values: ['sm', 'md', 'lg', 'full'], default: 'full', optional: true,
       label: { he: 'רוחב מקסימלי', en: 'Max width' }
     },
-    animate: {
-      type: 'enum', values: ['none', 'fade', 'rise'], default: 'none', optional: true,
-      label: { he: 'אנימציית כניסה', en: 'Entrance animation' }
-    },
+    // animate is UNIVERSAL since v1.97 — injected by register(), zoom included
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -159,7 +176,7 @@ register({
     if (p.lead === true || p.lead === 'true') extraCls += ' lead';
     if (p.dropcap === true || p.dropcap === 'true') extraCls += ' dropcap';
     if (p.maxwidth && p.maxwidth !== 'full') extraCls += ` maxw-${escapeAttr(p.maxwidth)}`;
-    if (p.animate && p.animate !== 'none') extraCls += ` anim-${escapeAttr(p.animate)}`;
+    // anim-* rides cls via attrsExtra since v1.97
     const parts = String(node.text || '').split(/\n\n+/);
     const d = dirAttr(ctx);
     return parts
@@ -1702,6 +1719,7 @@ register({
 
 module.exports = {
   register,
+  ANIMATE_VALUES,
   getModule,
   getModuleByTag,
   listModules,

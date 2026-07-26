@@ -3,7 +3,7 @@
   "title": "Tapuziel .pzn page language",
   "description": "Constrained-HTML page format (benTML dialect). Body may contain only registered bent-* module tags.",
   "specVersion": "0.1",
-  "generatedFrom": "tapuziel@1.71.0-alpha",
+  "generatedFrom": "tapuziel@1.97.0-alpha",
   "modules": {
     "heading": {
       "tag": "bent-heading",
@@ -15,6 +15,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "level": {
           "type": "integer",
           "min": 1,
@@ -29,16 +40,6 @@
             "end"
           ],
           "default": "start",
-          "optional": true
-        },
-        "animate": {
-          "type": "enum",
-          "enum": [
-            "none",
-            "fade",
-            "rise"
-          ],
-          "default": "none",
           "optional": true
         },
         "text": {
@@ -58,6 +59,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "text": {
           "type": "text",
           "default": "פסקה חדשה",
@@ -103,16 +115,6 @@
           ],
           "default": "full",
           "optional": true
-        },
-        "animate": {
-          "type": "enum",
-          "enum": [
-            "none",
-            "fade",
-            "rise"
-          ],
-          "default": "none",
-          "optional": true
         }
       }
     },
@@ -126,6 +128,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "src": {
           "type": "url",
           "default": ""
@@ -178,6 +191,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "href": {
           "type": "url",
           "default": "#"
@@ -237,6 +261,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "text": {
           "type": "text",
           "default": "פריט",
@@ -256,6 +291,17 @@
         "item"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "ordered": {
           "type": "boolean",
           "default": false,
@@ -273,6 +319,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "author": {
           "type": "string",
           "default": "",
@@ -295,6 +352,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "height": {
           "type": "string",
           "default": "2rem"
@@ -322,6 +390,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "style": {
           "type": "enum",
           "enum": [
@@ -354,6 +433,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "url": {
           "type": "url",
           "default": ""
@@ -370,6 +460,17 @@
       "container": true,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "kind": {
           "type": "string",
           "default": "content",
@@ -398,6 +499,17 @@
       "container": true,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "width": {
           "type": "enum",
           "enum": [
@@ -424,6 +536,17 @@
         "col"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "gap": {
           "type": "enum",
           "enum": [
@@ -477,6 +600,17 @@
       "container": true,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "image": {
           "type": "url",
           "default": "",
@@ -519,6 +653,17 @@
         "image"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "columns": {
           "type": "integer",
           "min": 1,
@@ -538,6 +683,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "tag": {
           "type": "string",
           "default": "article"
@@ -566,6 +722,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "author": {
           "type": "string",
           "default": "",
@@ -593,6 +760,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "title": {
           "type": "string",
           "default": ""
@@ -621,6 +799,17 @@
         "feature"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "columns": {
           "type": "integer",
           "min": 1,
@@ -639,7 +828,19 @@
       "category": "layout",
       "container": true,
       "accept": [],
-      "props": {}
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     },
     "map": {
       "tag": "bent-map",
@@ -651,6 +852,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "address": {
           "type": "string",
           "default": ""
@@ -684,6 +896,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "title": {
           "type": "string",
           "default": ""
@@ -745,6 +968,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "value": {
           "type": "string",
           "default": ""
@@ -767,6 +1001,17 @@
         "stat"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "columns": {
           "type": "integer",
           "min": 2,
@@ -786,6 +1031,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "src": {
           "type": "url",
           "default": ""
@@ -813,7 +1069,19 @@
       "accept": [
         "logo"
       ],
-      "props": {}
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     },
     "qa": {
       "tag": "bent-qa",
@@ -825,6 +1093,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "question": {
           "type": "string",
           "default": ""
@@ -847,7 +1126,19 @@
       "accept": [
         "qa"
       ],
-      "props": {}
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     },
     "navitem": {
       "tag": "bent-navitem",
@@ -859,6 +1150,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "label": {
           "type": "string",
           "default": ""
@@ -882,6 +1184,17 @@
         "navitem"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "background": {
           "type": "string",
           "default": "",
@@ -913,6 +1226,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "image": {
           "type": "url",
           "default": "",
@@ -950,7 +1274,19 @@
       "accept": [
         "mediacard"
       ],
-      "props": {}
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     },
     "slide": {
       "tag": "bent-slide",
@@ -962,6 +1298,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "image": {
           "type": "url",
           "default": "",
@@ -1001,6 +1348,17 @@
         "slide"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "height": {
           "type": "enum",
           "enum": [
@@ -1028,6 +1386,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "text": {
           "type": "string",
           "default": ""
@@ -1051,6 +1420,17 @@
         "tickeritem"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "label": {
           "type": "string",
           "default": "",
@@ -1088,6 +1468,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "time": {
           "type": "string",
           "default": "",
@@ -1116,6 +1507,17 @@
         "newspopitem"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "label": {
           "type": "string",
           "default": "",
@@ -1133,6 +1535,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "src": {
           "type": "url",
           "default": ""
@@ -1179,6 +1592,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "src": {
           "type": "url",
           "default": ""
@@ -1205,6 +1629,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "slug": {
           "type": "string",
           "default": ""
@@ -1233,6 +1668,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "label": {
           "type": "string",
           "default": ""
@@ -1282,6 +1728,17 @@
         "field"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "action": {
           "type": "string",
           "default": "",
@@ -1311,6 +1768,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "phone": {
           "type": "string",
           "default": "",
@@ -1343,6 +1811,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "tone": {
           "type": "enum",
           "enum": [
@@ -1381,6 +1860,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "speed": {
           "type": "enum",
           "enum": [
@@ -1408,6 +1898,17 @@
       "container": true,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "image": {
           "type": "url",
           "default": ""
@@ -1442,6 +1943,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "label": {
           "type": "string",
           "default": "טאב"
@@ -1464,7 +1976,19 @@
       "accept": [
         "tab"
       ],
-      "props": {}
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     },
     "fold": {
       "tag": "bent-fold",
@@ -1476,6 +2000,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "title": {
           "type": "string",
           "default": "כותרת"
@@ -1498,7 +2033,19 @@
       "accept": [
         "fold"
       ],
-      "props": {}
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     },
     "trow": {
       "tag": "bent-trow",
@@ -1510,6 +2057,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "cells": {
           "type": "text",
           "default": "",
@@ -1529,6 +2087,17 @@
         "trow"
       ],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "header": {
           "type": "boolean",
           "default": true,
@@ -1546,6 +2115,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "content": {
           "type": "text",
           "default": ""
@@ -1572,6 +2152,17 @@
       "container": false,
       "accept": [],
       "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
         "title": {
           "type": "string",
           "default": ""
@@ -1619,7 +2210,19 @@
       "accept": [
         "plan"
       ],
-      "props": {}
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     }
   }
 }

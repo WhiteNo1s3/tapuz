@@ -552,7 +552,19 @@ const RESERVED = new Set([
   'INPUT', 'FOOTER', 'HEADER', 'CODE'
 ]);
 
-const UNIVERSAL = new Set(['id', 'class', 'dir']);
+const UNIVERSAL = new Set(['id', 'class', 'dir', 'animate']);
+
+// v1.97: entrance animation is UNIVERSAL — every keyword takes animate=
+// (grok's game writes it on anything). Injected in one loop so the whole
+// dictionary agrees; a per-keyword copy (HEADING/TEXT used to carry one
+// without zoom) is replaced by the canonical version.
+const ANIMATE_KW_PARAM = {
+  type: 'enum', default: 'none', values: ['none', 'fade', 'rise', 'zoom']
+};
+for (const def of Object.values(KEYWORDS)) {
+  if (!def.params) def.params = {};
+  def.params.animate = ANIMATE_KW_PARAM;
+}
 
 function getKeyword(name) {
   if (!name) return null;

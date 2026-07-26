@@ -47,6 +47,8 @@ function compile(source) {
  */
 function applyChrome(data, p) {
   if (p.class) data.className = p.class;
+  // animate is universal chrome since v1.97 — every keyword carries it here
+  if (p.animate && p.animate !== 'none' && data.animate === undefined) data.animate = p.animate;
   // generated (storage-shape) ids are block identity, not authored anchors —
   // blockToJson restores those on the block itself, never into data.id
   if (p.id && !isGeneratedBlockId(p.id)) data.id = p.id;
@@ -79,8 +81,7 @@ function buildBlock(node, warnings) {
       const level = clampInt(p.level, 1, 6, 2);
       const data = { level, text: collapseSingleParagraph(text) };
       if (p.align && p.align !== 'start') data.align = p.align;
-      if (p.animate && p.animate !== 'none') data.animate = p.animate;
-      applyChrome(data, p);
+      applyChrome(data, p); // animate rides the universal chrome (v1.97)
       return createBlock('heading', data);
     }
     case 'TEXT': {
@@ -92,8 +93,7 @@ function buildBlock(node, warnings) {
       if (p.lead === true || p.lead === 'true') data.lead = true;
       if (p.dropcap === true || p.dropcap === 'true') data.dropcap = true;
       if (p.maxwidth && p.maxwidth !== 'full') data.maxWidth = p.maxwidth;
-      if (p.animate && p.animate !== 'none') data.animate = p.animate;
-      applyChrome(data, p);
+      applyChrome(data, p); // animate rides the universal chrome (v1.97)
       return createBlock('text', data);
     }
     case 'IMAGE': {

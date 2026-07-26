@@ -81,6 +81,8 @@ function decompile(page = {}, blocks = [], opts = {}) {
 function uni(params, d, idParams = []) {
   const has = (name) => params.some((x) => x.startsWith(name + ':'));
   if (d.className) params.push(`class: ${q(d.className)}`);
+  // animate is universal chrome since v1.97 — emitted here for every keyword
+  if (d.animate && d.animate !== 'none' && !has('animate')) params.push(`animate: ${d.animate}`);
   // the id: slot holds either the authored anchor (data.id, §7.4) or the
   // nested block's storage id — the anchor is content, so it wins
   if (d.id) params.push(`id: ${q(d.id)}`);
@@ -111,8 +113,7 @@ function decompileBlock(block, indent) {
       const params = [];
       if (d.level != null && d.level !== 2) params.push(`level: ${d.level}`);
       if (d.align && d.align !== 'start') params.push(`align: ${d.align}`);
-      if (d.animate && d.animate !== 'none') params.push(`animate: ${d.animate}`);
-      uni(params, d, idParams);
+      uni(params, d, idParams); // animate rides uni() since v1.97
       return `${pad}HEADING${paramList(params)} { ${escBody(d.text || '')} }`;
     }
     // The raw-HTML escape hatch. The triple-brace fence keeps the payload
@@ -132,8 +133,7 @@ function decompileBlock(block, indent) {
       if (d.lead) params.push('lead: true');
       if (d.dropcap) params.push('dropcap: true');
       if (d.maxWidth && d.maxWidth !== 'full') params.push(`maxwidth: ${d.maxWidth}`);
-      if (d.animate && d.animate !== 'none') params.push(`animate: ${d.animate}`);
-      uni(params, d, idParams);
+      uni(params, d, idParams); // animate rides uni() since v1.97
       const body = String(d.content || '');
       if (!body.includes('\n')) {
         return `${pad}TEXT${paramList(params)} { ${escBody(body)} }`;

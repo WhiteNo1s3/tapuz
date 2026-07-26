@@ -63,6 +63,21 @@ const ALIASES = {
   contact: 'contact-info', 'contact-details': 'contact-info'
 };
 
+/** Common model drift on PROP VALUES (v1.97): grok's demo — and any model
+ * that learned animation names elsewhere — writes `slide-up` where our canon
+ * says `rise`, `zoom-in` for `zoom`. Snapping those to the default killed
+ * the animation silently; aliasing them is a dictionary fix, exactly what
+ * the repair telemetry's PROP_ALIAS bucket is for. Keyed by prop name,
+ * consulted BEFORE the enum snap. */
+const PROP_VALUE_TWINS = {
+  animate: {
+    'slide-up': 'rise', slideup: 'rise', slide: 'rise', up: 'rise', rise_up: 'rise',
+    'fade-in': 'fade', fadein: 'fade', appear: 'fade',
+    'zoom-in': 'zoom', zoomin: 'zoom', scale: 'zoom', grow: 'zoom'
+  },
+  speed: { sm: 'slow', lg: 'fast', small: 'slow', large: 'fast' }
+};
+
 /** Common model drift on PROP names: url= for href=, src= for image=… (v0.69).
  * Twin adoption fires only when the schema key is EMPTY and the twin is not
  * itself a real prop of the module — same "server owns the vocabulary" move
@@ -291,9 +306,18 @@ function repairAst(doc, changes) {
         continue;
       }
       if (schema.type === 'enum' && schema.values && !schema.values.includes(String(v)) && !schema.values.includes(v)) {
-        const snap = schema.default !== undefined ? schema.default : schema.values[0];
-        node.props[key] = snap;
-        changes.push({ code: 'PROP_ENUM', message: `<bent-${node.name}> "${key}"=${JSON.stringify(v)} → ${JSON.stringify(snap)}` });
+        // a known twin of a legal value is vocabulary drift, not an error —
+        // alias it (and let the telemetry count a dictionary fix), only then
+        // snap what is truly foreign to the default
+        const twin = PROP_VALUE_TWINS[key] && PROP_VALUE_TWINS[key][String(v).toLowerCase()];
+        if (twin !== undefined && schema.values.includes(twin)) {
+          node.props[key] = twin;
+          changes.push({ code: 'PROP_ALIAS', message: `<bent-${node.name}> "${key}"=${JSON.stringify(v)} → ${JSON.stringify(twin)}` });
+        } else {
+          const snap = schema.default !== undefined ? schema.default : schema.values[0];
+          node.props[key] = snap;
+          changes.push({ code: 'PROP_ENUM', message: `<bent-${node.name}> "${key}"=${JSON.stringify(v)} → ${JSON.stringify(snap)}` });
+        }
       } else if (schema.type === 'integer' || schema.type === 'number') {
         let n = Number(v);
         if (!Number.isFinite(n)) n = schema.default != null ? schema.default : (schema.min != null ? schema.min : 0);

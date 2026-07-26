@@ -73,6 +73,11 @@ function baseOpts(block, props, extra = {}) {
   const opts = { props, ...extra };
   if (block.id) opts.id = block.id;
   if (block.data?.className) opts.className = block.data.className;
+  // animate is universal (v1.97) — carried for EVERY type, like className;
+  // the per-case pickProps lists that already name it simply win the tie
+  if (block.data?.animate !== undefined && props.animate === undefined) {
+    props.animate = block.data.animate;
+  }
   styleToProps(block.data, props);
   return opts;
 }
@@ -403,6 +408,11 @@ function pickData(props, keys, renames = {}) {
 
 function finishBlock(node, type, data) {
   if (node.className) data.className = node.className;
+  // the universal animate crosses back too (v1.97), for every type
+  const anim = node.props && node.props.animate;
+  if (anim !== undefined && anim !== 'none' && data.animate === undefined) {
+    data.animate = anim;
+  }
   propsToStyle(node.props || {}, data);
   const block = { type, data };
   if (node.id) block.id = node.id;

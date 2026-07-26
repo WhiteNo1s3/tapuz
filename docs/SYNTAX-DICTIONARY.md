@@ -48,6 +48,7 @@ Shape: `HERO(params) { nested modules }`
 | `height` | `height` | enum sm\|md\|lg\|full |  | "md" |
 | `overlay` | `overlay` | integer |  | 0 |
 | `parallax` | `parallax` | boolean |  | false |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 HERO {
@@ -67,7 +68,7 @@ Shape: `HEADING(params) { text body }`
 |---|---|---|---|---|
 | `level` | `level` | integer |  | 2 |
 | `align` | `align` | enum start\|center\|end |  | "start" |
-| `animate` | `animate` | enum none\|fade\|rise |  | "none" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 HEADING(level: 2) {
@@ -88,7 +89,7 @@ Shape: `TEXT(params) { text body }`
 | `lead` | `lead` | boolean |  | false |
 | `dropcap` | `dropcap` | boolean |  | false |
 | `maxWidth` | `maxwidth` | enum sm\|md\|lg\|full |  | "full" |
-| `animate` | `animate` | enum none\|fade\|rise |  | "none" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 TEXT(size: md) {
@@ -112,6 +113,7 @@ Shape: `BUTTON(params) { text body }`
 | `rel` | `rel` | string |  | "" |
 | `target` | `target` | enum _self\|_blank |  | "_self" |
 | `title` | `title` | string |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 BUTTON(url: "/contact", style: primary) {
@@ -128,6 +130,7 @@ Shape: `QUOTE(params) { text body }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `author` | `author` | string |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 QUOTE {
@@ -145,6 +148,7 @@ Shape: `TESTIMONIAL(params) { text body }`
 |---|---|---|---|---|
 | `author` | `author` | string |  |  |
 | `role` | `role` | string |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 TESTIMONIAL {
@@ -162,6 +166,7 @@ Shape: `LIST(params) { nested modules }`
 |---|---|---|---|---|
 | `ordered` | `type` | boolean |  | false |
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 LIST {
@@ -180,6 +185,7 @@ Shape: `FEATURES(params) { nested modules }`
 |---|---|---|---|---|
 | `columns` | `columns` | integer |  | 3 |
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 FEATURES(columns: 2) {
@@ -198,6 +204,7 @@ Shape: `ARTICLES(params)`
 | `tag` | `tag` | string |  | "article" |
 | `limit` | `limit` | integer |  | 6 |
 | `columns` | `columns` | integer |  | 3 |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 ARTICLES(tag: "article", limit: 6, columns: 3)
@@ -214,6 +221,7 @@ Shape: `CATEGORY(params)`
 | `slug` | `slug` | string | yes |  |
 | `limit` | `limit` | integer |  | 6 |
 | `showheader` | `showheader` | boolean |  | true |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 CATEGORY(slug: "...")
@@ -234,6 +242,7 @@ Shape: `IMAGE(params)`
 | `title` | `title` | string |  | "" |
 | `caption` | `caption` | string |  |  |
 | `width` | `width` | enum sm\|md\|lg\|full |  | "full" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 IMAGE(src: "/uploads/photo.jpg", alt: "תיאור")
@@ -249,6 +258,7 @@ Shape: `GALLERY(params) { nested modules }`
 |---|---|---|---|---|
 | `columns` | `columns` | integer |  | 3 |
 | `images` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 GALLERY(columns: 3) {
@@ -268,6 +278,7 @@ Shape: `HTML {{{ raw }}}`
 |---|---|---|---|---|
 | `note` | `note` | string |  | "" |
 | `provisional` | `provisional` | boolean |  | false |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 HTML {
@@ -286,6 +297,7 @@ Shape: `EMBED(params)`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `url` | `url` | url | yes |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 EMBED(url: "https://www.youtube.com/watch?v=XXXXXXXX")
@@ -306,6 +318,7 @@ Shape: `VIDEO(params)`
 | `autoplay` | `autoplay` | boolean |  | false |
 | `loop` | `loop` | boolean |  | false |
 | `muted` | `muted` | boolean |  | false |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 VIDEO(src: "...")
@@ -322,6 +335,7 @@ Shape: `AUDIO(params)`
 | `src` | `src` | media | yes |  |
 | `caption` | `caption` | string |  |  |
 | `loop` | `loop` | boolean |  | false |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 AUDIO(src: "...")
@@ -341,6 +355,7 @@ Shape: `ROW(params) { nested modules }`
 | `gap` | `gap` | enum none\|sm\|md\|lg |  | "md" |
 | `collapse` | `collapse` | enum sm\|md\|lg\|never |  | "md" |
 | `valign` | `valign` | enum top\|center\|bottom\|stretch |  | "top" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 ROW(ratio: "1:1") {
@@ -362,6 +377,7 @@ Shape: `SPACE(params)`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `size` | `size` | enum sm\|md\|lg\|xl |  | "md" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 SPACE(size: md)
@@ -376,6 +392,7 @@ Shape: `DIVIDER(params)`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `bentStyle` | `style` | enum line\|dots\|thick |  | "line" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 DIVIDER
@@ -386,6 +403,10 @@ DIVIDER
 ▢ **כרטיס** — קבוצת מודולים בקופסה
 
 Shape: `CARD(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 CARD {
@@ -403,6 +424,7 @@ Shape: `SECTION(params) { nested modules }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `size` | `size` | enum sm\|md\|lg\|xl |  | "md" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 SECTION(size: md) {
@@ -423,6 +445,7 @@ Shape: `MAP(params)`
 | `address` | `address` | string | yes |  |
 | `zoom` | `zoom` | integer |  | 15 |
 | `height` | `height` | enum sm\|md\|lg |  | "md" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 MAP(address: "תל אביב", zoom: 14)
@@ -440,6 +463,7 @@ Shape: `MOTION(params) { text body }`
 |---|---|---|---|---|
 | `effect` | `effect` | enum marquee\|fade\|slide\|typewriter |  | "marquee" |
 | `speed` | `speed` | enum slow\|md\|fast |  | "md" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 MOTION {
@@ -460,6 +484,7 @@ Shape: `BACKDROP(params) { nested modules }`
 | `tint` | `tint` | enum none\|dark\|light\|brand |  | "none" |
 | `fade` | `fade` | boolean |  | false |
 | `height` | `height` | enum sm\|md\|lg\|full |  | "md" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 BACKDROP {
@@ -484,6 +509,7 @@ Shape: `CTA(params)`
 | `variant` | `style` | enum primary\|secondary\|outline |  | "primary" |
 | `tone` | `tone` | enum brand\|dark\|light |  | "brand" |
 | `align` | `align` | enum start\|center\|end |  | "start" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 CTA(title: "...", url: "...", align: start)
@@ -499,6 +525,7 @@ Shape: `STATS(params) { nested modules }`
 |---|---|---|---|---|
 | `columns` | `columns` | integer |  | 3 |
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 STATS {
@@ -517,6 +544,7 @@ Shape: `LOGOS(params) { nested modules }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 LOGOS {
@@ -535,6 +563,7 @@ Shape: `FAQ(params) { nested modules }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 FAQ {
@@ -552,6 +581,7 @@ Shape: `TABLE(params) { nested modules }`
 |---|---|---|---|---|
 | `header` | `header` | boolean |  | true |
 | `rows` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 TABLE {
@@ -570,6 +600,7 @@ Shape: `TABS(params) { nested modules }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 TABS {
@@ -586,6 +617,7 @@ Shape: `ACCORDION(params) { nested modules }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 ACCORDION {
@@ -607,6 +639,7 @@ Shape: `FORM(params) { nested modules }`
 | `method` | `method` | enum post\|get |  | "post" |
 | `submit` | `submit` | string |  | "שליחה" |
 | `fields` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 FORM {
@@ -625,6 +658,7 @@ Shape: `CARDS(params) { nested modules }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 CARDS {
@@ -643,6 +677,7 @@ Shape: `CAROUSEL(params) { nested modules }`
 | `height` | `height` | enum sm\|md\|lg |  | "md" |
 | `peek` | `peek` | boolean |  | true |
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 CAROUSEL {
@@ -661,6 +696,7 @@ Shape: `PRICING(params) { nested modules }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 PRICING {
@@ -680,6 +716,7 @@ Shape: `NAV(params) { nested modules }`
 | `color` | `color` | string |  | "" |
 | `align` | `align` | enum start\|center\|end |  | "start" |
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 NAV(align: start) {
@@ -702,6 +739,7 @@ Shape: `TICKER(params) { nested modules }`
 | `background` | `background` | string |  | "" |
 | `color` | `color` | string |  | "" |
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 TICKER {
@@ -719,6 +757,7 @@ Shape: `NEWSPOP(params) { nested modules }`
 |---|---|---|---|---|
 | `label` | `label` | string |  | "" |
 | `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 NEWSPOP {
@@ -740,6 +779,7 @@ Shape: `CONTACT(params)`
 | `email` | `email` | string |  |  |
 | `address` | `address` | string |  |  |
 | `hours` | `hours` | string |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 CONTACT
@@ -757,6 +797,7 @@ Shape: `BANNER(params) { text body }`
 |---|---|---|---|---|
 | `tone` | `tone` | enum brand\|dark\|light\|warn |  | "brand" |
 | `align` | `align` | enum start\|center\|end |  | "start" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 BANNER(align: start) {

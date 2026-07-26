@@ -62,7 +62,7 @@ function cssUrl(value) {
     .replace(/[\\'"()<>]/g, (c) => '\\' + c.charCodeAt(0).toString(16) + ' ');
 }
 
-const ANIMATE_VALUES = new Set(['fade', 'rise']);
+const ANIMATE_VALUES = new Set(['fade', 'rise', 'zoom']);
 
 /** Neutralize executable URL schemes on any clickable link (public render). */
 function safeHref(url) {
@@ -113,7 +113,11 @@ function anchorId(block) {
 }
 
 function renderBlock(block, direction = 'rtl') {
-  const extraClass = block.data?.className ? ` ${escapeHtml(block.data.className)}` : '';
+  // animate is universal (v1.97): it rides the same extraClass slot as
+  // className, so every case that interpolates ${extra}/${extraClass}
+  // animates. heading/text keep their own class lists and read it there.
+  const animClass = ANIMATE_VALUES.has(block.data?.animate) ? ` anim-${block.data.animate}` : '';
+  const extraClass = (block.data?.className ? ` ${escapeHtml(block.data.className)}` : '') + animClass;
   const anchor = anchorId(block);
   const extraId = anchor ? ` id="${escapeHtml(anchor)}"` : '';
   const style = styleAttr(block.data);

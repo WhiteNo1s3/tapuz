@@ -1252,6 +1252,11 @@ const UNIVERSAL_PARAMS = [
   {
     name: 'id', bentmlParam: 'id', labelHe: 'מזהה (id)',
     type: 'string', hint: 'לעוגנים ולקישורים פנימיים (#מזהה)'
+  },
+  {
+    name: 'animate', bentmlParam: 'animate', labelHe: 'אנימציית כניסה',
+    type: 'enum', enum: ['none', 'fade', 'rise', 'zoom'], default: 'none',
+    hint: 'כל מודול יכול להיכנס באנימציה — fade / rise / zoom'
   }
 ];
 
@@ -1311,6 +1316,23 @@ function defaultDataFor(type) {
     }
   }
   return data;
+}
+
+// v1.97: entrance animation is UNIVERSAL — the language accepts animate= on
+// every module (grok's game wrote it on anything), so the builder offers the
+// select on every block. Injected here rather than thirty hand-edits; the
+// per-def copies heading/text used to carry are replaced by this one, which
+// keeps a single source of truth (and adds zoom everywhere at once).
+const ANIMATE_PARAM = {
+  name: 'animate', labelHe: 'אנימציית כניסה', type: 'enum',
+  enum: ['none', 'fade', 'rise', 'zoom'], default: 'none', omitDefault: true,
+  hint: 'fade = הופעה הדרגתית · rise = עולה בגלילה · zoom = מתקרב'
+};
+for (const def of BLOCK_REGISTRY) {
+  if (!Array.isArray(def.params)) def.params = [];
+  const i = def.params.findIndex((p) => p && p.name === 'animate');
+  if (i >= 0) def.params[i] = ANIMATE_PARAM;
+  else def.params.push(ANIMATE_PARAM);
 }
 
 module.exports = {
