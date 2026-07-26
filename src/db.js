@@ -437,6 +437,10 @@ function initializeCrm() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_tasks_contact ON crm_tasks(contact_id, status)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_tasks_due ON crm_tasks(status, due_at)');
+  // v2.04 — last day we emailed the *contact* a reminder for this task (not the owner).
+  if (!hasColumn('crm_tasks', 'customer_reminded_on')) {
+    db.exec(`ALTER TABLE crm_tasks ADD COLUMN customer_reminded_on TEXT`);
+  }
 
   // Email sequences / drip (v2.03) — HubSpot-class multi-step follow-up.
   // Consent-gated, SMTP-backed, stoppable; never invents a second mail stack.

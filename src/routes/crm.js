@@ -582,25 +582,37 @@ router.get('/admin/crm/tasks', requireAdmin, requireCrm('crm-tasks', 'משימו
     <div class="card" id="reminders">
       <div class="card-head">✉️ תזכורות במייל (SMTP)</div>
       <p class="lead" style="font-size:.92rem">
-        פעם ביום — סיכום משימות <strong>באיחור</strong> ו<strong>להיום</strong> לכתובת ההתראות.
-        אותו שרת מייל של קמפיינים והתראות פניות.
+        <strong>אליכם</strong> — סיכום משימות באיחור / להיום.<br>
+        <strong>ללקוחות</strong> — תזכורת על פגישה / מעקב / שיחה במועד (למייל שלהם).
       </p>
       <p class="muted" style="font-size:.85rem">
         SMTP: ${smtp.smtpReady ? 'מוכן ✓' : 'לא מוכן — הגדירו ב־<a href="/admin/integrations">אינטגרציות</a>'}
-        · ממתינות: ${rem.pendingOverdue} באיחור, ${rem.pendingToday} להיום
-        ${rem.lastSentDay ? ' · נשלח לאחרונה: ' + esc(rem.lastSentDay) : ''}
+        · לצוות: ${rem.pendingOverdue} באיחור, ${rem.pendingToday} להיום
+        ${rem.lastSentDay ? ' · צוות נשלח: ' + esc(rem.lastSentDay) : ''}
+        · ללקוחות ממתינים: ${rem.customerPending || 0}
+        ${rem.lastCustomerDay ? ' · לקוחות נשלח: ' + esc(rem.lastCustomerDay) : ''}
       </p>
       <form method="POST" action="/admin/crm/tasks/reminders" class="stack">
         <label style="display:flex;gap:8px;align-items:center">
           <input type="checkbox" name="enabled" value="1" ${rem.enabled ? 'checked' : ''}>
-          שלח תזכורת יומית אוטומטית
+          תזכורת יומית <strong>לצוות</strong> (סיכום משימות)
         </label>
-        <label>נמען (ריק = כתובת ההתראות מ־notify)
+        <label>נמען צוות (ריק = כתובת ההתראות מ־notify)
           <input name="to" class="input" dir="ltr" value="${esc(rem.to)}"
                  placeholder="${esc(smtp.to || 'you@example.com')}"></label>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:8px 0">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="customerEnabled" value="1" ${rem.customerEnabled ? 'checked' : ''}>
+          תזכורת <strong>ללקוח</strong> על משימות במועד (פגישה / מעקב / שיחה)
+        </label>
+        <p class="muted" style="font-size:.8rem;margin:0">
+          נשלח למייל של איש הקשר, פעם אחת ליום־מועד. לא דורש הסכמת דיוור שיווקי —
+          זו תזכורת שירות על משהו שאתם תיזמנתם. לא נשלח לכרטיסים זמניים.
+        </p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn secondary sm" type="submit" name="action" value="save">שמור הגדרות</button>
-          <button class="btn sm" type="submit" name="action" value="send">שלח עכשיו</button>
+          <button class="btn sm" type="submit" name="action" value="send">שלח לצוות עכשיו</button>
+          <button class="btn sm" type="submit" name="action" value="send-customers">שלח ללקוחות עכשיו</button>
         </div>
       </form>
     </div>`);
@@ -611,13 +623,18 @@ router.post('/admin/crm/tasks/reminders', requireAdmin, async (req, res) => {
   const cfg = config.loadConfig();
   const b = req.body || {};
   const action = String(b.action || 'save');
+  const prevTasks = (cfg.crm && cfg.crm.tasks) || {};
   cfg.crm = Object.assign({}, cfg.crm, {
-    tasks: {
+    tasks: Object.assign({}, prevTasks, {
       reminders: {
         enabled: !!b.enabled,
         to: String(b.to || '').trim().slice(0, 300)
+      },
+      customerReminders: {
+        enabled: !!b.customerEnabled,
+        kinds: ['meeting', 'followup', 'call']
       }
-    }
+    })
   });
   config.saveConfig(cfg);
   if (action === 'send') {
@@ -628,6 +645,18 @@ router.post('/admin/crm/tasks/reminders', requireAdmin, async (req, res) => {
       });
       if (r.ok) return res.redirect('/admin/crm/tasks?ok=reminded');
       return res.redirect('/admin/crm/tasks?err=' + encodeURIComponent(r.error || 'שליחה נכשלה'));
+    } catch (e) {
+      return res.redirect('/admin/crm/tasks?err=' + encodeURIComponent(e.message || 'שגיאה'));
+    }
+  }
+  if (action === 'send-customers') {
+    try {
+      const r = await require('../crm').taskReminders.sendCustomerTaskReminders({
+        force: true,
+        ignoreEnabled: true
+      });
+      if (r.ok) return res.redirect('/admin/crm/tasks?ok=reminded');
+      return res.redirect('/admin/crm/tasks?err=' + encodeURIComponent(r.error || 'שליחה ללקוחות נכשלה'));
     } catch (e) {
       return res.redirect('/admin/crm/tasks?err=' + encodeURIComponent(e.message || 'שגיאה'));
     }

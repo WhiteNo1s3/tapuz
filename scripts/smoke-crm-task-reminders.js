@@ -126,8 +126,87 @@ check('empty digest is null',
   const st = reminders.getReminderStatus();
   check('status reports pending counts', st.pendingOverdue >= 1 && st.pendingToday >= 1);
 
+  // ── customer-facing reminders (v2.04) ──
+  config.saveConfig(
+    Object.assign(config.loadConfig(), {
+      crm: {
+        enabled: true,
+        tasks: {
+          reminders: { enabled: false },
+          customerReminders: { enabled: true, kinds: ['meeting', 'followup', 'call'] }
+        }
+      },
+      title: 'סטודיו בדיקה'
+    })
+  );
+
+  const customer = contacts.upsertContact({
+    email: 'customer@test.com',
+    name: 'נועה',
+    status: 'customer',
+    consent: false // service reminder must not require marketing consent
+  }).contact;
+  tasks.createTask({
+    contactId: customer.id,
+    title: 'פגישת ייעוץ',
+    kind: 'meeting',
+    dueAt: today,
+    notes: 'בזום'
+  });
+  tasks.createTask({
+    contactId: customer.id,
+    title: 'משימה פנימית',
+    kind: 'other',
+    dueAt: today
+  });
+
+  const cand = reminders.listCustomerReminderCandidates({
+    kinds: ['meeting', 'followup', 'call'],
+    today
+  });
+  check('customer candidates include meeting', cand.some((t) => t.title === 'פגישת ייעוץ'));
+  check('customer candidates exclude kind=other', !cand.some((t) => t.title === 'משימה פנימית'));
+
+  const mail = reminders.buildCustomerReminderMail({
+    task: { title: 'פגישת ייעוץ', kind: 'meeting', due_at: today, notes: 'בזום' },
+    contact: { email: 'customer@test.com', name: 'נועה' },
+    siteTitle: 'סטודיו בדיקה',
+    baseUrl: 'https://x.test'
+  });
+  check('customer mail built', !!mail && mail.to === 'customer@test.com');
+  check('customer mail names person', /נועה/.test(mail.text));
+  check('customer mail has title', /פגישת ייעוץ/.test(mail.subject));
+
+  sent = [];
+  const cr = await reminders.sendCustomerTaskReminders({
+    force: true,
+    ignoreEnabled: true,
+    sender: async (msg) => {
+      sent.push(msg);
+      return { ok: true };
+    }
+  });
+  check('customer send ok', cr.ok && cr.sent >= 1);
+  check('customer mail addressed to contact', sent.some((m) => m.to === 'customer@test.com'));
+  const taskRow = require('../src/db')
+    .db.prepare("SELECT customer_reminded_on FROM crm_tasks WHERE title = 'פגישת ייעוץ'")
+    .get();
+  check('customer_reminded_on stamped', taskRow && taskRow.customer_reminded_on === today);
+
+  sent = [];
+  const cr2 = await reminders.sendCustomerTaskReminders({
+    force: true,
+    ignoreEnabled: true,
+    sender: async (msg) => {
+      sent.push(msg);
+      return { ok: true };
+    }
+  });
+  check('second customer pass does not re-spam same day', cr2.sent === 0 && sent.length === 0);
+
   const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'crm.js'), 'utf8');
   check('reminders form on tasks page', /tasks\/reminders/.test(routes));
+  check('customer send action in admin', /send-customers/.test(routes));
   check('runRetention schedules maybeSendDaily',
     /maybeSendDaily/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'crm', 'index.js'), 'utf8')));
 

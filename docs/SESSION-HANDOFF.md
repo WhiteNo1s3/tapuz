@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v2.03 email sequences / drip).
+> **Last updated:** 2026-07-26 (v2.04 customer task reminders).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v2.03 email sequences** on main |
-| Recent line | v2.02 kanban + digests → **v2.03 drip sequences** |
-| Package version field | **`2.03.0-alpha`** |
+| Tip when handoff written | see `git log -1` — **v2.04 customer task reminders** on main |
+| Recent line | v2.03 sequences → **v2.04 customer task reminders** |
+| Package version field | **`2.04.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -244,6 +244,15 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | Rules | consent + email; no provisional/garbage; unsub stops drip |
 | Schedule | `runRetention` → `maybeProcessDaily` |
 | Smoke | `npm run test:crm-sequences` |
+
+## 9g. Customer task reminders (v2.04)
+
+| Piece | Path |
+|-------|------|
+| Config | `crm.tasks.customerReminders.enabled` |
+| Send | `sendCustomerTaskReminders` in `task-reminders.js` |
+| Dedupe | `crm_tasks.customer_reminded_on` |
+| Admin | משימות → תזכורת ללקוח + שלח ללקוחות עכשיו |
 
 ## 10. Open / next (when resuming)
 
