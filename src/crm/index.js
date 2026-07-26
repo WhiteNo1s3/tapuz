@@ -35,6 +35,7 @@ const cards = require('./cards');
 const sites = require('./sites');
 const identityClaims = require('./identity-claims');
 const tasks = require('./tasks');
+const taskReminders = require('./task-reminders');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -237,6 +238,8 @@ const runRetention = safe('runRetention', () => {
   }
   // Progressive cards: quiet provisional → garbage → hard erase (not forever).
   const cardsLife = cards.runCardLifecycle();
+  // Task digest email (v2.01) — best-effort, same daily cadence.
+  try { taskReminders.maybeSendDaily(); } catch (e) { /* never block retention */ }
   return { pruned, days: days || 0, cards: cardsLife };
 });
 
@@ -277,5 +280,6 @@ module.exports = {
   sites,
   identityClaims,
   tasks,
+  taskReminders,
   Customer
 };

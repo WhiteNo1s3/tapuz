@@ -173,6 +173,8 @@ function main() {
     ['crm-interests', 'scripts/smoke-crm-interests.js'],
     ['pixel-embed', 'scripts/smoke-pixel-embed.js'],
     ['crm-tasks', 'scripts/smoke-crm-tasks.js'],
+    ['crm-board', 'scripts/smoke-crm-board.js'],
+    ['crm-task-reminders', 'scripts/smoke-crm-task-reminders.js'],
     ['crm-capture', 'scripts/smoke-crm-capture.js'],
     ['crm-cs', 'scripts/smoke-crm-cs.js'],
     ['whatsapp', 'scripts/smoke-whatsapp.js'],

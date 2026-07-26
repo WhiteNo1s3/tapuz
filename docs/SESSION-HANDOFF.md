@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v2.00 CRM tasks — sales next-action board).
+> **Last updated:** 2026-07-26 (v2.02 kanban + task email reminders; remote 2.01 was pixel wrappers).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v2.00 CRM tasks** on main |
-| Recent line | v1.98 interests → v1.99 pixel claims → **v2.00 sales tasks** |
-| Package version field | **`2.00.0-alpha`** |
+| Tip when handoff written | see `git log -1` — **v2.02 kanban + reminders** on main |
+| Recent line | v2.00 tasks → v2.01 pixel wrappers (P4) → **v2.02 status kanban + SMTP task digests** |
+| Package version field | **`2.02.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -223,6 +223,17 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | Schema | `crm_tasks` (CASCADE on contact) |
 | Admin | `/admin/crm/tasks` + card quick-add |
 | Smoke | `npm run test:crm-tasks` |
+
+## 9e. Kanban + task reminders (v2.02)
+
+| Piece | Path |
+|-------|------|
+| Board | `/admin/crm/board` — drag or select status move |
+| Reminders | `src/crm/task-reminders.js` + tasks page form |
+| Config | `crm.tasks.reminders.{ enabled, to }` |
+| SMTP | same `notify.js` as campaigns / lead alerts |
+| Schedule | daily with `runRetention` (dedupe by day) |
+| Smokes | `test:crm-board`, `test:crm-task-reminders` |
 
 ## 10. Open / next (when resuming)
 

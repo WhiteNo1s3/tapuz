@@ -325,6 +325,22 @@ function statusCounts() {
   return out;
 }
 
+/**
+ * Contacts for one pipeline column (kanban, v2.01).
+ * Caps per column so a fat "provisional" pile cannot drown the board.
+ */
+function listByStatus(status, { limit = 80 } = {}) {
+  const st = STATUSES.includes(status) ? status : '';
+  if (!st) return [];
+  const n = Math.min(Math.max(parseInt(limit, 10) || 80, 1), 200);
+  return db
+    .prepare(
+      `SELECT * FROM crm_contacts WHERE status = ?
+       ORDER BY updated_at DESC LIMIT ?`
+    )
+    .all(st, n);
+}
+
 /** Bump updated_at — "last interaction" for progressive cards lifecycle. */
 function touchActivity(id) {
   const n = Number(id);
@@ -350,5 +366,6 @@ module.exports = {
   listContacts,
   countContacts,
   statusCounts,
+  listByStatus,
   touchActivity
 };

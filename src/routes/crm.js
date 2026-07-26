@@ -87,19 +87,181 @@ router.post('/admin/crm/settings', requireAdmin, (req, res) => {
   res.redirect('/admin/crm');
 });
 
+// ─── status kanban (v2.01, BEFORE /:id) ──────────────────────────────
+router.get('/admin/crm/board', requireAdmin, requireCrm('crm-board', 'לוח סטטוסים'), (req, res) => {
+  const { contacts, tasks: taskMod } = require('../crm');
+  // Working columns — garbage is a trash queue, not a sales stage; show at end.
+  const columns = ['provisional', 'lead', 'active', 'customer', 'archived', 'garbage'];
+  const openTaskCounts = {};
+  try {
+    const { db } = require('../db');
+    for (const row of db
+      .prepare(
+        `SELECT contact_id AS id, COUNT(*) AS n FROM crm_tasks
+         WHERE status = 'open' GROUP BY contact_id`
+      )
+      .all()) {
+      openTaskCounts[row.id] = row.n;
+    }
+  } catch (e) { /* */ }
+
+  const colsHtml = columns
+    .map((st) => {
+      const rows = contacts.listByStatus(st, { limit: 60 });
+      const count = contacts.statusCounts()[st] || 0;
+      const cards = rows.length
+        ? rows
+            .map((row) => {
+              const name = row.name || row.email || row.phone || ('#' + row.id);
+              const sub = [row.email, row.phone].filter(Boolean).join(' · ');
+              const tc = openTaskCounts[row.id] || 0;
+              const moves = columns
+                .filter((s) => s !== st)
+                .map(
+                  (s) =>
+                    `<option value="${s}">→ ${esc(contacts.statusLabel(s))}</option>`
+                )
+                .join('');
+              return `
+              <div class="kanban-card" draggable="true" data-id="${row.id}" data-status="${st}">
+                <a href="/admin/crm/${row.id}" style="text-decoration:none;color:inherit">
+                  <strong style="display:block;font-size:.92rem">${esc(name)}</strong>
+                  ${sub ? `<div class="muted" style="font-size:.75rem;margin-top:2px">${esc(sub)}</div>` : ''}
+                </a>
+                ${tc ? `<div class="muted" style="font-size:.72rem;margin-top:4px">✅ ${tc} משימות</div>` : ''}
+                <form method="POST" action="/admin/crm/board/move" style="margin-top:8px">
+                  <input type="hidden" name="contactId" value="${row.id}">
+                  <select name="status" class="input" style="font-size:.78rem;padding:4px 6px;width:100%"
+                          onchange="this.form.submit()">
+                    <option value="">העבר…</option>
+                    ${moves}
+                  </select>
+                </form>
+              </div>`;
+            })
+            .join('')
+        : `<div class="muted" style="font-size:.8rem;padding:8px 4px">ריק</div>`;
+      const more = count > rows.length
+        ? `<div class="muted" style="font-size:.75rem;margin-top:6px">+${count - rows.length} נוספים ברשימה</div>`
+        : '';
+      return `
+        <div class="kanban-col" data-status="${st}">
+          <div class="kanban-col-head">
+            <span>${esc(contacts.statusLabel(st))}</span>
+            <span class="pill" style="font-size:.72rem">${count}</span>
+          </div>
+          <div class="kanban-col-body" data-drop-status="${st}">
+            ${cards}${more}
+          </div>
+        </div>`;
+    })
+    .join('');
+
+  page(res, 'crm-board', 'לוח סטטוסים', `
+    <style>
+      .kanban-wrap { display:flex; gap:10px; overflow-x:auto; padding-bottom:12px; align-items:flex-start; }
+      .kanban-col { flex:0 0 220px; background:var(--ws-panel,#f8fafc); border:1px solid var(--ws-border,#e2e8f0);
+                    border-radius:12px; min-height:280px; display:flex; flex-direction:column; }
+      .kanban-col-head { display:flex; justify-content:space-between; align-items:center; gap:8px;
+                         padding:10px 12px; font-weight:700; font-size:.9rem; border-bottom:1px solid var(--ws-border,#e2e8f0); }
+      .kanban-col-body { padding:8px; display:flex; flex-direction:column; gap:8px; flex:1; min-height:120px; }
+      .kanban-col-body.drag-over { outline:2px dashed #ea580c; outline-offset:-2px; background:#fff7ed; }
+      .kanban-card { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px;
+                     box-shadow:0 1px 2px rgba(15,23,42,.04); cursor:grab; }
+      .kanban-card:active { cursor:grabbing; }
+      .kanban-card.dragging { opacity:.5; }
+    </style>
+    <p class="lead" style="margin-top:0">
+      צינור מכירות ויזואלי — גררו כרטיס בין עמודות, או בחרו סטטוס מהרשימה.
+      אותו אדם, אותו כרטיס; רק השלב משתנה.
+    </p>
+    <div class="kanban-wrap">${colsHtml}</div>
+    <p class="muted" style="font-size:.82rem">
+      <a href="/admin/crm">רשימה מלאה</a> · <a href="/admin/crm/tasks">משימות</a>
+    </p>
+    <script>
+    (function () {
+      var dragId = null;
+      document.querySelectorAll('.kanban-card').forEach(function (card) {
+        card.addEventListener('dragstart', function (e) {
+          dragId = card.getAttribute('data-id');
+          card.classList.add('dragging');
+          e.dataTransfer.setData('text/plain', dragId);
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        card.addEventListener('dragend', function () {
+          card.classList.remove('dragging');
+          dragId = null;
+          document.querySelectorAll('.kanban-col-body').forEach(function (b) {
+            b.classList.remove('drag-over');
+          });
+        });
+      });
+      document.querySelectorAll('.kanban-col-body').forEach(function (body) {
+        body.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          body.classList.add('drag-over');
+        });
+        body.addEventListener('dragleave', function () {
+          body.classList.remove('drag-over');
+        });
+        body.addEventListener('drop', function (e) {
+          e.preventDefault();
+          body.classList.remove('drag-over');
+          var id = e.dataTransfer.getData('text/plain') || dragId;
+          var status = body.getAttribute('data-drop-status');
+          if (!id || !status) return;
+          var f = document.createElement('form');
+          f.method = 'POST';
+          f.action = '/admin/crm/board/move';
+          f.innerHTML = '<input name="contactId" value="' + id + '">' +
+            '<input name="status" value="' + status + '">';
+          document.body.appendChild(f);
+          f.submit();
+        });
+      });
+    })();
+    </script>`);
+});
+
+router.post('/admin/crm/board/move', requireAdmin, (req, res) => {
+  const { contacts } = require('../crm');
+  const b = req.body || {};
+  const id = Number(b.contactId);
+  const status = String(b.status || '');
+  if (id && contacts.STATUSES.includes(status)) {
+    contacts.updateContact(id, { status });
+    try {
+      require('../crm').events.record({
+        contactId: id,
+        type: 'status',
+        title: 'הועבר ל־' + contacts.statusLabel(status)
+      });
+    } catch (e) { /* */ }
+  }
+  res.redirect('/admin/crm/board');
+});
+
 // ─── sales tasks (v2.00, BEFORE /:id) ────────────────────────────────
 router.get('/admin/crm/tasks', requireAdmin, requireCrm('crm-tasks', 'משימות'), (req, res) => {
-  const { tasks, contacts } = require('../crm');
+  const { tasks, contacts, taskReminders } = require('../crm');
   const counts = tasks.counts();
   const due = tasks.listDue();
   const upcoming = tasks.listUpcoming({ days: 7 });
   const undated = tasks.listUndated();
+  const rem = taskReminders.getReminderStatus();
+  const smtp = require('../notify').getSettings();
   const flash = String((req.query || {}).ok || '');
+  const flashErr = String((req.query || {}).err || '');
   const flashMsg = flash === 'done'
     ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ המשימה סומנה כבוצעה.</div>'
     : flash === 'created'
       ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ משימה חדשה נפתחה.</div>'
-      : '';
+      : flash === 'reminded'
+        ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ תזכורת נשלחה (או שאין משימות למועד).</div>'
+        : flashErr
+          ? `<div class="card" style="border-color:#fecaca;background:#fef2f2">⚠ ${esc(flashErr)}</div>`
+          : '';
 
   function taskRow(t, { showDue } = {}) {
     const name = t.contact_name || t.contact_email || t.contact_phone || ('#' + t.contact_id);
@@ -204,8 +366,64 @@ router.get('/admin/crm/tasks', requireAdmin, requireCrm('crm-tasks', 'משימו
         <label>הערות<textarea name="notes" class="input" rows="2" placeholder="אופציונלי"></textarea></label>
         <button class="btn" type="submit">פתח משימה</button>
       </form>
-      <p class="muted" style="font-size:.8rem">אפשר גם מתוך כרטיס איש קשר — שם זה מהיר יותר.</p>
+      <p class="muted" style="font-size:.8rem">אפשר גם מתוך כרטיס איש קשר — שם זה מהיר יותר.
+        · <a href="/admin/crm/board">לוח סטטוסים</a></p>
+    </div>
+
+    <div class="card" id="reminders">
+      <div class="card-head">✉️ תזכורות במייל (SMTP)</div>
+      <p class="lead" style="font-size:.92rem">
+        פעם ביום — סיכום משימות <strong>באיחור</strong> ו<strong>להיום</strong> לכתובת ההתראות.
+        אותו שרת מייל של קמפיינים והתראות פניות.
+      </p>
+      <p class="muted" style="font-size:.85rem">
+        SMTP: ${smtp.smtpReady ? 'מוכן ✓' : 'לא מוכן — הגדירו ב־<a href="/admin/integrations">אינטגרציות</a>'}
+        · ממתינות: ${rem.pendingOverdue} באיחור, ${rem.pendingToday} להיום
+        ${rem.lastSentDay ? ' · נשלח לאחרונה: ' + esc(rem.lastSentDay) : ''}
+      </p>
+      <form method="POST" action="/admin/crm/tasks/reminders" class="stack">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="enabled" value="1" ${rem.enabled ? 'checked' : ''}>
+          שלח תזכורת יומית אוטומטית
+        </label>
+        <label>נמען (ריק = כתובת ההתראות מ־notify)
+          <input name="to" class="input" dir="ltr" value="${esc(rem.to)}"
+                 placeholder="${esc(smtp.to || 'you@example.com')}"></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn secondary sm" type="submit" name="action" value="save">שמור הגדרות</button>
+          <button class="btn sm" type="submit" name="action" value="send">שלח עכשיו</button>
+        </div>
+      </form>
     </div>`);
+});
+
+router.post('/admin/crm/tasks/reminders', requireAdmin, async (req, res) => {
+  const config = require('../config');
+  const cfg = config.loadConfig();
+  const b = req.body || {};
+  const action = String(b.action || 'save');
+  cfg.crm = Object.assign({}, cfg.crm, {
+    tasks: {
+      reminders: {
+        enabled: !!b.enabled,
+        to: String(b.to || '').trim().slice(0, 300)
+      }
+    }
+  });
+  config.saveConfig(cfg);
+  if (action === 'send') {
+    try {
+      const r = await require('../crm').taskReminders.sendTaskReminders({
+        force: true,
+        ignoreEnabled: true
+      });
+      if (r.ok) return res.redirect('/admin/crm/tasks?ok=reminded');
+      return res.redirect('/admin/crm/tasks?err=' + encodeURIComponent(r.error || 'שליחה נכשלה'));
+    } catch (e) {
+      return res.redirect('/admin/crm/tasks?err=' + encodeURIComponent(e.message || 'שגיאה'));
+    }
+  }
+  res.redirect('/admin/crm/tasks#reminders');
 });
 
 router.post('/admin/crm/tasks', requireAdmin, (req, res) => {
