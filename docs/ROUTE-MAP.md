@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**207 routes across 36 files.**
+**211 routes across 36 files.**
 
 ## By file (what each module owns)
 
@@ -108,9 +108,13 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /crm/cs/v1/session`
 - `POST /crm/cs/v1/message`
 
-### `src/routes/crm.js` — 43 routes
+### `src/routes/crm.js` — 47 routes
 
 - `POST /admin/crm/settings`
+- `GET /admin/crm/tasks`
+- `POST /admin/crm/tasks`
+- `POST /admin/crm/tasks/:id/done`
+- `POST /admin/crm/tasks/:id/cancel`
 - `GET /admin/crm/sites`
 - `POST /admin/crm/sites/settings`
 - `POST /admin/crm/sites`
@@ -456,6 +460,10 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/sites/:slug/delete` | POST | `src/routes/crm.js` |
 | `/admin/crm/sites/:slug/update` | POST | `src/routes/crm.js` |
 | `/admin/crm/sites/settings` | POST | `src/routes/crm.js` |
+| `/admin/crm/tasks` | GET | `src/routes/crm.js` |
+| `/admin/crm/tasks` | POST | `src/routes/crm.js` |
+| `/admin/crm/tasks/:id/cancel` | POST | `src/routes/crm.js` |
+| `/admin/crm/tasks/:id/done` | POST | `src/routes/crm.js` |
 | `/admin/crm/whatsapp` | GET | `src/routes/crm.js` |
 | `/admin/crm/whatsapp/optin` | POST | `src/routes/crm.js` |
 | `/admin/crm/whatsapp/send` | POST | `src/routes/crm.js` |

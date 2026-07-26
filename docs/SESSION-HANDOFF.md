@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v1.99 pixel embed — claims inbox, site registry, no auto-upsert).
+> **Last updated:** 2026-07-26 (v2.00 CRM tasks — sales next-action board).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v1.99 pixel embed / claims** on main |
-| Recent line | v1.96 sqlite-forever → v1.97 animate → v1.98 interests → **v1.99 pixel embed (claims, not upsert)** |
-| Package version field | **`1.99.0-alpha`** |
+| Tip when handoff written | see `git log -1` — **v2.00 CRM tasks** on main |
+| Recent line | v1.98 interests → v1.99 pixel claims → **v2.00 sales tasks** |
+| Package version field | **`2.00.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -214,6 +214,15 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | Admin | `/admin/crm/sites`, `/admin/crm/claims` |
 | Smoke | `npm run test:pixel-embed` |
 | Spec | `docs/PIXEL-EMBED-INTEGRATION.md` |
+
+## 9d. Sales tasks (v2.00) — vs HubSpot "next action"
+
+| Piece | Path |
+|-------|------|
+| Core | `src/crm/tasks.js` — create / due board / complete / cancel |
+| Schema | `crm_tasks` (CASCADE on contact) |
+| Admin | `/admin/crm/tasks` + card quick-add |
+| Smoke | `npm run test:crm-tasks` |
 
 ## 10. Open / next (when resuming)
 

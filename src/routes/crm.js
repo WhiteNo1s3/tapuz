@@ -87,6 +87,155 @@ router.post('/admin/crm/settings', requireAdmin, (req, res) => {
   res.redirect('/admin/crm');
 });
 
+// ─── sales tasks (v2.00, BEFORE /:id) ────────────────────────────────
+router.get('/admin/crm/tasks', requireAdmin, requireCrm('crm-tasks', 'משימות'), (req, res) => {
+  const { tasks, contacts } = require('../crm');
+  const counts = tasks.counts();
+  const due = tasks.listDue();
+  const upcoming = tasks.listUpcoming({ days: 7 });
+  const undated = tasks.listUndated();
+  const flash = String((req.query || {}).ok || '');
+  const flashMsg = flash === 'done'
+    ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ המשימה סומנה כבוצעה.</div>'
+    : flash === 'created'
+      ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ משימה חדשה נפתחה.</div>'
+      : '';
+
+  function taskRow(t, { showDue } = {}) {
+    const name = t.contact_name || t.contact_email || t.contact_phone || ('#' + t.contact_id);
+    const overdue = t.due_at && t.due_at < counts.today;
+    return `
+      <div class="rec" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <div style="flex:1;min-width:180px">
+          <strong>${esc(t.title)}</strong>
+          <div class="muted" style="font-size:.82rem">
+            <span class="pill" style="font-size:.75rem">${esc(tasks.kindLabel(t.kind))}</span>
+            <a href="/admin/crm/${t.contact_id}">${esc(name)}</a>
+            ${showDue && t.due_at
+              ? ` · <span style="color:${overdue ? '#b91c1c' : 'inherit'}">${esc(t.due_at)}${overdue ? ' — באיחור' : ''}</span>`
+              : ''}
+          </div>
+        </div>
+        <form method="POST" action="/admin/crm/tasks/${t.id}/done">
+          <button class="btn sm" type="submit">בוצע ✓</button>
+        </form>
+        <form method="POST" action="/admin/crm/tasks/${t.id}/cancel">
+          <button class="btn secondary sm" type="submit">בטל</button>
+        </form>
+      </div>`;
+  }
+
+  const dueBody = due.length
+    ? due.map((t) => taskRow(t, { showDue: true })).join('')
+    : '<div class="empty-state">אין משימות למועד הזה — יום טוב לעבודה יזומה.</div>';
+  const upBody = upcoming.length
+    ? upcoming.map((t) => taskRow(t, { showDue: true })).join('')
+    : '<div class="muted" style="font-size:.88rem;padding:8px 0">אין משימות בשבוע הקרוב.</div>';
+  const undatedBody = undated.length
+    ? undated.map((t) => taskRow(t, { showDue: false })).join('')
+    : '';
+
+  // Quick-add: pick from recent contacts
+  const recent = contacts.listContacts({ limit: 40 }).filter((c) =>
+    c.status !== 'garbage' && c.status !== 'provisional'
+  );
+
+  page(res, 'crm-tasks', 'משימות', `
+    ${flashMsg}
+    <p class="lead" style="margin-top:0">
+      מה עושים <strong>היום</strong> עם האנשים שלכם — שיחה, מייל, מעקב.
+      לא מעקב צללים: משימה שאתם פותחים על אדם שכבר בכרטיס.
+    </p>
+    <div class="stat-row">
+      <a class="stat-tile" href="#due">
+        <div class="stat-num" style="${counts.overdue ? 'color:#b91c1c' : ''}">${counts.overdue + counts.dueToday}</div>
+        <div class="stat-label">ליום זה / באיחור</div>
+      </a>
+      <a class="stat-tile" href="#upcoming">
+        <div class="stat-num">${upcoming.length}</div>
+        <div class="stat-label">השבוע</div>
+      </a>
+      <a class="stat-tile" href="#undated">
+        <div class="stat-num">${counts.undated}</div>
+        <div class="stat-label">בלי תאריך</div>
+      </a>
+      <a class="stat-tile" href="#new">
+        <div class="stat-num">${counts.open}</div>
+        <div class="stat-label">פתוחות סה״כ</div>
+      </a>
+    </div>
+
+    <div class="card" id="due">
+      <div class="card-head">🔥 לביצוע עכשיו · ${counts.overdue} באיחור · ${counts.dueToday} להיום</div>
+      ${dueBody}
+    </div>
+
+    <div class="card" id="upcoming">
+      <div class="card-head">📅 השבוע הקרוב</div>
+      ${upBody}
+    </div>
+
+    ${undatedBody ? `
+    <div class="card" id="undated">
+      <div class="card-head">📋 בלי תאריך יעד</div>
+      ${undatedBody}
+    </div>` : ''}
+
+    <div class="card" id="new">
+      <div class="card-head">משימה חדשה</div>
+      <form method="POST" action="/admin/crm/tasks" class="stack">
+        <label>איש קשר
+          <select name="contactId" class="input" required>
+            <option value="">— בחרו —</option>
+            ${recent.map((c) => {
+              const label = [c.name, c.email, c.phone].filter(Boolean).join(' · ') || ('#' + c.id);
+              return `<option value="${c.id}">${esc(label)}</option>`;
+            }).join('')}
+          </select>
+        </label>
+        <label>מה לעשות<input name="title" class="input" required placeholder="להתקשר בעניין החבילה"></label>
+        <label>סוג
+          <select name="kind" class="input">
+            ${tasks.KINDS.map((k) =>
+              `<option value="${k}">${esc(tasks.kindLabel(k))}</option>`).join('')}
+          </select>
+        </label>
+        <label>תאריך יעד<input name="dueAt" type="date" class="input" value="${esc(counts.today)}"></label>
+        <label>הערות<textarea name="notes" class="input" rows="2" placeholder="אופציונלי"></textarea></label>
+        <button class="btn" type="submit">פתח משימה</button>
+      </form>
+      <p class="muted" style="font-size:.8rem">אפשר גם מתוך כרטיס איש קשר — שם זה מהיר יותר.</p>
+    </div>`);
+});
+
+router.post('/admin/crm/tasks', requireAdmin, (req, res) => {
+  const { tasks } = require('../crm');
+  const b = req.body || {};
+  const r = tasks.createTask({
+    contactId: b.contactId,
+    title: b.title,
+    kind: b.kind,
+    dueAt: b.dueAt,
+    notes: b.notes
+  });
+  if (r.ok && b.returnTo) {
+    return res.redirect(String(b.returnTo));
+  }
+  res.redirect(r.ok ? '/admin/crm/tasks?ok=created' : '/admin/crm/tasks');
+});
+
+router.post('/admin/crm/tasks/:id/done', requireAdmin, (req, res) => {
+  require('../crm').tasks.completeTask(req.params.id);
+  const back = (req.body && req.body.returnTo) || '/admin/crm/tasks?ok=done';
+  res.redirect(String(back));
+});
+
+router.post('/admin/crm/tasks/:id/cancel', requireAdmin, (req, res) => {
+  require('../crm').tasks.cancelTask(req.params.id);
+  const back = (req.body && req.body.returnTo) || '/admin/crm/tasks';
+  res.redirect(String(back));
+});
+
 // ─── site registry + identity claims (v1.99, BEFORE /:id) ─────────────
 router.get('/admin/crm/sites', requireAdmin, requireCrm('crm-sites', 'אתרים (פיקסל)'), (req, res) => {
   const { sites } = require('../crm');
@@ -1519,10 +1668,12 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
 
 // ─── contacts: one person ────────────────────────────────────────────
 router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש קשר'), (req, res) => {
-  const { Customer, contacts } = require('../crm');
+  const { Customer, contacts, tasks } = require('../crm');
   const c = Customer.load(req.params.id);
   if (!c) return res.status(404).send(layout('<div class="container">איש הקשר לא נמצא</div>', 'לא נמצא', ACCENT));
   const d = c.datasheet();
+  const openTasks = tasks.listForContact(d.id, { includeDone: false });
+  const today = tasks.todayUTC();
 
   const timeline = d.timeline.length
     ? d.timeline.map((e) => `
@@ -1603,6 +1754,44 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
         <input name="interest" class="input" style="flex:1;min-width:140px" dir="auto"
                placeholder="הוסיפו תחום (למשל wedding-packages)" required>
         <button class="btn secondary sm" type="submit">הוסף תחום</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-head">✅ משימות · ${openTasks.length} פתוחות
+        <a class="btn secondary sm" href="/admin/crm/tasks" style="margin-inline-start:auto">לוח משימות</a>
+      </div>
+      ${openTasks.length
+        ? openTasks.map((t) => {
+            const overdue = t.due_at && t.due_at < today;
+            return `
+            <div class="rec" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+              <div style="flex:1">
+                <strong>${esc(t.title)}</strong>
+                <div class="muted" style="font-size:.8rem">
+                  ${esc(tasks.kindLabel(t.kind))}
+                  ${t.due_at ? ' · <span style="color:' + (overdue ? '#b91c1c' : 'inherit') + '">' + esc(t.due_at) + (overdue ? ' באיחור' : '') + '</span>' : ''}
+                </div>
+              </div>
+              <form method="POST" action="/admin/crm/tasks/${t.id}/done">
+                <input type="hidden" name="returnTo" value="/admin/crm/${d.id}">
+                <button class="btn sm" type="submit">בוצע</button>
+              </form>
+            </div>`;
+          }).join('')
+        : '<p class="muted" style="font-size:.88rem">אין משימות פתוחות על האדם הזה.</p>'}
+      <form method="POST" action="/admin/crm/tasks" class="stack" style="margin-top:12px;border-top:1px solid var(--ws-border,#e2e8f0);padding-top:12px">
+        <input type="hidden" name="contactId" value="${d.id}">
+        <input type="hidden" name="returnTo" value="/admin/crm/${d.id}">
+        <label>משימה חדשה<input name="title" class="input" required placeholder="להתקשר / לשלוח הצעה / …"></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select name="kind" class="input" style="width:auto">
+            ${tasks.KINDS.map((k) =>
+              `<option value="${k}">${esc(tasks.kindLabel(k))}</option>`).join('')}
+          </select>
+          <input name="dueAt" type="date" class="input" style="width:auto" value="${esc(today)}">
+          <button class="btn secondary sm" type="submit">הוסף משימה</button>
+        </div>
       </form>
     </div>
 

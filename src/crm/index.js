@@ -34,6 +34,7 @@ const cs = require('./cs');
 const cards = require('./cards');
 const sites = require('./sites');
 const identityClaims = require('./identity-claims');
+const tasks = require('./tasks');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -275,5 +276,6 @@ module.exports = {
   cards,
   sites,
   identityClaims,
+  tasks,
   Customer
 };

@@ -47,7 +47,10 @@ const PERSONAL_TABLES = [
   { table: 'crm_wa_messages', column: 'contact_id', label: 'whatsapp messages' },
   // v1.99 identity claims — contact_id set only after admin approval; pending
   // rows keyed by email/phone are wiped in eraseContact via eraseForSubject.
-  { table: 'crm_identity_claims', column: 'contact_id', label: 'identity claims' }
+  { table: 'crm_identity_claims', column: 'contact_id', label: 'identity claims' },
+  // v2.00 sales tasks — CASCADE on contact delete; listed so the drift guard
+  // never lets a personal table go untracked.
+  { table: 'crm_tasks', column: 'contact_id', label: 'sales tasks' }
 ];
 
 /** Phone-keyed WhatsApp tables — reached through the contact's phone. */

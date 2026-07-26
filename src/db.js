@@ -419,6 +419,25 @@ function initializeCrm() {
   }
   db.exec('CREATE INDEX IF NOT EXISTS idx_pageviews_site ON pageviews(site_id, created_at DESC)');
 
+  // Sales tasks on contacts (v2.00) — HubSpot's "what do I do next" loop.
+  // Open work against a person, with a due date; not surveillance of visitors.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contact_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'followup',
+      due_at TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      notes TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_tasks_contact ON crm_tasks(contact_id, status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_tasks_due ON crm_tasks(status, due_at)');
+
   initializeCrmCs();
   initializeCrmWa();
   initializeCrmSearch();
