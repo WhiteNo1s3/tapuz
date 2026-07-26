@@ -50,7 +50,9 @@ const PERSONAL_TABLES = [
   { table: 'crm_identity_claims', column: 'contact_id', label: 'identity claims' },
   // v2.00 sales tasks — CASCADE on contact delete; listed so the drift guard
   // never lets a personal table go untracked.
-  { table: 'crm_tasks', column: 'contact_id', label: 'sales tasks' }
+  { table: 'crm_tasks', column: 'contact_id', label: 'sales tasks' },
+  { table: 'crm_sequence_enrollments', column: 'contact_id', label: 'sequence enrollments' },
+  { table: 'crm_sequence_sends', column: 'contact_id', label: 'sequence sends' }
 ];
 
 /** Phone-keyed WhatsApp tables — reached through the contact's phone. */

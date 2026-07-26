@@ -93,6 +93,7 @@ const ADMIN_NAV_GROUPS = [
       { key: 'crm-tasks', href: '/admin/crm/tasks', label: 'משימות', icon: '✅' },
       { key: 'crm-interests', href: '/admin/crm/interests', label: 'תחומי עניין', icon: '💡' },
       { key: 'crm-segments', href: '/admin/crm/segments', label: 'פילוחים', icon: '🎯' },
+      { key: 'crm-sequences', href: '/admin/crm/sequences', label: 'רצפי מייל', icon: '🔁' },
       { key: 'crm-lists', href: '/admin/crm/lists', label: 'רשימות דיוור', icon: '📋' },
       { key: 'crm-campaigns', href: '/admin/crm/campaigns', label: 'קמפיינים', icon: '✉️' },
       { key: 'crm-sites', href: '/admin/crm/sites', label: 'אתרים (פיקסל)', icon: '🌐' },

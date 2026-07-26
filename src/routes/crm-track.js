@@ -53,7 +53,11 @@ router.get('/crm/o/:token.gif', (req, res) => {
   // The response is identical in every branch below — that is the point.
   try {
     if (crmOn() && limiter.allow('trk:' + clientIp(req))) {
-      require('../crm').campaigns.recordOpen(req.params.token);
+      const crm = require('../crm');
+      // Campaign open, else sequence open (v2.03) — same pixel URL shape.
+      if (!crm.campaigns.recordOpen(req.params.token)) {
+        try { crm.sequences.recordOpen(req.params.token); } catch (e2) { /* */ }
+      }
     }
   } catch (e) { /* a tracking failure must never show up as a broken image */ }
   sendPixel(res);
@@ -76,7 +80,28 @@ router.get('/crm/c/:token/:index', (req, res) => {
 function unsubscribeHandler(req, res) {
   let ok = false;
   try {
-    if (crmOn()) ok = require('../crm').campaigns.unsubscribe(req.params.token).ok;
+    if (crmOn()) {
+      const crm = require('../crm');
+      const r = crm.campaigns.unsubscribe(req.params.token);
+      ok = !!(r && r.ok);
+      // Sequence tokens share List-Unsubscribe URL shape; clear consent + stop drips.
+      if (!ok) {
+        const send = crm.sequences.findSendByToken(req.params.token);
+        if (send) {
+          crm.contacts.updateContact(send.contact_id, { consent: false });
+          crm.sequences.cancelActiveForContact(send.contact_id);
+          ok = true;
+        }
+      } else if (r && r.contactId) {
+        try { crm.sequences.cancelActiveForContact(r.contactId); } catch (e2) { /* */ }
+      } else {
+        // campaigns.unsubscribe may not return contactId — cancel if we can resolve send
+        try {
+          const s = crm.campaigns.findSendByToken(req.params.token);
+          if (s) crm.sequences.cancelActiveForContact(s.contact_id);
+        } catch (e3) { /* */ }
+      }
+    }
   } catch (e) { ok = false; }
 
   // RFC 8058: a One-Click POST wants a bare 200, not a page.

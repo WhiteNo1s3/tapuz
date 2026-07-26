@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v2.02 kanban + task email reminders; remote 2.01 was pixel wrappers).
+> **Last updated:** 2026-07-26 (v2.03 email sequences / drip).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v2.02 kanban + reminders** on main |
-| Recent line | v2.00 tasks → v2.01 pixel wrappers (P4) → **v2.02 status kanban + SMTP task digests** |
-| Package version field | **`2.02.0-alpha`** |
+| Tip when handoff written | see `git log -1` — **v2.03 email sequences** on main |
+| Recent line | v2.02 kanban + digests → **v2.03 drip sequences** |
+| Package version field | **`2.03.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -234,6 +234,16 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | SMTP | same `notify.js` as campaigns / lead alerts |
 | Schedule | daily with `runRetention` (dedupe by day) |
 | Smokes | `test:crm-board`, `test:crm-task-reminders` |
+
+## 9f. Email sequences (v2.03)
+
+| Piece | Path |
+|-------|------|
+| Core | `src/crm/sequences.js` |
+| Admin | `/admin/crm/sequences` + contact enroll |
+| Rules | consent + email; no provisional/garbage; unsub stops drip |
+| Schedule | `runRetention` → `maybeProcessDaily` |
+| Smoke | `npm run test:crm-sequences` |
 
 ## 10. Open / next (when resuming)
 

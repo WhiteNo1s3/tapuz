@@ -87,6 +87,215 @@ router.post('/admin/crm/settings', requireAdmin, (req, res) => {
   res.redirect('/admin/crm');
 });
 
+// ─── email sequences / drip (v2.03, BEFORE /:id) ─────────────────────
+router.get('/admin/crm/sequences', requireAdmin, requireCrm('crm-sequences', 'רצפי מייל'), (req, res) => {
+  const { sequences } = require('../crm');
+  const rows = sequences.listSequences();
+  const smtp = require('../notify').getSettings();
+  const list = rows.length
+    ? rows.map((s) => `
+        <a class="rec" href="/admin/crm/sequences/${s.id}" style="display:flex;gap:12px;align-items:center;text-decoration:none;flex-wrap:wrap">
+          <div style="flex:1">
+            <strong>${esc(s.name)}</strong>
+            <div class="muted" style="font-size:.82rem">${s.stepCount} שלבים · ${s.activeEnrollments} רשומים פעילים</div>
+          </div>
+          <span class="pill">${s.active ? 'פעיל' : 'כבוי'}</span>
+        </a>`).join('')
+    : '<div class="empty-state">אין רצפים — צרו את הראשון (ברוכים הבאים, טיפוח ליד, אחרי רכישה…).</div>';
+
+  page(res, 'crm-sequences', 'רצפי מייל', `
+    <p class="lead" style="margin-top:0">
+      מיילים מרובי־שלבים — כמו HubSpot Sequences, על ה־SMTP שלכם.
+      רק למי שנתן <strong>הסכמה לדיוור</strong>; הסרה בלחיצה עוצרת את הרצף.
+    </p>
+    ${smtp.smtpReady
+      ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5"><strong>SMTP מוכן</strong> — הרצף יישלח ברקע יומי.</div>'
+      : '<div class="card" style="border-color:#fde68a;background:#fffbeb"><strong>SMTP לא מוכן</strong> — אפשר לבנות רצף, שליחה תחכה ל־<a href="/admin/integrations">אינטגרציות</a>.</div>'}
+    <div class="card">
+      <div class="card-head">🔁 רצפים</div>
+      ${list}
+    </div>
+    <div class="card">
+      <div class="card-head">רצף חדש</div>
+      <form method="POST" action="/admin/crm/sequences" class="stack">
+        <label>שם<input name="name" class="input" required placeholder="טיפוח לידים — 3 מיילים"></label>
+        <button class="btn" type="submit">צור רצף</button>
+      </form>
+    </div>`);
+});
+
+router.post('/admin/crm/sequences', requireAdmin, (req, res) => {
+  try {
+    const s = require('../crm').sequences.createSequence((req.body || {}).name);
+    if (s) return res.redirect('/admin/crm/sequences/' + s.id);
+  } catch (e) { /* */ }
+  res.redirect('/admin/crm/sequences');
+});
+
+// Literal path before /:id — "enrollments" must not become a sequence id.
+router.post('/admin/crm/sequences/enrollments/:enrollId/cancel', requireAdmin, (req, res) => {
+  const e = require('../db').db
+    .prepare('SELECT sequence_id FROM crm_sequence_enrollments WHERE id = ?')
+    .get(Number(req.params.enrollId));
+  require('../crm').sequences.cancelEnrollment(req.params.enrollId);
+  res.redirect(e ? '/admin/crm/sequences/' + e.sequence_id : '/admin/crm/sequences');
+});
+
+router.get('/admin/crm/sequences/:id', requireAdmin, requireCrm('crm-sequences', 'רצף'), (req, res) => {
+  const { sequences, contacts } = require('../crm');
+  const s = sequences.getSequence(req.params.id);
+  if (!s) return res.status(404).send(layout('<div class="container">רצף לא נמצא</div>', 'לא נמצא', ACCENT));
+  const enrolls = sequences.listEnrollments(s.id, { limit: 50 });
+  const recent = contacts.listContacts({ limit: 40 }).filter((c) =>
+    c.consent && c.email && c.status !== 'garbage' && c.status !== 'provisional'
+  );
+
+  const stepsHtml = s.steps.length
+    ? s.steps.map((st, i) => `
+        <div class="rec" style="display:block">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <span class="pill">שלב ${i + 1}</span>
+            <span class="muted" style="font-size:.82rem">המתנה ${st.delay_days} ימים ${i === 0 ? '(לפני השליחה הראשונה)' : '(אחרי השלב הקודם)'}</span>
+          </div>
+          <form method="POST" action="/admin/crm/sequences/${s.id}/steps/${st.id}" class="stack">
+            <label>ימי המתנה<input name="delayDays" type="number" min="0" max="365" class="input" value="${Number(st.delay_days) || 0}"></label>
+            <label>נושא<input name="subject" class="input" value="${esc(st.subject)}" required></label>
+            <label>תוכן (HTML)
+              <textarea name="body" class="input" rows="5" dir="auto">${esc(st.body)}</textarea></label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn secondary sm" type="submit">שמור שלב</button>
+            </div>
+          </form>
+          <form method="POST" action="/admin/crm/sequences/${s.id}/steps/${st.id}/delete"
+                onsubmit="return confirm('למחוק שלב?')" style="margin-top:6px">
+            <button class="btn secondary sm" type="submit">מחק שלב</button>
+          </form>
+        </div>`).join('')
+    : '<div class="empty-state">עדיין אין שלבים — הוסיפו את המייל הראשון.</div>';
+
+  const enrollHtml = enrolls.length
+    ? enrolls.map((e) => `
+        <div class="rec" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <div style="flex:1">
+            <a href="/admin/crm/${e.contact_id}">${esc(e.contact_name || e.contact_email || '#' + e.contact_id)}</a>
+            <div class="muted" style="font-size:.8rem">שלב ${e.step_index + 1} · ${esc(e.status)}
+              ${e.next_run_at ? ' · הבא: ' + esc(e.next_run_at) : ''}</div>
+          </div>
+          ${e.status === 'active' ? `
+            <form method="POST" action="/admin/crm/sequences/enrollments/${e.id}/cancel">
+              <button class="btn secondary sm" type="submit">עצור</button>
+            </form>` : `<span class="pill">${esc(e.status)}</span>`}
+        </div>`).join('')
+    : '<div class="muted" style="font-size:.88rem">עדיין אין נרשמים.</div>';
+
+  page(res, 'crm-sequences', s.name, `
+    <div class="card">
+      <div class="section-bar">
+        <div class="card-head">🔁 ${esc(s.name)}</div>
+        <a class="btn secondary sm" href="/admin/crm/sequences">← לרשימה</a>
+      </div>
+      <form method="POST" action="/admin/crm/sequences/${s.id}" class="stack">
+        <label>שם<input name="name" class="input" value="${esc(s.name)}"></label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="active" value="1" ${s.active ? 'checked' : ''}> רצף פעיל (שולח ברקע)
+        </label>
+        <button class="btn secondary sm" type="submit">שמור</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-head">שלבים</div>
+      <p class="muted" style="font-size:.85rem">אפשר {{name}} ו־{{email}}. קישור הסרה מתווסף אוטומטית.</p>
+      ${stepsHtml}
+      <form method="POST" action="/admin/crm/sequences/${s.id}/steps" class="stack" style="margin-top:12px;border-top:1px solid #e2e8f0;padding-top:12px">
+        <div class="card-head" style="font-size:1rem">שלב חדש</div>
+        <label>ימי המתנה<input name="delayDays" type="number" min="0" max="365" class="input" value="${s.steps.length ? 2 : 0}"></label>
+        <label>נושא<input name="subject" class="input" required placeholder="שלום {{name}}, …"></label>
+        <label>תוכן<textarea name="body" class="input" rows="4" dir="auto" required
+          placeholder="<p>היי {{name}},</p><p>…</p>"></textarea></label>
+        <button class="btn" type="submit">הוסף שלב</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-head">רישום לאדם</div>
+      <form method="POST" action="/admin/crm/sequences/${s.id}/enroll" class="stack">
+        <label>איש קשר (רק עם מייל + הסכמה)
+          <select name="contactId" class="input" required>
+            <option value="">— בחרו —</option>
+            ${recent.map((c) => {
+              const label = [c.name, c.email].filter(Boolean).join(' · ');
+              return `<option value="${c.id}">${esc(label)}</option>`;
+            }).join('')}
+          </select>
+        </label>
+        <button class="btn" type="submit">רשום לרצף</button>
+      </form>
+      <div style="margin-top:14px">${enrollHtml}</div>
+    </div>
+    <div class="card">
+      <form method="POST" action="/admin/crm/sequences/${s.id}/process">
+        <button class="btn secondary sm" type="submit">עבד שליחות ממתינות עכשיו</button>
+      </form>
+      <p class="muted" style="font-size:.8rem;margin-top:8px">בדרך כלל רץ פעם ביום עם תחזוקת ה־CRM.</p>
+    </div>
+    <div class="card">
+      <form method="POST" action="/admin/crm/sequences/${s.id}/delete"
+            onsubmit="return confirm('למחוק את הרצף וכל הרישומים?')">
+        <button class="btn secondary sm" type="submit">מחק רצף</button>
+      </form>
+    </div>`);
+});
+
+router.post('/admin/crm/sequences/:id', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  require('../crm').sequences.updateSequence(req.params.id, {
+    name: b.name,
+    active: !!b.active
+  });
+  res.redirect('/admin/crm/sequences/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/sequences/:id/steps', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  require('../crm').sequences.addStep(req.params.id, {
+    delayDays: b.delayDays,
+    subject: b.subject,
+    body: b.body
+  });
+  res.redirect('/admin/crm/sequences/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/sequences/:id/steps/:stepId', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  require('../crm').sequences.updateStep(req.params.stepId, {
+    delayDays: b.delayDays,
+    subject: b.subject,
+    body: b.body
+  });
+  res.redirect('/admin/crm/sequences/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/sequences/:id/steps/:stepId/delete', requireAdmin, (req, res) => {
+  require('../crm').sequences.deleteStep(req.params.stepId);
+  res.redirect('/admin/crm/sequences/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/sequences/:id/enroll', requireAdmin, (req, res) => {
+  require('../crm').sequences.enroll(req.params.id, (req.body || {}).contactId);
+  res.redirect('/admin/crm/sequences/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/sequences/:id/process', requireAdmin, async (req, res) => {
+  try {
+    await require('../crm').sequences.processDue({ limit: 30 });
+  } catch (e) { /* */ }
+  res.redirect('/admin/crm/sequences/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/sequences/:id/delete', requireAdmin, (req, res) => {
+  require('../crm').sequences.deleteSequence(req.params.id);
+  res.redirect('/admin/crm/sequences');
+});
+
 // ─── status kanban (v2.01, BEFORE /:id) ──────────────────────────────
 router.get('/admin/crm/board', requireAdmin, requireCrm('crm-board', 'לוח סטטוסים'), (req, res) => {
   const { contacts, tasks: taskMod } = require('../crm');
@@ -1892,12 +2101,14 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
 
 // ─── contacts: one person ────────────────────────────────────────────
 router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש קשר'), (req, res) => {
-  const { Customer, contacts, tasks } = require('../crm');
+  const { Customer, contacts, tasks, sequences } = require('../crm');
   const c = Customer.load(req.params.id);
   if (!c) return res.status(404).send(layout('<div class="container">איש הקשר לא נמצא</div>', 'לא נמצא', ACCENT));
   const d = c.datasheet();
   const openTasks = tasks.listForContact(d.id, { includeDone: false });
   const today = tasks.todayUTC();
+  const activeSeq = sequences.listActiveForContact(d.id);
+  const allSeq = sequences.listSequences().filter((s) => s.active && s.stepCount > 0);
 
   const timeline = d.timeline.length
     ? d.timeline.map((e) => `
@@ -2017,6 +2228,33 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
           <button class="btn secondary sm" type="submit">הוסף משימה</button>
         </div>
       </form>
+    </div>
+
+    <div class="card">
+      <div class="card-head">🔁 רצפי מייל</div>
+      ${activeSeq.length
+        ? activeSeq.map((e) => `
+          <div class="rec" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <a href="/admin/crm/sequences/${e.sequence_id}">${esc(e.sequence_name)}</a>
+            <span class="muted" style="font-size:.8rem">שלב ${e.step_index + 1}
+              ${e.next_run_at ? ' · ' + esc(e.next_run_at) : ''}</span>
+            <form method="POST" action="/admin/crm/sequences/enrollments/${e.id}/cancel">
+              <button class="btn secondary sm" type="submit">עצור</button>
+            </form>
+          </div>`).join('')
+        : '<p class="muted" style="font-size:.88rem">לא רשום לרצף פעיל.</p>'}
+      ${d.consent && d.email && allSeq.length ? `
+        <form method="POST" action="/admin/crm/sequences/${allSeq[0].id}/enroll"
+              style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"
+              onsubmit="var s=this.querySelector('[name=seqId]'); this.action='/admin/crm/sequences/'+s.value+'/enroll';">
+          <input type="hidden" name="contactId" value="${d.id}">
+          <select name="seqId" class="input" style="width:auto">
+            ${allSeq.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}
+          </select>
+          <button class="btn secondary sm" type="submit">רשום לרצף</button>
+        </form>` : !d.consent || !d.email
+          ? '<p class="muted" style="font-size:.8rem">צריך מייל + הסכמה לדיוור כדי לרשום לרצף.</p>'
+          : ''}
     </div>
 
     <div class="card">

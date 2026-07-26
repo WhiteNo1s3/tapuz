@@ -438,6 +438,63 @@ function initializeCrm() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_tasks_contact ON crm_tasks(contact_id, status)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_tasks_due ON crm_tasks(status, due_at)');
 
+  // Email sequences / drip (v2.03) — HubSpot-class multi-step follow-up.
+  // Consent-gated, SMTP-backed, stoppable; never invents a second mail stack.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_sequences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_sequence_steps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sequence_id INTEGER NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      delay_days INTEGER NOT NULL DEFAULT 0,
+      subject TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      FOREIGN KEY (sequence_id) REFERENCES crm_sequences(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_seq_steps ON crm_sequence_steps(sequence_id, position)');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_sequence_enrollments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sequence_id INTEGER NOT NULL,
+      contact_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      step_index INTEGER NOT NULL DEFAULT 0,
+      next_run_at DATETIME,
+      enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME,
+      FOREIGN KEY (sequence_id) REFERENCES crm_sequences(id) ON DELETE CASCADE,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_seq_enroll_run ON crm_sequence_enrollments(status, next_run_at)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_seq_enroll_contact ON crm_sequence_enrollments(contact_id, status)');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_sequence_sends (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      enrollment_id INTEGER NOT NULL,
+      step_id INTEGER NOT NULL,
+      contact_id INTEGER NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'queued',
+      error TEXT,
+      sent_at DATETIME,
+      opened_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (enrollment_id) REFERENCES crm_sequence_enrollments(id) ON DELETE CASCADE,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_seq_sends_token ON crm_sequence_sends(token)');
+
   initializeCrmCs();
   initializeCrmWa();
   initializeCrmSearch();

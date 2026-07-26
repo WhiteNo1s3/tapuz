@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**214 routes across 36 files.**
+**225 routes across 36 files.**
 
 ## By file (what each module owns)
 
@@ -108,9 +108,20 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /crm/cs/v1/session`
 - `POST /crm/cs/v1/message`
 
-### `src/routes/crm.js` — 50 routes
+### `src/routes/crm.js` — 61 routes
 
 - `POST /admin/crm/settings`
+- `GET /admin/crm/sequences`
+- `POST /admin/crm/sequences`
+- `POST /admin/crm/sequences/enrollments/:enrollId/cancel`
+- `GET /admin/crm/sequences/:id`
+- `POST /admin/crm/sequences/:id`
+- `POST /admin/crm/sequences/:id/steps`
+- `POST /admin/crm/sequences/:id/steps/:stepId`
+- `POST /admin/crm/sequences/:id/steps/:stepId/delete`
+- `POST /admin/crm/sequences/:id/enroll`
+- `POST /admin/crm/sequences/:id/process`
+- `POST /admin/crm/sequences/:id/delete`
 - `GET /admin/crm/board`
 - `POST /admin/crm/board/move`
 - `GET /admin/crm/tasks`
@@ -459,6 +470,17 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/segments` | GET | `src/routes/crm.js` |
 | `/admin/crm/segments` | POST | `src/routes/crm.js` |
 | `/admin/crm/segments/:id/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences` | GET | `src/routes/crm.js` |
+| `/admin/crm/sequences` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences/:id` | GET | `src/routes/crm.js` |
+| `/admin/crm/sequences/:id` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences/:id/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences/:id/enroll` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences/:id/process` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences/:id/steps` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences/:id/steps/:stepId` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences/:id/steps/:stepId/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/sequences/enrollments/:enrollId/cancel` | POST | `src/routes/crm.js` |
 | `/admin/crm/settings` | POST | `src/routes/crm.js` |
 | `/admin/crm/sites` | GET | `src/routes/crm.js` |
 | `/admin/crm/sites` | POST | `src/routes/crm.js` |
