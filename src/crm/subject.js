@@ -54,7 +54,8 @@ const PERSONAL_TABLES = [
   { table: 'crm_sequence_enrollments', column: 'contact_id', label: 'sequence enrollments' },
   { table: 'crm_sequence_sends', column: 'contact_id', label: 'sequence sends' },
   { table: 'crm_company_members', column: 'contact_id', label: 'company memberships' },
-  { table: 'crm_deals', column: 'contact_id', label: 'deals' }
+  { table: 'crm_deals', column: 'contact_id', label: 'deals' },
+  { table: 'crm_portal_accounts', column: 'contact_id', label: 'portal accounts' }
 ];
 
 /** Phone-keyed WhatsApp tables — reached through the contact's phone. */

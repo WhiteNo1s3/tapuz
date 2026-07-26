@@ -40,6 +40,7 @@ const sequences = require('./sequences');
 const unifiedInbox = require('./unified-inbox');
 const companies = require('./companies');
 const deals = require('./deals');
+const portal = require('./portal');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -291,5 +292,6 @@ module.exports = {
   unifiedInbox,
   companies,
   deals,
+  portal,
   Customer
 };

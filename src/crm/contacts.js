@@ -261,7 +261,13 @@ function deleteContact(id) {
  * reduced to nothing usable — so a search for `***` still behaves, and a SQLite
  * without FTS5 still finds people, just more slowly.
  */
-function searchClause({ q = '', status = '' } = {}) {
+/**
+ * kind:
+ *   ''     — everyone
+ *   real   — named/reachable people (name|email|phone), not provisional/garbage
+ *            ("real customers" kept ~1y quiet; ghosts use the short path)
+ */
+function searchClause({ q = '', status = '', kind = '' } = {}) {
   const args = {};
   const where = [];
   let from = 'crm_contacts c';
@@ -282,11 +288,19 @@ function searchClause({ q = '', status = '' } = {}) {
     where.push('c.status = @status');
     args.status = status;
   }
+  if (String(kind || '') === 'real') {
+    where.push(`c.status NOT IN ('provisional', 'garbage')`);
+    where.push(`(
+      (c.name IS NOT NULL AND c.name <> '')
+      OR (c.email IS NOT NULL AND c.email <> '')
+      OR (c.phone IS NOT NULL AND c.phone <> '')
+    )`);
+  }
   return { from, clause: where.length ? 'WHERE ' + where.join(' AND ') : '', args };
 }
 
-function listContacts({ q = '', status = '', limit = 50, offset = 0 } = {}) {
-  const { from, clause, args } = searchClause({ q, status });
+function listContacts({ q = '', status = '', kind = '', limit = 50, offset = 0 } = {}) {
+  const { from, clause, args } = searchClause({ q, status, kind });
   args.limit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500);
   args.offset = Math.max(parseInt(offset, 10) || 0, 0);
   try {
@@ -299,15 +313,20 @@ function listContacts({ q = '', status = '', limit = 50, offset = 0 } = {}) {
     const like = { like: '%' + String(q).trim().toLowerCase() + '%', limit: args.limit, offset: args.offset };
     const st = STATUSES.includes(status) ? 'AND status = @status' : '';
     if (st) like.status = status;
+    const real =
+      String(kind || '') === 'real'
+        ? `AND status NOT IN ('provisional','garbage')
+           AND ((name IS NOT NULL AND name <> '') OR (email IS NOT NULL AND email <> '') OR (phone IS NOT NULL AND phone <> ''))`
+        : '';
     return db
-      .prepare(`SELECT * FROM crm_contacts WHERE search_blob LIKE @like ${st}
+      .prepare(`SELECT * FROM crm_contacts WHERE search_blob LIKE @like ${st} ${real}
                 ORDER BY updated_at DESC LIMIT @limit OFFSET @offset`)
       .all(like);
   }
 }
 
-function countContacts({ q = '', status = '' } = {}) {
-  const { from, clause, args } = searchClause({ q, status });
+function countContacts({ q = '', status = '', kind = '' } = {}) {
+  const { from, clause, args } = searchClause({ q, status, kind });
   try {
     return db.prepare(`SELECT COUNT(*) AS n FROM ${from} ${clause}`).get(args).n;
   } catch (e) {
@@ -322,6 +341,11 @@ function statusCounts() {
   for (const s of STATUSES) out[s] = 0;
   for (const r of rows) out[r.status] = r.n;
   out.total = rows.reduce((a, r) => a + r.n, 0);
+  try {
+    out.real = countContacts({ kind: 'real' });
+  } catch (e) {
+    out.real = 0;
+  }
   return out;
 }
 

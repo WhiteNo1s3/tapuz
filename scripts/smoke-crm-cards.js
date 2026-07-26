@@ -131,10 +131,11 @@ life = cards.runCardLifecycle();
 check('old garbage hard-erased', contacts.getContact(ghost.id) == null);
 check('lifecycle reported erase', life.erased >= 1);
 
-// reachable leads are NOT auto-garbaged by quietDays alone
+// reachable leads are NOT auto-garbaged by quietDays alone (named path is 365d)
 db.prepare(`UPDATE crm_contacts SET updated_at = datetime('now', '-30 days') WHERE id = ?`).run(id1);
 life = cards.runCardLifecycle();
 check('reachable lead survives quiet lifecycle', !!contacts.getContact(id1));
+check('lifecycle exposes namedQuietDays default', life.namedQuietDays === 365 || life.namedQuietDays >= 1);
 
 // DNT path is above CRM — capture with progressive still needs CRM on
 // merge: form identity that already exists while cookie held a ghost

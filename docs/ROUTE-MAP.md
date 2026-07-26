@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**243 routes across 36 files.**
+**250 routes across 37 files.**
 
 ## By file (what each module owns)
 
@@ -108,7 +108,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /crm/cs/v1/session`
 - `POST /crm/cs/v1/message`
 
-### `src/routes/crm.js` — 79 routes
+### `src/routes/crm.js` — 80 routes
 
 - `POST /admin/crm/settings`
 - `GET /admin/crm/inbox`
@@ -185,6 +185,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/crm`
 - `GET /admin/crm/:id`
 - `POST /admin/crm/:id/update`
+- `POST /admin/crm/:id/portal`
 - `POST /admin/crm/:id/interest`
 - `POST /admin/crm/:id/note`
 - `GET /admin/crm/:id/export.json`
@@ -267,6 +268,15 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/save`
 - `POST /admin/publish`
 - `POST /admin/build`
+
+### `src/routes/portal.js` — 6 routes
+
+- `GET /account/login`
+- `POST /account/login`
+- `GET /account/register`
+- `POST /account/register`
+- `GET /account`
+- `POST /account/logout`
 
 ### `src/routes/pzn-pages.js` — 5 routes
 
@@ -366,6 +376,12 @@ shows where, so editing is navigation, not a grep hunt.
 | Route | Method | File |
 |---|---|---|
 | `/_tapuz/collect` | POST | `src/server.js` |
+| `/account` | GET | `src/routes/portal.js` |
+| `/account/login` | GET | `src/routes/portal.js` |
+| `/account/login` | POST | `src/routes/portal.js` |
+| `/account/logout` | POST | `src/routes/portal.js` |
+| `/account/register` | GET | `src/routes/portal.js` |
+| `/account/register` | POST | `src/routes/portal.js` |
 | `/admin` | GET | `src/routes/admin-home.js` |
 | `/admin/agent` | GET | `src/routes/copilot.js` |
 | `/admin/ai` | GET | `src/routes/copilot.js` |
@@ -459,6 +475,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/:id/export.json` | GET | `src/routes/crm.js` |
 | `/admin/crm/:id/interest` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/note` | POST | `src/routes/crm.js` |
+| `/admin/crm/:id/portal` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/update` | POST | `src/routes/crm.js` |
 | `/admin/crm/board` | GET | `src/routes/crm.js` |
 | `/admin/crm/board/move` | POST | `src/routes/crm.js` |

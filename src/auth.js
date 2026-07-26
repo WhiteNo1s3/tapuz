@@ -376,9 +376,10 @@ module.exports = {
   addTeamMember,
   setUserRole,
   removeUser,
-  // password primitives (exported for tests)
+  // password primitives (exported for tests + customer portal)
   hashPassword,
   verifyPassword,
+  getSecret,
   // sessions
   verifySession,
   issueSession,

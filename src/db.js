@@ -546,6 +546,20 @@ function initializeCrm() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_deals_company ON crm_deals(company_id, stage)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_deals_stage ON crm_deals(stage, expected_close)');
 
+  // Customer portal logins (v2.10) — off by default in config; table always ready.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_portal_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contact_id INTEGER NOT NULL UNIQUE,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_login_at DATETIME,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_portal_user ON crm_portal_accounts(username)');
+
   initializeCrmCs();
   initializeCrmWa();
   initializeCrmSearch();

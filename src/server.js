@@ -125,6 +125,10 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
 // parsed) and before the static mounts. Order is load-bearing.
 app.use(require('./routes/form-capture'));
 
+// Customer portal (v2.10) — /account/* when crm.portal.enabled (off by default).
+// Mounted before admin so it is never gated by requireAdmin.
+app.use(require('./routes/portal'));
+
 // Public CRM email tracking (open pixel / tracked link / unsubscribe) — v1.81,
 // phase 3c. PUBLIC and unauthenticated, because a recipient's mail client is
 // what calls them. MOUNTED HERE for the same reason as form capture: before the

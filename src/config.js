@@ -69,8 +69,17 @@ const DEFAULT_CONFIG = {
     // Not surveillance — service. See src/crm/cards.js.
     cards: {
       progressive: true,
-      quietDays: 5,     // no touch → status garbage
-      garbageDays: 3    // then hard erase (full subject wipe)
+      quietDays: 5,     // provisional, no identity → garbage
+      garbageDays: 3,   // then hard erase (full subject wipe)
+      // Named / reachable people (name|email|phone): keep until owner deletes
+      // or quiet this many days (default 1 year). 0 = never auto-erase named.
+      namedQuietDays: 365
+    },
+    // Customer portal (v2.10) — username/password for *site customers*, not admin.
+    // Both flags off by default; owner opts in. Self-register requires enabled too.
+    portal: {
+      enabled: false,
+      allowSelfRegister: false
     },
     // Customer-service chat (v1.83). The ONLY CRM surface where an anonymous
     // visitor can spend the owner's money, so it ships off and every limit has
@@ -189,6 +198,7 @@ function loadConfig() {
         },
         retention: { ...clone(DEFAULT_CONFIG.crm.retention), ...(dc.retention || {}) },
         cards: { ...clone(DEFAULT_CONFIG.crm.cards), ...(dc.cards || {}) },
+        portal: { ...clone(DEFAULT_CONFIG.crm.portal), ...(dc.portal || {}) },
         cs: { ...clone(DEFAULT_CONFIG.crm.cs), ...(dc.cs || {}) },
         whatsapp: { ...clone(DEFAULT_CONFIG.crm.whatsapp), ...(dc.whatsapp || {}) }
       };

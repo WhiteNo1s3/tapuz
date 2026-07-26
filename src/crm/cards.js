@@ -30,20 +30,30 @@ const { db } = require('../db');
 
 const DEFAULT_QUIET_DAYS = 5;
 const DEFAULT_GARBAGE_DAYS = 3;
+/** Named / reachable people: keep until remove or this many quiet days (default 1 year). */
+const DEFAULT_NAMED_QUIET_DAYS = 365;
 const MAX_INTEREST_TAGS = 24;
 
 function cardsConfig() {
   try {
     const cfg = require('../config').loadConfig();
     const c = (cfg.crm && cfg.crm.cards) || {};
+    const named = parseInt(c.namedQuietDays, 10);
     return {
       // Progressive cards ON whenever CRM is on, unless explicitly disabled.
       progressive: c.progressive !== false,
       quietDays: Math.max(1, parseInt(c.quietDays, 10) || DEFAULT_QUIET_DAYS),
-      garbageDays: Math.max(1, parseInt(c.garbageDays, 10) || DEFAULT_GARBAGE_DAYS)
+      garbageDays: Math.max(1, parseInt(c.garbageDays, 10) || DEFAULT_GARBAGE_DAYS),
+      // 0 = never auto-erase named customers (owner must delete manually)
+      namedQuietDays: Number.isFinite(named) && named >= 0 ? Math.min(named, 3650) : DEFAULT_NAMED_QUIET_DAYS
     };
   } catch (e) {
-    return { progressive: true, quietDays: DEFAULT_QUIET_DAYS, garbageDays: DEFAULT_GARBAGE_DAYS };
+    return {
+      progressive: true,
+      quietDays: DEFAULT_QUIET_DAYS,
+      garbageDays: DEFAULT_GARBAGE_DAYS,
+      namedQuietDays: DEFAULT_NAMED_QUIET_DAYS
+    };
   }
 }
 
@@ -165,13 +175,19 @@ function mergeCards(fromId, toId) {
 }
 
 /**
- * Lifecycle sweep: provisional quiet → garbage; garbage old → erase.
- * @returns {{ markedGarbage: number, erased: number, quietDays: number, garbageDays: number }}
+ * Lifecycle sweep:
+ *   1) empty provisional quiet → garbage
+ *   2) garbage old → erase
+ *   3) named/reachable quiet for namedQuietDays (default 365) → erase
+ *      (real customers kept long; not the 5-day ghost path)
+ *
+ * @returns {{ markedGarbage: number, erased: number, erasedNamed: number, quietDays: number, garbageDays: number, namedQuietDays: number }}
  */
 function runCardLifecycle() {
   const cfg = cardsConfig();
   const quiet = cfg.quietDays;
   const gar = cfg.garbageDays;
+  const namedQuiet = cfg.namedQuietDays;
 
   // Quiet provisional (no email/phone) → garbage
   const marked = db
@@ -207,13 +223,55 @@ function runCardLifecycle() {
     }
   }
 
-  if (marked || erased) {
+  // Named / reachable: indefinitely until owner deletes OR quiet past namedQuietDays.
+  // "Saw the user" = updated_at (touchActivity / form / task / portal login).
+  let erasedNamed = 0;
+  if (namedQuiet >= 1) {
+    const namedDoomed = db
+      .prepare(
+        `SELECT id FROM crm_contacts
+         WHERE status NOT IN ('garbage', 'provisional')
+           AND (
+             (name IS NOT NULL AND name <> '')
+             OR (email IS NOT NULL AND email <> '')
+             OR (phone IS NOT NULL AND phone <> '')
+           )
+           AND updated_at < datetime('now', ?)
+         LIMIT 100`
+      )
+      .all('-' + namedQuiet + ' days');
+    for (const row of namedDoomed) {
+      try {
+        // Portal accounts cascade via subject / explicit portal wipe
+        try {
+          require('./portal').deleteAccountForContact(row.id);
+        } catch (e) { /* portal module optional on old trees */ }
+        const r = subject.eraseContact(row.id);
+        if (r && r.ok) erasedNamed++;
+        else if (contacts.deleteContact(row.id)) erasedNamed++;
+      } catch (e) {
+        try {
+          if (contacts.deleteContact(row.id)) erasedNamed++;
+        } catch (e2) { /* */ }
+      }
+    }
+  }
+
+  if (marked || erased || erasedNamed) {
     console.log(
-      '[crm] cards lifecycle: ' + marked + ' → garbage, ' + erased + ' erased (quiet=' +
-        quiet + 'd, garbage=' + gar + 'd)'
+      '[crm] cards lifecycle: ' + marked + ' → garbage, ' + erased + ' garbage-erased, ' +
+        erasedNamed + ' named-quiet-erased (quiet=' + quiet + 'd, garbage=' + gar +
+        'd, named=' + namedQuiet + 'd)'
     );
   }
-  return { markedGarbage: marked, erased, quietDays: quiet, garbageDays: gar };
+  return {
+    markedGarbage: marked,
+    erased,
+    erasedNamed,
+    quietDays: quiet,
+    garbageDays: gar,
+    namedQuietDays: namedQuiet
+  };
 }
 
 /** Interests as clean labels for admin / segments. */
@@ -327,5 +385,6 @@ module.exports = {
   listInterestStats,
   DEFAULT_QUIET_DAYS,
   DEFAULT_GARBAGE_DAYS,
+  DEFAULT_NAMED_QUIET_DAYS,
   MAX_INTEREST_TAGS
 };

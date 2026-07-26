@@ -2184,7 +2184,12 @@ router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרט
   const cardsCfg = (cfg.crm && cfg.crm.cards) || {};
   const quietDays = cardsCfg.quietDays != null ? cardsCfg.quietDays : 5;
   const garbageDays = cardsCfg.garbageDays != null ? cardsCfg.garbageDays : 3;
+  const namedQuietDays =
+    cardsCfg.namedQuietDays != null ? cardsCfg.namedQuietDays : 365;
   const progressive = cardsCfg.progressive !== false;
+  const portalCfg = (cfg.crm && cfg.crm.portal) || {};
+  const portalEnabled = portalCfg.enabled === true;
+  const portalSelfReg = portalCfg.allowSelfRegister === true;
   const { db } = require('../db');
   const eventCount = db.prepare('SELECT COUNT(*) AS n FROM crm_events').get().n;
   const anchored = db.prepare('SELECT COUNT(*) AS n FROM crm_events WHERE ref_id IS NOT NULL').get().n;
@@ -2200,7 +2205,7 @@ router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרט
       </p>
       <p class="muted" style="font-size:.88rem">
         עכשיו: ${counts.provisional || 0} כרטיסים זמניים · ${counts.garbage || 0} ממתינים למחיקה ·
-        ${counts.lead || 0} לידים · ${counts.customer || 0} לקוחות.
+        ${counts.real || 0} לקוחות אמיתיים · ${counts.lead || 0} לידים · ${counts.customer || 0} לקוחות.
       </p>
       <form method="POST" action="/admin/crm/privacy" class="stack">
         <input type="hidden" name="section" value="cards">
@@ -2208,11 +2213,38 @@ router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרט
           <input type="checkbox" name="progressive" value="1" ${progressive ? 'checked' : ''}>
           לפתוח כרטיס זמני בביקור ראשון (מומלץ)
         </label>
-        <label>ימים בלי אינטראקציה עד «ממתין למחיקה» (כרטיס בלי מייל/טלפון)
+        <label>ימים בלי אינטראקציה עד «ממתין למחיקה» (כרטיס בלי מייל/טלפון/שם)
           <input type="number" name="quietDays" class="input" min="1" max="90" value="${Number(quietDays) || 5}"></label>
-        <label>ימים נוספים עד מחיקה מוחלטת
+        <label>ימים נוספים עד מחיקה מוחלטת (כרטיסים זמניים)
           <input type="number" name="garbageDays" class="input" min="1" max="90" value="${Number(garbageDays) || 3}"></label>
+        <label>ימים בלי פעילות עד מחיקה — <strong>לקוחות אמיתיים</strong> (שם / מייל / טלפון). 0 = לעולם לא אוטומטית; ברירת מחדל 365
+          <input type="number" name="namedQuietDays" class="input" min="0" max="3650" value="${Number(namedQuietDays)}"></label>
         <button class="btn" type="submit">שמור מדיניות כרטיסים</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-head">🔑 אזור אישי ללקוחות (פורטל)</div>
+      <p class="lead">
+        שם משתמש וסיסמה <strong>ללקוחות האתר</strong> — לא צוות אדמין.
+        כבוי כברירת מחדל; רק אתם מפעילים. הרשמה עצמית היא דגל נפרד (גם הוא כבוי).
+        אפשר תמיד לפתוח חשבון מכרטיס איש הקשר בלי לפתוח הרשמה לציבור.
+      </p>
+      <p class="muted" style="font-size:.88rem">
+        כשפעיל: <span dir="ltr">/account/login</span> · האזור האישי מציג ללקוח את הפרטים וההיסטוריה שלו.
+        ${portalEnabled ? ' · <a href="/account/login" target="_blank" rel="noopener">פתח התחברות</a>' : ''}
+      </p>
+      <form method="POST" action="/admin/crm/privacy" class="stack">
+        <input type="hidden" name="section" value="portal">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="portalEnabled" value="1" ${portalEnabled ? 'checked' : ''}>
+          הפעל אזור אישי (התחברות ללקוחות)
+        </label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="allowSelfRegister" value="1" ${portalSelfReg ? 'checked' : ''}>
+          אפשר הרשמה עצמית לציבור (דורש גם «הפעל אזור אישי»)
+        </label>
+        <button class="btn" type="submit">שמור הגדרות פורטל</button>
       </form>
     </div>
 
@@ -2250,6 +2282,7 @@ router.get('/admin/crm/privacy', requireAdmin, requireCrm('crm-privacy', 'פרט
         נמצאות בדף של כל איש קשר — ייצוא מלא בלחיצה, ומחיקה שנבדקת אחרי עצמה.
       </p>
       <a class="btn secondary" href="/admin/crm">לרשימת אנשי הקשר</a>
+      <a class="btn secondary" href="/admin/crm?kind=real" style="margin-inline-start:8px">לקוחות אמיתיים</a>
     </div>`);
 });
 
@@ -2261,12 +2294,27 @@ router.post('/admin/crm/privacy', requireAdmin, (req, res) => {
   if (section === 'cards') {
     const q = parseInt(b.quietDays, 10);
     const g = parseInt(b.garbageDays, 10);
+    const nq = parseInt(b.namedQuietDays, 10);
+    const prevCards = (cfg.crm && cfg.crm.cards) || {};
     cfg.crm = Object.assign({}, cfg.crm, {
-      cards: {
+      cards: Object.assign({}, prevCards, {
         progressive: !!b.progressive,
         quietDays: Number.isFinite(q) && q >= 1 ? Math.min(q, 90) : 5,
-        garbageDays: Number.isFinite(g) && g >= 1 ? Math.min(g, 90) : 3
-      }
+        garbageDays: Number.isFinite(g) && g >= 1 ? Math.min(g, 90) : 3,
+        namedQuietDays:
+          Number.isFinite(nq) && nq >= 0 ? Math.min(nq, 3650) : 365
+      })
+    });
+  } else if (section === 'portal') {
+    const prevPortal = (cfg.crm && cfg.crm.portal) || {};
+    const enabled = !!b.portalEnabled;
+    cfg.crm = Object.assign({}, cfg.crm, {
+      portal: Object.assign({}, prevPortal, {
+        enabled,
+        // Self-register only meaningful when portal is on — store the owner's
+        // intent; portalConfig() still requires both flags at runtime.
+        allowSelfRegister: enabled && !!b.allowSelfRegister
+      })
     });
   } else {
     const n = parseInt(b.eventDays, 10);
@@ -2608,6 +2656,7 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
   const { contacts, Customer, segments, cards } = require('../crm');
   const q = String((req.query || {}).q || '');
   const status = String((req.query || {}).status || '');
+  const kind = String((req.query || {}).kind || '') === 'real' ? 'real' : '';
   const interest = cards.normalizeInterestLabel((req.query || {}).interest || '');
   let rows;
   if (interest) {
@@ -2621,8 +2670,16 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
       rows = rows.filter((r) => String(r.search_blob || '').includes(qq) ||
         String(r.name || '').includes(q) || String(r.email || '').includes(qq));
     }
+    if (kind === 'real') {
+      rows = rows.filter(
+        (r) =>
+          r.status !== 'provisional' &&
+          r.status !== 'garbage' &&
+          !!(r.name || r.email || r.phone)
+      );
+    }
   } else {
-    rows = contacts.listContacts({ q, status, limit: 100 });
+    rows = contacts.listContacts({ q, status, kind, limit: 100 });
   }
   const counts = contacts.statusCounts();
   const topInterests = cards.listInterestStats({ limit: 8 });
@@ -2633,6 +2690,10 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
       <div class="stat-num">${counts[s] || 0}</div>
       <div class="stat-label">${esc(contacts.statusLabel(s))}</div>
     </a>`).join('') + `
+    <a class="stat-tile" href="/admin/crm?kind=real" style="${kind === 'real' ? 'outline:2px solid #ea580c' : ''}">
+      <div class="stat-num">${counts.real || 0}</div>
+      <div class="stat-label">אמיתיים</div>
+    </a>
     <a class="stat-tile" href="/admin/crm">
       <div class="stat-num">${counts.total || 0}</div>
       <div class="stat-label">הכול</div>
@@ -2654,12 +2715,14 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
         const interestPills = c.interests.slice(0, 3).map((t) =>
           `<span class="pill" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa">${esc(t)}</span>`
         ).join('');
+        const lastSeen = String(row.updated_at || '').slice(0, 16);
         return `
         <a class="rec" href="/admin/crm/${c.id}" style="display:flex;align-items:center;gap:12px;text-decoration:none">
           <div style="flex:1">
             <strong>${esc(c.displayName)}</strong>
             <div class="muted" style="font-size:.82rem">
               ${esc([c.email, c.phone, c.company].filter(Boolean).join(' · ') || 'עדיין בלי פרטי קשר — כרטיס מביקור')}
+              ${lastSeen ? ' · נראה לאחרונה ' + esc(lastSeen) : ''}
             </div>
           </div>
           ${interestPills}
@@ -2668,21 +2731,24 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
       }).join('')
     : `<div class="empty-state">
          <div style="font-size:2rem;margin-bottom:8px">👥</div>
-         ${q || status || interest
+         ${q || status || interest || kind
            ? 'אין תוצאות לחיפוש הזה.'
            : 'עדיין אין אנשי קשר — הם ייווצרו מהפניות שיגיעו, או מביקור באתר (כרטיס זמני).'}
        </div>`;
 
-  page(res, 'crm-contacts', 'אנשי קשר', `
+  page(res, 'crm-contacts', kind === 'real' ? 'לקוחות אמיתיים' : 'אנשי קשר', `
     <p class="lead" style="margin-top:0">
       כרטיס אחד לכל אדם: ביקור → כרטיס זמני, מייל/שם → העשרה, דפים → תחומי עניין.
+      <strong>לקוחות אמיתיים</strong> (עם שם/מייל/טלפון) נשמרים עד שנה בלי פעילות או עד מחיקה ידנית.
       כך אפשר לדוור רלוונטי — לא להציף.
     </p>
     <div class="stat-row">${tiles}</div>
     ${interestBar}
     <div class="card">
       <div class="section-bar">
-        <div class="card-head">👥 אנשי קשר · ${interest ? rows.length + ' (מסונן)' : counts.total}</div>
+        <div class="card-head">👥 ${kind === 'real' ? 'לקוחות אמיתיים' : 'אנשי קשר'} · ${
+          interest || kind ? rows.length + ' (מסונן)' : counts.total
+        }</div>
         <form method="GET" action="/admin/crm" style="display:flex;gap:8px;flex-wrap:wrap">
           <input name="q" class="input" value="${esc(q)}" placeholder="חיפוש שם, מייל, טלפון…">
           <select name="status" class="input" style="width:auto" onchange="this.form.submit()">
@@ -2691,19 +2757,24 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
               `<option value="${s}" ${s === status ? 'selected' : ''}>${esc(contacts.statusLabel(s))}</option>`
             ).join('')}
           </select>
+          <select name="kind" class="input" style="width:auto" onchange="this.form.submit()">
+            <option value="">כל הכרטיסים</option>
+            <option value="real" ${kind === 'real' ? 'selected' : ''}>אמיתיים בלבד</option>
+          </select>
           ${interest ? `<input type="hidden" name="interest" value="${esc(interest)}">` : ''}
           <button class="btn secondary sm" type="submit">חפש</button>
-          ${q || status || interest ? '<a class="btn secondary sm" href="/admin/crm">נקה</a>' : ''}
+          ${q || status || interest || kind ? '<a class="btn secondary sm" href="/admin/crm">נקה</a>' : ''}
         </form>
       </div>
       ${interest ? `<p class="muted" style="font-size:.85rem;margin:0 0 10px">מסונן לתחום: <strong dir="auto">${esc(interest)}</strong></p>` : ''}
+      ${kind === 'real' ? '<p class="muted" style="font-size:.85rem;margin:0 0 10px">מציג רק אנשים עם זהות (שם / מייל / טלפון) — לא כרטיסים זמניים.</p>' : ''}
       ${body}
     </div>`);
 });
 
 // ─── contacts: one person ────────────────────────────────────────────
 router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש קשר'), (req, res) => {
-  const { Customer, contacts, tasks, sequences } = require('../crm');
+  const { Customer, contacts, tasks, sequences, portal } = require('../crm');
   const c = Customer.load(req.params.id);
   if (!c) return res.status(404).send(layout('<div class="container">איש הקשר לא נמצא</div>', 'לא נמצא', ACCENT));
   const d = c.datasheet();
@@ -2711,6 +2782,22 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
   const today = tasks.todayUTC();
   const activeSeq = sequences.listActiveForContact(d.id);
   const allSeq = sequences.listSequences().filter((s) => s.active && s.stepCount > 0);
+  const portalAccount = portal.getByContact(d.id);
+  const portalOn = portal.portalConfig().enabled;
+  const portalMsg = String((req.query || {}).portal || '');
+  const portalErrHe = {
+    ok: 'חשבון פורטל נשמר',
+    created: 'חשבון פורטל נוצר',
+    password: 'סיסמה עודכנה',
+    deleted: 'חשבון פורטל הוסר',
+    username: 'שם משתמש קצר מדי (3+)',
+    'password-short': 'סיסמה לפחות 8 תווים',
+    'username-taken': 'שם המשתמש תפוס',
+    exists: 'כבר יש חשבון לאיש הקשר',
+    'no-identity': 'צריך שם, מייל או טלפון לפני פתיחת חשבון',
+    missing: 'אין חשבון פורטל',
+    contact: 'איש קשר לא נמצא'
+  };
   const personInbox = (() => {
     try {
       return c.inboxItems(10);
@@ -2912,12 +2999,53 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
     </div>
 
     <div class="card">
+      <div class="card-head">🔑 חשבון אזור אישי (פורטל)</div>
+      <p class="muted" style="font-size:.88rem;margin-top:0">
+        שם משתמש וסיסמה ללקוח — נפרד מאדמין. פורטל ציבורי
+        ${portalOn ? 'פעיל' : '<strong>כבוי</strong> (הפעילו ב־<a href="/admin/crm/privacy">פרטיות ושמירה</a>')}.
+        אפשר תמיד לפתוח חשבון כאן.
+      </p>
+      ${portalMsg
+        ? `<p class="${portalMsg === 'ok' || portalMsg === 'created' || portalMsg === 'password' || portalMsg === 'deleted' ? 'ok' : 'muted'}" style="font-size:.88rem;${
+            portalMsg === 'ok' || portalMsg === 'created' || portalMsg === 'password' || portalMsg === 'deleted'
+              ? 'color:#047857'
+              : 'color:#b91c1c'
+          }">${esc(portalErrHe[portalMsg] || portalMsg)}</p>`
+        : ''}
+      ${portalAccount
+        ? `<p style="margin:0 0 10px">משתמש: <strong dir="ltr">${esc(portalAccount.username)}</strong>
+             ${portalAccount.last_login_at ? ' · התחברות אחרונה ' + esc(String(portalAccount.last_login_at).slice(0, 16)) : ' · טרם התחבר'}
+           </p>
+           <form method="POST" action="/admin/crm/${d.id}/portal" class="stack">
+             <input type="hidden" name="action" value="set-password">
+             <label>סיסמה חדשה (8+)<input name="password" type="password" class="input" dir="ltr" minlength="8" required></label>
+             <button class="btn secondary sm" type="submit">עדכן סיסמה</button>
+           </form>
+           <form method="POST" action="/admin/crm/${d.id}/portal" style="margin-top:10px"
+                 onsubmit="return confirm('להסיר את חשבון הפורטל?')">
+             <input type="hidden" name="action" value="delete">
+             <button class="btn secondary sm" type="submit">הסר חשבון פורטל</button>
+           </form>`
+        : `<form method="POST" action="/admin/crm/${d.id}/portal" class="stack">
+             <input type="hidden" name="action" value="create">
+             <label>שם משתמש<input name="username" class="input" dir="ltr" required minlength="3"
+               placeholder="למשל מהמייל" value="${esc((d.email || '').split('@')[0] || '')}"></label>
+             <label>סיסמה התחלתית (8+)<input name="password" type="password" class="input" dir="ltr" minlength="8" required></label>
+             <button class="btn sm" type="submit">פתח חשבון ללקוח</button>
+           </form>`}
+    </div>
+
+    <div class="card">
       <div class="card-head">📊 למה הציון ${d.score}</div>
       <ul class="muted" style="font-size:.88rem;line-height:1.8">${reasons || '<li>אין עדיין נתונים</li>'}</ul>
     </div>
 
     <div class="card">
-      <div class="card-head">🕘 ציר הזמן · ${d.eventCount} אירועים</div>
+      <div class="card-head">🕘 ציר הזמן · ${d.eventCount} אירועים
+        <span class="muted" style="font-weight:400;font-size:.82rem;margin-inline-start:8px">
+          נראה לאחרונה ${esc(String(d.updatedAt || '').slice(0, 16) || '—')}
+        </span>
+      </div>
       ${timeline}
       <form method="POST" action="/admin/crm/${d.id}/note" style="display:flex;gap:8px;margin-top:12px">
         <input name="text" class="input" style="flex:1" placeholder="הוסיפו הערה לציר הזמן…" required>
@@ -2968,6 +3096,27 @@ router.post('/admin/crm/:id/update', requireAdmin, (req, res) => {
     status: b.status, tags: manual.concat(keptInterests), notes: b.notes, consent: !!b.consent
   });
   res.redirect('/admin/crm/' + encodeURIComponent(id));
+});
+
+// Owner mints / resets / deletes a customer portal login on a contact card.
+router.post('/admin/crm/:id/portal', requireAdmin, (req, res) => {
+  const { portal } = require('../crm');
+  const id = req.params.id;
+  const b = req.body || {};
+  const action = String(b.action || 'create');
+  let q = 'ok';
+  if (action === 'delete') {
+    q = portal.deleteAccountForContact(id) ? 'deleted' : 'missing';
+  } else if (action === 'set-password') {
+    const r = portal.setPassword(id, b.password);
+    q = r.ok ? 'password' : r.error === 'password' ? 'password-short' : r.error || 'missing';
+  } else {
+    const r = portal.createForContact(id, b.username, b.password);
+    if (r.ok) q = 'created';
+    else if (r.error === 'password') q = 'password-short';
+    else q = r.error || '1';
+  }
+  res.redirect('/admin/crm/' + encodeURIComponent(id) + '?portal=' + encodeURIComponent(q));
 });
 
 router.post('/admin/crm/:id/interest', requireAdmin, (req, res) => {
