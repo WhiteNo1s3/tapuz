@@ -38,6 +38,8 @@ const tasks = require('./tasks');
 const taskReminders = require('./task-reminders');
 const sequences = require('./sequences');
 const unifiedInbox = require('./unified-inbox');
+const companies = require('./companies');
+const deals = require('./deals');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -287,5 +289,7 @@ module.exports = {
   taskReminders,
   sequences,
   unifiedInbox,
+  companies,
+  deals,
   Customer
 };

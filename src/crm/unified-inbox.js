@@ -518,6 +518,84 @@ function addNoteFromItem(key, text) {
   }
 }
 
+/**
+ * Reply from the queue (v2.09 stubs).
+ *  - chat: admin text as assistant message in the CS conversation (no AI spend)
+ *  - whatsapp: free-form text via wa-send (gate + Graph; may refuse if window closed)
+ * Never invents a second transcript store.
+ *
+ * @returns {Promise<{ok:boolean, error?:string, channel?:string}>}
+ */
+async function replyFromItem(key, text) {
+  const body = String(text || '').trim().slice(0, 4000);
+  if (!body) return { ok: false, error: 'empty' };
+  const p = parseKey(key);
+  if (!p) return { ok: false, error: 'key' };
+
+  if (p.channel === 'chat') {
+    try {
+      const cs = require('./cs');
+      const conv = cs.getConversation(Number(p.refId));
+      if (!conv) return { ok: false, error: 'missing' };
+      if (conv.status !== 'open') return { ok: false, error: 'closed' };
+      cs.addMessage(Number(p.refId), 'assistant', body);
+      // Link / touch person when possible
+      const ensured = ensureContactForItem(key);
+      if (ensured.ok) {
+        try {
+          require('./events').record({
+            contactId: ensured.contactId,
+            type: 'chat',
+            title: 'תשובה מהתיבה: ' + body.slice(0, 120)
+          });
+          contacts.touchActivity(ensured.contactId);
+        } catch (e) { /* */ }
+      }
+      return { ok: true, channel: 'chat' };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  if (p.channel === 'whatsapp') {
+    try {
+      const row = db
+        .prepare('SELECT * FROM crm_wa_messages WHERE id = ?')
+        .get(Number(p.refId));
+      if (!row || !row.phone) return { ok: false, error: 'missing' };
+      // Prefer linking contact first (entity enrichment)
+      try { ensureContactForItem(key); } catch (e) { /* */ }
+      const r = await require('./wa-send').sendMessage({
+        phone: row.phone,
+        msgType: 'text',
+        body
+      });
+      if (!r.ok) {
+        return {
+          ok: false,
+          error: r.error || 'send_failed',
+          channel: 'whatsapp'
+        };
+      }
+      // Keep item open until owner marks טופל — reply ≠ done
+      if (row.contact_id) {
+        try {
+          require('./events').record({
+            contactId: row.contact_id,
+            type: 'chat',
+            title: 'WhatsApp: ' + body.slice(0, 120)
+          });
+        } catch (e) { /* */ }
+      }
+      return { ok: true, channel: 'whatsapp', waMessageId: r.waMessageId };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  return { ok: false, error: 'channel' };
+}
+
 /** Resolve display names for contact ids in a list (one query). */
 function attachContactNames(items) {
   const ids = [
@@ -557,6 +635,7 @@ module.exports = {
   ensureContactForItem,
   createTaskFromItem,
   addNoteFromItem,
+  replyFromItem,
   ackItem,
   unackItem,
   isAcked,

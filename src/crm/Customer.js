@@ -155,6 +155,28 @@ class Customer {
     return this._cache.lists;
   }
 
+  /** Companies this person is a member of (v2.09). */
+  companies() {
+    if (this._cache.companies) return this._cache.companies;
+    try {
+      this._cache.companies = require('./companies').companiesForContact(this.id);
+    } catch (e) {
+      this._cache.companies = [];
+    }
+    return this._cache.companies;
+  }
+
+  /** Deals linked to this person (v2.09). */
+  deals() {
+    if (this._cache.deals) return this._cache.deals;
+    try {
+      this._cache.deals = require('./deals').dealsForContact(this.id);
+    } catch (e) {
+      this._cache.deals = [];
+    }
+    return this._cache.deals;
+  }
+
   /** How many things they have ever done. */
   get eventCount() {
     if (this._cache.eventCount == null) this._cache.eventCount = events.countForContact(this.id);
@@ -215,6 +237,8 @@ class Customer {
       submissionCount: this.submissions(50).length,
       lists: this.lists(),
       relations: this.relations(),
+      companies: this.companies(),
+      deals: this.deals(),
       timeline: this.timeline(20)
     };
   }

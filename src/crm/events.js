@@ -13,7 +13,7 @@ const { db } = require('../db');
 // The vocabulary. A closed set keeps the timeline groupable and the admin
 // filters honest; anything unknown is stored as 'other' rather than silently
 // inventing a new type nobody can filter on.
-const TYPES = ['form', 'pageview', 'note', 'status', 'email', 'chat', 'other'];
+const TYPES = ['form', 'pageview', 'note', 'status', 'email', 'chat', 'other', 'deal'];
 
 function normalizeType(t) {
   const v = String(t == null ? '' : t).trim().toLowerCase();

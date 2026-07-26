@@ -499,6 +499,53 @@ function initializeCrm() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_seq_sends_token ON crm_sequence_sends(token)');
 
+  // Companies + deals (v2.09) — hang off Customer, not parallel people stores.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_companies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      domain TEXT DEFAULT '',
+      phone TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      country TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_companies_name ON crm_companies(name)');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_company_members (
+      company_id INTEGER NOT NULL,
+      contact_id INTEGER NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (company_id, contact_id),
+      FOREIGN KEY (company_id) REFERENCES crm_companies(id) ON DELETE CASCADE,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_company_members_contact ON crm_company_members(contact_id)');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_deals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      contact_id INTEGER,
+      company_id INTEGER,
+      amount REAL,
+      currency TEXT NOT NULL DEFAULT 'ILS',
+      stage TEXT NOT NULL DEFAULT 'lead',
+      expected_close TEXT,
+      notes TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE SET NULL,
+      FOREIGN KEY (company_id) REFERENCES crm_companies(id) ON DELETE SET NULL
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_deals_contact ON crm_deals(contact_id, stage)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_deals_company ON crm_deals(company_id, stage)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_deals_stage ON crm_deals(stage, expected_close)');
+
   initializeCrmCs();
   initializeCrmWa();
   initializeCrmSearch();

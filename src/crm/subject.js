@@ -52,7 +52,9 @@ const PERSONAL_TABLES = [
   // never lets a personal table go untracked.
   { table: 'crm_tasks', column: 'contact_id', label: 'sales tasks' },
   { table: 'crm_sequence_enrollments', column: 'contact_id', label: 'sequence enrollments' },
-  { table: 'crm_sequence_sends', column: 'contact_id', label: 'sequence sends' }
+  { table: 'crm_sequence_sends', column: 'contact_id', label: 'sequence sends' },
+  { table: 'crm_company_members', column: 'contact_id', label: 'company memberships' },
+  { table: 'crm_deals', column: 'contact_id', label: 'deals' }
 ];
 
 /** Phone-keyed WhatsApp tables — reached through the contact's phone. */

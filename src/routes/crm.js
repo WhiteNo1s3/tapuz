@@ -112,9 +112,11 @@ router.get('/admin/crm/inbox', requireAdmin, requireCrm('crm-inbox', 'תיבה �
         ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ נפתחה משימה על הכרטיס.</div>'
         : flash === 'note'
           ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ הערה נרשמה בציר הזמן.</div>'
-          : flashErr
-            ? `<div class="card" style="border-color:#fecaca;background:#fef2f2">⚠ ${esc(flashErr)}</div>`
-            : '';
+          : flash === 'replied'
+            ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ תשובה נשלחה בערוץ (התמלול נשאר במקור).</div>'
+            : flashErr
+              ? `<div class="card" style="border-color:#fecaca;background:#fef2f2">⚠ ${esc(flashErr)}</div>`
+              : '';
 
   const channelTone = {
     form: 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe',
@@ -189,6 +191,16 @@ router.get('/admin/crm/inbox', requireAdmin, requireCrm('crm-inbox', 'תיבה �
               <button class="btn secondary sm" type="submit">📝 הערה</button>
             </form>
           </div>` : ''}
+          ${it.channel === 'chat' || it.channel === 'whatsapp' ? `
+          <form method="POST" action="/admin/crm/inbox/reply"
+                style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            <input type="hidden" name="key" value="${esc(it.id)}">
+            <input name="text" class="input" style="flex:1;min-width:180px" required
+                   placeholder="${it.channel === 'whatsapp'
+                     ? 'תשובת WhatsApp (טקסט — דורש חלון שירות פתוח)'
+                     : 'תשובה בצ׳אט (נשמרת כהודעת נציג, בלי AI)'}">
+            <button class="btn sm" type="submit">${it.channel === 'whatsapp' ? '📗 שלח WA' : '💬 השב'}</button>
+          </form>` : ''}
         </div>`;
       }).join('')
     : `<div class="empty-state">
@@ -288,6 +300,364 @@ router.post('/admin/crm/inbox/note', requireAdmin, (req, res) => {
           : (r && r.error) || 'ההערה לא נשמרה'
       )
   );
+});
+
+router.post('/admin/crm/inbox/reply', requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const r = await require('../crm').unifiedInbox.replyFromItem(String(b.key || ''), b.text);
+    if (r && r.ok) return res.redirect('/admin/crm/inbox?ok=replied');
+    const he = {
+      empty: 'כתבו תשובה',
+      missing: 'השיחה לא נמצאה',
+      closed: 'השיחה כבר סגורה',
+      channel: 'תשובה זמינה רק לצ׳אט ו־WhatsApp',
+      csw_closed_use_template: 'חלון השירות ב־WhatsApp סגור — השתמשו בתבנית במסך WhatsApp',
+      marketing_opt_in_required: 'נדרשת הסכמת WhatsApp לשיווק',
+      whatsapp_disabled: 'WhatsApp כבוי בהגדרות',
+      graph_error: 'שליחת WhatsApp נכשלה (Meta)',
+      invalid_message: 'הודעה לא תקינה',
+      messaging_limit_reached: 'מגבלת WhatsApp יומית'
+    };
+    return res.redirect(
+      '/admin/crm/inbox?err=' + encodeURIComponent(he[r && r.error] || (r && r.error) || 'שליחה נכשלה')
+    );
+  } catch (e) {
+    return res.redirect('/admin/crm/inbox?err=' + encodeURIComponent(e.message || 'שגיאה'));
+  }
+});
+
+// ─── companies (v2.09, BEFORE /:id) ──────────────────────────────────
+router.get('/admin/crm/companies', requireAdmin, requireCrm('crm-companies', 'חברות'), (req, res) => {
+  const { companies } = require('../crm');
+  const q = String((req.query || {}).q || '');
+  const rows = companies.listCompanies({ q, limit: 100 });
+  const list = rows.length
+    ? rows.map((c) => `
+        <a class="rec" href="/admin/crm/companies/${c.id}" style="display:flex;gap:12px;text-decoration:none;flex-wrap:wrap">
+          <div style="flex:1">
+            <strong>${esc(c.name)}</strong>
+            <div class="muted" style="font-size:.82rem" dir="ltr">${esc(c.domain || '')} ${esc(c.phone || '')}</div>
+          </div>
+          <span class="pill">${companies.memberCount(c.id)} אנשים</span>
+        </a>`).join('')
+    : '<div class="empty-state">אין חברות — צרו חברה וקשרו אליה אנשי קשר.</div>';
+
+  page(res, 'crm-companies', 'חברות', `
+    <p class="lead" style="margin-top:0">
+      ארגונים תלויים ב־Customer — לא אנשים מקבילים. חברה = ישות B2B; אנשים נקשרים אליה.
+    </p>
+    <div class="card">
+      <div class="section-bar">
+        <div class="card-head">🏢 חברות · ${rows.length}</div>
+        <form method="GET" action="/admin/crm/companies">
+          <input name="q" class="input" value="${esc(q)}" placeholder="חיפוש…">
+        </form>
+      </div>
+      ${list}
+    </div>
+    <div class="card">
+      <div class="card-head">חברה חדשה</div>
+      <form method="POST" action="/admin/crm/companies" class="stack">
+        <label>שם<input name="name" class="input" required placeholder="סטודיו תפוז בע״מ"></label>
+        <label>דומיין<input name="domain" class="input" dir="ltr" placeholder="example.com"></label>
+        <label>טלפון<input name="phone" class="input" dir="ltr"></label>
+        <label>הערות<textarea name="notes" class="input" rows="2"></textarea></label>
+        <button class="btn" type="submit">צור חברה</button>
+      </form>
+    </div>`);
+});
+
+router.post('/admin/crm/companies', requireAdmin, (req, res) => {
+  try {
+    const c = require('../crm').companies.createCompany(req.body || {});
+    if (c) return res.redirect('/admin/crm/companies/' + c.id);
+  } catch (e) { /* */ }
+  res.redirect('/admin/crm/companies');
+});
+
+router.get('/admin/crm/companies/:id', requireAdmin, requireCrm('crm-companies', 'חברה'), (req, res) => {
+  const { companies, contacts, deals } = require('../crm');
+  const c = companies.getCompany(req.params.id);
+  if (!c) return res.status(404).send(layout('<div class="container">חברה לא נמצאה</div>', 'לא נמצא', ACCENT));
+  const members = companies.membersOf(c.id);
+  const companyDeals = deals.listDeals({ companyId: c.id, limit: 40 });
+  const people = contacts.listContacts({ limit: 80 }).filter((p) =>
+    p.status !== 'garbage' && p.status !== 'provisional'
+  );
+
+  page(res, 'crm-companies', c.name, `
+    <div class="card">
+      <div class="section-bar">
+        <div class="card-head">🏢 ${esc(c.name)}</div>
+        <a class="btn secondary sm" href="/admin/crm/companies">← לרשימה</a>
+      </div>
+      <form method="POST" action="/admin/crm/companies/${c.id}" class="stack">
+        <label>שם<input name="name" class="input" value="${esc(c.name)}" required></label>
+        <label>דומיין<input name="domain" class="input" dir="ltr" value="${esc(c.domain || '')}"></label>
+        <label>טלפון<input name="phone" class="input" dir="ltr" value="${esc(c.phone || '')}"></label>
+        <label>הערות<textarea name="notes" class="input" rows="3">${esc(c.notes || '')}</textarea></label>
+        <button class="btn" type="submit">שמור</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-head">אנשים בחברה · ${members.length}</div>
+      ${members.length
+        ? members.map((m) => `
+          <div class="rec" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <a href="/admin/crm/${m.id}" style="flex:1">${esc(m.name || m.email || m.phone || '#' + m.id)}</a>
+            <span class="pill">${esc(m.company_role || 'member')}</span>
+            <form method="POST" action="/admin/crm/companies/${c.id}/unlink">
+              <input type="hidden" name="contactId" value="${m.id}">
+              <button class="btn secondary sm" type="submit">הסר</button>
+            </form>
+          </div>`).join('')
+        : '<p class="muted">עדיין אין חברים.</p>'}
+      <form method="POST" action="/admin/crm/companies/${c.id}/link" class="stack" style="margin-top:12px">
+        <label>הוסף איש קשר
+          <select name="contactId" class="input" required>
+            <option value="">— בחרו —</option>
+            ${people.map((p) => {
+              const label = [p.name, p.email, p.phone].filter(Boolean).join(' · ');
+              return `<option value="${p.id}">${esc(label)}</option>`;
+            }).join('')}
+          </select>
+        </label>
+        <label>תפקיד<input name="role" class="input" value="member" placeholder="member / decision-maker"></label>
+        <button class="btn secondary sm" type="submit">קשר</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-head">עסקאות · ${companyDeals.length}
+        <a class="btn secondary sm" href="/admin/crm/deals?companyId=${c.id}">הכול</a>
+      </div>
+      ${companyDeals.length
+        ? companyDeals.map((d) => `
+          <a class="rec" href="/admin/crm/deals/${d.id}" style="display:flex;gap:8px;text-decoration:none">
+            <strong style="flex:1">${esc(d.title)}</strong>
+            <span class="pill">${esc(deals.stageLabel(d.stage))}</span>
+            ${d.amount != null ? `<span>₪${esc(String(d.amount))}</span>` : ''}
+          </a>`).join('')
+        : '<p class="muted">אין עסקאות — צרו ב־<a href="/admin/crm/deals">עסקאות</a>.</p>'}
+    </div>
+    <div class="card">
+      <form method="POST" action="/admin/crm/companies/${c.id}/delete"
+            onsubmit="return confirm('למחוק חברה? העסקאות יישארו בלי חברה.')">
+        <button class="btn secondary sm" type="submit">מחק חברה</button>
+      </form>
+    </div>`);
+});
+
+router.post('/admin/crm/companies/:id', requireAdmin, (req, res) => {
+  require('../crm').companies.updateCompany(req.params.id, req.body || {});
+  res.redirect('/admin/crm/companies/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/companies/:id/link', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  require('../crm').companies.linkContact(req.params.id, b.contactId, b.role);
+  res.redirect('/admin/crm/companies/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/companies/:id/unlink', requireAdmin, (req, res) => {
+  require('../crm').companies.unlinkContact(req.params.id, (req.body || {}).contactId);
+  res.redirect('/admin/crm/companies/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/companies/:id/delete', requireAdmin, (req, res) => {
+  require('../crm').companies.deleteCompany(req.params.id);
+  res.redirect('/admin/crm/companies');
+});
+
+// ─── deals (v2.09, BEFORE /:id) ──────────────────────────────────────
+router.get('/admin/crm/deals', requireAdmin, requireCrm('crm-deals', 'עסקאות'), (req, res) => {
+  const { deals, contacts, companies } = require('../crm');
+  const stage = String((req.query || {}).stage || '');
+  const companyId = (req.query || {}).companyId || '';
+  const rows = deals.listDeals({
+    stage: deals.STAGES.includes(stage) ? stage : '',
+    companyId: companyId ? Number(companyId) : undefined,
+    limit: 100
+  });
+  const summary = deals.pipelineSummary();
+  const fmt = (n) => new Intl.NumberFormat('he-IL').format(Math.round(n || 0));
+
+  const tiles = deals.STAGES.map((s) => `
+    <a class="stat-tile" href="/admin/crm/deals?stage=${s}">
+      <div class="stat-num">${summary.byStage[s].n}</div>
+      <div class="stat-label">${esc(deals.stageLabel(s))}</div>
+    </a>`).join('');
+
+  const list = rows.length
+    ? rows.map((d) => `
+        <a class="rec" href="/admin/crm/deals/${d.id}" style="display:flex;gap:10px;flex-wrap:wrap;text-decoration:none;align-items:center">
+          <div style="flex:1;min-width:140px">
+            <strong>${esc(d.title)}</strong>
+            <div class="muted" style="font-size:.8rem">
+              ${d.contact_name || d.contact_email ? esc(d.contact_name || d.contact_email) : ''}
+              ${d.company_name ? ' · ' + esc(d.company_name) : ''}
+            </div>
+          </div>
+          <span class="pill">${esc(deals.stageLabel(d.stage))}</span>
+          ${d.amount != null ? `<strong>₪${fmt(d.amount)}</strong>` : ''}
+          ${d.expected_close ? `<span class="muted" style="font-size:.8rem">${esc(d.expected_close)}</span>` : ''}
+        </a>`).join('')
+    : '<div class="empty-state">אין עסקאות — צרו עסקה על איש קשר או חברה.</div>';
+
+  const people = contacts.listContacts({ limit: 60 }).filter((c) =>
+    c.email || c.phone || c.name
+  );
+  const cos = companies.listCompanies({ limit: 60 });
+
+  page(res, 'crm-deals', 'עסקאות', `
+    <p class="lead" style="margin-top:0">
+      הזדמנויות תלויות ב־Customer / חברה — צינור מכירות עם ערך, לא רק סטטוס איש קשר.
+    </p>
+    <div class="stat-row">
+      <div class="stat-tile">
+        <div class="stat-num">₪${fmt(summary.open.value)}</div>
+        <div class="stat-label">פתוח · ${summary.open.n}</div>
+      </div>
+      ${tiles}
+    </div>
+    <div class="card">
+      <div class="section-bar">
+        <div class="card-head">💼 עסקאות</div>
+        <a class="btn secondary sm" href="/admin/crm/deals">הכול</a>
+      </div>
+      ${list}
+    </div>
+    <div class="card">
+      <div class="card-head">עסקה חדשה</div>
+      <form method="POST" action="/admin/crm/deals" class="stack">
+        <label>כותרת<input name="title" class="input" required placeholder="אתר תדמית + CRM"></label>
+        <label>איש קשר
+          <select name="contactId" class="input">
+            <option value="">— אופציונלי אם יש חברה —</option>
+            ${people.map((p) =>
+              `<option value="${p.id}">${esc([p.name, p.email].filter(Boolean).join(' · '))}</option>`
+            ).join('')}
+          </select>
+        </label>
+        <label>חברה
+          <select name="companyId" class="input">
+            <option value="">— אופציונלי —</option>
+            ${cos.map((co) => `<option value="${co.id}" ${String(co.id) === String(companyId) ? 'selected' : ''}>${esc(co.name)}</option>`).join('')}
+          </select>
+        </label>
+        <label>שלב
+          <select name="stage" class="input">
+            ${deals.STAGES.map((s) =>
+              `<option value="${s}">${esc(deals.stageLabel(s))}</option>`).join('')}
+          </select>
+        </label>
+        <label>סכום (₪)<input name="amount" type="number" min="0" step="1" class="input" dir="ltr"></label>
+        <label>סגירה צפויה<input name="expectedClose" type="date" class="input"></label>
+        <label>הערות<textarea name="notes" class="input" rows="2"></textarea></label>
+        <button class="btn" type="submit">צור עסקה</button>
+      </form>
+    </div>`);
+});
+
+router.post('/admin/crm/deals', requireAdmin, (req, res) => {
+  try {
+    const b = req.body || {};
+    const d = require('../crm').deals.createDeal({
+      title: b.title,
+      contactId: b.contactId,
+      companyId: b.companyId,
+      amount: b.amount,
+      stage: b.stage,
+      expectedClose: b.expectedClose,
+      notes: b.notes
+    });
+    if (d && d.contact_id) {
+      try {
+        require('../crm').events.record({
+          contactId: d.contact_id,
+          type: 'deal',
+          title: 'עסקה: ' + d.title
+        });
+      } catch (e) { /* */ }
+    }
+    if (d) return res.redirect('/admin/crm/deals/' + d.id);
+  } catch (e) {
+    return res.redirect('/admin/crm/deals?err=' + encodeURIComponent(e.message || 'שגיאה'));
+  }
+  res.redirect('/admin/crm/deals');
+});
+
+router.get('/admin/crm/deals/:id', requireAdmin, requireCrm('crm-deals', 'עסקה'), (req, res) => {
+  const { deals, contacts, companies } = require('../crm');
+  const d = deals.getDeal(req.params.id);
+  if (!d) return res.status(404).send(layout('<div class="container">עסקה לא נמצאה</div>', 'לא נמצא', ACCENT));
+  const people = contacts.listContacts({ limit: 80 });
+  const cos = companies.listCompanies({ limit: 80 });
+
+  page(res, 'crm-deals', d.title, `
+    <div class="card">
+      <div class="section-bar">
+        <div class="card-head">💼 ${esc(d.title)}</div>
+        <a class="btn secondary sm" href="/admin/crm/deals">← לרשימה</a>
+      </div>
+      <form method="POST" action="/admin/crm/deals/${d.id}" class="stack">
+        <label>כותרת<input name="title" class="input" value="${esc(d.title)}" required></label>
+        <label>איש קשר
+          <select name="contactId" class="input">
+            <option value="">—</option>
+            ${people.map((p) =>
+              `<option value="${p.id}" ${Number(p.id) === Number(d.contact_id) ? 'selected' : ''}>${esc([p.name, p.email].filter(Boolean).join(' · ') || '#' + p.id)}</option>`
+            ).join('')}
+          </select>
+        </label>
+        <label>חברה
+          <select name="companyId" class="input">
+            <option value="">—</option>
+            ${cos.map((co) =>
+              `<option value="${co.id}" ${Number(co.id) === Number(d.company_id) ? 'selected' : ''}>${esc(co.name)}</option>`
+            ).join('')}
+          </select>
+        </label>
+        <label>שלב
+          <select name="stage" class="input">
+            ${deals.STAGES.map((s) =>
+              `<option value="${s}" ${s === d.stage ? 'selected' : ''}>${esc(deals.stageLabel(s))}</option>`).join('')}
+          </select>
+        </label>
+        <label>סכום<input name="amount" type="number" min="0" step="1" class="input" dir="ltr"
+          value="${d.amount != null ? esc(String(d.amount)) : ''}"></label>
+        <label>סגירה צפויה<input name="expectedClose" type="date" class="input"
+          value="${esc(d.expected_close || '')}"></label>
+        <label>הערות<textarea name="notes" class="input" rows="3">${esc(d.notes || '')}</textarea></label>
+        <button class="btn" type="submit">שמור</button>
+      </form>
+      ${d.contact_id ? `<p class="muted"><a href="/admin/crm/${d.contact_id}">← לכרטיס איש הקשר</a></p>` : ''}
+      ${d.company_id ? `<p class="muted"><a href="/admin/crm/companies/${d.company_id}">← לחברה</a></p>` : ''}
+    </div>
+    <div class="card">
+      <form method="POST" action="/admin/crm/deals/${d.id}/delete" onsubmit="return confirm('למחוק עסקה?')">
+        <button class="btn secondary sm" type="submit">מחק עסקה</button>
+      </form>
+    </div>`);
+});
+
+router.post('/admin/crm/deals/:id', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  require('../crm').deals.updateDeal(req.params.id, {
+    title: b.title,
+    contactId: b.contactId,
+    companyId: b.companyId,
+    amount: b.amount,
+    stage: b.stage,
+    expectedClose: b.expectedClose,
+    notes: b.notes
+  });
+  res.redirect('/admin/crm/deals/' + encodeURIComponent(req.params.id));
+});
+
+router.post('/admin/crm/deals/:id/delete', requireAdmin, (req, res) => {
+  require('../crm').deals.deleteDeal(req.params.id);
+  res.redirect('/admin/crm/deals');
 });
 
 // ─── email sequences / drip (v2.03, BEFORE /:id) ─────────────────────
@@ -2481,6 +2851,38 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
           <a class="btn secondary sm" href="${esc(it.href)}">פתח</a>
         </div>`).join('')}
     </div>` : ''}
+
+    <div class="card">
+      <div class="card-head">🏢 חברות · ${(d.companies || []).length}
+        <a class="btn secondary sm" href="/admin/crm/companies" style="margin-inline-start:auto">ניהול</a>
+      </div>
+      ${(d.companies && d.companies.length)
+        ? d.companies.map((co) => `
+          <a class="rec" href="/admin/crm/companies/${co.id}" style="display:flex;gap:8px;text-decoration:none">
+            <strong style="flex:1">${esc(co.name)}</strong>
+            <span class="pill">${esc(co.company_role || 'member')}</span>
+          </a>`).join('')
+        : '<p class="muted" style="font-size:.88rem">לא מקושר לחברה — קשרו מ־<a href="/admin/crm/companies">חברות</a>.</p>'}
+    </div>
+
+    <div class="card">
+      <div class="card-head">💼 עסקאות · ${(d.deals || []).length}
+        <a class="btn secondary sm" href="/admin/crm/deals" style="margin-inline-start:auto">הכול</a>
+      </div>
+      ${(d.deals && d.deals.length)
+        ? d.deals.map((deal) => `
+          <a class="rec" href="/admin/crm/deals/${deal.id}" style="display:flex;gap:8px;flex-wrap:wrap;text-decoration:none;align-items:center">
+            <strong style="flex:1">${esc(deal.title)}</strong>
+            <span class="pill">${esc(require('../crm').deals.stageLabel(deal.stage))}</span>
+            ${deal.amount != null ? `<span>₪${esc(String(deal.amount))}</span>` : ''}
+          </a>`).join('')
+        : `<form method="POST" action="/admin/crm/deals" class="stack">
+             <input type="hidden" name="contactId" value="${d.id}">
+             <label>עסקה חדשה על האדם הזה
+               <input name="title" class="input" required placeholder="למשל: חבילת אתר"></label>
+             <button class="btn secondary sm" type="submit">צור עסקה</button>
+           </form>`}
+    </div>
 
     <div class="card">
       <div class="card-head">🔁 רצפי מייל</div>

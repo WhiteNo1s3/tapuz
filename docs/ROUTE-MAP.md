@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**230 routes across 36 files.**
+**243 routes across 36 files.**
 
 ## By file (what each module owns)
 
@@ -108,7 +108,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /crm/cs/v1/session`
 - `POST /crm/cs/v1/message`
 
-### `src/routes/crm.js` — 66 routes
+### `src/routes/crm.js` — 79 routes
 
 - `POST /admin/crm/settings`
 - `GET /admin/crm/inbox`
@@ -116,6 +116,19 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/crm/inbox/link`
 - `POST /admin/crm/inbox/task`
 - `POST /admin/crm/inbox/note`
+- `POST /admin/crm/inbox/reply`
+- `GET /admin/crm/companies`
+- `POST /admin/crm/companies`
+- `GET /admin/crm/companies/:id`
+- `POST /admin/crm/companies/:id`
+- `POST /admin/crm/companies/:id/link`
+- `POST /admin/crm/companies/:id/unlink`
+- `POST /admin/crm/companies/:id/delete`
+- `GET /admin/crm/deals`
+- `POST /admin/crm/deals`
+- `GET /admin/crm/deals/:id`
+- `POST /admin/crm/deals/:id`
+- `POST /admin/crm/deals/:id/delete`
 - `GET /admin/crm/sequences`
 - `POST /admin/crm/sequences`
 - `POST /admin/crm/sequences/enrollments/:enrollId/cancel`
@@ -461,12 +474,25 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/claims` | GET | `src/routes/crm.js` |
 | `/admin/crm/claims/:id/approve` | POST | `src/routes/crm.js` |
 | `/admin/crm/claims/:id/reject` | POST | `src/routes/crm.js` |
+| `/admin/crm/companies` | GET | `src/routes/crm.js` |
+| `/admin/crm/companies` | POST | `src/routes/crm.js` |
+| `/admin/crm/companies/:id` | GET | `src/routes/crm.js` |
+| `/admin/crm/companies/:id` | POST | `src/routes/crm.js` |
+| `/admin/crm/companies/:id/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/companies/:id/link` | POST | `src/routes/crm.js` |
+| `/admin/crm/companies/:id/unlink` | POST | `src/routes/crm.js` |
 | `/admin/crm/conversions` | GET | `src/routes/crm.js` |
 | `/admin/crm/conversions` | POST | `src/routes/crm.js` |
+| `/admin/crm/deals` | GET | `src/routes/crm.js` |
+| `/admin/crm/deals` | POST | `src/routes/crm.js` |
+| `/admin/crm/deals/:id` | GET | `src/routes/crm.js` |
+| `/admin/crm/deals/:id` | POST | `src/routes/crm.js` |
+| `/admin/crm/deals/:id/delete` | POST | `src/routes/crm.js` |
 | `/admin/crm/inbox` | GET | `src/routes/crm.js` |
 | `/admin/crm/inbox/handle` | POST | `src/routes/crm.js` |
 | `/admin/crm/inbox/link` | POST | `src/routes/crm.js` |
 | `/admin/crm/inbox/note` | POST | `src/routes/crm.js` |
+| `/admin/crm/inbox/reply` | POST | `src/routes/crm.js` |
 | `/admin/crm/inbox/task` | POST | `src/routes/crm.js` |
 | `/admin/crm/interests` | GET | `src/routes/crm.js` |
 | `/admin/crm/interests/segment` | POST | `src/routes/crm.js` |
