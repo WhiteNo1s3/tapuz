@@ -560,6 +560,20 @@ function initializeCrm() {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_portal_user ON crm_portal_accounts(username)');
 
+  // Open attributes bag (v2.12) — vertical/enterprise fields without schema forks.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_contact_attrs (
+      contact_id INTEGER NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      public INTEGER NOT NULL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (contact_id, key),
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_attrs_key ON crm_contact_attrs(key, contact_id)');
+
   initializeCrmCs();
   initializeCrmWa();
   initializeCrmSearch();

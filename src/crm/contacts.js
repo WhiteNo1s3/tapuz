@@ -158,7 +158,11 @@ function upsertContact(input = {}) {
          VALUES (@email, @phone, @name, @company, @status, @source, @tags, @notes, @country, @consent, @search_blob)`
       )
       .run(row);
-    return { contact: getContact(info.lastInsertRowid), created: true };
+    const created = getContact(info.lastInsertRowid);
+    try {
+      require('./hooks').emit('contact.created', { contactId: created.id, contact: created });
+    } catch (e) { /* hooks must never block identity */ }
+    return { contact: created, created: true };
   }
 
   // ── merge into the person we already know ──
@@ -201,7 +205,16 @@ function upsertContact(input = {}) {
   if (!Object.keys(patch).length) {
     // Nothing new — still bump updated_at so "last seen" means something.
     db.prepare('UPDATE crm_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(existing.id);
-    return { contact: getContact(existing.id), created: false };
+    const touched = getContact(existing.id);
+    try {
+      require('./hooks').emit('contact.updated', {
+        contactId: existing.id,
+        contact: touched,
+        patch: { touched: true },
+        created: false
+      });
+    } catch (e) { /* */ }
+    return { contact: touched, created: false };
   }
 
   const next = Object.assign({}, existing, patch);
@@ -209,7 +222,16 @@ function upsertContact(input = {}) {
   const sets = Object.keys(patch).map((k) => `${k} = @${k}`).join(', ');
   db.prepare(`UPDATE crm_contacts SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE id = @id`)
     .run(Object.assign({ id: existing.id }, patch));
-  return { contact: getContact(existing.id), created: false };
+  const updated = getContact(existing.id);
+  try {
+    require('./hooks').emit('contact.updated', {
+      contactId: existing.id,
+      contact: updated,
+      patch,
+      created: false
+    });
+  } catch (e) { /* */ }
+  return { contact: updated, created: false };
 }
 
 /** Admin edit — here a field CAN be cleared, because a human meant it. */
@@ -241,7 +263,16 @@ function updateContact(id, patch = {}) {
   const sets = Object.keys(set).map((k) => `${k} = @${k}`).join(', ');
   db.prepare(`UPDATE crm_contacts SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE id = @id`)
     .run(Object.assign({ id: Number(id) }, set));
-  return getContact(id);
+  const row = getContact(id);
+  try {
+    require('./hooks').emit('contact.updated', {
+      contactId: Number(id),
+      contact: row,
+      patch: set,
+      source: 'admin'
+    });
+  } catch (e) { /* */ }
+  return row;
 }
 
 /** Deleting a person takes their timeline, edges and memberships (ON DELETE CASCADE). */

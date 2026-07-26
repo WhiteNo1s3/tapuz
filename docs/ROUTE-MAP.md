@@ -186,6 +186,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/crm`
 - `GET /admin/crm/:id`
 - `POST /admin/crm/:id/update`
+- `POST /admin/crm/:id/attrs`
 - `POST /admin/crm/:id/portal`
 - `POST /admin/crm/:id/interest`
 - `POST /admin/crm/:id/note`
@@ -472,6 +473,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/create-account` | POST | `src/routes/auth-screens.js` |
 | `/admin/crm` | GET | `src/routes/crm.js` |
 | `/admin/crm/:id` | GET | `src/routes/crm.js` |
+| `/admin/crm/:id/attrs` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/delete` | POST | `src/routes/crm.js` |
 | `/admin/crm/:id/export.json` | GET | `src/routes/crm.js` |
 | `/admin/crm/:id/interest` | POST | `src/routes/crm.js` |

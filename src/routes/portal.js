@@ -199,6 +199,18 @@ router.get('/account', requirePortal, requireLoggedIn, (req, res) => {
             ? `<p class="muted" style="margin-top:12px">תחומי עניין: ${profile.interests.map((t) => esc(t)).join(' · ')}</p>`
             : ''
         }
+        ${
+          profile.attrs && Object.keys(profile.attrs).length
+            ? `<h2 style="font-size:1rem;margin:20px 0 8px">פרטים נוספים</h2>` +
+              Object.keys(profile.attrs)
+                .map((k) => {
+                  const v = profile.attrs[k];
+                  const shown = typeof v === 'string' ? v : JSON.stringify(v);
+                  return `<div class="kv"><b dir="ltr">${esc(k)}</b><span>${esc(shown)}</span></div>`;
+                })
+                .join('')
+            : ''
+        }
         ${deals ? `<h2 style="font-size:1rem;margin:20px 0 8px">עסקאות</h2>${deals}` : ''}
         <h2 style="font-size:1rem;margin:20px 0 8px">היסטוריה אצלנו</h2>
         ${tl || '<p class="muted">עדיין אין פעילות מתועדת.</p>'}

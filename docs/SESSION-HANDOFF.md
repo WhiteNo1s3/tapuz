@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v2.10 named retention + customer portal).
+> **Last updated:** 2026-07-26 (v2.12 CRM extension spine — expand, not closed).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v2.10 named retention + customer portal** on main |
-| Recent line | v2.09 companies/deals → **v2.10 named 1y retention + portal** |
-| Package version field | **`2.10.0-alpha`** |
+| Tip when handoff written | see `git log -1` — **v2.11 CRM hooks + attrs (expand spine)** on main |
+| Recent line | v2.10 portal → **v2.11 extension hooks/attrs** |
+| Package version field | **`2.12.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -90,7 +90,12 @@ WhatsApp phases W0–W3 (config/ledger/webhook/send), CRM phases on main, CS wid
 - Dual lifecycle: provisional ghosts short path; **named/reachable** → erase only after `namedQuietDays` (default **365**) or owner delete (`0` = never auto).
 - List: `?kind=real` + «אמיתיים» tile; last-seen on rows.
 - Portal: `src/crm/portal.js` + `src/routes/portal.js` (`/account/*`); flags `crm.portal.enabled` + `allowSelfRegister` **both default false**. Owner mints from contact card (`POST /admin/crm/:id/portal`). Cookie `tapuz_portal` ≠ admin. Privacy UI owns cards + portal.
-- Next verticals (restaurants etc.) reuse CRM + portal user instance — do not invent a second identity system.
+
+**v2.12 (enterprise expand spine — Ben: not a closed script):**
+- `src/crm/hooks.js` — bus for verticals; core emits stable event names.
+- `src/crm/attrs.js` — open namespaced attributes on contacts; public → portal.
+- `events.registerType` / open slugs — timeline not a sealed enum.
+- Restaurant (etc.) packages: `hooks.on(...)` + `attrs.define(...)` + custom event types — **no second identity system, no CRM fork**.
 
 ### C. Explicitly parked
 

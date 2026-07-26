@@ -150,9 +150,18 @@ function selfRegister({ username, password, name, email, phone } = {}) {
        VALUES (?, ?, ?)`
     )
     .run(contact.id, u, auth.hashPassword(pw));
+  const account = getById(info.lastInsertRowid);
+  try {
+    require('./hooks').emit('portal.register', {
+      contactId: contact.id,
+      accountId: account.id,
+      username: u,
+      createdContact: created
+    });
+  } catch (e) { /* */ }
   return {
     ok: true,
-    account: getById(info.lastInsertRowid),
+    account,
     contact,
     created
   };
@@ -172,6 +181,21 @@ function verifyLogin(username, password) {
     'UPDATE crm_portal_accounts SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?'
   ).run(row.id);
   contacts.touchActivity(row.contact_id);
+  try {
+    require('./events').record({
+      contactId: row.contact_id,
+      type: 'portal',
+      title: 'התחברות לאזור אישי',
+      path: '/account'
+    });
+  } catch (e) { /* */ }
+  try {
+    require('./hooks').emit('portal.login', {
+      contactId: row.contact_id,
+      accountId: row.id,
+      username: row.username
+    });
+  } catch (e) { /* */ }
   return row;
 }
 
@@ -292,6 +316,12 @@ function publicProfile(contactId) {
   const Customer = require('./Customer');
   const cust = new Customer(c);
   const account = getByContact(contactId);
+  let attrs = {};
+  try {
+    attrs = require('./attrs').asMap(contactId, { publicOnly: true });
+  } catch (e) {
+    attrs = {};
+  }
   return {
     username: account ? account.username : '',
     name: cust.name,
@@ -301,6 +331,8 @@ function publicProfile(contactId) {
     interests: cust.interests,
     status: cust.status,
     statusLabel: contacts.statusLabel(cust.status),
+    // Vertical / enterprise fields marked public on the contact card
+    attrs,
     timeline: cust.timeline(15).map((e) => ({
       type: e.type,
       title: e.title,

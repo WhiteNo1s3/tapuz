@@ -41,6 +41,8 @@ const unifiedInbox = require('./unified-inbox');
 const companies = require('./companies');
 const deals = require('./deals');
 const portal = require('./portal');
+const hooks = require('./hooks');
+const attrs = require('./attrs');
 const Customer = require('./Customer');
 
 /** Is the CRM turned on for this site? */
@@ -293,5 +295,7 @@ module.exports = {
   companies,
   deals,
   portal,
+  hooks,
+  attrs,
   Customer
 };

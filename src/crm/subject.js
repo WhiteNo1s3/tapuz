@@ -55,7 +55,8 @@ const PERSONAL_TABLES = [
   { table: 'crm_sequence_sends', column: 'contact_id', label: 'sequence sends' },
   { table: 'crm_company_members', column: 'contact_id', label: 'company memberships' },
   { table: 'crm_deals', column: 'contact_id', label: 'deals' },
-  { table: 'crm_portal_accounts', column: 'contact_id', label: 'portal accounts' }
+  { table: 'crm_portal_accounts', column: 'contact_id', label: 'portal accounts' },
+  { table: 'crm_contact_attrs', column: 'contact_id', label: 'contact attributes' }
 ];
 
 /** Phone-keyed WhatsApp tables — reached through the contact's phone. */
@@ -218,7 +219,21 @@ function eraseContact(contactId, { deleteSubmissions = false } = {}) {
     }
   }
 
-  return { ok: leftovers.length === 0, removed, leftovers, submissionsDeleted };
+  const result = {
+    ok: leftovers.length === 0,
+    removed,
+    leftovers,
+    submissionsDeleted
+  };
+  try {
+    require('./hooks').emit('contact.erased', {
+      contactId: id,
+      ok: result.ok,
+      removed,
+      leftovers
+    });
+  } catch (e) { /* */ }
+  return result;
 }
 
 /**

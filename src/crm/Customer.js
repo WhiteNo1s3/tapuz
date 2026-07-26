@@ -85,6 +85,30 @@ class Customer {
   }
 
   /**
+   * Open attributes bag (v2.12) — vertical/enterprise fields without core schema forks.
+   * @param {{ publicOnly?: boolean }} opts
+   */
+  attrs(opts = {}) {
+    const key = 'attrs:' + (opts.publicOnly ? 'pub' : 'all');
+    if (this._cache[key]) return this._cache[key];
+    try {
+      this._cache[key] = require('./attrs').listForContact(this.id, opts);
+    } catch (e) {
+      this._cache[key] = [];
+    }
+    return this._cache[key];
+  }
+
+  /** Attribute map { key: value }. */
+  attrMap(opts = {}) {
+    try {
+      return require('./attrs').asMap(this.id, opts);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /**
    * Open unified-inbox items for this person (forms, chat, WA, claims).
    * Projector only — does not invent a second store (v2.05).
    */
@@ -239,6 +263,8 @@ class Customer {
       relations: this.relations(),
       companies: this.companies(),
       deals: this.deals(),
+      attrs: this.attrs(),
+      attrMap: this.attrMap(),
       timeline: this.timeline(20)
     };
   }

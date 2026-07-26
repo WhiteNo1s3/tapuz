@@ -3088,6 +3088,64 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
     </div>
 
     <div class="card">
+      <div class="card-head">🧩 מאפיינים פתוחים (הרחבה, לא סגירה)
+        <span class="muted" style="font-weight:400;font-size:.8rem;margin-inline-start:8px">vertical / enterprise</span>
+      </div>
+      <p class="muted" style="font-size:.88rem;margin-top:0">
+        שדות מעבר לשם/מייל/טלפון — מפתחות בשמות מרווחים
+        (<span dir="ltr">restaurant.dietary</span>, <span dir="ltr">loyalty.tier</span>…).
+        מסעדות וורטיקלים אחרים נתלים כאן בלי לשכתב את ה-CRM.
+        סמנו «ציבורי» כדי שהלקוח יראה באזור האישי.
+      </p>
+      ${(() => {
+        const { attrs } = require('../crm');
+        const list = attrs.listForContact(d.id);
+        const defs = attrs.listDefinitions();
+        const rows = list.length
+          ? list
+              .map(
+                (a) => `
+            <div class="rec" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <code dir="ltr" style="flex:1;min-width:120px">${esc(a.key)}</code>
+              <span style="flex:2">${esc(typeof a.value === 'string' ? a.value : JSON.stringify(a.value))}</span>
+              ${a.public ? '<span class="pill">ציבורי</span>' : '<span class="muted" style="font-size:.75rem">פנימי</span>'}
+              <form method="POST" action="/admin/crm/${d.id}/attrs" style="margin:0">
+                <input type="hidden" name="action" value="remove">
+                <input type="hidden" name="key" value="${esc(a.key)}">
+                <button class="btn secondary sm" type="submit">הסר</button>
+              </form>
+            </div>`
+              )
+              .join('')
+          : '<p class="muted" style="font-size:.88rem">אין מאפיינים עדיין — הוסיפו למטה או ממודול ורטיקל.</p>';
+        const defHints = defs.length
+          ? `<p class="muted" style="font-size:.8rem">מוגדרים במערכת: ${defs
+              .map((x) => esc(x.key) + (x.label && x.label !== x.key ? ' (' + esc(x.label) + ')' : ''))
+              .join(' · ')}</p>`
+          : '';
+        return (
+          rows +
+          defHints +
+          `
+        <form method="POST" action="/admin/crm/${d.id}/attrs" class="stack" style="margin-top:12px;border-top:1px solid var(--ws-border,#e2e8f0);padding-top:12px">
+          <input type="hidden" name="action" value="set">
+          <label>מפתח <span class="muted" dir="ltr">(namespace.key)</span>
+            <input name="key" class="input" dir="ltr" required placeholder="restaurant.dietary" list="attr-keys-${d.id}"></label>
+          <datalist id="attr-keys-${d.id}">${defs
+            .map((x) => `<option value="${esc(x.key)}">${esc(x.label || x.key)}</option>`)
+            .join('')}</datalist>
+          <label>ערך (טקסט או JSON)
+            <input name="value" class="input" dir="auto" required placeholder="צמחוני / &quot;vip&quot; / 4"></label>
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" name="public" value="1"> הצג ללקוח באזור האישי
+          </label>
+          <button class="btn secondary sm" type="submit">שמור מאפיין</button>
+        </form>`
+        );
+      })()}
+    </div>
+
+    <div class="card">
       <div class="card-head">🔑 חשבון אזור אישי (פורטל)</div>
       <p class="muted" style="font-size:.88rem;margin-top:0">
         שם משתמש וסיסמה ללקוח — נפרד מאדמין. פורטל ציבורי
@@ -3185,6 +3243,42 @@ router.post('/admin/crm/:id/update', requireAdmin, (req, res) => {
     status: b.status, tags: manual.concat(keptInterests), notes: b.notes, consent: !!b.consent
   });
   res.redirect('/admin/crm/' + encodeURIComponent(id));
+});
+
+// Open attributes bag — vertical/enterprise fields on a contact.
+router.post('/admin/crm/:id/attrs', requireAdmin, (req, res) => {
+  const { attrs, events } = require('../crm');
+  const id = req.params.id;
+  const b = req.body || {};
+  const action = String(b.action || 'set');
+  if (action === 'remove') {
+    attrs.remove(id, b.key);
+  } else {
+    let value = b.value;
+    const raw = String(b.value == null ? '' : b.value).trim();
+    // Prefer JSON when it parses; otherwise keep as string.
+    if (raw.startsWith('{') || raw.startsWith('[') || raw === 'true' || raw === 'false' || /^-?\d+(\.\d+)?$/.test(raw)) {
+      try {
+        value = JSON.parse(raw);
+      } catch (e) {
+        value = raw;
+      }
+    } else {
+      value = raw;
+    }
+    const r = attrs.set(id, b.key, value, { public: !!b.public });
+    if (r.ok) {
+      try {
+        events.record({
+          contactId: id,
+          type: 'attr',
+          title: 'מאפיין ' + (attrs.normalizeKey(b.key) || '') + ' עודכן',
+          meta: { key: attrs.normalizeKey(b.key), public: !!b.public }
+        });
+      } catch (e) { /* */ }
+    }
+  }
+  res.redirect('/admin/crm/' + encodeURIComponent(id) + '#attrs');
 });
 
 // Owner mints / resets / deletes a customer portal login on a contact card.

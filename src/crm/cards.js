@@ -264,7 +264,7 @@ function runCardLifecycle() {
         'd, named=' + namedQuiet + 'd)'
     );
   }
-  return {
+  const result = {
     markedGarbage: marked,
     erased,
     erasedNamed,
@@ -272,6 +272,10 @@ function runCardLifecycle() {
     garbageDays: gar,
     namedQuietDays: namedQuiet
   };
+  try {
+    require('./hooks').emit('lifecycle.cards', result);
+  } catch (e) { /* */ }
+  return result;
 }
 
 /** Interests as clean labels for admin / segments. */
