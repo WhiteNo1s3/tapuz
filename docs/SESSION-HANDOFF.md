@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (campaign send to live segment — HubSpot-class mail path).
+> **Last updated:** 2026-07-26 (SMTP hardening v1.95 — timeouts, caps, injection guard).
 
 ---
 
@@ -162,18 +162,31 @@ Reachable people (email/phone) are **not** auto-deleted by the quiet timer — o
 | `/admin/crm/privacy` | progressive toggle + quietDays + garbageDays |
 | `/admin/crm/segments` | **interest** + hasInterest rules for relevant mail |
 
-## 8. Open / next (when resuming)
+## 8. Campaign → live segment (shipped)
 
-1. **Campaign from segment** — one-click “send only to this audience”.
+| Piece | Detail |
+|-------|--------|
+| Schema | `crm_campaigns.segment_id` (additive) |
+| Audience | Segment evaluated at send time; consent + email required; provisional/garbage skipped |
+| Admin | Campaign form: segment OR list; segments page: **דיוור לפילוח** |
+| Smoke | `smoke-crm-campaigns` covers interest segment audience |
+
+Obligations unchanged: consent, unsubscribe, no open redirect.
+
+## 9. Open / next (when resuming)
+
+1. **A/B or drip** — only after core mail path is battle-tested in production SMTP.
 2. **Pixel on real WP** — Hostinger WhiteNo1se + public CRM base.
 3. **Israeli invoicing** — finance round, separate.
-4. **Hygiene** — Actions action-runtime Node 20 deprecation noise.
+4. **Open-source packaging** — npm publish readiness, CONTRIBUTING, when the product is proud enough.
+
+Ambition (HubSpot / Siebel / Builder): legitimate. Path: **deep features + open source + zero-shady CRM**, not feature soup.
 
 Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified without browser/CMS install.
 
 ---
 
-## 9. Honesty log (don’t overclaim)
+## 10. Honesty log (don’t overclaim)
 
 | Claim | Truth |
 |-------|--------|
@@ -187,7 +200,7 @@ Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified witho
 
 ---
 
-## 10. Update protocol (future agents / future you)
+## 11. Update protocol (future agents / future you)
 
 When you finish a real chunk of work:
 
@@ -201,7 +214,7 @@ If the conversation dies mid-task: read this file first, then `git log -15 --one
 
 ---
 
-## 11. Quick identity
+## 12. Quick identity
 
 - **Product name users see:** Tapuziel (not “Tapuz” in UI).
 - **Org credit:** Shaltiel Industries · made by WhiteNo1se / WhiteNo1s3 on GitHub.

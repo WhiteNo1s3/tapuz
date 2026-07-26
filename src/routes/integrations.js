@@ -63,14 +63,24 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
       </section>
 
       <section class="card">
-        <h3 class="sub-head">📧 התראת אימייל על פנייה חדשה</h3>
-        <p class="lead">כשמישהו שולח טופס באתר, תיבת הפניות כבר שומרת אותו — כאן אפשר גם לקבל התראה במייל ברגע שזה קורה, דרך שרת SMTP משלכם (Gmail, ספק אחסון, וכו׳). ללא הגדרה — הכל ממשיך לעבוד כרגיל, ההתראה פשוט לא נשלחת.</p>
+        <h3 class="sub-head">📧 מייל (SMTP) — קמפיינים + התראות</h3>
+        <p class="lead">
+          שרת SMTP אחד משרת גם <strong>קמפייני CRM</strong> וגם <strong>התראה על פנייה חדשה</strong>.
+          הסיסמה נשמרת מקומית בלבד (לא ב־site.json, לא חוזרת ב־API).
+        </p>
+        <p class="muted" style="font-size:.88rem">
+          סטטוס:
+          ${nf.smtpReady
+            ? `<span style="color:#047857">SMTP מוכן לקמפיינים</span> · נשלחו היום ${Number(nf.sentToday) || 0}/${Number(nf.maxPerDay) || 500}`
+            : '<span style="color:#b45309">SMTP לא מוכן — חסר מארח/משתמש/סיסמה או כבוי</span>'}
+          ${nf.leadReady ? ' · התראות פניות: מוכן' : ' · התראות פניות: חסר אימייל יעד'}
+        </p>
         <label class="check-row">
-          <input type="checkbox" id="nf-enabled" ${nf.enabled ? 'checked' : ''}> שלחו לי מייל על כל פנייה חדשה
+          <input type="checkbox" id="nf-enabled" ${nf.enabled ? 'checked' : ''}> הפעל שליחת מייל (SMTP)
         </label>
-        <label class="field-label">אימייל לקבלת ההתראות</label>
+        <label class="field-label">אימייל לקבלת התראות על פניות (לא חובה לקמפיינים)</label>
         <input id="nf-to" dir="ltr" value="${escapeAdmin(nf.to || '')}" placeholder="owner@example.com" class="input mb">
-        <label class="field-label">אימייל שולח (אופציונלי — ברירת מחדל: שם המשתמש)</label>
+        <label class="field-label">אימייל שולח (From — אופציונלי)</label>
         <input id="nf-from" dir="ltr" value="${escapeAdmin(nf.from || '')}" placeholder="site@example.com" class="input mb">
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px">
           <div>
@@ -86,13 +96,20 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
         <input id="nf-user" dir="ltr" value="${escapeAdmin(nf.user || '')}" placeholder="user@example.com" class="input mb">
         <label class="field-label">סיסמה${nf.hasPass ? ' (מוגדרת — השאירו ריק כדי לשמור)' : ''}</label>
         <input id="nf-pass" dir="ltr" type="password" placeholder="${nf.hasPass ? '••••••••' : ''}" class="input">
+        <label class="field-label">מקסימום הודעות ביום (הגנת מוניטין)</label>
+        <input id="nf-maxday" dir="ltr" type="number" min="1" max="50000" value="${Number(nf.maxPerDay) || 500}" class="input mb">
         <label class="check-row">
           <input type="checkbox" id="nf-secure" ${nf.secure ? 'checked' : ''}> חיבור מאובטח (SSL — לרוב פורט 465)
         </label>
+        <label class="check-row">
+          <input type="checkbox" id="nf-insecure-tls" ${nf.tlsAllowInsecure ? 'checked' : ''}>
+          אפשר תעודת TLS לא מאומתת (רק מעבדה — לא לפרודקשן)
+        </label>
         <div class="row end">
           <span id="nf-status" class="ok-text"></span>
+          <button type="button" class="btn" id="nf-verify" style="background:#fff;color:#0f172a;border:1.5px solid #cbd5e1">בדוק חיבור</button>
           <button type="button" class="btn" id="nf-test" style="background:#fff;color:#f97316;border:1.5px solid #f97316">שלח בדיקה</button>
-          <button type="button" class="btn" id="nf-save">שמור התראות</button>
+          <button type="button" class="btn" id="nf-save">שמור מייל</button>
         </div>
       </section>
 
@@ -177,7 +194,9 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
             port: document.getElementById('nf-port').value,
             secure: document.getElementById('nf-secure').checked,
             user: document.getElementById('nf-user').value,
-            pass: document.getElementById('nf-pass').value || undefined
+            pass: document.getElementById('nf-pass').value || undefined,
+            maxPerDay: document.getElementById('nf-maxday').value,
+            tlsAllowInsecure: document.getElementById('nf-insecure-tls').checked
           })
         }).then(function (r) { return r.json(); }).then(function (d) {
           document.getElementById('nf-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
@@ -189,6 +208,13 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
         fetch('/admin/api/notify/test', { method: 'POST' })
           .then(function (r) { return r.json(); }).then(function (d) {
             document.getElementById('nf-status').textContent = d.ok ? 'נשלח ✓' : (d.error || 'שגיאה בשליחה');
+          });
+      });
+      document.getElementById('nf-verify').addEventListener('click', function () {
+        document.getElementById('nf-status').textContent = 'בודק חיבור…';
+        fetch('/admin/api/notify/verify', { method: 'POST' })
+          .then(function (r) { return r.json(); }).then(function (d) {
+            document.getElementById('nf-status').textContent = d.ok ? 'חיבור תקין ✓' : (d.error || 'חיבור נכשל');
           });
       });
     </script>
@@ -287,11 +313,22 @@ router.post('/admin/api/notify/settings', requireAdmin, (req, res) => {
       port: b.port,
       secure: b.secure,
       user: b.user,
-      pass: b.pass // undefined = keep, '' = clear, value = replace
+      pass: b.pass, // undefined = keep, '' = clear, value = replace
+      maxPerDay: b.maxPerDay,
+      tlsAllowInsecure: b.tlsAllowInsecure
     });
     res.json({ ok: true, ...settings });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/notify/verify', requireAdmin, async (req, res) => {
+  try {
+    const result = await require('../notify').verifyConnection();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 

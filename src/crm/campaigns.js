@@ -253,10 +253,38 @@ function startSend(campaignId, { baseUrl = '', sender } = {}) {
   }
   if (!campaign.subject.trim()) return { ok: false, error: 'נושא נדרש', queued: 0 };
 
-  const { recipients, skippedNoConsent, skippedNoEmail } = audienceFor(campaign);
+  // SMTP hardening: refuse to queue if the transport is not ready or the
+  // daily reputation cap cannot fit this audience.
+  if (!sender) {
+    try {
+      const notify = require('../notify');
+      if (!notify.isSmtpReady()) {
+        return {
+          ok: false, queued: 0,
+          error: 'SMTP לא מוכן — הגדירו שרת מייל (מארח, משתמש, סיסמה) בהגדרות'
+        };
+      }
+      const audPeek = audienceFor(campaign);
+      const cap = notify.canQueue(audPeek.recipients.length);
+      if (!cap.ok) {
+        return {
+          ok: false,
+          queued: 0,
+          skippedNoConsent: audPeek.skippedNoConsent,
+          skippedNoEmail: audPeek.skippedNoEmail,
+          skippedIneligible: audPeek.skippedIneligible,
+          error: 'מגבלת שליחה יומית — נשארו ' + cap.remaining + ' מתוך ' + cap.maxPerDay + ' היום'
+        };
+      }
+    } catch (e) {
+      return { ok: false, queued: 0, error: 'בדיקת SMTP נכשלה' };
+    }
+  }
+
+  const { recipients, skippedNoConsent, skippedNoEmail, skippedIneligible } = audienceFor(campaign);
   if (!recipients.length) {
     return {
-      ok: false, queued: 0, skippedNoConsent, skippedNoEmail,
+      ok: false, queued: 0, skippedNoConsent, skippedNoEmail, skippedIneligible,
       error: 'אין נמענים עם הסכמה לדיוור'
     };
   }
@@ -286,7 +314,13 @@ function startSend(campaignId, { baseUrl = '', sender } = {}) {
     console.error('[crm] campaign delivery failed:', e.message);
   });
 
-  return { ok: true, queued: rows.length, skippedNoConsent, skippedNoEmail };
+  return {
+    ok: true,
+    queued: rows.length,
+    skippedNoConsent,
+    skippedNoEmail,
+    skippedIneligible: skippedIneligible || 0
+  };
 }
 
 /** Walk the queue, one polite message at a time. Never throws. */

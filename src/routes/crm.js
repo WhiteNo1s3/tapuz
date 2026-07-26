@@ -838,11 +838,21 @@ router.get('/admin/crm/campaigns', requireAdmin, requireCrm('crm-campaigns', 'ק
     : '<div class="empty-state">אין עדיין קמפיינים.</div>';
 
   page(res, 'crm-campaigns', 'קמפיינים', `
-    ${smtp.enabled && smtp.host ? '' : `
-    <div class="card" style="border-color:#fde68a;background:#fffbeb">
-      <strong>שרת המייל לא מוגדר</strong>
+    ${smtp.smtpReady ? `
+    <div class="card" style="border-color:#a7f3d0;background:#ecfdf5">
+      <strong>SMTP מוכן לקמפיינים</strong>
       <p class="muted" style="margin:6px 0 0;font-size:.88rem">
-        אפשר להכין קמפיין, אבל שליחה תיכשל עד שתגדירו SMTP ב־<a href="/admin/settings">הגדרות</a>.
+        נשלחו היום ${smtp.sentToday || 0} / ${smtp.maxPerDay || 500}
+        · מארח <span dir="ltr">${esc(smtp.host)}</span>
+        · <a href="/admin/integrations">הגדרות מייל</a>
+      </p>
+    </div>` : `
+    <div class="card" style="border-color:#fde68a;background:#fffbeb">
+      <strong>שרת המייל (SMTP) לא מוכן</strong>
+      <p class="muted" style="margin:6px 0 0;font-size:.88rem">
+        אפשר להכין טיוטה, אבל שליחה תיחסם עד שתגדירו מארח + משתמש + סיסמה ב־
+        <a href="/admin/integrations">אינטגרציות → מייל</a>
+        (אותו SMTP משמש גם להתראות על פניות).
       </p>
     </div>`}
     <div class="card">

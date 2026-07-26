@@ -113,23 +113,58 @@ function runSendTest() {
     }
   }));
 
+  // ── hardening gates (v1.95) ──
+  check(notify.isSmtpReady(notify.load ? undefined : undefined) === true || notify.isSmtpReady() === true,
+    'smtpReady when host/user/pass/enabled present');
+  check(notify.sanitizeAddress('good@example.com') === 'good@example.com', 'valid address accepted');
+  check(notify.sanitizeAddress('bad\r\ninject@x.com') === '', 'CR/LF address rejected');
+  check(notify.sanitizeAddress('not-an-email') === '', 'junk address rejected');
+  check(notify.sanitizeHeaderValue('hi\r\nBcc: evil@x.com').indexOf('\n') < 0, 'header values strip newlines');
+
   notify.sendLeadNotification({ page: 'צור-קשר', fields: { שם: 'רות' } }).then((r) => {
     check(r.ok === true, 'send succeeds through the injected transport');
     check(captured && captured.to === 'owner@example.com', 'the real message reached the transport');
     check(captured && captured.text.includes('שם: רות'), 'field data survives into the sent message');
 
+    // campaign-style sendMail
+    return notify.sendMail({ to: 'cust@example.com', subject: 'שלום', html: '<p>hi</p>' });
+  }).then((rCamp) => {
+    check(rCamp.ok === true, 'sendMail works for campaign-shaped messages');
+    check(captured && captured.to === 'cust@example.com', 'sendMail recipient is the campaign contact');
+
+    // invalid recipient
+    return notify.sendMail({ to: 'not-valid', subject: 'x', text: 'y' });
+  }).then((rBad) => {
+    check(rBad.ok === false && /invalid recipient/.test(rBad.error), 'invalid recipient refused before SMTP');
+
+    // daily cap
+    notify.saveSettings({ maxPerDay: 1 });
+    // one already counted from earlier success — force usage high
+    const fs2 = require('fs');
+    fs2.writeFileSync(notify.USAGE_PATH, JSON.stringify({ day: new Date().toISOString().slice(0, 10), count: 99 }));
+    return notify.sendMail({ to: 'another@example.com', subject: 'nope', text: 'x' });
+  }).then((rCap) => {
+    check(rCap.ok === false && /daily send cap/.test(rCap.error), 'daily cap blocks further sends');
+    check(notify.canQueue(1).ok === false, 'canQueue reports exhausted day');
+
     shouldThrow = true;
-    notify.sendLeadNotification({ page: 'x', fields: { a: '1' } }).then((r2) => {
-      check(r2.ok === false && r2.error === 'boom', 'a transport failure is caught, never thrown');
+    // reset cap so lead path reaches transport
+    fs.writeFileSync(notify.USAGE_PATH, JSON.stringify({ day: new Date().toISOString().slice(0, 10), count: 0 }));
+    notify.saveSettings({ maxPerDay: 500 });
+    return notify.sendLeadNotification({ page: 'x', fields: { a: '1' } });
+  }).then((r2) => {
+    check(r2.ok === false && r2.error === 'boom', 'a transport failure is caught, never thrown');
 
-      try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) {}
+    try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) {}
 
-      console.log('');
-      if (failures) {
-        console.log('SMOKE NOTIFY: FAIL (' + failures + ')');
-        process.exit(1);
-      }
-      console.log('SMOKE NOTIFY: PASS');
-    });
+    console.log('');
+    if (failures) {
+      console.log('SMOKE NOTIFY: FAIL (' + failures + ')');
+      process.exit(1);
+    }
+    console.log('SMOKE NOTIFY: PASS');
+  }).catch((e) => {
+    console.error(e);
+    process.exit(1);
   });
 }
