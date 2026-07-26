@@ -44,7 +44,10 @@ const PERSONAL_TABLES = [
   // deletes explicitly. NOTE: crm_wa_optins and crm_wa_windows are keyed by
   // PHONE, not contact_id — the drift guard cannot see them, so they are
   // handled by phone in eraseContact below and pinned by their own test.
-  { table: 'crm_wa_messages', column: 'contact_id', label: 'whatsapp messages' }
+  { table: 'crm_wa_messages', column: 'contact_id', label: 'whatsapp messages' },
+  // v1.99 identity claims — contact_id set only after admin approval; pending
+  // rows keyed by email/phone are wiped in eraseContact via eraseForSubject.
+  { table: 'crm_identity_claims', column: 'contact_id', label: 'identity claims' }
 ];
 
 /** Phone-keyed WhatsApp tables — reached through the contact's phone. */
@@ -165,6 +168,17 @@ function eraseContact(contactId, { deleteSubmissions = false } = {}) {
     }
     try { db.prepare('DELETE FROM crm_wa_messages WHERE contact_id = ?').run(id); }
     catch (e) { /* older database */ }
+
+    // Identity claims (v1.99): FK is SET NULL, and pending claims may only have
+    // email/phone with no contact_id yet — wipe both shapes so a forgotten
+    // person cannot reappear as an unapproved claim.
+    try {
+      require('./identity-claims').eraseForSubject({
+        contactId: id,
+        email: contact.email,
+        phone: contact.phone
+      });
+    } catch (e) { /* older database */ }
 
     if (deleteSubmissions) {
       const ids = db

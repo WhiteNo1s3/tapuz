@@ -88,16 +88,21 @@ function referrerHost(ref) {
 // ---------------------------------------------------------------------------
 // Record a pageview (privacy-safe columns only)
 // ---------------------------------------------------------------------------
-function recordPageview({ path, referrer, ip, userAgent } = {}) {
+function recordPageview({ path, referrer, ip, userAgent, siteId } = {}) {
   let cleanPath = String(path || '');
   if (!cleanPath || cleanPath[0] !== '/') return null; // only same-site absolute paths
   if (cleanPath.length > 512) cleanPath = cleanPath.slice(0, 512);
   const host = referrerHost(referrer);
   const device = deviceClass(userAgent);
   const vh = visitorHash(ip, userAgent);
+  // site_id tags foreign-embed traffic on the analytics spine (v1.99) —
+  // never a reason to open a CRM timeline row by itself.
+  const site = String(siteId || '').trim().toLowerCase().slice(0, 80);
   const info = db
-    .prepare('INSERT INTO pageviews (path, referrer_host, device_class, visitor_hash) VALUES (?, ?, ?, ?)')
-    .run(cleanPath, host, device, vh);
+    .prepare(
+      'INSERT INTO pageviews (path, referrer_host, device_class, visitor_hash, site_id) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(cleanPath, host, device, vh, site);
   return info.lastInsertRowid;
 }
 

@@ -87,6 +87,198 @@ router.post('/admin/crm/settings', requireAdmin, (req, res) => {
   res.redirect('/admin/crm');
 });
 
+// ─── site registry + identity claims (v1.99, BEFORE /:id) ─────────────
+router.get('/admin/crm/sites', requireAdmin, requireCrm('crm-sites', 'אתרים (פיקסל)'), (req, res) => {
+  const { sites } = require('../crm');
+  const config = require('../config');
+  const cfg = config.loadConfig();
+  const peOn = !!(cfg.crm && cfg.crm.pixelEmbed && cfg.crm.pixelEmbed.enabled);
+  const rows = sites.listSites();
+  const baseHint = (cfg.baseUrl || '').trim() || 'https://YOUR-CRM-HOST';
+  const list = rows.length
+    ? rows.map((s) => {
+        const snip = sites.buildSnippet({ base: baseHint, siteId: s.slug });
+        const snipSafe = snip
+          ? esc(snip)
+          : '<span class="muted">הגדירו baseUrl ב־HTTPS (או localhost) כדי לקבל קטע להדבקה</span>';
+        return `
+        <div class="rec" style="display:block">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <div style="flex:1;min-width:160px">
+              <strong dir="ltr">${esc(s.slug)}</strong>
+              <div class="muted" style="font-size:.85rem">${esc(s.label || '')}</div>
+            </div>
+            <span class="pill">${s.active ? 'פעיל' : 'כבוי'}</span>
+            <span class="pill" style="${s.claimsEnabled ? 'background:#fff7ed;color:#c2410c' : ''}">
+              ${s.claimsEnabled ? 'תביעות זהות: פתוח' : 'תביעות: סגור'}
+            </span>
+          </div>
+          <p class="muted" style="font-size:.8rem;margin:8px 0 4px">מקורות מורשים:
+            ${s.allowedOrigins.length ? esc(s.allowedOrigins.join(', ')) : 'הכול (רק slug)'}</p>
+          <pre class="muted" style="font-size:.75rem;white-space:pre-wrap;direction:ltr;text-align:left;background:#f8fafc;padding:10px;border-radius:8px">${snipSafe}</pre>
+          <form method="POST" action="/admin/crm/sites/${encodeURIComponent(s.slug)}/update"
+                style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            <label style="display:flex;gap:4px;align-items:center;font-size:.85rem">
+              <input type="checkbox" name="active" value="1" ${s.active ? 'checked' : ''}> פעיל</label>
+            <label style="display:flex;gap:4px;align-items:center;font-size:.85rem">
+              <input type="checkbox" name="claimsEnabled" value="1" ${s.claimsEnabled ? 'checked' : ''}>
+              לאפשר תביעות identify (דורש אישור)</label>
+            <input name="label" class="input" style="width:auto" value="${esc(s.label)}" placeholder="תווית">
+            <input name="allowedOrigins" class="input" style="flex:1;min-width:180px" dir="ltr"
+                   value="${esc(s.allowedOrigins.join(', '))}" placeholder="https://shop.example.com">
+            <button class="btn secondary sm" type="submit">שמור</button>
+          </form>
+          <form method="POST" action="/admin/crm/sites/${encodeURIComponent(s.slug)}/delete"
+                onsubmit="return confirm('למחוק את האתר מהרשם?')" style="margin-top:6px">
+            <button class="btn secondary sm" type="submit">מחק מהרשם</button>
+          </form>
+        </div>`;
+      }).join('')
+    : '<div class="empty-state">אין אתרים ברשם — צרו slug לפני שמדביקים פיקסל באתר זר.</div>';
+
+  page(res, 'crm-sites', 'אתרים (פיקסל)', `
+    <div class="card">
+      <div class="card-head">🌐 רשם אתרים — multi-tenant בלי זיהום</div>
+      <p class="lead">
+        <code>site_id</code> הוא ציבורי כמו מזהה מדידה. <strong>רק</strong> slug שנוצר כאן
+        מתקבל ב־collector; לא מוכר → 204 שקט. תביעת identify לעולם לא יוצרת איש קשר לבד.
+      </p>
+      <form method="POST" action="/admin/crm/sites/settings" class="stack" style="margin-bottom:16px">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="enabled" value="1" ${peOn ? 'checked' : ''}>
+          הפעל פיקסל זר (pixel embed) — ברירת מחדל כבוי
+        </label>
+        <button class="btn secondary sm" type="submit">שמור דגל</button>
+      </form>
+      ${list}
+    </div>
+    <div class="card">
+      <div class="card-head">אתר חדש</div>
+      <form method="POST" action="/admin/crm/sites" class="stack">
+        <label>מזהה (slug)<input name="slug" class="input" dir="ltr" required placeholder="wp-shop-il"></label>
+        <label>תווית<input name="label" class="input" placeholder="חנות WordPress"></label>
+        <label>מקורות מורשים (אופציונלי, מופרדים בפסיק)
+          <input name="allowedOrigins" class="input" dir="ltr" placeholder="https://shop.example.com"></label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="claimsEnabled" value="1"> לאפשר תביעות identify (סגור כברירת מחדל)
+        </label>
+        <button class="btn" type="submit">הוסף לרשם</button>
+      </form>
+      <p class="muted" style="font-size:.8rem">
+        הקטע להדבקה דורש <strong>HTTPS</strong> ב־baseUrl של האתר (או localhost לפיתוח) —
+        http רגיל מחוץ ל־loopback נדחה.
+      </p>
+    </div>`);
+});
+
+router.post('/admin/crm/sites/settings', requireAdmin, (req, res) => {
+  const config = require('../config');
+  const cfg = config.loadConfig();
+  cfg.crm = Object.assign({}, cfg.crm, {
+    pixelEmbed: { enabled: !!(req.body && req.body.enabled) }
+  });
+  config.saveConfig(cfg);
+  res.redirect('/admin/crm/sites');
+});
+
+router.post('/admin/crm/sites', requireAdmin, (req, res) => {
+  const { sites } = require('../crm');
+  const b = req.body || {};
+  try {
+    sites.createSite({
+      slug: b.slug,
+      label: b.label,
+      allowedOrigins: b.allowedOrigins,
+      claimsEnabled: !!b.claimsEnabled,
+      active: true
+    });
+  } catch (e) { /* duplicate / empty */ }
+  res.redirect('/admin/crm/sites');
+});
+
+router.post('/admin/crm/sites/:slug/update', requireAdmin, (req, res) => {
+  const { sites } = require('../crm');
+  const b = req.body || {};
+  sites.updateSite(req.params.slug, {
+    label: b.label,
+    allowedOrigins: b.allowedOrigins,
+    active: !!b.active,
+    claimsEnabled: !!b.claimsEnabled
+  });
+  res.redirect('/admin/crm/sites');
+});
+
+router.post('/admin/crm/sites/:slug/delete', requireAdmin, (req, res) => {
+  require('../crm').sites.deleteSite(req.params.slug);
+  res.redirect('/admin/crm/sites');
+});
+
+router.get('/admin/crm/claims', requireAdmin, requireCrm('crm-claims', 'תביעות זהות'), (req, res) => {
+  const { identityClaims, sites } = require('../crm');
+  const status = String((req.query || {}).status || 'pending');
+  const rows = identityClaims.listClaims({ status, limit: 100 });
+  const pending = identityClaims.countPending();
+  const list = rows.length
+    ? rows.map((c) => `
+        <div class="rec" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+          <div style="flex:1;min-width:180px">
+            <strong dir="ltr">${esc(c.email || c.phone || '—')}</strong>
+            <div class="muted" style="font-size:.82rem">
+              ${esc(c.name || '')} · site <span dir="ltr">${esc(c.site_id)}</span>
+              · ×${c.claim_count} · ${esc(c.last_seen_at || '')}
+            </div>
+            <div class="muted" style="font-size:.78rem" dir="ltr">${esc(c.path || '')}</div>
+          </div>
+          <span class="pill">${esc(c.status)}</span>
+          ${c.status === 'pending' ? `
+            <form method="POST" action="/admin/crm/claims/${c.id}/approve"><button class="btn sm" type="submit">אשר → איש קשר</button></form>
+            <form method="POST" action="/admin/crm/claims/${c.id}/reject"><button class="btn secondary sm" type="submit">דחה</button></form>
+          ` : c.contact_id
+            ? `<a class="btn secondary sm" href="/admin/crm/${c.contact_id}">לכרטיס #${c.contact_id}</a>`
+            : ''}
+        </div>`).join('')
+    : '<div class="empty-state">אין תביעות במצב הזה.</div>';
+
+  page(res, 'crm-claims', 'תביעות זהות', `
+    <div class="card">
+      <div class="card-head">🪪 תביעות זהות — עצור לאישור</div>
+      <p class="lead">
+        <code>identify({email})</code> מאתר זר <strong>לא</strong> יוצר איש קשר.
+        הוא נוחת כאן כתביעה לא מאומתת — כמו הקופיילוט שלא פועל בלי אישור.
+        רק «אשר» מעביר דרך ה־upsert הרגיל.
+      </p>
+      <p class="muted" style="font-size:.88rem">ממתינות: <strong>${pending}</strong>
+        · <a href="/admin/crm/claims?status=pending">ממתינות</a>
+        · <a href="/admin/crm/claims?status=approved">מאושרות</a>
+        · <a href="/admin/crm/claims?status=rejected">נדחו</a>
+        · <a href="/admin/crm/sites">רשם אתרים</a>
+      </p>
+      ${list}
+    </div>
+    <div class="card">
+      <div class="card-head">למה זה חשוב</div>
+      <p class="muted" style="font-size:.9rem;line-height:1.55">
+        בלי השער הזה, כל אחד באינטרנט יכול לטעון שהוא «dana@example.com» ולהצמיד
+        היסטוריית גלישה לכרטיס אמיתי — או להציף את ה־CRM באנשי קשר מזויפים.
+        טופס באתר שלכם (שבו האדם מקליד) נשאר מסלול זהות לגיטימי.
+      </p>
+      <p class="muted" style="font-size:.85rem">אתרים עם תביעות פתוחות:
+        ${sites.listSites().filter((s) => s.claimsEnabled).map((s) => esc(s.slug)).join(', ') || 'אין — הפעילו per-site'}.
+      </p>
+    </div>`);
+});
+
+router.post('/admin/crm/claims/:id/approve', requireAdmin, (req, res) => {
+  const r = require('../crm').identityClaims.approveClaim(req.params.id);
+  if (r.ok && r.contact) return res.redirect('/admin/crm/' + r.contact.id);
+  res.redirect('/admin/crm/claims');
+});
+
+router.post('/admin/crm/claims/:id/reject', requireAdmin, (req, res) => {
+  require('../crm').identityClaims.rejectClaim(req.params.id);
+  res.redirect('/admin/crm/claims');
+});
+
 // ─── interest map (declared BEFORE /:id) ─────────────────────────────
 // Progressive cards learn topics from page paths. This screen is the owner's
 // map of that learning: counts, one-click segments, mail without blasting.

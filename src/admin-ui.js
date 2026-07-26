@@ -93,6 +93,8 @@ const ADMIN_NAV_GROUPS = [
       { key: 'crm-segments', href: '/admin/crm/segments', label: 'פילוחים', icon: '🎯' },
       { key: 'crm-lists', href: '/admin/crm/lists', label: 'רשימות דיוור', icon: '📋' },
       { key: 'crm-campaigns', href: '/admin/crm/campaigns', label: 'קמפיינים', icon: '✉️' },
+      { key: 'crm-sites', href: '/admin/crm/sites', label: 'אתרים (פיקסל)', icon: '🌐' },
+      { key: 'crm-claims', href: '/admin/crm/claims', label: 'תביעות זהות', icon: '🪪' },
       { key: 'crm-pixels', href: '/admin/crm/pixels', label: 'פיקסלים', icon: '📡' },
       { key: 'crm-conversions', href: '/admin/crm/conversions', label: 'המרות בשרת', icon: '🛰️' },
       { key: 'crm-cs', href: '/admin/crm/chat', label: 'צ׳אט שירות', icon: '💬' },

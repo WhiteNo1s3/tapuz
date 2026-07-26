@@ -171,6 +171,7 @@ function main() {
     ['crm-contacts', 'scripts/smoke-crm-contacts.js'],
     ['crm-cards', 'scripts/smoke-crm-cards.js'],
     ['crm-interests', 'scripts/smoke-crm-interests.js'],
+    ['pixel-embed', 'scripts/smoke-pixel-embed.js'],
     ['crm-capture', 'scripts/smoke-crm-capture.js'],
     ['crm-cs', 'scripts/smoke-crm-cs.js'],
     ['whatsapp', 'scripts/smoke-whatsapp.js'],

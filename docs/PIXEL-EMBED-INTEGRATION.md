@@ -1,7 +1,6 @@
 # Universal pixel embed — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** reviewed (lab `99274e7` → `c1682fc`, +1,931/−38 across 31 files) ·
-phases NOT started — awaiting Ben's go.
+**Status:** **shipped v1.99** (rebuild with all four findings fixed — never the lab path).
 **Prerequisite:** the CRM (v1.77+). This is the *write-portability* direction
 docs/CRM-PORTABILITY.md measured and recommended: our collector already accepts
 foreign beacons; the lab turned that into a product surface.

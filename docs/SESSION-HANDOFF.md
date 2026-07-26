@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v1.98 interest map; main also has v1.96 sqlite forever + v1.97 universal animate).
+> **Last updated:** 2026-07-26 (v1.99 pixel embed — claims inbox, site registry, no auto-upsert).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v1.98 interest map** on main |
-| Recent line | v1.95 SMTP → v1.96 sqlite-forever `.pzn` → v1.97 universal `animate=` → **v1.98 interest map** |
-| Package version field | **`1.98.0-alpha`** |
+| Tip when handoff written | see `git log -1` — **v1.99 pixel embed / claims** on main |
+| Recent line | v1.96 sqlite-forever → v1.97 animate → v1.98 interests → **v1.99 pixel embed (claims, not upsert)** |
+| Package version field | **`1.99.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -198,6 +198,22 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | List | `?interest=` filter + hot-topic pills |
 | Campaign | `?interest=` ensures segment with hasEmail and preselects it |
 | Smoke | `npm run test:crm-interests` |
+
+## 9c. Pixel embed + identity claims (v1.99) — serious security
+
+**Do not reintroduce** `identify → upsertContact` on the public collector.
+
+| Piece | Path |
+|-------|------|
+| Collect | `src/crm/collect-handler.js` — no upsertContact |
+| Registry | `crm_sites` / `src/crm/sites.js` — unknown → 204 |
+| Claims | `crm_identity_claims` / `src/crm/identity-claims.js` — approve in admin |
+| Analytics | foreign anonymous → `pageviews.site_id`, not `crm_events` |
+| Loader | `public/tz-pixel.js` — claim-only identify, HTTPS snippets |
+| Flag | `config.crm.pixelEmbed.enabled` default **off** |
+| Admin | `/admin/crm/sites`, `/admin/crm/claims` |
+| Smoke | `npm run test:pixel-embed` |
+| Spec | `docs/PIXEL-EMBED-INTEGRATION.md` |
 
 ## 10. Open / next (when resuming)
 

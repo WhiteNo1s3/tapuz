@@ -74,54 +74,31 @@ app.use((req, res, next) => {
 });
 
 // =========================================================================
-// S6: first-party analytics collector — POST /_tapuz/collect
+// S6 + v1.99 foreign pixel: POST /_tapuz/collect
 // Registered BEFORE the global 12mb JSON parser so it enforces its OWN tight
 // 2kb limit (an unauthenticated public endpoint must never buffer megabytes).
-// express.static below is GET-only, so this POST route can't collide with a
-// served file. Privacy: the IP + User-Agent are derived HERE, server-side, and
-// only a salted hash is ever stored — the client beacon never sends an IP.
+// Handler lives in src/crm/collect-handler.js so the security rules (no
+// auto-upsert, site registry, analytics vs CRM spine) have one home.
 // =========================================================================
-app.post('/_tapuz/collect', express.json({ limit: '2kb', type: ['application/json', 'text/plain'] }), (req, res) => {
+const collectHandler = require('./crm/collect-handler');
+app.options('/_tapuz/collect', collectHandler.handleOptions);
+app.post(
+  '/_tapuz/collect',
+  express.json({ limit: '2kb', type: ['application/json', 'text/plain'] }),
+  (req, res) => collectHandler.handleCollect(req, res, { limiter: collectLimiter })
+);
+
+// Universal pixel loader — open CORS so foreign CMSs can load it; no secrets.
+app.get('/tz-pixel.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=300');
   try {
-    // Respect Do-Not-Track / Global Privacy Control — record nothing.
-    if (req.headers['dnt'] === '1' || req.headers['sec-gpc'] === '1') return res.status(204).end();
-
-    const ua = req.headers['user-agent'] || '';
-    if (analytics.isBot(ua)) return res.status(204).end(); // keep crawlers out of human stats
-
-    const ip = clientIp(req);
-    if (!collectLimiter.allow('collect:' + ip)) {
-      res.setHeader('Retry-After', String(collectLimiter.retryAfter('collect:' + ip)));
-      return res.status(429).end();
-    }
-
-    const b = (req.body && typeof req.body === 'object') ? req.body : {};
-    let p = typeof b.path === 'string' ? b.path : '';
-    if (!p || p[0] !== '/') return res.status(204).end(); // ignore garbage / cross-site paths
-    if (p.length > 512) p = p.slice(0, 512);
-
-    // Never track the admin surface (default OR custom base). Defense in depth:
-    // admin pages don't emit the beacon, but a forged POST must not slip in.
-    const base = auth.getAdminBase();
-    if (p === '/admin' || p.startsWith('/admin/') || p === base || p.startsWith(base + '/')) {
-      return res.status(204).end();
-    }
-
-    const ref = typeof b.ref === 'string' ? b.ref.slice(0, 1024) : '';
-    analytics.recordPageview({ path: p, referrer: ref, ip, userAgent: ua });
-    // CRM (v1.77 phase 2): if this browser was linked to a person by an earlier
-    // form submission, the visit also joins their timeline. An UNLINKED visitor
-    // records nothing here — they stay anonymous in `pageviews` alone, which is
-    // the whole point of keeping the two systems apart. Runs after the
-    // analytics write and behind the guarded seam, so it cannot cost a
-    // pageview; DNT/GPC and the bot filter above already excluded this request
-    // long before we reach it.
-    // Pass `res` so progressive cards can set the first-party stitch cookie.
-    require('./crm').capturePageview({ req, res, path: p });
-  } catch (e) {
-    // Never surface collector errors to anonymous callers.
-  }
-  return res.status(204).end();
+    const fsSync = require('fs');
+    const p = require('path').join(__dirname, '..', 'public', 'tz-pixel.js');
+    if (fsSync.existsSync(p)) return res.sendFile(p);
+  } catch (e) { /* */ }
+  res.status(404).end('/* missing */');
 });
 
 // Swallow body-parser errors (malformed JSON, oversized 2kb body) for the

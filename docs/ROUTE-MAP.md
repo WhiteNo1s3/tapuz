@@ -6,13 +6,14 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**198 routes across 36 files.**
+**207 routes across 36 files.**
 
 ## By file (what each module owns)
 
-### `src/server.js` — 5 routes
+### `src/server.js` — 6 routes
 
 - `POST /_tapuz/collect`
+- `GET /tz-pixel.js`
 - `GET /pzn-schema.json`
 - `GET /admin/api/registry`
 - `GET /admin/bentml-engine.js`
@@ -107,9 +108,17 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /crm/cs/v1/session`
 - `POST /crm/cs/v1/message`
 
-### `src/routes/crm.js` — 35 routes
+### `src/routes/crm.js` — 43 routes
 
 - `POST /admin/crm/settings`
+- `GET /admin/crm/sites`
+- `POST /admin/crm/sites/settings`
+- `POST /admin/crm/sites`
+- `POST /admin/crm/sites/:slug/update`
+- `POST /admin/crm/sites/:slug/delete`
+- `GET /admin/crm/claims`
+- `POST /admin/crm/claims/:id/approve`
+- `POST /admin/crm/claims/:id/reject`
 - `GET /admin/crm/interests`
 - `POST /admin/crm/interests/segment`
 - `GET /admin/crm/segments`
@@ -424,6 +433,9 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/chat` | GET | `src/routes/crm.js` |
 | `/admin/crm/chat` | POST | `src/routes/crm.js` |
 | `/admin/crm/chat/:id` | GET | `src/routes/crm.js` |
+| `/admin/crm/claims` | GET | `src/routes/crm.js` |
+| `/admin/crm/claims/:id/approve` | POST | `src/routes/crm.js` |
+| `/admin/crm/claims/:id/reject` | POST | `src/routes/crm.js` |
 | `/admin/crm/conversions` | GET | `src/routes/crm.js` |
 | `/admin/crm/conversions` | POST | `src/routes/crm.js` |
 | `/admin/crm/interests` | GET | `src/routes/crm.js` |
@@ -439,6 +451,11 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/crm/segments` | POST | `src/routes/crm.js` |
 | `/admin/crm/segments/:id/delete` | POST | `src/routes/crm.js` |
 | `/admin/crm/settings` | POST | `src/routes/crm.js` |
+| `/admin/crm/sites` | GET | `src/routes/crm.js` |
+| `/admin/crm/sites` | POST | `src/routes/crm.js` |
+| `/admin/crm/sites/:slug/delete` | POST | `src/routes/crm.js` |
+| `/admin/crm/sites/:slug/update` | POST | `src/routes/crm.js` |
+| `/admin/crm/sites/settings` | POST | `src/routes/crm.js` |
 | `/admin/crm/whatsapp` | GET | `src/routes/crm.js` |
 | `/admin/crm/whatsapp/optin` | POST | `src/routes/crm.js` |
 | `/admin/crm/whatsapp/send` | POST | `src/routes/crm.js` |
@@ -518,4 +535,5 @@ shows where, so editing is navigation, not a grep hunt.
 | `/robots.txt` | GET | `src/routes/seo-files.js` |
 | `/sitemap.xml` | GET | `src/routes/seo-files.js` |
 | `/tz-cs-chat.js` | GET | `src/routes/crm-track.js` |
+| `/tz-pixel.js` | GET | `src/server.js` |
 

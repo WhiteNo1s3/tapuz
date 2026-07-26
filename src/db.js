@@ -374,6 +374,51 @@ function initializeCrm() {
     )
   `);
 
+  // Site registry for foreign pixel embeds (v1.99) — slug is public like a
+  // measurement id; unknown slugs never write. No personal data here.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_sites (
+      slug TEXT PRIMARY KEY,
+      label TEXT NOT NULL DEFAULT '',
+      allowed_origins TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      claims_enabled INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Identity claims (v1.99) — a foreign identify() is an *unverified claim*
+  // until an admin approves it. Never auto-upserts a contact. contact_id is
+  // set only after approval so PERSONAL_TABLES erasure still covers it.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crm_identity_claims (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id TEXT NOT NULL DEFAULT '',
+      email TEXT,
+      phone TEXT,
+      name TEXT DEFAULT '',
+      visitor_hash TEXT DEFAULT '',
+      path TEXT DEFAULT '',
+      claim_count INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'pending',
+      contact_id INTEGER,
+      first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (contact_id) REFERENCES crm_contacts(id) ON DELETE SET NULL
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_claims_status ON crm_identity_claims(status, last_seen_at DESC)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_claims_site ON crm_identity_claims(site_id, status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_claims_contact ON crm_identity_claims(contact_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_claims_email ON crm_identity_claims(email)');
+
+  // Foreign anonymous traffic can tag analytics pageviews with a site_id
+  // without polluting crm_events (privacy spine).
+  if (!hasColumn('pageviews', 'site_id')) {
+    db.exec(`ALTER TABLE pageviews ADD COLUMN site_id TEXT DEFAULT ''`);
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pageviews_site ON pageviews(site_id, created_at DESC)');
+
   initializeCrmCs();
   initializeCrmWa();
   initializeCrmSearch();
