@@ -103,9 +103,18 @@ router.get('/admin/crm/inbox', requireAdmin, requireCrm('crm-inbox', 'תיבה �
   items = unifiedInbox.attachContactNames(items);
 
   const flash = String((req.query || {}).ok || '');
+  const flashErr = String((req.query || {}).err || '');
   const flashMsg = flash === 'handled'
     ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ סומן כטופל — המקור נשאר בערוץ שלו.</div>'
-    : '';
+    : flash === 'linked'
+      ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ קושר לכרטיס לקוח — הישות התעשרה, לא נוצר מחסן חדש.</div>'
+      : flash === 'task'
+        ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ נפתחה משימה על הכרטיס.</div>'
+        : flash === 'note'
+          ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ הערה נרשמה בציר הזמן.</div>'
+          : flashErr
+            ? `<div class="card" style="border-color:#fecaca;background:#fef2f2">⚠ ${esc(flashErr)}</div>`
+            : '';
 
   const channelTone = {
     form: 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe',
@@ -114,6 +123,7 @@ router.get('/admin/crm/inbox', requireAdmin, requireCrm('crm-inbox', 'תיבה �
     claim: 'background:#fff7ed;color:#c2410c;border-color:#fed7aa'
   };
 
+  const today = require('../crm').tasks.todayUTC();
   const tiles = unifiedInbox.CHANNELS.map((ch) => `
     <a class="stat-tile" href="/admin/crm/inbox?channel=${ch}">
       <div class="stat-num">${counts[ch] || 0}</div>
@@ -138,23 +148,47 @@ router.get('/admin/crm/inbox', requireAdmin, requireCrm('crm-inbox', 'תיבה �
                  <input type="hidden" name="key" value="${esc(it.id)}">
                  <button class="btn secondary sm" type="submit">טופל</button>
                </form>`;
+        const linkBtn = !it.contactId && it.channel !== 'claim'
+          ? `<form method="POST" action="/admin/crm/inbox/link" style="display:inline">
+               <input type="hidden" name="key" value="${esc(it.id)}">
+               <button class="btn secondary sm" type="submit" title="צור/קשר כרטיס Customer">🔗 כרטיס</button>
+             </form>`
+          : '';
         return `
-        <div class="rec" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
-          <div style="flex:1;min-width:200px">
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-              <span class="pill" style="${tone}">${esc(unifiedInbox.channelLabel(it.channel))}</span>
-              <strong>${esc(it.title)}</strong>
+        <div class="rec" style="display:block">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
+            <div style="flex:1;min-width:200px">
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+                <span class="pill" style="${tone}">${esc(unifiedInbox.channelLabel(it.channel))}</span>
+                <strong>${esc(it.title)}</strong>
+              </div>
+              <div class="muted" style="font-size:.88rem;line-height:1.45">${esc(it.preview)}</div>
+              <div class="muted" style="font-size:.78rem;margin-top:6px">
+                ${who} · ${esc(when)}
+              </div>
             </div>
-            <div class="muted" style="font-size:.88rem;line-height:1.45">${esc(it.preview)}</div>
-            <div class="muted" style="font-size:.78rem;margin-top:6px">
-              ${who} · ${esc(when)}
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <a class="btn sm" href="${esc(it.href)}">פתח בערוץ</a>
+              ${it.contactId ? `<a class="btn secondary sm" href="/admin/crm/${it.contactId}">כרטיס</a>` : ''}
+              ${linkBtn}
+              ${handleBtn}
             </div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <a class="btn sm" href="${esc(it.href)}">פתח בערוץ</a>
-            ${it.contactId ? `<a class="btn secondary sm" href="/admin/crm/${it.contactId}">כרטיס</a>` : ''}
-            ${handleBtn}
-          </div>
+          ${it.channel !== 'claim' ? `
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0">
+            <form method="POST" action="/admin/crm/inbox/task" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1">
+              <input type="hidden" name="key" value="${esc(it.id)}">
+              <input name="title" class="input" style="flex:1;min-width:140px" placeholder="משימה (מעקב…)"
+                     value="${esc('מעקב: ' + String(it.title || '').slice(0, 40))}">
+              <input name="dueAt" type="date" class="input" style="width:auto" value="${esc(today)}">
+              <button class="btn secondary sm" type="submit">✅ משימה</button>
+            </form>
+            <form method="POST" action="/admin/crm/inbox/note" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1">
+              <input type="hidden" name="key" value="${esc(it.id)}">
+              <input name="text" class="input" style="flex:1;min-width:140px" placeholder="הערה לכרטיס…" required>
+              <button class="btn secondary sm" type="submit">📝 הערה</button>
+            </form>
+          </div>` : ''}
         </div>`;
       }).join('')
     : `<div class="empty-state">
@@ -169,8 +203,8 @@ router.get('/admin/crm/inbox', requireAdmin, requireCrm('crm-inbox', 'תיבה �
   page(res, 'crm-inbox', 'תיבה מאוחדת', `
     ${flashMsg}
     <p class="lead" style="margin-top:0">
-      <strong>תור אחד, ערוצים רבים</strong> — בלי למזג טבלאות.
-      כל פריט מצביע על המקור; הכרטיס (Customer) הוא הישות שמתעשרת.
+      <strong>תור אחד שמשרת</strong> — קשירה לכרטיס, משימה, הערה, טופל —
+      בלי למזג טבלאות. ה־Customer הוא הישות; הערוץ נשאר מקור האמת.
     </p>
     <div class="stat-row">${tiles}</div>
     <div class="card">
@@ -192,10 +226,10 @@ router.get('/admin/crm/inbox', requireAdmin, requireCrm('crm-inbox', 'תיבה �
     <div class="card">
       <div class="card-head">איך זה לא מתבלגן</div>
       <ul class="muted" style="font-size:.88rem;line-height:1.7;margin:0;padding-inline-start:1.2rem">
-        <li>טפסים נשארים ב־<a href="/admin/inbox">צינור לידים</a> (סטטוס/ערך/מעקב).</li>
-        <li>צ׳אט ו־WhatsApp נשארים במסכים שלהם — כאן רק «צריך טיפול».</li>
-        <li>תביעות זהות נפתחות לאישור, לא למיזוג אוטומטי.</li>
-        <li>הוספת ערוץ חדש = אספן אחד + קישור — לא שכתוב של התיבה.</li>
+        <li><strong>🔗 כרטיס</strong> — יוצר/מקשר Customer מהפריט (מייל/טלפון), בלי שכפול ערוץ.</li>
+        <li><strong>✅ משימה / 📝 הערה</strong> — נכתבים על הישות, לא על «הודעה זמנית».</li>
+        <li>טפסים נשארים ב־<a href="/admin/inbox">צינור לידים</a> לעומק (ערך/מעקב).</li>
+        <li>תביעות זהות רק באישור — לא «טופל» מהתור.</li>
       </ul>
     </div>`);
 });
@@ -208,6 +242,52 @@ router.post('/admin/crm/inbox/handle', requireAdmin, (req, res) => {
     return res.redirect('/admin/crm/claims');
   }
   res.redirect('/admin/crm/inbox');
+});
+
+router.post('/admin/crm/inbox/link', requireAdmin, (req, res) => {
+  const key = String((req.body || {}).key || '');
+  const r = require('../crm').unifiedInbox.ensureContactForItem(key);
+  if (r && r.ok) return res.redirect('/admin/crm/inbox?ok=linked');
+  const errMap = {
+    'no-identity': 'אין מייל/טלפון בפריט — אי אפשר לפתוח כרטיס',
+    missing: 'הפריט לא נמצא',
+    'use-approve': 'תביעת זהות — אשרו במסך התביעות'
+  };
+  res.redirect(
+    '/admin/crm/inbox?err=' + encodeURIComponent(errMap[r && r.error] || (r && r.error) || 'שגיאה')
+  );
+});
+
+router.post('/admin/crm/inbox/task', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  const r = require('../crm').unifiedInbox.createTaskFromItem(String(b.key || ''), {
+    title: b.title,
+    dueAt: b.dueAt,
+    kind: 'followup'
+  });
+  if (r && r.ok) return res.redirect('/admin/crm/inbox?ok=task');
+  res.redirect(
+    '/admin/crm/inbox?err=' +
+      encodeURIComponent(
+        r && r.error === 'no-identity'
+          ? 'קודם קשרו כרטיס (מייל/טלפון) או מלאו זהות בפריט'
+          : (r && r.error) || 'לא נוצרה משימה'
+      )
+  );
+});
+
+router.post('/admin/crm/inbox/note', requireAdmin, (req, res) => {
+  const b = req.body || {};
+  const r = require('../crm').unifiedInbox.addNoteFromItem(String(b.key || ''), b.text);
+  if (r && r.ok) return res.redirect('/admin/crm/inbox?ok=note');
+  res.redirect(
+    '/admin/crm/inbox?err=' +
+      encodeURIComponent(
+        r && r.error === 'no-identity'
+          ? 'קודם קשרו כרטיס — הערה שייכת לישות'
+          : (r && r.error) || 'ההערה לא נשמרה'
+      )
+  );
 });
 
 // ─── email sequences / drip (v2.03, BEFORE /:id) ─────────────────────

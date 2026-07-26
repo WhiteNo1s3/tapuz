@@ -321,6 +321,11 @@ function markHandled(key) {
     try {
       const forms = require('../forms');
       forms.markRead(Number(p.refId));
+      // Pipeline: first touch from the unified desk moves new → contacted
+      const row = forms.getSubmission(Number(p.refId));
+      if (row && (row.status === 'new' || !row.status)) {
+        forms.setStatus(Number(p.refId), 'contacted');
+      }
       return { ok: true, channel: 'form' };
     } catch (e) {
       return { ok: false, error: e.message };
@@ -348,6 +353,169 @@ function markHandled(key) {
     return { ok: false, error: 'use-approve-or-reject' };
   }
   return { ok: false, error: 'channel' };
+}
+
+/**
+ * Re-load one item by key from collectors (fresh, not stale list).
+ */
+function getItem(key) {
+  const p = parseKey(key);
+  if (!p) return null;
+  const items = listItems({ channel: p.channel, state: 'all', limit: 200 });
+  return items.find((it) => it.id === key) || null;
+}
+
+/**
+ * Ensure a Customer exists for this inbox item and link channel rows to it.
+ * Adds to the entity — never invents a parallel person store.
+ *
+ * @returns {{ok:boolean, contactId?:number, created?:boolean, error?:string}}
+ */
+function ensureContactForItem(key) {
+  const p = parseKey(key);
+  if (!p) return { ok: false, error: 'key' };
+  const item = getItem(key);
+  if (item && item.contactId) {
+    return { ok: true, contactId: Number(item.contactId), created: false };
+  }
+
+  if (p.channel === 'form') {
+    try {
+      const forms = require('../forms');
+      const crm = require('./index');
+      const sub = forms.getSubmission(Number(p.refId));
+      if (!sub) return { ok: false, error: 'missing' };
+      const fields = sub.fields || {};
+      const identity = crm.identityFromFields(fields);
+      if (!identity.email && !identity.phone && !identity.name) {
+        return { ok: false, error: 'no-identity' };
+      }
+      const up = contacts.upsertContact(
+        Object.assign({}, identity, {
+          source: sub.page || 'form',
+          status: identity.email || identity.phone ? 'lead' : 'provisional'
+        })
+      );
+      if (!up.contact) return { ok: false, error: 'upsert' };
+      // Link timeline if missing
+      const linked = db
+        .prepare(
+          `SELECT id FROM crm_events WHERE type = 'form' AND ref_id = ? AND contact_id = ?`
+        )
+        .get(Number(p.refId), up.contact.id);
+      if (!linked) {
+        require('./events').record({
+          contactId: up.contact.id,
+          type: 'form',
+          path: sub.page || '',
+          title: identity.name || identity.email || identity.phone || '',
+          refId: Number(p.refId)
+        });
+      }
+      return { ok: true, contactId: up.contact.id, created: !!up.created };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  if (p.channel === 'chat') {
+    try {
+      const cs = require('./cs');
+      const conv = cs.getConversation(Number(p.refId));
+      if (!conv) return { ok: false, error: 'missing' };
+      if (conv.contact_id) return { ok: true, contactId: conv.contact_id, created: false };
+      // Pull identity from user messages (email/phone typed in chat)
+      const msgs = cs.messagesFor(Number(p.refId), { limit: 50 });
+      const blob = msgs
+        .filter((m) => m.role === 'user')
+        .map((m) => m.text)
+        .join('\n');
+      const crm = require('./index');
+      const identity = crm.identityFromFields({ text: blob, message: blob });
+      // also scan for email/phone regex if identityFromFields only looks at keys
+      const emailMatch = blob.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      const phoneMatch = blob.match(/(?:\+?972|0)[\d\- ]{8,12}/);
+      if (emailMatch) identity.email = identity.email || emailMatch[0];
+      if (phoneMatch) identity.phone = identity.phone || phoneMatch[0];
+      if (!identity.email && !identity.phone) {
+        return { ok: false, error: 'no-identity' };
+      }
+      const up = contacts.upsertContact(
+        Object.assign({}, identity, { source: 'chat', status: 'lead' })
+      );
+      if (!up.contact) return { ok: false, error: 'upsert' };
+      db.prepare(
+        'UPDATE crm_cs_conversations SET contact_id = ? WHERE id = ? AND contact_id IS NULL'
+      ).run(up.contact.id, Number(p.refId));
+      return { ok: true, contactId: up.contact.id, created: !!up.created };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  if (p.channel === 'whatsapp') {
+    try {
+      const row = db
+        .prepare('SELECT * FROM crm_wa_messages WHERE id = ?')
+        .get(Number(p.refId));
+      if (!row) return { ok: false, error: 'missing' };
+      if (row.contact_id) return { ok: true, contactId: row.contact_id, created: false };
+      const ledger = require('./wa-ledger');
+      const cid = ledger.ensureContact(row.phone, '');
+      if (!cid) return { ok: false, error: 'upsert' };
+      return { ok: true, contactId: cid, created: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  if (p.channel === 'claim') {
+    return { ok: false, error: 'use-approve' };
+  }
+  return { ok: false, error: 'channel' };
+}
+
+/**
+ * Open a sales task on the person behind this item (ensures contact first).
+ */
+function createTaskFromItem(key, { title, kind, dueAt, notes } = {}) {
+  const ensured = ensureContactForItem(key);
+  if (!ensured.ok) return ensured;
+  const tasks = require('./tasks');
+  const item = getItem(key);
+  const defaultTitle =
+    title ||
+    (item
+      ? 'מעקב: ' + String(item.title || item.channel).slice(0, 80)
+      : 'מעקב מתיבה');
+  return tasks.createTask({
+    contactId: ensured.contactId,
+    title: defaultTitle,
+    kind: kind || 'followup',
+    dueAt: dueAt || tasks.todayUTC(),
+    notes: notes || ''
+  });
+}
+
+/**
+ * Owner note on the Customer timeline for this item.
+ */
+function addNoteFromItem(key, text) {
+  const body = String(text || '').trim().slice(0, 500);
+  if (!body) return { ok: false, error: 'empty' };
+  const ensured = ensureContactForItem(key);
+  if (!ensured.ok) return ensured;
+  try {
+    require('./events').record({
+      contactId: ensured.contactId,
+      type: 'note',
+      title: body
+    });
+    contacts.touchActivity(ensured.contactId);
+    return { ok: true, contactId: ensured.contactId };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 /** Resolve display names for contact ids in a list (one query). */
@@ -385,6 +553,10 @@ module.exports = {
   listItems,
   counts,
   markHandled,
+  getItem,
+  ensureContactForItem,
+  createTaskFromItem,
+  addNoteFromItem,
   ackItem,
   unackItem,
   isAcked,

@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v2.07 unified inbox).
+> **Last updated:** 2026-07-26 (v2.08 actionable unified inbox).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v2.07 unified inbox** on main |
-| Recent line | v2.03 sequences → **v2.07 unified inbox** |
-| Package version field | **`2.07.0-alpha`** |
+| Tip when handoff written | see `git log -1` — **v2.08 actionable unified inbox** on main |
+| Recent line | v2.03 sequences → **v2.08 actionable unified inbox** |
+| Package version field | **`2.08.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -263,6 +263,15 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | Admin | `/admin/crm/inbox` |
 | Rule | channels stay systems of record; no dual body store |
 | Smoke | `npm run test:crm-unified-inbox` |
+
+## 9i. Actionable inbox (v2.08)
+
+| Action | Effect |
+|--------|--------|
+| 🔗 כרטיס | `ensureContactForItem` → Customer |
+| ✅ משימה | task on that contact |
+| 📝 הערה | timeline note on entity |
+| טופל | channel-native close/ack |
 
 ## 10. Open / next (when resuming)
 

@@ -1,6 +1,6 @@
 # Tapuziel — Roadmap & Idea Pool
 
-**Current version: v2.07-alpha**
+**Current version: v2.08-alpha**
 
 ## How versions work
 

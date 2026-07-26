@@ -119,8 +119,35 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'crm', 'unified-in
 check('docs projector principle in module', /projector|PROJECTOR|read projector/i.test(src));
 check('no INSERT into form_submissions from unified', !/INSERT INTO form_submissions/.test(src));
 
+// actionable desk: link / task / note on the entity
+const orphan = forms.saveSubmission({
+  page: 'x',
+  fields: { email: 'orphan@example.com', name: 'יתום', msg: 'היי' }
+});
+const orphanKey = inbox.itemKey('form', orphan.id);
+const linked = inbox.ensureContactForItem(orphanKey);
+check('ensureContactForItem links form identity', linked.ok && !!linked.contactId);
+const again = inbox.ensureContactForItem(orphanKey);
+check('ensureContact is idempotent on same person', again.contactId === linked.contactId);
+
+const taskR = inbox.createTaskFromItem(orphanKey, {
+  title: 'לחזור ליתום',
+  kind: 'call',
+  dueAt: require('../src/crm/tasks').todayUTC()
+});
+check('createTaskFromItem opens task on Customer', taskR.ok && taskR.task.contact_id === linked.contactId);
+
+const noteR = inbox.addNoteFromItem(orphanKey, 'דיברנו — מעוניין בחבילה');
+check('addNoteFromItem on timeline', noteR.ok);
+const events = require('../src/crm/events').listForContact(linked.contactId);
+check(
+  'note visible on contact timeline',
+  events.some((e) => e.type === 'note' && /מעוניין/.test(e.title || ''))
+);
+
 const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'crm.js'), 'utf8');
 check('GET /admin/crm/inbox registered', /\/admin\/crm\/inbox'/.test(routes));
+check('inbox action routes', /inbox\/link/.test(routes) && /inbox\/task/.test(routes) && /inbox\/note/.test(routes));
 const nav = fs.readFileSync(path.join(__dirname, '..', 'src', 'admin-ui.js'), 'utf8');
 check('nav crm-inbox', /crm-inbox/.test(nav));
 
