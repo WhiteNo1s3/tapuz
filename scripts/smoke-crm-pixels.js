@@ -83,23 +83,38 @@ check('ACCEPTANCE: a rendered page with pixels off is byte-identical', (() => {
 const gated = pixels.renderPixels(cfg());
 check('with consent required, the vendor code is NOT live markup — it waits as data',
   gated.indexOf('<script>!function(f,b,e,v,n,t,s)') === -1 && gated.includes('fbq'));
-check('the consent bar is rendered', gated.includes('id="tz-consent"') && gated.includes('אישור'));
+// v2.10: the bar, the public API and the remembered answer moved to
+// src/crm/consent.js — consent stopped being a pixel feature, because
+// server-side conversions gate on the same answer with no vendor in sight.
+// The coverage moves with them (smoke-consent.js); what stays here is the
+// CONTRACT BETWEEN the two: this loader must defer, not decide.
+const consent = require('../src/crm/consent');
+check('the consent bar is rendered — by its owner, for this same site',
+  consent.renderConsent(cfg()).includes('id="tz-consent"'));
 check('a site with its own banner can suppress ours',
-  !pixels.renderPixels(cfg({ banner: false })).includes('id="tz-consent"'));
+  !consent.renderConsent(cfg({ banner: false })).includes('id="tz-consent"'));
 check('consent can be waived deliberately (requireConsent false fires immediately)', (() => {
   const s = pixels.renderPixels(cfg({ requireConsent: false }));
-  return s.includes('NEED=false') && !s.includes('id="tz-consent"');
+  return s.includes('NEED=false') && s.includes('if(!NEED){fire();return}');
 })());
-check('the loader exposes a public consent API for a custom banner',
-  gated.includes('window.tapuzConsent') && gated.includes('grant:') && gated.includes('deny:'));
+check('the loader DEFERS to the consent runtime instead of deciding itself',
+  gated.includes('tapuzConsent.onGrant(fire)') &&
+  !gated.includes('localStorage') && !gated.includes('id="tz-consent"'));
+check('the public consent API is still there for a custom banner', (() => {
+  const c = consent.renderConsent(cfg());
+  return c.includes('window.tapuzConsent') && c.includes('grant:') && c.includes('deny:');
+})());
 check('Do-Not-Track / GPC is checked before anything fires',
   gated.includes('doNotTrack') && gated.includes('globalPrivacyControl'));
-check('consent is remembered between visits', gated.includes('localStorage'));
+check('consent is remembered between visits', consent.renderConsent(cfg()).includes('localStorage'));
 // v1.80: the server sends conversions too, so it must be able to read the same
 // answer — the decision is mirrored into a cookie, not locked in localStorage.
-check('the consent decision is mirrored to a cookie the SERVER can read',
-  gated.includes('document.cookie=KEY') && gated.includes('SameSite=Lax'));
-check('the consent cookie is Secure on https', gated.includes("location.protocol==='https:'"));
+check('the consent decision is mirrored to a cookie the SERVER can read', (() => {
+  const c = consent.renderConsent(cfg());
+  return c.includes('document.cookie=KEY') && c.includes('SameSite=Lax');
+})());
+check('the consent cookie is Secure on https',
+  consent.renderConsent(cfg()).includes("location.protocol==='https:'"));
 
 // ── id validation: nothing unvalidated reaches a script ──────────────
 check('a Meta id survives as digits ONLY (every markup character is stripped)', (() => {

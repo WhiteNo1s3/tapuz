@@ -105,28 +105,25 @@ function vendorSnippets(p) {
   return out;
 }
 
-/** The built-in consent bar. RTL, no external asset, survives static export. */
-function bannerMarkup() {
-  return (
-    `<div id="tz-consent" dir="rtl" style="position:fixed;inset-inline:0;bottom:0;z-index:2147483000;` +
-    `display:none;background:#0f172a;color:#e2e8f0;padding:14px 18px;font:500 14px/1.5 system-ui,sans-serif;` +
-    `box-shadow:0 -4px 24px rgba(0,0,0,.3)">` +
-    `<div style="max-width:900px;margin:0 auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap">` +
-    `<span style="flex:1;min-width:220px">האתר משתמש בכלי מדידה כדי להבין מה עוזר לכם. אפשר לאשר או לדחות — האתר עובד אותו דבר.</span>` +
-    `<button type="button" data-tz-consent="deny" style="border:1px solid #475569;background:transparent;` +
-    `color:#e2e8f0;border-radius:8px;padding:8px 16px;cursor:pointer;font:inherit">דחייה</button>` +
-    `<button type="button" data-tz-consent="grant" style="border:none;background:#f97316;color:#fff;` +
-    `border-radius:8px;padding:8px 18px;cursor:pointer;font:600 14px system-ui">אישור</button>` +
-    `</div></div>`
-  );
+/**
+ * Does the PIXEL layer gate on consent? Asked by `consent.js` so the bar
+ * appears for the vendors we would actually load (v2.10).
+ */
+function needsConsent(config) {
+  const p = getPixels(config);
+  return !!(p.enabled && p.requireConsent && hasAnyPixel(p));
 }
 
 /**
- * The full <head> payload. Empty string when pixels are off or unconfigured —
+ * The vendor loader. Empty string when pixels are off or unconfigured —
  * which is what makes "off is byte-identical" true rather than aspirational.
  *
+ * v2.10: this module no longer OWNS consent — `consent.js` does. Here we only
+ * register with `window.tapuzConsent.onGrant()` and let it decide when (or
+ * whether) the vendors run. One decision, one writer.
+ *
  * @param {object} config site config
- * @returns {string} markup to append to <head>
+ * @returns {string} markup for the body-end extras
  */
 function renderPixels(config) {
   const p = getPixels(config);
@@ -140,20 +137,13 @@ function renderPixels(config) {
   const payload = JSON.stringify(snippets).replace(/<\/script/gi, '<\\/script');
   const needConsent = p.requireConsent ? 'true' : 'false';
 
-  const loader =
+  return (
     `<script>(function(){` +
-    `var KEY=${JSON.stringify(CONSENT_KEY)},NEED=${needConsent},SNIPS=${payload},fired=false;` +
+    `var NEED=${needConsent},SNIPS=${payload},fired=false;` +
     // Do-Not-Track / GPC is an explicit refusal — never load a tracker over it.
-    `function dnt(){try{return navigator.doNotTrack=='1'||window.doNotTrack=='1'||navigator.msDoNotTrack=='1'||navigator.globalPrivacyControl===true}catch(e){return false}}` +
-    // The decision is mirrored into a cookie as well as localStorage, because
-    // the SERVER has to honour the same answer: phase 3b sends conversions
-    // server-side, and a visitor who refused here must be refused there too.
-    // localStorage stays the source of truth for the browser (survives cookie
-    // clearing policies); the cookie is how the server learns the answer.
-    `function read(){try{var v=localStorage.getItem(KEY);if(v)return v}catch(e){}` +
-    `try{var m=document.cookie.match(/(?:^|;\\s*)tz_consent=([^;]*)/);return m?m[1]:null}catch(e){return null}}` +
-    `function write(v){try{localStorage.setItem(KEY,v)}catch(e){}` +
-    `try{document.cookie=KEY+'='+v+';Path=/;Max-Age=31536000;SameSite=Lax'+(location.protocol==='https:'?';Secure':'')}catch(e){}}` +
+    // consent.js checks this too; a tracker checks its own refusals.
+    `function dnt(){try{return navigator.doNotTrack=='1'||window.doNotTrack=='1'||` +
+    `navigator.msDoNotTrack=='1'||navigator.globalPrivacyControl===true}catch(e){return false}}` +
     // Vendor code is injected as a real <script> element, NOT eval'd. Our CSP
     // allows 'unsafe-inline' (the analytics beacon needs it) but deliberately
     // withholds 'unsafe-eval' — so an eval-based loader is silently blocked on
@@ -166,24 +156,15 @@ function renderPixels(config) {
     `var el=document.createElement('script');el.text=SNIPS[i];` +
     `(document.head||document.documentElement).appendChild(el);` +
     `}catch(e){if(window.console&&console.warn)console.warn('[tapuziel] pixel '+i+' failed:',e&&e.message)}}}` +
-    `function hide(){var b=document.getElementById('tz-consent');if(b)b.style.display='none'}` +
-    `function show(){var b=document.getElementById('tz-consent');if(b)b.style.display='block'}` +
-    `window.tapuzConsent={` +
-    `status:function(){return read()||'unset'},` +
-    `grant:function(){write('granted');hide();fire()},` +
-    `deny:function(){write('denied');hide()}};` +
-    `function boot(){` +
-    `var b=document.getElementById('tz-consent');` +
-    `if(b)b.addEventListener('click',function(e){var a=e.target&&e.target.getAttribute('data-tz-consent');` +
-    `if(a==='grant')window.tapuzConsent.grant();else if(a==='deny')window.tapuzConsent.deny()});` +
-    `if(dnt())return;` +
     `if(!NEED){fire();return}` +
-    `var s=read();if(s==='granted'){fire();return}if(s==='denied')return;show()}` +
-    `if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();` +
-    `})();</script>`;
-
-  const banner = p.requireConsent && p.banner ? bannerMarkup() : '';
-  return banner + loader;
+    // Consent required: the runtime decides. If it is absent (the owner turned
+    // the consent surface off while keeping consent-gated pixels) we fail
+    // CLOSED — and say so once, because a silent no-op is the bug that costs
+    // an afternoon.
+    `if(window.tapuzConsent&&window.tapuzConsent.onGrant){window.tapuzConsent.onGrant(fire);return}` +
+    `if(window.console&&console.warn)console.warn('[tapuziel] pixels need consent but no consent runtime is on this page — nothing will load');` +
+    `})();</script>`
+  );
 }
 
 /**
@@ -253,6 +234,6 @@ function cspSources(config) {
 }
 
 module.exports = {
-  CONSENT_KEY, getPixels, hasAnyPixel, vendorSnippets,
+  CONSENT_KEY, getPixels, hasAnyPixel, vendorSnippets, needsConsent,
   renderPixels, renderConversionPixel, cspSources
 };

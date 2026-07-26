@@ -1715,10 +1715,6 @@ router.get('/admin/crm/pixels', requireAdmin, requireCrm('crm-pixels', 'פיקס
           <input type="checkbox" name="requireConsent" value="1" ${on(p.requireConsent !== false)}>
           בקש אישור מהמבקר לפני טעינה <strong>(מומלץ מאוד)</strong>
         </label>
-        <label style="display:flex;gap:8px;align-items:center">
-          <input type="checkbox" name="banner" value="1" ${on(p.banner !== false)}>
-          הצג את סרגל האישור שלנו (כבו אם יש לכם סרגל משלכם)
-        </label>
 
         <div class="side-title">מזהים</div>
         <label>Meta / Facebook Pixel ID
@@ -1735,6 +1731,7 @@ router.get('/admin/crm/pixels', requireAdmin, requireCrm('crm-pixels', 'פיקס
         <button class="btn" type="submit">שמור</button>
       </form>
     </div>
+    ${consentCard(cfg)}
     <div class="card">
       <div class="card-head">איך זה מתנהג</div>
       <ul class="muted" style="font-size:.88rem;line-height:1.9;padding-inline-start:18px;margin:0">
@@ -1744,6 +1741,98 @@ router.get('/admin/crm/pixels', requireAdmin, requireCrm('crm-pixels', 'פיקס
         <li>בלי מזהים, או עם הפיקסלים כבויים — הדף מוגש בדיוק כמו קודם.</li>
       </ul>
     </div>`);
+});
+
+/**
+ * Consent (v2.10) — its own card, because consent stopped being a pixel
+ * feature: server-side conversions gate on the same answer, and a site with
+ * no browser vendor used to get no bar at all.
+ */
+function consentCard(cfg) {
+  const consent = require('../crm/consent');
+  const c = consent.getConsent(cfg);
+  const pixelsNeed = (() => {
+    try { return require('../crm/pixels').needsConsent(cfg); } catch (e) { return false; }
+  })();
+  const convNeed = (() => {
+    try { return require('../crm/conversions').needsConsent(cfg); } catch (e) { return false; }
+  })();
+  const active = consent.consentActive(cfg);
+  const opt = (v, label, cur) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${label}</option>`;
+
+  return `
+    <div class="card">
+      <div class="card-head">🍪 הסכמת מבקרים</div>
+      <p class="lead">
+        התשובה של המבקר נשמרת פעם אחת ומשרתת את <strong>כל</strong> מה שתלוי בה:
+        פיקסלים בדפדפן וגם המרות שנשלחות מהשרת. Do-Not-Track גובר על הכול.
+      </p>
+      <div class="rec" style="display:flex;gap:14px;flex-wrap:wrap;font-size:.86rem">
+        <span class="pill ${pixelsNeed ? 'ok' : ''}">פיקסלים: ${pixelsNeed ? 'דורשים הסכמה' : 'לא דורשים'}</span>
+        <span class="pill ${convNeed ? 'ok' : ''}">המרות בשרת: ${convNeed ? 'דורשות הסכמה' : 'לא דורשות'}</span>
+        <span class="pill" style="${active ? 'background:#ecfdf5;color:#047857' : ''}">
+          ${active ? (c.banner ? 'הסרגל מוצג באתר ✓' : 'המנגנון פעיל — בלי סרגל שלנו') : 'לא נשאלת שאלה'}
+        </span>
+      </div>
+      ${!active && (pixelsNeed || convNeed) ? `
+      <p class="muted" style="color:#b45309;font-size:.85rem;margin-top:8px">
+        ⚠ משהו באתר דורש הסכמה אבל מצב ההסכמה כבוי — המבקרים לא נשאלים, ולכן
+        הפעולות האלה פשוט לא יקרו.
+      </p>` : ''}
+      <form method="POST" action="/admin/crm/consent" class="stack" style="margin-top:12px">
+        <label>מתי לשאול
+          <select name="mode" class="input">
+            ${opt('auto', 'אוטומטי — רק כשמשהו באמת דורש הסכמה (מומלץ)', c.mode)}
+            ${opt('always', 'תמיד — גם אם כרגע שום דבר לא דורש', c.mode)}
+            ${opt('off', 'כבוי — יש לי מנגנון הסכמה משלי', c.mode)}
+          </select>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="banner" value="1" ${c.banner ? 'checked' : ''}>
+          הצג את סרגל האישור שלנו (כבו אם יש לכם סרגל משלכם)
+        </label>
+        <label>נוסח<input name="text" class="input" value="${esc(c.text)}"></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="flex:1;min-width:120px">כפתור אישור<input name="grantLabel" class="input" value="${esc(c.grantLabel)}"></label>
+          <label style="flex:1;min-width:120px">כפתור דחייה<input name="denyLabel" class="input" value="${esc(c.denyLabel)}"></label>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label style="flex:2;min-width:180px">קישור למדיניות פרטיות (נתיב באתר או https)
+            <input name="policyUrl" class="input" dir="ltr" value="${esc(c.policyUrl)}" placeholder="/מדיניות-פרטיות"></label>
+          <label style="flex:1;min-width:120px">טקסט הקישור<input name="policyLabel" class="input" value="${esc(c.policyLabel)}"></label>
+        </div>
+        <button class="btn" type="submit">שמור הסכמה</button>
+      </form>
+      <p class="muted" style="font-size:.82rem;margin-top:10px">
+        הסכמה חייבת להיות הפיכה: כל אלמנט בדף עם
+        <code dir="ltr">data-tz-consent="open"</code> פותח את הסרגל מחדש —
+        שימו קישור כזה בתחתית האתר ("שינוי הסכמה").
+      </p>
+    </div>`;
+}
+
+router.post('/admin/crm/consent', requireAdmin, (req, res) => {
+  const config = require('../config');
+  const cfg = config.loadConfig();
+  const b = req.body || {};
+  const consent = require('../crm/consent');
+  cfg.crm = Object.assign({}, cfg.crm, {
+    consent: {
+      mode: consent.MODES.includes(b.mode) ? b.mode : 'auto',
+      banner: !!b.banner,
+      text: String(b.text || '').trim().slice(0, 400),
+      grantLabel: String(b.grantLabel || '').trim().slice(0, 40),
+      denyLabel: String(b.denyLabel || '').trim().slice(0, 40),
+      policyLabel: String(b.policyLabel || '').trim().slice(0, 60),
+      // validated again at render time — this is convenience, not the guard
+      policyUrl: consent.safeUrl(b.policyUrl)
+    }
+  });
+  config.saveConfig(cfg);
+  // Consent markup is injected at render time, so the published site keeps
+  // serving the old bar until a rebuild — same reason as the pixel save.
+  try { require('../export').exportAll(); } catch (e) { console.error('[crm] rebuild after consent change failed:', e.message); }
+  res.redirect('/admin/crm/pixels');
 });
 
 router.post('/admin/crm/pixels', requireAdmin, (req, res) => {
@@ -3002,7 +3091,7 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
       <div class="card-head">🔑 חשבון אזור אישי (פורטל)</div>
       <p class="muted" style="font-size:.88rem;margin-top:0">
         שם משתמש וסיסמה ללקוח — נפרד מאדמין. פורטל ציבורי
-        ${portalOn ? 'פעיל' : '<strong>כבוי</strong> (הפעילו ב־<a href="/admin/crm/privacy">פרטיות ושמירה</a>')}.
+        ${portalOn ? 'פעיל' : '<strong>כבוי</strong> (הפעילו ב־<a href="/admin/crm/privacy">פרטיות ושמירה</a>)'}.
         אפשר תמיד לפתוח חשבון כאן.
       </p>
       ${portalMsg

@@ -993,8 +993,13 @@ function renderPage(page, options = {}) {
   // consent bar is real markup (invalid in <head>), and a consent-gated tracker
   // gains nothing from loading earlier. Returns '' when pixels are off, so a
   // site without them renders byte-for-byte what it always did.
+  // Consent (v2.10) renders BEFORE the pixel loader on purpose: the loader
+  // registers itself with `window.tapuzConsent.onGrant()`, so the runtime has
+  // to exist first. It also renders for sites with no browser vendor at all —
+  // server-side conversions gate on the same answer.
   const siteExtras = renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
-    renderAnalyticsBeacon(config) + require('./crm/pixels').renderPixels(config) +
+    renderAnalyticsBeacon(config) + require('./crm/consent').renderConsent(config) +
+    require('./crm/pixels').renderPixels(config) +
     require('./crm/cs-widget').renderTag(config);
   const seoJsonLd = seoLib.jsonLdScript(seoLib.buildJsonLd({
     title: pageTitle, description: pageDesc, image: ogAbs, isArticle, isHome,

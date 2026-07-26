@@ -248,10 +248,23 @@ function describeSettings(config) {
   };
 }
 
+/**
+ * Does the SERVER-SIDE layer gate on consent? Asked by `consent.js` (v2.10).
+ *
+ * This is the case the old pixel-owned bar missed entirely: a site sending
+ * CAPI/GA4 from the server with no browser vendor configured showed no bar,
+ * so `consentFromRequest` never saw 'granted' and every conversion was
+ * refused with `no-consent` — a gate with no door.
+ */
+function needsConsent(config) {
+  const c = getConfig(config);
+  return !!(c.enabled && c.requireConsent && (c.meta.ready || c.ga4.ready));
+}
+
 module.exports = {
   META_HOST, GA4_HOST, TIMEOUT_MS,
   sha256Norm, sha256Phone, newEventId,
-  getConfig, consentFromRequest, refusesTracking, gaClientId,
+  getConfig, consentFromRequest, refusesTracking, gaClientId, needsConsent,
   buildMetaPayload, buildGa4Payload,
   sendConversion, describeSettings
 };
