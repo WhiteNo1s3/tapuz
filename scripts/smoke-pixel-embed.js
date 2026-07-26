@@ -227,6 +227,43 @@ function waitUp() {
     check('native collect does not upsert from email field',
       contacts.findByEmail('native-forge@example.com') == null);
 
+    // ── v2.02: the native stream belongs to THIS site ────────────────
+    // Found by the live WordPress test: an unregistered site_id was
+    // correctly dropped, but omitting site_id entirely let a foreign page
+    // write into the owner's OWN analytics.
+    const beforeForeign = db.prepare('SELECT COUNT(*) n FROM pageviews').get().n;
+    const foreignNoSite = await req('POST', '/_tapuz/collect', {
+      body: { path: '/injected-by-a-stranger', type: 'pageview' },
+      origin: 'https://evil.example.com'
+    });
+    check('a FOREIGN-origin beacon with no site_id is refused (silent 204)',
+      foreignNoSite.status === 204 &&
+      db.prepare("SELECT COUNT(*) n FROM pageviews WHERE path = '/injected-by-a-stranger'").get().n === 0 &&
+      db.prepare('SELECT COUNT(*) n FROM pageviews').get().n === beforeForeign);
+
+    const sameOrigin = await req('POST', '/_tapuz/collect', {
+      body: { path: '/native-same-origin', type: 'pageview' },
+      origin: BASE
+    });
+    check('a SAME-origin native beacon still records (nothing first-party broke)',
+      sameOrigin.status === 204 &&
+      db.prepare("SELECT COUNT(*) n FROM pageviews WHERE path = '/native-same-origin'").get().n === 1);
+
+    const noOriginHeader = await req('POST', '/_tapuz/collect', {
+      body: { path: '/native-no-origin', type: 'pageview' }
+    });
+    check('a beacon with NO Origin header keeps working (server-side / old clients)',
+      noOriginHeader.status === 204 &&
+      db.prepare("SELECT COUNT(*) n FROM pageviews WHERE path = '/native-no-origin'").get().n === 1);
+
+    const foreignRegistered = await req('POST', '/_tapuz/collect', {
+      body: { path: '/still-fine', type: 'pageview', site_id: 'wp-local' },
+      origin: 'https://shop.example.com'
+    });
+    check('a REGISTERED foreign site is unaffected by the new native guard',
+      foreignRegistered.status === 204 &&
+      db.prepare("SELECT COUNT(*) n FROM pageviews WHERE path = '/still-fine' AND site_id = 'wp-local'").get().n === 1);
+
     // approve claim
     const claim = claims.listClaims({ status: 'pending' }).find((c) => c.email === 'real-person@example.com');
     const approved = claims.approveClaim(claim.id);

@@ -34,6 +34,23 @@ function handleOptions(req, res) {
 }
 
 /**
+ * Does this beacon come from the very site it is reporting on?
+ *
+ * Compares the Origin header's host against the request's own Host, so it
+ * works unchanged behind a tunnel or reverse proxy (both carry the public
+ * hostname). Used only to protect the NATIVE stream — the foreign path has
+ * the site registry and its own per-site origin allowlist.
+ */
+function isSameOrigin(origin, req) {
+  try {
+    const host = String(req.headers.host || '').toLowerCase();
+    return !!host && new URL(origin).host.toLowerCase() === host;
+  } catch (e) {
+    return false; // unparseable Origin is not our own
+  }
+}
+
+/**
  * @param {object} req
  * @param {object} res
  * @param {{ limiter: { allow: Function, retryAfter: Function } }} deps
@@ -133,6 +150,15 @@ function handleCollect(req, res, { limiter } = {}) {
     }
 
     // ── native first-party path (no site_id) ────────────────────────
+    // The native analytics stream belongs to THIS site. A beacon that
+    // announces a foreign Origin and names no registered site is refused
+    // (v2.02 — found by the live WordPress test: an unregistered id was
+    // correctly dropped, but omitting site_id entirely let a foreign page
+    // inject arbitrary paths into the owner's OWN analytics). A request
+    // with no Origin at all (server-side callers, older clients) keeps the
+    // previous behavior, so nothing first-party breaks.
+    if (origin && !isSameOrigin(origin, req)) return res.status(204).end();
+
     // Ignore spoofed email/phone on the native collector too — identity for
     // first-party comes from forms (authenticated by human action), not from
     // a forgeable beacon field.
