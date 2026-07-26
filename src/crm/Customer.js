@@ -85,6 +85,26 @@ class Customer {
   }
 
   /**
+   * Open unified-inbox items for this person (forms, chat, WA, claims).
+   * Projector only — does not invent a second store (v2.05).
+   */
+  inboxItems(limit = 30) {
+    const key = 'inbox:' + limit;
+    if (this._cache[key]) return this._cache[key];
+    try {
+      const inbox = require('./unified-inbox');
+      this._cache[key] = inbox.listItems({
+        contactId: this.id,
+        state: 'open',
+        limit
+      });
+    } catch (e) {
+      this._cache[key] = [];
+    }
+    return this._cache[key];
+  }
+
+  /**
    * The submissions this person sent. Read through the timeline's `ref_id`
    * rather than re-matching identity against every inbox row — the event is
    * the link, recorded once when the form arrived.

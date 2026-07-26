@@ -87,6 +87,129 @@ router.post('/admin/crm/settings', requireAdmin, (req, res) => {
   res.redirect('/admin/crm');
 });
 
+// ─── unified inbox (v2.05, BEFORE /:id) ───────────────────────────────
+// Projector over form / chat / WhatsApp / claims — never a second store.
+router.get('/admin/crm/inbox', requireAdmin, requireCrm('crm-inbox', 'תיבה מאוחדת'), (req, res) => {
+  const { unifiedInbox, contacts } = require('../crm');
+  const channel = String((req.query || {}).channel || '');
+  const q = String((req.query || {}).q || '');
+  const counts = unifiedInbox.counts();
+  let items = unifiedInbox.listItems({
+    channel: unifiedInbox.CHANNELS.includes(channel) ? channel : '',
+    state: 'open',
+    q,
+    limit: 120
+  });
+  items = unifiedInbox.attachContactNames(items);
+
+  const flash = String((req.query || {}).ok || '');
+  const flashMsg = flash === 'handled'
+    ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ סומן כטופל — המקור נשאר בערוץ שלו.</div>'
+    : '';
+
+  const channelTone = {
+    form: 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe',
+    chat: 'background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe',
+    whatsapp: 'background:#ecfdf5;color:#047857;border-color:#a7f3d0',
+    claim: 'background:#fff7ed;color:#c2410c;border-color:#fed7aa'
+  };
+
+  const tiles = unifiedInbox.CHANNELS.map((ch) => `
+    <a class="stat-tile" href="/admin/crm/inbox?channel=${ch}">
+      <div class="stat-num">${counts[ch] || 0}</div>
+      <div class="stat-label">${esc(unifiedInbox.channelLabel(ch))}</div>
+    </a>`).join('') + `
+    <a class="stat-tile" href="/admin/crm/inbox">
+      <div class="stat-num">${counts.total || 0}</div>
+      <div class="stat-label">הכול פתוח</div>
+    </a>`;
+
+  const body = items.length
+    ? items.map((it) => {
+        const tone = channelTone[it.channel] || '';
+        const who = it.contactName
+          ? `<a href="/admin/crm/${it.contactId}">${esc(it.contactName)}</a>`
+          : '<span class="muted">ללא כרטיס עדיין</span>';
+        const when = String(it.at || '').replace('T', ' ').slice(0, 16);
+        const handleBtn =
+          it.channel === 'claim'
+            ? `<a class="btn sm" href="${esc(it.href)}">לטפל בתביעה</a>`
+            : `<form method="POST" action="/admin/crm/inbox/handle" style="display:inline">
+                 <input type="hidden" name="key" value="${esc(it.id)}">
+                 <button class="btn secondary sm" type="submit">טופל</button>
+               </form>`;
+        return `
+        <div class="rec" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
+          <div style="flex:1;min-width:200px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+              <span class="pill" style="${tone}">${esc(unifiedInbox.channelLabel(it.channel))}</span>
+              <strong>${esc(it.title)}</strong>
+            </div>
+            <div class="muted" style="font-size:.88rem;line-height:1.45">${esc(it.preview)}</div>
+            <div class="muted" style="font-size:.78rem;margin-top:6px">
+              ${who} · ${esc(when)}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <a class="btn sm" href="${esc(it.href)}">פתח בערוץ</a>
+            ${it.contactId ? `<a class="btn secondary sm" href="/admin/crm/${it.contactId}">כרטיס</a>` : ''}
+            ${handleBtn}
+          </div>
+        </div>`;
+      }).join('')
+    : `<div class="empty-state">
+         <div style="font-size:2rem;margin-bottom:8px">📥</div>
+         התיבה נקייה — אין פריטים פתוחים
+         ${channel ? ' בערוץ הזה' : ''}.
+         <div class="muted" style="margin-top:8px;font-size:.88rem">
+           טפסים, צ׳אט, WhatsApp ותביעות זהות נכנסים לכאן בלי לערבב את המחסנים שלהם.
+         </div>
+       </div>`;
+
+  page(res, 'crm-inbox', 'תיבה מאוחדת', `
+    ${flashMsg}
+    <p class="lead" style="margin-top:0">
+      <strong>תור אחד, ערוצים רבים</strong> — בלי למזג טבלאות.
+      כל פריט מצביע על המקור; הכרטיס (Customer) הוא הישות שמתעשרת.
+    </p>
+    <div class="stat-row">${tiles}</div>
+    <div class="card">
+      <div class="section-bar">
+        <div class="card-head">📥 ממתינים לטיפול · ${items.length}</div>
+        <form method="GET" action="/admin/crm/inbox" style="display:flex;gap:8px;flex-wrap:wrap">
+          <input name="q" class="input" value="${esc(q)}" placeholder="חיפוש…">
+          <select name="channel" class="input" style="width:auto" onchange="this.form.submit()">
+            <option value="">כל הערוצים</option>
+            ${unifiedInbox.CHANNELS.map((ch) =>
+              `<option value="${ch}" ${ch === channel ? 'selected' : ''}>${esc(unifiedInbox.channelLabel(ch))}</option>`
+            ).join('')}
+          </select>
+          <button class="btn secondary sm" type="submit">סנן</button>
+        </form>
+      </div>
+      ${body}
+    </div>
+    <div class="card">
+      <div class="card-head">איך זה לא מתבלגן</div>
+      <ul class="muted" style="font-size:.88rem;line-height:1.7;margin:0;padding-inline-start:1.2rem">
+        <li>טפסים נשארים ב־<a href="/admin/inbox">צינור לידים</a> (סטטוס/ערך/מעקב).</li>
+        <li>צ׳אט ו־WhatsApp נשארים במסכים שלהם — כאן רק «צריך טיפול».</li>
+        <li>תביעות זהות נפתחות לאישור, לא למיזוג אוטומטי.</li>
+        <li>הוספת ערוץ חדש = אספן אחד + קישור — לא שכתוב של התיבה.</li>
+      </ul>
+    </div>`);
+});
+
+router.post('/admin/crm/inbox/handle', requireAdmin, (req, res) => {
+  const key = String((req.body || {}).key || '');
+  const r = require('../crm').unifiedInbox.markHandled(key);
+  if (r && r.ok) return res.redirect('/admin/crm/inbox?ok=handled');
+  if (r && r.error === 'use-approve-or-reject') {
+    return res.redirect('/admin/crm/claims');
+  }
+  res.redirect('/admin/crm/inbox');
+});
+
 // ─── email sequences / drip (v2.03, BEFORE /:id) ─────────────────────
 router.get('/admin/crm/sequences', requireAdmin, requireCrm('crm-sequences', 'רצפי מייל'), (req, res) => {
   const { sequences } = require('../crm');
@@ -2138,6 +2261,13 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
   const today = tasks.todayUTC();
   const activeSeq = sequences.listActiveForContact(d.id);
   const allSeq = sequences.listSequences().filter((s) => s.active && s.stepCount > 0);
+  const personInbox = (() => {
+    try {
+      return c.inboxItems(10);
+    } catch (e) {
+      return [];
+    }
+  })();
 
   const timeline = d.timeline.length
     ? d.timeline.map((e) => `
@@ -2258,6 +2388,19 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
         </div>
       </form>
     </div>
+
+    ${personInbox.length ? `
+    <div class="card">
+      <div class="card-head">📥 בתיבה המאוחדת · ${personInbox.length}
+        <a class="btn secondary sm" href="/admin/crm/inbox" style="margin-inline-start:auto">כל התיבה</a>
+      </div>
+      ${personInbox.map((it) => `
+        <div class="rec" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span class="pill">${esc(require('../crm').unifiedInbox.channelLabel(it.channel))}</span>
+          <span style="flex:1">${esc(it.title)}</span>
+          <a class="btn secondary sm" href="${esc(it.href)}">פתח</a>
+        </div>`).join('')}
+    </div>` : ''}
 
     <div class="card">
       <div class="card-head">🔁 רצפי מייל</div>

@@ -176,6 +176,7 @@ function main() {
     ['crm-board', 'scripts/smoke-crm-board.js'],
     ['crm-task-reminders', 'scripts/smoke-crm-task-reminders.js'],
     ['crm-sequences', 'scripts/smoke-crm-sequences.js'],
+    ['crm-unified-inbox', 'scripts/smoke-crm-unified-inbox.js'],
     ['crm-capture', 'scripts/smoke-crm-capture.js'],
     ['crm-cs', 'scripts/smoke-crm-cs.js'],
     ['whatsapp', 'scripts/smoke-whatsapp.js'],

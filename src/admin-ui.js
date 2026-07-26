@@ -88,6 +88,7 @@ const ADMIN_NAV_GROUPS = [
     // without it, and one flag (config.crm.enabled) turns the whole group off.
     key: 'crm', label: 'לקוחות', color: '#ea580c', desc: 'האנשים מאחורי הפניות — מי הם, מה עשו ואיך לפלח אותם',
     items: [
+      { key: 'crm-inbox', href: '/admin/crm/inbox', label: 'תיבה מאוחדת', icon: '📥' },
       { key: 'crm-contacts', href: '/admin/crm', label: 'אנשי קשר', icon: '👥' },
       { key: 'crm-board', href: '/admin/crm/board', label: 'לוח סטטוסים', icon: '🗂' },
       { key: 'crm-tasks', href: '/admin/crm/tasks', label: 'משימות', icon: '✅' },

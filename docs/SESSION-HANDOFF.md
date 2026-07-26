@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v2.04 customer task reminders).
+> **Last updated:** 2026-07-26 (v2.07 unified inbox).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v2.04 customer task reminders** on main |
-| Recent line | v2.03 sequences → **v2.04 customer task reminders** |
-| Package version field | **`2.04.0-alpha`** |
+| Tip when handoff written | see `git log -1` — **v2.07 unified inbox** on main |
+| Recent line | v2.03 sequences → **v2.07 unified inbox** |
+| Package version field | **`2.07.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -253,6 +253,16 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | Send | `sendCustomerTaskReminders` in `task-reminders.js` |
 | Dedupe | `crm_tasks.customer_reminded_on` |
 | Admin | משימות → תזכורת ללקוח + שלח ללקוחות עכשיו |
+
+## 9h. Unified inbox (v2.07)
+
+| Piece | Path |
+|-------|------|
+| Projector | `src/crm/unified-inbox.js` |
+| Entity | `Customer.inboxItems()` |
+| Admin | `/admin/crm/inbox` |
+| Rule | channels stay systems of record; no dual body store |
+| Smoke | `npm run test:crm-unified-inbox` |
 
 ## 10. Open / next (when resuming)
 
