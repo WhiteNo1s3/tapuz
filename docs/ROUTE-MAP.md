@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**194 routes across 36 files.**
+**195 routes across 36 files.**
 
 ## By file (what each module owns)
 
@@ -173,13 +173,14 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/inbox/value`
 - `POST /admin/inbox/follow-up`
 
-### `src/routes/integrations.js` — 6 routes
+### `src/routes/integrations.js` — 7 routes
 
 - `GET /admin/integrations`
 - `GET /admin/api/integrations`
 - `POST /admin/api/integrations`
 - `GET /admin/api/notify/settings`
 - `POST /admin/api/notify/settings`
+- `POST /admin/api/notify/verify`
 - `POST /admin/api/notify/test`
 
 ### `src/routes/media.js` — 8 routes
@@ -356,6 +357,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/notify/settings` | GET | `src/routes/integrations.js` |
 | `/admin/api/notify/settings` | POST | `src/routes/integrations.js` |
 | `/admin/api/notify/test` | POST | `src/routes/integrations.js` |
+| `/admin/api/notify/verify` | POST | `src/routes/integrations.js` |
 | `/admin/api/pages` | GET | `src/routes/content-api.js` |
 | `/admin/api/pzn/create-from-source` | POST | `src/routes/pzn-pages.js` |
 | `/admin/api/pzn/decompile` | POST | `src/routes/pzn-pages.js` |

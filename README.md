@@ -73,7 +73,7 @@ TAPUZ_ROOT=/path/to/my-site node src/server.js
 ## בדיקות
 
 ```bash
-npm run qa                       # דוח QA מלא בפкודה אחת (מראה CI + CRM/WhatsApp)
+npm run qa                       # דוח QA מלא בפקודה אחת (מראה CI + CRM/WhatsApp)
 npm run qa:quick                 # pzn + CRM/WA + route-map בלי full smoke
 npm run test:smoke               # כל חבילת ה-smoke (שער ה-CI)
 npm run test:pzn                 # מנוע ה-.pzn (יחידה, node --test)
@@ -82,6 +82,13 @@ node scripts/smoke-drafts.js     # או בדיקה בודדת: טיוטה/פרס
 node scripts/smoke-render.js     # פלט HTML סמנטי
 node scripts/smoke-wizard.js     # אשף ההתקנה (רץ על תיקייה זמנית)
 ```
+
+## מייל (SMTP) לפרודקשן
+
+מדריך קצר בעברית — Gmail / SES / Resend / אחסון, והגנות v1.95:  
+[docs/SMTP-PRODUCTION.md](docs/SMTP-PRODUCTION.md)
+
+עברית קודם; CMS + CRM מאותו יצרן (Shaltiel Industries / WhiteNo1se).
 
 ## לעורכי הקוד (המניפסט)
 

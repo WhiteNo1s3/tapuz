@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (SMTP hardening v1.95 — timeouts, caps, injection guard).
+> **Last updated:** 2026-07-26 (מדריך SMTP בעברית + מפת צעדים; עברית קודם).
 
 ---
 
@@ -24,6 +24,8 @@ cd /home/<user>/.grok/worktrees/tapuz/handoff && git fetch && git merge origin/m
 ```
 
 **Product rule:** Tapuz main is the source of truth. Lab ideas return *rebuilt*, not raw-merged.
+
+**Language rule:** **Hebrew first, English later** — product UI, owner docs, and cookbooks. Same maker / same company (Shaltiel Industries · WhiteNo1se): CMS + CRM + lab are one family of apps.
 
 ---
 
@@ -173,20 +175,38 @@ Reachable people (email/phone) are **not** auto-deleted by the quiet timer — o
 
 Obligations unchanged: consent, unsubscribe, no open redirect.
 
-## 9. Open / next (when resuming)
+## 9. SMTP hardening (v1.95)
 
-1. **A/B or drip** — only after core mail path is battle-tested in production SMTP.
-2. **Pixel on real WP** — Hostinger WhiteNo1se + public CRM base.
-3. **Israeli invoicing** — finance round, separate.
-4. **Open-source packaging** — npm publish readiness, CONTRIBUTING, when the product is proud enough.
+| Guard | Detail |
+|-------|--------|
+| `isSmtpReady` | campaigns need host/user/pass/enabled (not lead `to`) |
+| Timeouts | connection / greeting / socket |
+| Header injection | CR/LF stripped; address validated |
+| Daily cap | `maxPerDay` (default 500), `notify-usage.json` |
+| Campaign queue | refuses if SMTP not ready or cap too small |
+| Admin | verify connection + test send; reputation counter |
 
-Ambition (HubSpot / Siebel / Builder): legitimate. Path: **deep features + open source + zero-shady CRM**, not feature soup.
+## 10. Open / next (when resuming)
+
+Full Hebrew cookbook: **`docs/SMTP-PRODUCTION.md`**.
+
+| # | Next step | Notes |
+|---|-----------|--------|
+| 1 | Real SMTP on staging | Follow SMTP-PRODUCTION.md (Gmail / SES / Resend / cPanel) |
+| 2 | Pixel on real WP | Hostinger WhiteNo1se + public CRM `site_id` |
+| 3 | Production campaign → live segment | Consent + unsubscribe war story |
+| 4 | OSS packaging | CONTRIBUTING, release, paid support SKU |
+| 5 | Premium / support (sales = father) | Free core; money on support/hosting/modules |
+| 6 | Israeli invoicing | Separate finance round |
+| 7 | English product surface | Only after Hebrew is solid |
+
+**Company:** Ben builds (behind the scenes). Father sells (face). OSS community + paid support. Long exit optional.
 
 Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified without browser/CMS install.
 
 ---
 
-## 10. Honesty log (don’t overclaim)
+## 11. Honesty log (don’t overclaim)
 
 | Claim | Truth |
 |-------|--------|
@@ -200,7 +220,7 @@ Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified witho
 
 ---
 
-## 11. Update protocol (future agents / future you)
+## 12. Update protocol (future agents / future you)
 
 When you finish a real chunk of work:
 
@@ -214,7 +234,7 @@ If the conversation dies mid-task: read this file first, then `git log -15 --one
 
 ---
 
-## 12. Quick identity
+## 13. Quick identity
 
 - **Product name users see:** Tapuziel (not “Tapuz” in UI).
 - **Org credit:** Shaltiel Industries · made by WhiteNo1se / WhiteNo1s3 on GitHub.
