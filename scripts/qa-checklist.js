@@ -170,6 +170,7 @@ function main() {
   const spots = [
     ['crm-contacts', 'scripts/smoke-crm-contacts.js'],
     ['crm-cards', 'scripts/smoke-crm-cards.js'],
+    ['crm-interests', 'scripts/smoke-crm-interests.js'],
     ['crm-capture', 'scripts/smoke-crm-capture.js'],
     ['crm-cs', 'scripts/smoke-crm-cs.js'],
     ['whatsapp', 'scripts/smoke-whatsapp.js'],

@@ -226,6 +226,92 @@ function interestsOf(contactId) {
     .map((t) => t.slice('interest:'.length));
 }
 
+/**
+ * Normalize a free-text interest label (Hebrew/Latin) to the same shape
+ * path-derived interests use — so manual + automatic tags can match.
+ */
+function normalizeInterestLabel(raw) {
+  const t = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^interest:/, '')
+    .replace(/\.html?$/i, '')
+    .replace(/[^a-z0-9\u0590-\u05ff._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return t;
+}
+
+function fullInterestTag(label) {
+  const t = normalizeInterestLabel(label);
+  return t ? 'interest:' + t : '';
+}
+
+/** Owner (or UI) adds an interest without touching other tags. */
+function addInterest(contactId, label) {
+  const id = Number(contactId);
+  const tag = fullInterestTag(label);
+  if (!id || !tag) return { ok: false, error: 'empty' };
+  const row = contacts.getContact(id);
+  if (!row) return { ok: false, error: 'missing' };
+  const tags = contacts.parseTags(row.tags);
+  if (tags.includes(tag)) return { ok: true, tag: tag.slice('interest:'.length), already: true };
+  const interests = tags.filter((t) => t.startsWith('interest:'));
+  if (interests.length >= MAX_INTEREST_TAGS) return { ok: false, error: 'cap' };
+  contacts.updateContact(id, { tags: tags.concat([tag]) });
+  return { ok: true, tag: tag.slice('interest:'.length) };
+}
+
+/** Remove one interest tag; other tags stay. */
+function removeInterest(contactId, label) {
+  const id = Number(contactId);
+  const tag = fullInterestTag(label);
+  if (!id || !tag) return { ok: false, error: 'empty' };
+  const row = contacts.getContact(id);
+  if (!row) return { ok: false, error: 'missing' };
+  const next = contacts.parseTags(row.tags).filter((t) => t !== tag);
+  contacts.updateContact(id, { tags: next });
+  return { ok: true, tag: tag.slice('interest:'.length) };
+}
+
+/**
+ * Site-wide interest map — what the progressive cards learned.
+ * @returns {Array<{label:string, total:number, withEmail:number, provisional:number, reachable:number}>}
+ */
+function listInterestStats({ limit = 100 } = {}) {
+  const cap = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
+  const rows = db
+    .prepare(
+      `SELECT status, email, phone, tags FROM crm_contacts
+       WHERE tags LIKE '%interest:%'`
+    )
+    .all();
+  const map = new Map();
+  for (const row of rows) {
+    const tags = contacts.parseTags(row.tags);
+    const hasEmail = !!(row.email && String(row.email).trim());
+    const hasPhone = !!(row.phone && String(row.phone).trim());
+    const reachable = hasEmail || hasPhone;
+    for (const t of tags) {
+      if (!String(t).startsWith('interest:')) continue;
+      const label = String(t).slice('interest:'.length);
+      if (!label) continue;
+      let bucket = map.get(label);
+      if (!bucket) {
+        bucket = { label, total: 0, withEmail: 0, provisional: 0, reachable: 0 };
+        map.set(label, bucket);
+      }
+      bucket.total++;
+      if (hasEmail) bucket.withEmail++;
+      if (row.status === 'provisional') bucket.provisional++;
+      if (reachable) bucket.reachable++;
+    }
+  }
+  return [...map.values()]
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'he'))
+    .slice(0, cap);
+}
+
 module.exports = {
   cardsConfig,
   interestFromPath,
@@ -234,6 +320,11 @@ module.exports = {
   mergeCards,
   runCardLifecycle,
   interestsOf,
+  normalizeInterestLabel,
+  fullInterestTag,
+  addInterest,
+  removeInterest,
+  listInterestStats,
   DEFAULT_QUIET_DAYS,
   DEFAULT_GARBAGE_DAYS,
   MAX_INTEREST_TAGS

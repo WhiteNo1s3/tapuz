@@ -87,10 +87,104 @@ router.post('/admin/crm/settings', requireAdmin, (req, res) => {
   res.redirect('/admin/crm');
 });
 
+// ─── interest map (declared BEFORE /:id) ─────────────────────────────
+// Progressive cards learn topics from page paths. This screen is the owner's
+// map of that learning: counts, one-click segments, mail without blasting.
+router.get('/admin/crm/interests', requireAdmin, requireCrm('crm-interests', 'תחומי עניין'), (req, res) => {
+  const { cards, segments } = require('../crm');
+  const stats = cards.listInterestStats({ limit: 200 });
+  const flash = String((req.query || {}).ok || '');
+  const flashMsg = flash === 'segment'
+    ? '<div class="card" style="border-color:#a7f3d0;background:#ecfdf5">✓ נוצר פילוח חי מתחום העניין — אפשר לדוור אליו עכשיו.</div>'
+    : '';
+
+  const rows = stats.length
+    ? stats.map((s) => `
+        <div class="rec" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:140px">
+            <strong dir="auto">${esc(s.label)}</strong>
+            <div class="muted" style="font-size:.8rem">
+              ${s.withEmail} עם מייל · ${s.reachable} עם פרטי קשר · ${s.provisional} כרטיס זמני
+            </div>
+          </div>
+          <span class="pill" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa">${s.total} אנשים</span>
+          <a class="btn secondary sm" href="/admin/crm?interest=${encodeURIComponent(s.label)}">👥 רשימה</a>
+          <form method="POST" action="/admin/crm/interests/segment" style="display:inline">
+            <input type="hidden" name="interest" value="${esc(s.label)}">
+            <input type="hidden" name="withEmail" value="1">
+            <button class="btn secondary sm" type="submit">🎯 פילוח + מייל</button>
+          </form>
+          <a class="btn sm" href="/admin/crm/campaigns?interest=${encodeURIComponent(s.label)}">✉️ דיוור</a>
+        </div>`).join('')
+    : `<div class="empty-state">
+         <div style="font-size:2rem;margin-bottom:8px">💡</div>
+         עדיין אין תחומי עניין — הם נוצרים אוטומטית כשמישהו גולש בדפים
+         (למשל <code dir="ltr">/services/wedding-packages</code>), או שמוסיפים ידנית בכרטיס.
+       </div>`;
+
+  // Existing segments that already key on interest — so the map and the rules stay friends.
+  const interestSegs = segments.listSegments().filter((s) => s.rules && s.rules.interest);
+  const segNote = interestSegs.length
+    ? `<p class="muted" style="font-size:.85rem">פילוחי עניין קיימים:
+         ${interestSegs.map((s) =>
+           `<a href="/admin/crm/campaigns?segmentId=${s.id}">${esc(s.name)}</a> (${s.size})`
+         ).join(' · ')}</p>`
+    : '';
+
+  page(res, 'crm-interests', 'תחומי עניין', `
+    ${flashMsg}
+    <div class="card">
+      <div class="card-head">💡 מפת תחומי עניין — מה האתר למד על האנשים</div>
+      <p class="lead">
+        כל ביקור לגיטימי יכול לסמן <strong>תחום</strong> על הכרטיס (מקטע נתיב).
+        כאן רואים את המפה שלמה: מה מעניין, לכמה אנשים, ומי כבר ניתן לדיוור —
+        בלי להציף את כולם.
+      </p>
+      ${segNote}
+      ${rows}
+    </div>
+    <div class="card">
+      <div class="card-head">פילוח ידני מתחום</div>
+      <form method="POST" action="/admin/crm/interests/segment" class="stack">
+        <label>תחום עניין
+          <input name="interest" class="input" dir="ltr" required placeholder="wedding-packages"></label>
+        <label>שם הפילוח (אופציונלי)
+          <input name="name" class="input" placeholder="מתעניינים ב… + מייל"></label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="withEmail" value="1" checked> רק מי שיש לו מייל
+        </label>
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" name="consent" value="1"> רק מי שנתן הסכמה לדיוור
+        </label>
+        <button class="btn" type="submit">צור פילוח חי</button>
+      </form>
+    </div>`);
+});
+
+router.post('/admin/crm/interests/segment', requireAdmin, (req, res) => {
+  const { cards, segments } = require('../crm');
+  const b = req.body || {};
+  const label = cards.normalizeInterestLabel(b.interest);
+  if (!label) return res.redirect('/admin/crm/interests');
+  const rules = { interest: label };
+  if (b.withEmail) rules.hasEmail = true;
+  if (b.consent) rules.consent = true;
+  const name = String(b.name || '').trim() ||
+    ('מתעניינים ב־' + label + (rules.hasEmail ? ' · עם מייל' : ''));
+  try {
+    const seg = segments.createSegment(name.slice(0, 200), rules);
+    if (seg && seg.id) {
+      return res.redirect('/admin/crm/campaigns?segmentId=' + encodeURIComponent(seg.id));
+    }
+  } catch (e) { /* nameless / bad → stay on map */ }
+  res.redirect('/admin/crm/interests?ok=segment');
+});
+
 // ─── segments (declared BEFORE /:id) ─────────────────────────────────
 router.get('/admin/crm/segments', requireAdmin, requireCrm('crm-segments', 'פילוחים'), (req, res) => {
   const { segments } = require('../crm');
   const rows = segments.listSegments();
+  const hint = String((req.query || {}).hint || '').trim();
   const list = rows.length
     ? rows.map((s) => `
         <div class="rec" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -114,13 +208,15 @@ router.get('/admin/crm/segments', requireAdmin, requireCrm('crm-segments', 'פי
       <p class="lead">
         פילוח הוא <strong>כלל</strong>, לא רשימה קפואה: מי שעונה עליו נמצא בו — תמיד עכשיו.
         השתמשו ב<strong>תחום עניין</strong> (מדפי האתר) כדי לדוור רק למי שזה רלוונטי לו — לא לכל הרשימה.
+        <a href="/admin/crm/interests">מפת תחומי עניין ←</a>
       </p>
       ${list}
     </div>
     <div class="card">
       <div class="card-head">פילוח חדש</div>
       <form method="POST" action="/admin/crm/segments" class="stack">
-        <label>שם<input name="name" class="input" required placeholder="מתעניינים בחתונות · עם מייל"></label>
+        <label>שם<input name="name" class="input" required placeholder="מתעניינים בחתונות · עם מייל"
+          value="${esc(hint ? 'מתעניינים ב־' + hint + ' · עם מייל' : '')}"></label>
         <label>סטטוס
           <select name="status" class="input">
             <option value="">כל הסטטוסים</option>
@@ -130,6 +226,7 @@ router.get('/admin/crm/segments', requireAdmin, requireCrm('crm-segments', 'פי
         </label>
         <label>תחום עניין (מדף באתר)
           <input name="interest" class="input" dir="ltr" placeholder="wedding-packages"
+                 value="${esc(hint)}"
                  title="מקטע נתיב אחרי ביקור — למשל /services/wedding-packages">
         </label>
         <p class="muted" style="font-size:.8rem;margin:0">
@@ -138,7 +235,7 @@ router.get('/admin/crm/segments', requireAdmin, requireCrm('crm-segments', 'פי
         <label>מדינה (קוד דו-אותי)<input name="country" class="input" maxlength="2" placeholder="IL"></label>
         <label>תגיות (מופרדות בפסיק)<input name="tags" class="input" placeholder="vip,newsletter"></label>
         <label style="display:flex;gap:8px;align-items:center">
-          <input type="checkbox" name="hasEmail" value="1"> רק מי שיש לו מייל (מתאים לדיוור)
+          <input type="checkbox" name="hasEmail" value="1" ${hint ? 'checked' : ''}> רק מי שיש לו מייל (מתאים לדיוור)
         </label>
         <label style="display:flex;gap:8px;align-items:center">
           <input type="checkbox" name="hasInterest" value="1"> רק מי שיש לו לפחות תחום עניין אחד
@@ -809,12 +906,33 @@ router.post('/admin/crm/privacy', requireAdmin, (req, res) => {
 
 // ─── campaigns (declared BEFORE /:id) ────────────────────────────────
 router.get('/admin/crm/campaigns', requireAdmin, requireCrm('crm-campaigns', 'קמפיינים'), (req, res) => {
-  const { campaigns, lists, segments } = require('../crm');
+  const { campaigns, lists, segments, cards } = require('../crm');
   const rows = campaigns.listCampaigns();
   const allLists = lists.listAll();
-  const allSegs = segments.listSegments();
+  let allSegs = segments.listSegments();
   const smtp = require('../notify').getSettings();
-  const preSeg = String((req.query || {}).segmentId || '');
+  let preSeg = String((req.query || {}).segmentId || '');
+  // From interest map: ?interest=wedding-packages → ensure a live segment and pre-select it.
+  const interestQ = cards.normalizeInterestLabel((req.query || {}).interest || '');
+  if (!preSeg && interestQ) {
+    const existing = allSegs.find((s) =>
+      s.rules && s.rules.interest === interestQ && s.rules.hasEmail
+    );
+    if (existing) {
+      preSeg = String(existing.id);
+    } else {
+      try {
+        const seg = segments.createSegment(
+          ('מתעניינים ב־' + interestQ + ' · עם מייל').slice(0, 200),
+          { interest: interestQ, hasEmail: true }
+        );
+        if (seg && seg.id) {
+          preSeg = String(seg.id);
+          allSegs = segments.listSegments();
+        }
+      } catch (e) { /* leave preSeg empty */ }
+    }
+  }
 
   const statusPill = (s) => s === 'sent'
     ? '<span class="pill">נשלח</span>'
@@ -1111,11 +1229,27 @@ router.post('/admin/crm/conversions', requireAdmin, (req, res) => {
 
 // ─── contacts: the list ──────────────────────────────────────────────
 router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קשר'), (req, res) => {
-  const { contacts, Customer } = require('../crm');
+  const { contacts, Customer, segments, cards } = require('../crm');
   const q = String((req.query || {}).q || '');
   const status = String((req.query || {}).status || '');
-  const rows = contacts.listContacts({ q, status, limit: 100 });
+  const interest = cards.normalizeInterestLabel((req.query || {}).interest || '');
+  let rows;
+  if (interest) {
+    // Live audience by interest (and optional status/q applied after).
+    rows = segments.evaluate(
+      Object.assign({ interest }, status ? { status } : {}),
+      { limit: 100 }
+    );
+    if (q) {
+      const qq = q.toLowerCase();
+      rows = rows.filter((r) => String(r.search_blob || '').includes(qq) ||
+        String(r.name || '').includes(q) || String(r.email || '').includes(qq));
+    }
+  } else {
+    rows = contacts.listContacts({ q, status, limit: 100 });
+  }
   const counts = contacts.statusCounts();
+  const topInterests = cards.listInterestStats({ limit: 8 });
 
   const tileOrder = ['provisional', 'lead', 'active', 'customer', 'archived', 'garbage'];
   const tiles = tileOrder.map((s) => `
@@ -1127,6 +1261,16 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
       <div class="stat-num">${counts.total || 0}</div>
       <div class="stat-label">הכול</div>
     </a>`;
+
+  const interestBar = topInterests.length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px;align-items:center">
+         <span class="muted" style="font-size:.82rem">תחומים חמים:</span>
+         ${topInterests.map((s) => `
+           <a class="pill" style="background:${interest === s.label ? '#ffedd5' : '#fff7ed'};color:#c2410c;border-color:#fed7aa;text-decoration:none"
+              href="/admin/crm?interest=${encodeURIComponent(s.label)}">${esc(s.label)} · ${s.total}</a>`).join('')}
+         <a class="muted" style="font-size:.82rem" href="/admin/crm/interests">מפה מלאה ←</a>
+       </div>`
+    : '';
 
   const body = rows.length
     ? rows.map((row) => {
@@ -1148,7 +1292,7 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
       }).join('')
     : `<div class="empty-state">
          <div style="font-size:2rem;margin-bottom:8px">👥</div>
-         ${q || status
+         ${q || status || interest
            ? 'אין תוצאות לחיפוש הזה.'
            : 'עדיין אין אנשי קשר — הם ייווצרו מהפניות שיגיעו, או מביקור באתר (כרטיס זמני).'}
        </div>`;
@@ -1159,9 +1303,10 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
       כך אפשר לדוור רלוונטי — לא להציף.
     </p>
     <div class="stat-row">${tiles}</div>
+    ${interestBar}
     <div class="card">
       <div class="section-bar">
-        <div class="card-head">👥 אנשי קשר · ${counts.total}</div>
+        <div class="card-head">👥 אנשי קשר · ${interest ? rows.length + ' (מסונן)' : counts.total}</div>
         <form method="GET" action="/admin/crm" style="display:flex;gap:8px;flex-wrap:wrap">
           <input name="q" class="input" value="${esc(q)}" placeholder="חיפוש שם, מייל, טלפון…">
           <select name="status" class="input" style="width:auto" onchange="this.form.submit()">
@@ -1170,10 +1315,12 @@ router.get('/admin/crm', requireAdmin, requireCrm('crm-contacts', 'אנשי קש
               `<option value="${s}" ${s === status ? 'selected' : ''}>${esc(contacts.statusLabel(s))}</option>`
             ).join('')}
           </select>
+          ${interest ? `<input type="hidden" name="interest" value="${esc(interest)}">` : ''}
           <button class="btn secondary sm" type="submit">חפש</button>
-          ${q || status ? '<a class="btn secondary sm" href="/admin/crm">נקה</a>' : ''}
+          ${q || status || interest ? '<a class="btn secondary sm" href="/admin/crm">נקה</a>' : ''}
         </form>
       </div>
+      ${interest ? `<p class="muted" style="font-size:.85rem;margin:0 0 10px">מסונן לתחום: <strong dir="auto">${esc(interest)}</strong></p>` : ''}
       ${body}
     </div>`);
 });
@@ -1195,12 +1342,21 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
     : '<div class="empty-state">עדיין אין פעילות.</div>';
 
   const reasons = d.scoreReasons.map((r) => `<li>${esc(r.why)} — ${r.points}</li>`).join('');
+  // Manual tags only in the edit field — interests are edited in their own card
+  // so a save cannot wipe path-learned topics by accident.
+  const manualTags = (d.tags || []).filter((t) => !String(t).startsWith('interest:'));
   const interestBlock = (d.interests && d.interests.length)
-    ? d.interests.map((t) =>
-        `<a class="pill" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;text-decoration:none"
-            href="/admin/crm/segments?hint=${encodeURIComponent(t)}">${esc(t)}</a>`
-      ).join(' ')
-    : '<span class="muted" style="font-size:.88rem">עדיין אין — יתווספו מצפיות בדפים (למשל /services/…).</span>';
+    ? d.interests.map((t) => `
+        <span style="display:inline-flex;align-items:center;gap:4px">
+          <a class="pill" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa;text-decoration:none"
+             href="/admin/crm?interest=${encodeURIComponent(t)}">${esc(t)}</a>
+          <form method="POST" action="/admin/crm/${d.id}/interest" style="display:inline;margin:0">
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="interest" value="${esc(t)}">
+            <button type="submit" class="btn secondary sm" title="הסר תחום" style="padding:2px 8px">✕</button>
+          </form>
+        </span>`).join(' ')
+    : '<span class="muted" style="font-size:.88rem">עדיין אין — יתווספו מצפיות בדפים (למשל /services/…), או הוסיפו ידנית.</span>';
 
   page(res, 'crm-contacts', d.displayName, `
     <div class="card">
@@ -1232,8 +1388,8 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
               `<option value="${s}" ${s === d.status ? 'selected' : ''}>${esc(contacts.statusLabel(s))}</option>`).join('')}
           </select>
         </label>
-        <label>תגיות<input name="tags" class="input" value="${esc(d.tags.join(','))}"
-          placeholder="vip,newsletter — תחומי עניין (interest:…) מנוהלים אוטומטית"></label>
+        <label>תגיות (ידניות)<input name="tags" class="input" value="${esc(manualTags.join(','))}"
+          placeholder="vip,newsletter — תחומי עניין מנוהלים בנפרד למטה"></label>
         <label>הערות<textarea name="notes" class="input" rows="3">${esc(d.notes)}</textarea></label>
         <label style="display:flex;gap:8px;align-items:center">
           <input type="checkbox" name="consent" value="1" ${d.consent ? 'checked' : ''}> הסכמה לדיוור
@@ -1243,11 +1399,19 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
     </div>
 
     <div class="card">
-      <div class="card-head">💡 תחומי עניין (מהאתר)</div>
+      <div class="card-head">💡 תחומי עניין (מהאתר + ידני)</div>
       <p class="muted" style="font-size:.88rem;margin-top:0">
         נגזרים מדפים שביקרו בהם — בסיס לפילוח דיוור בלי להציף את כולם.
+        <a href="/admin/crm/interests">מפת כל התחומים ←</a>
       </p>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">${interestBlock}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">${interestBlock}</div>
+      <form method="POST" action="/admin/crm/${d.id}/interest"
+            style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <input type="hidden" name="action" value="add">
+        <input name="interest" class="input" style="flex:1;min-width:140px" dir="auto"
+               placeholder="הוסיפו תחום (למשל wedding-packages)" required>
+        <button class="btn secondary sm" type="submit">הוסף תחום</button>
+      </form>
     </div>
 
     <div class="card">
@@ -1293,11 +1457,29 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
 
 router.post('/admin/crm/:id/update', requireAdmin, (req, res) => {
   const b = req.body || {};
-  require('../crm').contacts.updateContact(req.params.id, {
+  const { contacts } = require('../crm');
+  const id = req.params.id;
+  const existing = contacts.getContact(id);
+  // Preserve interest:* tags the progressive card (or interest editor) owns —
+  // the form only edits manual tags so a save never wipes site-learned topics.
+  const keptInterests = existing
+    ? contacts.parseTags(existing.tags).filter((t) => String(t).startsWith('interest:'))
+    : [];
+  const manual = contacts.parseTags(b.tags).filter((t) => !String(t).startsWith('interest:'));
+  contacts.updateContact(id, {
     name: b.name, email: b.email, phone: b.phone, company: b.company,
-    status: b.status, tags: b.tags, notes: b.notes, consent: !!b.consent
+    status: b.status, tags: manual.concat(keptInterests), notes: b.notes, consent: !!b.consent
   });
-  res.redirect('/admin/crm/' + encodeURIComponent(req.params.id));
+  res.redirect('/admin/crm/' + encodeURIComponent(id));
+});
+
+router.post('/admin/crm/:id/interest', requireAdmin, (req, res) => {
+  const { cards } = require('../crm');
+  const b = req.body || {};
+  const id = req.params.id;
+  if (String(b.action || '') === 'remove') cards.removeInterest(id, b.interest);
+  else cards.addInterest(id, b.interest);
+  res.redirect('/admin/crm/' + encodeURIComponent(id));
 });
 
 router.post('/admin/crm/:id/note', requireAdmin, (req, res) => {

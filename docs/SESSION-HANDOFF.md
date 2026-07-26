@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (מדריך SMTP בעברית + מפת צעדים; עברית קודם).
+> **Last updated:** 2026-07-26 (v1.98 interest map; main also has v1.96 sqlite forever + v1.97 universal animate).
 
 ---
 
@@ -55,9 +55,9 @@ Hostinger WP sandbox (portfolio):
 
 | | |
 |---|---|
-| Tip when handoff written | `ac86870` — *v1.88.1: one-command QA report, body-parser 1.20.6, Actions Node 24* |
-| Recent line | v1.77 CRM spine → v1.83 CS chat → v1.84–1.88 WhatsApp W0–W3 → v1.90 premium DB → v1.91 restore/.pzn DB → **v1.88.1 QA tooling** (on top of 1.91 tree after rebase) |
-| Package version field | Was `1.91.0-alpha` in package.json at merge time |
+| Tip when handoff written | see `git log -1` — **v1.98 interest map** on main |
+| Recent line | v1.95 SMTP → v1.96 sqlite-forever `.pzn` → v1.97 universal `animate=` → **v1.98 interest map** |
+| Package version field | **`1.98.0-alpha`** |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
 | Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
 
@@ -185,6 +185,19 @@ Obligations unchanged: consent, unsubscribe, no open redirect.
 | Daily cap | `maxPerDay` (default 500), `notify-usage.json` |
 | Campaign queue | refuses if SMTP not ready or cap too small |
 | Admin | verify connection + test send; reputation counter |
+
+## 9b. Interest map (v1.98)
+
+Closes the loop: pageview → interest tag → **site-wide map** → live segment → campaign.
+
+| Piece | Path |
+|-------|------|
+| Core | `cards.listInterestStats`, `addInterest`, `removeInterest`, `normalizeInterestLabel` |
+| Admin | `/admin/crm/interests` (+ nav **תחומי עניין**) |
+| Contact | interest add/remove; manual tags no longer wipe `interest:*` |
+| List | `?interest=` filter + hot-topic pills |
+| Campaign | `?interest=` ensures segment with hasEmail and preselects it |
+| Smoke | `npm run test:crm-interests` |
 
 ## 10. Open / next (when resuming)
 

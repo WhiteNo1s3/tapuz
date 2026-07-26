@@ -89,6 +89,7 @@ const ADMIN_NAV_GROUPS = [
     key: 'crm', label: 'לקוחות', color: '#ea580c', desc: 'האנשים מאחורי הפניות — מי הם, מה עשו ואיך לפלח אותם',
     items: [
       { key: 'crm-contacts', href: '/admin/crm', label: 'אנשי קשר', icon: '👥' },
+      { key: 'crm-interests', href: '/admin/crm/interests', label: 'תחומי עניין', icon: '💡' },
       { key: 'crm-segments', href: '/admin/crm/segments', label: 'פילוחים', icon: '🎯' },
       { key: 'crm-lists', href: '/admin/crm/lists', label: 'רשימות דיוור', icon: '📋' },
       { key: 'crm-campaigns', href: '/admin/crm/campaigns', label: 'קמפיינים', icon: '✉️' },
