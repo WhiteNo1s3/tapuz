@@ -133,3 +133,19 @@ browser-to-browser.
 
 Item 4 is the only defect this exercise found in what we have shipped. The rest
 is a decision about how much surface to expose, which is Ben's call, not a bug.
+
+## Addendum (v1.92) — the transfer format is SQLite, forever
+
+Ben's decision, after the v1.91 JSON package experiment: *"it's brickable, the
+fact it's in parts — we move to sqlite forever now."* The rule for every port
+and for the community CRM builds:
+
+- **`tapuz-db` = a SQLite 3 database file**, stamped
+  `PRAGMA application_id = 0x5450555A` (`'TPUZ'`) in the header, downloadable
+  as `.pzn`. SQLite is the open, archival-grade standard every language reads
+  — a better "anyone can implement" story than any JSON shape we could design.
+- Transfers are **whole-file, single-artifact** — a snapshot via `VACUUM INTO`
+  (consistent under WAL). Nothing chunked, nothing that can half-land.
+- An importer MUST verify `quick_check` **and** identity (the `TPUZ`
+  application_id, or the presence of the expected schema) *before* touching
+  its own data — accepting a healthy-but-foreign file is a wipe.

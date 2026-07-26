@@ -144,29 +144,28 @@ function dbCard(req) {
       <div class="side-title">מדף הגיבויים (אוטומטית פעם ביום, נשמרים ${h.backupKeep})</div>
       ${shelf}
       <p class="faint" style="margin-top:6px;font-size:.8rem">
-        כל גיבוי הוא snapshot עקבי (VACUUM INTO) — קובץ SQLite רגיל שנפתח בכל כלי, בכל מקום.
-        הייצוא הוא חבילת <code>tapuz-db</code> ‎(.pzn)‎ — אותו תוכן כ-JSON קריא, טבלה-טבלה,
-        בשביל המשחק: כמו שחבילת <code>tapuz-site</code> נושאת את האתר, זו נושאת את מסד הנתונים.
+        פורמט אחד לכול — SQLite קדימה: כל גיבוי, הייצוא (‎.pzn) והשחזור-מקובץ הם אותו
+        snapshot עקבי (VACUUM INTO), קובץ SQLite 3 חתום <code>application_id 'TPUZ'</code>
+        שמזהה את עצמו. פורמט פתוח וארכיוני שנפתח בכל שפה ובכל כלי — שום דבר שעובר
+        בחלקים ויכול להיתקע באמצע.
       </p>
-      <div class="side-title" style="margin-top:10px">ייבוא חבילת ‎.pzn</div>
-      <textarea id="dbp-text" rows="3" dir="ltr" placeholder='{"format":"tapuz-db", ...}'
-        style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:monospace;font-size:.8rem"></textarea>
-      <div class="row between" style="margin-top:6px">
-        <span id="dbp-status" class="faint"></span>
-        <button type="button" class="btn secondary sm" id="dbp-apply">ייבוא (מחליף הכול)</button>
+      <div class="side-title" style="margin-top:10px">שחזור מקובץ (גיבוי שהורד / ייצוא ‎.pzn / העברה מהתקנה אחרת)</div>
+      <div class="row between" style="gap:8px;align-items:center;margin-top:6px">
+        <input type="file" id="dbu-file" accept=".pzn,.sqlite,.db" style="flex:1">
+        <span id="dbu-status" class="faint"></span>
+        <button type="button" class="btn secondary sm" id="dbu-apply">שחזר מהקובץ</button>
       </div>
       <script>
-        document.getElementById('dbp-apply').addEventListener('click', function () {
-          var status = document.getElementById('dbp-status');
-          var pkg;
-          try { pkg = JSON.parse(document.getElementById('dbp-text').value || ''); }
-          catch (e) { status.textContent = 'לא JSON תקין'; status.style.color = '#b91c1c'; return; }
-          if (!confirm('ייבוא מחליף את כל תוכן מסד הנתונים. נוצר גיבוי בטיחות קודם. להמשיך?')) return;
-          status.textContent = 'מייבא…'; status.style.color = '#166534';
-          fetch('/admin/api/db/import-pzn', {
+        document.getElementById('dbu-apply').addEventListener('click', function () {
+          var status = document.getElementById('dbu-status');
+          var f = (document.getElementById('dbu-file').files || [])[0];
+          if (!f) { status.textContent = 'בחרו קובץ'; status.style.color = '#b91c1c'; return; }
+          if (!confirm('שחזור מחליף את כל תוכן מסד הנתונים. נוצר גיבוי בטיחות קודם. להמשיך?')) return;
+          status.textContent = 'משחזר…'; status.style.color = '#166534';
+          fetch('/admin/db/upload-restore', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ package: pkg })
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: f
           }).then(function (r) { return r.json(); }).then(function (d) {
             if (d.ok) { window.location = '/admin/storage?db=restored'; }
             else { status.style.color = '#b91c1c'; status.textContent = d.error || 'שגיאה'; }
@@ -203,27 +202,43 @@ router.post('/admin/db/restore', requireAdmin, (req, res) => {
   }
 });
 
-// The database as a .pzn package — `tapuz-db`, the same family as
-// `tapuz-site`: everything portable in Tapuziel is a documented package.
+// The database as .pzn — v1.92 "sqlite forever": the package IS the SQLite
+// snapshot, stamped 'TPUZ' in its application_id header. One format for
+// shelf, export and upload; nothing that moves in brickable parts.
 router.get('/admin/db/export.pzn', requireAdmin, (req, res) => {
+  const tmp = path.join(require('../paths').DB_DIR, 'backups', 'export-' + process.pid + '-' + Date.now() + '.tmp');
   try {
-    const pkg = require('../db-restore').exportDbPackage();
+    require('../db').snapshotTo(tmp);
     const filename = 'tapuziel-db-' + new Date().toISOString().slice(0, 10) + '.pzn';
-    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
-    res.type('application/json').send(JSON.stringify(pkg, null, 2));
+    res.download(tmp, filename, () => { try { fs.unlinkSync(tmp); } catch (e) { /* best effort */ } });
   } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (e2) { /* */ }
     res.status(500).json({ ok: false, error: e.message });
   }
 });
 
-router.post('/admin/api/db/import-pzn', requireAdmin, (req, res) => {
-  try {
-    require('../db').backupNow(); // safety net before the replace
-    const r = require('../db-restore').importDbPackage((req.body || {}).package);
-    res.status(r.ok ? 200 : 400).json(r);
-  } catch (e) {
-    res.status(400).json({ ok: false, error: String(e.message || e) });
-  }
+// Upload-restore: the request BODY is the SQLite file itself, streamed to
+// disk — never through a body parser, so there is NO payload cap to hit.
+// restoreFromSnapshot then refuses anything that is not a healthy Tapuziel
+// database before the live data is touched.
+router.post('/admin/db/upload-restore', requireAdmin, (req, res) => {
+  const dir = path.join(require('../paths').DB_DIR, 'backups');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmp = path.join(dir, 'upload-' + process.pid + '-' + Date.now() + '.restoring');
+  const out = fs.createWriteStream(tmp);
+  const cleanup = () => { try { fs.unlinkSync(tmp); } catch (e) { /* best effort */ } };
+  req.pipe(out);
+  req.on('error', () => { out.destroy(); cleanup(); });
+  out.on('error', () => { cleanup(); if (!res.headersSent) res.status(500).json({ ok: false, error: 'write_failed' }); });
+  out.on('finish', () => {
+    try {
+      require('../db').backupNow(); // the moment before the replace, kept
+      const r = require('../db-restore').restoreFromSnapshot(tmp);
+      res.status(r.ok ? 200 : 400).json(r);
+    } catch (e) {
+      res.status(400).json({ ok: false, error: String(e.message || e) });
+    } finally { cleanup(); }
+  });
 });
 
 router.get('/admin/db/backup/:name', requireAdmin, (req, res) => {

@@ -23,6 +23,14 @@ db.pragma('busy_timeout = 5000');
 // The WAL-safe durability setting: fsync at checkpoint, not every
 // transaction. Same corruption safety under WAL, far less disk thrash.
 db.pragma('synchronous = NORMAL');
+// v1.92 "sqlite forever": brand the file with SQLite's own application_id
+// header field ('TPUZ') — a Tapuziel database identifies ITSELF, which is
+// what lets the upload-restore guard refuse a foreign sqlite file before
+// emptying the live tables for it. Every snapshot inherits the mark.
+const TAPUZ_APP_ID = 0x5450555A; // 'TPUZ'
+if (db.pragma('application_id', { simple: true }) === 0) {
+  db.pragma(`application_id = ${TAPUZ_APP_ID}`);
+}
 
 function hasColumn(table, column) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all();
@@ -603,7 +611,18 @@ function listBackups() {
 /**
  * A consistent point-in-time snapshot via VACUUM INTO — WAL-safe (readers
  * and the writer are unaffected), compacted, and a plain SQLite file anyone
- * can open anywhere. The shelf keeps the newest BACKUP_KEEP and prunes the
+ * can open anywhere. Re-stamps the 'TPUZ' application_id belt-and-braces,
+ * so a snapshot always self-identifies regardless of VACUUM semantics.
+ */
+function snapshotTo(file) {
+  db.prepare('VACUUM INTO ?').run(file);
+  const s = new Database(file);
+  try { s.pragma(`application_id = ${TAPUZ_APP_ID}`); } finally { s.close(); }
+  return { file, size: fs.statSync(file).size };
+}
+
+/**
+ * Snapshot onto the shelf. Keeps the newest BACKUP_KEEP and prunes the
  * rest; a same-second name collision gets a suffix rather than an error.
  */
 function backupNow() {
@@ -612,7 +631,7 @@ function backupNow() {
   for (let n = 2; fs.existsSync(file); n++) {
     file = path.join(backupDir(), `tapuz-${stamp}-${n}.sqlite`);
   }
-  db.prepare('VACUUM INTO ?').run(file);
+  snapshotTo(file);
   for (const old of listBackups().slice(BACKUP_KEEP)) {
     try { fs.unlinkSync(path.join(backupDir(), old.name)); } catch (e) { /* pruning is best effort */ }
   }
@@ -657,8 +676,8 @@ function dbHealth() {
 // Export BEFORE auto-init: initialize() requires modules that require db back
 // (revisions/menus). Exporting first breaks the circular-dependency deadlock.
 module.exports = {
-  db, initialize, crmSearchReady,
-  dbHealth, integrityCheck, backupNow, backupIfStale, listBackups
+  db, initialize, crmSearchReady, TAPUZ_APP_ID,
+  dbHealth, integrityCheck, snapshotTo, backupNow, backupIfStale, listBackups
 };
 
 // Auto-migrate on require so server/CLI always have schema

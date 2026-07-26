@@ -278,7 +278,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/db/backup`
 - `POST /admin/db/restore`
 - `GET /admin/db/export.pzn`
-- `POST /admin/api/db/import-pzn`
+- `POST /admin/db/upload-restore`
 - `GET /admin/db/backup/:name`
 
 ### `src/routes/symbols.js` — 3 routes
@@ -340,7 +340,6 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/bentml/primer` | GET | `src/routes/bentml-api.js` |
 | `/admin/api/categories` | GET | `src/routes/categories.js` |
 | `/admin/api/categories` | POST | `src/routes/categories.js` |
-| `/admin/api/db/import-pzn` | POST | `src/routes/storage.js` |
 | `/admin/api/homepage` | POST | `src/routes/homepage.js` |
 | `/admin/api/import` | POST | `src/routes/import.js` |
 | `/admin/api/inject-pack` | GET | `src/routes/copilot.js` |
@@ -443,6 +442,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/db/backup/:name` | GET | `src/routes/storage.js` |
 | `/admin/db/export.pzn` | GET | `src/routes/storage.js` |
 | `/admin/db/restore` | POST | `src/routes/storage.js` |
+| `/admin/db/upload-restore` | POST | `src/routes/storage.js` |
 | `/admin/delete` | POST | `src/routes/pages-builder.js` |
 | `/admin/edit/:fullPath` | GET | `src/routes/pages-builder.js` |
 | `/admin/homepage` | POST | `src/routes/homepage.js` |
