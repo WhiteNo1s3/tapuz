@@ -38,12 +38,17 @@ function newToken() {
 
 // ─── campaign CRUD ───────────────────────────────────────────────────
 
-function createCampaign({ name, subject, body, listId } = {}) {
+function createCampaign({ name, subject, body, listId, segmentId } = {}) {
   const n = String(name || '').trim().slice(0, 200);
   if (!n) throw new Error('שם קמפיין נדרש');
+  // Audience source: prefer segment when both somehow set (live rule > frozen list).
+  const seg = segmentId ? Number(segmentId) : null;
+  const list = !seg && listId ? Number(listId) : null;
   const info = db
-    .prepare('INSERT INTO crm_campaigns (name, subject, body, list_id) VALUES (?, ?, ?, ?)')
-    .run(n, String(subject || '').slice(0, 300), String(body || ''), listId ? Number(listId) : null);
+    .prepare(
+      'INSERT INTO crm_campaigns (name, subject, body, list_id, segment_id) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(n, String(subject || '').slice(0, 300), String(body || ''), list, seg);
   return getCampaign(info.lastInsertRowid);
 }
 
@@ -65,6 +70,12 @@ function updateCampaign(id, patch = {}) {
   if (patch.subject !== undefined) set.subject = String(patch.subject).slice(0, 300);
   if (patch.body !== undefined) set.body = String(patch.body);
   if (patch.listId !== undefined) set.list_id = patch.listId ? Number(patch.listId) : null;
+  if (patch.segmentId !== undefined) set.segment_id = patch.segmentId ? Number(patch.segmentId) : null;
+  // Choosing a segment clears the list, and vice versa — one audience source.
+  if (patch.segmentId) set.list_id = null;
+  if (patch.listId && !patch.segmentId) set.segment_id = null;
+  if (patch.audience === 'list') set.segment_id = null;
+  if (patch.audience === 'segment') set.list_id = null;
   if (!Object.keys(set).length) return existing;
   const sets = Object.keys(set).map((k) => `${k} = @${k}`).join(', ');
   db.prepare(`UPDATE crm_campaigns SET ${sets} WHERE id = @id`).run(Object.assign({ id: Number(id) }, set));
@@ -91,30 +102,82 @@ function listCampaigns() {
 // ─── audience ────────────────────────────────────────────────────────
 
 /**
- * Who will actually receive this — consent is the filter, not the list.
- * @returns {{recipients:object[], skippedNoConsent:number, skippedNoEmail:number}}
+ * Who will actually receive this — consent is the filter, not the membership.
+ *
+ * Audience source (in order):
+ *   1. Live **segment** — rule evaluated at send time (interests, status, …)
+ *   2. Explicit **list** — frozen membership
+ *
+ * Skips: no email, no consent, provisional/garbage cards (not mail targets).
+ *
+ * @returns {{recipients:object[], skippedNoConsent:number, skippedNoEmail:number,
+ *            skippedIneligible:number, source:string, sourceLabel:string, poolSize:number}}
  */
 function audienceFor(campaign) {
-  if (!campaign || !campaign.list_id) {
-    return { recipients: [], skippedNoConsent: 0, skippedNoEmail: 0 };
+  const empty = {
+    recipients: [],
+    skippedNoConsent: 0,
+    skippedNoEmail: 0,
+    skippedIneligible: 0,
+    source: '',
+    sourceLabel: '',
+    poolSize: 0
+  };
+  if (!campaign) return empty;
+
+  let members = [];
+  let source = '';
+  let sourceLabel = '';
+
+  if (campaign.segment_id) {
+    const segments = require('./segments');
+    const seg = segments.getSegment(campaign.segment_id);
+    if (!seg) return empty;
+    members = segments.evaluate(seg.rules, { limit: 5000 });
+    source = 'segment';
+    sourceLabel = 'פילוח: ' + (seg.name || '#' + seg.id);
+  } else if (campaign.list_id) {
+    members = db
+      .prepare(
+        `SELECT c.* FROM crm_contacts c
+         JOIN crm_list_members m ON m.contact_id = c.id
+         WHERE m.list_id = ? ORDER BY c.id`
+      )
+      .all(campaign.list_id);
+    source = 'list';
+    try {
+      const lists = require('./lists');
+      const L = lists.getList ? lists.getList(campaign.list_id) : null;
+      sourceLabel = L && L.name ? 'רשימה: ' + L.name : 'רשימה #' + campaign.list_id;
+    } catch (e) {
+      sourceLabel = 'רשימה #' + campaign.list_id;
+    }
+  } else {
+    return empty;
   }
-  const members = db
-    .prepare(
-      `SELECT c.* FROM crm_contacts c
-       JOIN crm_list_members m ON m.contact_id = c.id
-       WHERE m.list_id = ? ORDER BY c.id`
-    )
-    .all(campaign.list_id);
 
   const recipients = [];
   let skippedNoConsent = 0;
   let skippedNoEmail = 0;
+  let skippedIneligible = 0;
   for (const c of members) {
+    if (c.status === 'provisional' || c.status === 'garbage') {
+      skippedIneligible++;
+      continue;
+    }
     if (!c.email) { skippedNoEmail++; continue; }
     if (!c.consent) { skippedNoConsent++; continue; }
     recipients.push(c);
   }
-  return { recipients, skippedNoConsent, skippedNoEmail };
+  return {
+    recipients,
+    skippedNoConsent,
+    skippedNoEmail,
+    skippedIneligible,
+    source,
+    sourceLabel,
+    poolSize: members.length
+  };
 }
 
 // ─── link extraction + rewriting ─────────────────────────────────────

@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (cards admin UI + interest segments + Hebrew CRM copy).
+> **Last updated:** 2026-07-26 (campaign send to live segment — HubSpot-class mail path).
 
 ---
 
@@ -173,7 +173,7 @@ Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified witho
 
 ---
 
-## 8. Honesty log (don’t overclaim)
+## 9. Honesty log (don’t overclaim)
 
 | Claim | Truth |
 |-------|--------|
@@ -187,7 +187,7 @@ Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified witho
 
 ---
 
-## 9. Update protocol (future agents / future you)
+## 10. Update protocol (future agents / future you)
 
 When you finish a real chunk of work:
 
@@ -201,7 +201,7 @@ If the conversation dies mid-task: read this file first, then `git log -15 --one
 
 ---
 
-## 10. Quick identity
+## 11. Quick identity
 
 - **Product name users see:** Tapuziel (not “Tapuz” in UI).
 - **Org credit:** Shaltiel Industries · made by WhiteNo1se / WhiteNo1s3 on GitHub.

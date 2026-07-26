@@ -323,6 +323,12 @@ function initializeCrm() {
       FOREIGN KEY (list_id) REFERENCES crm_lists(id) ON DELETE SET NULL
     )
   `);
+  // Live segment audience (v1.94) — evaluated at send time, not a frozen list.
+  // Either list_id OR segment_id may be set; consent + email still filter.
+  if (!hasColumn('crm_campaigns', 'segment_id')) {
+    db.exec('ALTER TABLE crm_campaigns ADD COLUMN segment_id INTEGER');
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_crm_campaigns_segment ON crm_campaigns(segment_id)');
 
   // One row per recipient. `token` is the unguessable handle that appears in
   // the open pixel, every tracked link and the unsubscribe URL — so a single

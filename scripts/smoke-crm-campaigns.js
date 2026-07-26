@@ -61,6 +61,39 @@ check('only consenting contacts with an address are recipients',
   aud.recipients.length === 2 && aud.recipients.every((r) => r.consent && r.email));
 check('the non-consenting member is skipped AND counted', aud.skippedNoConsent === 1);
 check('a member with no address is skipped AND counted', aud.skippedNoEmail === 1);
+check('list audience source is labelled', aud.source === 'list');
+
+// ── live SEGMENT audience (interest / rules at send time) ────────────
+const segments = require('../src/crm/segments');
+const interested = contacts.upsertContact({
+  email: 'bride@example.com', name: 'כלה', consent: true, tags: 'interest:wedding-packages'
+}).contact;
+const notInterested = contacts.upsertContact({
+  email: 'other@example.com', name: 'אחר', consent: true, tags: 'interest:plumbing'
+}).contact;
+const seg = segments.createSegment('מתענייני חתונה', {
+  interest: 'wedding-packages', hasEmail: true
+});
+const campSeg = campaigns.createCampaign({
+  name: 'מבצע חתונות', subject: 'רק לכם', body: BODY, segmentId: seg.id
+});
+const audSeg = campaigns.audienceFor(campSeg);
+check('segment campaign source is segment', audSeg.source === 'segment');
+check('segment audience is live and filtered by interest',
+  audSeg.recipients.length === 1 && audSeg.recipients[0].id === interested.id);
+check('unrelated consenting contact is not in the interest audience',
+  !audSeg.recipients.some((r) => r.id === notInterested.id));
+// provisional cards never get mail — even if they match the segment rules
+const ghost = contacts.upsertContact({ status: 'provisional', source: 'visit' }).contact;
+contacts.updateContact(ghost.id, {
+  email: 'ghost@example.com',
+  consent: true,
+  status: 'provisional',
+  tags: 'interest:wedding-packages'
+});
+const audGhost = campaigns.audienceFor(campSeg);
+check('provisional cards stay out of mail even when they match the segment',
+  audGhost.skippedIneligible >= 1 && !audGhost.recipients.some((r) => r.id === ghost.id));
 
 // ── link extraction ─────────────────────────────────────────────────
 const links = campaigns.extractLinks(BODY);

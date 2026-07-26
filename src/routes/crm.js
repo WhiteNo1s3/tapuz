@@ -93,12 +93,13 @@ router.get('/admin/crm/segments', requireAdmin, requireCrm('crm-segments', 'פי
   const rows = segments.listSegments();
   const list = rows.length
     ? rows.map((s) => `
-        <div class="rec" style="display:flex;align-items:center;gap:12px">
-          <div style="flex:1">
+        <div class="rec" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:160px">
             <strong>${esc(s.name)}</strong>
             <div class="muted" style="font-size:.8rem">${esc(JSON.stringify(s.rules))}</div>
           </div>
           <span class="pill">${s.size} אנשים</span>
+          <a class="btn sm" href="/admin/crm/campaigns?segmentId=${s.id}">✉️ דיוור לפילוח</a>
           <form method="POST" action="/admin/crm/segments/${s.id}/delete"
                 onsubmit="return confirm('למחוק את הפילוח?')">
             <button class="btn secondary sm" type="submit">מחק</button>
@@ -808,10 +809,12 @@ router.post('/admin/crm/privacy', requireAdmin, (req, res) => {
 
 // ─── campaigns (declared BEFORE /:id) ────────────────────────────────
 router.get('/admin/crm/campaigns', requireAdmin, requireCrm('crm-campaigns', 'קמפיינים'), (req, res) => {
-  const { campaigns, lists } = require('../crm');
+  const { campaigns, lists, segments } = require('../crm');
   const rows = campaigns.listCampaigns();
   const allLists = lists.listAll();
+  const allSegs = segments.listSegments();
   const smtp = require('../notify').getSettings();
+  const preSeg = String((req.query || {}).segmentId || '');
 
   const statusPill = (s) => s === 'sent'
     ? '<span class="pill">נשלח</span>'
@@ -823,7 +826,9 @@ router.get('/admin/crm/campaigns', requireAdmin, requireCrm('crm-campaigns', 'ק
         <a class="rec" href="/admin/crm/campaigns/${c.id}" style="display:flex;align-items:center;gap:12px;text-decoration:none">
           <div style="flex:1">
             <strong>${esc(c.name)}</strong>
-            <div class="muted" style="font-size:.82rem">${esc(c.subject || 'ללא נושא')}</div>
+            <div class="muted" style="font-size:.82rem">${esc(c.subject || 'ללא נושא')}
+              ${c.segment_id ? ' · <span title="קהל חי">🎯 פילוח</span>' : c.list_id ? ' · רשימה' : ''}
+            </div>
           </div>
           ${c.status === 'sent' || c.status === 'sending'
             ? `<span class="muted" style="font-size:.8rem">${c.sent_count} נשלחו · ${c.opened_count} נפתחו · ${c.clicked_count} הקליקו${c.failed_count ? ' · ' + c.failed_count + ' נכשלו' : ''}</span>`
@@ -843,22 +848,34 @@ router.get('/admin/crm/campaigns', requireAdmin, requireCrm('crm-campaigns', 'ק
     <div class="card">
       <div class="card-head">✉️ קמפיינים</div>
       <p class="lead">
-        דיוור לרשימה — ואז רואים מי פתח ומי הקליק. נשלח <strong>רק</strong> למי שנתן
-        הסכמה לדיוור, וכל הודעה כוללת קישור הסרה בלחיצה אחת.
+        דיוור ל<strong>פילוח חי</strong> (תחומי עניין, סטטוס…) או לרשימה קבועה.
+        נשלח <strong>רק</strong> למי שנתן הסכמה לדיוור, עם קישור הסרה בלחיצה אחת —
+        רלוונטי, לא הצפה.
       </p>
       ${list}
     </div>
     <div class="card">
       <div class="card-head">קמפיין חדש</div>
       <form method="POST" action="/admin/crm/campaigns" class="stack">
-        <label>שם פנימי<input name="name" class="input" required placeholder="ניוזלטר יולי"></label>
-        <label>נושא המייל<input name="subject" class="input" placeholder="מה חדש אצלנו"></label>
-        <label>רשימת נמענים
+        <label>שם פנימי<input name="name" class="input" required placeholder="מבצע חתונות — מתעניינים"></label>
+        <label>נושא המייל<input name="subject" class="input" placeholder="משהו שרלוונטי בדיוק להם"></label>
+        <label>קהל יעד — פילוח חי (מומלץ)
+          <select name="segmentId" class="input">
+            <option value="">— בלי פילוח —</option>
+            ${allSegs.map((s) =>
+              `<option value="${s.id}" ${String(s.id) === preSeg ? 'selected' : ''}>${esc(s.name)} (${s.size})</option>`
+            ).join('')}
+          </select>
+        </label>
+        <label>או רשימת נמענים קבועה
           <select name="listId" class="input">
-            <option value="">— בחרו רשימה —</option>
+            <option value="">— בלי רשימה —</option>
             ${allLists.map((l) => `<option value="${l.id}">${esc(l.name)} (${l.members})</option>`).join('')}
           </select>
         </label>
+        <p class="muted" style="font-size:.8rem;margin:0">
+          אם בחרתם פילוח, הוא גובר על הרשימה. הפילוח מחושב <strong>ברגע השליחה</strong>.
+        </p>
         <label>תוכן (HTML)
           <textarea name="body" class="input" rows="8" dir="auto"
             placeholder="שלום {{name}}, ...">‏</textarea></label>
@@ -873,7 +890,11 @@ router.post('/admin/crm/campaigns', requireAdmin, (req, res) => {
   const b = req.body || {};
   try {
     const c = campaigns.createCampaign({
-      name: b.name, subject: b.subject, body: b.body, listId: b.listId
+      name: b.name,
+      subject: b.subject,
+      body: b.body,
+      listId: b.listId,
+      segmentId: b.segmentId
     });
     return res.redirect('/admin/crm/campaigns/' + c.id);
   } catch (e) {
@@ -882,12 +903,13 @@ router.post('/admin/crm/campaigns', requireAdmin, (req, res) => {
 });
 
 router.get('/admin/crm/campaigns/:id', requireAdmin, requireCrm('crm-campaigns', 'קמפיין'), (req, res) => {
-  const { campaigns, lists } = require('../crm');
+  const { campaigns, lists, segments } = require('../crm');
   const c = campaigns.getCampaign(req.params.id);
   if (!c) return res.status(404).send(layout('<div class="container">קמפיין לא נמצא</div>', 'לא נמצא', ACCENT));
   const audience = campaigns.audienceFor(c);
   const sends = campaigns.sendsFor(c.id);
   const allLists = lists.listAll();
+  const allSegs = segments.listSegments();
   const isDraft = c.status === 'draft';
 
   const results = sends.length
@@ -912,33 +934,46 @@ router.get('/admin/crm/campaigns/:id', requireAdmin, requireCrm('crm-campaigns',
       <form method="POST" action="/admin/crm/campaigns/${c.id}/update" class="stack">
         <label>שם פנימי<input name="name" class="input" value="${esc(c.name)}"></label>
         <label>נושא המייל<input name="subject" class="input" value="${esc(c.subject)}"></label>
-        <label>רשימת נמענים
+        <label>קהל — פילוח חי
+          <select name="segmentId" class="input">
+            <option value="">— בלי פילוח —</option>
+            ${allSegs.map((s) =>
+              `<option value="${s.id}" ${Number(s.id) === Number(c.segment_id) ? 'selected' : ''}>${esc(s.name)} (${s.size})</option>`
+            ).join('')}
+          </select>
+        </label>
+        <label>או רשימה קבועה
           <select name="listId" class="input">
-            <option value="">— בחרו רשימה —</option>
+            <option value="">— בלי רשימה —</option>
             ${allLists.map((l) =>
-              `<option value="${l.id}" ${l.id === c.list_id ? 'selected' : ''}>${esc(l.name)} (${l.members})</option>`).join('')}
+              `<option value="${l.id}" ${Number(l.id) === Number(c.list_id) ? 'selected' : ''}>${esc(l.name)} (${l.members})</option>`
+            ).join('')}
           </select>
         </label>
         <label>תוכן (HTML)<textarea name="body" class="input" rows="10" dir="auto">${esc(c.body)}</textarea></label>
         <button class="btn secondary" type="submit">שמור טיוטה</button>
       </form>` : `
         <p class="muted">נושא: <strong>${esc(c.subject)}</strong> · נשלח ב־${esc(c.sent_at || '')}</p>
-        <p class="muted" style="font-size:.85rem">קמפיין שנשלח נעול — הוא הרשומה של מה שיצא בפועל.</p>`}
+        <p class="muted" style="font-size:.85rem">קמפיין שנשלח נעול — הוא הרשומה של מה שיצא בפועל.
+          ${audience.sourceLabel ? ' · ' + esc(audience.sourceLabel) : ''}</p>`}
     </div>
 
     ${isDraft ? `
     <div class="card">
       <div class="card-head">📤 שליחה</div>
       <p class="lead">
-        ${audience.recipients.length} נמענים יקבלו את הדיוור.
-        ${audience.skippedNoConsent ? `<br><strong>${audience.skippedNoConsent}</strong> ברשימה לא נתנו הסכמה לדיוור — הם לא יקבלו.` : ''}
-        ${audience.skippedNoEmail ? `<br>${audience.skippedNoEmail} ברשימה בלי כתובת מייל.` : ''}
+        ${audience.sourceLabel ? `<span class="pill">${esc(audience.sourceLabel)}</span><br>` : ''}
+        ${audience.poolSize ? `בקהל כרגע <strong>${audience.poolSize}</strong> אנשים · ` : ''}
+        <strong>${audience.recipients.length}</strong> יקבלו דיוור (מייל + הסכמה).
+        ${audience.skippedNoConsent ? `<br><strong>${audience.skippedNoConsent}</strong> בלי הסכמה לדיוור — לא יישלח.` : ''}
+        ${audience.skippedNoEmail ? `<br>${audience.skippedNoEmail} בלי כתובת מייל.` : ''}
+        ${audience.skippedIneligible ? `<br>${audience.skippedIneligible} כרטיסים זמניים/למחיקה — לא יישלח.` : ''}
       </p>
       ${audience.recipients.length ? `
       <form method="POST" action="/admin/crm/campaigns/${c.id}/send"
             onsubmit="return confirm('לשלוח ל-${audience.recipients.length} נמענים? אין דרך לבטל.')">
         <button class="btn" type="submit">שלח עכשיו ל-${audience.recipients.length} נמענים</button>
-      </form>` : '<p class="muted">אין נמענים עם הסכמה — אין מה לשלוח.</p>'}
+      </form>` : '<p class="muted">אין נמענים עם הסכמה — אין מה לשלוח. בדקו פילוח/רשימה והסכמות.</p>'}
     </div>` : ''}
 
     ${results ? `
@@ -960,7 +995,11 @@ router.get('/admin/crm/campaigns/:id', requireAdmin, requireCrm('crm-campaigns',
 router.post('/admin/crm/campaigns/:id/update', requireAdmin, (req, res) => {
   const b = req.body || {};
   require('../crm').campaigns.updateCampaign(req.params.id, {
-    name: b.name, subject: b.subject, body: b.body, listId: b.listId
+    name: b.name,
+    subject: b.subject,
+    body: b.body,
+    listId: b.listId || null,
+    segmentId: b.segmentId || null
   });
   res.redirect('/admin/crm/campaigns/' + encodeURIComponent(req.params.id));
 });
