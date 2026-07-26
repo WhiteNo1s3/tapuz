@@ -1,6 +1,8 @@
 # Universal pixel embed — `tapuziel-crm-lab` → Tapuziel
 
-**Status:** **shipped v1.99** (rebuild with all four findings fixed — never the lab path).
+**Status:** **complete** — core shipped v1.99 (all four findings fixed — never
+the lab path); P4 wrappers shipped v2.01 (`integrations/`, inject-only enforced
+by `smoke-wrappers`).
 **Prerequisite:** the CRM (v1.77+). This is the *write-portability* direction
 docs/CRM-PORTABILITY.md measured and recommended: our collector already accepts
 foreign beacons; the lab turned that into a product surface.
@@ -107,10 +109,15 @@ normal seam. Erasure/export learn the claims table in the same commit.
 **Acceptance:** a forged identify cannot create or merge a contact; approval
 does; the drift guard sees the new table; erasure reaches claims.
 
-### Phase P4 — the wrappers
-`integrations/wordpress/tapuziel-pixel/` + Builder README in OUR repo,
-rebuilt to inject-only (they already are — port the discipline, verify no
-collect logic).
+### ~~Phase P4 — the wrappers~~ · **shipped v2.01**
+`integrations/wordpress/tapuziel-pixel/` (plugin + readme) and
+`integrations/builder.io/README.md`, rebuilt inject-only with the four-findings
+discipline carried in: HTTPS-only base (loopback excepted), the registry's own
+site-id normalization, nothing injected until base AND site are set, and the
+docs state plainly that `identify()` is a claim. `smoke-wrappers` (16 checks)
+makes the rule executable: no HTTP of the wrapper's own, no collect endpoint in
+code, and a drift guard — a wrapper may only speak `data-tz-pixel-*` attributes
+the loader actually reads.
 
 ---
 

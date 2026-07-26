@@ -317,6 +317,12 @@ router.get('/admin/crm/sites', requireAdmin, requireCrm('crm-sites', 'אתרים
         הקטע להדבקה דורש <strong>HTTPS</strong> ב־baseUrl של האתר (או localhost לפיתוח) —
         http רגיל מחוץ ל־loopback נדחה.
       </p>
+      <p class="muted" style="font-size:.8rem">
+        עטיפות מוכנות (v2.01): תוסף <strong>WordPress</strong> בתיקיית
+        <code dir="ltr">integrations/wordpress/tapuziel-pixel/</code> ·
+        הדבקה ל־<strong>Builder.io</strong> ב־<code dir="ltr">integrations/builder.io/</code>.
+        עטיפה רק מזריקה את הטוען — אפס לוגיקת איסוף, נאכף בבדיקה.
+      </p>
     </div>`);
 });
 
