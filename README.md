@@ -83,6 +83,19 @@ node scripts/smoke-render.js     # פלט HTML סמנטי
 node scripts/smoke-wizard.js     # אשף ההתקנה (רץ על תיקייה זמנית)
 ```
 
+## פריסה לשרת
+
+תפוזיאל הוא **שרת Node חי** (Express + SQLite), לא אתר סטטי — `npm run build`
+רק מייצא את הדפים המפורסמים ל-HTML, בלי אדמין, CRM או קליטת טפסים. Docker,
+systemd, פרוקסי הפוך, משתני סביבה, גיבוי ושדרוג:  
+[docs/DEPLOY.md](docs/DEPLOY.md)
+
+```bash
+docker compose up -d --build     # → http://localhost:3000/admin
+```
+
+דורש **Node 24 LTS** ומעלה (18 ו-20 בסוף חיים).
+
 ## מייל (SMTP) לפרודקשן
 
 מדריך קצר בעברית — Gmail / SES / Resend / אחסון, והגנות v1.95:  

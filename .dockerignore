@@ -1,0 +1,48 @@
+# Rebuilt inside the image for the target platform — a host's native
+# better-sqlite3/sharp binaries would be the wrong ABI here.
+node_modules/
+
+.git/
+.github/
+.gitignore
+.gitleaks.toml
+
+# Site data belongs to the volume, never baked into the image. Shipping a
+# database would hand every deploy of this image the same content — and the
+# same admin password hashes.
+db/
+config/auth.json*
+config/agent-tokens.json
+config/missions.json
+config/ai.json
+config/tool-gap.json
+config/notify.json
+config/notify-usage.json
+config/whatsapp.json
+content/uploads/
+public/assets/*
+!public/assets/.gitkeep
+
+# Dev-only weight and noise.
+#
+# docs/ deliberately STAYS in the image: src/routes/bentml-api.js serves
+# docs/bentml-cheatsheet.md and docs/agent-free-tier-pack.md at runtime, so
+# dropping it would 500 those routes. themes/ stays too — paths.js falls back
+# to the packaged themes whenever the site root has none of its own.
+tapuziel-skeleton.zip
+test/
+examples/
+extension/
+*.log
+*.db
+*.sqlite
+*.db-shm
+*.db-wal
+.DS_Store
+.vscode/
+.idea/
+.claude/
+tmp*
+tmp_*.js
+fix_*.js
+fix_*.py
