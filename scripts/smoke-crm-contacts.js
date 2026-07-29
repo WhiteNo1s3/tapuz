@@ -85,10 +85,33 @@ check('an admin edit can clear a field', contacts.getContact(a.contact.id).compa
 // ── timeline ─────────────────────────────────────────────────────────
 events.record({ contactId: a.contact.id, type: 'form', title: 'פנייה', refId: 1 });
 events.record({ contactId: a.contact.id, type: 'pageview', path: '/pricing' });
-events.record({ contactId: a.contact.id, type: 'nonsense-type' });
+events.record({ contactId: a.contact.id, type: 'restaurant.order' });
 check('the timeline records events', events.countForContact(a.contact.id) >= 3);
-check('an unknown event type is stored as other, not invented',
-  events.listForContact(a.contact.id).some((e) => e.type === 'other'));
+
+// v2.12 opened the vocabulary: a vertical adds `restaurant.order` without
+// forking events.js, so a well-formed type is kept AS ITSELF. Until v2.12 it
+// was flattened to 'other', which made every custom event indistinguishable
+// from every other one — this pins the expansion, and the guard that survived
+// it. normalizeType is the contract; record() just runs input through it.
+check('a namespaced type from a vertical is kept verbatim, not flattened',
+  events.listForContact(a.contact.id).some((e) => e.type === 'restaurant.order'));
+check('a bare custom token is kept too (open expansion, not a closed script)',
+  events.normalizeType('nonsense-type') === 'nonsense-type');
+check('core types still normalize to themselves',
+  events.normalizeType('form') === 'form' && events.normalizeType('pageview') === 'pageview');
+check('case and surrounding space are folded, not preserved',
+  events.normalizeType('  SHOUTY  ') === 'shouty');
+
+// Open is not the same as unvalidated — a token that cannot be a type at all
+// still lands on 'other' rather than reaching the DB as junk.
+check('a malformed type still falls back to other',
+  events.normalizeType('Not A Type!') === 'other' && events.normalizeType('123abc') === 'other');
+check('an empty/missing type still falls back to other',
+  events.normalizeType('') === 'other' &&
+  events.normalizeType(null) === 'other' &&
+  events.normalizeType(undefined) === 'other');
+check('a type is length-capped so it cannot bloat the column',
+  events.normalizeType('a'.repeat(60)).length === 40);
 
 // ── Customer: the datasheet ──────────────────────────────────────────
 const cust = Customer.load(a.contact.id);

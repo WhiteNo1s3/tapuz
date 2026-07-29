@@ -1,0 +1,36 @@
+# Tapuziel — one long-lived Node process, one SQLite file, one volume.
+#
+#   docker compose up -d --build
+#   → http://localhost:3000/admin   (first run: the setup wizard)
+#
+# Put a reverse proxy (Caddy/nginx/Traefik) in front for TLS, then set
+# TAPUZ_TRUST_PROXY=1 so rate limits key off the real client IP.
+# Full guide: docs/DEPLOY.md
+
+services:
+  tapuz:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Site data lives here, on the named volume below — never in the image.
+      TAPUZ_ROOT: /data
+      # Session signing key. Without it Tapuz generates one into
+      # /data/config/auth.json on first boot, which is fine for a single
+      # container — set it explicitly when you want logins to survive a
+      # volume reset, or to share it across replicas.
+      # Generate: openssl rand -hex 32
+      TAPUZ_ADMIN_SECRET: ${TAPUZ_ADMIN_SECRET:-}
+      # Only enable behind a proxy you actually control: it makes the app
+      # believe X-Forwarded-For, which a direct-to-internet client can forge.
+      TAPUZ_TRUST_PROXY: ${TAPUZ_TRUST_PROXY:-0}
+      # Move the admin off the guessable default path (e.g. /studio).
+      TAPUZ_ADMIN_PATH: ${TAPUZ_ADMIN_PATH:-}
+    volumes:
+      - tapuz-data:/data
+
+volumes:
+  tapuz-data:
