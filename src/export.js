@@ -164,6 +164,25 @@ function exportAll(outputDir = PUBLIC_DIR) {
   // build output; css/, uploads and search-index.json are untouched. Keyed to
   // the DB list (not this pass's writes) so a page whose render failed above
   // keeps its previous good file instead of being taken down.
+  //
+  // The one state that is NOT drift: an EMPTY published set. db/*.db is
+  // gitignored, so a server that clones the repo and runs `npm run build`
+  // arrives here with pages = [] — indistinguishable from a database that
+  // failed to open or migrate. Unguarded, the reconciler reads that as "every
+  // exported page is stale" and deletes the entire site, index.html included,
+  // and nothing regenerates it: the DB that would is the thing that was empty.
+  // So the reconciler fails CLOSED on zero pages. The one path where taking
+  // the last page down IS what the owner asked for stays covered — unpublish,
+  // delete and rename each call removePageHtml directly (pages.js).
+  if (pages.length === 0) {
+    console.warn(
+      '[export] no published pages in the database — leaving ' + outputDir +
+      ' untouched rather than pruning it. Fresh install? Run the setup wizard ' +
+      'at /admin, or point TAPUZ_ROOT at the site whose db/tapuz.db holds your pages.'
+    );
+    return results;
+  }
+
   const keep = new Set(pages.map((p) => publicHtmlName(p.full_path)));
   if (homePath !== null) keep.add('index.html');
   try {
