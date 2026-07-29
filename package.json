@@ -1,14 +1,14 @@
 {
   "name": "tapuziel",
   "version": "2.12.0-alpha",
-  "description": "Tapuziel \u2014 a Hebrew-first (RTL) modular CMS with a visual builder. \u05ea\u05e4\u05d5\u05d6\u05d9\u05d0\u05dc: \u05d4\u05d8\u05e4\u05d5\u05d6 \u05e2\u05dd \u05d4\u05db\u05e0\u05e4\u05d9\u05d9\u05dd.",
+  "description": "Tapuziel — a Hebrew-first (RTL) modular CMS with a visual builder. תפוזיאל: הטפוז עם הכנפיים.",
   "main": "src/server.js",
   "bin": {
     "tapuziel": "./bin/tapuz.js",
     "tapuz": "./bin/tapuz.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "repository": {
     "type": "git",
@@ -158,9 +158,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "better-sqlite3": "^12.1.1",
-    "body-parser": "^1.20.6",
-    "express": "^4.21.2",
+    "better-sqlite3": "^13.0.1",
+    "body-parser": "^2.3.0",
+    "express": "^5.2.1",
     "nodemailer": "^9.0.3",
     "sharp": "^0.35.3"
   }
