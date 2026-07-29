@@ -17,6 +17,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
+    "build": "echo 'Tapuziel has no build step — the server renders pages itself. This is a no-op so deploy pipelines that insist on a build cannot fail here. Start: node src/server.js · static export: npm run export:static'",
     "admin": "node src/server.js",
     "db:init": "node scripts/init-db.js",
     "seed:admin": "node scripts/seed-dev-admin.js",
