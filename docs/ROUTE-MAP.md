@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**251 routes across 37 files.**
+**252 routes across 37 files.**
 
 ## By file (what each module owns)
 
@@ -108,7 +108,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /crm/cs/v1/session`
 - `POST /crm/cs/v1/message`
 
-### `src/routes/crm.js` — 81 routes
+### `src/routes/crm.js` — 82 routes
 
 - `POST /admin/crm/settings`
 - `GET /admin/crm/inbox`
