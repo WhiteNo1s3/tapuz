@@ -3,7 +3,7 @@
 // exportAll() reconciles public/*.html against the DB's published set, so a
 // deleted/unpublished/renamed page stops serving. On a FRESH SERVER that
 // reconciliation was catastrophic: db/*.db is gitignored, so `git clone &&
-// npm install && npm run build` runs against an empty database, the published
+// npm install && npm run export:static` runs against an empty database, the published
 // set is [], and every committed HTML file — index.html included — read as
 // stale and was deleted. The host then reported no site at all.
 //
