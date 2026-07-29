@@ -166,7 +166,7 @@ function exportAll(outputDir = PUBLIC_DIR) {
   // keeps its previous good file instead of being taken down.
   //
   // The one state that is NOT drift: an EMPTY published set. db/*.db is
-  // gitignored, so a server that clones the repo and runs `npm run build`
+  // gitignored, so a server that clones the repo and runs `npm run export:static`
   // arrives here with pages = [] — indistinguishable from a database that
   // failed to open or migrate. Unguarded, the reconciler reads that as "every
   // exported page is stale" and deletes the entire site, index.html included,

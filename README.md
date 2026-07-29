@@ -85,9 +85,9 @@ node scripts/smoke-wizard.js     # אשף ההתקנה (רץ על תיקייה �
 
 ## פריסה לשרת
 
-תפוזיאל הוא **שרת Node חי** (Express + SQLite), לא אתר סטטי — `npm run build`
-רק מייצא את הדפים המפורסמים ל-HTML, בלי אדמין, CRM או קליטת טפסים. Docker,
-systemd, פרוקסי הפוך, משתני סביבה, גיבוי ושדרוג:  
+תפוזיאל הוא **שרת Node חי** (Express + SQLite), לא אתר סטטי — ואין לו שלב
+בנייה. `npm run export:static` רק מייצא את הדפים המפורסמים ל-HTML, בלי אדמין,
+CRM או קליטת טפסים. Docker, systemd, פרוקסי הפוך, משתני סביבה, גיבוי ושדרוג:  
 [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ```bash
