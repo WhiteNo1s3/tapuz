@@ -17,7 +17,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "build": "node -e \"const fs=require('fs');fs.mkdirSync('.next',{recursive:true});fs.writeFileSync('.next/BUILD_ID','tapuziel-no-op');console.log('Tapuziel has no build step — the server renders pages itself. A decoy .next/ was created so pipelines misconfigured as Next.js pass their output-directory check and proceed to the start command (npm start -> node src/server.js). Static export: npm run export:static')\"",
+    "build": "node scripts/deploy-decoy.js",
     "admin": "node src/server.js",
     "db:init": "node scripts/init-db.js",
     "seed:admin": "node scripts/seed-dev-admin.js",

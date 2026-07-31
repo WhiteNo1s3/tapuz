@@ -1,0 +1,62 @@
+'use strict';
+
+/**
+ * The no-op "build" for deploy pipelines that insist on one (npm run build).
+ *
+ * Tapuziel has no build step — the server renders pages itself. This script
+ * exists for pipelines whose app entry is misconfigured as a build-then-serve
+ * framework (the live Hostinger case was a web app typed as Next.js):
+ *
+ *   - A NODE pipeline (build → start) hits its ".next exists?" gate, passes,
+ *     and proceeds to `npm start` → node src/server.js. The decoy is scenery.
+ *   - A STATIC pipeline (build → publish output dir) grabs .next/ and serves
+ *     it as the site. Nothing can save that deploy — such a pipeline cannot
+ *     run a Node server — so the decoy's index.html IS the error message:
+ *     whoever opens the domain sees exactly what happened and how to fix it,
+ *     instead of the webserver's bare 403 for an index-less folder.
+ */
+
+const fs = require('fs');
+
+fs.mkdirSync('.next', { recursive: true });
+fs.writeFileSync('.next/BUILD_ID', 'tapuziel-no-op');
+fs.writeFileSync('.next/index.html', `<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>תפוזיאל: שרת, לא אתר סטטי</title>
+<style>
+  body{font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;max-width:44rem;margin:8vh auto;padding:0 1.5rem;line-height:1.7;color:#1f2937;background:#fff7ed}
+  h1{color:#c2410c}
+  code{background:#ffedd5;padding:.1em .4em;border-radius:4px;direction:ltr;display:inline-block}
+  .en{direction:ltr;text-align:left;border-top:1px solid #fdba74;margin-top:2.5rem;padding-top:1.5rem;color:#4b5563}
+</style>
+</head>
+<body>
+<h1>🍊 תפוזיאל הותקן — אבל האחסון הזה מגיש קבצים, לא מריץ שרת</h1>
+<p>אם אתם רואים את הדף הזה, צינור הפריסה פרסם את תיקיית הפלט של "הבנייה"
+כאתר סטטי. תפוזיאל הוא <strong>שרת Node.js חי</strong> (‎<code>node src/server.js</code>‎)
+— אין לו פלט בנייה, וסוג הפריסה הנוכחי לא מסוגל להריץ אותו.</p>
+<p><strong>התיקון:</strong> צרו את האפליקציה מחדש כ-<strong>Express.js / Node.js</strong>
+(לא Next/React/סטטי), עם פקודת בנייה ריקה ונקודת כניסה ‎<code>src/server.js</code>‎.
+אם הספק לא מציע סוג כזה — האחסון הזה לא יכול להריץ את תפוזיאל; נדרש
+VPS או כל שרת שמריץ תהליך Node. המדריך המלא: ‎<code>docs/DEPLOY.md</code>‎ במאגר.</p>
+<div class="en">
+<p><strong>Tapuziel is a live Node.js server, not a static site.</strong>
+This hosting mode published the build output directory as flat files, which can
+never run it. Re-create the app as an <strong>Express.js/Node.js</strong> app
+(empty build command, entry <code>src/server.js</code>), or use a host that runs
+a Node process (VPS, Docker — see <code>docs/DEPLOY.md</code>).</p>
+</div>
+</body>
+</html>
+`);
+
+console.log(
+  'Tapuziel has no build step — the server renders pages itself. ' +
+  'A decoy .next/ was created: a Node pipeline will pass its output check and continue to `npm start` (node src/server.js); ' +
+  'a static pipeline that publishes .next/ will serve a page explaining that this hosting mode cannot run Tapuziel. ' +
+  'Static export: npm run export:static'
+);
