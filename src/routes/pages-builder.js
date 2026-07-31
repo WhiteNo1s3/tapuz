@@ -14,6 +14,7 @@ const express = require('express');
 const { layout, adminNav, accentFor, escapeAdmin, jsonForScript } = require('../admin-ui');
 const { loadConfig } = require('../config');
 const { listPages, createPage, updatePage, publishPage, getPageByFullPath, deletePage, generateFullPath } = require('../pages');
+const { deriveSlug } = require('../pzn/intent');
 const { exportAll } = require('../export');
 const bentml = require('../bentml');
 const blockRegistry = require('../block-registry');
@@ -83,7 +84,16 @@ router.get('/admin/new', (req, res) => {
         var s = document.getElementById('np-slug');
         if (!t || !s) return;
         var touched = false;
-        s.addEventListener('input', function () { touched = s.value.trim().length > 0; });
+        s.addEventListener('input', function () {
+          touched = s.value.trim().length > 0;
+          // Hand-typed slugs get the same space→dash treatment as auto-slugs,
+          // live, with the caret kept in place.
+          if (/\\s/.test(s.value)) {
+            var pos = s.selectionStart;
+            s.value = s.value.replace(/\\s/g, '-');
+            try { s.setSelectionRange(pos, pos); } catch (e) {}
+          }
+        });
         function slugify(v) {
           return String(v || '').trim().replace(/\\s+/g, '-')
             .replace(/[\\\\/:*?"<>|#]/g, '').replace(/\\.\\.+/g, '.').replace(/^\\.+/, '').slice(0, 80);
@@ -127,12 +137,10 @@ router.get('/admin/new', (req, res) => {
 
 router.post('/admin/create', (req, res) => {
   const title = (req.body.title || '').trim() || 'דף חדש';
-  let slug = (req.body.slug || '').trim();
   // Auto-slug when the user left it blank (they may not know what a slug is).
-  if (!slug) {
-    const { deriveSlug } = require('../pzn/intent');
-    slug = deriveSlug(title);
-  }
+  // A hand-typed slug goes through deriveSlug too: the stored slug must always
+  // match its URL form (spaces → dashes), or every slug-built link 404s.
+  const slug = deriveSlug((req.body.slug || '').trim() || title);
   // Never clobber an existing page — suffix until the full_path is free.
   let candidate = slug;
   for (let n = 2; getPageByFullPath(generateFullPath('', candidate)); n++) {
@@ -438,11 +446,12 @@ router.post('/admin/save', (req, res) => {
     // page's edits always persist. updatePage handles the .pzn/file rename.
     let slugRejected = false;
     if (typeof slug === 'string' && slug.trim()) {
+      const clean = deriveSlug(slug); // spaces → dashes; stored slug = URL form
       const existing = getPageByFullPath(full_path);
-      const desired = existing ? generateFullPath(existing.path_prefix || '', slug.trim()) : null;
+      const desired = existing ? generateFullPath(existing.path_prefix || '', clean) : null;
       if (desired && desired !== full_path) {
         if (getPageByFullPath(desired)) slugRejected = true;
-        else updates.slug = slug.trim();
+        else updates.slug = clean;
       }
     }
     const page = updatePage(full_path, updates);

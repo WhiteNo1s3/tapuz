@@ -120,7 +120,11 @@ router.post('/admin/create-account', (req, res) => {
   try {
     const u = auth.createAdmin(b.username, b.password);
     auth.issueSession(res, u.id, req);
-    res.redirect(base);
+    // First account on a pristine site → straight into the setup wizard.
+    // (/admin would bounce there anyway via admin-home, but landing the new
+    // owner on the wizard directly is the advice, not a detour.)
+    const { needsSetup } = require('../setup');
+    res.redirect(needsSetup() ? base + '/setup' : base);
   } catch (e) {
     res.redirect(base + '/create-account?err=' + encodeURIComponent(e.message || 'שגיאה'));
   }

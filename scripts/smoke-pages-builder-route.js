@@ -97,6 +97,14 @@ function waitUp(tries = 40) {
     const slug = decodeURIComponent((create.headers.location || '').replace('/admin/edit/', ''));
     check('the created page has a real slug', !!slug);
 
+    // ── a hand-typed slug with spaces is normalized, not stored raw ──
+    const spaced = await req('POST', '/admin/create', { cookie, form: { title: 'דף עם רווחים', slug: 'my cool page', template: 'basic' } });
+    const spacedPath = decodeURIComponent((spaced.headers.location || '').replace('/admin/edit/', ''));
+    const spacedPage = require('../src/pages').getPageByFullPath(spacedPath);
+    check('a spaced slug becomes dashes in the URL', spacedPath === 'my-cool-page');
+    check('the STORED slug matches its URL form (no spaces)', !!spacedPage && spacedPage.slug === 'my-cool-page');
+    await req('POST', '/admin/delete', { cookie, form: { full_path: spacedPath } });
+
     // ── the visual builder page renders for that page ──
     const edit = await req('GET', '/admin/edit/' + encodeURIComponent(slug), { cookie });
     check('GET /admin/edit/:fullPath renders the builder (toolbox + canvas)', edit.status === 200 && /id="layers-fold"/.test(edit.text) && /admin-builder\.js/.test(edit.text));
