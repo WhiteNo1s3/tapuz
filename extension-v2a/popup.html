@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: system-ui, "Segoe UI", Arial, sans-serif; width: 300px; margin: 0; padding: 14px; background: #fff7ed; color: #1f2937; }
+  h1 { font-size: 1rem; margin: 0 0 2px; color: #c2410c; }
+  .sub { font-size: .78rem; color: #64748b; margin: 0 0 12px; }
+  .row { margin-bottom: 10px; }
+  label { display: block; font-size: .8rem; margin-bottom: 3px; }
+  input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #fdba74; border-radius: 6px; direction: ltr; }
+  button { width: 100%; padding: 7px; border: 0; border-radius: 6px; background: #f97316; color: #fff; font-weight: 600; cursor: pointer; }
+  button.ghost { background: #ffedd5; color: #9a3412; }
+  #status { font-size: .82rem; margin-top: 10px; line-height: 1.5; }
+  .ok { color: #166534; }
+  .bad { color: #b91c1c; }
+  .models { direction: ltr; text-align: left; font-size: .75rem; color: #4b5563; max-height: 80px; overflow-y: auto; margin-top: 4px; }
+</style>
+</head>
+<body>
+<h1>🍊 Tapuziel Bridge V2</h1>
+<p class="sub">גשר למודל מקומי (LM Studio) — בלי מפתחות, בלי ענן. אלפא.</p>
+
+<div class="row">
+  <label for="base">כתובת השרת המקומי (loopback בלבד)</label>
+  <input id="base" placeholder="http://127.0.0.1:1234">
+</div>
+
+<div class="row"><button id="check">בדוק חיבור למודל</button></div>
+<div class="row"><button id="connect" class="ghost">חבר את האתר הפתוח</button></div>
+
+<div class="row">
+  <label for="prompt">בדיקת מודל — שלחו שאלה ל-GPU</label>
+  <textarea id="prompt" rows="2" placeholder="שלום! מי אתה?" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #fdba74;border-radius:6px;font-family:inherit"></textarea>
+</div>
+<div class="row"><button id="ask">שלח למודל המקומי</button></div>
+
+<div id="status"></div>
+
+<script src="popup.js"></script>
+</body>
+</html>

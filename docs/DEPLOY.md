@@ -138,6 +138,30 @@ TAPUZ_TRUST_PROXY=1
 לוגים: **Deployments → הפריסה שנכשלה → החץ → Build logs.** שם רואים מה
 באמת רץ, ולא מה שחשבנו שרץ.
 
+### 3ב. Hostinger — פריסת ארכיון (API / MCP), בלי git
+
+**הוכח חי ב-2026-07-31** (<live-site>). לצד
+זרימת ה-git של hPanel יש ל-Hostinger מסלול פריסה מארכיון —
+`POST .../nodejs/builds/archive` (או כלי ה-MCP `hosting_deployJsApplication`)
+— שמזהה נכון מ-`package.json`: ‏`app_type: express`,‏ entry ‏`src/server.js`.
+בניגוד לזרימת ה-git, כאן אין הגדרה ישנה ששורדת מניסיון קודם.
+
+הארכיון: **קבצים עוקבים בלבד, בלי מצב האתר.** המאגר עוקב אחרי אתר פיתוח
+(`config/`, `pages/`, `content/`, `db/`) בתור fixtures; אם הם נשלחים, השרת
+יורש `setupDone: true` — האשף לא יופיע לבעלים החדש — וגם טוקני agent של
+פיתוח דולפים. לכן:
+
+```bash
+git ls-files -z | grep -zEv '^(config|pages|content|db)/' > /tmp/filelist.nul
+tar --null -czf /tmp/tapuziel-deploy.tgz -T /tmp/filelist.nul   # ‎~2.3MB, תקרה 50MB
+```
+
+שתי נקודות שנשארות נכונות גם כאן:
+
+1. **`TAPUZ_ROOT` מחוץ לעץ הפריסה** (משתני סביבה ב-hPanel) — פריסה חוזרת
+   מחליפה את עץ המקור, ובלעדיו `db/` והעלאות נמחקים איתו.
+2. פריסה ראשונה נבדקת דרך `/admin` (יפנה ל-create-account), לא דרך `/`.
+
 ---
 
 ## 3. VPS רגיל + systemd
