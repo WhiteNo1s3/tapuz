@@ -59,3 +59,6 @@ public/assets/*
 
 # Auth backups (same secret material as config/auth.json — never commit)
 config/auth.json*
+
+# Decoy output dir written by the no-op build (deploy pipelines misconfigured as Next.js)
+.next/
