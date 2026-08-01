@@ -58,6 +58,7 @@ function applyChrome(data, p) {
   if (p.fontsize) style.fontSize = p.fontsize;
   if (p.padding) style.padding = p.padding;
   if (p.radius) style.radius = p.radius;
+  if (p.hide === 'mobile' || p.hide === 'desktop') style.hideOn = p.hide;
   if (Object.keys(style).length) data.style = style;
   return data;
 }

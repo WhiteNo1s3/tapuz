@@ -1268,3 +1268,7 @@ a.bent-newspop-text:hover { text-decoration: underline; }
    Anything visual is the author's job, inside their own markup. */
 .bent-html { min-width: 0; max-width: 100%; overflow-wrap: break-word; }
 .bent-html > * { max-width: 100%; }
+
+/* per-device visibility (v2.12) — builder "עיצוב מודול" chrome */
+@media (max-width: 767px) { .hide-on-mobile { display: none !important; } }
+@media (min-width: 768px) { .hide-on-desktop { display: none !important; } }

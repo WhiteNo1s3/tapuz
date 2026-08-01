@@ -1474,6 +1474,10 @@
       content.style.fontSize = s.fontSize === 'sm' ? '0.9em' : s.fontSize === 'lg' ? '1.2em' : '';
       content.style.padding = s.padding === 'sm' ? '0.35rem 0.5rem' : s.padding === 'md' ? '0.75rem 1rem' : s.padding === 'lg' ? '1.25rem 1.5rem' : '';
       content.style.borderRadius = s.radius === 'sm' ? '6px' : s.radius === 'md' ? '12px' : s.radius === 'lg' ? '20px' : '';
+      // conditionally-hidden module: editable here, honest about the live page
+      content.style.opacity = s.hideOn ? '0.55' : '';
+      content.style.outline = s.hideOn ? '2px dashed #f59e0b' : '';
+      content.title = s.hideOn === 'mobile' ? 'מוסתר בנייד (מוצג כאן לעריכה)' : s.hideOn === 'desktop' ? 'מוסתר במחשב (מוצג כאן לעריכה)' : '';
     })();
 
     // side split zones (not for columns container itself — drop between/into cols instead)
@@ -2655,6 +2659,11 @@
     host.style.fontSize = s.fontSize === 'sm' ? '0.9em' : s.fontSize === 'lg' ? '1.2em' : '';
     host.style.padding = s.padding === 'sm' ? '0.35rem 0.5rem' : s.padding === 'md' ? '0.75rem 1rem' : s.padding === 'lg' ? '1.25rem 1.5rem' : '';
     host.style.borderRadius = s.radius === 'sm' ? '6px' : s.radius === 'md' ? '12px' : s.radius === 'lg' ? '20px' : '';
+    // conditionally-hidden modules stay VISIBLE in the canvas but announce it —
+    // the responsive preview (📱) shows the real per-device behavior
+    host.style.opacity = s.hideOn ? '0.55' : '';
+    host.style.outline = s.hideOn ? '2px dashed #f59e0b' : '';
+    host.title = s.hideOn === 'mobile' ? 'מוסתר בנייד (מוצג כאן לעריכה)' : s.hideOn === 'desktop' ? 'מוסתר במחשב (מוצג כאן לעריכה)' : '';
   }
 
   /**
@@ -3555,6 +3564,14 @@
           '<option value="sm"' + (st.radius === 'sm' ? ' selected' : '') + '>קטן</option>' +
           '<option value="md"' + (st.radius === 'md' ? ' selected' : '') + '>בינוני</option>' +
           '<option value="lg"' + (st.radius === 'lg' ? ' selected' : '') + '>גדול</option>' +
+        '</select>'
+      ) +
+      field(
+        'תצוגה לפי מכשיר',
+        '<select data-style="hideOn">' +
+          '<option value=""' + (!st.hideOn ? ' selected' : '') + '>בכל המכשירים</option>' +
+          '<option value="mobile"' + (st.hideOn === 'mobile' ? ' selected' : '') + '>מוסתר בנייד</option>' +
+          '<option value="desktop"' + (st.hideOn === 'desktop' ? ' selected' : '') + '>מוסתר במחשב</option>' +
         '</select>'
       ) +
       field('מחלקת CSS (מתקדם מאוד)', '<input data-key="className" value="' + escAttr(d.className || '') + '" placeholder="my-class" dir="ltr">') +

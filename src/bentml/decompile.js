@@ -94,6 +94,7 @@ function uni(params, d, idParams = []) {
   if (s.fontSize) params.push(`fontsize: ${s.fontSize}`);
   if (s.padding) params.push(`padding: ${s.padding}`);
   if (s.radius) params.push(`radius: ${s.radius}`);
+  if (s.hideOn === 'mobile' || s.hideOn === 'desktop') params.push(`hide: ${s.hideOn}`);
 }
 
 function decompileBlock(block, indent) {

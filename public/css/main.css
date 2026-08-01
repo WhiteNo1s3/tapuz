@@ -1305,3 +1305,7 @@ body.menu-side .main-nav ul {
   gap: 0.5rem;
   align-items: flex-start;
 }
+
+/* per-device visibility (v2.12) — builder "עיצוב מודול" chrome */
+@media (max-width: 767px) { .hide-on-mobile { display: none !important; } }
+@media (min-width: 768px) { .hide-on-desktop { display: none !important; } }

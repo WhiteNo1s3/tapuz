@@ -136,6 +136,17 @@ function waitUp(tries = 40) {
     check('no href item field is a bare string — all are url (picker-eligible)',
       !/name: 'href', labelHe: 'קישור', type: 'string'/.test(reg));
 
+    // ── per-device visibility (v2.12): full chain, builder → language → page ──
+    check('the style form offers תצוגה לפי מכשיר', /data-style="hideOn"/.test(builderJs));
+    const { compile } = require('../src/bentml/compile');
+    const hideOut = compile('BENTML 0.1\n\nMETA {\n  title: "x"\n}\n\nHEADING(level: 2, hide: mobile) { כותרת }\n');
+    const hideBlock = hideOut.blocks[0];
+    check('hide: mobile compiles into style.hideOn', !!(hideBlock.data.style && hideBlock.data.style.hideOn === 'mobile'));
+    check('the renderer emits the hide-on class', /hide-on-mobile/.test(require('../src/renderer').renderBlock(hideBlock, 'rtl')));
+    const siteCss = fs.readFileSync(path.join(__dirname, '..', 'themes', 'default', 'css', 'main.css'), 'utf8');
+    check('the theme CSS backs both hide-on classes with media queries',
+      /hide-on-mobile/.test(siteCss) && /hide-on-desktop/.test(siteCss));
+
     // ── save a draft via the ops-based save endpoint ──
     const { getPageByFullPath } = require('../src/pages');
     // canonical block shape: heading renders data.text (not html), level 1-6.

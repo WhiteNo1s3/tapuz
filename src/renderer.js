@@ -117,7 +117,10 @@ function renderBlock(block, direction = 'rtl') {
   // className, so every case that interpolates ${extra}/${extraClass}
   // animates. heading/text keep their own class lists and read it there.
   const animClass = ANIMATE_VALUES.has(block.data?.animate) ? ` anim-${block.data.animate}` : '';
-  const extraClass = (block.data?.className ? ` ${escapeHtml(block.data.className)}` : '') + animClass;
+  // per-device visibility (v2.12) — class-only chrome, same universal slot
+  const hideOn = block.data?.style?.hideOn;
+  const hideClass = hideOn === 'mobile' || hideOn === 'desktop' ? ` hide-on-${hideOn}` : '';
+  const extraClass = (block.data?.className ? ` ${escapeHtml(block.data.className)}` : '') + animClass + hideClass;
   const anchor = anchorId(block);
   const extraId = anchor ? ` id="${escapeHtml(anchor)}"` : '';
   const style = styleAttr(block.data);
@@ -152,6 +155,7 @@ function renderBlock(block, direction = 'rtl') {
       const level = Math.min(Math.max(block.data.level || 2, 1), 6);
       const clsList = [];
       if (ANIMATE_VALUES.has(block.data.animate)) clsList.push(`anim-${block.data.animate}`);
+      if (hideClass) clsList.push(hideClass.trim());
       if (block.data.className) clsList.push(escapeHtml(block.data.className));
       const clsAttr = clsList.length ? ` class="${clsList.join(' ')}"` : '';
       const hId = extraId;
@@ -165,6 +169,7 @@ function renderBlock(block, direction = 'rtl') {
       if (d.dropcap) classes.push('text-dropcap');
       if (d.maxWidth && d.maxWidth !== 'full') classes.push(`text-max-${escapeHtml(d.maxWidth)}`);
       if (ANIMATE_VALUES.has(d.animate)) classes.push(`anim-${d.animate}`);
+      if (hideClass) classes.push(hideClass.trim());
       if (d.className) classes.push(escapeHtml(d.className));
       const classAttr = ` class="${escapeHtml(classes.join(' '))}"`;
       const idAttr = extraId;
