@@ -8,13 +8,17 @@
  *                   'tz-bridge-ping' — the CMS admin JS shows its "מקומי
  *                   (דרך הדפדפן)" option only when a bridge is present.
  *
+ * Promise-style messaging on purpose: Firefox's `browser` namespace has no
+ * callbacks, and Chrome MV3 returns promises when the callback is omitted —
+ * the one shape both browsers accept.
+ *
  * The page never names a host — only a path from the background's allowlist.
  * No credentials pass through here in either direction. */
 (function () {
   'use strict';
 
   const B = typeof browser !== 'undefined' ? browser : chrome;
-  const VERSION = '0.1.0';
+  const VERSION = '0.2.0';
 
   function announce() {
     window.postMessage({ source: 'tapuziel-bridge', type: 'tz-bridge-hello', version: VERSION }, window.location.origin);
@@ -30,15 +34,17 @@
 
     if (msg.type === 'tz-local-llm') {
       const id = msg.id;
-      B.runtime.sendMessage({ type: 'tz-local-llm', path: msg.path, body: msg.body }, (res) => {
-        const err = B.runtime.lastError; // extension reloaded / worker gone
-        window.postMessage({
-          source: 'tapuziel-bridge',
-          type: 'tz-local-llm-result',
-          id,
-          ...(err ? { ok: false, error: err.message } : (res || { ok: false, error: 'no response' }))
-        }, window.location.origin);
-      });
+      Promise.resolve(B.runtime.sendMessage({ type: 'tz-local-llm', path: msg.path, body: msg.body }))
+        .then((res) => res || { ok: false, error: 'no response' })
+        .catch((err) => ({ ok: false, error: (err && err.message) || 'extension unavailable' }))
+        .then((res) => {
+          window.postMessage({
+            source: 'tapuziel-bridge',
+            type: 'tz-local-llm-result',
+            id,
+            ...res
+          }, window.location.origin);
+        });
     }
   });
 

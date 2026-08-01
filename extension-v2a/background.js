@@ -8,6 +8,12 @@
  * Ollama — anything OpenAI-compatible on loopback), so the local model never
  * has to be exposed to the internet.
  *
+ * Cross-browser: Chrome runs this as a service worker, Firefox as an event
+ * page (both keys sit in the manifest). Everything is PROMISE-style — in
+ * Firefox the `browser` namespace is promise-only, callbacks break — except
+ * onMessage, which keeps sendResponse+true because Chrome does not accept a
+ * returned Promise there.
+ *
  * SECURITY INVARIANT (mirrors src/providers.js isLoopbackHost on the CMS):
  * the target hostname must be exactly localhost / 127.0.0.1 / [::1]. Not a
  * LAN address, not 0.0.0.0, not localhost.evil.com. The page supplies a path,
@@ -23,12 +29,9 @@ const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 // The page picks from this menu — it can never name an arbitrary URL.
 const ALLOWED_PATHS = ['/v1/chat/completions', '/v1/models'];
 
-function getBase() {
-  return new Promise((resolve) => {
-    B.storage.local.get(['llm_base'], (r) => {
-      resolve((r.llm_base || DEFAULT_BASE).replace(/\/+$/, ''));
-    });
-  });
+async function getBase() {
+  const r = await B.storage.local.get(['llm_base']);
+  return (r.llm_base || DEFAULT_BASE).replace(/\/+$/, '');
 }
 
 function isLoopbackBase(base) {
@@ -42,6 +45,20 @@ function isLoopbackBase(base) {
   }
 }
 
+/** Firefox MV3 treats manifest host_permissions as user-approvable, not
+ *  auto-granted — so a fetch to loopback can fail on PERMISSION, and that
+ *  must say "approve in the popup", not "is LM Studio running?". */
+async function hasLocalPermission(base) {
+  try {
+    const u = new URL(base);
+    // match patterns ignore ports; [::1] has no valid pattern form — skip it
+    if (u.hostname === '::1' || u.hostname === '[::1]') return true;
+    return await B.permissions.contains({ origins: [u.protocol + '//' + u.hostname + '/*'] });
+  } catch (e) {
+    return true; // never turn the permission probe itself into a hard failure
+  }
+}
+
 async function relay(msg) {
   const path = String(msg.path || '');
   if (!ALLOWED_PATHS.includes(path)) {
@@ -50,6 +67,9 @@ async function relay(msg) {
   const base = await getBase();
   if (!isLoopbackBase(base)) {
     return { ok: false, error: 'endpoint is not loopback: ' + base };
+  }
+  if (!(await hasLocalPermission(base))) {
+    return { ok: false, error: 'אין הרשאת גישה ל-localhost — פתחו את הפופאפ של התוסף ואשרו אותה' };
   }
   try {
     const res = await fetch(base + path, {

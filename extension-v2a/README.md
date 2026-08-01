@@ -47,8 +47,20 @@ window.postMessage({
 ## התקנה (אלפא — טעינה ידנית)
 
 - **Chrome:** `chrome://extensions` → Developer mode → Load unpacked → התיקייה הזאת.
-- **Firefox:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → `manifest.json`.
+- **Firefox (128+):** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on
+  → בחרו את `manifest.json`. טעינה זמנית נעלמת בסגירת הדפדפן — לטעינה קבועה
+  צריך חתימת AMO (שלב בטא, לא עכשיו).
 - ב-LM Studio: Developer → Start Server (פורט 1234 הוא ברירת המחדל של התוסף).
+
+### הבדלי Firefox שכבר מטופלים בקוד
+
+- **הרשאות מארח אינן אוטומטיות** ב-MV3 של Firefox — גם `localhost` מאושר רק
+  כשמבקשים. הפופאפ מבקש את ההרשאה בתוך הלחיצה ("בדוק חיבור" / "שלח למודל"),
+  וה-worker מבדיל בין "אין הרשאה" ל"‏LM Studio לא רץ" בהודעות השגיאה.
+- **`browser` הוא promise-בלבד** — אין callbacks. כל הקוד promise-style,
+  והוא רץ זהה ב-Chrome (MV3 מחזיר promises כשאין callback).
+- **הרקע הוא event page, לא service worker** — המניפסט נושא את שני המפתחות
+  (`service_worker` ל-Chrome, `scripts` ל-Firefox) וכל דפדפן קורא את שלו.
 
 ## מצב
 
