@@ -1601,7 +1601,8 @@
     if (block.type === 'image') {
       if (d.src) {
         wrap.innerHTML =
-          '<img src="' + escAttr(d.src) + '" alt="" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0">';
+          '<img src="' + escAttr(d.src) + '" alt="" style="max-width:100%;border-radius:8px;border:1px solid #e2e8f0">' +
+          (d.link ? '<div style="font-size:.75rem;color:#0a66c2;margin-top:4px" title="' + escAttr(d.link) + '">🔗 תמונה לחיצה ← ' + esc(d.link) + '</div>' : '');
         var imgEl = wrap.querySelector('img');
         imgEl.title = 'לחיצה כפולה = החלפת תמונה';
         imgEl.addEventListener('dblclick', function (e) {
@@ -1654,6 +1655,7 @@
             return (
               '<div class="preview-feature"><strong>' +
               esc(it.title || '') +
+              (it.url ? ' <span style="font-size:.75rem;color:#0a66c2" title="' + escAttr(it.url) + '">🔗</span>' : '') +
               '</strong><div>' +
               esc(it.description || '') +
               '</div></div>'
@@ -2791,8 +2793,9 @@
           if (hit) any = true;
         });
         cat.style.display = any ? '' : 'none';
-        if (q) cat.open = true;
-        else cat.open = false; // default: ALL families folded — a calm palette
+        // open either way — tools are never hidden behind a fold (Ben, v2.12:
+        // "not hide the tools on the sides"); the palette scrolls inside itself
+        cat.open = true;
       });
     });
     search.addEventListener('keydown', function (e) {
@@ -4868,7 +4871,14 @@
       body: JSON.stringify({ full_path: currentPageFullPath, title: title, blocks: blocks, tags: pageTags, meta: pageMeta })
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (data.ok) {
-        showToast('פורסם ✓ — הדף חי', 'ok');
+        // ONE publish concept (v2.12, Ben: the פרסם/פרסם+בנה split was
+        // indistinguishable): publishing a page also rebuilds the site, so
+        // menus, article cubes and cross-page lists are never stale. The
+        // build is cheap; a failure downgrades the toast, never the publish.
+        fetch('/admin/build', { method: 'POST' }).then(function (r2) { return r2.json(); }).then(function (b) {
+          if (b && b.ok === false) showToast('הדף פורסם, אך בניית שאר האתר נכשלה' + (b.error ? ': ' + b.error : ''), 'warn');
+        }).catch(function () { /* the page itself is live either way */ });
+        showToast('פורסם ✓ — הדף חי והאתר עודכן', 'ok');
         hasUnpublishedState = false;
         markSaved();
         var badge = document.getElementById('publish-badge');
@@ -4909,8 +4919,8 @@
       link.id = 'view-live-link';
       link.target = '_blank';
       link.rel = 'noopener';
-      link.className = 'btn secondary';
-      var bar = document.querySelector('.save-bar .container');
+      link.className = 'btn secondary sm';
+      var bar = document.querySelector('.topbar-actions');
       if (bar) bar.insertBefore(link, bar.firstChild);
     }
     link.href = encodeURI(url);
@@ -4927,21 +4937,9 @@
     }
   }
 
-  function publishAndBuild() {
-    var liveUrl = '';
-    publishPage().then(function (pub) {
-      liveUrl = (pub && pub.liveUrl) || ('/' + currentPageFullPath);
-      return fetch('/admin/build', { method: 'POST' });
-    }).then(function (r) { return r.json(); }).then(function (data) {
-      if (data && data.ok === false) {
-        showToast('שגיאה בבנייה' + (data.error ? ': ' + data.error : ''), 'err');
-        return;
-      }
-      showToast('נבנה ✓ — נפתח בחלון חדש', 'ok');
-      // open THE PAGE that was just published, not the homepage
-      window.open(encodeURI(liveUrl), '_blank');
-    }).catch(function () { showToast('שגיאה בבנייה', 'err'); });
-  }
+  // v2.12: publish IS publish-and-build now — one concept, one button. The
+  // alias stays so tours, smokes and muscle memory keep working.
+  function publishAndBuild() { return publishPage(); }
 
   /**
    * Import BenTML from any AI (v0.53) — the in-builder bridge. One-time: hand

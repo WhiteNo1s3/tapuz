@@ -145,6 +145,7 @@ function decompileBlock(block, indent) {
       if (d.alt) params.push(`alt: ${q(d.alt)}`);
       if (d.title) params.push(`title: ${q(d.title)}`); // image SEO title (v0.71)
       if (d.caption) params.push(`caption: ${q(d.caption)}`);
+      if (d.link) params.push(`link: ${q(d.link)}`); // clickable image (v2.12)
       if (d.width && d.width !== 'full') params.push(`width: ${d.width}`);
       uni(params, d, idParams);
       return `${pad}IMAGE${paramList(params)}`;
@@ -290,8 +291,10 @@ function decompileBlock(block, indent) {
           const title = typeof it === 'string' ? it : it.title || '';
           const desc = typeof it === 'string' ? '' : it.description || '';
           const icon = typeof it === 'string' ? '' : it.icon || '';
+          const url = typeof it === 'string' ? '' : it.url || '';
           const ps = [`title: ${q(title)}`];
           if (icon) ps.push(`icon: ${q(icon)}`);
+          if (url) ps.push(`url: ${q(url)}`);
           if (desc) return `${pad}  FEATURE${paramList(ps)} { ${escBody(desc)} }`;
           return `${pad}  FEATURE${paramList(ps)} { }`;
         })

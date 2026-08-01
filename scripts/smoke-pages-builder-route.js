@@ -105,9 +105,25 @@ function waitUp(tries = 40) {
     check('the STORED slug matches its URL form (no spaces)', !!spacedPage && spacedPage.slug === 'my-cool-page');
     await req('POST', '/admin/delete', { cookie, form: { full_path: spacedPath } });
 
+    // ── the article TEMPLATE tags the page (v2.12) — before this, "I added
+    //    an article" produced a plain page no article cube would show ──
+    const art = await req('POST', '/admin/create', { cookie, form: { title: 'מאמר בדיקה', template: 'article' } });
+    const artPath = decodeURIComponent((art.headers.location || '').replace('/admin/edit/', ''));
+    const artPage = require('../src/pages').getPageByFullPath(artPath);
+    const artTags = artPage ? (Array.isArray(artPage.tags) ? artPage.tags : JSON.parse(artPage.tags || '[]')) : [];
+    check('the article template lands TAGGED as an article', artTags.indexOf('article') !== -1);
+    await req('POST', '/admin/delete', { cookie, form: { full_path: artPath } });
+
     // ── the visual builder page renders for that page ──
     const edit = await req('GET', '/admin/edit/' + encodeURIComponent(slug), { cookie });
     check('GET /admin/edit/:fullPath renders the builder (toolbox + canvas)', edit.status === 200 && /id="layers-fold"/.test(edit.text) && /admin-builder\.js/.test(edit.text));
+
+    // ── ONE publish concept, nothing hides the side panels (v2.12, Ben) ──
+    check('one publish button — the פרסם/פרסם+בנה split is gone',
+      edit.text.indexOf('topbar-actions') !== -1 && edit.text.indexOf('פרסם + בנה') === -1);
+    check('no bottom save-bar covering the side panels', edit.text.indexOf('save-bar') === -1);
+    check('palette families ship OPEN — tools are never folded away',
+      /<details class="tool-cat"[^>]* open>/.test(edit.text));
 
     // ── save a draft via the ops-based save endpoint ──
     const { getPageByFullPath } = require('../src/pages');

@@ -49,6 +49,7 @@ const KEYWORDS = {
       alt: { type: 'string', default: '' },
       title: { type: 'string' },
       caption: { type: 'string' },
+      link: { type: 'string' },
       width: { type: 'enum', default: 'full', values: ['sm', 'md', 'lg', 'full'] }
     }
   },
@@ -187,7 +188,8 @@ const KEYWORDS = {
     parent: 'FEATURES',
     params: {
       title: { type: 'string', required: true },
-      icon: { type: 'string' }
+      icon: { type: 'string' },
+      url: { type: 'string' }
     }
   },
   EMBED: {

@@ -44,7 +44,7 @@ for (const sel of stepSels) {
 }
 // the five moves the walkthrough must teach, in walk order
 check('teaches toolbox → canvas → properties → responsive → save/publish',
-  stepSels.join(' ') === '.toolbox #canvas .properties #btn-responsive .save-bar');
+  stepSels.join(' ') === '.toolbox #canvas .properties #btn-responsive .topbar-actions');
 
 // ── copy teaches the ACTION, not the label ───────────────────────────
 check('teaches drag (not click) on the toolbox', /גוררים|גררו/.test(tour));

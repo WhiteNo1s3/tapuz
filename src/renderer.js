@@ -175,12 +175,14 @@ function renderBlock(block, direction = 'rtl') {
       return `<div${idAttr}${classAttr}${style} dir="${direction}">${inner}</div>`;
     }
     case 'image': {
-      const { src = '', alt = '', caption = '', width = 'full' } = block.data || {};
+      const { src = '', alt = '', caption = '', width = 'full', link = '' } = block.data || {};
       const wClass = width && width !== 'full' ? ` img-w-${escapeHtml(width)}` : '';
       const figClass = ` class="bent-image${wClass}${extraClass}"`;
       const figId = extraId;
       const imgTitle = block.data?.title ? ` title="${escapeHtml(block.data.title)}"` : '';
       let h = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"${imgTitle} loading="lazy">`;
+      // a linked image wraps the IMG only — the caption stays plain text
+      if (link) h = `<a href="${escapeHtml(safeHref(link))}">${h}</a>`;
       if (caption) h += `<figcaption>${escapeHtml(caption)}</figcaption>`;
       return `<figure${figId}${figClass}${style} dir="${direction}">${h}</figure>`;
     }
@@ -355,7 +357,11 @@ function renderBlock(block, direction = 'rtl') {
         const title = escapeHtml(item.title || item);
         const icon = item.icon ? `<span class="feature-icon">${escapeHtml(item.icon)}</span>` : '';
         const desc = item.description ? `<p>${escapeHtml(item.description)}</p>` : '';
-        return `<article class="feature">${icon}<h3>${title}</h3>${desc}</article>`;
+        const inner = `${icon}<h3>${title}</h3>${desc}`;
+        // item.url makes the WHOLE card the link — a real destination, not decor
+        return item.url
+          ? `<a class="feature feature-link" href="${escapeHtml(safeHref(item.url))}">${inner}</a>`
+          : `<article class="feature">${inner}</article>`;
       }).join('');
       const cols = Math.min(Math.max(parseInt(block.data.columns, 10) || 3, 1), 4);
       return `<section class="features cols-${cols}"${extra} dir="${direction}">${list}</section>`;

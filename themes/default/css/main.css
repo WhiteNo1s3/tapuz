@@ -208,6 +208,14 @@ p { margin-bottom: 1.1rem; }
   border: 1px solid var(--color-border);
 }
 
+/* a feature card that IS a link (item.url) — card look, link behavior */
+a.feature-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+a.feature-link h3 { color: inherit; }
+
 .feature strong {
   display: block;
   font-size: 1.1rem;

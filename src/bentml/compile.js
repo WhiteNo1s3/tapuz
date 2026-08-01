@@ -104,6 +104,7 @@ function buildBlock(node, warnings) {
         width: p.width || 'full'
       };
       if (p.title) data.title = p.title; // image SEO title (v0.71)
+      if (p.link) data.link = p.link;    // clickable image (v2.12)
       if (!data.alt) warnings.push({ code: 'W401', message: 'IMAGE missing alt' });
       applyChrome(data, p);
       return createBlock('image', data);
@@ -243,6 +244,7 @@ function buildBlock(node, warnings) {
         .map((c) => ({
           title: (c.params && c.params.title) || '',
           icon: (c.params && c.params.icon) || '',
+          url: (c.params && c.params.url) || '',
           description: collapseSingleParagraph(c.text || '')
         }));
       return createBlock('features', applyChrome({

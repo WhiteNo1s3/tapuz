@@ -2236,6 +2236,13 @@ body.is-col-resizing {
   position: sticky;
   top: 70px;
   color: var(--bc-text);
+  /* scrolls INSIDE itself, like the toolbox — a long form (hero: title,
+     subtitle, button, link, image, height…) must never push its lower
+     fields out of reach. That was the "I cannot edit it for real" bug:
+     everything below the fold was unreachable behind the old bottom bar. */
+  max-height: calc(100vh - 86px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .properties h4 { margin: 0 0 14px; font-size: 0.95rem; color: var(--bc-text); }
 .prop-group { margin-bottom: 14px; }
@@ -3059,7 +3066,7 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
 #copilot-drawer {
   position: fixed;
   inset-inline-start: 16px;
-  bottom: 76px; /* above the save-bar */
+  bottom: 16px; /* the bottom save-bar is gone (v2.12) — the drawer owns the corner */
   width: 360px;
   max-width: 94vw;
   height: 460px;

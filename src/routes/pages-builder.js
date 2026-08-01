@@ -152,7 +152,11 @@ router.post('/admin/create', (req, res) => {
     direction: 'rtl',
     // starter templates (v0.93) — unknown/missing key falls back to 'basic',
     // which is exactly the old single-hero seed (behavior preserved)
-    blocks: require('../templates').templateBlocks(req.body.template, title)
+    blocks: require('../templates').templateBlocks(req.body.template, title),
+    // The article template also TAGS the page (v2.12). Before this the
+    // template was cosmetic: "I added an article" produced a plain page that
+    // no article cube would ever show — the checkbox hid in page props.
+    tags: req.body.template === 'article' ? ['article'] : []
   });
   res.redirect('/admin/edit/' + encodeURIComponent(result.full_path));
 });
@@ -209,7 +213,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
             <button type="button" class="tool-btn" data-type="${escapeAdmin(e.type)}" title="${escapeAdmin(e.hintHe || e.labelHe)}">
               <span class="tool-ico">${escapeAdmin(e.icon || '•')}</span><span class="tool-meta"><span class="tool-name">${escapeAdmin(e.labelHe)}</span><span class="tool-hint">${escapeAdmin(e.hintHe || '')}</span></span>
             </button>`).join('');
-    return `<details class="tool-cat" data-cat-i="${catIndex}">
+    return `<details class="tool-cat" data-cat-i="${catIndex}" open>
             <summary class="tool-cat-toggle"><span class="chev">▸</span><span class="tool-cat-title">${escapeAdmin(cat)}</span><span class="tool-cat-count">${entries.length}</span></summary>
             <div class="tool-cat-body">${buttons}</div>
           </details>`;
@@ -229,14 +233,13 @@ router.get('/admin/edit/:fullPath', (req, res) => {
             <option value="published" ${page.status === 'published' ? 'selected' : ''}>פורסם</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="topbar-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button type="button" onclick="TapuzBuilder.openImportAi()" class="btn secondary" style="padding:8px 12px;border-color:#c7d2fe;color:#4338ca">🤖 ייבא מ‑AI</button>
           <button type="button" onclick="TapuzBuilder.openRevisions()" class="btn secondary sm">היסטוריה</button>
           <a href="/admin/theme" class="btn secondary sm">ערכת נושא</a>
           <a href="/" target="_blank" class="btn secondary sm">צפה באתר</a>
           <button type="button" onclick="TapuzBuilder.savePage()" class="btn sm">שמור טיוטה</button>
-          <button type="button" onclick="TapuzBuilder.publishPage()" class="btn js-publish-btn publish sm" data-publish-main="1">פרסם</button>
-          <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn js-publish-btn publish-build sm">פרסם + בנה</button>
+          <button type="button" onclick="TapuzBuilder.publishPage()" class="btn js-publish-btn publish sm" data-publish-main="1" title="הדף עולה לאוויר וכל האתר מתעדכן — פעולה אחת, בלי הבדלים דקים">פרסם</button>
         </div>
       </div>
     </div>
@@ -334,14 +337,6 @@ router.get('/admin/edit/:fullPath', (req, res) => {
           </p>
           <textarea id="bentml-source" spellcheck="false" dir="ltr" autocomplete="off" autocorrect="off" autocapitalize="off" wrap="off" aria-label="BenTML source" placeholder="BENTML 0.1&#10;&#10;META {&#10;  title: &quot;...&quot;&#10;}&#10;&#10;TEXT { ... }"></textarea>
         </div>
-      </div>
-    </div>
-
-    <div class="save-bar">
-      <div class="container" style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap">
-        <button type="button" onclick="TapuzBuilder.savePage()" class="btn">שמור טיוטה</button>
-        <button type="button" onclick="TapuzBuilder.publishPage()" class="btn js-publish-btn publish" data-publish-main="1">פרסם</button>
-        <button type="button" onclick="TapuzBuilder.publishAndBuild()" class="btn js-publish-btn publish-build">פרסם + בנה אתר</button>
       </div>
     </div>
 

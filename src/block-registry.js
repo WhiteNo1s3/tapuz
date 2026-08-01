@@ -308,9 +308,10 @@ const BLOCK_REGISTRY = [
         itemFields: [
           { name: 'title', labelHe: 'כותרת', type: 'string', required: true },
           { name: 'icon', labelHe: 'אייקון', type: 'string', hint: 'אימוג׳י בודד או נתיב ‎/uploads‎ ל-svg/png' },
-          { name: 'description', labelHe: 'תיאור', type: 'textarea' }
+          { name: 'description', labelHe: 'תיאור', type: 'textarea' },
+          { name: 'url', labelHe: 'קישור (אופציונלי)', type: 'url', hint: 'הכרטיס כולו נהיה לחיץ' }
         ],
-        hint: 'ב-BenTML: צאצאי FEATURE (הכותרת פרמטר, התיאור גוף)'
+        hint: 'ב-BenTML: צאצאי FEATURE (הכותרת פרמטר, התיאור גוף, url פרמטר)'
       }
     ],
     textField: null,
@@ -389,6 +390,10 @@ const BLOCK_REGISTRY = [
       },
       { name: 'title', labelHe: 'כותרת תמונה (SEO)', type: 'string', default: '', hint: 'מופיע ברחיפה ומחזק SEO לתמונה' },
       { name: 'caption', labelHe: 'כיתוב', type: 'string', hint: 'מוצג מתחת לתמונה' },
+      {
+        name: 'link', labelHe: 'קישור בלחיצה', type: 'url', default: '',
+        hint: 'התמונה נהיית לחיצה — לדף באתר (‎/about‎) או לכתובת מלאה'
+      },
       {
         name: 'width', labelHe: 'רוחב', type: 'enum',
         enum: ['sm', 'md', 'lg', 'full'], default: 'full'
