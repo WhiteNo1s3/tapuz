@@ -146,6 +146,12 @@ async function generate({ system = '', user = '', history = [] } = {}) {
   const s = load();
   const key = String(s.apiKey || '');
   const provider = getProvider(s.provider || 'claude');
+  // The browser-relay provider exists only where a browser does: the owner's
+  // copilot (converse via /admin/api/ai/chat). Server-initiated generation —
+  // the visitor CS chat, agents — has no bridge to relay through.
+  if (provider && provider.browserRelay) {
+    throw new Error('הספק "דרך הדפדפן" משרת רק את קופיילוט הבעלים — לצ׳אט האתר נדרש ספק עם מפתח (או מודל מקומי של השרת עצמו)');
+  }
   if (!provider || !provider.endpoint) throw new Error('ספק לא מוגדר');
   // A local runtime serves without credentials; a public one never does.
   if (!key && !provider.keyOptional) {
@@ -227,6 +233,49 @@ function takePending(id) {
   return s;
 }
 
+// ── browser-relay continuations (the 'browser' provider, extension-v2a) ──
+//
+// On a HOSTED CMS the server cannot reach the owner's LM Studio — but the
+// owner's BROWSER can, through the Bridge V2 extension. So for this provider
+// the tool loop pauses at every model call: the composed request body goes to
+// the page as { modelCall: { id, body } }, the page relays it via the bridge,
+// and posts the raw provider JSON back as { step: { id, result } }. Same
+// server-held-state pattern as pendings: the browser only ever carries an
+// opaque id and the model's own output.
+//
+// Trusting the returned output is a DECISION, not an oversight: the sender is
+// the authenticated owner (admin session + Origin gate), the fabricated-reply
+// risk is identical to the paste tier (/admin/ai), and every write still stops
+// at the approval gate regardless of what the "model" said.
+const steps = new Map();
+
+function putStep(state) {
+  const id = 'step_' + require('crypto').randomBytes(12).toString('hex');
+  steps.set(id, { ...state, at: Date.now() });
+  for (const [k, v] of steps) if (Date.now() - v.at > PENDING_TTL_MS) steps.delete(k);
+  return id;
+}
+function takeStep(id) {
+  const s = steps.get(String(id || ''));
+  if (!s) return null;
+  steps.delete(id);
+  if (Date.now() - s.at > PENDING_TTL_MS) return null;
+  return s;
+}
+
+/** The request the page will relay verbatim (openai-chat shape; no auth —
+ *  there is no key anywhere on this path). model '' = the page substitutes
+ *  whatever the bridge reports as loaded. */
+function buildRelayBody(provider, s, system, turns, toolDefs) {
+  const body = {
+    model: String(s.model || '').trim(),
+    max_tokens: provider.maxTokens || 4096,
+    messages: [{ role: 'system', content: system }, ...turns]
+  };
+  if (toolDefs && toolDefs.length) body.tools = toolDefs;
+  return body;
+}
+
 /** Pull tool calls + text out of either provider's reply shape. */
 function readReply(style, data) {
   if (style === 'openai-chat') {
@@ -266,19 +315,31 @@ function appendToolTurn(style, turns, reply, results) {
 
 /**
  * A turn that may use tools.
- * @returns {Promise<{reply?: string, pending?: {id, tool, summary, input}, used: string[]}>}
+ * @param {{ system?, user?, history?, approve?, step? }} args
+ *  step: { id, result } — a browser-relay continuation: `result` is the raw
+ *  provider JSON the bridge got from the local model for modelCall `id`.
+ * @returns {Promise<{reply?: string, pending?: {id, tool, summary, input},
+ *   modelCall?: {id, body}, used: string[]}>}
  */
-async function converse({ system = '', user = '', history = [], approve = null } = {}) {
+async function converse({ system = '', user = '', history = [], approve = null, step = null } = {}) {
   const tools = require('./ai-tools');
   const s = load();
   const provider = getProvider(s.provider || 'claude');
   if (!provider) throw new Error('ספק לא מוגדר');
   const style = (provider.body && provider.body.style) || 'anthropic-messages';
-  const used = [];
+  let used = [];
+  let hop = 0;
+  let incoming = null; // model output handed back by the page (browser relay)
 
-  // Resuming an approved write, or starting fresh.
+  // Resuming a relay step, an approved write, or starting fresh.
   let turns;
-  if (approve && approve.id) {
+  if (step && step.id) {
+    const st = takeStep(step.id);
+    if (!st) throw new Error('הצעד פג — שלחו את ההודעה שוב');
+    ({ system, turns, used, hop } = st);
+    incoming = step.result && typeof step.result === 'object' ? step.result : null;
+    if (!incoming) throw new Error('צעד ללא תוצאת מודל');
+  } else if (approve && approve.id) {
     const pend = takePending(approve.id);
     if (!pend) throw new Error('הבקשה פגה — בקשו מהקופיילוט לנסות שוב');
     if (!approve.ok) {
@@ -303,8 +364,19 @@ async function converse({ system = '', user = '', history = [], approve = null }
     turns.push({ role: 'user', content: String(user) });
   }
 
-  for (let hop = 0; hop < MAX_TOOL_HOPS; hop++) {
-    const data = await callProvider(provider, system, turns, tools.toolsForProvider(style));
+  for (; hop < MAX_TOOL_HOPS; hop++) {
+    let data;
+    if (incoming) {
+      data = incoming;
+      incoming = null;
+    } else if (provider.browserRelay) {
+      // Pause here: the page executes this call through the bridge and
+      // returns with { step: { id, result } } — the loop resumes above.
+      const id = putStep({ system, turns, used, hop });
+      return { modelCall: { id, body: buildRelayBody(provider, s, system, turns, tools.toolsForProvider(style)) }, used };
+    } else {
+      data = await callProvider(provider, system, turns, tools.toolsForProvider(style));
+    }
     const reply = readReply(style, data);
     if (!reply.calls.length) return { reply: reply.text || '', used };
 

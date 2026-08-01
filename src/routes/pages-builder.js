@@ -394,6 +394,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
     <script src="/admin-bentml-ui.js"></script>
     <script src="/admin-builder-tour.js"></script>
     <script src="/admin-prompt-builder.js"></script>
+    <script src="/admin-bridge.js"></script>
     <script src="/admin-copilot-panel.js"></script>
     <script>
       TapuzBuilder.init({

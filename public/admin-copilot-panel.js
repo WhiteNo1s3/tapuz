@@ -81,13 +81,23 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  /* POST one payload; when the browser-relay provider answers with a
+     modelCall continuation, TapuzBridge (loaded on the edit page) relays it
+     to the local model and loops until a real reply arrives. */
+  function postChat(payload) {
+    return fetch('/admin/api/ai/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ok && d.modelCall && window.TapuzBridge) return TapuzBridge.drive(d, postChat);
+      return d;
+    });
+  }
+
   function answerApproval(card, p, ok) {
     card.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
     setBusy(true, ok ? 'מבצע ושומר טיוטה…' : 'מודיע לקופיילוט…');
-    fetch('/admin/api/ai/chat', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approve: { id: p.id, ok: ok } })
-    }).then(function (r) { return r.json(); }).then(function (d) {
+    postChat({ approve: { id: p.id, ok: ok } }).then(function (d) {
       if (!d.ok) throw new Error(d.error || '?');
       if (d.reply) { history.push({ role: 'assistant', content: d.reply }); bubble('assistant', d.reply); }
       if (d.pending) { renderApproval(d.pending); setBusy(false, ''); return; }
@@ -117,10 +127,7 @@
     var ctx = { page: pageFullPath() };
     var sel = selectedInfo();
     if (sel) ctx.selected = sel;
-    fetch('/admin/api/ai/chat', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: message, history: history, context: ctx })
-    }).then(function (r) { return r.json(); }).then(function (d) {
+    postChat({ message: message, history: history, context: ctx }).then(function (d) {
       if (!d.ok) throw new Error(d.error || '?');
       history.push({ role: 'user', content: message }, { role: 'assistant', content: d.reply || '' });
       if (d.reply) bubble('assistant', d.reply);

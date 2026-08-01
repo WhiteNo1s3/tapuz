@@ -67,6 +67,33 @@ const PROVIDERS = {
   // required and none charged; nothing leaves the machine. `endpoint` is a
   // DEFAULT: the real one comes from the user's baseUrl setting and must
   // resolve to loopback (see resolveLocalEndpoint).
+  // The owner's local model reached THROUGH THEIR BROWSER (extension-v2a).
+  // For a HOSTED CMS: the server compiles each model request and hands it to
+  // the page as a continuation; the Bridge V2 extension relays it to LM
+  // Studio on the owner's machine and posts the reply back. The server never
+  // fetches anything for this provider (endpoint empty on purpose) and no
+  // key exists anywhere in the path.
+  browser: {
+    id: 'browser',
+    label: 'מקומי — דרך הדפדפן (Bridge V2)',
+    chatHost: '',
+    endpoint: '',
+    method: 'POST',
+    authScheme: 'bearer',
+    authHeader: 'Authorization',
+    extraHeaders: {},
+    // '' = the page substitutes whatever model the bridge reports as loaded.
+    defaultModel: '',
+    models: [],
+    openModel: true,
+    keyOptional: true,
+    browserRelay: true,
+    maxTokens: 4096,
+    responsePath: ['choices', 0, 'message', 'content'],
+    keyHint: 'לא נדרש — המודל רץ אצלכם',
+    keyUrl: '',
+    body: { style: 'openai-chat', systemField: 'system-message' }
+  },
   local: {
     id: 'local',
     label: 'מודל מקומי (LM Studio / Ollama)',

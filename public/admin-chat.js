@@ -14,6 +14,12 @@
   let providers = [];
   let settings = { provider: 'claude', model: '', hasKey: false, keyTail: '' };
 
+  // Bridge V2 (extension-v2a) — shared glue lives in /admin-bridge.js;
+  // this page only reacts to its presence/model events.
+  const bridge = window.TapuzBridge || { present: false, models: [], call: () => Promise.reject(new Error('אין גשר')), drive: (d) => Promise.resolve(d) };
+  document.addEventListener('tapuz-bridge-hello', () => { if (providers.length) renderSettings(); });
+  document.addEventListener('tapuz-bridge-models', () => { if (currentProvider().browserRelay) syncProviderUI(); });
+
   async function api(path, opts = {}) {
     const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
     const ct = res.headers.get('content-type') || '';
@@ -58,7 +64,10 @@
       sel.hidden = true;
       $('ai-model-free').hidden = false;
       $('ai-model-free').value = settings.model || '';
-      $('ai-model-free').placeholder = p.defaultModel || 'שם המודל שטעון';
+      // the bridge reports what LM Studio actually has loaded — offer it
+      $('ai-model-free').placeholder = (p.browserRelay && bridge.models[0])
+        ? bridge.models[0] + ' · זוהה מהתוסף (ריק = אוטומטי)'
+        : (p.defaultModel || 'שם המודל שטעון');
       return;
     }
     sel.hidden = false;
@@ -80,9 +89,11 @@
     $('ai-local-row').hidden = !p.baseUrlDefault;
     $('ai-base').value = settings.baseUrl || '';
     $('ai-base').placeholder = p.baseUrlDefault || '';
-    $('ai-key-state').textContent = p.keyOptional
-      ? '· לרוב לא נדרש למודל מקומי'
-      : (settings.hasKey ? '· מוגדר (…' + settings.keyTail + ')' : '· לא מוגדר');
+    $('ai-key-state').textContent = p.browserRelay
+      ? '· לא נדרש — המודל אצלכם, דרך התוסף'
+      : p.keyOptional
+        ? '· לרוב לא נדרש למודל מקומי'
+        : (settings.hasKey ? '· מוגדר (…' + settings.keyTail + ')' : '· לא מוגדר');
     $('ai-key').placeholder = settings.hasKey
       ? 'להחלפה — הדביקו מפתח חדש'
       : (p.keyHint || 'sk-…');
@@ -95,10 +106,16 @@
     // choosing one is exactly how you get to configure it.
     const box = $('ai-provider-radios');
     box.innerHTML = providers.map((p) => {
-      const ready = p.keyOptional || (p.id === settings.provider && settings.hasKey);
-      const chip = p.keyOptional
-        ? 'מקומי · ללא מפתח'
-        : (ready ? 'מוגדר ✓' : 'דורש מפתח');
+      // browser-relay readiness = the extension announced itself on THIS page;
+      // everything else keeps the key/local rule.
+      const ready = p.browserRelay
+        ? bridge.present
+        : (p.keyOptional || (p.id === settings.provider && settings.hasKey));
+      const chip = p.browserRelay
+        ? (bridge.present ? 'תוסף מחובר ✓' : 'דורש את תוסף Bridge V2')
+        : p.keyOptional
+          ? 'מקומי · ללא מפתח'
+          : (ready ? 'מוגדר ✓' : 'דורש מפתח');
       return '<label class="provider-radio' + (ready ? '' : ' is-off') + '">' +
         '<input type="radio" name="ai-provider" value="' + esc(p.id) + '"' +
         (p.id === settings.provider ? ' checked' : '') + '>' +
@@ -133,9 +150,18 @@
 
   /* ── the conversation ── */
 
+  function savedProvider() {
+    return providers.find((x) => x.id === settings.provider) || {};
+  }
+
   function welcome(fresh) {
     if (fresh) log.innerHTML = '';
-    if (settings.hasKey) {
+    const p = savedProvider();
+    if (p.browserRelay) {
+      bubble('system', bridge.present
+        ? 'הקופיילוט מחובר למודל המקומי דרך הדפדפן ✓ שום דבר לא עוזב את המחשב שלכם.'
+        : 'הספק הנבחר עובד דרך תוסף Bridge V2 — פתחו את התוסף ולחצו "חבר את האתר הפתוח".');
+    } else if (settings.hasKey || p.keyOptional) {
       bubble('system', 'הקופיילוט מחובר ✓ תארו דף — והוא ייבנה כטיוטה בלחיצה. המפתח שלכם נשאר בשרת.');
     } else {
       bubble('system', 'עוד אין מפתח API. הגדירו אותו בצד (נשמר בשרת בלבד) — או השתמשו במסלולים ללא מפתח.');
@@ -175,10 +201,9 @@
         btn.textContent = ok ? 'מבצע…' : 'נדחה';
         setStatus(ok ? 'מבצע…' : '');
         try {
-          const d = await api('/admin/api/ai/chat', {
-            method: 'POST',
-            body: JSON.stringify({ approve: { id: p.id, ok } })
-          });
+          // approvals ride the same driver — an approved write hands control
+          // back to the model, which may need more bridge round-trips
+          const d = await chatTurn({ approve: { id: p.id, ok } });
           if (ok) {
             const slug = (p.input && p.input.slug) || '';
             bubble('system', 'בוצע ✓ ' + (slug
@@ -204,11 +229,28 @@
       '</div>';
   }
 
+  /* Drive one copilot turn to completion. With the browser provider the
+     server answers with modelCall continuations — relay each through the
+     bridge and hand the local model's output back until a real reply (or an
+     approval request) arrives. Key providers finish in a single round. */
+  async function chatTurn(payload) {
+    const post = (p) => api('/admin/api/ai/chat', { method: 'POST', body: JSON.stringify(p) });
+    const d = await post(payload);
+    if (d.modelCall) setStatus('המודל המקומי חושב… (דרך התוסף)');
+    return bridge.drive(d, post);
+  }
+
   async function send() {
     const message = input.value.trim();
     if (!message) return;
-    if (!settings.hasKey) {
+    const p = savedProvider();
+    // a keyless provider (local / browser-relay) is ready without any key
+    if (!settings.hasKey && !p.keyOptional) {
       bubble('system', 'קודם מגדירים מפתח בצד — או עוברים ל<a href="/admin/ai">הדבקה ידנית</a>.');
+      return;
+    }
+    if (p.browserRelay && !bridge.present) {
+      bubble('system', 'הספק הנבחר עובד דרך תוסף Bridge V2 — פתחו את התוסף ולחצו "חבר את האתר הפתוח", ואז רעננו.');
       return;
     }
     input.value = '';
@@ -216,10 +258,7 @@
     setStatus('חושב…');
     $('btn-send').disabled = true;
     try {
-      const d = await api('/admin/api/ai/chat', {
-        method: 'POST',
-        body: JSON.stringify({ message, history })
-      });
+      const d = await chatTurn({ message, history });
       history.push({ role: 'user', content: message }, { role: 'assistant', content: d.reply || '' });
       renderTurn(d);
       setStatus('');

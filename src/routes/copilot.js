@@ -290,7 +290,12 @@ router.post('/admin/api/ai/chat', async (req, res) => {
     const approve = b.approve && b.approve.id
       ? { id: String(b.approve.id), ok: b.approve.ok === true }
       : null;
-    if (!message && !approve) return res.status(400).json({ ok: false, error: 'הודעה ריקה' });
+    // A relay step carries no message either — it resumes a browser-provider
+    // turn with the local model's output (see ai.js, browser-relay).
+    const step = b.step && b.step.id
+      ? { id: String(b.step.id), result: b.step.result }
+      : null;
+    if (!message && !approve && !step) return res.status(400).json({ ok: false, error: 'הודעה ריקה' });
     // The CONNECTED copilot gets its own briefing, not the paste-into-a-chat
     // roleplay pack: it arrived through the owner's API key, it is already
     // inside the CMS, and it is talking to the person who owns the site. Same
@@ -324,9 +329,16 @@ router.post('/admin/api/ai/chat', async (req, res) => {
       system,
       user: message,
       history: Array.isArray(b.history) ? b.history : [],
-      approve
+      approve,
+      step
     });
-    res.json({ ok: true, reply: out.reply || '', pending: out.pending || null, used: out.used || [] });
+    res.json({
+      ok: true,
+      reply: out.reply || '',
+      pending: out.pending || null,
+      modelCall: out.modelCall || null,
+      used: out.used || []
+    });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -414,6 +426,7 @@ router.get('/admin/chat', (req, res) => {
         </div>
       </aside>
     </div>
+    <script src="/admin-bridge.js"></script>
     <script src="/admin-chat.js"></script>
   `;
   res.send(layout(html, 'קופיילוט', accentFor('chat')));

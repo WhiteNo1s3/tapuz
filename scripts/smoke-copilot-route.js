@@ -71,13 +71,16 @@ function check(name, cond) {
     !/https?:\/\//.test(panel) && /\/admin\/api\/ai\/chat/.test(panel));
 }
 
-function req(method, urlPath, { form, cookie } = {}) {
+function req(method, urlPath, { form, json, cookie } = {}) {
   return new Promise((resolve, reject) => {
     let data = null;
     const headers = { Accept: 'text/html', Origin: BASE };
     if (form != null) {
       data = new URLSearchParams(form).toString();
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    } else if (json != null) {
+      data = JSON.stringify(json);
+      headers['Content-Type'] = 'application/json';
     }
     if (cookie) headers['Cookie'] = cookie;
     const r = http.request(BASE + urlPath, { method, headers }, (res) => {
@@ -189,6 +192,43 @@ function waitUp(tries = 40) {
     check('/admin/chat is not reachable unauthenticated', chatNoAuth.status !== 200 || !/id="ai-key"/.test(chatNoAuth.text));
     const settingsNoAuth = await req('GET', '/admin/api/ai/settings', {});
     check('/admin/api/ai/settings is not reachable unauthenticated', settingsNoAuth.status !== 200);
+
+    // ── the browser-relay provider (extension-v2a): the tool loop pauses at
+    //    each model call and resumes with the output the page relays back ──
+    const setBrowser = await req('POST', '/admin/api/ai/settings', { cookie, json: { provider: 'browser' } });
+    check('provider "browser" is saveable (no key, no baseUrl)',
+      setBrowser.status === 200 && /"provider":"browser"/.test(setBrowser.text));
+
+    const turn1 = await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'שלום', history: [] } });
+    const call = (() => { try { return JSON.parse(turn1.text).modelCall; } catch (e) { return null; } })();
+    check('a chat turn answers with a modelCall continuation (id + body)',
+      !!(call && call.id && call.body));
+    check('the relayed body is openai-chat shaped with the system briefing first',
+      !!(call && call.body.messages && call.body.messages[0].role === 'system' &&
+         /תפוזיאל|BenTML|bent-/i.test(call.body.messages[0].content)));
+    check('the relayed body carries the tool definitions',
+      !!(call && Array.isArray(call.body.tools) && call.body.tools.length));
+
+    const turn2 = await req('POST', '/admin/api/ai/chat', {
+      cookie,
+      json: { step: { id: call ? call.id : 'x', result: { choices: [{ message: { content: 'שלום! אני המודל המקומי.' } }] } } }
+    });
+    const done = (() => { try { return JSON.parse(turn2.text); } catch (e) { return null; } })();
+    check('handing the model output back completes the turn with the reply',
+      !!(done && done.ok && /המודל המקומי/.test(done.reply || '')));
+
+    const replay = await req('POST', '/admin/api/ai/chat', {
+      cookie,
+      json: { step: { id: call ? call.id : 'x', result: { choices: [] } } }
+    });
+    check('a step id is single-use (replay is refused)', replay.status !== 200);
+
+    // server-initiated generation must refuse this provider honestly —
+    // the visitor CS chat has no browser to relay through
+    let genErr = '';
+    try { await require('../src/ai').generate({ system: 'x', user: 'y' }); }
+    catch (e) { genErr = e.message; }
+    check('generate() refuses the browser provider with the honest error', /דרך הדפדפן/.test(genErr));
   } finally {
     child.kill();
   }
