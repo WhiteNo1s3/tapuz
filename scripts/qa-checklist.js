@@ -21,12 +21,17 @@ const quick = process.argv.includes('--quick');
 const verbose = process.argv.includes('--verbose') || process.argv.includes('-v');
 
 function sh(cmd, args, opts = {}) {
+  // Windows: npm is npm.cmd, and a .cmd can only be spawned through a shell
+  // (Node's CVE-2024-27980 hardening). Without this every npm gate "fails"
+  // with a spawn error that reads like a test failure.
+  const needsShell = process.platform === 'win32' && cmd === 'npm';
   const r = spawnSync(cmd, args, {
     cwd: ROOT,
     encoding: 'utf8',
     env: process.env,
     maxBuffer: 20 * 1024 * 1024,
-    ...opts
+    ...opts,
+    shell: needsShell || !!opts.shell
   });
   return {
     code: r.status == null ? 1 : r.status,
@@ -69,7 +74,7 @@ function gitMeta() {
 }
 
 function runNpm(script) {
-  const r = sh('npm', ['run', script, '--silent'], { shell: false });
+  const r = sh('npm', ['run', script, '--silent']);
   if (verbose && r.out) {
     const lines = r.out.trim().split('\n');
     const tail = lines.slice(-12).join('\n');
