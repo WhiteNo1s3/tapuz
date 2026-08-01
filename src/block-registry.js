@@ -1012,7 +1012,7 @@ const BLOCK_REGISTRY = [
           { name: 'tag', labelHe: 'תגית', type: 'string' },
           { name: 'title', labelHe: 'כותרת', type: 'string', required: true },
           { name: 'excerpt', labelHe: 'תקציר', type: 'string' },
-          { name: 'href', labelHe: 'קישור', type: 'string' }
+          { name: 'href', labelHe: 'קישור', type: 'url' }
         ],
         hint: 'ב-BenTML: צאצאי MEDIACARD'
       }
@@ -1050,7 +1050,7 @@ const BLOCK_REGISTRY = [
           { name: 'tag', labelHe: 'תגית', type: 'string' },
           { name: 'title', labelHe: 'כותרת', type: 'string' },
           { name: 'excerpt', labelHe: 'תקציר', type: 'string' },
-          { name: 'href', labelHe: 'קישור', type: 'string' }
+          { name: 'href', labelHe: 'קישור', type: 'url' }
         ],
         hint: 'ב-BenTML: צאצאי SLIDE (התקציר גוף, השאר פרמטרים)'
       }
@@ -1114,7 +1114,7 @@ const BLOCK_REGISTRY = [
         name: 'items', bentmlParam: null, labelHe: 'קישורים', type: 'list',
         itemFields: [
           { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
-          { name: 'href', labelHe: 'קישור', type: 'string' }
+          { name: 'href', labelHe: 'קישור', type: 'url' }
         ],
         hint: 'ב-BenTML: צאצאי NAVITEM'
       }
@@ -1151,7 +1151,7 @@ const BLOCK_REGISTRY = [
         name: 'items', bentmlParam: null, labelHe: 'מבזקים', type: 'list',
         itemFields: [
           { name: 'text', labelHe: 'כותרת', type: 'string', required: true },
-          { name: 'href', labelHe: 'קישור', type: 'string' }
+          { name: 'href', labelHe: 'קישור', type: 'url' }
         ],
         hint: 'ב-BenTML: צאצאי TICKERITEM'
       }
@@ -1182,7 +1182,7 @@ const BLOCK_REGISTRY = [
         itemFields: [
           { name: 'time', labelHe: 'שעה', type: 'string' },
           { name: 'text', labelHe: 'כותרת', type: 'string', required: true },
-          { name: 'href', labelHe: 'קישור', type: 'string' }
+          { name: 'href', labelHe: 'קישור', type: 'url' }
         ],
         hint: 'ב-BenTML: צאצאי NEWSPOPITEM'
       }

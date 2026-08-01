@@ -125,6 +125,17 @@ function waitUp(tries = 40) {
     check('palette families ship OPEN — tools are never folded away',
       /<details class="tool-cat"[^>]* open>/.test(edit.text));
 
+    // ── firm settings, live doors (the builder.io bar) — client statics ──
+    const builderJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-builder.js'), 'utf8');
+    check('url fields carry the page picker (tz-page-list datalist)',
+      /list="tz-page-list"/.test(builderJs) && /ensurePageDatalist/.test(builderJs));
+    check('an empty מאמרים module is a DOOR — create-first-article button',
+      /data-new-article/.test(builderJs) && /createArticleAndGo/.test(builderJs));
+    check('article cubes carry ✎ into their own editor', /cube-edit/.test(builderJs));
+    const reg = fs.readFileSync(path.join(__dirname, '..', 'src', 'block-registry.js'), 'utf8');
+    check('no href item field is a bare string — all are url (picker-eligible)',
+      !/name: 'href', labelHe: 'קישור', type: 'string'/.test(reg));
+
     // ── save a draft via the ops-based save endpoint ──
     const { getPageByFullPath } = require('../src/pages');
     // canonical block shape: heading renders data.text (not html), level 1-6.

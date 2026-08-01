@@ -2859,6 +2859,9 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
   font-size: 1.2rem;
 }
 .preview-cube .cube-img img { width: 100%; height: 100%; object-fit: cover; }
+/* the ✎ on an article cube — a quiet door into that article's editor */
+.preview-cube .cube-edit { text-decoration: none; font-size: 0.85em; opacity: 0.55; }
+.preview-cube .cube-edit:hover { opacity: 1; }
 .preview-cube .cube-txt {
   padding: 6px 8px;
   font-size: 0.78rem;

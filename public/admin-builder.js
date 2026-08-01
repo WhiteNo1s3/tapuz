@@ -565,6 +565,46 @@
       .catch(function () { cb(hit ? hit.articles : []); });
   }
 
+  /** Every url field offers the site's OWN pages (datalist) — a link picker,
+   *  not a bare box. Type freely for external URLs; pick for internal ones. */
+  var pageListLoaded = false;
+  function ensurePageDatalist() {
+    if (pageListLoaded || document.getElementById('tz-page-list')) return;
+    pageListLoaded = true;
+    fetch('/admin/api/pages')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var pages = (data && data.pages) || [];
+        var dl = document.createElement('datalist');
+        dl.id = 'tz-page-list';
+        dl.innerHTML = pages.map(function (pg) {
+          return '<option value="/' + escAttr(pg.full_path) + '">' + esc(pg.title || pg.full_path) + '</option>';
+        }).join('');
+        document.body.appendChild(dl);
+      })
+      .catch(function () { pageListLoaded = false; });
+  }
+
+  /** New article in one move: save the open page, create a TAGGED article
+   *  from the template, land in its editor. The מאמרים module stops being
+   *  a display case and becomes the door. */
+  function createArticleAndGo() {
+    try { savePage({ silent: true }); } catch (e) { /* view-only */ }
+    var f = document.createElement('form');
+    f.method = 'POST';
+    f.action = '/admin/create';
+    f.style.display = 'none';
+    [['title', 'מאמר חדש'], ['template', 'article']].forEach(function (kv) {
+      var i = document.createElement('input');
+      i.type = 'hidden';
+      i.name = kv[0];
+      i.value = kv[1];
+      f.appendChild(i);
+    });
+    document.body.appendChild(f);
+    f.submit();
+  }
+
   /** Cached one-shot categories fetch (v0.64) — page props + category preview. */
   var categoriesCache = null; // { at, cats }
   function loadCategoriesOnce(cb) {
@@ -1712,17 +1752,28 @@
       fetchArticlesPreview(alTag, alLimit, function (articles) {
         if (!document.body.contains(grid)) return; // canvas re-rendered meanwhile
         if (!articles.length) {
-          grid.innerHTML = '<div class="preview-cubes-note">אין עדיין דפים מפורסמים עם תגית "' + esc(alTag) +
-            '" — סמן דף כמאמר במאפייני הדף (לחץ על רקע הקנבס)</div>';
+          // an empty module must be a DOOR, not a shrug: create the first
+          // article right here (template creates it tagged, editor opens)
+          grid.innerHTML =
+            '<div class="preview-cubes-note">עוד אין מאמרים מפורסמים עם התגית "' + esc(alTag) + '".<br>' +
+            '<button type="button" class="btn" style="margin-top:8px" data-new-article="1">✍ צרו את המאמר הראשון</button>' +
+            '<div style="font-size:.78rem;margin-top:6px;color:#64748b">או סמנו דף קיים כ"דף מאמר" במאפייני הדף ופרסמו אותו</div></div>';
+          var mk = grid.querySelector('[data-new-article]');
+          if (mk) mk.addEventListener('click', function (e) { e.stopPropagation(); createArticleAndGo(); });
           return;
         }
         grid.innerHTML = articles.map(function (a) {
           var img = a.image
             ? '<img src="' + escAttr(a.image) + '" alt="">'
             : '⊞';
+          // ✎ jumps into that article's editor — the cubes are live doors too
           return '<div class="preview-cube"><div class="cube-img">' + img + '</div>' +
-            '<div class="cube-txt">' + esc(a.title || '') + '</div></div>';
+            '<div class="cube-txt">' + esc(a.title || '') +
+            ' <a href="/admin/edit/' + encodeURIComponent(a.full_path || '') + '" class="cube-edit" title="עריכת המאמר">✎</a></div></div>';
         }).join('');
+        grid.querySelectorAll('.cube-edit').forEach(function (aEl) {
+          aEl.addEventListener('click', function (e) { e.stopPropagation(); });
+        });
       });
       return wrap;
     }
@@ -2855,7 +2906,7 @@
         '<button type="button" class="btn" style="margin:2px 0 10px" data-media-param="' + escAttr(p.name) + '">בחר מהספרייה</button>' + hint;
     }
     if (t === 'url') {
-      return field(label, '<input data-key="' + escAttr(p.name) + '" dir="ltr" value="' + escAttr(cur || '') + '">') + hint;
+      return field(label, '<input data-key="' + escAttr(p.name) + '" dir="ltr" list="tz-page-list" value="' + escAttr(cur || '') + '" placeholder="/דף-באתר או https://…">') + hint;
     }
     if (t === 'textarea') {
       return field(label, '<textarea data-key="' + escAttr(p.name) + '">' + esc(cur || '') + '</textarea>') + hint;
@@ -2912,7 +2963,9 @@
         if (f.type === 'textarea') {
           html += field(flabel, '<textarea data-lp="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '">' + esc(v) + '</textarea>');
         } else {
-          html += field(flabel, '<input data-lp="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '" value="' + escAttr(v) + '">');
+          // url item fields get the page picker too — same datalist everywhere
+          var urlAttrs = f.type === 'url' ? ' dir="ltr" list="tz-page-list"' : '';
+          html += field(flabel, '<input data-lp="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '"' + urlAttrs + ' value="' + escAttr(v) + '">');
         }
       });
       html += '<button type="button" class="btn secondary" style="margin:0 0 12px;font-size:0.8rem;padding:4px 10px" data-lp-del="' + i + '" data-lp="' + escAttr(p.name) + '">− הסר פריט ' + (i + 1) + '</button>';
@@ -2979,6 +3032,7 @@
   function renderProperties() {
     var panel = document.getElementById('properties-panel');
     if (!panel) return;
+    ensurePageDatalist(); // url fields offer the site's own pages
 
     var node = selectedId ? findNode(selectedId) : null;
     if (!node) {
@@ -3194,6 +3248,12 @@
       html += '<button type="button" class="btn" data-container-add-text="1">+ טקסט במיכל</button>';
     } else if (regDef && !HAND_WRITTEN[block.type]) {
       html += renderSchemaForm(regDef, block);
+      if (block.type === 'article-list') {
+        // settings with teeth: the module manages its content, not just its columns
+        html += '<div class="prop-section-label">פעולות</div>' +
+          '<button type="button" class="btn" style="margin:0 0 8px" data-new-article="1">✍ מאמר חדש — נפתח בבונה</button>' +
+          '<div class="prop-hint">הקוביות מציגות דפים מפורסמים הנושאים את התגית שלמעלה. כל דף הופך למאמר בסימון "דף מאמר" במאפייני הדף.</div>';
+      }
       if (block.type === 'spacer') {
         var exactPx = /^\d+px$/.test(String(d.height || '')) ? parseInt(d.height, 10) : '';
         html += field(
@@ -3704,6 +3764,8 @@
         renderProperties();
       });
     }
+    var newArticle = panel.querySelector('[data-new-article]');
+    if (newArticle) newArticle.addEventListener('click', createArticleAndGo);
 
     function wireListEditor(attr, keys, addSel, newItem) {
       panel.querySelectorAll('[' + attr + ']').forEach(function (input) {
