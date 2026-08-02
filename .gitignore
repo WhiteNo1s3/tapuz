@@ -62,3 +62,4 @@ config/auth.json*
 
 # Decoy output dir written by the no-op build (deploy pipelines misconfigured as Next.js)
 .next/
+.tapuz-root

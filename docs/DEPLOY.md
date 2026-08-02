@@ -158,9 +158,27 @@ tar --null -czf /tmp/tapuziel-deploy.tgz -T /tmp/filelist.nul   # ‎~2.3MB, ת�
 
 שתי נקודות שנשארות נכונות גם כאן:
 
-1. **`TAPUZ_ROOT` מחוץ לעץ הפריסה** (משתני סביבה ב-hPanel) — פריסה חוזרת
-   מחליפה את עץ המקור, ובלעדיו `db/` והעלאות נמחקים איתו.
+1. **הנתונים חייבים לשבת מחוץ לעץ הפריסה.** שתי דרכים: משתנה סביבה
+   `TAPUZ_ROOT` (אם הפאנל מאפשר) — או **נעץ הפריסה** (v2.13): קובץ
+   `‎.tapuz-root‎` בשורש הארכיון עם הנתיב המוחלט. הקובץ gitignored —
+   המתכון מזריק אותו לארכיון בלבד:
+
+   ```bash
+   printf '/home/<hostinger-user>/tapuz-data' > .tapuz-root
+   git ls-files -z | grep -zEv '^(config|pages|content|db)/' > /tmp/filelist.nul
+   printf '.tapuz-root\0' >> /tmp/filelist.nul
+   tar --null -czf /tmp/tapuziel-deploy.tgz -T /tmp/filelist.nul
+   rm .tapuz-root
+   ```
+
+   מרגע שהנעץ פרוס, `db/` · `config/` · `pages/` · העלאות חיים
+   ב-`~/tapuz-data` — פריסות חוזרות, ואפילו צינור git סורר שמוחץ את
+   העץ, לא נוגעים בהם. שחזור = פריסת ארכיון, בלי אובדן תוכן.
 2. פריסה ראשונה נבדקת דרך `/admin` (יפנה ל-create-account), לא דרך `/`.
+
+**MySQL:** קיים `<hostinger-user>_Tapuziel` (נוצר 2026-08-02, 6GB) — שמור למתאם
+MySQL עתידי (סקייל CRM). מנוע האחסון היום הוא SQLite; ההתמדה מגיעה מהנעץ
+שלמעלה, לא מהחלפת מנוע.
 
 ### ⚠️ המלכודת הקטלנית: אינטגרציית git ישנה עם auto-deploy
 

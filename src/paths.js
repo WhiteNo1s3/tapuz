@@ -12,9 +12,25 @@ const path = require('path');
 const fs = require('fs');
 
 const PACKAGE_ROOT = path.join(__dirname, '..');
+
+/** Deploy-time root pin (v2.13). Some hosting panels bury (or simply lack)
+ * env configuration for Node apps — so the DEPLOY ARCHIVE itself may carry a
+ * one-line `.tapuz-root` file holding the absolute data path. The env var
+ * still wins; the file is gitignored and injected by the deploy recipe
+ * (docs/DEPLOY.md §3ב), never committed. This is what lets site data survive
+ * redeploys — and even a rogue pipeline flattening the app tree. */
+function pinnedRoot() {
+  try {
+    const p = fs.readFileSync(path.join(PACKAGE_ROOT, '.tapuz-root'), 'utf8').trim();
+    return p || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 const SITE_ROOT = process.env.TAPUZ_ROOT
   ? path.resolve(process.env.TAPUZ_ROOT)
-  : PACKAGE_ROOT;
+  : (pinnedRoot() ? path.resolve(pinnedRoot()) : PACKAGE_ROOT);
 
 const siteThemes = path.join(SITE_ROOT, 'themes');
 const THEMES_DIR = fs.existsSync(siteThemes) ? siteThemes : path.join(PACKAGE_ROOT, 'themes');
