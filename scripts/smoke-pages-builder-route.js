@@ -147,6 +147,18 @@ function waitUp(tries = 40) {
     check('the theme CSS backs both hide-on classes with media queries',
       /hide-on-mobile/.test(siteCss) && /hide-on-desktop/.test(siteCss));
 
+    // ── every leaf module draws a REAL canvas preview (v2.13, Ben: "many
+    //    models are not rendered in live editor"). Containers render via
+    //    childrenKey; everything else must have its own branch — a module
+    //    that falls into the dashed generic box fails this check. ──
+    const bodyRegion = builderJs.slice(builderJs.indexOf('function renderBlockBody'));
+    const previewless = require('../src/block-registry').BLOCK_REGISTRY
+      .filter((e) => !e.childrenOf && !e.childrenKey)
+      .map((e) => e.type)
+      .filter((t) => !new RegExp("type === '" + t + "'").test(bodyRegion));
+    check('no leaf module falls back to the generic dashed box' +
+      (previewless.length ? ' — missing: ' + previewless.join(', ') : ''), previewless.length === 0);
+
     // ── save a draft via the ops-based save endpoint ──
     const { getPageByFullPath } = require('../src/pages');
     // canonical block shape: heading renders data.text (not html), level 1-6.

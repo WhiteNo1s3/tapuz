@@ -1812,6 +1812,109 @@
       return wrap;
     }
 
+    // ── v2.13: the eight modules that used to fall into the dashed generic
+    // box ("not rendered", Ben). Every leaf module draws a REAL preview. ──
+
+    if (block.type === 'marquee') {
+      wrap.innerHTML =
+        '<div style="background:#0f172a;color:#fbbf24;border-radius:8px;padding:8px 12px;white-space:nowrap;overflow:hidden;font-weight:600">' +
+        '〰 <span data-inline-key="text">' + esc(d.text || 'טקסט נע…') + '</span></div>';
+      wireInlineEditable(wrap, block);
+      return wrap;
+    }
+
+    if (block.type === 'banner') {
+      var bTones = { brand: 'background:#f97316;color:#fff', dark: 'background:#0f172a;color:#e2e8f0', light: 'background:#f1f5f9;color:#0f172a', warn: 'background:#fef3c7;color:#92400e' };
+      wrap.innerHTML =
+        '<div style="' + (bTones[d.tone] || bTones.brand) + ';border-radius:8px;padding:10px 14px;text-align:center;font-weight:600">' +
+        '<span data-inline-key="text">' + esc(d.text || 'טקסט הבאנר…') + '</span></div>';
+      wireInlineEditable(wrap, block);
+      return wrap;
+    }
+
+    if (block.type === 'cta') {
+      var cTones = { brand: 'background:linear-gradient(135deg,#f97316,#ea580c);color:#fff', dark: 'background:#0f172a;color:#e2e8f0', light: 'background:#f8fafc;color:#0f172a;border:1px solid #e2e8f0' };
+      wrap.innerHTML =
+        '<div style="' + (cTones[d.tone] || cTones.brand) + ';border-radius:12px;padding:18px;text-align:center">' +
+        '<div data-inline-key="title" style="font-size:1.15rem;font-weight:700">' + esc(d.title || 'כותרת הקריאה לפעולה') + '</div>' +
+        '<div data-inline-key="text" style="margin:6px 0;opacity:.9;min-height:1.2em">' + esc(d.text || '') + '</div>' +
+        '<span class="preview-btn" data-inline-key="buttonText" style="display:inline-block;background:rgba(255,255,255,.92);color:#0f172a;border-radius:8px;padding:7px 16px;font-weight:600">' +
+        esc(d.buttonText || 'כפתור') + '</span>' +
+        (d.url ? '<div style="font-size:.72rem;opacity:.75;margin-top:5px">🔗 ' + esc(d.url) + '</div>' : '') +
+        '</div>';
+      wireInlineEditable(wrap, block);
+      return wrap;
+    }
+
+    if (block.type === 'stats') {
+      var stItems = d.items || [];
+      var stCols = Math.min(Math.max(parseInt(d.columns, 10) || stItems.length || 3, 1), 6);
+      wrap.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(' + stCols + ',1fr);gap:10px;text-align:center">' +
+        (stItems.length ? stItems : [{ value: '—', label: 'מדד' }]).map(function (it) {
+          return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px">' +
+            '<div style="font-size:1.3rem;font-weight:800;color:#0f172a">' + esc(it.value || '—') + '</div>' +
+            '<div style="font-size:.82rem;color:#64748b">' + esc(it.label || '') + '</div></div>';
+        }).join('') + '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'logos') {
+      var lgItems = d.items || [];
+      wrap.innerHTML =
+        '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px">' +
+        (lgItems.length ? lgItems.map(function (it) {
+          return it.src
+            ? '<img src="' + escAttr(it.src) + '" alt="' + escAttr(it.alt || '') + '" style="height:34px;max-width:110px;object-fit:contain">'
+            : '<span style="color:#94a3b8">▣ ' + esc(it.alt || 'לוגו') + '</span>';
+        }).join('') : '<span style="color:#94a3b8">▣▣ לוגואים — הוסיפו פריטים במאפיינים ←</span>') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'faq') {
+      var fqItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-faq">' +
+        (fqItems.length ? fqItems.map(function (it, i) {
+          return '<div style="border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;overflow:hidden">' +
+            '<div style="padding:9px 12px;font-weight:600;background:#f8fafc">▾ ' + esc(it.question || 'שאלה…') + '</div>' +
+            (i === 0 ? '<div style="padding:9px 12px;color:#475569;font-size:.9rem">' + esc(it.answer || '') + '</div>' : '') +
+            '</div>';
+        }).join('') : '<div style="color:#94a3b8">? שאלות ותשובות — הוסיפו פריטים במאפיינים ←</div>') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'newspop') {
+      var npItems = d.items || [];
+      wrap.innerHTML =
+        '<div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">' +
+        '<div style="background:#dc2626;color:#fff;font-weight:700;padding:6px 12px;font-size:.85rem">📰 ' + esc(d.label || 'מבזקים') + '</div>' +
+        (npItems.length ? npItems.slice(0, 4).map(function (it) {
+          return '<div style="display:flex;gap:10px;padding:7px 12px;border-top:1px solid #f1f5f9;font-size:.9rem">' +
+            '<span style="color:#dc2626;font-weight:700;direction:ltr">' + esc(it.time || '') + '</span>' +
+            '<span style="color:#334155">' + esc(it.text || '') + '</span></div>';
+        }).join('') : '<div style="padding:10px 12px;color:#94a3b8">הוסיפו מבזקים במאפיינים ←</div>') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'contact-info') {
+      var ciRows = [
+        d.phone ? '📞 <span dir="ltr">' + esc(d.phone) + '</span>' : '',
+        d.email ? '✉️ <span dir="ltr">' + esc(d.email) + '</span>' : '',
+        d.address ? '📍 ' + esc(d.address) : '',
+        d.hours ? '🕐 ' + esc(d.hours) : ''
+      ].filter(Boolean);
+      wrap.innerHTML =
+        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px">' +
+        (ciRows.length ? ciRows.map(function (r) { return '<div>' + r + '</div>'; }).join('')
+          : '<div style="color:#94a3b8">☎ פרטי קשר — מלאו טלפון/מייל/כתובת במאפיינים ←</div>') +
+        '</div>';
+      return wrap;
+    }
+
     // Any container whose children live in a flat data.blocks list
     // (card, parallax, …) — registry-driven off childrenKey:'blocks'.
     if (isBlocksContainer(block.type)) {
