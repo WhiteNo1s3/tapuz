@@ -60,3 +60,36 @@ console.log(
   'a static pipeline that publishes .next/ will serve a page explaining that this hosting mode cannot run Tapuziel. ' +
   'Static export: npm run export:static'
 );
+
+// ── deploy diagnostics (v2.13) — the build log is our only eye on the server.
+// The wizard-skip class of bug is always "which SITE_ROOT is the app really
+// using, and what does that root's config claim?" — so the build answers it
+// out loud on every deploy. Read the log via the deployments API. Best-effort:
+// a diagnostics failure must never fail a deploy.
+try {
+  const path = require('path');
+  const probe = (label, p) => {
+    try {
+      const st = fs.statSync(p);
+      console.log('[diag] ' + label + ': EXISTS' + (st.isDirectory() ? ' (dir: ' + fs.readdirSync(p).slice(0, 8).join(', ') + ')' : ''));
+    } catch (e) { console.log('[diag] ' + label + ': absent'); }
+  };
+  const src = process.cwd(); // .builds/source
+  const publicHtml = path.resolve(src, '..', '..', 'public_html');
+  probe('source/.tapuz-root', path.join(src, '.tapuz-root'));
+  probe('public_html/.tapuz-root', path.join(publicHtml, '.tapuz-root'));
+  probe('public_html/config/site.json', path.join(publicHtml, 'config', 'site.json'));
+  probe('public_html/db', path.join(publicHtml, 'db'));
+  probe('~/tapuz-data', path.join(process.env.HOME || '/home/<hostinger-user>', 'tapuz-data'));
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(publicHtml, 'config', 'site.json'), 'utf8'));
+    console.log('[diag] tree config: setupDone=' + cfg.setupDone + ' title=' + JSON.stringify(cfg.title || ''));
+  } catch (e) { /* no tree config */ }
+  try {
+    const dataCfg = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '/home/<hostinger-user>', 'tapuz-data', 'config', 'site.json'), 'utf8'));
+    console.log('[diag] tapuz-data config: setupDone=' + dataCfg.setupDone + ' title=' + JSON.stringify(dataCfg.title || ''));
+  } catch (e) { console.log('[diag] tapuz-data config: absent'); }
+  console.log('[diag] paths.js resolves SITE_ROOT=' + require(path.join(src, 'src', 'paths')).SITE_ROOT);
+} catch (e) {
+  console.log('[diag] diagnostics failed: ' + e.message);
+}
