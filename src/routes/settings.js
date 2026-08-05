@@ -55,6 +55,13 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
       </section>
 
       <section class="card" style="margin-top:18px">
+        <h3 class="sub-head">🔁 אשף ההקמה — סיבוב נוסף</h3>
+        <p class="lead">רוצים לרענן את המראה או להשלים דפי בסיס שחסרים? האשף רץ שוב בבטחה:
+        דפים קיימים <b>לא נדרסים</b> — מתעדכנים רק שם האתר, התיאור, ערכת הנושא והתפריט הראשי.</p>
+        <a class="btn secondary" href="/admin/setup?again=1">🪄 הרץ את האשף שוב</a>
+      </section>
+
+      <section class="card" style="margin-top:18px">
         <h3 class="sub-head">📦 ייצוא / ייבוא אתר שלם</h3>
         <p class="lead">קובץ אחד עם כל הדפים (טיוטה + מפורסם), ערכת הנושא והתפריטים — לגיבוי או להעברה בין התקנות Tapuz. ייבוא לעולם לא דורס דף קיים אלא אם מסמנים "דרוס דפים קיימים".</p>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">

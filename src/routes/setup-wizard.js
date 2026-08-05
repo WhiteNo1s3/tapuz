@@ -18,7 +18,14 @@ const { layout } = require('../admin-ui');
 const router = express.Router();
 
 router.get('/admin/setup', (req, res) => {
-  if (!needsSetup()) return res.redirect('/admin');
+  // Re-run (v2.13, Ben): the wizard retires after first run — but the owner
+  // may WANT it again (new look, missing starter pages). ?again=1 reopens it
+  // for the authenticated admin; the whole /admin tree is behind the gate.
+  const again = !needsSetup();
+  if (again && req.query.again !== '1') return res.redirect('/admin');
+  let cfg = {};
+  try { cfg = require('../config').loadConfig(); } catch (e) { /* pristine */ }
+  const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const html = `
     <style>
       .wiz-steps { display:flex;justify-content:center;gap:6px;margin-bottom:22px;flex-wrap:wrap }
@@ -50,9 +57,13 @@ router.get('/admin/setup', (req, res) => {
     <div class="container page-body" style="max-width:640px">
       <div style="text-align:center;margin-bottom:18px">
         <div style="font-size:3rem">🍊</div>
-        <h1 style="margin:8px 0 4px">ברוכים הבאים ל־Tapuziel</h1>
+        <h1 style="margin:8px 0 4px">${again ? 'האשף — סיבוב נוסף' : 'ברוכים הבאים ל־Tapuziel'}</h1>
         <p class="lead">מהרעיון שבראש — לאתר חי. ארבעה צעדים, הכל ניתן לשינוי אחר כך.</p>
       </div>
+      ${again ? `<div class="wiz-teach" style="background:#fffbeb;border-color:#fde68a;color:#92400e">
+        🔁 <strong>הרצה מחודשת.</strong> דפים קיימים <b>לא נדרסים</b> — האשף רק יוצר את מה שחסר.
+        כן יתעדכנו: שם האתר, התיאור, המראה (ערכת הנושא) והתפריט הראשי.
+      </div>` : ''}
       <div class="wiz-steps">
         <span class="wiz-step-dot" data-dot="0">1 · שם</span>
         <span class="wiz-step-dot" data-dot="1">2 · צבעים</span>
@@ -64,8 +75,8 @@ router.get('/admin/setup', (req, res) => {
         <!-- Step 1: name -->
         <div class="wiz-panel" data-panel="0">
           <label class="field-label">איך קוראים לאתר?</label>
-          <input id="wiz-title" class="wiz-input" required maxlength="60" placeholder="השם שיופיע בכותרת">
-          <input id="wiz-desc" class="wiz-input" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="margin-top:8px">
+          <input id="wiz-title" class="wiz-input" required maxlength="60" placeholder="השם שיופיע בכותרת" value="${again ? esc(cfg.title) : ''}">
+          <input id="wiz-desc" class="wiz-input" maxlength="160" placeholder="משפט קצר על האתר (לא חובה)" style="margin-top:8px" value="${again ? esc(cfg.description) : ''}">
         </div>
 
         <!-- Step 2: coloring = the theme creator, taught live. The MOODS here
@@ -169,24 +180,50 @@ router.get('/admin/setup', (req, res) => {
           var c = colors();
           var st = lookStyle();
           var lookColors = (window.WIZ_LOOKS[selectedLook] || { overrides: { colors: {} } }).overrides.colors || {};
+          // The whole personality, not just the four pickers: secondary powers
+          // the gradient, surface/border/muted/shadows make the mock read like
+          // the theme really renders — not a washed-out flat sketch of it.
+          var secondary = lookColors.secondary || c.primary;
+          var surface = lookColors.surface || '#ffffff';
+          var border = lookColors.border || c.lightBg;
+          var muted = lookColors.muted || c.text;
           var radius = st.radius === 'sharp' ? '4px' : st.radius === 'round' ? '14px' : '8px';
+          var shadow = st.shadow === 'deep' ? '0 6px 18px rgba(0,0,0,0.35)'
+            : st.shadow === 'flat' ? 'none' : '0 2px 8px rgba(2,8,23,0.1)';
           var btnBg = st.accent === 'gradient'
-            ? 'linear-gradient(135deg,' + c.primary + ',' + (lookColors.secondary || c.primary) + ')'
+            ? 'linear-gradient(135deg,' + c.primary + ',' + secondary + ')'
             : c.primary;
           var side = q('wiz-menu-placement').value === 'side';
-          var title = (q('wiz-title').value || 'האתר שלי');
+          var title = (q('wiz-title').value || 'האתר שלי').replace(/</g, '&lt;');
+          var subtitle = (q('wiz-desc').value || 'משפט קצר על האתר שלכם').replace(/</g, '&lt;');
+          var teaserBar = function (w) {
+            return '<div style="height:5px;width:' + w + ';background:' + muted + ';opacity:.3;border-radius:4px;margin-top:6px"></div>';
+          };
           q('wiz-preview').innerHTML =
             '<div style="background:' + c.bg + ';color:' + c.text + ';font-size:12px">' +
-            '<div style="display:flex;' + (side ? 'flex-direction:column;align-items:flex-start;gap:4px;' : 'justify-content:space-between;align-items:center;') + 'padding:8px 12px;border-bottom:1px solid ' + c.lightBg + '">' +
-            '<strong>' + title.replace(/</g, '&lt;') + '</strong>' +
+            // header like .site-header: surface bg, real border, text-colored
+            // links with the active-page underline in primary
+            '<div style="background:' + surface + ';display:flex;' + (side ? 'flex-direction:column;align-items:flex-start;gap:4px;' : 'justify-content:space-between;align-items:center;') + 'padding:8px 12px;border-bottom:1px solid ' + border + '">' +
+            '<strong>' + title + '</strong>' +
             '<span style="display:flex;' + (side ? 'flex-direction:column;gap:2px;' : 'gap:10px;') + '">' +
-            selectedPages().map(function (p) { return '<span style="color:' + c.primary + '">' + PAGE_LABELS[p] + '</span>'; }).join('') +
+            selectedPages().map(function (p, i) {
+              return '<span style="color:' + c.text + ';font-weight:600;' + (i === 0 ? 'border-bottom:2px solid ' + c.primary + ';' : '') + 'padding-bottom:1px">' + PAGE_LABELS[p] + '</span>';
+            }).join('') +
             '</span></div>' +
-            '<div style="text-align:center;padding:18px 12px;background:' + c.lightBg + '"><div style="font-size:16px;font-weight:800">' + title.replace(/</g, '&lt;') + '</div>' +
-            '<span style="display:inline-block;margin-top:8px;background:' + btnBg + ';color:#fff;border-radius:' + radius + ';padding:4px 14px">כפתור ראשי</span></div>' +
-            '<div style="display:flex;gap:8px;padding:10px 12px">' +
-            '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
-            '<div style="flex:1;border:1px solid ' + c.lightBg + ';border-radius:8px;overflow:hidden"><div style="height:26px;background:' + c.lightBg + '"></div><div style="padding:6px;font-weight:700">קוביית מאמר</div></div>' +
+            // hero mirrors the theme's lightBg→bg gradient, with the subtitle
+            '<div style="text-align:center;padding:20px 12px 18px;background:linear-gradient(180deg,' + c.lightBg + ',' + c.bg + ')">' +
+            '<div style="font-size:17px;font-weight:800">' + title + '</div>' +
+            '<div style="color:' + muted + ';margin-top:3px">' + subtitle + '</div>' +
+            '<span style="display:inline-block;margin-top:9px;background:' + btnBg + ';color:#fff;border-radius:' + radius + ';padding:5px 16px;font-weight:600;box-shadow:' + shadow + '">כפתור ראשי</span></div>' +
+            // two DIFFERENT sections, like the showcase home really has:
+            // an article cube (image + teaser) and the closing CTA strip
+            '<div style="display:flex;gap:10px;padding:12px">' +
+            '<div style="flex:1;background:' + surface + ';border:1px solid ' + border + ';border-radius:' + radius + ';overflow:hidden;box-shadow:' + shadow + '">' +
+            '<div style="height:36px;background:linear-gradient(135deg,' + c.primary + '40,' + secondary + '59)"></div>' +
+            '<div style="padding:8px 10px 11px"><div style="font-weight:700">קוביית מאמר</div>' + teaserBar('90%') + teaserBar('60%') + '</div></div>' +
+            '<div style="flex:1;background:' + btnBg + ';color:#fff;border-radius:' + radius + ';box-shadow:' + shadow + ';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:10px;text-align:center">' +
+            '<div style="font-weight:800">קריאה לפעולה</div>' +
+            '<span style="background:rgba(255,255,255,.92);color:' + c.primary + ';border-radius:' + radius + ';padding:3px 12px;font-weight:700">דברו איתנו</span></div>' +
             '</div></div>';
         }
 
@@ -231,6 +268,7 @@ router.get('/admin/setup', (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               title: q('wiz-title').value.trim(),
+              again: ${again ? 'true' : 'false'},
               description: q('wiz-desc').value.trim(),
               look: selectedLook,
               colors: colors(),
@@ -270,7 +308,11 @@ router.get('/admin/setup', (req, res) => {
 
 router.post('/admin/setup', (req, res) => {
   try {
-    if (!needsSetup()) return res.status(409).json({ ok: false, error: 'ההתקנה כבר בוצעה' });
+    // an explicit again:true is the owner ASKING for a re-run; without it the
+    // 409 still protects against double-submits and stale tabs
+    if (!needsSetup() && !(req.body && req.body.again === true)) {
+      return res.status(409).json({ ok: false, error: 'ההתקנה כבר בוצעה' });
+    }
     const result = runSetup(req.body || {});
     res.json({ ok: true, ...result });
   } catch (e) {

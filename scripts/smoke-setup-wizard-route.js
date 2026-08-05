@@ -118,6 +118,29 @@ function waitUp(tries = 40) {
     // ── and /admin no longer redirects to setup ──
     const adminPost = await req('GET', '/admin', { cookie });
     check('GET /admin now renders the admin (no longer bounces to setup)', adminPost.status === 200);
+
+    // ── the deliberate re-run (v2.13): ?again=1 reopens, again:true reruns ──
+    const wizAgain = await req('GET', '/admin/setup?again=1', { cookie });
+    check('GET /admin/setup?again=1 reopens the wizard (re-run banner, prefilled title)',
+      wizAgain.status === 200 && /הרצה מחודשת/.test(wizAgain.text) && /value="אתר הבדיקה"/.test(wizAgain.text));
+    const homeBefore = await req('GET', '/admin/api/pages', { cookie });
+    const homeBlocksBefore = JSON.stringify((homeBefore.json.pages.find((p) => p.full_path === 'home') || {}).blocks || null);
+    const rerun = await req('POST', '/admin/setup', {
+      cookie,
+      body: {
+        again: true,
+        title: 'אתר הבדיקה 2', description: 'ריצה שנייה',
+        colors: { primary: '#166534', bg: '#fff', lightBg: '#f0fdf4', text: '#0f172a' },
+        menuPlacement: 'top', pages: ['home', 'about', 'contact'], menuPages: ['home'], external: []
+      }
+    });
+    check('POST with again:true reruns the wizard (no 409)', rerun.status === 200 && rerun.json && rerun.json.ok);
+    const pagesAfter = await req('GET', '/admin/api/pages', { cookie });
+    const homeBlocksAfter = JSON.stringify((pagesAfter.json.pages.find((p) => p.full_path === 'home') || {}).blocks || null);
+    check('a re-run NEVER overwrites an existing page (home untouched)', homeBlocksAfter === homeBlocksBefore);
+    check('a re-run fills the gaps (contact now exists)', pagesAfter.json.pages.some((p) => p.full_path === 'contact'));
+    const rerunBare = await req('POST', '/admin/setup', { cookie, body: { title: 'בלי דגל' } });
+    check('without the again flag the 409 still protects', rerunBare.status === 409);
   } finally {
     child.kill();
   }
