@@ -87,5 +87,18 @@ check('existing page skipped without replace flag', r3.results.skipped === 1 && 
 const pg2 = pages.getPageByFullPath('seed-check');
 check('content untouched', JSON.stringify(pg2.blocks).includes('נזרע'));
 
+// 5. syncPackagedTheme refreshes a stale site-local theme shadow (with backup)
+const siteThemes = path.join(ROOT, 'themes');
+fs.mkdirSync(path.join(siteThemes, 'default', 'css'), { recursive: true });
+fs.writeFileSync(path.join(siteThemes, 'default', 'css', 'main.css'), '/* stale shadow */', 'utf8');
+writeManifest({ id: 'smoke-seed-3', pages: [], syncPackagedTheme: 'default' });
+const r4 = seed.maybeSeed();
+check('theme-sync package runs', r4.ran === true);
+const syncedCss = fs.readFileSync(path.join(siteThemes, 'default', 'css', 'main.css'), 'utf8');
+const pkgCss = fs.readFileSync(path.join(__dirname, '..', 'themes', 'default', 'css', 'main.css'), 'utf8');
+check('site theme copy refreshed from package', syncedCss === pkgCss);
+check('stale copy backed up beside it',
+  fs.existsSync(path.join(siteThemes, 'default.pre-smoke-seed-3', 'css', 'main.css')));
+
 console.log('\nSMOKE SEED: ' + (fail ? 'FAIL' : 'PASS'));
 process.exit(fail ? 1 : 0);

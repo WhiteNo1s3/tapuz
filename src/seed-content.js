@@ -22,7 +22,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { PACKAGE_ROOT, CONFIG_DIR, pinnedRoot } = require('./paths');
+const { PACKAGE_ROOT, CONFIG_DIR, SITE_ROOT, pinnedRoot } = require('./paths');
 
 // TAPUZ_SEED_DIR override exists for the smoke test (a hermetic package in a
 // temp dir); real deploys always ship the package at <app>/seed.
@@ -110,6 +110,33 @@ function seedTheme(manifest, seedId) {
   console.log('[seed] theme overrides applied');
 }
 
+/**
+ * Sync ONE packaged theme over its site-local shadow (manifest:
+ * `"syncPackagedTheme": "default"`). A site data root that carries a
+ * `themes/` dir shadows the package's themes entirely (paths.js) — which is
+ * the extension point for custom themes, but when the shadowed slug is a
+ * stale COPY of a packaged theme (root-pin migrations moved the whole tree),
+ * every theme fix shipped by deploy silently never arrives. The sync copies
+ * the packaged slug over the site copy — previous contents are backed up
+ * beside it first — and only ever touches the named slug: custom themes and
+ * sites with no themes/ dir (package served directly) are left alone.
+ */
+function seedThemeSync(manifest, seedId) {
+  const slug = String(manifest.syncPackagedTheme || '').replace(/[^\w-]/g, '');
+  if (!slug) return;
+  const siteThemes = path.join(SITE_ROOT, 'themes');
+  if (!fs.existsSync(siteThemes)) return; // no shadow — package is served fresh
+  const pkgDir = path.join(PACKAGE_ROOT, 'themes', slug);
+  if (!fs.existsSync(pkgDir)) return;
+  const siteDir = path.join(siteThemes, slug);
+  if (fs.existsSync(siteDir)) {
+    const bak = path.join(siteThemes, `${slug}.pre-${seedId}`);
+    if (!fs.existsSync(bak)) fs.cpSync(siteDir, bak, { recursive: true });
+  }
+  fs.cpSync(pkgDir, siteDir, { recursive: true, force: true });
+  console.log(`[seed] packaged theme "${slug}" synced over the site copy (backup kept beside it)`);
+}
+
 function seedSite(manifest, seedId) {
   if (!manifest.site || typeof manifest.site !== 'object') return;
   backupConfigFile('site', seedId);
@@ -147,6 +174,7 @@ function maybeSeed() {
     const results = seedPages(manifest);
     seedMenus(manifest, manifest.id);
     seedTheme(manifest, manifest.id);
+    seedThemeSync(manifest, manifest.id); // before exportAll — the export reads the theme files
     seedSite(manifest, manifest.id);
     try { require('./export').exportAll(); } catch (e) {
       console.error('[seed] static export failed: ' + e.message);
