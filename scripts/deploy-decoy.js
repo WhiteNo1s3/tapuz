@@ -93,3 +93,32 @@ try {
 } catch (e) {
   console.log('[diag] diagnostics failed: ' + e.message);
 }
+
+// ── public_html shadow cleanup (v2.13): the panel's static layer serves
+// public_html files BEFORE the Node app, and the old git-flow deploys copied
+// the repo's dev-export artifacts (index/home/about html + css/main.css)
+// in there — permanently shadowing the live site's real pages and theme CSS
+// (the sidebar fix shipped three times and never showed: this was why).
+// Remove exactly those known artifact names, loudly; never touch anything
+// else in public_html. Best-effort — cleanup must never fail a deploy.
+try {
+  const path = require('path');
+  const publicHtml = path.resolve(process.cwd(), '..', '..', 'public_html');
+  const staleArtifacts = [
+    'index.html', 'home.html', 'about.html', 'articles.html',
+    'contact.html', 'first-article.html', path.join('css', 'main.css')
+  ];
+  for (const rel of staleArtifacts) {
+    const p = path.join(publicHtml, rel);
+    try {
+      if (fs.existsSync(p)) {
+        fs.unlinkSync(p);
+        console.log('[clean] public_html/' + rel + ' removed (stale dev-export shadow)');
+      }
+    } catch (e) {
+      console.log('[clean] public_html/' + rel + ': ' + e.message);
+    }
+  }
+} catch (e) {
+  console.log('[clean] shadow cleanup failed: ' + e.message);
+}
