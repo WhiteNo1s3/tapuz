@@ -7,7 +7,7 @@
     <meta name="bent-teaser" content="הקלף המנצח: המוח הוא מינוי ה-AI שלכם, לא הטוקנים שלנו. ארבעה שלבים — כולם כבר קיימים." />
   </head>
   <body>
-    <bent-hero id="hero-act3" height="md">
+    <bent-hero id="hero-act3" height="md" image="/demo/tile-4.svg" overlay="55" parallax="true">
       <bent-heading level="1">מערכה שלישית — AI בלי מונה</bent-heading>
       <bent-text>הקלף המנצח: המוח הוא מינוי ה-AI שלכם, לא הטוקנים שלנו. ארבעה שלבים, כולם כבר קיימים — מהדבקה חינמית ועד מודל שרץ אצלכם במחשב.</bent-text>
     </bent-hero>
@@ -15,20 +15,20 @@
       <bent-trow>שלב | מה זה | מה זה עולה</bent-trow>
       <bent-trow>BYOT בהדבקה | נותנים לכל צ'אט (ChatGPT / Claude / Grok / Gemini חינמיים) את מילון BenTML פעם אחת — חבילת החינם נכנסת גם בתוכניות חינמיות — ומדביקים את התשובות בבונה | כלום. לעולם.</bent-trow>
       <bent-trow>תוסף Chrome | אנחנו מעתיקים, אתם מדביקים — התוסף רק קורא את תשובת ה-AI ומפרסם אותה; הוא לעולם לא מקליד בצ'אט שלכם. כיבוד תנאי שימוש הוא יכולת, לא מגבלה | כלום</bent-trow>
-      <bent-trow>קופיילוט BYOK | המפתח שלכם: קופיילוט שרואה את הדפים שלכם ועורך אותם — עם רצועה קשיחה | המפתח שלכם, התעריף שלכם — בלי עמלת מתווך</bent-trow>
+      <bent-trow>קופיילוט BYOK | המפתח שלכם: קופיילוט שרואה את הדפים שלכם ועורך אותם — עם חגורת בטיחות קשיחה | המפתח שלכם, התעריף שלכם — בלי עמלת מתווך</bent-trow>
       <bent-trow>מודל מקומי | LM Studio / Ollama על המחשב שלכם — השרת מקבל כתובות loopback בלבד; שום דבר לא עוזב את המכונה | כלום, ולגמרי אופליין</bent-trow>
     </bent-table>
     <bent-heading id="copilot" level="2">הקופיילוט בתוך הבונה</bent-heading>
     <bent-text id="copilot-show">
       @B{מראים:} מגירת צ'אט שיודעת איזה דף פתוח ואיזה מודול מסומן — "הוסף טקסט לפריט המסומן" מתכוון בדיוק @B{לבלוק הזה}. כפתור 🧠 אחד בונה פרומפט שלם (משחק + מילון + הדף הנוכחי + הבקשה שלכם) ומעתיק ללוח — לכל צ'אט חיצוני, בלי מפתח.
     </bent-text>
-    <bent-heading id="leash" level="2">הרצועה</bent-heading>
+    <bent-heading id="leash" level="2">חגורת הבטיחות</bent-heading>
     <bent-features id="leash-rules" columns="3">
       <bent-feature icon="✋" title="עוצר לאישור">לפני כל כתיבה — תמיד</bent-feature>
       <bent-feature icon="📝" title="הכול נוחת כטיוטה">אין פרסום אוטומטי, לעולם</bent-feature>
       <bent-feature icon="🔒" title="גבולות קשיחים">לא מוחק, לא מפרסם, לא נוגע בהגדרות</bent-feature>
     </bent-features>
-    <bent-card id="leash-tell">
+    <bent-card id="leash-tell" style-background="var(--color-light-bg)" style-radius="lg" style-padding="md">
       <bent-text>@B{מספרים:} ‏builder.io מודד "קרדיטים של סוכן" — ככל שזה עובד טוב יותר, אתם משלמים יותר. תוספי AI ל-WordPress רוצים כל אחד מפתח בתשלום משלו. עקומת עלות ה-AI בתפוזיאל @B{שטוחה על אפס} אם כך תבחרו — וסוכנים הם משתמשים מהשורה הראשונה: בלוקים כ-JSON מובנה, CLI מלא, API סוכנים מתועד וסכמות מפורסמות — כל LLM יכול להפעיל את המערכת כולה. AI מסייע, אדם מפרסם.</bent-text>
     </bent-card>
     <bent-banner id="ai-proof" tone="brand" align="center">האתר הזה נבנה בדיוק כך: סוכן AI כתב את הדפים כ-pzn ופרסם אותם דרך צינור הסוכנים המתועד.</bent-banner>

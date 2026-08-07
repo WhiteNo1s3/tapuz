@@ -7,12 +7,12 @@
     <meta name="bent-teaser" content="הטופס הזה הוא הדגמה חיה: השליחה נוחתת בתיבת הפניות של ה-CRM המובנה והופכת לליד עם משפך ומשימות." />
   </head>
   <body>
-    <bent-hero id="hero-contact" height="sm">
+    <bent-hero id="hero-contact" height="sm" image="/demo/tile-8.svg" overlay="55" parallax="true">
       <bent-heading level="1">דברו איתנו</bent-heading>
       <bent-text>רוצים הדגמה חיה, שאלה על המוצר, או סתם להגיד שלום בעברית? נשמח לשמוע.</bent-text>
     </bent-hero>
     <bent-banner id="contact-demo-note" tone="brand" align="center">הטופס הזה הוא הדגמה חיה: השליחה נוחתת בתיבת הפניות של ה-CRM המובנה, יורה התראת מייל, והופכת לליד עם משפך, משימות ותחזית — בדיוק כמו שקראתם.</bent-banner>
-    <bent-form id="contact-form" method="post" submit="שליחה">
+    <bent-form id="contact-form" method="post" submit="שליחה" style-background="var(--color-light-bg)" style-padding="lg" style-radius="lg">
       <bent-field label="שם מלא" name="fullname" type="text" required="true" placeholder="" />
       <bent-field label="אימייל" name="email" type="email" required="true" placeholder="" />
       <bent-field label="טלפון" name="phone" type="tel" required="false" placeholder="050-… או +972-50-…" />

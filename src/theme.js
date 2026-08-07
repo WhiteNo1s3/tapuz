@@ -191,20 +191,12 @@ function overridesToCss(overrides) {
   if (cssValue(o.fonts.headingFamily)) {
     css += `h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }\n`;
   }
-  if (o.layout.menuPlacement === 'side') {
-    css += `
-body.menu-side .site-header .header-inner {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-body.menu-side .main-nav ul {
-  flex-direction: column;
-  gap: 0.5rem;
-  align-items: flex-start;
-}
-`;
-  }
+  // menuPlacement:side no longer emits layout CSS from here — the REAL sidebar
+  // layout lives in the theme (themes/default/css/main.css, body.menu-side).
+  // The renderer stamps the body class; the theme owns the geometry. The old
+  // inline block just stacked the top header and pushed the page down, and —
+  // being injected AFTER the theme stylesheet — would also override the
+  // theme's narrow-screen fallback.
   return css;
 }
 

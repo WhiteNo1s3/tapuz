@@ -676,7 +676,9 @@ button:focus-visible,
   margin: 0.75rem 0;
 }
 .site-banner p { margin: 0; font-weight: 600; }
-.site-banner.tone-brand { background: #dbeafe; color: #1e3a8a; }
+/* "brand" tone follows the THEME's brand (accent surface + white), not a
+   hardcoded palette — a citrus site was getting a blue announcement strip */
+.site-banner.tone-brand { background: var(--accent-bg, #1d4ed8); color: #fff; }
 .site-banner.tone-dark { background: #0f172a; color: #f8fafc; }
 .site-banner.tone-light { background: #f1f5f9; color: #334155; }
 .site-banner.tone-warn { background: #fef3c7; color: #92400e; }
@@ -1272,3 +1274,102 @@ a.bent-newspop-text:hover { text-decoration: underline; }
 /* per-device visibility (v2.12) — builder "עיצוב מודול" chrome */
 @media (max-width: 767px) { .hide-on-mobile { display: none !important; } }
 @media (min-width: 768px) { .hide-on-desktop { display: none !important; } }
+
+/* ===== Side menu (menuPlacement: side) — a REAL sidebar (v2.13) =====
+   body.menu-side is stamped by the renderer when the theme picks the vertical
+   menu. It used to just stack the top header's flex column — the menu pushed
+   the whole page down. Now: a two-column grid; the entire header becomes a
+   sticky, full-height sidebar on the inline-start side (right in RTL, left in
+   LTR), content + footer flow in the second column. Narrow screens fall back
+   to the regular top bar with a wrapping horizontal menu — CSS only, published
+   pages still ship zero JavaScript. */
+body.menu-side {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  min-height: 100vh;
+}
+body.menu-side .site-header {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  border-bottom: none;
+  border-inline-end: 1px solid var(--color-border);
+  padding: 1.5rem 0;
+}
+body.menu-side .main-content {
+  grid-column: 2;
+  grid-row: 1;
+  /* no explicit width: the minmax(0,1fr) column sizes it; width:100% would
+     add the padding on top of the column width (content-box) and overflow */
+}
+body.menu-side .site-footer {
+  grid-column: 2;
+  grid-row: 2;
+}
+/* stray static body children (site extras) belong to the content column;
+   fixed/absolute ones (floats, banners, skip-link) are out of flow anyway */
+body.menu-side > :not(.site-header):not(.main-content):not(.site-footer) {
+  grid-column: 2;
+}
+body.menu-side .site-header .header-inner {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1.4rem;
+  max-width: none;
+  margin: 0;
+}
+body.menu-side .header-brand {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+body.menu-side .main-nav ul {
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: stretch;
+}
+body.menu-side .main-nav a {
+  display: block;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--radius-md, 10px);
+}
+body.menu-side .main-nav a:hover {
+  background: var(--color-light-bg);
+  color: var(--color-primary);
+}
+@media (max-width: 900px) {
+  /* narrow screens: back to the familiar top bar, menu wraps horizontally */
+  body.menu-side { display: block; }
+  body.menu-side .site-header {
+    height: auto;
+    overflow: visible;
+    border-inline-end: none;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.9rem 0;
+  }
+  body.menu-side .site-header .header-inner {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    max-width: var(--max-width);
+    margin: 0 auto;
+  }
+  body.menu-side .header-brand {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  body.menu-side .main-nav ul {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 1rem;
+  }
+  body.menu-side .main-nav a { padding: 0.25rem 0.4rem; }
+}

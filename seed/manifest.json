@@ -1,5 +1,5 @@
 {
-  "id": "show-and-tell-v1",
+  "id": "show-and-tell-v1.3",
   "description": "תפוזיאל — מראים ומספרים: אתר ההצגה השיווקי, בנוי כולו ממודולים של תפוזיאל מתוך מסמך ה-Show and Tell",
   "pages": [
     { "file": "pages/home.pzn", "replace": true },
@@ -26,9 +26,9 @@
   "theme": {
     "colors": {
       "primary": "#ea580c",
-      "secondary": "#f59e0b",
+      "secondary": "#c2410c",
       "text": "#1c1917",
-      "muted": "#78716c",
+      "muted": "#57534e",
       "border": "#ece5df",
       "bg": "#fffbf7",
       "lightBg": "#fdf1e6",

@@ -2,35 +2,35 @@
 <html lang="he" dir="rtl" bent-version="0.1">
   <head>
     <meta charset="utf-8" />
-    <title>מערכה שנייה — שכבת השפה (החפיר)</title>
+    <title>מערכה שנייה — שכבת השפה</title>
     <meta name="bent-slug" content="השפה" />
     <meta name="bent-teaser" content="BenTML — הקנבס והקוד הם דף אחד; תקן pzn פתוח — ה-RPM שלנו; וייבוא מ-WordPress בפקודה אחת." />
   </head>
   <body>
-    <bent-hero id="hero-act2" height="md">
-      <bent-heading level="1">מערכה שנייה — שכבת השפה (החפיר)</bent-heading>
-      <bent-text>שפת דפים שבני אדם ומכונות כותבים יחד, תקן ייצוא שמפורסם בגאווה, ודלת כניסה רחבה מ-WordPress. הדרך פנימה פתוחה — והדרך החוצה מתועדת.</bent-text>
+    <bent-hero id="hero-act2" height="md" image="/demo/tile-3.svg" overlay="55" parallax="true">
+      <bent-heading level="1">מערכה שנייה — שכבת השפה</bent-heading>
+      <bent-text>שפת דפים שבני אדם ומכונות כותבים יחד, תקן ייצוא פתוח, וייבוא בפקודה אחת. זה היתרון שהכי קשה להעתיק: הדרך פנימה פתוחה — והדרך החוצה מתועדת.</bent-text>
     </bent-hero>
     <bent-heading id="bentml" level="2">BenTML — הקנבס והקוד הם דף אחד</bent-heading>
     <bent-text id="bentml-show">
       @B{מראים:} בונים ויזואלית וצופים ב-BenTML חי שמצטבר מתחת לקנבס. מקלידים במקור — והקנבס מתקמפל תוך כדי הקלדה, @B{אטומית}: שגיאה לא נוגעת בכלום, מדליקה את השורה המדויקת, ומדפיסה את התיקון המילולי.
     </bent-text>
-    <bent-card id="bentml-tell">
-      <bent-text>@B{מספרים:} שפת דפים עם @B{דרך אחת לכל מבנה}, שתוכננה כך שגם LLM בתוכנית חינמית כותב אותה נכון בניסיון הראשון. כל השפה נכנסת בצ'יטשיט של מסך אחד. שגיאות מתקנות את עצמן — צינור תיקון סלחני שממפה כמעט-פגיעות במקום להיכשל. אף CMS אחר לא חושף מקור דף חי, דו-כיווני, שבני אדם ומכונות כותבים יחד.</bent-text>
+    <bent-card id="bentml-tell" style-background="var(--color-light-bg)" style-radius="lg" style-padding="md">
+      <bent-text>@B{מספרים:} שפת דפים עם @B{דרך אחת לכל מבנה}, שתוכננה כך שגם LLM בתוכנית חינמית כותב אותה נכון בניסיון הראשון. כל השפה נכנסת בצ'יטשיט של מסך אחד. שגיאות מתקנות את עצמן — מנגנון תיקון סלחני שמבין למה התכוונתם ומתקן, במקום להיכשל. אף CMS אחר לא חושף מקור דף חי, דו-כיווני, שבני אדם ומכונות כותבים יחד.</bent-text>
     </bent-card>
     <bent-banner id="bentml-proof" tone="brand" align="center">ההוכחה החיה: את הדף הזה כתב סוכן AI ב-BenTML, והוא פורסם דרך אותו צינור בדיוק.</bent-banner>
     <bent-heading id="pzn" level="2">pzn — "ה-RPM שלנו"</bent-heading>
     <bent-text id="pzn-show">
-      @B{מראים:} מייצאים דף, ערכת נושא, אתר שלם — או את מסד הנתונים כולו — כחבילת @B{pzn} ניידת. הפורמט הוא תקן מפורסם וקריא-מכונה (@CODE{docs/pzn-spec.md} + @CODE{docs/pzn-schema.json}, מוגש חי ב-@LINK(url: "/pzn-schema.json"){pzn-schema.json}), מתחדש אוטומטית מרישום המודולים ומוגן-סחיפה ב-CI — כך שהתקן לעולם לא ישקר בשקט למי שמממש אותו.
+      @B{מראים:} מייצאים דף, ערכת נושא, אתר שלם — או את מסד הנתונים כולו — כחבילת @B{pzn} ניידת. הפורמט הוא תקן מפורסם וקריא-מכונה (@CODE{docs/pzn-spec.md} + @CODE{docs/pzn-schema.json}, מוגש חי ב-@LINK(url: "/pzn-schema.json"){pzn-schema.json}), מתחדש אוטומטית מרישום המודולים ומעוגן בבדיקות אוטומטיות — כך שהתקן לעולם לא ישקר בשקט למי שמממש אותו.
     </bent-text>
-    <bent-card id="pzn-tell">
+    <bent-card id="pzn-tell" style-background="var(--color-light-bg)" style-radius="lg" style-padding="md">
       <bent-text>@B{מספרים:} הסימן של רד האט היה RPM; שלנו הוא pzn. כל אחד יכול לממש קורא/כותב. השוו: ייצוא ה-WXR המאבד של WordPress, או בוני אתרים @B{בלי ייצוא בכלל}. עוזבים מתי שרוצים, לוקחים הכול — הנעילה היא אפס מעצם הבנייה, וזו יכולת שאנחנו מפרסמים, לא סיכון שאנחנו מסתירים.</bent-text>
     </bent-card>
-    <bent-heading id="import" level="2">ייבוא כאזרח מהשורה הראשונה</bent-heading>
+    <bent-heading id="import" level="2">ייבוא כחלק מהמוצר, לא כתוסף</bent-heading>
     <bent-text id="import-show">
-      @B{מראים:} ‏@CODE{./bin/tapuz.js import-wp export.xml} — ייבוא WordPress ו-Elementor מזין את אותו צינור. דקומפיילר HTML←BenTML גורס סימון קיים למודולים אמיתיים, והופך תמונות מרוחקות ל-webp שלכם באחסון עצמי.
+      @B{מראים:} ‏@CODE{./bin/tapuz.js import-wp export.xml} — ייבוא WordPress ו-Elementor מזין את אותו צינור. ממיר HTML←BenTML מפרק דפים קיימים למודולים אמיתיים, והופך תמונות מרוחקות ל-webp שלכם באחסון עצמי.
     </bent-text>
-    <bent-card id="import-tell">
+    <bent-card id="import-tell" style-background="var(--color-light-bg)" style-radius="lg" style-padding="md">
       <bent-text>@B{מספרים:} לעבור @B{אל} תפוזיאל זו פקודה אחת; לעבור @B{ממנה} זה תקן מתועד. שני הכיוונים פתוחים — אף CMS/CRM אחר לא מעז להגיד את זה.</bent-text>
     </bent-card>
     <bent-cta id="next-act" title="ההמשך: AI בלי מונה" buttontext="למערכה השלישית" url="/הבינה.html" tone="brand" align="center">המוח הוא מינוי ה-AI שלכם — לא הטוקנים שלנו.</bent-cta>

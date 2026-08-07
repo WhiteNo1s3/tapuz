@@ -8,7 +8,7 @@
   </head>
   <body>
     <bent-banner id="ver-banner" tone="brand" align="center">גרסה נוכחית v2.12-alpha · קוד פתוח MIT · שרת Node אחד · עברית קודם</bent-banner>
-    <bent-hero id="hero-main" height="lg">
+    <bent-hero id="hero-main" height="lg" image="/demo/tile-1.svg" overlay="55" parallax="true">
       <bent-heading level="1">🍊 תפוזיאל — מראים ומספרים</bent-heading>
       <bent-text>כל יכולת, כל יתרון — זה לצד זה מול המערכות שתפוזיאל מחליפה. האתר הזה הוא ההצגה המלאה: מה מדגימים על המסך, ולמה זה מנצח את הכלי שהוא מחליף.</bent-text>
       <bent-button href="#story">מה יש בפנים</bent-button>
@@ -20,7 +20,7 @@
 
       רוב העסקים מרכיבים את זה מארבעה-חמישה מינויים. תפוזיאל היא @CODE{node src/server.js} אחד.
     </bent-text>
-    <bent-stats id="stats-top" columns="4">
+    <bent-stats id="stats-top" columns="4" style-background="var(--color-light-bg)" style-padding="lg" style-radius="lg">
       <bent-stat label="מודולי תוכן" value="56" />
       <bent-stat label="תלויות ריצה" value="5" />
       <bent-stat label="בדיקות ב-CI" value="2,700+" />
@@ -30,9 +30,9 @@
     <bent-table id="replace-table" header="true">
       <bent-trow>מה משלמים / מרכיבים היום | התשובה של תפוזיאל</bent-trow>
       <bent-trow>WordPress + Elementor Pro + תוסף טפסים + תוסף גיבוי | הבונה, הטפסים, הגרסאות והגיבויים — מובנים</bent-trow>
-      <bent-trow>Wix / Squarespace / בוני אתרים בשכירות בסגנון קמיליו | אותה קלות — אבל השרת, המידע והייצוא שלכם</bent-trow>
+      <bent-trow>Wix / Squarespace / בוני אתרים בשכירות | אותה קלות — אבל השרת, המידע והייצוא שלכם</bent-trow>
       <bent-trow>builder.io — תמחור למשתמש + קרדיטים של AI במונה | יצירה עם AI בלי מונה — הצ'אט שלכם, המפתח שלכם, או מודל מקומי</bent-trow>
-      <bent-trow>HubSpot / Zoho — CRM לפי משתמש ולפי איש קשר | משפך, משימות, קנבן, קמפיינים, רצפים — WhatsApp בלי מחיר למושב</bent-trow>
+      <bent-trow>HubSpot / Zoho — CRM לפי משתמש ולפי איש קשר | משפך, משימות, קנבן, קמפיינים, רצפים — WhatsApp בלי תשלום פר-משתמש</bent-trow>
       <bent-trow>Google Analytics + ספק באנר עוגיות | אנליטיקס פרטי מהצד שלכם + באנר הסכמה אמיתי, כלולים</bent-trow>
     </bent-table>
     <bent-heading id="demo" level="2">תסריט ההדגמה של שתי דקות</bent-heading>
@@ -51,17 +51,17 @@
     </bent-list>
     <bent-heading id="acts" level="2">חמש מערכות, סיפור אחד</bent-heading>
     <bent-cards id="acts-cards">
-      <bent-mediacard href="/הבונה.html" image="/demo/tile-1.svg" tag="מערכה ראשונה" title="מכלום לאתר חי" excerpt="האשף המודרך, הבונה הוויזואלי, 56 מודולים, דפים בלי JavaScript, טיוטה ≠ פרסום, ועברית מהשורה הראשונה." />
-      <bent-mediacard href="/השפה.html" image="/demo/tile-2.svg" tag="מערכה שנייה" title="שכבת השפה (החפיר)" excerpt="BenTML — הקנבס והקוד הם דף אחד; תקן pzn פתוח — ה-RPM שלנו; וייבוא מ-WordPress בפקודה אחת." />
-      <bent-mediacard href="/הבינה.html" image="/demo/tile-3.svg" tag="מערכה שלישית" title="AI בלי מונה" excerpt="המוח הוא מינוי ה-AI שלכם: הדבקה חינמית, תוסף כרום, קופיילוט במפתח שלכם או מודל מקומי — עם רצועה קשיחה." />
-      <bent-mediacard href="/הלקוחות.html" image="/demo/tile-4.svg" tag="מערכה רביעית" title="ה-CRM שגר בתוך ה-CMS" excerpt="קליטה ← משפך ← סגירה, זהות שנעשתה נכון, קמפיינים ורצפים, WhatsApp Business, פיקסלים והסכמה, ופורטל לקוחות." />
-      <bent-mediacard href="/היסודות.html" image="/demo/tile-5.svg" tag="מערכה חמישית" title="היסודות" excerpt="אבטחה מתועדת בכנות, מסד נתונים שאפשר להחזיק ביד, אנליטיקס עצמאי, ורף הנדסה של 2,700+ בדיקות." />
-      <bent-mediacard href="/השוואות.html" image="/demo/tile-6.svg" tag="לוחות התוצאות" title="ההשוואות המלאות" excerpt="מול WordPress, מול בוני האתרים, מול builder.io ומול CRM בענן — כולל הטור הכן של מה שעוד אין." />
+      <bent-mediacard href="/הבונה.html" image="/demo/tile-2.svg" tag="מערכה ראשונה" title="מכלום לאתר חי" excerpt="האשף המודרך, הבונה הוויזואלי, 56 מודולים, דפים בלי JavaScript, טיוטה ≠ פרסום, ועברית מהשורה הראשונה." />
+      <bent-mediacard href="/השפה.html" image="/demo/tile-3.svg" tag="מערכה שנייה" title="שכבת השפה" excerpt="BenTML — הקנבס והקוד הם דף אחד; תקן pzn פתוח — ה-RPM שלנו; וייבוא מ-WordPress בפקודה אחת." />
+      <bent-mediacard href="/הבינה.html" image="/demo/tile-4.svg" tag="מערכה שלישית" title="AI בלי מונה" excerpt="המוח הוא מינוי ה-AI שלכם: הדבקה חינמית, תוסף כרום, קופיילוט במפתח שלכם או מודל מקומי — עם חגורת בטיחות קשיחה." />
+      <bent-mediacard href="/הלקוחות.html" image="/demo/tile-5.svg" tag="מערכה רביעית" title="ה-CRM שגר בתוך ה-CMS" excerpt="קליטה ← משפך ← סגירה, זהות שנעשתה נכון, קמפיינים ורצפים, WhatsApp Business, פיקסלים והסכמה, ופורטל לקוחות." />
+      <bent-mediacard href="/היסודות.html" image="/demo/tile-6.svg" tag="מערכה חמישית" title="היסודות" excerpt="אבטחה בשקיפות מלאה, מסד נתונים שאפשר להחזיק ביד, אנליטיקס עצמאי, ורף הנדסה של 2,700+ בדיקות." />
+      <bent-mediacard href="/השוואות.html" image="/demo/tile-7.svg" tag="לוחות התוצאות" title="ההשוואות המלאות" excerpt="מול WordPress, מול בוני האתרים, מול builder.io ומול CRM בענן — כולל הטור הכן של מה שעוד אין." />
     </bent-cards>
-    <bent-quote id="one-sentence" author="המשפט האחד">
+    <bent-quote id="one-sentence" author="המשפט האחד" style-background="var(--color-light-bg)" style-padding="lg" style-radius="lg">
       בוני אתרים משכירים לכם אתר; WordPress מוכר לכם פרויקט הרכבה; builder.io מוכר פיתוח AI לצוותים שכבר יש להם קוד; ו-CRM בענן מודד לכם בחזרה את רשימת הלקוחות של עצמכם. תפוזיאל נותנת את הדבר כולו — אתר, בונה, CRM, AI — מלווה בעברית, מתומחרת כתוכנה שבבעלותכם, וניתנת לייצוא לתקן שכל אחד יכול לממש.
     </bent-quote>
-    <bent-ticker id="ticker-facts" label="מבזק" speed="md">
+    <bent-ticker id="ticker-facts" label="מבזק" speed="md" background="#9a3412" color="#ffffff">
       <bent-tickeritem href="/הבונה.html" text="56 מודולי תוכן, אפס תוספים לקנות" />
       <bent-tickeritem href="/השפה.html" text="ייצוא מלא בתקן pzn פתוח — הנעילה היא אפס מעצם הבנייה" />
       <bent-tickeritem href="/הבינה.html" text="שכבת AI בלי מפתח: 0, לתמיד" />
