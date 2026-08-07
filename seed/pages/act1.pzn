@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>מערכה ראשונה — מכלום לאתר חי</title>
+    <meta name="bent-slug" content="הבונה" />
+    <meta name="bent-teaser" content="האשף המודרך, בונה הדפים הוויזואלי, 56 מודולי התוכן, דפים מפורסמים בלי JavaScript — ועברית מהשורה הראשונה." />
+  </head>
+  <body>
+    <bent-hero id="hero-act1" height="md">
+      <bent-heading level="1">מערכה ראשונה — מכלום לאתר חי</bent-heading>
+      <bent-text>האשף, הבונה, ארגז הכלים, והדפים שנטענים בלי JavaScript. כל סעיף בדף הזה הוא "מראים" (מה מדגימים על המסך) ו"מספרים" (למה זה מנצח את הכלי שהוא מחליף).</bent-text>
+    </bent-hero>
+    <bent-heading id="wizard" level="2">אשף ההתקנה המודרך</bent-heading>
+    <bent-text id="wizard-show">
+      @B{מראים:} ההפעלה הראשונה נוחתת באשף של ארבעה צעדים (שם ← צבעים ← דפים ← תפריט). הצבעים נבחרים בתוך יוצר ערכת הנושא האמיתי — האשף מלמד את הכלי תוך כדי שימוש. וניתן להריץ אותו שוב, בכוונה (@CODE{?again=1}) — הוא נפתח מחדש, ולעולם לא דורס.
+    </bent-text>
+    <bent-card id="wizard-tell">
+      <bent-text>@B{מספרים:} "התקנת חמש הדקות" של WordPress מסתיימת באדמין ריק וברשימת קניות של תוספים. האשף של תפוזיאל מסתיים ב@B{אתר גמור, מעוצב, עם תפריט} — ובדרך הוא לימד אתכם את יוצר ערכת הנושא.</bent-text>
+    </bent-card>
+    <bent-heading id="builder" level="2">בונה הדפים הוויזואלי</bent-heading>
+    <bent-text id="builder-show">
+      @B{מראים:} מודולים בתוך מיכלים, גרירה, פיצול לטורים, שינוי יחסי טורים, פאנל מאפיינים בצד, עריכת טקסט במקום עם כלי Word, וביטול פעולה. סיור מודרך של חמישה צעדים רץ על הממשק האמיתי בכניסה הראשונה (וזמין תמיד מכפתור 🧭) — מלמד את @B{הפעולה}, לא את התווית. שחרור לפי כוונה: חלק עליון/תחתון של בלוק = לפני/אחרי, מרכז של מיכל = פנימה, קצוות = פיצול לטורים — עם סימון חי של נקודת הנחיתה.
+    </bent-text>
+    <bent-card id="builder-tell">
+      <bent-text>@B{מספרים:} זו עריכה ברמת Elementor בלי התוסף בתשלום, וארגונומיה ברמת builder.io בלי צוות פיתוח. לוח התוספות של הבונה כבר מסומן כולו:</bent-text>
+    </bent-card>
+    <bent-features id="builder-extras" columns="4">
+      <bent-feature icon="⌨️" title="לוח פקודות Ctrl+K">בכל מסך, בעברית או באנגלית</bent-feature>
+      <bent-feature icon="🥞" title="פאנל שכבות">עץ הדף כולו, בגרירה</bent-feature>
+      <bent-feature icon="📱" title="תצוגת מכשירים">רספונסיבית, בתוך העורך</bent-feature>
+      <bent-feature icon="👁️" title="נראות לפי מכשיר">כל מודול יכול להסתתר בנייד או בדסקטופ</bent-feature>
+      <bent-feature icon="💠" title="סימבולים">בלוקים שמורים לשימוש חוזר</bent-feature>
+      <bent-feature icon="⚡" title="קיצורי מקלדת">מערך ברמת מערכת הפעלה</bent-feature>
+      <bent-feature icon="🖼️" title="גלריית תבניות פתיחה">דף נחיתה, מאמר, צור קשר או ריק</bent-feature>
+      <bent-feature icon="🎯" title="גרירה לפי כוונה">כל שטח המודול קולט שחרור</bent-feature>
+    </bent-features>
+    <bent-heading id="modules" level="2">56 מודולי תוכן — אוצר המילים</bent-heading>
+    <bent-text id="modules-show">
+      @B{מראים:} ארגז הכלים. כל מודול מרונדר חי בעורך ומצהיר על האפשרויות של עצמו, כך שהפאנל הצדדי אחיד ומונחה-סכמה.
+    </bent-text>
+    <bent-table id="modules-table" header="true">
+      <bent-trow>קבוצה | מודולים</bent-trow>
+      <bent-trow>טקסט ויסודות | heading, text, quote, list, item, button, spacer, divider</bent-trow>
+      <bent-trow>מדיה | image, gallery, video, audio, embed, mediacard</bent-trow>
+      <bent-trow>פריסה | section, columns, col, card, cards, banner, parallax</bent-trow>
+      <bent-trow>שיווק | hero, cta, feature/features, stat/stats, logo/logos, testimonial, pricing/plan</bent-trow>
+      <bent-trow>אינטראקטיבי (CSS בלבד) | tabs, accordion, carousel, table, ticker, marquee, newspop</bent-trow>
+      <bent-trow>אתר ותוכן | nav, article-list, category, map, contact-info, faq/qa</bent-trow>
+      <bent-trow>קליטה ופתח מילוט | form + field, html (דלת ה-HTML הגולמי היחידה, המבוקרת)</bent-trow>
+    </bent-table>
+    <bent-card id="modules-tell">
+      <bent-text>@B{מספרים:} הפלטה מכסה את מה שאתר של עסק קטן באמת צריך — בלי ציד תוספים, בלי מפתחות רישוי. והדף שאתם קוראים עכשיו? בנוי כולו מהמודולים האלה.</bent-text>
+    </bent-card>
+    <bent-heading id="no-js" level="2">דפים מפורסמים בלי JavaScript</bent-heading>
+    <bent-text id="no-js-show">
+      @B{מראים:} ‏view-source על דף מפורסם. טאבים, אקורדיונים, קרוסלות, טבלאות, מבזקים — הכול CSS בלבד. הסקריפטים היחידים שיכולים להופיע הם אלה שבחרתם בהם (משואת האנליטיקס, חיפוש באתר). הטאבים שלמטה? נסו אותם, ואז פתחו view-source על הדף הזה.
+    </bent-text>
+    <bent-tabs id="no-js-tabs">
+      <bent-tab label="הטאב הזה">עובד בלי שורת JavaScript אחת. כל האינטראקציה כאן היא CSS טהור.</bent-tab>
+      <bent-tab label="גם הזה">דף שלא מריץ סקריפטים נטען מהר, לא יכול להישבר, ולא חושף משטח תקיפה.</bent-tab>
+      <bent-tab label="וגם זה">WordPress שולח מרק JS של תוספים; בוני אתרים שולחים את כל סביבת הריצה שלהם לכל מבקר.</bent-tab>
+    </bent-tabs>
+    <bent-card id="no-js-tell">
+      <bent-text>@B{מספרים:} הדפים נטענים מהר, לא יכולים להישבר, ולא חושפים @B{שום משטח תקיפה בזמן ריצה}.</bent-text>
+    </bent-card>
+    <bent-heading id="publish" level="2">טיוטה ≠ פרסום, גרסאות, מושג פרסום אחד</bent-heading>
+    <bent-text id="publish-show">
+      @B{מראים:} "שמור" שומר טיוטה; "פרסם" מעתיק טיוטה ← מפורסם; הבנייה מרנדרת מפורסם בלבד. כל שמירה משאירה גרסה שאפשר לשחזר.
+    </bent-text>
+    <bent-card id="publish-tell">
+      <bent-text>@B{מספרים:} מושג פרסום אחד — בלי בלבול "עדכון מול שמירה מול סנכרון", ובלי תוסף גיבוי לקנות. מחיקה / שינוי שם / ביטול פרסום מגיעים גם לייצוא הסטטי: דפי רפאים נגזמים, לא ננטשים.</bent-text>
+    </bent-card>
+    <bent-heading id="media" level="2">ספריית מדיה, יוצר ערכת נושא, מאמרים</bent-heading>
+    <bent-text id="media-show">
+      @B{מראים:} ספריית מדיה בסגנון סייר Windows (תיקיות, פירורי לחם, קליק ימני). יוצר ערכת נושא עם תצוגה חיה — צבעים, גופנים, לוגו, מיקום תפריט. סמנו דף כמאמר והוא מופיע אוטומטית בקוביות (תמונה + כותרת + תקציר — אוטומטי או ידני).
+    </bent-text>
+    <bent-card id="media-tell">
+      <bent-text>@B{מספרים:} ערכות הנושא הן מראה @B{שבבעלותכם}, ניתנות לייצוא כחבילות — לא שכירות ממרקטפלייס. מערכת המאמרים היא מנוע בלוג באפס הגדרות.</bent-text>
+    </bent-card>
+    <bent-heading id="seo" level="2">SEO, חיפוש, רב-לשוניות</bent-heading>
+    <bent-text id="seo-show">
+      @B{מראים:} שדות SEO לכל דף (תיאור, og:image, robots, תגיות canonical ו-JSON-LD), מפת אתר — במאפייני הדף, לא בתוסף. חיפוש באתר עובד @B{גם על ייצוא סטטי לגמרי} (אינדקס בזמן בנייה + ווידג'ט זעיר בצד הלקוח). קשרו שני דפים כתרגומים — hreflang אוטומטי ומחליף שפה בלי JS.
+    </bent-text>
+    <bent-card id="seo-tell">
+      <bent-text>@B{מספרים:} ‏Yoast + WPML + תוסף חיפוש זה שלושה רישיונות ושלושה מסכי הגדרות ב-WordPress. כאן זה שלוש תיבות סימון.</bent-text>
+    </bent-card>
+    <bent-heading id="rtl" level="2">עברית ו-RTL, אזרחים מהשורה הראשונה</bent-heading>
+    <bent-text id="rtl-show">
+      @B{מראים:} האדמין בעברית. הכתובות (slugs) בעברית — הסתכלו על שורת הכתובת של הדף הזה. הרנדרר בנוי RTL-תחילה עם CSS לוגי לכל האורך. ‏@CODE{+972-50-…} ו-@CODE{050-…} הם אותו לקוח.
+    </bent-text>
+    <bent-card id="rtl-tell">
+      <bent-text>@B{מספרים:} כל מתחרה מתייחס ל-RTL כאל מחשבה שנייה או קובץ לוקליזציה. תפוזיאל נבנתה @B{מתוך העברית} — לעסק הישראלי זה ההבדל בין כלי לכלי מתורגם.</bent-text>
+    </bent-card>
+    <bent-cta id="next-act" title="ההמשך: שכבת השפה — החפיר" buttontext="למערכה השנייה" url="/השפה.html" tone="brand" align="center">BenTML, תקן pzn, וייבוא כאזרח מהשורה הראשונה.</bent-cta>
+  </body>
+</html>

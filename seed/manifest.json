@@ -1,0 +1,58 @@
+{
+  "id": "show-and-tell-v1",
+  "description": "תפוזיאל — מראים ומספרים: אתר ההצגה השיווקי, בנוי כולו ממודולים של תפוזיאל מתוך מסמך ה-Show and Tell",
+  "pages": [
+    { "file": "pages/home.pzn", "replace": true },
+    { "file": "pages/act1.pzn", "replace": true },
+    { "file": "pages/act2.pzn", "replace": true },
+    { "file": "pages/act3.pzn", "replace": true },
+    { "file": "pages/act4.pzn", "replace": true },
+    { "file": "pages/act5.pzn", "replace": true },
+    { "file": "pages/compare.pzn", "replace": true },
+    { "file": "pages/contact.pzn", "replace": true }
+  ],
+  "menus": {
+    "main": [
+      { "label": "🍊 הבית", "url": "/home.html", "type": "page", "target": "home" },
+      { "label": "הבונה", "url": "/הבונה.html", "type": "page", "target": "הבונה" },
+      { "label": "השפה", "url": "/השפה.html", "type": "page", "target": "השפה" },
+      { "label": "AI בלי מונה", "url": "/הבינה.html", "type": "page", "target": "הבינה" },
+      { "label": "ה-CRM", "url": "/הלקוחות.html", "type": "page", "target": "הלקוחות" },
+      { "label": "היסודות", "url": "/היסודות.html", "type": "page", "target": "היסודות" },
+      { "label": "השוואות", "url": "/השוואות.html", "type": "page", "target": "השוואות" },
+      { "label": "📬 צרו קשר", "url": "/צרו-קשר.html", "type": "page", "target": "צרו-קשר" }
+    ]
+  },
+  "theme": {
+    "colors": {
+      "primary": "#ea580c",
+      "secondary": "#f59e0b",
+      "text": "#1c1917",
+      "muted": "#78716c",
+      "border": "#ece5df",
+      "bg": "#fffbf7",
+      "lightBg": "#fdf1e6",
+      "surface": "#ffffff"
+    },
+    "fonts": {
+      "family": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans Hebrew\", sans-serif",
+      "headingFamily": "",
+      "baseSize": "17px"
+    },
+    "style": {
+      "radius": "soft",
+      "shadow": "soft",
+      "accent": "gradient"
+    },
+    "layout": {
+      "maxWidth": "900px",
+      "menuPlacement": "side"
+    }
+  },
+  "site": {
+    "title": "תפוזיאל — מראים ומספרים",
+    "description": "תפוזיאל (התפוז עם הכנפיים) — CMS + CRM שלמים בחבילה אחת, בשרת שלכם: בונה אתרים ויזואלי, מאמרים, אנליטיקס עצמאי, CRM עם קמפיינים ו-WhatsApp Business, וקופיילוט AI בלי מונה. עברית קודם.",
+    "homepage": "home",
+    "footerText": "תפוזיאל · CMS + CRM מאותו יצרן — Shaltiel Industries / WhiteNo1se · קוד פתוח MIT"
+  }
+}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>צרו קשר — תפוזיאל</title>
+    <meta name="bent-slug" content="צרו-קשר" />
+    <meta name="bent-teaser" content="הטופס הזה הוא הדגמה חיה: השליחה נוחתת בתיבת הפניות של ה-CRM המובנה והופכת לליד עם משפך ומשימות." />
+  </head>
+  <body>
+    <bent-hero id="hero-contact" height="sm">
+      <bent-heading level="1">דברו איתנו</bent-heading>
+      <bent-text>רוצים הדגמה חיה, שאלה על המוצר, או סתם להגיד שלום בעברית? נשמח לשמוע.</bent-text>
+    </bent-hero>
+    <bent-banner id="contact-demo-note" tone="brand" align="center">הטופס הזה הוא הדגמה חיה: השליחה נוחתת בתיבת הפניות של ה-CRM המובנה, יורה התראת מייל, והופכת לליד עם משפך, משימות ותחזית — בדיוק כמו שקראתם.</bent-banner>
+    <bent-form id="contact-form" method="post" submit="שליחה">
+      <bent-field label="שם מלא" name="fullname" type="text" required="true" placeholder="" />
+      <bent-field label="אימייל" name="email" type="email" required="true" placeholder="" />
+      <bent-field label="טלפון" name="phone" type="tel" required="false" placeholder="050-… או +972-50-…" />
+      <bent-field label="על מה נדבר?" name="topic" type="select" required="false" options="הדגמה חיה, מעבר מ-WordPress, ה-CRM והקמפיינים, WhatsApp Business, משהו אחר" />
+      <bent-field label="הודעה" name="body" type="textarea" required="false" placeholder="" />
+    </bent-form>
+    <bent-heading id="open-source" level="2">הקוד פתוח</bent-heading>
+    <bent-text id="open-source-text">
+      תפוזיאל משוחררת ברישיון MIT. הקוד, התיעוד, תקן ה-pzn והיומן הציבורי — הכול ב-@LINK(url: "https://github.com/WhiteNo1s3/tapuz"){github.com/WhiteNo1s3/tapuz}. רוצים להריץ את ההדגמה בעצמכם? @CODE{node src/server.js} ואז @CODE{http://localhost:3000/admin}.
+    </bent-text>
+    <bent-banner id="credit-contact" tone="light" align="center">CMS + CRM מאותו יצרן: Shaltiel Industries / WhiteNo1se · עברית קודם, אנגלית אחר כך</bent-banner>
+  </body>
+</html>

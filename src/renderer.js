@@ -244,7 +244,10 @@ function renderBlock(block, direction = 'rtl') {
     case 'list': {
       const items = block.data.items || [];
       const tag = block.data.ordered ? 'ol' : 'ul';
-      return `<${tag} dir="${direction}">${items.map(i => `<li dir="${direction}">${escapeHtml(i.text || i)}</li>`).join('')}</${tag}>`;
+      // ITEM bodies carry inline marks per the cheatsheet ("Marks only inside
+      // TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies") — same contract as
+      // the quote case below; renderInlineMarks escapes everything it emits.
+      return `<${tag} dir="${direction}">${items.map(i => `<li dir="${direction}">${renderInlineMarks(i.text || i)}</li>`).join('')}</${tag}>`;
     }
     case 'quote': {
       const t = renderInlineMarks(block.data.text || '');

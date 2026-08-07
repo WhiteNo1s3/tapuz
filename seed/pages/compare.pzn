@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>לוחות התוצאות — ההשוואות המלאות</title>
+    <meta name="bent-slug" content="השוואות" />
+    <meta name="bent-teaser" content="תפוזיאל מול WordPress, מול Wix, מול builder.io ומול HubSpot — מודל העלות, לוח המספרים, והטור הכן של מה שעוד אין." />
+  </head>
+  <body>
+    <bent-hero id="hero-compare" height="md">
+      <bent-heading level="1">לוחות התוצאות</bent-heading>
+      <bent-text>כל שורה נבדקת מול הכלי שהיא מחליפה — כולל הטור הכן של מה שעוד אין. מפת ההשוואה המלאה נשמרת כנה בכל אצוות גרסאות.</bent-text>
+    </bent-hero>
+    <bent-heading id="vs-wp" level="2">מול WordPress ‏(+Elementor + ערימת התוספים)</bent-heading>
+    <bent-table id="wp-table" header="true">
+      <bent-trow>תחום | תפוזיאל | WordPress</bent-trow>
+      <bent-trow>בונה דפים | מובנה, ברמת Elementor | Elementor Pro — תוסף בתשלום</bent-trow>
+      <bent-trow>טפסים ← CRM | תיבה, משפך, משימות, קמפיינים — מובנים | CF7 + תוסף אחסון + תוסף CRM, ועדיין בלי משפך</bent-trow>
+      <bent-trow>אנליטיקס | עצמאי, פרטי, מובנה | תוספי Jetpack/GA</bent-trow>
+      <bent-trow>גיבויים וגרסאות | מובנים, צילומי מסד יומיים | תוסף</bent-trow>
+      <bent-trow>אבטחה | 5 תלויות, ייצוא סטטי, בלי חשבון ברירת מחדל | סביבת הריצה המותקפת ביותר ברשת</bent-trow>
+      <bent-trow>יצירה עם AI | ‏BYOT בלי מפתח / BYOK / מודל מקומי | מפתחות בתשלום פר-תוסף</bent-trow>
+      <bent-trow>RTL / עברית | מהשורה הראשונה | מחשבה שנייה</bent-trow>
+      <bent-trow>ייצוא | HTML סטטי מלא + תקן pzn פתוח | WXR מאבד</bent-trow>
+    </bent-table>
+    <bent-heading id="vs-wix" level="2">מול Wix / Squarespace / בונים בסגנון קמיליו</bent-heading>
+    <bent-table id="wix-table" header="true">
+      <bent-trow>תחום | תפוזיאל | בונים בשכירות</bent-trow>
+      <bent-trow>בעלות | MIT, השרת שלכם, הקובץ שלכם | הענן שלהם, שכירות חודשית לנצח</bent-trow>
+      <bent-trow>ייצוא | הכול, בתקן מתועד | מעט או כלום — האתר בן ערובה</bent-trow>
+      <bent-trow>משקל הדפים | סטטי, מודולים בלי JS | סביבת ריצה כבדה לכל מבקר</bent-trow>
+      <bent-trow>AI | המינוי שלכם, בלי מונה | AI בגן סגור, המונה שלהם</bent-trow>
+      <bent-trow>עומק ה-CRM | משפך, רצפים, WhatsApp, פורטל | רשימות אנשי קשר בסיסיות</bent-trow>
+      <bent-trow>מחיר בקנה מידה | קבוע: האחסון שלכם | גדל עם דפים, אנשי קשר ויכולות</bent-trow>
+    </bent-table>
+    <bent-heading id="vs-builder" level="2">מול builder.io (המתחרה בשם)</bent-heading>
+    <bent-table id="builder-table" header="true">
+      <bent-trow>תחום | תפוזיאל | builder.io</bent-trow>
+      <bent-trow>מה מקבלים | האתר הרץ המלא — CMS + CRM | פלטפורמה שמתחברת לקוד שהמפתחים שלכם חייבים שכבר יהיה</bent-trow>
+      <bent-trow>מי נוהג | בעל עסק, מלווה על ידי הבונה עצמו | צוותי מוצר/עיצוב/פיתוח עם לולאת Git</bent-trow>
+      <bent-trow>עלות AI | שכבה בלי מפתח = בלי מונה, לעולם | תמחור למשתמש + קרדיטים של סוכן במונה</bent-trow>
+      <bent-trow>הנתונים שלכם | קובץ SQLite | הענן שלהם</bent-trow>
+      <bent-trow>פתיחות | תקן pzn מפורסם | פלטפורמה קניינית</bent-trow>
+    </bent-table>
+    <bent-text id="builder-note">
+      הם מנצחים ב-codegen ברמת Fusion לתוך ריפו קיים, ב-Figma-to-code, ובאספקה headless ארגונית — לקוח אחר. אנחנו הופכים את הקטגוריה שלהם למיותרת עבור העסק הקטן.
+    </bent-text>
+    <bent-heading id="vs-hubspot" level="2">מול CRM בענן ברמת HubSpot</bent-heading>
+    <bent-table id="hubspot-table" header="true">
+      <bent-trow>תחום | תפוזיאל | CRM בענן</bent-trow>
+      <bent-trow>מודל המחיר | אחסון עצמי, בלי מושבים, בלי מדרגות אנשי קשר | מונים פר-משתמש, פר-איש-קשר, פר-יכולת</bent-trow>
+      <bent-trow>אתר ↔ CRM | מערכת אחת, כניסה אחת, לידים זורמים טבעית | CMS + CRM נפרדים + דבק אינטגרציות</bent-trow>
+      <bent-trow>רצפים, משימות, קנבן, תחזית | מובנים | מובנים — מאחורי מדרגות בתשלום</bent-trow>
+      <bent-trow>WhatsApp | מובנה, העלות מוצגת בכסף | מינוי תוסף ממרקטפלייס</bent-trow>
+      <bent-trow>הנתונים שלכם | קובץ SQLite פתוח אחד, ייצוא ומחיקה מלאים | בקשת ייצוא לתמיכה שלהם</bent-trow>
+      <bent-trow>עברית | שפת אם | לוקליזציה, במקרה הטוב</bent-trow>
+    </bent-table>
+    <bent-heading id="cost" level="2">מודל העלות, בפשטות</bent-heading>
+    <bent-table id="cost-table" header="true">
+      <bent-trow>מערכת | מה מגדיל את החשבון</bent-trow>
+      <bent-trow>ערימת WordPress | כל רישיון תוסף, כל שנה</bent-trow>
+      <bent-trow>בסגנון Wix | המינוי, לנצח, פר-אתר</bent-trow>
+      <bent-trow>builder.io | משתמשים</bent-trow>
+      <bent-trow>ברמת HubSpot | משתמשים</bent-trow>
+      <bent-trow>תפוזיאל | קופסת האחסון שלכם. זו כל הרשימה.</bent-trow>
+    </bent-table>
+    <bent-heading id="honest" level="2">מה שאנחנו עוד לא עושים — הטור הכן</bent-heading>
+    <bent-text id="honest-text">
+      "מראים ומספרים" שאפשר לסמוך עליו נוקב גם בפערים. לתפוזיאל היום @B{אין A/B טסטינג} (מעקב המרות קיים; הגשת וריאנטים ברשימת הציד), @B{אין ייבוא Figma}, @B{אין חנות מסחר} (CRM ← חנות הוא שלב מאוחר יותר), ו@B{אין אספקת headless/CDN ארגונית} — בכוונה, בשלב האלפא, כי הלקוח הוא בעל העסק הקטן. מפת ההשוואה המלאה, שנשמרת כנה בכל אצוות גרסאות, חיה ב-@LINK(url: "https://github.com/WhiteNo1s3/tapuz/blob/main/docs/COMPETITIVE.md"){docs/COMPETITIVE.md}.
+    </bent-text>
+    <bent-heading id="numbers" level="2">לוח המספרים</bent-heading>
+    <bent-table id="numbers-table" header="true">
+      <bent-trow>מדד | ערך</bent-trow>
+      <bent-trow>מודולי תוכן | 56</bent-trow>
+      <bent-trow>תלויות ריצה | 5</bent-trow>
+      <bent-trow>חבילות / בדיקות CI | ‏135 חבילות · 2,700+ בדיקות</bent-trow>
+      <bent-trow>מודולי נתיבים (ממונולית של 6,000 שורות) | 30+</bent-trow>
+      <bent-trow>גרסאות ששוחררו | כ-180 (מ-v0.31 עד v2.12, ‏0.01+ לסשן)</bent-trow>
+      <bent-trow>תקנים פתוחים שפורסמו | תקן pzn + סכמה מכונתית, מילון תחביר, מפת נתיבים — כולם מוגני-סחיפה</bent-trow>
+      <bent-trow>מחיר שכבת ה-AI בלי מפתח | ‏0, לתמיד</bent-trow>
+      <bent-trow>רישיון | MIT</bent-trow>
+    </bent-table>
+    <bent-cta id="cta-compare" title="רוצים לראות את זה על העסק שלכם?" buttontext="דברו איתנו" url="/צרו-קשר.html" tone="brand" align="center">נשמח להראות, לספר — ולהשאיר לכם את הקובץ ביד.</bent-cta>
+  </body>
+</html>

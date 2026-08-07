@@ -519,6 +519,10 @@ const server = app.listen(PORT, () => {
   if (!auth.hasAdmin()) {
     console.log(`   ↳ אין עדיין חשבון מנהל — היכנס ל־${base} כדי ליצור אותו.`);
   }
+  // Content seed (v2.13): a deploy archive may carry a one-time content
+  // package (seed/). Applied through the product's own page APIs, once per
+  // package id, and never allowed to block or break boot.
+  try { require('./seed-content').maybeSeed(); } catch (e) { console.error('[seed] failed: ' + e.message); }
   // CRM retention (v1.82, phase 5): enforce the policy on boot, then once a
   // day. `unref()` so this timer can never be the reason the process refuses
   // to exit — a housekeeping job must not outrank a shutdown.

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>תפוזיאל — מראים ומספרים</title>
+    <meta name="bent-slug" content="home" />
+    <meta name="bent-teaser" content="כל יכולת, כל יתרון — זה לצד זה מול המערכות שתפוזיאל מחליפה. CMS + CRM שלמים בחבילה אחת, בשרת שלכם." />
+  </head>
+  <body>
+    <bent-banner id="ver-banner" tone="brand" align="center">גרסה נוכחית v2.12-alpha · קוד פתוח MIT · שרת Node אחד · עברית קודם</bent-banner>
+    <bent-hero id="hero-main" height="lg">
+      <bent-heading level="1">🍊 תפוזיאל — מראים ומספרים</bent-heading>
+      <bent-text>כל יכולת, כל יתרון — זה לצד זה מול המערכות שתפוזיאל מחליפה. האתר הזה הוא ההצגה המלאה: מה מדגימים על המסך, ולמה זה מנצח את הכלי שהוא מחליף.</bent-text>
+      <bent-button href="#story">מה יש בפנים</bent-button>
+    </bent-hero>
+    <bent-marquee id="marquee-top" speed="md">אתר ✦ בונה ויזואלי ✦ CRM ✦ קמפיינים ✦ WhatsApp ✦ אנליטיקס ✦ AI בלי מונה ✦ הכול בעברית ✦ הכול שלכם ✦</bent-marquee>
+    <bent-heading id="story" level="2">מה זו תפוזיאל?</bent-heading>
+    <bent-text id="intro-text" lead="true">
+      תפוזיאל ("התפוז עם הכנפיים") היא @B{CMS + CRM שלמים בחבילה אחת, בשרת שלכם}: בונה אתרים ויזואלי, מערכת מאמרים, אנליטיקס עצמאי, CRM שהופך טפסים למשפך מכירות עם קמפיינים במייל ו-WhatsApp Business, וקופיילוט AI שעובד עם או בלי מפתח API — הכול מאחורי כניסה אחת, על השרת שלכם, בקובץ SQLite אחד.
+
+      רוב העסקים מרכיבים את זה מארבעה-חמישה מינויים. תפוזיאל היא @CODE{node src/server.js} אחד.
+    </bent-text>
+    <bent-stats id="stats-top" columns="4">
+      <bent-stat label="מודולי תוכן" value="56" />
+      <bent-stat label="תלויות ריצה" value="5" />
+      <bent-stat label="בדיקות ב-CI" value="2,700+" />
+      <bent-stat label="מחיר שכבת ה-AI בלי מפתח" value="0" />
+    </bent-stats>
+    <bent-heading id="replace" level="2">מה אתם מרכיבים היום — ומה תפוזיאל עונה</bent-heading>
+    <bent-table id="replace-table" header="true">
+      <bent-trow>מה משלמים / מרכיבים היום | התשובה של תפוזיאל</bent-trow>
+      <bent-trow>WordPress + Elementor Pro + תוסף טפסים + תוסף גיבוי | הבונה, הטפסים, הגרסאות והגיבויים — מובנים</bent-trow>
+      <bent-trow>Wix / Squarespace / בוני אתרים בשכירות בסגנון קמיליו | אותה קלות — אבל השרת, המידע והייצוא שלכם</bent-trow>
+      <bent-trow>builder.io — תמחור למשתמש + קרדיטים של AI במונה | יצירה עם AI בלי מונה — הצ'אט שלכם, המפתח שלכם, או מודל מקומי</bent-trow>
+      <bent-trow>HubSpot / Zoho — CRM לפי משתמש ולפי איש קשר | משפך, משימות, קנבן, קמפיינים, רצפים — WhatsApp בלי מחיר למושב</bent-trow>
+      <bent-trow>Google Analytics + ספק באנר עוגיות | אנליטיקס פרטי מהצד שלכם + באנר הסכמה אמיתי, כלולים</bent-trow>
+    </bent-table>
+    <bent-heading id="demo" level="2">תסריט ההדגמה של שתי דקות</bent-heading>
+    <bent-text id="demo-intro">
+      כל המערכת, בסדר שבו מציגים אותה בשידור חי. רוצים להריץ בעצמכם? @CODE{node src/server.js} ואז @CODE{http://localhost:3000/admin} — אשף ההתקנה כבר יקבל אתכם.
+    </bent-text>
+    <bent-list id="demo-list" ordered="true">
+      <bent-item>@B{הפעלה ראשונה} — אשף ההתקנה נפתח מעצמו. ארבעה צעדים: שם ← צבעים (בתוך יוצר ערכת הנושא האמיתי, שמלמד את הכלי תוך כדי שימוש) ← דפי ברירת מחדל ← תפריט. אף מתחרה לא פותח בהדרכה שמלמדת את הכלים של עצמו.</bent-item>
+      <bent-item>@B{האתר נולד כשהוא יודע להציג את עצמו} — דף הבית החדש הוא סיור צבעוני בארגז הכלים: גלריה, קרוסלה, מבזקים, טקסט נע, מיכלים ותפריט שני. כל קטע הוא מודול אמיתי — ערכו, גררו, מחקו. אתר ההתחלה של WordPress נותן "שלום עולם".</bent-item>
+      <bent-item>@B{גררו מודול} — כל הקנבס קולט שחרור לפי כוונה: חלק עליון/תחתון של בלוק = לפני/אחרי, מרכז של מיכל = פנימה, קצוות = פיצול לטורים — עם סימון חי של נקודת הנחיתה. לחיצה כפולה על טקסט עורכת במקום.</bent-item>
+      <bent-item>@B{תראו את הקוד הרוקד} — כל גרירה משכתבת את מקור ה-BenTML של הדף מתחת לקנבס; הקלדה במקור מקמפלת את הקנבס מחדש. לחצו על בלוק — השורות שלו זוהרות. לחצו על שורה — הבלוק נבחר. Gutenberg מסתיר את ה-JSON שלו; כאן הקוד והקנבס הם דף אחד.</bent-item>
+      <bent-item>@B{פרסמו} — טיוטה ופרסום נפרדים; פרסום פירושו חי. היסטוריית גרסאות שומרת כל שמירה; שחזור בלחיצה אחת.</bent-item>
+      <bent-item>@B{גלשו לאתר, שלחו את טופס יצירת הקשר} — וחזרו לאדמין: הפנייה בתיבת הפניות, והתראת מייל כבר בדרך.</bent-item>
+      <bent-item>@B{עבדו את הליד} — משפך סטטוסים, שווי עסקה, תאריך מעקב, משימות, לוח קנבן, וציר הזמן המלא של האדם. זו הנקודה שבה כל CMS אחר אומר "עכשיו לכו לקנות CRM".</bent-item>
+      <bent-item>@B{פתחו אנליטיקס} — צפיות, מקורות הפניה, מכשירים, המרות טפסים לפי דף. בלי Google, בלי עוגיות, בלי IP גולמי — וכל כרטיס מיוצא ל-CSV.</bent-item>
+    </bent-list>
+    <bent-heading id="acts" level="2">חמש מערכות, סיפור אחד</bent-heading>
+    <bent-cards id="acts-cards">
+      <bent-mediacard href="/הבונה.html" image="/demo/tile-1.svg" tag="מערכה ראשונה" title="מכלום לאתר חי" excerpt="האשף המודרך, הבונה הוויזואלי, 56 מודולים, דפים בלי JavaScript, טיוטה ≠ פרסום, ועברית מהשורה הראשונה." />
+      <bent-mediacard href="/השפה.html" image="/demo/tile-2.svg" tag="מערכה שנייה" title="שכבת השפה (החפיר)" excerpt="BenTML — הקנבס והקוד הם דף אחד; תקן pzn פתוח — ה-RPM שלנו; וייבוא מ-WordPress בפקודה אחת." />
+      <bent-mediacard href="/הבינה.html" image="/demo/tile-3.svg" tag="מערכה שלישית" title="AI בלי מונה" excerpt="המוח הוא מינוי ה-AI שלכם: הדבקה חינמית, תוסף כרום, קופיילוט במפתח שלכם או מודל מקומי — עם רצועה קשיחה." />
+      <bent-mediacard href="/הלקוחות.html" image="/demo/tile-4.svg" tag="מערכה רביעית" title="ה-CRM שגר בתוך ה-CMS" excerpt="קליטה ← משפך ← סגירה, זהות שנעשתה נכון, קמפיינים ורצפים, WhatsApp Business, פיקסלים והסכמה, ופורטל לקוחות." />
+      <bent-mediacard href="/היסודות.html" image="/demo/tile-5.svg" tag="מערכה חמישית" title="היסודות" excerpt="אבטחה מתועדת בכנות, מסד נתונים שאפשר להחזיק ביד, אנליטיקס עצמאי, ורף הנדסה של 2,700+ בדיקות." />
+      <bent-mediacard href="/השוואות.html" image="/demo/tile-6.svg" tag="לוחות התוצאות" title="ההשוואות המלאות" excerpt="מול WordPress, מול בוני האתרים, מול builder.io ומול CRM בענן — כולל הטור הכן של מה שעוד אין." />
+    </bent-cards>
+    <bent-quote id="one-sentence" author="המשפט האחד">
+      בוני אתרים משכירים לכם אתר; WordPress מוכר לכם פרויקט הרכבה; builder.io מוכר פיתוח AI לצוותים שכבר יש להם קוד; ו-CRM בענן מודד לכם בחזרה את רשימת הלקוחות של עצמכם. תפוזיאל נותנת את הדבר כולו — אתר, בונה, CRM, AI — מלווה בעברית, מתומחרת כתוכנה שבבעלותכם, וניתנת לייצוא לתקן שכל אחד יכול לממש.
+    </bent-quote>
+    <bent-ticker id="ticker-facts" label="מבזק" speed="md">
+      <bent-tickeritem href="/הבונה.html" text="56 מודולי תוכן, אפס תוספים לקנות" />
+      <bent-tickeritem href="/השפה.html" text="ייצוא מלא בתקן pzn פתוח — הנעילה היא אפס מעצם הבנייה" />
+      <bent-tickeritem href="/הבינה.html" text="שכבת AI בלי מפתח: 0, לתמיד" />
+      <bent-tickeritem href="/הלקוחות.html" text="WhatsApp Business מובנה — העלות מוצגת בכסף, לא בספירת הודעות" />
+      <bent-tickeritem href="/היסודות.html" text="קובץ SQLite אחד מחזיק את כל העסק — בלי ענן קנייני, בלי כופר" />
+    </bent-ticker>
+    <bent-cta id="cta" title="מוכנים לראות את זה מקרוב?" buttontext="דברו איתנו" url="/צרו-קשר.html" tone="brand" align="center">הקוד פתוח (MIT), ההדגמה רצה על כל מחשב — והטופס באתר הזה נוחת ישר ב-CRM המובנה. נסו אותו.</bent-cta>
+    <bent-banner id="credit-banner" tone="light" align="center">CMS + CRM מאותו יצרן: Shaltiel Industries / WhiteNo1se · עברית קודם, אנגלית אחר כך</bent-banner>
+  </body>
+</html>

@@ -38,6 +38,7 @@ const THEMES_DIR = fs.existsSync(siteThemes) ? siteThemes : path.join(PACKAGE_RO
 module.exports = {
   PACKAGE_ROOT,
   SITE_ROOT,
+  pinnedRoot,
   DB_DIR: path.join(SITE_ROOT, 'db'),
   CONFIG_DIR: path.join(SITE_ROOT, 'config'),
   PUBLIC_DIR: path.join(SITE_ROOT, 'public'),
