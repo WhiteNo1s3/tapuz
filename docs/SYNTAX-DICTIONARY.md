@@ -241,6 +241,7 @@ Shape: `IMAGE(params)`
 | `alt` | `alt` | string |  | "" |
 | `title` | `title` | string |  | "" |
 | `caption` | `caption` | string |  |  |
+| `link` | `link` | url |  | "" |
 | `width` | `width` | enum sm\|md\|lg\|full |  | "full" |
 | `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
