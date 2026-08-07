@@ -23,8 +23,14 @@ const check = (n, c) => { console.log((c ? 'OK  ' : 'FAIL') + ' ' + n); if (!c) 
 // ── provider constants (unchanged authority) ──
 const table = listProviders();
 check('provider table is non-empty', table.length >= 1);
-check('every provider has endpoint + method + defaultModel + authHeader',
-  table.every((p) => p.endpoint && p.method && p.defaultModel && p.authHeader && Array.isArray(p.models)));
+// browser-relay providers (Bridge V2) are the deliberate exception: the
+// server NEVER fetches for them, so an empty endpoint is their safety
+// property, and defaultModel '' means "the bridge substitutes what's loaded".
+check('every fetching provider has endpoint + method + defaultModel + authHeader',
+  table.filter((p) => !p.browserRelay)
+    .every((p) => p.endpoint && p.method && p.defaultModel && p.authHeader && Array.isArray(p.models)));
+check('a browser-relay provider has NO endpoint — the server must never fetch for it',
+  table.filter((p) => p.browserRelay).every((p) => p.endpoint === '' && p.keyOptional === true));
 check('table carries NO secret field', table.every((p) => p.apiKey === undefined && p.key === undefined && p.secret === undefined));
 check('claude endpoint is the anthropic messages API', getProvider('claude').endpoint === 'https://api.anthropic.com/v1/messages');
 
