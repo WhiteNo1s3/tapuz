@@ -56,14 +56,21 @@
       <bent-trow>עברית | שפת אם | לוקליזציה, במקרה הטוב</bent-trow>
     </bent-table>
     <bent-heading id="cost" level="2">מודל העלות, בפשטות</bent-heading>
-    <bent-table id="cost-table" header="true">
-      <bent-trow>מערכת | מה מגדיל את החשבון</bent-trow>
-      <bent-trow>ערימת WordPress | כל רישיון תוסף, כל שנה</bent-trow>
-      <bent-trow>בסגנון Wix | המינוי, לנצח, פר-אתר</bent-trow>
-      <bent-trow>builder.io | משתמשים</bent-trow>
-      <bent-trow>ברמת HubSpot | משתמשים</bent-trow>
-      <bent-trow>תפוזיאל | קופסת האחסון שלכם. זו כל הרשימה.</bent-trow>
-    </bent-table>
+    <bent-pricing id="cost-pricing">
+      <bent-plan title="ערימת WordPress" price="רישיון לכל תוסף" period="מתחדש כל שנה" features="בונה בתשלום
+תוסף CRM
+תוסף גיבוי
+תוסף SEO" />
+      <bent-plan title="בסגנון Wix" price="מינוי חודשי" period="לנצח, פר-אתר" features="האתר בן ערובה
+ייצוא מוגבל" />
+      <bent-plan title="builder.io" price="פר-משתמש" period="+ קרדיטים של AI במונה" features="הקוד אצלכם
+הנתונים אצלם" />
+      <bent-plan title="ברמת HubSpot" price="פר-משתמש" period="+ מדרגות אנשי קשר" features="משפך מאחורי מדרגות
+ייצוא דרך התמיכה" />
+      <bent-plan title="תפוזיאל" price="קופסת האחסון שלכם" period="זו כל הרשימה" features="CMS + CRM + AI
+קוד פתוח MIT
+הקובץ שלכם" highlighted="true" />
+    </bent-pricing>
     <bent-heading id="honest" level="2">מה שאנחנו עוד לא עושים — הטור הכן</bent-heading>
     <bent-text id="honest-text" style-background="var(--color-light-bg)" style-padding="lg" style-radius="lg">
       "מראים ומספרים" שאפשר לסמוך עליו נוקב גם בפערים. לתפוזיאל היום @B{אין A/B טסטינג} (מעקב המרות קיים; הגשת וריאנטים ברשימת הציד), @B{אין ייבוא Figma}, @B{אין חנות מסחר} (CRM ← חנות הוא שלב מאוחר יותר), ו@B{אין אספקת headless/CDN ארגונית} — בכוונה, בשלב האלפא, כי הלקוח הוא בעל העסק הקטן. מפת ההשוואה המלאה, שנשמרת כנה בכל אצוות גרסאות, חיה ב-@LINK(url: "https://github.com/WhiteNo1s3/tapuz/blob/main/docs/COMPETITIVE.md"){docs/COMPETITIVE.md}.

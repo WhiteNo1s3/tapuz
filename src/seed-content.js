@@ -154,6 +154,71 @@ function seedSite(manifest, seedId) {
 }
 
 /**
+ * Residue cleanup (manifest `"cleanup"`): repeated content packages each
+ * leave a backup set (<name>.pre-<id>.json, themes/<slug>.pre-<id>) and a
+ * publish revision per page — chains that keep growing with every deploy.
+ *   { "backups": "keep-latest", "revisionsKeep": 3 }
+ * keep-latest keeps ONE newest backup per config file / theme slug and
+ * deletes the older chain; revisionsKeep trims each seeded page's history
+ * to its newest N revisions. Best-effort, loudly logged, never fatal.
+ */
+function seedCleanup(manifest) {
+  const c = manifest.cleanup;
+  if (!c || typeof c !== 'object') return;
+  if (c.backups === 'keep-latest') {
+    try {
+      const groups = {};
+      for (const f of fs.readdirSync(CONFIG_DIR)) {
+        const m = /^(.+)\.pre-(.+)\.json$/.exec(f);
+        if (m) (groups[m[1]] = groups[m[1]] || []).push(f);
+      }
+      for (const files of Object.values(groups)) {
+        files.sort((a, b) => fs.statSync(path.join(CONFIG_DIR, b)).mtimeMs - fs.statSync(path.join(CONFIG_DIR, a)).mtimeMs);
+        for (const f of files.slice(1)) {
+          fs.unlinkSync(path.join(CONFIG_DIR, f));
+          console.log('[seed] pruned old backup config/' + f);
+        }
+      }
+    } catch (e) { console.error('[seed] config backup prune failed: ' + e.message); }
+    try {
+      const siteThemes = path.join(SITE_ROOT, 'themes');
+      if (fs.existsSync(siteThemes)) {
+        const groups = {};
+        for (const d of fs.readdirSync(siteThemes)) {
+          const m = /^(.+)\.pre-(.+)$/.exec(d);
+          if (m) (groups[m[1]] = groups[m[1]] || []).push(d);
+        }
+        for (const dirs of Object.values(groups)) {
+          dirs.sort((a, b) => fs.statSync(path.join(siteThemes, b)).mtimeMs - fs.statSync(path.join(siteThemes, a)).mtimeMs);
+          for (const d of dirs.slice(1)) {
+            fs.rmSync(path.join(siteThemes, d), { recursive: true, force: true });
+            console.log('[seed] pruned old theme backup themes/' + d);
+          }
+        }
+      }
+    } catch (e) { console.error('[seed] theme backup prune failed: ' + e.message); }
+  }
+  const keep = parseInt(c.revisionsKeep, 10);
+  if (keep > 0) {
+    try {
+      const { pruneRevisions } = require('./revisions');
+      const pages = require('./pages');
+      const pzn = require('./pzn/index');
+      const { deriveSlug } = require('./pzn/intent');
+      for (const entry of manifest.pages || []) {
+        try {
+          const doc = pzn.parse(fs.readFileSync(path.join(SEED_DIR, entry.file), 'utf8'));
+          const slug = deriveSlug((doc.slug || '').trim() || doc.title || '');
+          if (!pages.getPageByFullPath(slug)) continue;
+          const removed = pruneRevisions(slug, keep);
+          if (removed) console.log(`[seed] trimmed "${slug}" history to newest ${keep} (${removed} removed)`);
+        } catch (e) { /* per-page, best effort */ }
+      }
+    } catch (e) { console.error('[seed] revision prune failed: ' + e.message); }
+  }
+}
+
+/**
  * Apply the packaged seed once. Never throws — logs and returns a summary.
  * @returns {{ ran: boolean, reason?: string, results?: object }}
  */
@@ -176,6 +241,7 @@ function maybeSeed() {
     seedTheme(manifest, manifest.id);
     seedThemeSync(manifest, manifest.id); // before exportAll — the export reads the theme files
     seedSite(manifest, manifest.id);
+    seedCleanup(manifest); // after the writes — this run's own backups count as newest
     try { require('./export').exportAll(); } catch (e) {
       console.error('[seed] static export failed: ' + e.message);
     }

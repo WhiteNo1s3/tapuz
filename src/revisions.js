@@ -47,19 +47,32 @@ function addRevision({ pageId, fullPath, title, status, kind, blocks, pzn }) {
 }
 
 function pruneOld(fullPath) {
+  pruneRevisions(fullPath, MAX_REVISIONS_PER_PAGE);
+}
+
+/**
+ * Trim a page's history to its newest `keep` revisions. The automatic cap
+ * (MAX_REVISIONS_PER_PAGE) rides this on every save; cleanup paths (the
+ * content seed's residue pruning) call it with a tighter keep.
+ * @returns {number} how many revisions were deleted
+ */
+function pruneRevisions(fullPath, keep = MAX_REVISIONS_PER_PAGE) {
+  ensureSchema();
+  const max = Math.max(parseInt(keep, 10) || MAX_REVISIONS_PER_PAGE, 1);
   const rows = db.prepare(`
     SELECT id FROM page_revisions
     WHERE full_path = ?
     ORDER BY created_at DESC, id DESC
   `).all(fullPath);
 
-  if (rows.length <= MAX_REVISIONS_PER_PAGE) return;
-  const drop = rows.slice(MAX_REVISIONS_PER_PAGE).map(r => r.id);
+  if (rows.length <= max) return 0;
+  const drop = rows.slice(max).map(r => r.id);
   const del = db.prepare('DELETE FROM page_revisions WHERE id = ?');
   const tx = db.transaction((ids) => {
     ids.forEach(id => del.run(id));
   });
   tx(drop);
+  return drop.length;
 }
 
 function listRevisions(fullPath, limit = 30) {
@@ -112,5 +125,6 @@ module.exports = {
   addRevision,
   listRevisions,
   getRevision,
+  pruneRevisions,
   MAX_REVISIONS_PER_PAGE
 };

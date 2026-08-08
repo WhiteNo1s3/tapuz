@@ -33,6 +33,13 @@
     <bent-card id="import-tell" style-background="var(--color-light-bg)" style-radius="lg" style-padding="md">
       <bent-text>@B{מספרים:} לעבור @B{אל} תפוזיאל זו פקודה אחת; לעבור @B{ממנה} זה תקן מתועד. שני הכיוונים פתוחים — אף CMS/CRM אחר לא מעז להגיד את זה.</bent-text>
     </bent-card>
+    <bent-divider id="d-faq" bentstyle="dots" />
+    <bent-heading id="faq" level="2">שאלות שמממשים שואלים</bent-heading>
+    <bent-faq id="pzn-faq">
+      <bent-qa question="מה בעצם יש בתוך קובץ pzn?">HTML מוגבל: רק תגי bent-* מתועדים, בלי קוד גולמי. כל קורא שמממש את הסכמה יכול לפתוח, להציג ולערוך אותו — בכל שפה.</bent-qa>
+      <bent-qa question="אפשר לממש קורא pzn משלי?">כן. הסכמה המכונתית מוגשת חיה מהשרת, מתחדשת אוטומטית מרישום המודולים, ונשמרת מסונכרנת בבדיקות — התקן לא ישקר לכם.</bent-qa>
+      <bent-qa question="מה קורה כשה-AI כותב שגיאה?">מנגנון התיקון הסלחני מיישר כמעט-נכון לתקין; מה שבכל זאת נשאר — מוסבר בשורה מדויקת, עם התיקון המילולי מוכן להדבקה.</bent-qa>
+    </bent-faq>
     <bent-cta id="next-act" title="ההמשך: AI בלי מונה" buttontext="למערכה השלישית" url="/הבינה.html" tone="brand" align="center">המוח הוא מינוי ה-AI שלכם — לא הטוקנים שלנו.</bent-cta>
   </body>
 </html>

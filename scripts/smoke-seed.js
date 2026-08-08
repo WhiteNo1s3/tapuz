@@ -100,5 +100,28 @@ check('site theme copy refreshed from package', syncedCss === pkgCss);
 check('stale copy backed up beside it',
   fs.existsSync(path.join(siteThemes, 'default.pre-smoke-seed-3', 'css', 'main.css')));
 
+// 6. cleanup: backup chains pruned to newest, revision history trimmed
+fs.writeFileSync(path.join(ROOT, 'config', 'menus.pre-old1.json'), '{}', 'utf8');
+fs.writeFileSync(path.join(ROOT, 'config', 'menus.pre-old2.json'), '{}', 'utf8');
+fs.writeFileSync(path.join(ROOT, 'config', 'menus.pre-current.json'), '{}', 'utf8');
+// stagger mtimes so keep-latest deterministically keeps pre-current
+const day = 86400000;
+fs.utimesSync(path.join(ROOT, 'config', 'menus.pre-old1.json'), new Date(Date.now() - 2 * day), new Date(Date.now() - 2 * day));
+fs.utimesSync(path.join(ROOT, 'config', 'menus.pre-old2.json'), new Date(Date.now() - day), new Date(Date.now() - day));
+// pile revisions on the seeded page, then let cleanup trim to 2
+for (let i = 0; i < 4; i++) {
+  require('../src/pages').savePageSource('seed-check', PAGE, { publish: false });
+}
+writeManifest({
+  id: 'smoke-seed-4',
+  pages: [{ file: 'pages/p.pzn', replace: true }],
+  cleanup: { backups: 'keep-latest', revisionsKeep: 2 }
+});
+const r5 = seed.maybeSeed();
+check('cleanup package runs', r5.ran === true);
+const leftBackups = fs.readdirSync(path.join(ROOT, 'config')).filter((f) => /^menus\.pre-/.test(f));
+check('backup chain pruned to the newest one', leftBackups.length === 1 && /pre-current/.test(leftBackups[0]));
+check('revision history trimmed to keep', pages.listRevisions('seed-check').length === 2);
+
 console.log('\nSMOKE SEED: ' + (fail ? 'FAIL' : 'PASS'));
 process.exit(fail ? 1 : 0);

@@ -92,6 +92,47 @@
     <bent-card id="rtl-tell" style-background="var(--color-light-bg)" style-radius="lg" style-padding="md">
       <bent-text>@B{מספרים:} כל מתחרה מתייחס ל-RTL כאל מחשבה שנייה או קובץ לוקליזציה. תפוזיאל נבנתה @B{מתוך העברית} — לעסק הישראלי זה ההבדל בין כלי לכלי מתורגם.</bent-text>
     </bent-card>
+    <bent-divider id="d-toolbox" bentstyle="dots" />
+    <bent-heading id="toolbox-live" level="2">הארגז, בפעולה</bent-heading>
+    <bent-text id="toolbox-live-intro">
+      לא רק מספרים על מודולים — מריצים אותם. כל מה שבקטע הזה הוא מודול חי מתוך הארגז: עמודות, תמונה, גלריה, קרוסלה, אקורדיון ותפריט משני. פתחו view-source — אין כאן שורת JavaScript.
+    </bent-text>
+    <bent-section id="toolbox-demo" size="lg" style-background="var(--color-light-bg)" style-radius="lg" style-padding="lg">
+      <bent-columns id="demo-columns" ratio="1:1" collapse="md" gap="md" valign="center">
+        <bent-col>
+          <bent-image id="demo-image" src="/demo/tile-2.svg" alt="אריח הדגמה כחול" caption="מודול תמונה, עם כיתוב" width="full" />
+        </bent-col>
+        <bent-col>
+          <bent-text id="demo-columns-text">זהו מודול @B{עמודות} — טורים שנערמים יפה בנייד. לצדו מודול @B{תמונה}. בבונה גוררים לקצה כדי לפצל טור, ומזיזים את הגבול כדי לשנות יחס.</bent-text>
+        </bent-col>
+      </bent-columns>
+      <bent-gallery id="demo-gallery" columns="3">
+        <bent-image src="/demo/tile-1.svg" alt="אריח כתום" />
+        <bent-image src="/demo/tile-3.svg" alt="אריח טורקיז" />
+        <bent-image src="/demo/tile-4.svg" alt="אריח סגול" />
+        <bent-image src="/demo/tile-5.svg" alt="אריח ורוד" />
+        <bent-image src="/demo/tile-6.svg" alt="אריח ירוק" />
+        <bent-image src="/demo/tile-8.svg" alt="אריח ענבר" />
+      </bent-gallery>
+      <bent-carousel id="demo-carousel" height="md" peek="true">
+        <bent-slide image="/demo/tile-7.svg" tag="קרוסלה" title="שקופיות בלי JavaScript" excerpt="גלילה חלקה, גם בנייד — CSS בלבד." href="#toolbox-live" />
+        <bent-slide image="/demo/tile-4.svg" tag="תוכן" title="כותרת, תקציר ותגית לכל שקופית" excerpt="מחליפים תמונה בשתי לחיצות מהספרייה." href="#toolbox-live" />
+        <bent-slide image="/demo/tile-6.svg" tag="עריכה" title="כל שקופית היא פריט בפאנל" excerpt="מוסיפים, מסירים ומסדרים מחדש בגרירה." href="#toolbox-live" />
+      </bent-carousel>
+      <bent-accordion id="demo-accordion">
+        <bent-fold title="מה עוד יש בארגז שלא מודגם בדף הזה?">וידאו ושמע בהעלאה עצמית, הטמעות YouTube, מפות, קוביות מאמרים חיות, קטגוריות ורצועת לוגואים — נגררים פנימה כשצריך אותם.</bent-fold>
+        <bent-fold title="אפשר לשמור בלוק שבניתי לשימוש חוזר?">כן — סימבולים: כל מודול או מיכל נשמר בלחיצה לספרייה האישית, ונשלף מחדש בכל דף.</bent-fold>
+        <bent-fold title="ומה אם אין מודול למה שאני צריך?">יש דלת HTML גולמי אחת, מבוקרת ומסומנת — פתח מילוט מודע, לא הרגל.</bent-fold>
+      </bent-accordion>
+      <bent-spacer size="sm" />
+      <bent-nav id="demo-nav" align="center">
+        <bent-navitem href="/השפה.html" label="השפה" />
+        <bent-navitem href="/הבינה.html" label="AI בלי מונה" />
+        <bent-navitem href="/הלקוחות.html" label="ה-CRM" />
+        <bent-navitem href="/היסודות.html" label="היסודות" />
+        <bent-navitem href="/השוואות.html" label="השוואות" />
+      </bent-nav>
+    </bent-section>
     <bent-cta id="next-act" title="ההמשך: שכבת השפה" buttontext="למערכה השנייה" url="/השפה.html" tone="brand" align="center">BenTML, תקן pzn פתוח, וייבוא מ-WordPress בפקודה אחת.</bent-cta>
   </body>
 </html>

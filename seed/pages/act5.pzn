@@ -39,6 +39,10 @@
     <bent-card id="engineering-tell" style-background="var(--color-light-bg)" style-radius="lg" style-padding="md">
       <bent-text>@B{מספרים:} שרשרת אספקה של חמש תלויות היא יכולת אבטחה. כ-180 גרסאות שוחררו (מ-v0.31 עד v2.12, אחת לכל סשן עבודה) עם יומן פומבי של מה יצא ושל מי היה הרעיון — זו עמדת רד האט: קוד פתוח MIT, בלי DRM, מונע-קהילה; העסק הוא מומחיות ואקוסיסטם, לא שערי כניסה.</bent-text>
     </bent-card>
+    <bent-parallax id="foundation-band" image="/demo/tile-6.svg" overlay="55" height="sm">
+      <bent-heading level="2" align="center">היסודות לא זזים כשהאתר גדל</bent-heading>
+      <bent-text align="center">קובץ אחד, חמש תלויות, ואלפי בדיקות שרצות על כל שינוי.</bent-text>
+    </bent-parallax>
     <bent-stats id="engineering-stats" columns="4" style-background="var(--color-light-bg)" style-padding="lg" style-radius="lg">
       <bent-stat label="חבילות בדיקה ב-CI" value="135" />
       <bent-stat label="בדיקות" value="2,700+" />

@@ -19,6 +19,16 @@
       <bent-field label="על מה נדבר?" name="topic" type="select" required="false" options="הדגמה חיה, מעבר מ-WordPress, ה-CRM והקמפיינים, WhatsApp Business, משהו אחר" />
       <bent-field label="הודעה" name="body" type="textarea" required="false" placeholder="" />
     </bent-form>
+    <bent-divider id="d-contact" bentstyle="dots" />
+    <bent-heading id="explore" level="2">רוצים לקרוא עוד קודם?</bent-heading>
+    <bent-nav id="acts-nav" align="center">
+      <bent-navitem href="/הבונה.html" label="הבונה" />
+      <bent-navitem href="/השפה.html" label="השפה" />
+      <bent-navitem href="/הבינה.html" label="AI בלי מונה" />
+      <bent-navitem href="/הלקוחות.html" label="ה-CRM" />
+      <bent-navitem href="/היסודות.html" label="היסודות" />
+      <bent-navitem href="/השוואות.html" label="השוואות" />
+    </bent-nav>
     <bent-heading id="open-source" level="2">הקוד פתוח</bent-heading>
     <bent-text id="open-source-text">
       תפוזיאל משוחררת ברישיון MIT. הקוד, התיעוד, תקן ה-pzn והיומן הציבורי — הכול ב-@LINK(url: "https://github.com/WhiteNo1s3/tapuz"){github.com/WhiteNo1s3/tapuz}. רוצים להריץ את ההדגמה בעצמכם? @CODE{node src/server.js} ואז @CODE{http://localhost:3000/admin}.

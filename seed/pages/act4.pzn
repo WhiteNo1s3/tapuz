@@ -53,6 +53,13 @@
     <bent-card id="portal-tell" style-background="var(--color-light-bg)" style-radius="lg" style-padding="md">
       <bent-text>@B{מספרים:} פרטיות היא לא תיבת סימון לתאימות — שמירה, מחיקה והסכמה מחווטות דרך כל טבלה, ומוגנות בבדיקות אוטומטיות, כך שיכולת חדשה @B{לא יכולה} לשכוח אותן.</bent-text>
     </bent-card>
+    <bent-divider id="d-crm-faq" bentstyle="dots" />
+    <bent-heading id="crm-faq-h" level="2">שאלות שבעלי עסקים שואלים</bent-heading>
+    <bent-faq id="crm-faq">
+      <bent-qa question="לקוח ביקש להימחק — מה עושים?">לוחצים מחיקה בכרטיס. המחיקה מגיעה לכל טבלה אישית — כולל הודעות WhatsApp — ולא משאירה עותקי צל.</bent-qa>
+      <bent-qa question="אפשר לשלוח קמפיין למי שלא אישר?">לא. שער ההסכמה יושב במנוע השליחה עצמו, לא בתקנון: בלי הסכמה ובלי כתובת — האדם פשוט לא נכנס לקהל.</bent-qa>
+      <bent-qa question="ומה אם ה-CRM נופל?">האתר לא מרגיש. כל תת-המערכת יושבת מאחורי תפר אחד, וכשל בה לעולם לא שובר דף ולא מפיל טופס.</bent-qa>
+    </bent-faq>
     <bent-banner id="try-form" tone="brand" align="center">הטופס בדף "צרו קשר" של האתר הזה נוחת בדיוק בצינור הזה — נסו אותו.</bent-banner>
     <bent-cta id="next-act" title="ההמשך: היסודות" buttontext="למערכה החמישית" url="/היסודות.html" tone="brand" align="center">אבטחה מתועדת בכנות, מסד נתונים ביד, ורף הנדסה שנמדד בבדיקות.</bent-cta>
   </body>

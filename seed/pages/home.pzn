@@ -26,6 +26,7 @@
       <bent-stat label="בדיקות ב-CI" value="2,700+" />
       <bent-stat label="מחיר שכבת ה-AI בלי מפתח" value="0" />
     </bent-stats>
+    <bent-divider id="d-stats" bentstyle="dots" />
     <bent-heading id="replace" level="2">מה אתם מרכיבים היום — ומה תפוזיאל עונה</bent-heading>
     <bent-table id="replace-table" header="true">
       <bent-trow>מה משלמים / מרכיבים היום | התשובה של תפוזיאל</bent-trow>
@@ -58,9 +59,20 @@
       <bent-mediacard href="/היסודות.html" image="/demo/tile-6.svg" tag="מערכה חמישית" title="היסודות" excerpt="אבטחה בשקיפות מלאה, מסד נתונים שאפשר להחזיק ביד, אנליטיקס עצמאי, ורף הנדסה של 2,700+ בדיקות." />
       <bent-mediacard href="/השוואות.html" image="/demo/tile-7.svg" tag="לוחות התוצאות" title="ההשוואות המלאות" excerpt="מול WordPress, מול בוני האתרים, מול builder.io ומול CRM בענן — כולל הטור הכן של מה שעוד אין." />
     </bent-cards>
+    <bent-heading id="timeline" level="2">ציר הזמן — כ-180 גרסאות, אחת לכל סשן עבודה</bent-heading>
+    <bent-newspop id="release-log" label="יומן הגרסאות">
+      <bent-newspopitem time="v0.31" text="הגרסה הציבורית הראשונה — CMS עברי עם בונה ויזואלי" />
+      <bent-newspopitem time="v1.30" text="אשף ההתקנה המודרך — מהרעיון לאתר חי בארבעה צעדים" />
+      <bent-newspopitem time="v1.77" text="ה-CRM עובר לגור בבית — תיבת פניות, לידים ומשפך" />
+      <bent-newspopitem time="v1.87" text="WhatsApp Business — חלון 24 השעות נאכף לפני שמטא מחייבת" />
+      <bent-newspopitem time="v2.10" text="פורטל לקוחות וזכויות היציאה" />
+      <bent-newspopitem time="v2.12" text="נראות לפי מכשיר, סימבולים — וההצגה שאתם קוראים עכשיו" />
+    </bent-newspop>
+    <bent-divider id="d-timeline" bentstyle="dots" />
     <bent-quote id="one-sentence" author="המשפט האחד" style-background="var(--color-light-bg)" style-padding="lg" style-radius="lg">
       בוני אתרים משכירים לכם אתר; WordPress מוכר לכם פרויקט הרכבה; builder.io מוכר פיתוח AI לצוותים שכבר יש להם קוד; ו-CRM בענן מודד לכם בחזרה את רשימת הלקוחות של עצמכם. תפוזיאל נותנת את הדבר כולו — אתר, בונה, CRM, AI — מלווה בעברית, מתומחרת כתוכנה שבבעלותכם, וניתנת לייצוא לתקן שכל אחד יכול לממש.
     </bent-quote>
+    <bent-testimonial id="future-user" author="המשתמש הבא" role="זה יכול להיות אתם">בניתי אתר שלם בערב אחד, בעברית, בלי לגעת בשורת קוד — והלידים כבר חיכו לי בתיבה.</bent-testimonial>
     <bent-ticker id="ticker-facts" label="מבזק" speed="md" background="#9a3412" color="#ffffff">
       <bent-tickeritem href="/הבונה.html" text="56 מודולי תוכן, אפס תוספים לקנות" />
       <bent-tickeritem href="/השפה.html" text="ייצוא מלא בתקן pzn פתוח — הנעילה היא אפס מעצם הבנייה" />
