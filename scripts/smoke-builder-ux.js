@@ -96,6 +96,41 @@ check('spacerPx normalizes size-name / rem / px to a pixel number',
 check('admin.css styles the label, the handle, and the resize cursor',
   /\.spacer-label/.test(css) && /\.spacer-resize-handle/.test(css) && /is-spacer-resizing/.test(css));
 
+// ---- 6. the cut sits ON the cut (v2.13, "huge bug") ------------------------
+// The preview row is direction:ltr BY DESIGN; the old code branched on the
+// DOCUMENT direction (Hebrew admin → rtl), pinning the handle to the pane's
+// LEFT edge and inverting the drag. Physical placement, no isRtl() branches.
+
+check('handle is placed at the pane\'s physical right edge (the boundary)',
+  /handle\.style\.left = '100%'/.test(builder) && /handle\.style\.marginLeft = '-5px'/.test(builder));
+check('no isRtl() branch remains in handle placement',
+  !/handle\.style\.left = isRtl\(\)/.test(builder) && !/handle\.style\.right = isRtl\(\)/.test(builder));
+check('the drag math no longer inverts on document RTL',
+  !/if \(rtl\) dx = -dx/.test(builder));
+
+// ---- 7. splitting inside a column EXTENDS the row (Camilyo), never nests ---
+
+check('doSplitMove extends the parent row when target lives in a column',
+  /targetNode\.parent && isColumnsContainer\(targetNode\.parent\.type\)/.test(builder) &&
+  /rowCols\.splice\(insertAt, 0, \{ blocks: \[incoming\] \}\)/.test(builder));
+check('ratios are read BEFORE the new column is inserted (no extra share)',
+  /var rowRatios = parseColumnRatios\(rowBlock\);\s*\n\s*var insertAt/.test(builder));
+check('the row caps at 4 — at the cap the module lands beside, never nests',
+  /rowCols\.length < 4/.test(builder) && /השורה מלאה/.test(builder));
+check('a deterministic drop hook exists for tests (_testDrop)',
+  /_testDrop: function \(state, hint\)/.test(builder));
+
+// ---- 8. a happy builder ----------------------------------------------------
+
+check('selection/drop chrome is the brand citrus, not cold blue',
+  /--select: #ea580c/.test(css) && !/--select: #2563eb/.test(css));
+check('the block toolbar sits INSIDE the block (no more top:-11px pill over the neighbor)',
+  /\.block-toolbar \{[^}]*top: 3px/.test(css.replace(/\n/g, ' ')) &&
+  !/\.block-toolbar \{[^}]*top: -11px/.test(css.replace(/\n/g, ' ')));
+check('the toolbar is warm and light, delete stays a warning',
+  /\.block-toolbar \{[^}]*background: #fff/.test(css.replace(/\n/g, ' ')) &&
+  /data-act="del"\]:hover \{ color: var\(--danger\)/.test(css));
+
 // parse guard
 try { new Function(builder); check('admin-builder.js parses', true); }
 catch (e) { check('admin-builder.js parses (' + e.message + ')', false); }

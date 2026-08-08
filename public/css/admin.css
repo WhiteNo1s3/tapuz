@@ -30,9 +30,12 @@
   /* accents */
   --accent: var(--admin-accent, #f97316);
   --accent-glow: color-mix(in srgb, var(--accent) 35%, transparent);
-  --select: #2563eb;              /* selection & drop targets — content-neutral blue */
-  --select-soft: #eff6ff;
-  --select-glow: rgba(37, 99, 235, 0.25);
+  /* selection & drop targets — the brand citrus (Ben: the cold blue made the
+     whole builder feel unhappy; the product is orange, the canvas should
+     smile the same color) */
+  --select: #ea580c;
+  --select-soft: #fff7ed;
+  --select-glow: rgba(234, 88, 12, 0.28);
   --ok: #16a34a;
   --ok-deep: #166534;
   --warn: #b45309;
@@ -1821,36 +1824,41 @@ body.builder-screen .canvas-header {
 .block-handle:active { cursor: grabbing; }
 .canvas-block:hover .block-handle { color: var(--select); }
 
+/* The action bar lives INSIDE the block's top corner (label row), not poking
+   above it — the old top:-11px pill sat on the previous block's content and
+   read as a mess. Warm and light, not a midnight chip. */
 .block-toolbar {
   position: absolute;
-  top: -11px;
-  left: 10px;
-  background: #0f172a;
-  color: white;
+  top: 3px;
+  inset-inline-end: 6px;
+  background: #fff;
+  border: 1px solid var(--accent-line, #fed7aa);
+  color: var(--ws-text-soft);
   font-size: 11px;
-  padding: 1px 8px;
+  padding: 1px 6px;
   border-radius: 999px;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   opacity: 0;
   transition: opacity var(--dur);
   z-index: 10;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+  box-shadow: 0 3px 10px rgba(154, 52, 18, 0.12);
 }
 .canvas-block:hover .block-toolbar,
 .canvas-block.selected .block-toolbar { opacity: 1; }
 .block-toolbar button {
   background: none;
   border: none;
-  color: #cbd5e1;
+  color: #9a3412;
   font-size: 13px;
   padding: 2px 5px;
   cursor: pointer;
   line-height: 1;
   transition: color var(--dur), transform var(--dur);
 }
-.block-toolbar button:hover { color: white; transform: scale(1.15); }
+.block-toolbar button:hover { color: var(--select); transform: scale(1.15); }
+.block-toolbar button[data-act="del"]:hover { color: var(--danger); }
 
 .block-label {
   font-size: 11px;
@@ -1890,7 +1898,7 @@ body.builder-screen .canvas-header {
 /* ---- drop machinery: rails that light up while dragging ---- */
 .block-stack, .block-list { min-height: 40px; }
 .list-drop-active {
-  outline: 2px dashed #93c5fd;
+  outline: 2px dashed color-mix(in srgb, var(--select) 45%, #fff);
   outline-offset: 2px;
   border-radius: 10px;
 }
@@ -1963,7 +1971,7 @@ body.is-dragging .drop-slot.drop-slot-active,
   transform: none;
   white-space: nowrap;
   background: var(--select-soft);
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--accent-line, #fed7aa);
   border-radius: 6px;
   padding: 4px 2px;
   writing-mode: vertical-rl;
@@ -1981,7 +1989,7 @@ body.is-dragging .canvas-block:hover .split-zone,
 .split-zone.split-active {
   opacity: 1;
   width: 28px;
-  background: #dbeafe;
+  background: var(--select-soft);
   box-shadow: inset 0 0 0 1px var(--select);
 }
 .canvas-block.split-target {
@@ -2144,15 +2152,15 @@ body.is-col-resizing .column-head {
 }
 .container-badge {
   font-size: 0.65rem;
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--accent-wash-2, #ffedd5);
+  color: #9a3412;
   padding: 1px 6px;
   border-radius: 4px;
   font-weight: 700;
   margin-inline-end: 4px;
 }
 .columns-preview.is-container {
-  border: 2px dashed #bfdbfe;
+  border: 2px dashed color-mix(in srgb, var(--select) 35%, #fff);
   border-radius: var(--r-md);
   padding: 8px;
   background: #f8fbff;
@@ -2161,7 +2169,7 @@ body.is-col-resizing .column-head {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 .column-pane.is-container {
-  border: 1px dashed #93c5fd;
+  border: 1px dashed color-mix(in srgb, var(--select) 40%, #fff);
   border-radius: 10px;
   background: #fff;
   min-height: 80px;
@@ -2198,7 +2206,7 @@ body.is-col-resizing .column-head {
   left: 3px;
   width: 3px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #93c5fd, var(--select));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--select) 55%, #fff), var(--select));
   /* v1.70 (Ben asked for a feature that already existed — meaning nobody
      could SEE it): the cut line is always faintly present, not hover-only. */
   opacity: .3;
@@ -2370,7 +2378,7 @@ body.is-col-resizing {
 .replace-chip.active {
   border-color: var(--select);
   background: color-mix(in srgb, var(--select) 18%, var(--bc-panel-2));
-  color: #bfdbfe;
+  color: #fed7aa;
   cursor: default;
 }
 .replace-chip .chip-icon { font-size: 0.7rem; opacity: .85; }
@@ -2559,8 +2567,8 @@ details.agent-snip-details summary { cursor: pointer; }
   box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.4);
 }
 .inline-editable:hover {
-  outline-color: #93c5fd;
-  background: rgba(59, 130, 246, 0.07);
+  outline-color: color-mix(in srgb, var(--select) 45%, #fff);
+  background: rgba(234, 88, 12, 0.06);
   box-shadow: inset 0 -1.5px 0 rgba(59, 130, 246, 0.55);
 }
 .inline-editing {

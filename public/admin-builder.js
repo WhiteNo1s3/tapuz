@@ -2361,15 +2361,18 @@
         handle.setAttribute('role', 'separator');
         handle.setAttribute('aria-orientation', 'vertical');
         bindColumnResize(handle, block, colIndex, row);
-        // grid: place handle as a narrow track — use absolute overlay between panes instead
+        // The row is direction:ltr BY DESIGN (physical sides for split/drag),
+        // so the boundary with the NEXT pane is always this pane's physical
+        // RIGHT edge. The old isRtl() branch read the DOCUMENT direction
+        // (Hebrew admin → rtl) and pinned the handle to the pane's LEFT edge —
+        // the cut appeared beside the module instead of between the halves.
         colEl.style.position = 'relative';
         handle.style.position = 'absolute';
         handle.style.top = '0';
         handle.style.bottom = '0';
-        handle.style.left = isRtl() ? 'auto' : '100%';
-        handle.style.right = isRtl() ? '100%' : 'auto';
-        handle.style.marginInlineStart = isRtl() ? '0' : '-5px';
-        handle.style.marginInlineEnd = isRtl() ? '-5px' : '0';
+        handle.style.left = '100%';
+        handle.style.right = 'auto';
+        handle.style.marginLeft = '-5px';
         colEl.appendChild(handle);
       }
     });
@@ -2444,11 +2447,12 @@
       var total = startRatios.reduce(function (a, b) { return a + b; }, 0);
       var rowRect = rowEl.getBoundingClientRect();
       var rowW = Math.max(rowRect.width, 1);
-      var rtl = isRtl();
 
       function onMove(ev) {
+        // The row is direction:ltr by design — physical dx maps directly:
+        // dragging right grows the left pane. The old isRtl() flip read the
+        // DOCUMENT (Hebrew admin) and inverted the drag on every RTL site.
         var dx = ev.clientX - startX;
-        if (rtl) dx = -dx;
         // convert pixel drag to fraction of total ratio units
         var dUnits = (dx / rowW) * total;
         var left = startRatios[leftIndex];
@@ -2689,6 +2693,35 @@
     if (isColumnsContainer(targetNode.block.type)) {
       if (state.kind === 'block') blocks.push(incoming);
       return { ok: false, mutated: true, reason: 'split-columns-container' };
+    }
+
+    // Splitting a block that already lives in a column EXTENDS the row —
+    // the Camilyo/Mobeeart move: keep pushing modules into the same line,
+    // 2 → 3 → 4 columns — instead of nesting a whole new columns block
+    // inside the pane (which is what this used to do, and read as "you can
+    // only split once"). At the 4-column cap the incoming module lands
+    // beside the target inside its column; it never nests silently.
+    if (targetNode.parent && isColumnsContainer(targetNode.parent.type) &&
+        typeof targetNode.colIndex === 'number') {
+      var rowBlock = targetNode.parent;
+      var rowCols = ensureColumns(rowBlock);
+      if (rowCols.length < 4) {
+        // side is physical (the preview row is direction:ltr by design).
+        // Read the ratios BEFORE inserting the column — parseColumnRatios
+        // pads to the CURRENT column count, so reading after the splice
+        // would hand back one share too many.
+        var rowRatios = parseColumnRatios(rowBlock);
+        var insertAt = targetNode.colIndex + (hint.side === 'left' ? 0 : 1);
+        rowCols.splice(insertAt, 0, { blocks: [incoming] });
+        var evenShare = rowRatios.reduce(function (a, b) { return a + b; }, 0) / rowRatios.length;
+        rowRatios.splice(insertAt, 0, evenShare);
+        setColumnRatios(rowBlock, rowRatios);
+        return { ok: true, selectedId: incoming.id };
+      }
+      var sideOffset = hint.side === 'left' ? 0 : 1;
+      targetNode.list.splice(targetNode.index + sideOffset, 0, incoming);
+      flashCanvasHint('השורה מלאה (4 טורים) — המודול נחת ליד היעד');
+      return { ok: true, selectedId: incoming.id };
     }
 
     var target = targetNode.list.splice(targetNode.index, 1)[0];
@@ -5376,6 +5409,13 @@
     _selectBlock: selectBlock,
     _getSelectedId: function () { return selectedId; },
     _pushHistory: pushHistory,
+    // test hook (smokes / automation): run a drop deterministically — real
+    // browser drag events are unreliable to synthesize. Same path as a user
+    // drop: sets the drag state, commits, clears.
+    _testDrop: function (state, hint) {
+      dragState = state || null;
+      try { commitDrop(hint); } finally { dragState = null; }
+    },
     _getTags: function () { return pageTags; },
     _getMeta: function () { return pageMeta; },
     _markDirty: markDirty,
