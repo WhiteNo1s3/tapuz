@@ -46,9 +46,12 @@ check('the media-list editor renders an add-by-URL input beside the picker',
 check('the URL add handler splits comma / newline lists',
   /addUrls = function[\s\S]{0,120}split\(\/\[\\n,\]\+\//.test(builder));
 check('add-by-URL pushes history, marks dirty, and re-renders (a real edit)',
-  /addUrls = function[\s\S]{0,400}pushHistory\(\)[\s\S]{0,260}renderCanvas\(\)/.test(builder));
+  /addUrls = function[\s\S]{0,400}pushHistory\(\)[\s\S]{0,500}renderCanvas\(\)/.test(builder));
 check('it concats onto the SAME param list, keyed (not a hardcoded field)',
-  /block\.data\[key\] = block\.data\[key\]\.concat\(urls\)/.test(builder));
+  /block\.data\[key\] = block\.data\[key\]\.concat\(urls\.map\(/.test(builder));
+check('URLs become ITEM OBJECTS keyed by the media field, never bare strings',
+  /item\[mediaField\] = u/.test(builder) &&
+  /f\.type === 'media'[\s\S]{0,60}mediaField = f\.name/.test(builder));
 check('the library multi-pick path still exists (URL is ADDED, not a swap)',
   /data-lp-media-add\b/.test(builder) && /openMediaGallery/.test(builder));
 

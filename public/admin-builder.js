@@ -4278,13 +4278,27 @@
       var key = btn.dataset.lpUrlAdd;
       var input = panel.querySelector('[data-lp-url="' + key + '"]');
       if (!input) return;
+      // The list holds ITEM OBJECTS ({src}/{image} + alt/caption…), never bare
+      // strings — a bare string serializes as a src-less item and publishes a
+      // broken slot (found live, v2.13). Key each URL by the item's media field.
+      var def = registryDef(block.type);
+      var listParam = def && (def.params || []).filter(function (pp) { return pp.name === key; })[0];
+      var mediaField = 'src';
+      ((listParam && listParam.itemFields) || []).some(function (f) {
+        if (f.type === 'media') { mediaField = f.name; return true; }
+        return false;
+      });
       var addUrls = function () {
         var urls = input.value.split(/[\n,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
         if (!urls.length) return;
         pushHistory();
         if (!block.data) block.data = {};
         if (!Array.isArray(block.data[key])) block.data[key] = [];
-        block.data[key] = block.data[key].concat(urls);
+        block.data[key] = block.data[key].concat(urls.map(function (u) {
+          var item = {};
+          item[mediaField] = u;
+          return item;
+        }));
         input.value = '';
         markDirty();
         renderCanvas();
