@@ -78,6 +78,24 @@ check('the "into" hover names the landing (↳ נכנס לתוך המיכל)',
 check('the drop cue icon is styled (with a reduced-motion opt-out)',
   /\.drop-cue-icon/.test(css) && /prefers-reduced-motion: reduce[^}]*\}[\s\S]{0,80}drop-cue-icon|drop-cue-icon[\s\S]{0,200}prefers-reduced-motion/.test(css));
 
+// ---- 5. spacer is drag-resizable on the canvas (Mobeeart/Camilyo feel) -----
+// So a user reaches for a real spacer instead of hammering Enter in a text
+// block. Height is the source of truth and survives the .pzn round-trip.
+
+check('the canvas spacer renders a live height label + a drag handle',
+  /spacer-label/.test(builder) && /spacer-resize-handle/.test(builder) && /spacer-px/.test(builder));
+check('bindSpacerResize drags the bottom edge and writes exact px height',
+  /function bindSpacerResize\(/.test(builder) &&
+  /block\.data\.height = liveH \+ 'px'/.test(builder));
+check('the drag clamps to a sane range (4–800px)',
+  /Math\.max\(4, Math\.min\(800/.test(builder));
+check('the drag pushes history and re-syncs the panel (px field stays truthful)',
+  /function bindSpacerResize[\s\S]*?pushHistory\(\)[\s\S]*?renderProperties\(\)[\s\S]*?bindColumnResize/.test(builder));
+check('spacerPx normalizes size-name / rem / px to a pixel number',
+  /function spacerPx\(/.test(builder) && /\* 16/.test(builder));
+check('admin.css styles the label, the handle, and the resize cursor',
+  /\.spacer-label/.test(css) && /\.spacer-resize-handle/.test(css) && /is-spacer-resizing/.test(css));
+
 // parse guard
 try { new Function(builder); check('admin-builder.js parses', true); }
 catch (e) { check('admin-builder.js parses (' + e.message + ')', false); }

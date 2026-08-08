@@ -147,6 +147,19 @@
 
   var SPACER_HEIGHTS = { sm: '0.75rem', md: '1.5rem', lg: '2.5rem', xl: '4rem' };
 
+  /** A spacer's height as a plain pixel number, from any of its forms:
+   *  a size name (md), a rem string (1.5rem) or an exact px string (120px). */
+  function spacerPx(h) {
+    var s = String(h == null ? '' : h).trim();
+    if (SPACER_HEIGHTS[s]) s = SPACER_HEIGHTS[s]; // size name → rem
+    var m = /^([\d.]+)px$/.exec(s);
+    if (m) return Math.round(parseFloat(m[1]));
+    m = /^([\d.]+)rem$/.exec(s);
+    if (m) return Math.round(parseFloat(m[1]) * 16);
+    var n = parseFloat(s);
+    return isNaN(n) ? 24 : Math.max(4, Math.round(n));
+  }
+
   var MODULE_BY_TYPE = {};
   MODULES.forEach(function (m) { MODULE_BY_TYPE[m.type] = m; });
 
@@ -1704,8 +1717,22 @@
     }
 
     if (block.type === 'spacer') {
+      // A spacer you can SEE and GRAB (Mobeeart / Camilyo feel): the stripe
+      // block shows its live height, and its bottom edge is a drag handle —
+      // so a user reaches for a real spacer instead of hammering Enter in a
+      // text block. Invisible on the published page; a tool on the canvas.
+      var spH = spacerPx(d.height || d.size || '1.5rem');
       wrap.innerHTML =
-        '<div class="preview-spacer" style="height:' + escAttr(d.height || '30px') + '"></div>';
+        '<div class="preview-spacer" style="height:' + spH + 'px">' +
+          '<span class="spacer-label">↕ רווח · <span class="spacer-px">' + spH + '</span>px</span>' +
+          '<div class="spacer-resize-handle" title="גררו לשינוי גובה"></div>' +
+        '</div>';
+      bindSpacerResize(
+        wrap.querySelector('.spacer-resize-handle'),
+        block,
+        wrap.querySelector('.preview-spacer'),
+        wrap.querySelector('.spacer-px')
+      );
       return wrap;
     }
 
@@ -2372,6 +2399,40 @@
     }
 
     return row;
+  }
+
+  /**
+   * Drag a spacer's bottom edge to set its exact height, live (v2.13). Height
+   * is the source of truth (the size preset is a convenience) — the same field
+   * the panel px box writes, so the two stay in sync. Clamped 4–800px.
+   */
+  function bindSpacerResize(handle, block, previewEl, pxLabel) {
+    if (!handle || !previewEl) return;
+    handle.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var startY = e.clientY;
+      var startH = previewEl.getBoundingClientRect().height;
+      var liveH = Math.round(startH);
+      function onMove(ev) {
+        liveH = Math.max(4, Math.min(800, Math.round(startH + (ev.clientY - startY))));
+        previewEl.style.height = liveH + 'px';
+        if (pxLabel) pxLabel.textContent = liveH;
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.classList.remove('is-spacer-resizing');
+        pushHistory();
+        if (!block.data) block.data = {};
+        block.data.height = liveH + 'px'; // exact px; size preset stays as a label
+        markDirty();
+        if (selectedId === block.id) renderProperties();
+      }
+      document.body.classList.add('is-spacer-resizing');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
   }
 
   function bindColumnResize(handle, block, leftIndex, rowEl) {

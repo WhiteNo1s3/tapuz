@@ -2941,9 +2941,54 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
   color: #64748b;
 }
 .preview-spacer {
+  position: relative;
+  min-height: 8px;
   background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 4px, #fff 4px, #fff 8px);
+  border: 1px dashed var(--ws-border, #cbd5e1);
   border-radius: 4px;
 }
+/* live height chip, centered — the spacer says how tall it is */
+.spacer-label {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 50%;
+  transform: translate(50%, -50%); /* RTL-safe center */
+  background: #fff;
+  border: 1px solid var(--ws-border, #cbd5e1);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ws-faint, #64748b);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* bottom-edge grab handle — drag to resize (Mobeeart / Camilyo feel) */
+.spacer-resize-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 11px;
+  cursor: ns-resize;
+  z-index: 4;
+}
+.spacer-resize-handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--ws-border, #cbd5e1);
+  transition: background 0.12s;
+}
+.canvas-block:hover .spacer-resize-handle::after,
+.spacer-resize-handle:hover::after { background: var(--select, #2563eb); }
+body.is-spacer-resizing { cursor: ns-resize; user-select: none; }
+body.is-spacer-resizing * { cursor: ns-resize !important; }
 .preview-testimonial {
   background: #f8fafc;
   padding: 16px;
