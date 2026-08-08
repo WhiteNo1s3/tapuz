@@ -270,6 +270,42 @@
     return n;
   }
 
+  /**
+   * Empty-module scan (v2.13): modules whose emptiness is purely local block
+   * data — an image with no src, a gallery with no photos, a banner/heading
+   * with no text, a media player with no source — publish silently as blank
+   * or broken. This walks the tree and names them (Hebrew label + count) so
+   * publishPage can ask "לפרסם בכל זאת?" before shipping a hole. Dynamic
+   * modules (article-list/category) are NOT flagged: empty is a legitimate
+   * "no matching pages yet" state, not a mistake.
+   */
+  function findEmptyModules(list, acc) {
+    list = list || blocks;
+    acc = acc || [];
+    list.forEach(function (b) {
+      var d = b.data || {};
+      var empty = false;
+      if (b.type === 'image') empty = !mediaSrcOf(d.src || d);
+      else if (b.type === 'gallery') empty = !filledMedia(d.images).length;
+      else if (b.type === 'logos') empty = !filledMedia(d.items).length;
+      else if (b.type === 'video' || b.type === 'audio') empty = !mediaSrcOf(d.src || d);
+      else if (b.type === 'embed' || b.type === 'map') empty = !String(d.url || d.address || '').trim();
+      else if (b.type === 'banner' || b.type === 'heading' || b.type === 'html') empty = !String(d.text || d.content || '').trim();
+      if (empty) acc.push(moduleLabel(b.type));
+      if (isColumnsContainer(b.type)) ensureColumns(b).forEach(function (col) { findEmptyModules(col.blocks, acc); });
+      if (isBlocksContainer(b.type)) findEmptyModules(ensureBlocks(b), acc);
+    });
+    return acc;
+  }
+
+  /** Human Hebrew label for a module type (falls back to the raw type). */
+  function moduleLabel(type) {
+    for (var i = 0; i < MODULES.length; i++) {
+      if (MODULES[i].type === type) return MODULES[i].label;
+    }
+    return type;
+  }
+
   function isAncestor(maybeAncestorId, nodeId) {
     var n = findNode(nodeId);
     while (n && n.parent) {
@@ -1932,8 +1968,8 @@
       var contKids = ensureBlocks(block);
       if (!contKids.length) {
         var contEmpty = document.createElement('div');
-        contEmpty.className = 'column-empty';
-        contEmpty.textContent = 'גרור לכאן';
+        contEmpty.className = 'column-empty is-container-drop';
+        contEmpty.innerHTML = '<span class="drop-cue-icon">⬇</span> שחררו כאן מודול — הוא ייכנס לתוך המיכל';
         bindEmptyTarget(contEmpty, block, 'blocks');
         contList.appendChild(contEmpty);
       }
@@ -2270,8 +2306,8 @@
       if (!Array.isArray(col.blocks)) col.blocks = [];
       if (!col.blocks.length) {
         var empty = document.createElement('div');
-        empty.className = 'column-empty';
-        empty.textContent = 'גרור לכאן';
+        empty.className = 'column-empty is-container-drop';
+        empty.innerHTML = '<span class="drop-cue-icon">⬇</span> שחררו כאן — טור ' + (colIndex + 1);
         bindEmptyTarget(empty, block, colIndex);
         listWrap.appendChild(empty);
       }
@@ -3051,10 +3087,18 @@
       });
       html += '<div class="gallery-edit">' + thumbs + '</div>';
       html += '<button type="button" class="btn" style="margin:6px 0" data-lp-media-add="' + escAttr(p.name) + '">+ הוסף תמונות מהספרייה</button>';
+      // Add-by-URL (v2.13, MODULE_AUDIT #1): the library multi-pick is easy to
+      // fail — and when it does the gallery/logos strip publishes empty in
+      // silence. A plain URL box is ALWAYS available beside it; paste one or
+      // several links (comma / newline separated) and add.
+      html += '<div class="lp-url-add" style="display:flex;gap:6px;margin:2px 0 6px">' +
+        '<input data-lp-url="' + escAttr(p.name) + '" dir="ltr" placeholder="או הדביקו כתובת: /demo/tile-1.svg" style="flex:1">' +
+        '<button type="button" class="btn secondary" data-lp-url-add="' + escAttr(p.name) + '">הוסף</button>' +
+        '</div>';
       if (emptyCount) {
         html += '<button type="button" class="btn secondary" style="margin:0 0 6px" data-lp-clean="' + escAttr(p.name) + '">🧹 נקה ' + emptyCount + ' משבצות ריקות</button>';
       }
-      html += '<div class="prop-hint">' + (items.length - emptyCount) + ' פריטים</div>';
+      html += '<div class="prop-hint">' + (items.length - emptyCount) + ' פריטים · מהספרייה או בהדבקת כתובת</div>';
       return html;
     }
 
@@ -4134,6 +4178,30 @@
       });
     });
 
+    // Add-by-URL for any media list (gallery images, logos items) — the
+    // always-available path when the library picker isn't the fit.
+    panel.querySelectorAll('[data-lp-url-add]').forEach(function (btn) {
+      var key = btn.dataset.lpUrlAdd;
+      var input = panel.querySelector('[data-lp-url="' + key + '"]');
+      if (!input) return;
+      var addUrls = function () {
+        var urls = input.value.split(/[\n,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+        if (!urls.length) return;
+        pushHistory();
+        if (!block.data) block.data = {};
+        if (!Array.isArray(block.data[key])) block.data[key] = [];
+        block.data[key] = block.data[key].concat(urls);
+        input.value = '';
+        markDirty();
+        renderCanvas();
+        renderProperties();
+      };
+      btn.addEventListener('click', addUrls);
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); addUrls(); }
+      });
+    });
+
     panel.querySelectorAll('[data-col]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         addChildToColumn(block.id, parseInt(btn.dataset.col, 10), 'text');
@@ -5045,6 +5113,23 @@
 
   // ---- Publish helpers ----
   function publishPage() {
+    // Empty-module guard (v2.13): before shipping, name any module that would
+    // publish blank or broken and let the owner decide. Skipped for the tour /
+    // programmatic callers via publishPage.skipEmptyCheck.
+    if (!publishPage._skipEmptyCheck) {
+      var holes = findEmptyModules();
+      if (holes.length) {
+        var counts = {};
+        holes.forEach(function (l) { counts[l] = (counts[l] || 0) + 1; });
+        var lines = Object.keys(counts).map(function (l) {
+          return '• ' + l + (counts[l] > 1 ? ' (×' + counts[l] + ')' : '');
+        }).join('\n');
+        if (!window.confirm(
+          'יש מודולים ריקים שיתפרסמו כחלל ריק או שבור:\n\n' + lines +
+          '\n\nמלאו אותם קודם, או לפרסם בכל זאת?'
+        )) return Promise.resolve({ ok: false, cancelled: true });
+      }
+    }
     var titleEl = document.getElementById('page-title');
     var title = titleEl ? titleEl.value : '';
     return fetch('/admin/publish', {

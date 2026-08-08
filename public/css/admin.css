@@ -2015,6 +2015,43 @@ body.is-dragging .canvas-block:hover .split-zone,
   border-color: var(--select) !important;
   background: var(--select-soft);
   box-shadow: inset 0 0 0 2px var(--select), 0 0 0 4px var(--select-glow);
+  position: relative;
+}
+/* Name the landing while hovering a container's middle — so "into" reads as a
+   deliberate nesting, not an ambiguous hover. (v2.13, MODULE_AUDIT #6) */
+.canvas-block.drop-into::after {
+  content: "↳ נכנס לתוך המיכל";
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 8px;
+  background: var(--select);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 7;
+}
+/* Empty container placeholder: an inviting drop cue, not a flat label. */
+.column-empty.is-container-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  font-weight: 600;
+}
+.column-empty .drop-cue-icon {
+  font-size: 1.05rem;
+  animation: dropCueBounce 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .column-empty .drop-cue-icon { animation: none; }
+}
+@keyframes dropCueBounce {
+  0%, 100% { transform: translateY(0); opacity: 0.7; }
+  50% { transform: translateY(3px); opacity: 1; }
 }
 
 /* columns */

@@ -834,7 +834,7 @@ const BLOCK_REGISTRY = [
     category: 'מדיה',
     bodyClass: 'blocks',
     childrenOf: null,
-    hintHe: 'רצועת לוגואים — PLACEHOLDER עד העלאת קבצים',
+    hintHe: 'רצועת לוגואים — התחילו מאריחי הדגמה, החליפו בלוגואים שלכם',
     params: [
       {
         name: 'items', bentmlParam: null, labelHe: 'לוגואים', type: 'list',
@@ -846,11 +846,14 @@ const BLOCK_REGISTRY = [
       }
     ],
     textField: null,
+    // Seed with the packaged demo tiles (seeded to every site's public/demo by
+    // the setup wizard), not /uploads/PLACEHOLDER-*.svg which never exist and
+    // render broken on the canvas AND the published page until replaced.
     seed: {
       items: [
-        { src: '/uploads/PLACEHOLDER-logo-1.svg', alt: 'לקוח 1' },
-        { src: '/uploads/PLACEHOLDER-logo-2.svg', alt: 'לקוח 2' },
-        { src: '/uploads/PLACEHOLDER-logo-3.svg', alt: 'לקוח 3' }
+        { src: '/demo/tile-1.svg', alt: 'לקוח 1' },
+        { src: '/demo/tile-3.svg', alt: 'לקוח 2' },
+        { src: '/demo/tile-6.svg', alt: 'לקוח 3' }
       ]
     }
   },
