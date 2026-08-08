@@ -170,6 +170,80 @@ try {
   check('E306 MAP address required', e instanceof BentmlError && e.code === 'E306');
 }
 
+// 4ב. inline-mark braces must not close a text body (v2.13 — found live:
+// `TEXT { @B{הטמעת YouTube} — מדביקים }` was cut at the mark's brace)
+try {
+  const doc = 'BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\n' +
+    'TEXT { @B{הטמעת YouTube} — מדביקים קישור ציבורי: }\n';
+  const r = compile(doc);
+  const content = r.blocks[0].data.content;
+  check('mark brace does not close a one-line TEXT body',
+    content === '@B{הטמעת YouTube} — מדביקים קישור ציבורי:');
+} catch (e) {
+  check('mark brace does not close a one-line TEXT body', false, e.toString());
+}
+
+try {
+  const doc = 'BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\n' +
+    'TEXT {\n  @I{שלוש הסצנות צוירו על ידי הבינה.}\n}\n\nHEADING { אחרי }\n';
+  const r = compile(doc);
+  check('TEXT whose body is only a mark parses (no E102 on the next line)',
+    r.blocks.length === 2 && r.blocks[0].data.content === '@I{שלוש הסצנות צוירו על ידי הבינה.}' &&
+    r.blocks[1].type === 'heading');
+} catch (e) {
+  check('TEXT whose body is only a mark parses (no E102 on the next line)', false, e.toString());
+}
+
+try {
+  const doc = 'BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\n' +
+    'TEXT { לפני @LINK(url: "/הבינה.html"){הקישור} אחרי }\n';
+  const r = compile(doc);
+  check('@LINK(url){label} survives inside a one-line body',
+    r.blocks[0].data.content === 'לפני @LINK(url: "/הבינה.html"){הקישור} אחרי');
+} catch (e) {
+  check('@LINK(url){label} survives inside a one-line body', false, e.toString());
+}
+
+// 4ג. SPACE carries an exact height (v2.13 — drag-resize wrote 106px and the
+// code tab flattened it back to the size enum)
+try {
+  const doc = 'BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\nSPACE(height: 106px)\n';
+  const r = compile(doc);
+  check('SPACE(height: 106px) compiles to an exact spacer height',
+    r.blocks[0].type === 'spacer' && r.blocks[0].data.height === '106px');
+} catch (e) {
+  check('SPACE(height: 106px) compiles to an exact spacer height', false, e.toString());
+}
+
+try {
+  compile('BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\nSPACE(height: banana)\n');
+  check('E305 on a nonsense SPACE height', false);
+} catch (e) {
+  check('E305 on a nonsense SPACE height', e instanceof BentmlError && e.code === 'E305');
+}
+
+try {
+  const src = compile('BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\nSPACE(height: 106px)\n');
+  const round = decompile({ title: 't' }, src.blocks);
+  check('decompile emits SPACE(height: 106px) — lossless round-trip',
+    /SPACE\(height: 106px\)/.test(round));
+  const again = compile(round);
+  check('height survives decompile → compile',
+    again.blocks[0].data.height === '106px');
+} catch (e) {
+  check('SPACE height round-trip', false, e.toString());
+}
+
+// enum-height spacers keep decompiling to the size name, not a raw height
+try {
+  const src = compile('BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\nSPACE(size: lg)\n');
+  const round = decompile({ title: 't' }, src.blocks);
+  check('SPACE(size: lg) still decompiles to the size name',
+    /SPACE\(size: lg\)/.test(round) && !/height:/.test(round));
+} catch (e) {
+  check('SPACE(size: lg) still decompiles to the size name', false, e.toString());
+}
+
 // 5. back-compat: 0.1 documents still compile after the 0.2 bump
 try {
   const legacy = compile('BENTML 0.1\n\nMETA {\n  title: "ישן"\n}\n\nTEXT { עדיין עובד }\n');

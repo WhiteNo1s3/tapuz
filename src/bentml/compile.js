@@ -141,7 +141,17 @@ function buildBlock(node, warnings) {
     case 'SPACE': {
       const size = p.size || 'md';
       const heightMap = { sm: '0.75rem', md: '1.5rem', lg: '2.5rem', xl: '4rem' };
-      return createBlock('spacer', applyChrome({ size, height: heightMap[size] || '1.5rem' }, p));
+      const data = { size, height: heightMap[size] || '1.5rem' };
+      // exact height wins over the size name — the builder's drag-resize writes
+      // pixel heights, and the code tab must not flatten them back to the enum
+      if (p.height != null && p.height !== '') {
+        const raw = typeof p.height === 'number' ? p.height + 'px' : String(p.height).trim();
+        if (!/^\d+(\.\d+)?(px|rem|em|vh)$/.test(raw)) {
+          throw new BentmlError('E305', `Invalid SPACE height: ${p.height} (use e.g. 106px or 2rem)`, {});
+        }
+        data.height = raw;
+      }
+      return createBlock('spacer', applyChrome(data, p));
     }
     case 'DIVIDER': {
       // renderer uses style solid|dashed — map line→solid, dots→dashed, thick→solid

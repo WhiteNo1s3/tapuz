@@ -85,7 +85,9 @@ const KEYWORDS = {
     body: 'NO-BODY',
     jsonType: 'spacer',
     params: {
-      size: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'xl'] }
+      size: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'xl'] },
+      // exact css length (e.g. 106px) — wins over size; written by drag-resize
+      height: { type: 'string' }
     }
   },
   DIVIDER: {

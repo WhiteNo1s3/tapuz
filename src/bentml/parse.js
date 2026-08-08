@@ -328,8 +328,9 @@ class Parser {
   collectTextBody(firstChunk) {
     const parts = [];
     let inlineStart = false;
+    const scan = { inMark: false }; // a mark split across lines must not close the body
     if (firstChunk) {
-      const close = findUnescapedClose(firstChunk);
+      const close = findUnescapedClose(firstChunk, scan);
       if (close !== -1) {
         return unescapeText(firstChunk.slice(0, close));
       }
@@ -338,7 +339,7 @@ class Parser {
     }
     while (this.i < this.n) {
       const line = this.lines[this.i];
-      const close = findUnescapedClose(line);
+      const close = findUnescapedClose(line, scan);
       if (close !== -1) {
         parts.push(line.slice(0, close));
         this.i++;
@@ -507,14 +508,40 @@ function findMatchingParen(s, openIdx) {
   return -1;
 }
 
-function findUnescapedClose(s) {
+/**
+ * Find the body-closing `}` — skipping inline-mark spans (`@B{…}`, `@I{…}`,
+ * `@CODE{…}`, `@LINK(url: "…"){…}`), whose own closing brace must never
+ * terminate the body: `TEXT { @B{כותרת} — המשך }` ends at the LAST brace.
+ * Marks are flat (renderInlineMarks forbids braces inside them), so one
+ * boolean of nesting suffices. Pass `state` ({inMark}) to carry a mark that
+ * a line break split in half; stateless calls scan a fresh single line.
+ */
+function findUnescapedClose(s, state) {
+  let inMark = state ? !!state.inMark : false;
   for (let i = 0; i < s.length; i++) {
-    if (s[i] === '\\') {
+    const c = s[i];
+    if (c === '\\') {
       i++;
       continue;
     }
-    if (s[i] === '}') return i;
+    if (inMark) {
+      if (c === '}') inMark = false;
+      continue;
+    }
+    if (c === '@') {
+      const m = /^@[A-Za-z]+(\([^)]*\))?\{/.exec(s.slice(i));
+      if (m) {
+        inMark = true;
+        i += m[0].length - 1;
+      }
+      continue;
+    }
+    if (c === '}') {
+      if (state) state.inMark = inMark;
+      return i;
+    }
   }
+  if (state) state.inMark = inMark;
   return -1;
 }
 

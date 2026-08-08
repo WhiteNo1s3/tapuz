@@ -179,9 +179,15 @@ function decompileBlock(block, indent) {
       return `${pad}ROW${paramList(params)} {\n${inner}\n${pad}}`;
     }
     case 'spacer': {
-      const size = d.size || sizeFromHeight(d.height) || 'md';
       const params = [];
-      if (size !== 'md') params.push(`size: ${size}`);
+      // a height outside the size enum is an exact drag-resized value — emit
+      // it verbatim so builder → code tab → apply round-trips losslessly
+      if (d.height && !sizeFromHeight(d.height)) {
+        params.push(`height: ${d.height}`);
+      } else {
+        const size = d.size || sizeFromHeight(d.height) || 'md';
+        if (size !== 'md') params.push(`size: ${size}`);
+      }
       uni(params, d, idParams);
       if (!params.length) return `${pad}SPACE`;
       return `${pad}SPACE${paramList(params)}`;
