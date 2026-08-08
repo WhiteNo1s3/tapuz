@@ -1,5 +1,5 @@
 {
-  "id": "show-and-tell-v1.6",
+  "id": "show-and-tell-v1.7",
   "syncPackagedTheme": "default",
   "cleanup": { "backups": "keep-latest", "revisionsKeep": 3 },
   "description": "תפוזיאל — מראים ומספרים: אתר ההצגה השיווקי, בנוי כולו ממודולים של תפוזיאל מתוך מסמך ה-Show and Tell",
@@ -11,7 +11,10 @@
     { "file": "pages/act4.pzn", "replace": true },
     { "file": "pages/act5.pzn", "replace": true },
     { "file": "pages/compare.pzn", "replace": true },
-    { "file": "pages/contact.pzn", "replace": true }
+    { "file": "pages/contact.pzn", "replace": true },
+    { "file": "pages/article-1.pzn", "replace": true },
+    { "file": "pages/article-2.pzn", "replace": true },
+    { "file": "pages/article-3.pzn", "replace": true }
   ],
   "menus": {
     "main": [

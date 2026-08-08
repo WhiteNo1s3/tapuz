@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>מ-WordPress לתפוזיאל בפקודה אחת</title>
+    <meta name="bent-slug" content="מ-וורדפרס-לתפוזיאל" />
+    <meta name="bent-tags" content="article,מדריכים" />
+    <meta name="bent-teaser" content="ייצאתם XML מוורדפרס? מכאן והלאה זו פקודה אחת: הממיר מפרק את הדפים למודולים אמיתיים ומוריד את התמונות אליכם הביתה." />
+    <meta name="bent-card-image" content="/demo/tile-3.svg" />
+  </head>
+  <body>
+    <bent-heading id="a1-title" level="1">מ-WordPress לתפוזיאל בפקודה אחת</bent-heading>
+    <bent-text id="a1-intro" lead="true">
+      הגירה היא הרגע שבו כל CMS מגלה את הפרצוף האמיתי שלו. ‏WordPress מייצא WXR שמאבד את העיצוב; בוני אתרים בשכירות לא מייצאים בכלל. אצלנו ההגירה פנימה היא פקודה אחת — והדרך החוצה נשארת תקן מתועד.
+    </bent-text>
+    <bent-list id="a1-steps" ordered="true">
+      <bent-item>מייצאים מוורדפרס: כלים ← ייצוא ← "כל התוכן" — מתקבל קובץ XML.</bent-item>
+      <bent-item>מריצים @CODE{./bin/tapuz.js import-wp export.xml} — או גוררים את הקובץ למסך הייבוא באדמין.</bent-item>
+      <bent-item>הממיר מפרק את ה-HTML למודולים אמיתיים: כותרות, טקסטים, תמונות, גלריות — לא "בלוק HTML" אחד גדול ומת.</bent-item>
+      <bent-item>תמונות מרוחקות יורדות אליכם, נדחסות ל-webp, ונרשמות בספריית המדיה — האתר שלכם לא תלוי יותר בשרת הישן.</bent-item>
+      <bent-item>כל דף מיובא נוחת כטיוטה — עוברים, מסדרים, מפרסמים.</bent-item>
+    </bent-list>
+    <bent-quote id="a1-quote">לעבור אל תפוזיאל זו פקודה אחת; לעבור ממנה זה תקן מתועד. שני הכיוונים פתוחים — ואת זה אף מתחרה לא מעז להגיד.</bent-quote>
+    <bent-cta id="a1-cta" title="רוצים לראות את שכבת השפה כולה?" buttontext="למערכת השפה" url="/השפה.html" tone="brand" align="center">BenTML, תקן pzn, והממיר — בדף אחד.</bent-cta>
+  </body>
+</html>

@@ -222,8 +222,12 @@ function renderBlock(block, direction = 'rtl') {
         const parts = rawRatio.split(':').map((x) => Math.max(0.2, parseFloat(x) || 1));
         if (parts.length === n) ratios = parts;
       }
+      // Ratio rides a CSS custom property, never inline display:grid — an
+      // inline display defeated every mobile stack rule, so ratio'd columns
+      // shipped un-collapsible on phones. The stylesheet (.cols-ratio) owns
+      // display and the narrow-screen fallback; only the fractions come here.
       const gridCss = ratios
-        ? `display:grid;grid-template-columns:${ratios.map((r) => r + 'fr').join(' ')};gap:var(--col-gap,1.15rem)`
+        ? `--cols:${ratios.map((r) => r + 'fr').join(' ')}`
         : '';
       // merge with module style attr (avoid two style= attributes)
       let colExtra = extra;
@@ -239,7 +243,7 @@ function renderBlock(block, direction = 'rtl') {
         const colContent = list.map(bb => renderBlock(bb, direction)).join('');
         return `<div class="col">${colContent || ''}</div>`;
       }).join('');
-      return `<div${colExtra} class="columns" dir="${direction}">${inner}</div>`;
+      return `<div${colExtra} class="columns${ratios ? ' cols-ratio' : ''}" dir="${direction}">${inner}</div>`;
     }
     case 'list': {
       const items = block.data.items || [];

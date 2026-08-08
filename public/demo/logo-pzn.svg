@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120" role="img" aria-label="pzn">
+  <rect width="320" height="120" rx="16" fill="#fffbf7"/>
+  <rect x="30" y="30" width="60" height="60" rx="10" fill="none" stroke="#ea580c" stroke-width="6"/>
+  <path d="M30 48 h60 M60 30 v60" stroke="#ea580c" stroke-width="4"/>
+  <text x="112" y="76" font-family="Consolas,monospace" font-size="40" font-weight="700" fill="#1c1917">.pzn</text>
+  <text x="222" y="76" font-family="system-ui,Segoe UI,Arial" font-size="18" fill="#57534e">התקן הפתוח</text>
+</svg>

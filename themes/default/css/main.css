@@ -186,11 +186,21 @@ p { margin-bottom: 1.1rem; }
 
 .columns .col { flex: 1; min-width: 0; }
 
+/* ratio'd columns (ROW ratio="2:1"…): the renderer passes the fractions as
+   --cols; the stylesheet owns display so the phone stack below still wins */
+.columns.cols-ratio {
+  display: grid;
+  grid-template-columns: var(--cols, 1fr 1fr);
+  gap: var(--col-gap, 1.15rem);
+}
+.columns.cols-ratio > .col { min-width: 0; }
+
 @media (max-width: 640px) {
   .columns {
     flex-direction: column;
     gap: 1.25rem;
   }
+  .columns.cols-ratio { grid-template-columns: 1fr; }
 }
 
 /* ===== Features ===== */

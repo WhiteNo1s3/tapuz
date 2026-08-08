@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120" role="img" aria-label="Shaltiel Industries">
+  <rect width="320" height="120" rx="16" fill="#fffbf7"/>
+  <rect x="28" y="34" width="52" height="52" rx="8" fill="#1c1917"/>
+  <text x="41" y="72" font-family="Georgia,serif" font-size="34" font-weight="700" fill="#fdba74">S</text>
+  <text x="96" y="60" font-family="system-ui,Segoe UI,Arial" font-size="22" font-weight="700" fill="#1c1917">Shaltiel Industries</text>
+  <text x="96" y="86" font-family="system-ui,Segoe UI,Arial" font-size="16" fill="#57534e">made by WhiteNo1se</text>
+</svg>

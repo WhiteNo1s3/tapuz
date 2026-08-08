@@ -531,12 +531,16 @@ register({
     let extraCls = '';
     if (node.props.collapse && node.props.collapse !== 'md') extraCls += ` collapse-${escapeAttr(node.props.collapse)}`;
     if (node.props.valign && node.props.valign !== 'top') extraCls += ` valign-${escapeAttr(node.props.valign)}`;
+    // Ratio rides a CSS custom property, never inline display:grid — same
+    // contract as the server renderer: the stylesheet (.cols-ratio) owns
+    // display and the narrow-screen stack; inline display used to defeat it.
     let gridStyle = '';
     const ratio = String(node.props.ratio || '');
     if (ratio.includes(':')) {
       const parts = ratio.split(':').map((x) => Math.max(0.2, parseFloat(x) || 1));
       if (parts.length === node.children.length) {
-        gridStyle = ` style="display:grid;grid-template-columns:${parts.map((r) => r + 'fr').join(' ')};gap:var(--col-gap,1.15rem)"`;
+        gridStyle = ` style="--cols:${parts.map((r) => r + 'fr').join(' ')}"`;
+        extraCls += ' cols-ratio';
       }
     }
     const inner = node.children.map((c) => compileChild(c, ctx)).join('');

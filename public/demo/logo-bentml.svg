@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120" role="img" aria-label="BenTML">
+  <rect width="320" height="120" rx="16" fill="#1c1917"/>
+  <text x="34" y="74" font-family="Consolas,monospace" font-size="30" fill="#fdba74">&lt;bent-</text>
+  <text x="138" y="74" font-family="Consolas,monospace" font-size="30" font-weight="700" fill="#ffffff">TML</text>
+  <text x="205" y="74" font-family="Consolas,monospace" font-size="30" fill="#fdba74">/&gt;</text>
+</svg>

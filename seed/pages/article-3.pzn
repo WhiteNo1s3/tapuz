@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>איך נבנתה ההצגה הזאת: סוכן AI, BenTML ו-180 גרסאות</title>
+    <meta name="bent-slug" content="איך-נבנתה-ההצגה" />
+    <meta name="bent-tags" content="article,מדריכים" />
+    <meta name="bent-teaser" content="האתר שאתם קוראים נכתב על ידי סוכן AI בשפת BenTML, פורסם דרך צינור הסוכנים המתועד — וכל דף בו הוא הוכחה חיה של המוצר." />
+    <meta name="bent-card-image" content="/demo/tile-4.svg" />
+  </head>
+  <body>
+    <bent-heading id="a3-title" level="1">איך נבנתה ההצגה הזאת: סוכן AI, BenTML ו-180 גרסאות</bent-heading>
+    <bent-text id="a3-intro" lead="true">
+      ההבטחה הכי גדולה של תפוזיאל היא ש"סוכנים הם משתמשים מהשורה הראשונה". האתר הזה הוא ההוכחה: כל דף בו נכתב על ידי סוכן AI כקובץ pzn, עבר את אותו מנגנון אימות שכל משתמש עובר, ופורסם דרך אותו צינור בדיוק.
+    </bent-text>
+    <bent-list id="a3-how" ordered="true">
+      <bent-item>הסוכן קורא את @B{מילון התחביר} — אותו מסמך שכל צ'אט חינמי מקבל בחבילת ההדבקה.</bent-item>
+      <bent-item>כל דף נכתב כ-pzn: תגי bent-* בלבד, בלי HTML פרוץ — מה שהתקן לא מרשה, פשוט לא עובר.</bent-item>
+      <bent-item>המנגנון הסלחני מאמת כל דף לפני פרסום; שגיאה חוזרת עם השורה המדויקת והתיקון.</bent-item>
+      <bent-item>הפרסום רץ באותו מסלול של כפתור "פרסם" באדמין — טיוטה, גרסה בהיסטוריה, ייצוא סטטי.</bent-item>
+    </bent-list>
+    <bent-text id="a3-numbers">
+      ומאחורי הכול — המשמעת שמאפשרת את זה: כ-180 גרסאות ששוחררו אחת-אחת, כל אחת עם בדיקות שרצות על כל שינוי, ותקן שמתעדכן אוטומטית מהקוד כך שהסוכן והבונה לעולם לא מדברים שפות שונות.
+    </bent-text>
+    <bent-cta id="a3-cta" title="רוצים את אותו כוח לאתר שלכם?" buttontext="למערכת ה-AI" url="/הבינה.html" tone="brand" align="center">ארבעה שלבים של AI בלי מונה — מהדבקה חינמית ועד מודל מקומי.</bent-cta>
+  </body>
+</html>

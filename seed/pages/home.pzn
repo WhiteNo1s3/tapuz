@@ -68,6 +68,8 @@
       <bent-newspopitem time="v2.10" text="פורטל לקוחות וזכויות היציאה" />
       <bent-newspopitem time="v2.12" text="נראות לפי מכשיר, סימבולים — וההצגה שאתם קוראים עכשיו" />
     </bent-newspop>
+    <bent-heading id="notebook" level="2">מהמחברת — מדריכים וסיפורים מאחורי הקלעים</bent-heading>
+    <bent-article-list id="notebook-list" tag="article" limit="3" columns="3" />
     <bent-divider id="d-timeline" bentstyle="dots" />
     <bent-quote id="one-sentence" author="המשפט האחד" style-background="var(--color-light-bg)" style-padding="lg" style-radius="lg">
       בוני אתרים משכירים לכם אתר; WordPress מוכר לכם פרויקט הרכבה; builder.io מוכר פיתוח AI לצוותים שכבר יש להם קוד; ו-CRM בענן מודד לכם בחזרה את רשימת הלקוחות של עצמכם. תפוזיאל נותנת את הדבר כולו — אתר, בונה, CRM, AI — מלווה בעברית, מתומחרת כתוכנה שבבעלותכם, וניתנת לייצוא לתקן שכל אחד יכול לממש.

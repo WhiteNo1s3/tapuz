@@ -95,7 +95,7 @@
     <bent-divider id="d-toolbox" bentstyle="dots" />
     <bent-heading id="toolbox-live" level="2">הארגז, בפעולה</bent-heading>
     <bent-text id="toolbox-live-intro">
-      לא רק מספרים על מודולים — מריצים אותם. כל מה שבקטע הזה הוא מודול חי מתוך הארגז: עמודות, תמונה, גלריה, קרוסלה, אקורדיון ותפריט משני. פתחו view-source — אין כאן שורת JavaScript.
+      לא רק מספרים על מודולים — מריצים אותם. כל מה שבקטע הזה הוא מודול חי מתוך הארגז: עמודות, תמונה, גלריה, קרוסלה, אקורדיון, וידאו, שמע, מפה ואפילו דלת ה-HTML. פתחו view-source — היחיד שירוץ כאן הוא נגן הווידאו של הדפדפן. נכון לרגע זה, ההצגה כולה משתמשת בכל 56 המודולים של הארגז.
     </bent-text>
     <bent-section id="toolbox-demo" size="lg" style-background="var(--color-light-bg)" style-radius="lg" style-padding="lg">
       <bent-columns id="demo-columns" ratio="1:1" collapse="md" gap="md" valign="center">
@@ -119,8 +119,22 @@
         <bent-slide image="/demo/tile-4.svg" tag="תוכן" title="כותרת, תקציר ותגית לכל שקופית" excerpt="מחליפים תמונה בשתי לחיצות מהספרייה." href="#toolbox-live" />
         <bent-slide image="/demo/tile-6.svg" tag="עריכה" title="כל שקופית היא פריט בפאנל" excerpt="מוסיפים, מסירים ומסדרים מחדש בגרירה." href="#toolbox-live" />
       </bent-carousel>
+      <bent-video id="demo-video" src="/demo/showreel.mp4" poster="/demo/tile-1.svg" caption="מודול וידאו — סרטון שנבנה מתוך ערכת האריחים של האתר עצמו" controls="true" loop="true" muted="true" />
+      <bent-audio id="demo-audio" src="/demo/jingle.mp3" caption="מודול שמע — הג'ינגל של תפוזיאל: חמש שניות של תפוז" />
+      <bent-columns id="demo-map-row" ratio="1:1" collapse="md" gap="md" valign="center">
+        <bent-col>
+          <bent-map id="demo-map" address="תל אביב" zoom="12" height="sm" />
+        </bent-col>
+        <bent-col>
+          <bent-text id="demo-map-note">מודול @B{מפה} — כתובת אחת בפאנל, והמפה חיה. (תל אביב לצורך ההדגמה — אנחנו עסק אונליין.)@BREAK@BREAK ומודול @B{הטמעה} יודע להבחין: קישור YouTube הופך לנגן; כל קישור אחר — לקישור בטוח, בלי iframe פראי:</bent-text>
+          <bent-embed id="demo-embed" url="https://github.com/WhiteNo1s3/tapuz" />
+        </bent-col>
+      </bent-columns>
+      <bent-html id="demo-html" note="דלת ה-HTML הגולמי — הדגמה" content="&lt;div style=&quot;border:2px dashed #ea580c;border-radius:12px;padding:16px;text-align:center;background:#fff&quot;&gt;זהו מודול ה-HTML הגולמי — דלת המילוט האחת, המבוקרת והמסומנת, למקרה שאין מודול למה שצריך. בלי סקריפטים, כמובן.&lt;/div&gt;" />
+      <bent-heading id="demo-category-h" level="3">ומודול קטגוריה, עם מאמרים אמיתיים מהאתר:</bent-heading>
+      <bent-category id="demo-category" slug="מדריכים" limit="3" showheader="false" />
       <bent-accordion id="demo-accordion">
-        <bent-fold title="מה עוד יש בארגז שלא מודגם בדף הזה?">וידאו ושמע בהעלאה עצמית, הטמעות YouTube, מפות, קוביות מאמרים חיות, קטגוריות ורצועת לוגואים — נגררים פנימה כשצריך אותם.</bent-fold>
+        <bent-fold title="כמה מהארגז מודגם באתר הזה?">הכול. כל 56 המודולים חיים איפשהו באתר — וידאו, שמע, מפה, קטגוריות, לוגואים ואפילו דלת ה-HTML — רובם ממש כאן בדף.</bent-fold>
         <bent-fold title="אפשר לשמור בלוק שבניתי לשימוש חוזר?">כן — סימבולים: כל מודול או מיכל נשמר בלחיצה לספרייה האישית, ונשלף מחדש בכל דף.</bent-fold>
         <bent-fold title="ומה אם אין מודול למה שאני צריך?">יש דלת HTML גולמי אחת, מבוקרת ומסומנת — פתח מילוט מודע, לא הרגל.</bent-fold>
       </bent-accordion>

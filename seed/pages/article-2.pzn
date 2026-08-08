@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>למה הדפים שלנו לא מריצים JavaScript</title>
+    <meta name="bent-slug" content="דפים-בלי-JavaScript" />
+    <meta name="bent-tags" content="article,מדריכים" />
+    <meta name="bent-teaser" content="טאבים, קרוסלות, אקורדיונים ומבזקים — הכול CSS בלבד. למה בחרנו ככה, ומה זה נותן לאתר שלכם בפועל." />
+    <meta name="bent-card-image" content="/demo/tile-2.svg" />
+  </head>
+  <body>
+    <bent-heading id="a2-title" level="1">למה הדפים שלנו לא מריצים JavaScript</bent-heading>
+    <bent-text id="a2-intro" lead="true">
+      פתחו view-source על כל דף מפורסם של תפוזיאל — כולל הדף הזה. הטאבים, הקרוסלות, האקורדיונים והמבזקים כולם עובדים, ואף אחד מהם לא מריץ שורת סקריפט. זו לא מגבלה; זו החלטה.
+    </bent-text>
+    <bent-features id="a2-why" columns="3">
+      <bent-feature icon="⚡" title="מהירות">בלי סביבת ריצה שנטענת אצל כל מבקר — הדף מוכן ברגע שה-HTML הגיע</bent-feature>
+      <bent-feature icon="🛡️" title="אבטחה">מה שלא רץ — אי אפשר לפרוץ. לדף סטטי אין משטח תקיפה</bent-feature>
+      <bent-feature icon="🧱" title="עמידות">אין תלות בגרסת דפדפן, בתוסף חוסם או בשגיאת סקריפט — הדף פשוט עובד</bent-feature>
+    </bent-features>
+    <bent-text id="a2-how">
+      איך זה עובד? כל מודול אינטראקטיבי בארגז בנוי על יכולות מובנות של הדפדפן: אקורדיון הוא @CODE{details/summary}, טאבים בנויים על קלט רדיו נסתר, קרוסלה על גלילת snap, ומבזקים על אנימציית CSS. הסקריפטים היחידים שיכולים להופיע בדף הם אלה שבחרתם בהם — משואת האנליטיקס הפרטית או ווידג'ט החיפוש — ושניהם עובדים גם בלעדיהם.
+    </bent-text>
+    <bent-cta id="a2-cta" title="רוצים לראות את הארגז בפעולה?" buttontext="לדף הבונה" url="/הבונה.html" tone="brand" align="center">כל המודולים, חיים, בדף אחד.</bent-cta>
+  </body>
+</html>
