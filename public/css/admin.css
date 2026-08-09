@@ -19,13 +19,17 @@
   --ws-faint: #94a3b8;
   --ws-well: #f8fafc;
 
-  /* builder chrome (dark desk) */
-  --bc-bg: #0b1020;
-  --bc-panel: #121a2e;
-  --bc-panel-2: #1a243c;
-  --bc-border: #2a3a5c;
-  --bc-text: #e8eefc;
-  --bc-muted: #8b9dc3;
+  /* builder chrome (dark desk) — warm neutral GREY, not navy (Ben: "the
+     color of the system shouldn't be dark blue"). The citrus accent carries
+     the brand; the desk stays quiet stone. */
+  --bc-bg: #131211;
+  --bc-panel: #1c1a19;
+  --bc-panel-2: #272422;
+  --bc-border: #3d3936;
+  --bc-text: #f0eeeb;
+  --bc-muted: #a6a09a;
+  --bc-well: #171514;
+  --bc-topbar: rgba(19, 18, 17, 0.90);
 
   /* accents */
   --accent: var(--admin-accent, #f97316);
@@ -68,6 +72,22 @@
   --elev-2:
     0 2px 6px color-mix(in srgb, var(--accent) 14%, transparent),
     0 14px 34px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* ---- editor theme: citrus (v2.14) ---------------------------------------
+   The dark-grey desk is the default; the ORANGE editor is a feature — a warm
+   citrus-paper desk the owner can switch to from the builder's tab row. Only
+   the six chrome tokens flip; every themed component follows. Code surfaces
+   (BenTML editors, snippets) intentionally keep their constant dark ink. */
+body.builder-screen[data-btheme="citrus"] {
+  --bc-bg: #ffedd9;
+  --bc-panel: #fff8f0;
+  --bc-panel-2: #ffe3c4;
+  --bc-border: #f0c896;
+  --bc-text: #46250e;
+  --bc-muted: #9a6a42;
+  --bc-well: #fff3e4;
+  --bc-topbar: rgba(255, 248, 240, 0.92);
 }
 
 /* ---- text selection ----------------------------------------------------
@@ -1164,7 +1184,7 @@ a > .stat:hover {
 .modal {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(15, 23, 42, 0.65);
+  background: rgba(23, 21, 19, 0.62);
   backdrop-filter: blur(3px);
   display: none;
   align-items: center;
@@ -1174,6 +1194,9 @@ a > .stat:hover {
 .modal.show { display: flex; }
 .modal-content {
   background: white;
+  /* the builder body's chrome text color must never leak into a white
+     modal — revision titles were e8eefc-on-white, i.e. invisible (v2.14) */
+  color: var(--ws-text);
   padding: 28px;
   border-radius: var(--r-lg);
   width: 100%;
@@ -1271,12 +1294,12 @@ body.builder-screen {
   color: var(--bc-text);
   background:
     radial-gradient(900px 480px at 85% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%),
-    radial-gradient(700px 420px at 8% 12%, rgba(37, 99, 235, .10), transparent 55%),
+    radial-gradient(700px 420px at 8% 12%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 55%),
     var(--bc-bg);
   background-attachment: fixed;
 }
 body.builder-screen .topbar {
-  background: rgba(13, 18, 35, 0.90);
+  background: var(--bc-topbar, rgba(19, 18, 17, 0.90));
   border-bottom-color: var(--bc-border);
 }
 body.builder-screen .topbar input.page-title { color: var(--bc-text); }
@@ -1295,7 +1318,7 @@ body.builder-screen .btn.secondary:hover {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--bc-border));
 }
 body.builder-screen .save-bar {
-  background: rgba(11, 16, 32, 0.88);
+  background: color-mix(in srgb, var(--bc-bg) 88%, transparent);
   backdrop-filter: blur(10px);
   border-top-color: var(--bc-border);
 }
@@ -1424,34 +1447,34 @@ body.builder-screen .save-bar {
   align-items: center;
   gap: 14px;
   padding: 10px 18px;
-  background: #0f172a;
-  border-bottom: 1px solid #334155;
-  color: #e2e8f0;
+  background: var(--bc-panel);
+  border-bottom: 1px solid var(--bc-border);
+  color: var(--bc-text);
   font-size: 0.9rem;
 }
 .rsp-devices { display: flex; gap: 6px; }
 .rsp-devices button {
-  border: 1px solid #334155;
-  background: #1e293b;
-  color: #cbd5e1;
+  border: 1px solid var(--bc-border);
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
   border-radius: 8px;
   padding: 6px 12px;
   cursor: pointer;
   font: 600 0.82rem system-ui, sans-serif;
 }
-.rsp-devices button small { color: #64748b; font-weight: 500; }
+.rsp-devices button small { color: var(--bc-muted); font-weight: 500; }
 .rsp-devices button.active {
   background: var(--admin-accent, #f97316);
   border-color: var(--admin-accent, #f97316);
   color: #fff;
 }
 .rsp-devices button.active small { color: rgba(255, 255, 255, 0.8); }
-.rsp-note { color: #64748b; font-size: 0.76rem; }
+.rsp-note { color: var(--bc-muted); font-size: 0.76rem; }
 .rsp-close {
   margin-inline-start: auto;
   border: none;
   background: none;
-  color: #94a3b8;
+  color: var(--bc-muted);
   font-size: 1.1rem;
   cursor: pointer;
 }
@@ -1459,7 +1482,7 @@ body.builder-screen .save-bar {
 .rsp-frame {
   background: #fff;
   border-radius: 14px;
-  border: 1px solid #334155;
+  border: 1px solid var(--bc-border);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   max-width: 100%;
@@ -1474,7 +1497,7 @@ body.builder-screen .save-bar {
   margin: 0 0 12px;
   border: 1px solid var(--bc-border);
   border-radius: var(--r-sm);
-  background: #0b1220;
+  background: var(--bc-well);
   overflow: hidden;
 }
 .layers-fold > summary {
@@ -1495,8 +1518,8 @@ body.builder-screen .save-bar {
   margin-inline-start: auto;
   font-weight: 600;
   font-size: 0.72rem;
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.12);
+  color: var(--bc-muted);
+  background: color-mix(in srgb, var(--bc-muted) 16%, transparent);
   border-radius: 99px;
   padding: 1px 8px;
 }
@@ -1508,25 +1531,25 @@ body.builder-screen .save-bar {
   padding: 5px 10px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #cbd5e1;
+  color: var(--bc-text);
   white-space: nowrap;
 }
-.layer-row:hover { background: rgba(148, 163, 184, 0.09); }
+.layer-row:hover { background: color-mix(in srgb, var(--bc-muted) 10%, transparent); }
 .layer-row.active {
   background: rgba(249, 115, 22, 0.14);
   box-shadow: inset 3px 0 0 var(--admin-accent, #f97316);
-  color: #fff;
+  color: var(--bc-text);
 }
-.layer-row.virtual { cursor: default; color: #64748b; font-size: 0.74rem; }
+.layer-row.virtual { cursor: default; color: var(--bc-muted); font-size: 0.74rem; }
 .layer-ico { width: 1.25em; text-align: center; flex: none; opacity: 0.85; }
 .layer-label { font-weight: 600; flex: none; }
 .layer-hint {
-  color: #64748b;
+  color: var(--bc-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
-.layers-empty { padding: 12px; text-align: center; color: #64748b; font-size: 0.78rem; }
+.layers-empty { padding: 12px; text-align: center; color: var(--bc-muted); font-size: 0.78rem; }
 
 /* ── Symbols library (v0.91) — rides the layers-fold shell ── */
 .symbols-list { max-height: 220px; overflow: auto; padding: 4px 0; }
@@ -1537,9 +1560,9 @@ body.builder-screen .save-bar {
   padding: 6px 10px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #cbd5e1;
+  color: var(--bc-text);
 }
-.sym-row:hover { background: rgba(148, 163, 184, 0.09); }
+.sym-row:hover { background: color-mix(in srgb, var(--bc-muted) 10%, transparent); }
 .sym-name {
   font-weight: 600;
   white-space: nowrap;
@@ -1551,8 +1574,8 @@ body.builder-screen .save-bar {
   margin-inline-start: auto;
   flex: none;
   font-size: 0.68rem;
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.12);
+  color: var(--bc-muted);
+  background: color-mix(in srgb, var(--bc-muted) 16%, transparent);
   border-radius: 99px;
   padding: 1px 7px;
 }
@@ -1560,14 +1583,14 @@ body.builder-screen .save-bar {
   flex: none;
   border: none;
   background: none;
-  color: #64748b;
+  color: var(--bc-muted);
   cursor: pointer;
   font-size: 0.75rem;
   padding: 2px 4px;
   border-radius: 4px;
 }
 .sym-del:hover { color: #fca5a5; background: rgba(239, 68, 68, 0.12); }
-.sym-empty { padding: 12px; text-align: center; color: #64748b; font-size: 0.75rem; line-height: 1.5; }
+.sym-empty { padding: 12px; text-align: center; color: var(--bc-muted); font-size: 0.75rem; line-height: 1.5; }
 
 .tool-search {
   width: 100%;
@@ -1575,7 +1598,7 @@ body.builder-screen .save-bar {
   margin-bottom: 10px;
   border: 1px solid var(--bc-border);
   border-radius: var(--r-sm);
-  background: #0b1220;
+  background: var(--bc-well);
   color: var(--bc-text);
   font: inherit;
   font-size: 0.85rem;
@@ -1631,7 +1654,7 @@ body.builder-screen .save-bar {
 .tool-cat-count {
   font-size: 0.65rem;
   color: var(--bc-muted);
-  background: #0b1220;
+  background: var(--bc-well);
   padding: 1px 7px;
   border-radius: 999px;
 }
@@ -1700,6 +1723,11 @@ body.builder-screen .save-bar {
 /* canvas — the live page is the brightest thing on the dark desk */
 .canvas {
   background: #fff;
+  /* the canvas IS the white page — its text must read as the page's ink,
+     never inherit the dark desk's light chrome color. Without this, every
+     heading/paragraph/quote preview was e8eefc-on-white (161 unreadable
+     nodes counted live, v2.14); modules with explicit colors still win. */
+  color: var(--ws-text);
   border: 1px solid var(--ws-border);
   border-radius: var(--r-lg);
   min-height: 620px;
@@ -1725,7 +1753,7 @@ body.builder-screen .canvas-header {
 .canvas-header .canvas-hint {
   opacity: 0;
   transition: opacity var(--dur-slow);
-  color: #7dd3fc;
+  color: var(--accent);
   font-weight: 600;
   font-size: 0.78rem;
   margin-inline-start: auto;
@@ -1756,7 +1784,7 @@ body.builder-screen .canvas-header {
   left: 8px;
   z-index: 2;
   font-size: 0.7rem;
-  background: #0f172a;
+  background: #26221f;
   color: #fff;
   padding: 2px 8px;
   border-radius: 4px;
@@ -2222,7 +2250,7 @@ body.is-col-resizing .column-head {
   font-size: 14px;
   line-height: 1;
   color: var(--select);
-  background: var(--bc-panel-2, #1e293b);
+  background: var(--bc-panel-2, #272422);
   border: 1px solid var(--select);
   border-radius: 6px;
   padding: 4px 2px;
@@ -2250,7 +2278,7 @@ body.is-col-resizing {
   height: 26px;
   border-radius: 50%;
   border: 1.5px solid var(--select);
-  background: var(--bc-panel-2, #1e293b);
+  background: var(--bc-panel-2, #272422);
   color: var(--select);
   font-size: 16px;
   font-weight: 700;
@@ -2305,7 +2333,7 @@ body.is-col-resizing {
   border-radius: 7px;
   font-size: 0.95rem;
   font-family: inherit;
-  background: #0b1220;
+  background: var(--bc-well);
   color: var(--bc-text);
   transition: border-color var(--dur), box-shadow var(--dur);
 }
@@ -2501,8 +2529,8 @@ details.agent-snip-details summary { cursor: pointer; }
 /* the HTML block gets a CODE editor — no word options, just the markup */
 .text-editor-box.is-code .te-input {
   font: 400 .88rem/1.6 ui-monospace, 'Cascadia Code', Consolas, monospace;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: #1c1a19;
+  color: #f0eeeb;
   min-height: 300px;
 }
 .text-editor-box .te-actions {
@@ -2586,7 +2614,7 @@ details.agent-snip-details summary { cursor: pointer; }
   margin-top: 12px;
   border: 1px solid var(--bc-border);
   border-radius: var(--r-md);
-  background: #0b1220;
+  background: #191716;
   overflow: hidden;
 }
 .bentml-output-dock-head {
@@ -2600,7 +2628,7 @@ details.agent-snip-details summary { cursor: pointer; }
   font-size: 0.85rem;
 }
 .bentml-output-dock-head .dock-sub {
-  color: #94a3b8;
+  color: var(--bc-muted);
   font-size: 0.75rem;
   flex: 1;
   min-width: 140px;
@@ -2615,7 +2643,7 @@ details.agent-snip-details summary { cursor: pointer; }
 .bentml-editor {
   position: relative;
   display: grid;
-  background: #0b1220;
+  background: #191716;
 }
 .bentml-editor .bentml-hl {
   position: absolute;
@@ -2730,7 +2758,7 @@ body:not(.builder-screen) .output-explain { color: var(--ws-muted); }
 .block-kw, .tool-kw {
   font-family: ui-monospace, Consolas, monospace;
   font-size: 0.72rem;
-  background: #0f172a;
+  background: #26221f;
   color: #fbbf24;
   padding: 1px 6px;
   border-radius: 4px;
@@ -2739,8 +2767,8 @@ body:not(.builder-screen) .output-explain { color: var(--ws-muted); }
 pre.agent-snip, pre.agent-shape, pre.agent-sheet {
   font-family: ui-monospace, Consolas, monospace;
   font-size: 0.75rem;
-  background: #0b1220;
-  color: #e2e8f0;
+  background: #191716;
+  color: #f0eeeb;
   padding: 10px 12px;
   border-radius: var(--r-sm);
   overflow: auto;
@@ -2751,13 +2779,13 @@ pre.agent-snip, pre.agent-shape, pre.agent-sheet {
   max-height: 220px;
 }
 pre.agent-sheet { max-height: 420px; }
-pre.agent-shape { max-height: none; border: 1px solid #334155; }
+pre.agent-shape { max-height: none; border: 1px solid #3d3936; }
 
 #bentml-source {
   min-height: 62vh;
 }
 #builder-pane-source .bentml-editor {
-  border: 1px solid #334155;
+  border: 1px solid #3d3936;
   border-radius: var(--r-md);
   overflow: hidden;
 }
@@ -2794,7 +2822,7 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
 .bent-html-note { font-size: 0.78rem; color: #64748b; margin-bottom: 6px; }
 .bent-html-card.is-provisional .bent-html-note { color: #a16207; }
 .bent-html-raw {
-  max-height: 160px; overflow: auto; background: #1e293b; color: #e2e8f0;
+  max-height: 160px; overflow: auto; background: #191716; color: #f0eeeb;
   border-radius: var(--r-sm); padding: 10px; margin: 0 0 10px;
   font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-word;
 }
@@ -3061,9 +3089,9 @@ body.is-spacer-resizing * { cursor: ns-resize !important; }
   font-size: 0.78rem;
   direction: ltr;
   text-align: left;
-  background: #0b1220;
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: #191716;
+  color: #f0eeeb;
+  border: 1px solid #3d3936;
   border-radius: var(--r-md);
   padding: 12px;
   resize: vertical;
@@ -3166,9 +3194,9 @@ body.is-spacer-resizing * { cursor: ns-resize !important; }
   max-height: 70vh;
   display: none;
   flex-direction: column;
-  background: linear-gradient(160deg, #0f172a, #1e293b);
-  color: #e2e8f0;
-  border: 1px solid #334155;
+  background: linear-gradient(160deg, var(--bc-panel), var(--bc-panel-2));
+  color: var(--bc-text);
+  border: 1px solid var(--bc-border);
   border-radius: 14px;
   box-shadow: 0 14px 44px rgba(0, 0, 0, .5);
   z-index: 900;
@@ -3180,7 +3208,7 @@ body.is-spacer-resizing * { cursor: ns-resize !important; }
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--bc-border);
 }
 #copilot-drawer .cp-sub { font-size: .68rem; color: #94a3b8; flex: 1; }
 #copilot-drawer #cp-close {
@@ -3195,7 +3223,7 @@ body.is-spacer-resizing * { cursor: ns-resize !important; }
   padding: 10px 12px;
 }
 #copilot-drawer .cp-bubble { padding: 8px 11px; border-radius: 10px; line-height: 1.5; max-width: 94%; }
-#copilot-drawer .cp-system { background: #1e293b; color: #94a3b8; align-self: center; text-align: center; font-size: .78rem; }
+#copilot-drawer .cp-system { background: var(--bc-panel-2); color: var(--bc-muted); align-self: center; text-align: center; font-size: .78rem; }
 #copilot-drawer .cp-user { background: #0a66c2; color: #fff; align-self: flex-start; }
 #copilot-drawer .cp-assistant { background: #172554; border: 1px solid #1e40af; color: #dbeafe; align-self: flex-end; }
 #copilot-drawer .cp-approve {
@@ -3210,12 +3238,12 @@ body.is-spacer-resizing * { cursor: ns-resize !important; }
   border: none; border-radius: 8px; padding: 7px 10px; cursor: pointer; font: 600 12px system-ui;
 }
 #copilot-drawer .cp-ok { background: #059669; color: #fff; }
-#copilot-drawer .cp-no { background: #334155; color: #e2e8f0; }
+#copilot-drawer .cp-no { background: var(--bc-panel-2); color: var(--bc-text); }
 #copilot-drawer #cp-status { padding: 0 12px 4px; font-size: .74rem; color: #fbbf24; min-height: 16px; }
-#copilot-drawer .cp-compose { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #334155; }
+#copilot-drawer .cp-compose { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--bc-border); }
 #copilot-drawer #cp-input {
-  flex: 1; resize: none; border: 1px solid #334155; border-radius: 8px;
-  background: #0f172a; color: #e2e8f0; padding: 8px; font: inherit; font-size: .85rem;
+  flex: 1; resize: none; border: 1px solid var(--bc-border); border-radius: 8px;
+  background: var(--bc-well); color: var(--bc-text); padding: 8px; font: inherit; font-size: .85rem;
 }
 #copilot-drawer #cp-send {
   border: none; border-radius: 8px; background: #7c3aed; color: #fff;
@@ -3322,4 +3350,132 @@ body.is-spacer-resizing * { cursor: ns-resize !important; }
      the same actions on small screens */
   .save-bar { display: none; }
   .builder { padding-bottom: 70px; }
+}
+
+/* ==========================================================================
+   Revision history (v2.14) — a list a human can actually operate.
+   The old rows were anonymous twins: same title, pale timestamp, restore
+   button, nothing else. Now each row says WHAT it is (kind badge), WHEN in
+   human words (relative time, exact on the second line), how BIG the page
+   was, and which row is the draft you are standing on. Modal surfaces are
+   white in both editor themes, so these ride the light (--ws) tokens.
+   ========================================================================== */
+.rev-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  color: var(--ws-muted);
+}
+.rev-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--ws-border);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: #fff;
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.rev-row:hover {
+  border-color: var(--accent-line);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.rev-row.is-current {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--ws-border));
+  background: var(--accent-wash);
+}
+.rev-kind {
+  flex: none;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+.rev-kind.k-publish { background: #dcfce7; color: #166534; }
+.rev-kind.k-draft   { background: #f1f5f9; color: #475569; }
+.rev-kind.k-restore { background: #fef3c7; color: #92400e; }
+.rev-main { flex: 1; min-width: 0; }
+.rev-when { font-weight: 700; color: var(--ws-text); font-size: 0.92rem; }
+.rev-sub {
+  font-size: 0.74rem;
+  color: var(--ws-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rev-current-chip {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+.rev-row .btn { flex: none; padding: 6px 12px; }
+.rev-empty, .rev-error { padding: 24px; text-align: center; color: var(--ws-muted); }
+.rev-error { color: var(--danger); }
+
+/* topbar action row — was inline styles in the route; the media query below
+   must be able to unwrap it into one scrollable line */
+.topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn-import-ai { padding: 8px 12px; }
+body:not(.builder-screen) .btn-import-ai {
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
+}
+
+/* editor theme toggle — lives in the mode-tabs row, next to ⚙ מתקדם */
+.btheme-toggle {
+  align-self: center;
+  background: transparent;
+  border: 1px dashed var(--bc-border);
+  color: var(--bc-muted);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color var(--dur), border-color var(--dur), background var(--dur);
+}
+.btheme-toggle:hover {
+  color: var(--bc-text);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--bc-border));
+}
+
+/* ==========================================================================
+   Builder on a narrow window (v2.14) — the top chrome used to WRAP: logo,
+   title, badge and six buttons stacked into a wall that shoved the canvas
+   off-screen ("the menu hid everything"). Two slim rows now: identity line,
+   then ONE scrollable action line. The canvas stays king.
+   ========================================================================== */
+@media (max-width: 760px) {
+  .topbar-inner { flex-wrap: wrap; row-gap: 6px; }
+  .topbar .topbar-inner { padding-top: 6px; }
+  .topbar-left { flex: 1 1 100%; gap: 8px; min-width: 0; }
+  .topbar-left .brand-logo { font-size: 1.05rem !important; flex: none; }
+  .topbar input.page-title { min-width: 0; flex: 1; font-size: 1.05rem; }
+  .topbar-actions {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 3px;
+  }
+  .topbar-actions .btn { flex: none; white-space: nowrap; }
+  .builder-mode-tabs { margin-top: 8px; gap: 4px; }
+  .builder-mode-tabs button { padding: 6px 11px; font-size: 0.82rem; }
+  .builder-mode-tabs button .tab-sub { display: none; }
+  .canvas-header {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    white-space: nowrap;
+    align-items: center;
+  }
+  .canvas-header .page-props-btn { flex: none; }
 }

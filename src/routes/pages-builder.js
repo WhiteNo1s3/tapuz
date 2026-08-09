@@ -233,8 +233,8 @@ router.get('/admin/edit/:fullPath', (req, res) => {
             <option value="published" ${page.status === 'published' ? 'selected' : ''}>פורסם</option>
           </select>
         </div>
-        <div class="topbar-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button type="button" onclick="TapuzBuilder.openImportAi()" class="btn secondary" style="padding:8px 12px;border-color:#c7d2fe;color:#4338ca">🤖 ייבא מ‑AI</button>
+        <div class="topbar-actions">
+          <button type="button" onclick="TapuzBuilder.openImportAi()" class="btn secondary btn-import-ai">🤖 ייבא מ‑AI</button>
           <button type="button" onclick="TapuzBuilder.openRevisions()" class="btn secondary sm">היסטוריה</button>
           <a href="/admin/theme" class="btn secondary sm">ערכת נושא</a>
           <a href="/" target="_blank" class="btn secondary sm">צפה באתר</a>

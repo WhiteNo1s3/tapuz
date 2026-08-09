@@ -562,6 +562,35 @@
       });
     }
 
+    // editor theme (v2.14): dark-grey desk by default, citrus paper as a
+    // feature — the toggle lives in the mode-tabs row and persists per browser
+    var THEME_KEY = 'tapuz:btheme';
+    function applyBTheme(name, toggleBtn) {
+      if (name === 'citrus') document.body.dataset.btheme = 'citrus';
+      else delete document.body.dataset.btheme;
+      if (toggleBtn) {
+        toggleBtn.textContent = name === 'citrus' ? '🌒 עורך אפור' : '🍊 עורך כתום';
+        toggleBtn.title = name === 'citrus'
+          ? 'חזרה לשולחן העבודה הכהה'
+          : 'מצב הדרים — עורך בהיר בצבעי תפוז';
+      }
+    }
+    var tabsRow = document.querySelector('.builder-mode-tabs');
+    if (tabsRow) {
+      var themeBtn = document.createElement('button');
+      themeBtn.type = 'button';
+      themeBtn.className = 'btheme-toggle';
+      tabsRow.appendChild(themeBtn);
+      var storedTheme = '';
+      try { storedTheme = localStorage.getItem(THEME_KEY) || ''; } catch (e) {}
+      applyBTheme(storedTheme, themeBtn);
+      themeBtn.addEventListener('click', function () {
+        var next = document.body.dataset.btheme === 'citrus' ? '' : 'citrus';
+        applyBTheme(next, themeBtn);
+        try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+      });
+    }
+
     window.addEventListener('beforeunload', function (e) {
       if (!isDirty) return;
       e.preventDefault();
@@ -5096,8 +5125,11 @@
       deleteBlock(selectedId);
     }
     if (e.key === 'Escape') {
-      // responsive drawers close first; then selection clears
-      if (document.body.classList.contains('toolbox-open')) {
+      // open modals close first, then responsive drawers, then selection
+      var openModal = document.querySelector('.modal.show');
+      if (openModal) {
+        openModal.classList.remove('show');
+      } else if (document.body.classList.contains('toolbox-open')) {
         document.body.classList.remove('toolbox-open');
       } else if (document.body.classList.contains('props-open')) {
         document.body.classList.remove('props-open');
@@ -5173,26 +5205,49 @@
     if (modal) modal.classList.remove('show');
   }
 
+  /** SQLite CURRENT_TIMESTAMP is UTC — parse it as such, speak Hebrew time. */
+  function revTimeParts(iso) {
+    var t = new Date(String(iso || '').replace(' ', 'T') + 'Z');
+    if (isNaN(+t)) return { rel: iso || '', abs: '' };
+    var s = Math.floor((Date.now() - t.getTime()) / 1000);
+    var rel;
+    if (s < 45) rel = 'לפני רגע';
+    else if (s < 3600) { var m = Math.max(1, Math.round(s / 60)); rel = m === 1 ? 'לפני דקה' : 'לפני ' + m + ' דקות'; }
+    else if (s < 86400) { var h = Math.round(s / 3600); rel = h === 1 ? 'לפני שעה' : 'לפני ' + h + ' שעות'; }
+    else if (s < 172800) rel = 'אתמול';
+    else if (s < 604800) rel = 'לפני ' + Math.round(s / 86400) + ' ימים';
+    else rel = t.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
+    var abs = t.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' }) +
+      ' ' + t.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    return { rel: rel, abs: abs };
+  }
+
   function loadRevisions() {
     var list = document.getElementById('revisions-list');
     if (!list) return;
-    list.innerHTML = '<div style="padding:20px;color:#64748b">טוען...</div>';
+    list.innerHTML = '<div class="rev-empty">טוען...</div>';
     fetch('/admin/api/revisions/' + encodeURIComponent(currentPageFullPath))
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        if (!data.ok) { list.innerHTML = '<div style="color:#b91c1c;padding:20px">שגיאה</div>'; return; }
+        if (!data.ok) { list.innerHTML = '<div class="rev-error">שגיאה בטעינת ההיסטוריה</div>'; return; }
         var revs = data.revisions || [];
         if (!revs.length) {
-          list.innerHTML = '<div style="padding:20px;color:#64748b">אין היסטוריה עדיין</div>';
+          list.innerHTML = '<div class="rev-empty">אין היסטוריה עדיין — כל שמירה ופרסום יופיעו כאן</div>';
           return;
         }
-        list.innerHTML = revs.map(function (r) {
-          var kind = r.kind === 'publish' ? 'פרסום' : (r.kind === 'restore' ? 'שחזור' : 'טיוטה');
-          var badgeColor = r.kind === 'publish' ? '#166534' : '#0a66c2';
-          return '<div class="rev-row" data-id="' + r.id + '" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;background:#fff">' +
-            '<div><strong>' + esc(r.title || 'ללא כותרת') + '</strong><br>' +
-            '<span style="font-size:0.75rem;color:#64748b">' + (r.created_at || '').replace('T', ' ').slice(0, 19) + ' · ' + kind + '</span></div>' +
-            '<button type="button" class="btn secondary" data-restore="' + r.id + '" style="padding:6px 12px">שחזר לטיוטה</button>' +
+        var head = '<div class="rev-head">' + revs.length + ' גרסאות · כל שמירה ופרסום נרשמים אוטומטית · שחזור מעתיק לטיוטה בלבד</div>';
+        list.innerHTML = head + revs.map(function (r, i) {
+          var kindCls = r.kind === 'publish' ? 'k-publish' : (r.kind === 'restore' ? 'k-restore' : 'k-draft');
+          var kindHe = r.kind === 'publish' ? 'פורסם' : (r.kind === 'restore' ? 'שוחזר' : 'טיוטה');
+          var t = revTimeParts(r.created_at);
+          var kb = r.blocks_size ? Math.max(1, Math.round(r.blocks_size / 1024)) + 'KB' : '';
+          var sub = [t.abs, esc(r.title || 'ללא כותרת'), kb].filter(Boolean).join(' · ');
+          return '<div class="rev-row' + (i === 0 ? ' is-current' : '') + '" data-id="' + r.id + '">' +
+            '<span class="rev-kind ' + kindCls + '">' + kindHe + '</span>' +
+            '<div class="rev-main"><div class="rev-when">' + esc(t.rel) + '</div>' +
+            '<div class="rev-sub" title="' + esc(sub) + '">' + sub + '</div></div>' +
+            (i === 0 ? '<span class="rev-current-chip">✓ האחרונה</span>' : '') +
+            '<button type="button" class="btn secondary" data-restore="' + r.id + '">שחזר לטיוטה</button>' +
           '</div>';
         }).join('');
         list.querySelectorAll('[data-restore]').forEach(function (btn) {
