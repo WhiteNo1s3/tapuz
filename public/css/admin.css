@@ -1314,7 +1314,7 @@ body.builder-screen .btn.secondary {
 }
 body.builder-screen .btn.secondary:hover {
   background: var(--bc-panel);
-  color: #fff;
+  color: var(--bc-text);
   border-color: color-mix(in srgb, var(--accent) 55%, var(--bc-border));
 }
 body.builder-screen .save-bar {
@@ -1645,11 +1645,11 @@ body.builder-screen .save-bar {
   transition: transform var(--dur);
 }
 .tool-cat[open] .tool-cat-toggle .chev { transform: rotate(90deg); }
-.tool-cat-title {
+.tool-cat-title { /* mixes toward the chrome ink so citrus mode stays readable */
   flex: 1;
   font-size: 0.78rem;
   font-weight: 700;
-  color: color-mix(in srgb, var(--cat) 55%, #fff);
+  color: color-mix(in srgb, var(--cat) 55%, var(--bc-text));
 }
 .tool-cat-count {
   font-size: 0.65rem;
@@ -1659,7 +1659,7 @@ body.builder-screen .save-bar {
   border-radius: 999px;
 }
 .tool-cat-body { padding: 2px 5px 6px; }
-.tool-cat .tool-btn .tool-ico { color: color-mix(in srgb, var(--cat) 65%, #fff); }
+.tool-cat .tool-btn .tool-ico { color: color-mix(in srgb, var(--cat) 65%, var(--bc-text)); }
 .tool-btn {
   display: flex;
   align-items: center;
@@ -3479,3 +3479,8 @@ body:not(.builder-screen) .btn-import-ai {
   }
   .canvas-header .page-props-btn { flex: none; }
 }
+
+/* citrus-mode fine print — the dark desk's translucent black chips flip to
+   translucent ink so icons keep a quiet backdrop on paper */
+body.builder-screen[data-btheme="citrus"] .tool-btn .tool-ico { background: rgba(70, 37, 14, 0.08); }
+body.builder-screen[data-btheme="citrus"] .tool-btn:hover .tool-ico { background: rgba(70, 37, 14, 0.14); }
