@@ -1,5 +1,5 @@
 {
-  "id": "show-and-tell-v1.8",
+  "id": "show-and-tell-v1.8.1",
   "syncPackagedTheme": "default",
   "cleanup": { "backups": "keep-latest", "revisionsKeep": 3 },
   "description": "תפוזיאל — מראים ומספרים: אתר ההצגה השיווקי, בנוי כולו ממודולים של תפוזיאל מתוך מסמך ה-Show and Tell. v1.8 מצרף את חלון הראווה של גרוק — כל 40 המודולים העליונים בדף אחד.",

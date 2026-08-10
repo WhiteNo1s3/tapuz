@@ -116,13 +116,14 @@
       <bent-trow>gallery | OK | ספרייה + שדה URL</bent-trow>
       <bent-trow>article-list | תלוי תוכן | צריך תגית</bent-trow>
     </bent-table>
+    <bent-text id="pricing_intro_demo" size="md">מודול רובריקות — לא מוכרים כאן כלום 🙂 מדגימים: שורות יתרון, מחיר, ומסגרת מודגשת שתופסת את העין.</bent-text>
     <bent-pricing id="pricing_1786146711567_695">
-      <bent-plan ctaLabel="התחילו" ctaUrl="/contact.html" features="דפים
-מודולים
-עברית" highlighted="false" period="/התחלה" price="0" title="בסיסי" />
-      <bent-plan ctaLabel="דברו איתנו" ctaUrl="/contact.html" features="CRM
-טפסים
-תפריט צד" highlighted="true" period="/מותאם" price="—" title="מלא" />
+      <bent-plan ctaLabel="זו רק דוגמה" ctaUrl="/הבונה.html" features="שלוש שורות יתרון
+מחיר שהוא בכלל אות
+כפתור שלא מוכר דבר" highlighted="false" period="/רובריקה רגילה" price="א׳" title="הקליפה" />
+      <bent-plan ctaLabel="גם זו דוגמה" ctaUrl="/הבונה.html" features="אותו מודול בדיוק
+מסגרת שקופצת לעין
+תג ״מומלץ״ למעלה" highlighted="true" period="/רובריקה מודגשת" price="🍊" title="התפוז השלם" />
     </bent-pricing>
     <bent-form id="form_1786146712002_456" action="" method="post" submit="שלחו הודעה">
       <bent-field label="שם" name="name" required="true" type="text" />
