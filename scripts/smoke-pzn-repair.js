@@ -99,6 +99,30 @@ repairClean('hoist <bent-text> out of <bent-columns>', doc('    <bent-columns id
   check('  zero changes on a valid doc', r.changes.length === 0);
 }
 
+// ── inline HTML → marks (v2.19, Ben's "הבנייה נכשלה: Raw HTML <b>") ─────────
+// Model drift writes <b>/<i>/<a>/<br> inside module text. The old behavior
+// either threw E_RAW_HTML or tore the words out of the sentence into hoisted
+// bent-html blocks. Now the words SURVIVE, wearing the language's own marks.
+{
+  const doc = '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n' +
+    '<head><meta charset="utf-8" /><title>ת</title><meta name="bent-slug" content="t" /></head>\n' +
+    '<body>\n<bent-text>שלום <b>מודגש</b> וגם <i>נטוי</i> ו<a href="/דף">קישור</a><br>עוד <u>שורה</u></bent-text>\n' +
+    '<bent-heading level="2">כותרת <strong>חזקה</strong></bent-heading>\n</body>\n</html>';
+  const r = repair(doc);
+  check('inline-HTML doc repairs ok', r.ok === true && r.remaining.length === 0);
+  check('  INLINE_MARKS change recorded', r.changes.some((c) => c.code === 'INLINE_MARKS'));
+  check('  <b> became @B and the WORD survived', /@B\{מודגש\}/.test(r.source));
+  check('  <i> became @I', /@I\{נטוי\}/.test(r.source));
+  check('  <a href> became @LINK with url + text', /@LINK\(url: [^)]*דף[^)]*\)\{קישור\}/.test(r.source) || /@LINK\(url:.*\)\{קישור\}/.test(r.source));
+  check('  <br> became @BREAK', /@BREAK/.test(r.source));
+  check('  <u> shell shed, its word kept', !/[<]u[>]/.test(r.source) && /שורה/.test(r.source));
+  check('  <strong> in a heading became @B', /@B\{חזקה\}/.test(r.source));
+  check('  no words were torn out into hoisted bent-html', !r.changes.some((c) => c.code === 'WRAP_HTML'));
+  check('  nothing raw remains (re-parse strict-clean)', (() => {
+    try { pzn.parse(r.source); return true; } catch (e) { return false; }
+  })());
+}
+
 console.log('');
 console.log(fail ? 'SMOKE PZN-REPAIR: FAIL' : 'SMOKE PZN-REPAIR: PASS');
 process.exit(fail ? 1 : 0);

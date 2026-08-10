@@ -132,6 +132,9 @@ function buildRoleplayPack(opts = {}) {
   lines.push(he ? '2. את/ה בוחר/ת כלים מהמלאי ומרכיב/ת מסמך `.pzn` מלא.' : '2. You pick tools from inventory and compose one complete `.pzn` document.');
   lines.push(he ? '3. מהלך מנצח = fence אחד של html עם מסמך שלם + `</html>` (+ אופציונלי `PZN_READY`).' : '3. Winning move = one html fence with a complete document + `</html>` (optional `PZN_READY`).');
   lines.push(he ? '4. מהלכים לא חוקיים: HTML חופשי, מודולים שלא במילון, מסמך חצוי.' : '4. Illegal moves: free HTML, modules not in the dictionary, incomplete documents.');
+  lines.push(he
+    ? '5. גם בתוך טקסט אין תגיות HTML: לא `<b>`, לא `<i>`, לא `<a>`, לא `<br>` — במקומן סימוני השפה: `@B{מודגש}` · `@I{נטוי}` · `@LINK(url: "/דף"){טקסט}` · `@BREAK`.'
+    : '5. No HTML tags inside text either: not `<b>`, `<i>`, `<a>`, `<br>` — use the language marks instead: `@B{bold}` · `@I{italic}` · `@LINK(url: "/page"){text}` · `@BREAK`.');
   lines.push(he ? '5. אחרי שהמסמך מוכן — השחקן מפרסם ל‑CMS; הבונה הויזואלי מציג את אותה צורה.' : '5. After the document is ready the player publishes into the CMS; the visual builder shows the same shape.');
   lines.push('');
 

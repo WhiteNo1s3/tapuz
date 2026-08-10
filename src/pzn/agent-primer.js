@@ -35,6 +35,7 @@ function buildPznPrimer() {
   lines.push('');
   lines.push('1. Reply with **ONE fenced code block** containing a **complete .pzn document** (`<!DOCTYPE html>` … `</html>`). Explanations go outside the fence.');
   lines.push('2. Body may contain **only registered `bent-*` tags** listed below. Raw HTML tags in the body are a build error.');
+  lines.push('   Inside text too: never `<b>`/`<i>`/`<a>`/`<br>` — use the marks `@B{…}` · `@I{…}` · `@LINK(url: "…"){…}` · `@BREAK`.');
   lines.push('3. Every module gets a stable, unique `id` attribute (kebab or snake, e.g. `hero-1`).');
   lines.push('4. Hebrew site: keep `<html lang="he" dir="rtl">` unless asked otherwise.');
   lines.push('5. Page title goes in `<title>`; slug in `<meta name="bent-slug" content="...">` (do not change the slug unless asked).');

@@ -383,10 +383,67 @@ function repairAst(doc, changes) {
  * @param {string} source
  * @returns {{ ok: boolean, source?: string, changes: object[], remaining: object[], error?: string }}
  */
+// ── inline HTML → BenTML marks (v2.19, Ben's "הבנייה נכשלה: Raw HTML <b>") ──
+// Inline formatting the models keep writing as HTML (<b>, <i>, <a>, <br>…)
+// is MEANING, not markup noise. The old path either threw E_RAW_HTML or
+// "fixed" it by tearing the words out of the sentence into hoisted bent-html
+// blocks ("שלום <b>מודגש</b> עולם" → "שלום  עולם"). Convert to the language's
+// own marks BEFORE the parser ever sees them. These tags are never legitimate
+// .pzn structure, so a source-level pass is safe; escaped content
+// (&lt;b&gt; inside bent-html attrs) is untouched by construction.
+// Flat-mark rule: the renderer's marks don't nest — when an inner already
+// carries braces/marks, keep the words and shed the shell.
+const INLINE_MARK_TAGS = [
+  { re: /<(?:b|strong)\b[^>]*>([\s\S]*?)<\/(?:b|strong)\s*>/gi, wrap: (t) => `@B{${t}}` },
+  { re: /<(?:i|em)\b[^>]*>([\s\S]*?)<\/(?:i|em)\s*>/gi, wrap: (t) => `@I{${t}}` },
+  { re: /<code\b[^>]*>([\s\S]*?)<\/code\s*>/gi, wrap: (t) => `@CODE{${t}}` }
+];
+
+function normalizeInlineHtml(source) {
+  let s = String(source);
+  let changed = 0;
+  // innermost-first: repeat until no inline tag remains
+  let prev;
+  do {
+    prev = s;
+    for (const t of INLINE_MARK_TAGS) {
+      s = s.replace(t.re, (m, inner) => {
+        changed++;
+        const text = inner.trim();
+        return /[{}]/.test(text) ? inner : t.wrap(text);
+      });
+    }
+  } while (s !== prev);
+  // <a href> → @LINK (after the loop, so its inner is already mark-clean)
+  s = s.replace(/<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a\s*>/gi,
+    (m, d1, d2, inner) => {
+      changed++;
+      const url = (d1 || d2 || '').trim();
+      const text = inner.replace(/<[^>]+>/g, '').trim();
+      if (!url || /[{}]/.test(text)) return text; // flat marks only — keep the words
+      return `@LINK(url: "${url.replace(/"/g, '')}"){${text}}`;
+    });
+  // a bare <a> without href carries nothing we can keep but its words
+  s = s.replace(/<a\b[^>]*>([\s\S]*?)<\/a\s*>/gi, (m, inner) => { changed++; return inner; });
+  s = s.replace(/<br\s*\/?\s*>/gi, () => { changed++; return ' @BREAK '; });
+  // benign wrappers: shed the shell, keep the words
+  s = s.replace(/<\/?(?:u|span|font|mark|small|big|sub|sup)\b[^>]*>/gi, () => { changed++; return ''; });
+  return { source: s, changed };
+}
+
 function repair(source) {
   const changes = [];
   if (typeof source !== 'string' || !source.trim()) {
     return { ok: false, changes, remaining: [], error: 'empty source' };
+  }
+
+  const inline = normalizeInlineHtml(source);
+  if (inline.changed) {
+    source = inline.source;
+    changes.push({
+      code: 'INLINE_MARKS',
+      message: `${inline.changed} inline HTML tag(s) (<b>/<i>/<a>/<br>…) → @B/@I/@LINK marks`
+    });
   }
 
   let doc;
