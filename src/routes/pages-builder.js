@@ -299,7 +299,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
             <span>דף חי · טיוטה</span>
             <span id="block-count">${(draft || []).length} מודולים</span>
             <button type="button" id="btn-page-props" class="page-props-btn">⚙ הגדרות דף</button>
-            <button type="button" id="btn-responsive" class="page-props-btn" title="איך הדף נראה בנייד, בטאבלט ובמחשב — הרינדור האמיתי">📱 רספונסיב</button>
+            <button type="button" id="btn-responsive" class="page-props-btn" title="הרינדור האמיתי של הטיוטה — בדיוק מה שיתפרסם, בנייד, בטאבלט ובמחשב">👁 תצוגה חיה</button>
             <button type="button" id="btn-prompt-builder" class="page-props-btn" title="פרומפט מלא לצ׳אט ה-AI שלכם — כולל הדף הנוכחי, בלי מפתח">🧠 פרומפט AI</button>
             ${aiConfigured
               ? '<button type="button" id="btn-copilot" class="page-props-btn" title="הקופיילוט המחובר — רואה את הדף והפריט המסומן, עורך באישורכם (מפתח או מודל מקומי)">🤖 קופיילוט</button>'

@@ -181,7 +181,11 @@ function adminNav(active, sectionTitle, actionsHtml = '') {
           <a href="/" target="_blank" class="btn secondary" style="padding:7px 12px">צפה באתר</a>
           <span class="topbar-actions">${actionsHtml}</span>
           <form method="POST" action="${auth.getAdminBase()}/logout" style="margin:0">
-            <button type="submit" class="btn secondary" style="padding:7px 12px" title="התנתק">התנתק</button>
+            <!-- type=button, NEVER submit: a screen whose text input shares any
+                 form scope with the nav must not log the user out on Enter
+                 (user-build feedback 1.7 — the /admin/new misclick trap) -->
+            <button type="button" class="btn secondary" style="padding:7px 12px" title="התנתק"
+              onclick="this.form.submit()">התנתק</button>
           </form>
         </div>
       </div>

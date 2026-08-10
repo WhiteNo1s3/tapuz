@@ -134,6 +134,57 @@ check('the toolbar is warm and light, delete stays a warning',
   /\.block-toolbar \{[^}]*background: #fff/.test(css.replace(/\n/g, ' ')) &&
   /data-act="del"\]:hover \{ color: var\(--danger\)/.test(css));
 
+// ---- 9. the user-build feedback round (v2.16) ------------------------------
+// PRODUCT-FEEDBACK-USER-BUILD.md: publish honesty, one media story, selection
+// breadcrumb, live-preview naming, dynamic-module truth, logout trap.
+
+const adminUiSrc = fs.readFileSync(path.join(root, 'src', 'admin-ui.js'), 'utf8');
+const portalSrc = fs.readFileSync(path.join(root, 'src', 'routes', 'portal.js'), 'utf8');
+const builderRouteSrc = fs.readFileSync(path.join(root, 'src', 'routes', 'pages-builder.js'), 'utf8');
+const mediaSrc = fs.readFileSync(path.join(root, 'src', 'media.js'), 'utf8');
+
+check('placeholder scan compares data to the module\'s OWN registry seed',
+  /function findPlaceholderModules\(/.test(builder) &&
+  /d\[k\]\.trim\(\) === sv\.trim\(\)/.test(builder));
+check('placeholder scan flags dead-link buttons (# or empty url)',
+  /קישור ריק \(#\)/.test(builder));
+check('the publish confirm carries BOTH honesty sections',
+  /מודולים ריקים \(יתפרסמו כחלל ריק או שבור\)/.test(builder) &&
+  /תוכן ברירת־מחדל \(עדיין עם הטקסט שהגיע מהארגז\)/.test(builder));
+
+check('the media library ships a virtual read-only demo folder',
+  /DEMO_FOLDER_KEY = '__demo__'/.test(mediaSrc) && /listPackagedDemo/.test(mediaSrc) &&
+  /דמו מובנה/.test(mediaSrc));
+check('root listings re-adopt disk drift (throttled syncDisk)',
+  /syncDiskThrottled/.test(mediaSrc) && /if \(!folder\) syncDiskThrottled\(\)/.test(mediaSrc));
+check('demo-folder writes are refused at every entry point',
+  (mediaSrc.match(/לקריאה בלבד/g) || []).length >= 3);
+check('the client hides move/delete for readonly media tiles',
+  /if \(!tile\.dataset\.readonly\)/.test(builder) && /data-readonly="1"/.test(builder));
+check('the media bar states how much is really here',
+  /קבצים/.test(builder) && /media-count/.test(builder));
+
+check('the selection breadcrumb walks דף › מיכל › מודול with clickable ancestors',
+  /sel-crumbs/.test(builder) && /data-crumb-id/.test(builder) && /data-crumb-page/.test(builder));
+check('an explicit exit hands selection to the container',
+  /data-crumb-exit/.test(builder) && /node\.parent \? node\.parent\.id : null/.test(builder));
+
+check('the live preview is named for what it is (תצוגה חיה, not רספונסיב)',
+  /תצוגה חיה/.test(builderRouteSrc) && /בדיוק מה שיתפרסם/.test(builder));
+check('the preview still saves the draft before framing it',
+  /savePage\(\{ silent: true \}\)/.test(builder));
+
+check('category preview says the truth when the tag has no published pages',
+  /אין עדיין דפים מפורסמים עם התגית/.test(builder));
+check('article-list empty state stays a door (create-first-article)',
+  /צרו את המאמר הראשון/.test(builder));
+
+check('admin logout is type=button — Enter in a field can never log out',
+  /type="button"[^>]*title="התנתק"[\s\S]{0,80}this\.form\.submit\(\)/.test(adminUiSrc.replace(/\n/g, ' ')) ||
+  (/התנתק/.test(adminUiSrc) && /type="button"/.test(adminUiSrc.match(/<form method="POST"[^>]*logout[\s\S]{0,400}<\/form>/)[0])));
+check('portal logout got the same cure',
+  /type="button" onclick="this\.form\.submit\(\)"/.test(portalSrc));
+
 // parse guard
 try { new Function(builder); check('admin-builder.js parses', true); }
 catch (e) { check('admin-builder.js parses (' + e.message + ')', false); }

@@ -87,6 +87,38 @@ function mediaKind(filename) {
   return IMG_RE.test(String(filename || '')) ? 'image' : 'file';
 }
 
+// ── one media story (v2.16, user-build feedback 1.3) ─────────────────────
+// "מה באתר = מה בבוחר": the library must mirror reality without a restart.
+// Two moves: (1) every ROOT listing re-adopts disk drift (throttled — files
+// robocopied/FTP'd in mid-session appear on the next open); (2) the packaged
+// /demo art rides along as a virtual, read-only folder, so the tiles every
+// seed references are pickable instead of being a second, invisible system.
+
+const APP_DEMO_DIR = path.join(__dirname, '..', 'public', 'demo');
+const DEMO_FOLDER_KEY = '__demo__';
+const MEDIA_FILE_RE = /\.(png|jpe?g|gif|webp|svg|avif|mp4|webm|mp3|ogg|wav)$/i;
+
+let lastDiskSync = 0;
+function syncDiskThrottled() {
+  if (Date.now() - lastDiskSync < 30 * 1000) return;
+  lastDiskSync = Date.now();
+  try { syncDisk(); } catch (e) { /* a broken file must not kill the listing */ }
+}
+
+function listPackagedDemo(accept) {
+  let names = [];
+  try { names = fs.readdirSync(APP_DEMO_DIR).filter(n => MEDIA_FILE_RE.test(n)); } catch (e) { /* no demo dir */ }
+  const files = names.sort().map(n => ({
+    id: null,
+    name: n,
+    url: '/demo/' + n,
+    alt: '',
+    kind: mediaKind(n),
+    readonly: true
+  })).filter(f => accept === 'all' || f.kind === accept);
+  return { folder: DEMO_FOLDER_KEY, folders: [], files, accept, readonly: true };
+}
+
 /**
  * @param {string} folder
  * @param {{ accept?: 'image'|'file'|'all' }} [opts] — 'image' returns photos
@@ -94,13 +126,16 @@ function mediaKind(filename) {
  */
 function listMedia(folder, opts) {
   ensureSchema();
-  folder = cleanFolder(folder);
   const accept = (opts && opts.accept) || 'all';
+  if (String(folder || '') === DEMO_FOLDER_KEY) return listPackagedDemo(accept);
+  folder = cleanFolder(folder);
+  if (!folder) syncDiskThrottled(); // opening the library root = adopt disk drift
   const prefix = folder ? folder + '/' : '';
   const folders = db.prepare('SELECT path FROM media_folders ORDER BY path').all()
     .map(r => r.path)
     .filter(p => p.startsWith(prefix) && p !== folder && !p.slice(prefix.length).includes('/'))
     .map(p => ({ path: p, name: p.slice(prefix.length) }));
+  if (!folder) folders.unshift({ path: DEMO_FOLDER_KEY, name: '🍊 דמו מובנה', readonly: true });
   const files = db.prepare('SELECT id, filename, path, alt, size FROM media WHERE folder = ? ORDER BY created_at DESC')
     .all(folder)
     .map(r => ({ id: r.id, name: r.filename, url: r.path, alt: r.alt || '', kind: mediaKind(r.filename) }))
@@ -124,6 +159,7 @@ function listAllMedia(limit) {
 
 function createFolder(p) {
   ensureSchema();
+  if (String(p || '').includes(DEMO_FOLDER_KEY)) throw new Error('ספריית הדמו היא לקריאה בלבד');
   const folder = cleanFolder(p);
   if (!folder) throw new Error('שם תיקייה לא תקין');
   fs.mkdirSync(folderDiskPath(folder), { recursive: true });
@@ -157,6 +193,7 @@ function deleteFile(id) {
 }
 
 function moveFile(id, targetFolder) {
+  if (String(targetFolder || '').includes(DEMO_FOLDER_KEY)) throw new Error('ספריית הדמו היא לקריאה בלבד');
   ensureSchema();
   const folder = cleanFolder(targetFolder);
   const row = db.prepare('SELECT * FROM media WHERE id = ?').get(id);
@@ -210,6 +247,7 @@ function saveBuffer({ filename, buffer, folder }) {
 
 /** Save a base64 data-URL upload into <assets>/<folder>/ and register it. */
 function saveBase64({ filename, data, folder }) {
+  if (String(folder || '').includes(DEMO_FOLDER_KEY)) throw new Error('ספריית הדמו היא לקריאה בלבד — העלו לתיקייה אחרת');
   const match = String(data || '').match(/^data:([^;]+);base64,(.+)$/);
   if (!match) throw new Error('invalid data url');
   return saveBuffer({ filename, buffer: Buffer.from(match[2], 'base64'), folder });

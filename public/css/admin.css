@@ -3487,3 +3487,43 @@ body:not(.builder-screen) .btn-import-ai {
    translucent ink so icons keep a quiet backdrop on paper */
 body.builder-screen[data-btheme="citrus"] .tool-btn .tool-ico { background: rgba(70, 37, 14, 0.08); }
 body.builder-screen[data-btheme="citrus"] .tool-btn:hover .tool-ico { background: rgba(70, 37, 14, 0.14); }
+
+/* media bar count — the "one story" number (v2.16): how much is really here */
+.media-count { font-size: 0.74rem; color: var(--ws-muted); margin-inline-start: 8px; white-space: nowrap; }
+
+/* selection breadcrumb (v2.16) — דף › מיכל › טור › מודול, every step a click */
+.sel-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  color: var(--bc-muted);
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+.sel-crumb {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bc-muted) 12%, transparent);
+}
+.sel-crumb[data-crumb-id], .sel-crumb[data-crumb-page] {
+  cursor: pointer;
+  transition: background var(--dur), color var(--dur);
+}
+.sel-crumb[data-crumb-id]:hover, .sel-crumb[data-crumb-page]:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--bc-text);
+}
+.sel-crumb.is-current {
+  background: color-mix(in srgb, var(--select) 20%, transparent);
+  color: var(--bc-text);
+  font-weight: 700;
+}
+.sel-crumb-sep { opacity: 0.6; }
+.sel-crumb-exit {
+  width: 100%;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  padding: 7px 10px;
+}

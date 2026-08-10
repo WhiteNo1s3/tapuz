@@ -187,7 +187,7 @@ router.get('/account', requirePortal, requireLoggedIn, (req, res) => {
             <p class="muted">מחובר/ת כ־<span dir="ltr">${esc(profile.username)}</span>
               · <span class="pill">${esc(profile.statusLabel)}</span></p>
           </div>
-          <form method="POST" action="/account/logout"><button class="btn secondary" type="submit">יציאה</button></form>
+          <form method="POST" action="/account/logout"><button class="btn secondary" type="button" onclick="this.form.submit()">יציאה</button></form>
         </div>
         <h2 style="font-size:1rem;margin:20px 0 8px">הפרטים שלך</h2>
         <div class="kv"><b>שם</b><span>${esc(profile.name || '—')}</span></div>

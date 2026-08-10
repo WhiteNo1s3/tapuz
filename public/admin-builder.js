@@ -319,6 +319,47 @@
     return type;
   }
 
+  // Placeholder honesty (user-build feedback 1.5): a page can look "filled"
+  // with the seed's own פריט/כותרת copy and still publish. Compare each
+  // module's data against ITS OWN registry seed — exact equality means the
+  // owner never touched it — and flag dead-link buttons while at it.
+  function findPlaceholderModules(list, acc) {
+    list = list || blocks;
+    acc = acc || [];
+    list.forEach(function (b) {
+      var d = b.data || {};
+      var def = registryDef(b.type);
+      var seed = (def && def.seed) || {};
+      var flags = [];
+      // Only PRIMARY copy convicts: a buttonText that happens to say צרו קשר
+      // is normal Hebrew, not evidence of an untouched module.
+      var AUX_KEYS = { buttonText: 1, ctaLabel: 1, submit: 1, url: 1, buttonUrl: 1 };
+      Object.keys(seed).forEach(function (k) {
+        if (AUX_KEYS[k]) return;
+        var sv = seed[k];
+        if (typeof sv === 'string' && sv.trim() && typeof d[k] === 'string' &&
+          d[k].trim() === sv.trim()) {
+          flags.push('טקסט ברירת־מחדל');
+        } else if (Array.isArray(sv) && sv.length && Array.isArray(d[k]) &&
+          JSON.stringify(d[k]) === JSON.stringify(sv)) {
+          flags.push('פריטי ברירת־מחדל');
+        }
+      });
+      if (b.type === 'button' || b.type === 'cta') {
+        var url = String(d.url || '').trim();
+        if (!url || url === '#') flags.push('קישור ריק (#)');
+      }
+      if (flags.length) {
+        var seen = {};
+        var uniq = flags.filter(function (f) { if (seen[f]) return false; seen[f] = 1; return true; });
+        acc.push(moduleLabel(b.type) + ' — ' + uniq.join(', '));
+      }
+      if (isColumnsContainer(b.type)) ensureColumns(b).forEach(function (col) { findPlaceholderModules(col.blocks, acc); });
+      if (isBlocksContainer(b.type)) findPlaceholderModules(ensureBlocks(b), acc);
+    });
+    return acc;
+  }
+
   function isAncestor(maybeAncestorId, nodeId) {
     var n = findNode(nodeId);
     while (n && n.parent) {
@@ -1117,7 +1158,7 @@
     var previewUrl = '/admin/preview/' + encodeURIComponent(currentPageFullPath);
     overlay.innerHTML =
       '<div class="rsp-bar">' +
-      '<strong>תצוגה רספונסיבית</strong>' +
+      '<strong>👁 תצוגה חיה — בדיוק מה שיתפרסם</strong>' +
       '<span class="rsp-devices">' +
       RSP_DEVICES.map(function (d, i) {
         return '<button type="button" data-rsp="' + d.key + '"' + (i === 0 ? ' class="active"' : '') + '>' + d.label +
@@ -2172,7 +2213,7 @@
       wrap.innerHTML =
         '<div class="preview-category">' +
         '<div class="preview-category-head" id="pcat-head-' + escAttr(block.id) + '">🗂 ' + esc(catSlug || 'בחרו קטגוריה במאפיינים') + '</div>' +
-        '<div class="preview-cards">' +
+        '<div class="preview-cards" id="pcat-cards-' + escAttr(block.id) + '">' +
         [1, 2, 3].map(function () {
           return '<div class="preview-card"><div class="preview-card-media"></div><div class="preview-card-title">כתבה מהקטגוריה</div></div>';
         }).join('') +
@@ -2185,6 +2226,19 @@
           if (head && meta) {
             head.textContent = '🗂 ' + (meta.name || catSlug);
             if (/^#[0-9a-fA-F]{6}$/.test(meta.color || '')) head.style.borderColor = meta.color;
+          }
+          if (head && !meta) {
+            head.textContent = '🗂 ' + catSlug + ' — קטגוריה שעוד לא קיימת (צרו אותה במסך "קטגוריות")';
+          }
+        });
+        // honest cards (feedback 1.6): membership = published pages tagged with
+        // the slug. Zero members must SAY zero, not show three pretty fakes.
+        fetchArticlesPreview(catSlug, 6, function (articles) {
+          var cardsEl = document.getElementById('pcat-cards-' + block.id);
+          if (!cardsEl || !document.body.contains(cardsEl)) return;
+          if (!articles.length) {
+            cardsEl.innerHTML = '<div class="preview-cubes-note">אין עדיין דפים מפורסמים עם התגית "' + esc(catSlug) + '".<br>' +
+              '<div style="font-size:.78rem;margin-top:6px;color:#64748b">תייגו דפים בתגית הזו (הגדרות דף ← תגיות) ופרסמו — הם יופיעו כאן</div></div>';
           }
         });
       }
@@ -3484,13 +3538,32 @@
 
     var block = node.block;
     var d = block.data || {};
-    var nestHint = '';
-    if (node.parent) {
-      if (isColumnsContainer(node.parent.type)) {
-        nestHint = '<div class="nest-hint">בתוך עמודות · טור ' + ((parseInt(node.colIndex, 10) || 0) + 1) + '</div>';
-      } else {
-        nestHint = '<div class="nest-hint">בתוך ' + esc(typeLabel(node.parent.type)) + '</div>';
-      }
+    // Selection breadcrumb (user-build feedback 1.4): nesting stops being a
+    // footgun when you can SEE where you are — דף › מיכל › טור › מודול —
+    // and every ancestor is a click away. Replaces the inert nest-hint.
+    var crumbChain = [];
+    var crumbCur = node;
+    while (crumbCur) {
+      crumbChain.unshift({
+        id: crumbCur.block.id,
+        type: crumbCur.block.type,
+        colIndex: crumbCur.colIndex,
+        parentType: crumbCur.parent ? crumbCur.parent.type : null
+      });
+      crumbCur = crumbCur.parent ? findNode(crumbCur.parent.id) : null;
+    }
+    var nestHint = '<div class="sel-crumbs"><span class="sel-crumb" data-crumb-page="1" title="להגדרות הדף">📄 דף</span>';
+    crumbChain.forEach(function (c, i) {
+      var isLast = i === crumbChain.length - 1;
+      var colTag = (typeof c.colIndex === 'number' && c.parentType && isColumnsContainer(c.parentType))
+        ? ' <small>· טור ' + (c.colIndex + 1) + '</small>' : '';
+      nestHint += ' <span class="sel-crumb-sep">›</span> <span class="sel-crumb' + (isLast ? ' is-current' : '') + '"' +
+        (isLast ? '' : ' data-crumb-id="' + escAttr(c.id) + '" title="בחרו את ' + escAttr(typeLabel(c.type)) + '"') + '>' +
+        esc(typeLabel(c.type)) + colTag + '</span>';
+    });
+    nestHint += '</div>';
+    if (crumbChain.length > 1) {
+      nestHint += '<button type="button" class="btn secondary sel-crumb-exit" data-crumb-exit="1">⤴ סיימתי כאן — בחר את המיכל</button>';
     }
 
     var kw = bentmlKeywordFor(block.type);
@@ -4040,6 +4113,18 @@
         });
       });
     }
+
+    // breadcrumb navigation: every ancestor is a click, the page root too,
+    // and the exit button hands selection to the immediate container
+    panel.querySelectorAll('[data-crumb-id]').forEach(function (c) {
+      c.addEventListener('click', function () { selectBlock(c.dataset.crumbId); });
+    });
+    var crumbPage = panel.querySelector('[data-crumb-page]');
+    if (crumbPage) crumbPage.addEventListener('click', function () { selectBlock(null); });
+    var crumbExit = panel.querySelector('[data-crumb-exit]');
+    if (crumbExit) crumbExit.addEventListener('click', function () {
+      selectBlock(node.parent ? node.parent.id : null);
+    });
 
     var containerAdd = panel.querySelector('[data-container-add-text]');
     if (containerAdd) {
@@ -4784,16 +4869,26 @@
     var acc = '';
     (mediaState.folder ? mediaState.folder.split('/') : []).forEach(function (seg) {
       acc = acc ? acc + '/' + seg : seg;
-      crumbs += ' › <span class="crumb" data-goto="' + escAttr(acc) + '">' + esc(seg) + '</span>';
+      // the virtual demo folder's key is plumbing — people see its label
+      var segLabel = seg === '__demo__' ? '🍊 דמו מובנה' : seg;
+      crumbs += ' › <span class="crumb" data-goto="' + escAttr(acc) + '">' + esc(segLabel) + '</span>';
     });
+
+    // "מה באתר = מה בבוחר" needs a number to be believable (feedback 1.3):
+    // say how much is actually here, right in the bar.
+    var countLine = (data.files || []).length + ' קבצים' +
+      ((data.folders || []).length ? ' · ' + data.folders.length + ' תיקיות' : '');
 
     var bar =
       '<div class="media-bar">' +
-      '<div class="media-crumbs">' + crumbs + '</div>' +
+      '<div class="media-crumbs">' + crumbs +
+      ' <span class="media-count">' + countLine + '</span></div>' +
       '<div class="media-actions">' +
       (mediaState.folder ? '<button type="button" class="mbtn" data-up="1" title="תיקייה למעלה">⬆</button>' : '') +
-      '<button type="button" class="mbtn" data-newfolder="1">📁+ תיקייה חדשה</button>' +
-      '<button type="button" class="mbtn" data-upload-here="1">⬆ העלאה לתיקייה זו</button>' +
+      (data.readonly
+        ? '<span class="media-count">ספריית הדגמה — לקריאה בלבד</span>'
+        : '<button type="button" class="mbtn" data-newfolder="1">📁+ תיקייה חדשה</button>' +
+          '<button type="button" class="mbtn" data-upload-here="1">⬆ העלאה לתיקייה זו</button>') +
       (mediaState.mode === 'multi'
         ? '<button type="button" class="mbtn mbtn-primary" data-confirm-multi="1">הוסף (<span id="media-sel-count">0</span>)</button>'
         : '') +
@@ -4802,7 +4897,8 @@
     var tiles = '';
     (data.folders || []).forEach(function (f) {
       tiles +=
-        '<div class="media-tile media-folder" data-folder="' + escAttr(f.path) + '" title="' + escAttr(f.name) + '">' +
+        '<div class="media-tile media-folder" data-folder="' + escAttr(f.path) + '"' +
+        (f.readonly ? ' data-readonly="1"' : '') + ' title="' + escAttr(f.name) + '">' +
         '<div class="tile-icon">📁</div><div class="media-name">' + esc(f.name) + '</div></div>';
     });
     (data.files || []).forEach(function (f) {
@@ -4810,7 +4906,8 @@
       // before, because every file was rendered as <img> regardless of type.
       var isImage = (f.kind || 'image') === 'image';
       tiles +=
-        '<div class="media-tile media-item" data-url="' + escAttr(f.url) + '" data-id="' + escAttr(String(f.id)) + '" data-name="' + escAttr(f.name) + '" data-kind="' + escAttr(f.kind || 'image') + '">' +
+        '<div class="media-tile media-item" data-url="' + escAttr(f.url) + '" data-id="' + escAttr(String(f.id)) + '" data-name="' + escAttr(f.name) + '" data-kind="' + escAttr(f.kind || 'image') + '"' +
+        (f.readonly ? ' data-readonly="1"' : '') + '>' +
         (isImage
           ? '<img src="' + escAttr(f.url) + '" alt="" loading="lazy">'
           : '<div class="tile-icon">📄</div>') +
@@ -4873,10 +4970,11 @@
       tile.addEventListener('click', function () { loadMediaFolder(tile.dataset.folder); });
       tile.addEventListener('contextmenu', function (e) {
         e.preventDefault();
-        showCtxMenu(e.clientX, e.clientY, [
-          { label: '📂 פתח', fn: function () { loadMediaFolder(tile.dataset.folder); } },
-          { label: '🗑 מחק תיקייה', danger: true, fn: function () { deleteMediaFolder(tile.dataset.folder); } }
-        ]);
+        var items = [{ label: '📂 פתח', fn: function () { loadMediaFolder(tile.dataset.folder); } }];
+        if (!tile.dataset.readonly) {
+          items.push({ label: '🗑 מחק תיקייה', danger: true, fn: function () { deleteMediaFolder(tile.dataset.folder); } });
+        }
+        showCtxMenu(e.clientX, e.clientY, items);
       });
     });
 
@@ -4901,10 +4999,13 @@
         if (mediaState.mode === 'single') {
           items.push({ label: '✔ בחר תמונה', fn: function () { pickMedia(tile.dataset.url); } });
         }
-        items.push({
-          label: '📁 העבר לתיקייה…',
-          fn: function () { moveMediaFile(tile.dataset.id, tile.dataset.name); }
-        });
+        // packaged demo files are read-only: pick and copy, never move/delete
+        if (!tile.dataset.readonly) {
+          items.push({
+            label: '📁 העבר לתיקייה…',
+            fn: function () { moveMediaFile(tile.dataset.id, tile.dataset.name); }
+          });
+        }
         items.push({
           label: '🔗 העתק כתובת',
           fn: function () {
@@ -4912,10 +5013,12 @@
             showToast('הכתובת הועתקה', 'ok');
           }
         });
-        items.push({
-          label: '🗑 מחק קובץ', danger: true,
-          fn: function () { deleteMediaFile(tile.dataset.id, tile.dataset.name); }
-        });
+        if (!tile.dataset.readonly) {
+          items.push({
+            label: '🗑 מחק קובץ', danger: true,
+            fn: function () { deleteMediaFile(tile.dataset.id, tile.dataset.name); }
+          });
+        }
         showCtxMenu(e.clientX, e.clientY, items);
       });
     });
@@ -5280,17 +5383,24 @@
     // publish blank or broken and let the owner decide. Skipped for the tour /
     // programmatic callers via publishPage.skipEmptyCheck.
     if (!publishPage._skipEmptyCheck) {
+      // The pre-publish checklist (v2.13 empties + v2.16 placeholder honesty):
+      // one confirm, two honest sections — what will publish BROKEN, and what
+      // will publish still wearing the seed's own words.
       var holes = findEmptyModules();
-      if (holes.length) {
-        var counts = {};
-        holes.forEach(function (l) { counts[l] = (counts[l] || 0) + 1; });
-        var lines = Object.keys(counts).map(function (l) {
-          return '• ' + l + (counts[l] > 1 ? ' (×' + counts[l] + ')' : '');
-        }).join('\n');
-        if (!window.confirm(
-          'יש מודולים ריקים שיתפרסמו כחלל ריק או שבור:\n\n' + lines +
-          '\n\nמלאו אותם קודם, או לפרסם בכל זאת?'
-        )) return Promise.resolve({ ok: false, cancelled: true });
+      var stale = findPlaceholderModules();
+      if (holes.length || stale.length) {
+        var toLines = function (arr) {
+          var counts = {};
+          arr.forEach(function (l) { counts[l] = (counts[l] || 0) + 1; });
+          return Object.keys(counts).map(function (l) {
+            return '• ' + l + (counts[l] > 1 ? ' (×' + counts[l] + ')' : '');
+          }).join('\n');
+        };
+        var msg = 'רגע לפני פרסום — כדאי להעיף מבט:\n';
+        if (holes.length) msg += '\nמודולים ריקים (יתפרסמו כחלל ריק או שבור):\n' + toLines(holes) + '\n';
+        if (stale.length) msg += '\nתוכן ברירת־מחדל (עדיין עם הטקסט שהגיע מהארגז):\n' + toLines(stale) + '\n';
+        msg += '\nלתקן קודם, או לפרסם בכל זאת?';
+        if (!window.confirm(msg)) return Promise.resolve({ ok: false, cancelled: true });
       }
     }
     var titleEl = document.getElementById('page-title');
