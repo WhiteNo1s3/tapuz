@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>כל המודולים — Show &amp; Tell</title>
+    <meta name="bent-slug" content="showcase-modules" />
+    <meta name="bent-teaser" content="דף אחד, כל ארגז הכלים: מבאנר ועד טופס — כל מודול של תפוזיאל חי ונושם. נבנה בבונה הוויזואלי, בלי שורת קוד." />
+    <meta name="bent-card-image" content="/demo/vision-modules.jpg" />
+  </head>
+  <body>
+    <bent-banner id="banner_1786146695133_930" tone="brand">הודעת באנר — מודול banner מהארגז</bent-banner>
+    <bent-hero id="hero_1786146695584_99" height="md" image="/demo/vision-juice.jpg" overlay="35">
+      <bent-heading level="1">תפוזיאל — כל המודולים בפעולה</bent-heading>
+      <bent-text>נבנה בבונה הוויזואלי: לחיצה על מודולים → מילוי מאפיינים → פרסם + בנה</bent-text>
+      <bent-button href="/examples.html">לדוגמאות</bent-button>
+    </bent-hero>
+    <bent-marquee id="marquee_1786146696131_73">ברוכים הבאים לתפוזיאל ✦ CMS ו-CRM בעברית ✦ מודולים מהבונה ✦</bent-marquee>
+    <bent-ticker id="ticker_1786146696550_298" background="" color="" label="מבזק" speed="md">
+      <bent-tickeritem href="#" text="הדף נבנה בממשק הניהול" />
+      <bent-tickeritem href="#" text="כל מודול נבדק בפרסום" />
+    </bent-ticker>
+    <bent-newspop id="newspop_1786146696938_677" label="מבזקים">
+      <bent-newspopitem href="#" text="מודולים נוספו מהארגז" time="10:00" />
+      <bent-newspopitem href="#" text="פורסם ונבנה האתר" time="10:05" />
+    </bent-newspop>
+    <bent-heading id="heading_1786146697324_226" level="2">כותרת מודול</bent-heading>
+    <bent-text id="text_1786146697759_367" size="md">
+      פסקת טקסט אמיתית מהבונה. אפשר סימון @B{הדגשה}.
+
+      פסקה שנייה אחרי שורה ריקה.
+    </bent-text>
+    <bent-button id="button_1786146698167_516" href="/contact.html" variant="primary">כפתור דמו</bent-button>
+    <bent-divider id="divider_1786146698634_793" bentstyle="line" style="solid" />
+    <bent-features id="features_1786146699008_652" columns="3">
+      <bent-feature icon="" title="בונה ויזואלי">לחיצה על מודולים</bent-feature>
+      <bent-feature icon="" title="עברית RTL">ממשק ותוכן</bent-feature>
+      <bent-feature icon="" title="פרסום">בנייה סטטית</bent-feature>
+    </bent-features>
+    <bent-stats id="stats_1786146699885_962" columns="3">
+      <bent-stat label="מודולים בארגז" value="56" />
+      <bent-stat label="בונה ויזואלי" value="1" />
+      <bent-stat label="עברית RTL" value="100%" />
+    </bent-stats>
+    <bent-cta id="cta_1786146700261_421" buttontext="צור קשר" title="מוכנים לבנות אתר?" tone="brand" url="/contact.html" variant="primary">כל המודולים כאן נוספו כמו משתמש בממשק הניהול.</bent-cta>
+    <bent-quote id="quote_1786146700790_319" author="צוות תפוזיאל">מערכת בעברית — מהבונה עד האתר החי.</bent-quote>
+    <bent-testimonial id="testimonial_1786146701211_842" author="בעלת עסק (דוגמה)" role="בעלת סטודיו">בנינו את הדף בממשק — בלי לגעת ב-JSON.</bent-testimonial>
+    <bent-list id="list_1786146701787_955" ordered="false">
+      <bent-item>מודול מהארגז</bent-item>
+      <bent-item>מילוי מאפיינים</bent-item>
+      <bent-item>פרסום ובנייה</bent-item>
+      <bent-item>בדיקה באתר החי</bent-item>
+    </bent-list>
+    <bent-image id="image_1786146702205_574" alt="בית קפה — איור שנוצר על ידי הבינה" caption="תמונה ממולאת בכתובת URL במאפיינים" src="/demo/customer-cafe.jpg" width="full" />
+    <bent-gallery id="gallery_1786146702750_132" columns="3">
+      <bent-image alt="כוס מיץ תפוזים — איור" caption="" src="/demo/vision-juice.jpg" />
+      <bent-image alt="טבע דומם של הדרים — איור" caption="" src="/demo/vision-still.jpg" />
+      <bent-image alt="מודולים נבנים לדף — איור" caption="" src="/demo/vision-modules.jpg" />
+      <bent-image alt="התפוז עם הכנפיים — איור" caption="" src="/demo/vision-wings.jpg" />
+    </bent-gallery>
+    <bent-logos id="logos_1786146703152_484">
+      <bent-logo alt="לוגו 1" src="/demo/tile-1.svg" />
+      <bent-logo alt="לוגו 2" src="/demo/tile-2.svg" />
+      <bent-logo alt="לוגו 3" src="/demo/tile-3.svg" />
+    </bent-logos>
+    <bent-cards id="cards_1786146703561_479">
+      <bent-mediacard excerpt="כרטיס עם תמונה ותקציר" href="/צרו-קשר.html" image="/demo/customer-cafe.jpg" tag="דוגמה" title="בית קפה" />
+      <bent-mediacard excerpt="רשת כרטיסים מהבונה" href="/צרו-קשר.html" image="/demo/customer-studio.jpg" tag="דוגמה" title="סטודיו" />
+      <bent-mediacard excerpt="שלושה כרטיסים בשורה" href="/צרו-קשר.html" image="/demo/customer-clinic.jpg" tag="דוגמה" title="מרפאה" />
+    </bent-cards>
+    <bent-carousel id="carousel_1786146703966_924" height="md" peek="true">
+      <bent-slide excerpt="גלריית גלילה" href="#" image="/demo/vision-juice.jpg" tag="1" title="שקופית א׳" />
+      <bent-slide excerpt="בלי JS" href="#" image="/demo/vision-still.jpg" tag="2" title="שקופית ב׳" />
+      <bent-slide excerpt="scroll-snap" href="#" image="/demo/vision-modules.jpg" tag="3" title="שקופית ג׳" />
+    </bent-carousel>
+    <bent-columns id="columns_1786146704353_774" gap="md">
+      <bent-col>
+        <bent-text id="text_1786146704553_623">טור ימין — תוכן שנוסף דרך ״הוסף לטור״</bent-text>
+      </bent-col>
+      <bent-col>
+        <bent-text id="text_1786146704866_859">טור שמאל — שני טורים זה לצד זה</bent-text>
+      </bent-col>
+    </bent-columns>
+    <bent-card id="card_1786146705261_402">
+      <bent-heading id="c_h_gqcmfz" level="3">כרטיס</bent-heading>
+      <bent-text id="c_t_r0gc0p">תוכן בתוך כרטיס (מיכל מודולים).</bent-text>
+    </bent-card>
+    <bent-section id="section_1786146705694_930" size="md">
+      <bent-text id="s_it442m">מיכל section עם תוכן פנימי.</bent-text>
+    </bent-section>
+    <bent-parallax id="parallax_1786146706083_791" height="md" image="/demo/vision-abstract.jpg">
+      <bent-heading id="p_ns3r2v" level="2">רקע קבוע (Parallax)</bent-heading>
+    </bent-parallax>
+    <bent-spacer id="spacer_1786146706627_238" height="1.5rem" size="md" />
+    <bent-map id="map_1786146707029_111" address="תל אביב" height="md" zoom="14" />
+    <bent-embed id="embed_1786146707685_946" url="https://www.youtube.com/watch?v=jNQXAC9IVRw" />
+    <bent-video id="video_1786146708168_996" caption="Big Buck Bunny — (c) Blender Foundation, CC-BY 3.0 — מתארח אצלכם" controls="true" src="/demo/bbb-sample.mp4" />
+    <bent-audio id="audio_1786146708770_408" caption="ג׳ינגל תפוזיאל — קובץ שמע מתארח" src="/demo/jingle.mp3" />
+    <bent-html id="html_1786146709350_974" content="&lt;div class=&quot;demo-html&quot; style=&quot;padding:12px;border:2px dashed #ea580c;border-radius:8px&quot;&gt;&lt;strong&gt;HTML גולמי&lt;/strong&gt; — מודול בריחה כשאין מודול מוכן.&lt;/div&gt;" />
+    <bent-faq id="faq_1786146709835_823">
+      <bent-qa question="איך מוסיפים מודול?">לוחצים על כפתור בארגז הכלים כשאין בחירה.</bent-qa>
+      <bent-qa question="איך מפרסמים?">כפתור ״פרסם + בנה אתר״ בשורת השמירה.</bent-qa>
+      <bent-qa question="מה עם גלריה?">מספריית המדיה או בהדבקת כתובת — יש שדה URL ליד הבוחר.</bent-qa>
+    </bent-faq>
+    <bent-tabs id="tabs_1786146710257_378">
+      <bent-tab label="מה זה">CMS/CRM בעברית עם בונה מודולים.</bent-tab>
+      <bent-tab label="למי">עסקים שרוצים אתר בלי לכתוב קוד.</bent-tab>
+      <bent-tab label="איך">ארגז מודולים → מאפיינים → פרסום.</bent-tab>
+    </bent-tabs>
+    <bent-accordion id="accordion_1786146710693_164">
+      <bent-fold title="מודול פתוח">תוכן מגירה ראשונה — נפתחת כברירת מחדל.</bent-fold>
+      <bent-fold title="עוד פרטים">מגירה שנייה עם טקסט נוסף.</bent-fold>
+    </bent-accordion>
+    <bent-table id="table_1786146711114_25" header="true">
+      <bent-trow>מודול | סטטוס | הערה</bent-trow>
+      <bent-trow>hero | OK | עם כפתור CTA</bent-trow>
+      <bent-trow>gallery | OK | ספרייה + שדה URL</bent-trow>
+      <bent-trow>article-list | תלוי תוכן | צריך תגית</bent-trow>
+    </bent-table>
+    <bent-pricing id="pricing_1786146711567_695">
+      <bent-plan ctaLabel="התחילו" ctaUrl="/contact.html" features="דפים
+מודולים
+עברית" highlighted="false" period="/התחלה" price="0" title="בסיסי" />
+      <bent-plan ctaLabel="דברו איתנו" ctaUrl="/contact.html" features="CRM
+טפסים
+תפריט צד" highlighted="true" period="/מותאם" price="—" title="מלא" />
+    </bent-pricing>
+    <bent-form id="form_1786146712002_456" action="" method="post" submit="שלחו הודעה">
+      <bent-field label="שם" name="name" required="true" type="text" />
+      <bent-field label="אימייל" name="email" required="true" type="email" />
+      <bent-field label="הודעה" name="message" required="false" type="textarea" />
+    </bent-form>
+    <bent-contact-info id="contact-info_1786146712655_268" address="תל אביב (דמו)" email="hello@example.com" hours="א׳–ה׳ 9:00–17:00" phone="03-0000000" />
+    <bent-nav id="nav_1786146713421_363" align="start" background="" color="">
+      <bent-navitem href="/" label="בית" />
+      <bent-navitem href="/showcase-modules.html" label="כל המודולים" />
+      <bent-navitem href="/contact.html" label="צור קשר" />
+    </bent-nav>
+    <bent-article-list id="article-list_1786146713843_677" columns="3" limit="6" tag="article" />
+    <bent-category id="category_1786146714451_178" limit="6" showheader="true" slug="מדריכים" />
+  </body>
+</html>

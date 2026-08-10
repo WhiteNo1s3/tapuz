@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" bent-version="0.1">
+  <head>
+    <meta charset="utf-8" />
+    <title>דוגמאות מודולים</title>
+    <meta name="bent-slug" content="examples" />
+    <meta name="bent-teaser" content="שער הדוגמאות: מכאן מגיעים לדף שמריץ את כל ארגז המודולים של תפוזיאל — חי, בעברית, בלי קוד." />
+    <meta name="bent-card-image" content="/demo/vision-wings.jpg" />
+  </head>
+  <body>
+    <bent-hero id="hero_1786146717522_277" height="md" image="/demo/vision-wings.jpg" overlay="35">
+      <bent-heading level="1">דוגמאות ממודולי תפוזיאל</bent-heading>
+      <bent-text>כל מודול נוסף בבונה — לא JSON ידני</bent-text>
+      <bent-button href="/showcase-modules.html">פתח את כל המודולים</bent-button>
+    </bent-hero>
+    <bent-text id="text_1786146717910_109" size="md">דף showcase-modules מכיל את כל סוגי המודולים מהארגז. מה שלא מופיע באתר — מסומן בביקורת מודולים.</bent-text>
+    <bent-features id="features_1786146718205_6" columns="3">
+      <bent-feature icon="" title="כל המודולים">דף אחד עם ארגז מלא</bent-feature>
+      <bent-feature icon="" title="ביקורת כנה">OK / WEAK / EMPTY</bent-feature>
+      <bent-feature icon="" title="תיקונים">רשימת באגים לתיקון במוצר</bent-feature>
+    </bent-features>
+    <bent-button id="button_1786146718846_520" href="/showcase-modules.html" variant="primary">כל המודולים</bent-button>
+    <bent-button id="button_1786146719176_140" href="/" variant="primary">בית</bent-button>
+  </body>
+</html>

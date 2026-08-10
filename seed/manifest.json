@@ -1,8 +1,8 @@
 {
-  "id": "show-and-tell-v1.7",
+  "id": "show-and-tell-v1.8",
   "syncPackagedTheme": "default",
   "cleanup": { "backups": "keep-latest", "revisionsKeep": 3 },
-  "description": "תפוזיאל — מראים ומספרים: אתר ההצגה השיווקי, בנוי כולו ממודולים של תפוזיאל מתוך מסמך ה-Show and Tell",
+  "description": "תפוזיאל — מראים ומספרים: אתר ההצגה השיווקי, בנוי כולו ממודולים של תפוזיאל מתוך מסמך ה-Show and Tell. v1.8 מצרף את חלון הראווה של גרוק — כל 40 המודולים העליונים בדף אחד.",
   "pages": [
     { "file": "pages/home.pzn", "replace": true },
     { "file": "pages/act1.pzn", "replace": true },
@@ -14,7 +14,9 @@
     { "file": "pages/contact.pzn", "replace": true },
     { "file": "pages/article-1.pzn", "replace": true },
     { "file": "pages/article-2.pzn", "replace": true },
-    { "file": "pages/article-3.pzn", "replace": true }
+    { "file": "pages/article-3.pzn", "replace": true },
+    { "file": "pages/showcase-modules.pzn", "replace": true },
+    { "file": "pages/examples.pzn", "replace": true }
   ],
   "menus": {
     "main": [
@@ -25,6 +27,8 @@
       { "label": "ה-CRM", "url": "/הלקוחות.html", "type": "page", "target": "הלקוחות" },
       { "label": "היסודות", "url": "/היסודות.html", "type": "page", "target": "היסודות" },
       { "label": "השוואות", "url": "/השוואות.html", "type": "page", "target": "השוואות" },
+      { "label": "חלון ראווה", "url": "/חלון-ראווה.html", "type": "page", "target": "חלון-ראווה" },
+      { "label": "כל המודולים", "url": "/showcase-modules.html", "type": "page", "target": "showcase-modules" },
       { "label": "📬 צרו קשר", "url": "/צרו-קשר.html", "type": "page", "target": "צרו-קשר" }
     ]
   },
