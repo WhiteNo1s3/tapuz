@@ -224,15 +224,34 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
     const { extractPzn } = require('../pzn-extract');
     source = extractPzn(source);
     const pznApi = require('../pzn/index');
-    const doc = pznApi.parse(source);
-    const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
-    if (errors.length) {
-      return res.status(400).json({
-        ok: false,
-        error: errors.map((e) => `${e.code}: ${e.message}`).join('; '),
-        issues: errors
-      });
+    // repair-first (v2.19.1): this is the route the copilot chat's "צור דף"
+    // calls, and it was the ONE create path with no forgiveness — a model
+    // writing <b> instead of @B{} got a hard 'Raw HTML' failure here while
+    // the agent bridge repaired the same document happily. Same contract as
+    // the bridge now: imperfect input becomes a clean DRAFT + a change list.
+    let doc;
+    let repaired = false;
+    let changes = [];
+    try {
+      doc = pznApi.parse(source);
+      const errors = pznApi.validate(doc, { strict: false }).filter((i) => i.severity === 'error');
+      if (errors.length) { const err = new Error('invalid'); err.issues = errors; throw err; }
+    } catch (parseErr) {
+      const { repair } = require('../pzn/repair');
+      const r = repair(source);
+      if (!r.ok || r.remaining.length) {
+        return res.status(400).json({
+          ok: false,
+          error: r.error || (r.remaining || []).map((e) => `${e.code}: ${e.message}`).join('; ') || parseErr.message,
+          issues: r.remaining || parseErr.issues || []
+        });
+      }
+      source = r.source;
+      doc = pznApi.parse(source);
+      repaired = true;
+      changes = r.changes;
     }
+    require('../pzn-repair-stats').record({ changes, repaired });
     // an EMPTY document must never become a page a reader meets — this is how
     // a pristine paste-template (title "כותרת הדף", zero modules) once got
     // PUBLISHED with its placeholder as the visible title (v0.72 fix).
@@ -248,9 +267,14 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
       return res.status(409).json({ ok: false, error: `דף בשם "${slug}" כבר קיים — בחר אותו ברשימה או שנה את ה-slug במקור` });
     }
     createPage({ title, slug, blocks: [] });
-    const result = savePageSource(slug, source, { publish: !!publish });
-    if (publish) exportAll(); // publish from the paste flow means LIVE now
-    res.json({ ok: true, fullPath: slug, created: true, blocks: result.blocks, warnings: result.warnings });
+    // a repaired document never auto-publishes — the owner reviews the fixes
+    const doPublish = !!publish && !repaired;
+    const result = savePageSource(slug, source, { publish: doPublish });
+    if (doPublish) exportAll(); // publish from the paste flow means LIVE now
+    res.json({
+      ok: true, fullPath: slug, created: true, blocks: result.blocks,
+      warnings: result.warnings, repaired, changes, published: doPublish
+    });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column });
   }
