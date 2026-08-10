@@ -314,21 +314,45 @@ router.post('/admin/api/ai/test', requireAdmin, async (req, res) => {
   }
 });
 
-// The two extension folders, zipped on demand (src/zip-store.js — store-only,
-// no deps). Whitelist keyed — the param never touches the filesystem.
+// Extension downloads, one build per BROWSER (v2.18.1 — Ben installed the
+// generic zip on Firefox and it refused). Rules learned the hard way:
+//   • manifest.json must sit at the ZIP ROOT (no wrapping folder) — both
+//     Chrome's drag-install and Firefox's about:debugging reject otherwise
+//   • Firefox needs browser_specific_settings.gecko; Chrome warns on it —
+//     so each browser gets a manifest tailored from the same source folder.
+// Whitelist keyed — no param ever touches the filesystem.
 const EXTENSION_DIRS = {
-  bridge: { dir: 'extension-v2a', zipName: 'tapuziel-bridge-v2.zip', folder: 'tapuziel-bridge-v2' },
-  byot: { dir: 'extension', zipName: 'tapuziel-byot.zip', folder: 'tapuziel-byot' }
+  byot: { dir: 'extension', base: 'tapuziel-companion' },
+  bridge: { dir: 'extension-v2a', base: 'tapuziel-bridge-v2' }
 };
-router.get('/admin/ai-setup/extension-:which.zip', requireAdmin, (req, res) => {
+router.get('/admin/ai-setup/extension-:which-:browser.zip', requireAdmin, (req, res) => {
   const entry = EXTENSION_DIRS[req.params.which];
-  if (!entry) return res.status(404).json({ ok: false, error: 'unknown extension' });
+  const browser = req.params.browser;
+  if (!entry || !['chrome', 'firefox'].includes(browser)) {
+    return res.status(404).json({ ok: false, error: 'unknown extension build' });
+  }
   try {
     const path = require('path');
+    const fs = require('fs');
     const { zipDirectory } = require('../zip-store');
-    const buf = zipDirectory(path.join(__dirname, '..', '..', entry.dir), entry.folder);
+    const dir = path.join(__dirname, '..', '..', entry.dir);
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+    if (browser === 'chrome') {
+      delete manifest.browser_specific_settings; // Chrome-only build: no FF keys, no warnings
+      // Firefox MV3 uses background.scripts alongside service_worker; Chrome
+      // wants only the worker (the bridge ships both for cross-browser)
+      if (manifest.background && manifest.background.scripts && manifest.background.service_worker) {
+        delete manifest.background.scripts;
+      }
+    } else if (manifest.background && manifest.background.service_worker && !manifest.background.scripts) {
+      // Firefox build: event page via scripts (FF ignores/limits workers)
+      manifest.background.scripts = [manifest.background.service_worker];
+    }
+    const buf = zipDirectory(dir, '', {
+      'manifest.json': JSON.stringify(manifest, null, 2) + '\n'
+    });
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${entry.zipName}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${entry.base}-${browser}.zip"`);
     res.send(buf);
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -395,16 +419,30 @@ router.get('/admin/ai-setup', requireAdmin, (req, res) => {
           לא מזריקים, ושום עדכון שלהם לא שובר אותנו. <strong>Bridge V2</strong> — מגשר בין אתר מאוחסן בענן
           לבין המודל המקומי שרץ אצלכם.
         </p>
-        <div class="row" style="gap:10px;flex-wrap:wrap">
-          <a class="btn" href="/admin/ai-setup/extension-byot.zip">⬇ מלווה ההעתקה</a>
-          <a class="btn secondary" href="/admin/ai-setup/extension-bridge.zip">⬇ Bridge V2</a>
-          <a class="btn secondary" href="/admin/agent">🔑 טוקן סוכן (המלווה צריך אחד)</a>
+        <div class="ai-ext-grid">
+          <div class="ai-ext-block">
+            <div class="ai-ext-name">מלווה ההעתקה</div>
+            <a class="btn" data-ext-browser="chrome" href="/admin/ai-setup/extension-byot-chrome.zip">⬇ ל-Chrome / Edge</a>
+            <a class="btn" data-ext-browser="firefox" href="/admin/ai-setup/extension-byot-firefox.zip">⬇ ל-Firefox</a>
+          </div>
+          <div class="ai-ext-block">
+            <div class="ai-ext-name">Bridge V2</div>
+            <a class="btn secondary" data-ext-browser="chrome" href="/admin/ai-setup/extension-bridge-chrome.zip">⬇ ל-Chrome / Edge</a>
+            <a class="btn secondary" data-ext-browser="firefox" href="/admin/ai-setup/extension-bridge-firefox.zip">⬇ ל-Firefox</a>
+          </div>
+          <div class="ai-ext-block">
+            <div class="ai-ext-name">חיבור</div>
+            <a class="btn secondary" href="/admin/agent">🔑 טוקן סוכן (המלווה צריך אחד)</a>
+          </div>
         </div>
-        <p class="muted" style="margin-top:10px">
-          <strong>Chrome/Edge:</strong> <code dir="ltr">chrome://extensions</code> ← Developer mode ← גוררים את
-          ה-ZIP (או Load unpacked אחרי חילוץ). <strong>Firefox:</strong> <code dir="ltr">about:debugging</code>
-          ← This Firefox ← Load Temporary Add-on ← בוחרים את ה-ZIP.
-        </p>
+        <div id="ai-ext-howto" class="notice" style="margin-top:12px">
+          <strong>Chrome / Edge:</strong> פותחים <code dir="ltr">chrome://extensions</code>, מדליקים
+          Developer mode, וגוררים את קובץ ה-ZIP אל החלון.<br>
+          <strong>Firefox:</strong> פותחים <code dir="ltr">about:debugging#/runtime/this-firefox</code>,
+          לוחצים <strong>Load Temporary Add-on</strong> ובוחרים את ה-ZIP שהורדתם.
+          <span class="muted">(התקנה קבועה ב-Firefox דורשת חתימת Mozilla — בינתיים הטעינה הזמנית עובדת מצוין,
+          ונחתום כשנעלה לחנות.)</span>
+        </div>
       </section>
     </div>
     <style>
@@ -412,6 +450,17 @@ router.get('/admin/ai-setup', requireAdmin, (req, res) => {
       .ai-steps { margin:10px 0 14px; padding-inline-start:20px; line-height:1.9; }
       .ai-steps code { background:var(--ws-well); padding:1px 6px; border-radius:5px; }
       #ai-key-create a { word-break: break-all; display: inline-block; }
+      .ai-ext-grid { display:flex; gap:16px; flex-wrap:wrap; }
+      .ai-ext-block { display:flex; flex-direction:column; gap:8px; min-width:180px; }
+      .ai-ext-name { font-weight:800; font-size:.85rem; color:var(--accent-ink); }
+      .ai-ext-block .btn { text-align:center; }
+      a.btn.is-your-browser { outline:3px solid color-mix(in srgb, var(--accent) 45%, transparent); position:relative; }
+      a.btn.is-your-browser::after {
+        content:'הדפדפן שלך ✓';
+        position:absolute; top:-10px; inset-inline-end:8px;
+        background:var(--accent); color:#fff; font-size:.62rem; font-weight:800;
+        padding:1px 8px; border-radius:999px;
+      }
     </style>
     <script src="/admin-ai-setup.js"></script>
   `;

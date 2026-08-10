@@ -37,10 +37,15 @@ function dosDateTime(d) {
 /**
  * Zip a directory (one level of recursion is plenty for extension folders).
  * @param {string} dir absolute directory to pack
- * @param {string} [prefix] folder name inside the archive ('' = flat)
+ * @param {string} [prefix] folder name inside the archive. For BROWSER
+ *   EXTENSIONS this must be '' — Chrome's drag-install and Firefox's
+ *   about:debugging both require manifest.json at the ZIP ROOT; a wrapping
+ *   folder made the archive "corrupt" to them (found live by Ben, v2.18.1).
+ * @param {Object<string,string|Buffer>} [overrides] rel-path → replacement
+ *   content, so one folder can ship per-browser manifest variants.
  * @returns {Buffer} the complete .zip
  */
-function zipDirectory(dir, prefix = '') {
+function zipDirectory(dir, prefix = '', overrides = {}) {
   const files = [];
   (function walk(cur, rel) {
     for (const name of fs.readdirSync(cur)) {
@@ -57,7 +62,9 @@ function zipDirectory(dir, prefix = '') {
   let offset = 0;
 
   for (const f of files) {
-    const data = fs.readFileSync(f.full);
+    const data = overrides[f.rel] !== undefined
+      ? Buffer.from(overrides[f.rel])
+      : fs.readFileSync(f.full);
     const name = Buffer.from(f.rel, 'utf8');
     const crc = crc32(data);
 

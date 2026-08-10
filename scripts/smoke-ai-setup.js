@@ -46,6 +46,39 @@ check('the extension zip route is whitelist-keyed (no path from the param)',
   /EXTENSION_DIRS\[req\.params\.which\]/.test(copilotRoute));
 check('both extensions are offered (bridge + byot)',
   /extension-v2a/.test(copilotRoute) && /'extension'/.test(copilotRoute.match(/EXTENSION_DIRS = \{[\s\S]{0,400}\}/)[0]));
+
+// ── per-browser builds (v2.18.1 — Ben's Firefox zips refused to install) ──
+check('the download route serves one build per browser',
+  /extension-:which-:browser\.zip/.test(copilotRoute) &&
+  /\['chrome', 'firefox'\]\.includes\(browser\)/.test(copilotRoute));
+check('the zip is packed at ROOT (no wrapping folder — browsers reject those)',
+  /zipDirectory\(dir, '', \{/.test(copilotRoute));
+check('chrome build strips the firefox-only manifest keys',
+  /delete manifest\.browser_specific_settings/.test(copilotRoute));
+check('firefox build gets background.scripts when only a worker exists',
+  /manifest\.background\.scripts = \[manifest\.background\.service_worker\]/.test(copilotRoute));
+check('the screen offers a plain button per browser, per extension',
+  /extension-byot-chrome\.zip/.test(copilotRoute) && /extension-byot-firefox\.zip/.test(copilotRoute) &&
+  /extension-bridge-chrome\.zip/.test(copilotRoute) && /extension-bridge-firefox\.zip/.test(copilotRoute));
+check('the client marks the visitor\'s own browser on the matching buttons',
+  /markBrowserButtons/.test(client) && /firefox\/i\.test\(navigator\.userAgent\)/.test(client) &&
+  /data-ext-browser/.test(copilotRoute));
+check('the Firefox honesty note is on the page (temporary load until signing)',
+  /about:debugging/.test(copilotRoute) && /חתימת Mozilla/.test(copilotRoute));
+
+// functional: a root-level zip with a manifest override really is root-level
+{
+  const os = require('os');
+  const t2 = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-extzip-'));
+  fs.writeFileSync(path.join(t2, 'manifest.json'), '{"name":"orig"}');
+  fs.writeFileSync(path.join(t2, 'popup.html'), '<html>');
+  const z = zipDirectory(t2, '', { 'manifest.json': '{"name":"override"}' });
+  check('zip entries sit at the root (manifest.json, not folder/manifest.json)',
+    z.includes(Buffer.from('manifest.json')) && !z.includes(Buffer.from('/manifest.json')));
+  check('the manifest override replaces the on-disk content',
+    z.includes(Buffer.from('{"name":"override"}')) && !z.includes(Buffer.from('{"name":"orig"}')));
+  fs.rmSync(t2, { recursive: true, force: true });
+}
 check('the local test endpoint refuses non-loopback addresses',
   /router\.post\('\/admin\/api\/ai\/test', requireAdmin/.test(copilotRoute) &&
   /resolveLocalEndpoint\(raw\)/.test(copilotRoute) &&

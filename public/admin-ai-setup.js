@@ -182,6 +182,16 @@
     });
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  // browser detection (v2.18.1): the matching download button wears a chip —
+  // and both stay visible, plain and simple, exactly as Ben asked
+  function markBrowserButtons() {
+    var isFirefox = /firefox/i.test(navigator.userAgent);
+    var mine = isFirefox ? 'firefox' : 'chrome';
+    document.querySelectorAll('[data-ext-browser="' + mine + '"]').forEach(function (a) {
+      a.classList.add('is-your-browser');
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { boot(); markBrowserButtons(); });
+  else { boot(); markBrowserButtons(); }
 })();
