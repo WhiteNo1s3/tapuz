@@ -202,6 +202,16 @@ router.get('/admin/edit/:fullPath', (req, res) => {
   const badgeFg = page.status === 'published' ? '#166534' : '#92400e';
   const badgeExtra = hasUnpublished ? ' • טיוטה שונה' : '';
 
+  // The copilot rides ONLY where AI is actually connected (Ben, v2.15): a key,
+  // a local model, or the browser bridge. Unconfigured = the button never
+  // renders; setup lives at /admin/ai-setup.
+  let aiConfigured = false;
+  try {
+    const aiSettings = require('../ai').getSettings();
+    aiConfigured = aiSettings.hasKey ||
+      aiSettings.provider === 'local' || aiSettings.provider === 'browser';
+  } catch (e) { /* stays hidden */ }
+
   // Toolbox is GENERATED from the block registry (src/block-registry.js),
   // grouped by category — a new block type appears here automatically.
   // Categories fold closed (first one open) so the palette never drowns the
@@ -291,7 +301,9 @@ router.get('/admin/edit/:fullPath', (req, res) => {
             <button type="button" id="btn-page-props" class="page-props-btn">⚙ הגדרות דף</button>
             <button type="button" id="btn-responsive" class="page-props-btn" title="איך הדף נראה בנייד, בטאבלט ובמחשב — הרינדור האמיתי">📱 רספונסיב</button>
             <button type="button" id="btn-prompt-builder" class="page-props-btn" title="פרומפט מלא לצ׳אט ה-AI שלכם — כולל הדף הנוכחי, בלי מפתח">🧠 פרומפט AI</button>
-            <button type="button" id="btn-copilot" class="page-props-btn" title="הקופיילוט המחובר — רואה את הדף והפריט המסומן, עורך באישורכם (מפתח או מודל מקומי)">🤖 קופיילוט</button>
+            ${aiConfigured
+              ? '<button type="button" id="btn-copilot" class="page-props-btn" title="הקופיילוט המחובר — רואה את הדף והפריט המסומן, עורך באישורכם (מפתח או מודל מקומי)">🤖 קופיילוט</button>'
+              : ''}
             <span id="canvas-hint" class="canvas-hint"></span>
           </div>
           <div id="canvas" class="canvas"></div>

@@ -281,6 +281,140 @@ router.post('/admin/api/ai/settings', requireAdmin, (req, res) => {
   }
 });
 
+// ─── חיבור AI (v2.15, Ben's spec) — the ONE setup screen ────────────────
+// "Local AI" for a model on the owner's machine, the API-key tier with each
+// provider's CREATE-A-KEY page linked (that page is not the paste-the-key
+// page — people mix them up), the extension download, and a picture tutorial.
+
+// Connection test for the local runtime: hit its /models (OpenAI shape) and
+// report what is loaded. Never called with a key; loopback enforced twice.
+router.post('/admin/api/ai/test', requireAdmin, async (req, res) => {
+  const { resolveLocalEndpoint } = require('../providers');
+  const raw = String((req.body || {}).baseUrl || '');
+  const endpoint = resolveLocalEndpoint(raw);
+  if (!endpoint) {
+    return res.status(400).json({ ok: false, error: 'הכתובת חייבת להצביע על המחשב הזה (127.0.0.1 / localhost)' });
+  }
+  const modelsUrl = endpoint.replace(/\/(chat\/)?completions\/?$/, '/models');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
+  try {
+    const r = await fetch(modelsUrl, { signal: ctrl.signal });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) return res.json({ ok: false, error: 'השרת המקומי ענה ' + r.status + ' — בדקו שהשרת דולק' });
+    const models = (((data || {}).data) || []).map((m) => m.id).filter(Boolean);
+    res.json({ ok: true, endpoint, models });
+  } catch (e) {
+    res.json({
+      ok: false,
+      error: 'אין תשובה מ-' + modelsUrl + ' — פתחו את LM Studio, טאב Developer, והפעילו את השרת (Start Server)'
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+});
+
+// The two extension folders, zipped on demand (src/zip-store.js — store-only,
+// no deps). Whitelist keyed — the param never touches the filesystem.
+const EXTENSION_DIRS = {
+  bridge: { dir: 'extension-v2a', zipName: 'tapuziel-bridge-v2.zip', folder: 'tapuziel-bridge-v2' },
+  byot: { dir: 'extension', zipName: 'tapuziel-byot.zip', folder: 'tapuziel-byot' }
+};
+router.get('/admin/ai-setup/extension-:which.zip', requireAdmin, (req, res) => {
+  const entry = EXTENSION_DIRS[req.params.which];
+  if (!entry) return res.status(404).json({ ok: false, error: 'unknown extension' });
+  try {
+    const path = require('path');
+    const { zipDirectory } = require('../zip-store');
+    const buf = zipDirectory(path.join(__dirname, '..', '..', entry.dir), entry.folder);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${entry.zipName}"`);
+    res.send(buf);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.get('/admin/ai-setup', requireAdmin, (req, res) => {
+  const html = `
+    ${adminNav('ai-setup', 'חיבור AI')}
+    <div class="container page-body" style="max-width:1180px">
+      <p class="lead" style="margin:8px 0 0">
+        מחברים בינה לתפוזיאל באחת משתי דרכים — <strong>מודל מקומי</strong> שרץ אצלכם בחינם,
+        או <strong>מפתח API</strong> של ספק ענן. עד שמחברים, הקופיילוט פשוט לא מופיע בבונה.
+      </p>
+      <div id="ai-status-banner" class="notice" style="margin-top:14px">בודק מצב…</div>
+
+      <div class="split-2" style="margin-top:18px">
+        <section class="card">
+          <h3 class="sub-head">🖥️ Local AI — מודל על המחשב שלכם</h3>
+          <p class="lead">חינם, פרטי, בלי מונה: LM Studio (או Ollama) מריץ מודל פתוח על המחשב, ותפוזיאל מדבר איתו ישירות.</p>
+          <img src="/demo/ai-tut-lmstudio.jpg" alt="איור: LM Studio עם מודל טעון ושרת דולק" class="ai-tut-img">
+          <ol class="ai-steps">
+            <li>מורידים את <a href="https://lmstudio.ai" target="_blank" rel="noopener">LM Studio</a> ובוחרים מודל (מסך Discover).</li>
+            <li>בטאב <strong>Developer</strong> לוחצים <strong>Start Server</strong> — הכתובת תהיה <code dir="ltr">http://127.0.0.1:1234/v1</code>.</li>
+            <li>מדביקים את הכתובת כאן, שומרים, ולוחצים ״בדיקת חיבור״.</li>
+          </ol>
+          <img src="/demo/ai-tut-connect.jpg" alt="איור: הכתובת המקומית עוברת מ-LM Studio אל תפוזיאל" class="ai-tut-img">
+          <label class="field-label">כתובת השרת המקומי</label>
+          <input id="ai-base-url" class="input" dir="ltr" placeholder="http://127.0.0.1:1234/v1">
+          <label class="field-label" style="margin-top:10px">מודל (לא חובה — ריק = מה שטעון)</label>
+          <input id="ai-local-model" class="input" dir="ltr" placeholder="local-model">
+          <div class="row" style="margin-top:12px">
+            <button type="button" id="ai-save-local" class="btn">שמור Local AI</button>
+            <button type="button" id="ai-test-local" class="btn secondary">🔌 בדיקת חיבור</button>
+          </div>
+          <div id="ai-test-result" class="notice" style="display:none;margin-top:10px;white-space:pre-wrap"></div>
+        </section>
+
+        <section class="card">
+          <h3 class="sub-head">🔑 מפתח API — ספק ענן</h3>
+          <p class="lead">יש לכם חשבון אצל ספק? יוצרים מפתח בעמוד הייעודי של הספק (זה עמוד אחר מהעמוד שבו מדביקים אותו כאן!) ומדביקים למטה.</p>
+          <img src="/demo/ai-tut-key.jpg" alt="איור: יוצרים מפתח אצל הספק ומדביקים בתפוזיאל" class="ai-tut-img">
+          <label class="field-label">ספק</label>
+          <select id="ai-provider" class="input"></select>
+          <div id="ai-key-create" class="notice" style="margin-top:10px"></div>
+          <label class="field-label" style="margin-top:10px">המפתח (נשמר בשרת שלכם בלבד, לא מוצג שוב)</label>
+          <input id="ai-api-key" class="input" dir="ltr" type="password" autocomplete="off" placeholder="">
+          <div class="muted" id="ai-key-state" style="margin-top:6px"></div>
+          <label class="field-label" style="margin-top:10px">מודל</label>
+          <select id="ai-model" class="input"></select>
+          <div class="row" style="margin-top:12px">
+            <button type="button" id="ai-save-key" class="btn">שמור ספק ומפתח</button>
+            <button type="button" id="ai-clear-key" class="btn secondary">נקה מפתח</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="card" style="margin-top:18px">
+        <h3 class="sub-head">🧩 התוסף לדפדפן</h3>
+        <p class="lead">
+          שתי תוספות כרום, לפי הצורך: <strong>Bridge V2</strong> — מגשר בין אתר מאוחסן לבין המודל המקומי שלכם
+          (השרת בענן לא רואה את המחשב שלכם — הדפדפן כן). <strong>BYOT</strong> — מזריק את שפת BenTML לצ׳אט
+          שכבר יש לכם (ChatGPT / Claude / Grok), בלי מפתחות בכלל.
+        </p>
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+          <a class="btn" href="/admin/ai-setup/extension-bridge.zip">⬇ הורדת Bridge V2</a>
+          <a class="btn secondary" href="/admin/ai-setup/extension-byot.zip">⬇ הורדת BYOT</a>
+          <a class="btn secondary" href="/admin/inject">📖 חבילת ההזרקה לצ׳אט</a>
+        </div>
+        <p class="muted" style="margin-top:10px">
+          התקנה: פותחים <code dir="ltr">chrome://extensions</code>, מדליקים Developer mode, גוררים את קובץ ה-ZIP
+          (או Load unpacked על התיקייה אחרי חילוץ).
+        </p>
+      </section>
+    </div>
+    <style>
+      .ai-tut-img { width:100%; border-radius:10px; border:1px solid var(--ws-border); margin:10px 0; }
+      .ai-steps { margin:10px 0 14px; padding-inline-start:20px; line-height:1.9; }
+      .ai-steps code { background:var(--ws-well); padding:1px 6px; border-radius:5px; }
+      #ai-key-create a { word-break: break-all; display: inline-block; }
+    </style>
+    <script src="/admin-ai-setup.js"></script>
+  `;
+  res.send(layout(html, 'חיבור AI', accentFor('ai-setup')));
+});
+
 router.post('/admin/api/ai/chat', async (req, res) => {
   try {
     const b = req.body || {};

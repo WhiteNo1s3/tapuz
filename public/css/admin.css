@@ -80,14 +80,17 @@
    the six chrome tokens flip; every themed component follows. Code surfaces
    (BenTML editors, snippets) intentionally keep their constant dark ink. */
 body.builder-screen[data-btheme="citrus"] {
-  --bc-bg: #ffedd9;
-  --bc-panel: #fff8f0;
-  --bc-panel-2: #ffe3c4;
-  --bc-border: #f0c896;
-  --bc-text: #46250e;
-  --bc-muted: #9a6a42;
-  --bc-well: #fff3e4;
-  --bc-topbar: rgba(255, 248, 240, 0.92);
+  /* ORANGE, not sand (Ben, v2.15): paper carries a real orange-200 wash,
+     the lines are orange-400, the muted ink is orange-700 — the whole desk
+     reads citrus at a glance while the text stays deep-roast readable. */
+  --bc-bg: #fed7aa;
+  --bc-panel: #fff4e8;
+  --bc-panel-2: #fdc98c;
+  --bc-border: #fb923c;
+  --bc-text: #4a2008;
+  --bc-muted: #c2410c;
+  --bc-well: #fff0df;
+  --bc-topbar: rgba(255, 237, 213, 0.94);
 }
 
 /* ---- text selection ----------------------------------------------------

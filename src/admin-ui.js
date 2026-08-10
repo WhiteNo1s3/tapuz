@@ -125,6 +125,7 @@ const ADMIN_NAV_GROUPS = [
     key: 'ai', label: 'AI', color: '#c026d3', desc: 'העוזרים החכמים של טפוז',
     items: [
       { key: 'chat', href: '/admin/chat', label: 'קופיילוט', icon: '✨' },
+      { key: 'ai-setup', href: '/admin/ai-setup', label: 'חיבור AI', icon: '🔌' },
       { key: 'agent', href: '/admin/agent', label: 'גשר סוכן', icon: '🤖' }
     ]
   },
