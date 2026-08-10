@@ -127,6 +127,11 @@ function buildRequest(provider, key, system, userText, model, history = []) {
       max_tokens: maxTokens,
       messages: [{ role: 'system', content: system }, ...turns, { role: 'user', content: userText }]
     };
+    // Local runtimes default many models (Qwen3.*) to hybrid THINKING — the
+    // copilot then burns its whole budget on reasoning and returns an empty
+    // content field. LM Studio honors this switch; servers that don't know
+    // it ignore the extra key. (Found live against qwen3.6-35b-a3b, v2.17.)
+    if (provider.id === 'local' || provider.browserRelay) body.reasoning_effort = 'none';
   } else {
     body = {
       model: mdl,
@@ -270,7 +275,8 @@ function buildRelayBody(provider, s, system, turns, toolDefs) {
   const body = {
     model: String(s.model || '').trim(),
     max_tokens: provider.maxTokens || 4096,
-    messages: [{ role: 'system', content: system }, ...turns]
+    messages: [{ role: 'system', content: system }, ...turns],
+    reasoning_effort: 'none' // hybrid-thinking models must ANSWER (see buildRequest)
   };
   if (toolDefs && toolDefs.length) body.tools = toolDefs;
   return body;
@@ -432,6 +438,9 @@ async function callProvider(provider, system, turns, toolDefs) {
   const body = style === 'openai-chat'
     ? { model, max_tokens: provider.maxTokens || 4096, messages: [{ role: 'system', content: system }, ...turns] }
     : { model, max_tokens: provider.maxTokens || 4096, system, messages: turns };
+  if (style === 'openai-chat' && (provider.id === 'local' || provider.browserRelay)) {
+    body.reasoning_effort = 'none'; // hybrid-thinking models must ANSWER (see buildRequest)
+  }
   if (toolDefs && toolDefs.length) body.tools = toolDefs;
 
   let res;
