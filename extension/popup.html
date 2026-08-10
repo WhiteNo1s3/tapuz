@@ -1,78 +1,148 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8">
   <style>
-    body { font: 14px system-ui, sans-serif; width: 330px; margin: 0; padding: 14px; color: #0f172a; background: #fff; }
-    h1 { font-size: 1.05rem; margin: 0 0 4px; }
-    .sub { color: #64748b; font-size: .82rem; margin: 0 0 12px; line-height: 1.4; }
-    label { display: block; font-size: .82rem; color: #475569; margin: 10px 0 4px; }
-    input, select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: .9rem; }
-    input[dir=ltr] { direction: ltr; text-align: left; }
-    button { margin-top: 12px; padding: 9px 12px; border: none; border-radius: 8px; background: #0891b2; color: #fff; font-weight: 600; cursor: pointer; }
-    button.sec { background: #e2e8f0; color: #0f172a; }
-    .row { display: flex; gap: 8px; }
-    .row button { flex: 1; margin-top: 0; }
-    #status { margin-top: 10px; font-size: .85rem; padding: 8px; border-radius: 8px; display: none; }
-    .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
-    .err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
-
-    /* the PRIMARY action: the extension equips your AI with the tools */
-    #primer {
-      width: 100%; margin-top: 2px; padding: 13px 12px; font-size: .98rem;
-      background: linear-gradient(135deg, #f97316, #ea580c); color: #fff;
-      box-shadow: 0 4px 14px rgba(234,88,12,.28);
+    :root {
+      --orange: #f97316;
+      --orange-deep: #ea580c;
+      --ink: #431407;
+      --muted: #9a6b3f;
+      --paper: #fff7ed;
+      --card: #ffffff;
+      --line: #fed7aa;
+      --ok: #16a34a;
+      --err: #dc2626;
     }
-    #primer .hint { display: block; font-weight: 400; font-size: .72rem; opacity: .92; margin-top: 3px; }
-    details { margin-top: 14px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 4px 10px 10px; }
-    summary { cursor: pointer; font-size: .85rem; color: #475569; font-weight: 600; padding: 6px 0; list-style: none; }
-    summary::-webkit-details-marker { display: none; }
-    summary::before { content: '⚙ '; }
-    .steps { margin: 6px 0 0; padding-inline-start: 18px; font-size: .78rem; color: #64748b; line-height: 1.7; }
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      width: 380px;
+      font: 14px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+    }
+    header {
+      background: linear-gradient(135deg, var(--orange), var(--orange-deep));
+      color: #fff;
+      padding: 14px 16px 12px;
+    }
+    header h1 { font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+    header p { font-size: .78rem; opacity: .92; margin-top: 2px; }
+    main { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .card h2 { font-size: .85rem; margin-bottom: 8px; color: var(--orange-deep); }
+    label { display: block; font-size: .74rem; color: var(--muted); margin: 8px 0 3px; }
+    input, textarea, select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+      background: #fffdf9;
+      color: var(--ink);
+    }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--orange); }
+    textarea { resize: vertical; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--orange), var(--orange-deep));
+      color: #fff;
+      font: 700 .92rem system-ui, sans-serif;
+      cursor: pointer;
+      transition: transform .1s, filter .15s;
+    }
+    .btn:hover { filter: brightness(1.06); }
+    .btn:active { transform: translateY(1px); }
+    .btn.ghost {
+      background: #fff;
+      color: var(--orange-deep);
+      border: 1.5px solid var(--line);
+    }
+    .row { display: flex; gap: 8px; }
+    .row .btn { margin-top: 10px; }
+    .status { font-size: .78rem; margin-top: 8px; min-height: 1.2em; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+    .hint { font-size: .72rem; color: var(--muted); margin-top: 6px; }
+    details.connect > summary {
+      cursor: pointer;
+      font-size: .8rem;
+      color: var(--muted);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    details.connect > summary::-webkit-details-marker { display: none; }
+    #conn-dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; flex: none; }
+    #conn-dot.on { background: var(--ok); }
+    a { color: var(--orange-deep); }
+    .result-link {
+      display: block;
+      margin-top: 8px;
+      padding: 9px;
+      text-align: center;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--ok);
+    }
   </style>
 </head>
 <body>
-  <h1>🍊 גשר תפוזיאל</h1>
-  <p class="sub">הופך את ה‑AI שלכם לבונה אתרים — לא מבקש מפתח. ה‑AI רץ אצלכם בדפדפן, על המנוי שלכם. אנחנו מעתיקים, <strong>אתם מדביקים</strong> — וה‑🍊 אוסף את התשובה ומפרסם. בלי לגעת בצ׳אט שלכם.</p>
-
-  <button id="primer">📋 העתק את משחק בונה-האתרים
-    <span class="hint">מעתיק תפקיד + מילון BenTML — הדביקו בצ׳אט וה‑AI יֵדע לבנות דפים</span>
-  </button>
-  <label style="display:flex;gap:7px;align-items:flex-start;margin:8px 0 0;font-size:.78rem;color:#475569;cursor:pointer">
-    <input type="checkbox" id="lite" style="width:auto;margin-top:2px" />
-    <span>חשבון AI חינמי (ChatGPT חינם וכד׳) — חבילה חסכונית שנכנסת במגבלת האורך של הודעה אחת</span>
-  </label>
-
-  <div id="byok-moved" style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:10px 12px;margin:10px 0">
-    <div style="font-weight:700;color:#5b21b6;font-size:.85rem">🔑 יש לכם מפתח API?</div>
-    <p class="sub" style="margin:6px 0 8px">הצ׳אט עם מפתח עבר לממשק הניהול — המפתח נשמר בשרת שלכם, לא בדפדפן. התוסף הזה נשאר המסלול ללא מפתח: מעתיקים את המשחק, מדביקים בצ׳אט שאתם כבר מנויים עליו — והתוסף מפרסם את התשובה.</p>
-    <a id="byok-cms-link" href="#" target="_blank" style="display:block;text-align:center;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border-radius:8px;padding:8px 0;text-decoration:none;font-weight:700;font-size:.85rem">פתחו את הקופיילוט ב‑CMS</a>
-  </div>
-
-  <a id="prompt-builder-link" href="#" target="_blank" style="display:block;text-align:center;border:1.5px solid #f97316;color:#c2410c;border-radius:8px;padding:8px 0;text-decoration:none;font-weight:700;font-size:.85rem;margin:2px 0 4px">🧠 בונה הפרומפטים — בתוך בונה הדפים</a>
-
-  <label>יעד הפרסום</label>
-  <select id="target"><option value="__new__">✨ דף חדש (לפי הכותרת שהבוט כתב)</option></select>
-
-  <details id="setup">
-    <summary>חיבור ל‑CMS (פעם אחת)</summary>
-    <label>כתובת ה‑CMS</label>
-    <input id="url" dir="ltr" placeholder="http://localhost:3000" />
-    <label>טוקן סוכן (מ‑/admin/agent)</label>
-    <input id="token" dir="ltr" type="password" placeholder="tzk_…" />
-    <div class="row" style="margin-top:12px">
-      <button id="save">שמור</button>
-      <button id="ping" class="sec">בדוק חיבור</button>
+  <header>
+    <h1>🍊 תפוזיאל — מלווה ההעתקה</h1>
+    <p>מעתיקים חבילה → מדביקים בצ׳אט שלכם → מדביקים תשובה → דף</p>
+  </header>
+  <main>
+    <div class="card">
+      <details class="connect" id="connect-fold">
+        <summary><span id="conn-dot"></span><span id="conn-label">חיבור לתפוזיאל</span></summary>
+        <label>כתובת האתר</label>
+        <input id="base-url" dir="ltr" placeholder="http://localhost:3030">
+        <label>טוקן סוכן (יוצרים במסך ״גשר סוכן״)</label>
+        <input id="token" dir="ltr" type="password" placeholder="tap_…">
+        <button type="button" class="btn ghost" id="btn-connect">שמור ובדוק חיבור</button>
+        <div class="status" id="conn-status"></div>
+      </details>
     </div>
-    <ol class="steps">
-      <li>הריצו את ה‑CMS: <code>node src/server.js</code></li>
-      <li>הנפיקו טוקן ב‑<code>/admin/agent</code> והדביקו כאן</li>
-      <li>אין צורך ב‑Apache/nginx — תפוזיאל הוא השרת</li>
-    </ol>
-  </details>
 
-  <div id="status"></div>
+    <div class="card">
+      <h2>1 · מה בונים?</h2>
+      <textarea id="brief" rows="3" placeholder="למשל: דף נחיתה לחנות פרחים ברעננה, עם גלריה וטופס"></textarea>
+      <label>גודל החבילה</label>
+      <select id="pack-size">
+        <option value="full">מלאה — לצ׳אטים בתשלום</option>
+        <option value="lite">קלה — לחשבון חינמי</option>
+      </select>
+      <button type="button" class="btn" id="btn-copy">📋 העתק חבילה + המחשבה שלי</button>
+      <div class="status" id="copy-status"></div>
+      <div class="hint">מדביקים את הכל בצ׳אט (ChatGPT / Claude / Grok / Gemini) ושולחים בעצמכם — אנחנו לא נוגעים באתר שלהם.</div>
+    </div>
 
+    <div class="card">
+      <h2>2 · התשובה חזרה</h2>
+      <textarea id="reply" rows="4" placeholder="מעתיקים את כל תשובת הבוט ומדביקים כאן — אפשר עם הטקסט מסביב"></textarea>
+      <button type="button" class="btn" id="btn-create">📥 צור דף מהתשובה</button>
+      <div class="status" id="create-status"></div>
+      <div id="create-result"></div>
+    </div>
+  </main>
   <script src="popup.js"></script>
 </body>
 </html>

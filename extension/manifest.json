@@ -1,61 +1,30 @@
 {
   "manifest_version": 3,
-  "name": "Tapuziel Bridge",
-  "version": "0.3.0",
-  "description": "Turns your own ChatGPT / Claude chat into a Tapuziel Site Builder — or, with your OWN API key (BYOK), builds pages one-shot from the popup. The key stays in your browser; the CMS never sees it.",
+  "name": "Tapuziel — מלווה ההעתקה",
+  "version": "0.4.0",
+  "description": "כפתור אחד מעתיק חבילת BenTML מוכנה עם המחשבה שלכם. מדביקים בכל צ׳אט AI שיש לכם, שולחים בעצמכם, ומדביקים את התשובה חזרה — והיא הופכת לדף אמיתי. בלי נוכחות באתרי הצ׳אט, בלי מפתחות, בלי אוטומציה.",
   "permissions": [
     "storage",
-    "activeTab"
+    "clipboardWrite"
   ],
-  "optional_host_permissions": [
-    "http://*/*",
-    "https://*/*"
-  ],
-  "host_permissions": [
-    "http://localhost/*",
-    "http://127.0.0.1/*",
-    "https://claude.ai/*",
-    "https://chatgpt.com/*",
-    "https://chat.openai.com/*",
-    "https://grok.com/*",
-    "https://*.grok.com/*",
-    "https://x.com/*",
-    "https://gemini.google.com/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Tapuziel Bridge",
+    "default_title": "Tapuziel",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",
       "128": "icon.png"
     }
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://claude.ai/*",
-        "https://chatgpt.com/*",
-        "https://chat.openai.com/*",
-        "https://grok.com/*",
-        "https://*.grok.com/*",
-        "https://x.com/*",
-        "https://gemini.google.com/*"
-      ],
-      "js": [
-        "providers.js",
-        "extract.js",
-        "content-bridge.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",
     "128": "icon.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tapuziel-companion@whiteno1se",
+      "strict_min_version": "115.0"
+    }
   }
 }

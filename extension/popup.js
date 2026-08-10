@@ -1,119 +1,182 @@
-/* Tapuziel Bridge — popup. Talks to the background worker only; the token
-   is written to the worker's storage and never read back into the popup. */
-(function () {
-  'use strict';
-  const $ = (id) => document.getElementById(id);
+'use strict';
 
-  function send(msg) {
-    return new Promise((resolve) => chrome.runtime.sendMessage(msg, resolve));
-  }
-  function status(text, ok) {
-    const el = $('status');
-    el.textContent = text;
-    el.className = ok ? 'ok' : 'err';
-    el.style.display = 'block';
-  }
+/**
+ * Tapuziel — מלווה ההעתקה (v0.4, Ben's realignment).
+ *
+ * The whole philosophy in one file: the extension does NOTHING on the LLM
+ * sites. No content scripts, no DOM reading, no auto-send — the public chats
+ * are our natural partners, and the user is the only one who acts there.
+ * Our job is copy, paste, and looking good in orange:
+ *
+ *   1. the user types a thought → one button copies [roleplay pack + site
+ *      vocabulary + real media + that thought] from THEIR Tapuziel
+ *   2. they paste it into any chat THEY are logged into and press send
+ *   3. they copy the reply, paste it here → create-from-source turns it
+ *      into a real draft page (the server extracts/repairs; loose input ok)
+ *
+ * Zero host permissions: /agent/v1 speaks CORS (ACAO *), so the popup can
+ * fetch any Tapuziel with only its bearer token. The token is stored in
+ * extension storage and sent ONLY to the base URL the user configured.
+ */
 
-  async function loadTargets(selected) {
-    try {
-      const r = await send({ type: 'pages' });
-      if (!r || !r.ok) return;
-      for (const p of r.pages || []) {
-        const o = document.createElement('option');
-        o.value = p.full_path;
-        o.textContent = `${p.title} (${p.full_path})`;
-        if (p.full_path === selected) o.selected = true;
-        $('target').appendChild(o);
-      }
-    } catch (e) { /* not configured yet */ }
-  }
+var $ = function (id) { return document.getElementById(id); };
+var store = (typeof browser !== 'undefined' ? browser : chrome).storage.local;
 
-  (async function init() {
-    const c = await send({ type: 'getConfig' });
-    const configured = !!(c && c.ok && c.url && c.hasToken);
-    if (c && c.ok) {
-      $('url').value = c.url || '';
-      if (c.hasToken) $('token').placeholder = '•••••• (שמור כדי להחליף)';
-      $('lite').checked = c.packSize === 'lite';
-      if (configured) loadTargets(c.target);
-    }
-    // First run: the extension GIVES tools (the primer is the hero button), so
-    // the token setup is tucked into a fold — open it only until it's set.
-    const setup = document.getElementById('setup');
-    if (setup && !configured) setup.open = true;
-  })();
+function getCfg() {
+  return new Promise(function (resolve) {
+    store.get(['baseUrl', 'token', 'packSize'], function (c) { resolve(c || {}); });
+  });
+}
+function setCfg(patch) {
+  return new Promise(function (resolve) { store.set(patch, resolve); });
+}
 
-  // localhost is already in host_permissions; any other CMS origin needs a
-  // runtime grant (covered by optional_host_permissions). Requested here, on
-  // the user's click, so the background worker can fetch that origin.
-  async function ensureHostPermission(url) {
-    try {
-      const u = new URL(url);
-      if (/^(localhost|127\.0\.0\.1)$/.test(u.hostname)) return true;
-      const origins = [u.origin + '/*'];
-      if (await chrome.permissions.contains({ origins })) return true;
-      return await chrome.permissions.request({ origins });
-    } catch (e) {
+function status(id, msg, kind) {
+  var el = $(id);
+  el.className = 'status' + (kind ? ' ' + kind : '');
+  el.textContent = msg || '';
+}
+
+function normBase(raw) {
+  var b = String(raw || '').trim().replace(/\/+$/, '');
+  if (b && !/^https?:\/\//i.test(b)) b = 'http://' + b;
+  return b;
+}
+
+function api(cfg, path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({ Authorization: 'Bearer ' + cfg.token }, opts.headers || {});
+  return fetch(cfg.baseUrl + path, opts);
+}
+
+// ── connect ──────────────────────────────────────────────────────────────
+
+function markConnected(name) {
+  $('conn-dot').classList.add('on');
+  $('conn-label').textContent = 'מחובר: ' + name;
+}
+
+function testConnection(silent) {
+  return getCfg().then(function (cfg) {
+    if (!cfg.baseUrl || !cfg.token) {
+      if (!silent) status('conn-status', 'מלאו כתובת וטוקן', 'err');
+      $('connect-fold').open = true;
       return false;
     }
-  }
+    return api(cfg, '/agent/v1/ping').then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) {
+        markConnected(d.agent + ' · v' + d.version);
+        if (!silent) status('conn-status', '✓ מחובר', 'ok');
+        return true;
+      }
+      if (!silent) status('conn-status', d.error || 'הטוקן נדחה', 'err');
+      $('connect-fold').open = true;
+      return false;
+    }).catch(function () {
+      if (!silent) status('conn-status', 'אין תשובה מ-' + cfg.baseUrl + ' — האתר רץ?', 'err');
+      $('connect-fold').open = true;
+      return false;
+    });
+  });
+}
 
-  $('save').addEventListener('click', async () => {
-    const url = $('url').value.trim();
-    if (url && !(await ensureHostPermission(url))) {
-      status('צריך אישור גישה לכתובת ה-CMS כדי להתחבר', false);
+$('btn-connect').addEventListener('click', function () {
+  var baseUrl = normBase($('base-url').value);
+  var token = $('token').value.trim();
+  var patch = { baseUrl: baseUrl };
+  if (token) patch.token = token; // empty field keeps the stored token
+  setCfg(patch).then(function () {
+    status('conn-status', 'בודק…');
+    testConnection(false);
+  });
+});
+
+// ── 1 · copy the pack + the user's thought ──────────────────────────────
+
+$('btn-copy').addEventListener('click', function () {
+  var brief = $('brief').value.trim();
+  var size = $('pack-size').value;
+  setCfg({ packSize: size });
+  status('copy-status', 'מרכיב את החבילה…');
+  getCfg().then(function (cfg) {
+    if (!cfg.baseUrl || !cfg.token) {
+      status('copy-status', 'קודם מתחברים למעלה', 'err');
+      $('connect-fold').open = true;
       return;
     }
-    const patch = { type: 'setConfig', url, target: $('target').value };
-    if ($('token').value) patch.token = $('token').value;
-    const r = await send(patch);
-    if (r && r.ok) {
-      status('נשמר', true);
-      $('token').value = '';
-      const setup = document.getElementById('setup');
-      if (setup && url) setup.open = false; // connected — fold setup away
-      loadTargets($('target').value);
-    } else status('שגיאה בשמירה', false);
+    var q = '/agent/v1/roleplay?size=' + encodeURIComponent(size) +
+      (brief ? '&brief=' + encodeURIComponent(brief) : '');
+    api(cfg, q).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (pack) {
+      return navigator.clipboard.writeText(pack).then(function () {
+        status('copy-status', '✓ הועתק (' + Math.round(pack.length / 1024) + 'KB) — הדביקו בצ׳אט ושלחו', 'ok');
+      });
+    }).catch(function (e) {
+      status('copy-status', 'שגיאה: ' + e.message, 'err');
+    });
   });
+});
 
-  $('target').addEventListener('change', () => send({ type: 'setConfig', target: $('target').value }));
+// ── 2 · the reply becomes a draft page ──────────────────────────────────
 
-  $('ping').addEventListener('click', async () => {
-    const r = await send({ type: 'ping' });
-    if (r && r.ok) { status(`מחובר — ${r.agent} [${(r.scopes || []).join(', ')}] · v${r.version}`, true); return; }
-    const err = (r && r.error) || '?';
-    // a network failure usually means the CMS server isn't running / wrong URL
-    const hint = /failed to fetch|networkerror|load failed/i.test(err)
-      ? ' — האם שרת ה-CMS רץ בכתובת הזו? (node src/server.js)'
-      : '';
-    status('אין חיבור: ' + err + hint, false);
+function createFromReply(update) {
+  var source = $('reply').value.trim();
+  if (!source) { status('create-status', 'מדביקים כאן את תשובת הבוט קודם', 'err'); return; }
+  status('create-status', 'יוצר דף…');
+  $('create-result').innerHTML = '';
+  getCfg().then(function (cfg) {
+    if (!cfg.baseUrl || !cfg.token) {
+      status('create-status', 'קודם מתחברים למעלה', 'err');
+      $('connect-fold').open = true;
+      return;
+    }
+    var body = { source: source, publish: false };
+    if (update) body.update = true;
+    api(cfg, '/agent/v1/create-from-source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+      .then(function (res) {
+        var d = res.d;
+        if (d.ok) {
+          status('create-status',
+            (d.created ? '✓ נוצר דף חדש' : '✓ הדף עודכן') +
+            (d.repaired ? ' (תוקן אוטומטית — בדקו בבונה)' : '') + ' — טיוטה', 'ok');
+          var a = document.createElement('a');
+          a.className = 'result-link';
+          a.href = cfg.baseUrl + '/admin/edit/' + encodeURIComponent(d.fullPath);
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = '🍊 לפתוח את "' + d.fullPath + '" בבונה';
+          $('create-result').appendChild(a);
+          return;
+        }
+        if (res.status === 409 && d.fullPath) {
+          status('create-status', 'דף בשם "' + d.fullPath + '" כבר קיים', 'err');
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'btn ghost';
+          b.textContent = '↻ עדכן את הדף הקיים';
+          b.addEventListener('click', function () { createFromReply(true); });
+          $('create-result').appendChild(b);
+          return;
+        }
+        status('create-status', d.error || 'התשובה לא הכילה מסמך תקין', 'err');
+      })
+      .catch(function (e) { status('create-status', 'שגיאה: ' + e.message, 'err'); });
   });
+}
 
-  // free-plan (lite) pack — persisted so the on-page panel follows the same choice
-  $('lite').addEventListener('change', () =>
-    send({ type: 'setConfig', packSize: $('lite').checked ? 'lite' : 'full' }));
+$('btn-create').addEventListener('click', function () { createFromReply(false); });
 
-  $('primer').addEventListener('click', async () => {
-    const size = $('lite').checked ? 'lite' : 'full';
-    const r = await send({ type: 'roleplay', locale: 'he', size });
-    if (r && r.ok && r.roleplay) {
-      try {
-        await navigator.clipboard.writeText(r.roleplay);
-        const kb = ((r.length || r.roleplay.length) / 1000).toFixed(1);
-        status(`משחק בונה-האתרים הועתק (${kb}K תווים) — הדביקו בצ׳אט חדש של ה‑AI`, true);
-      } catch (e) { status('העתקה נכשלה', false); }
-    } else status('שגיאה: ' + ((r && r.error) || '?'), false);
-  });
+// ── boot ────────────────────────────────────────────────────────────────
 
-  // Tier realignment (v0.85): key-based generation lives in the CMS now
-  // (/admin/chat — the key on the user own server). This popup stays the
-  // KEYLESS tier; the card links to the copilot. The ecosystem link (v1.69)
-  // points at the page builder, where 🧠 בונה הפרומפטים lives.
-  send({ type: 'getConfig' }).then((c) => {
-    if (!(c && c.ok && c.url)) return;
-    const link = $('byok-cms-link');
-    if (link) link.href = c.url + '/admin/chat';
-    const pb = $('prompt-builder-link');
-    if (pb) pb.href = c.url + '/admin';
-  });
-})();
+getCfg().then(function (cfg) {
+  if (cfg.baseUrl) $('base-url').value = cfg.baseUrl;
+  if (cfg.packSize) $('pack-size').value = cfg.packSize;
+  if (cfg.baseUrl && cfg.token) testConnection(true);
+  else $('connect-fold').open = true;
+});

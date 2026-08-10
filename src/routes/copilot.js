@@ -387,20 +387,23 @@ router.get('/admin/ai-setup', requireAdmin, (req, res) => {
       </div>
 
       <section class="card" style="margin-top:18px">
-        <h3 class="sub-head">🧩 התוסף לדפדפן</h3>
+        <h3 class="sub-head">🧩 התוסף לדפדפן — Chrome וגם Firefox</h3>
         <p class="lead">
-          שתי תוספות כרום, לפי הצורך: <strong>Bridge V2</strong> — מגשר בין אתר מאוחסן לבין המודל המקומי שלכם
-          (השרת בענן לא רואה את המחשב שלכם — הדפדפן כן). <strong>BYOT</strong> — מזריק את שפת BenTML לצ׳אט
-          שכבר יש לכם (ChatGPT / Claude / Grok), בלי מפתחות בכלל.
+          שתי תוספות, לפי הצורך: <strong>מלווה ההעתקה</strong> — כפתור אחד מעתיק חבילת BenTML מוכנה יחד עם
+          המחשבה שלכם; מדביקים בכל צ׳אט שיש לכם, שולחים בעצמכם, ומדביקים את התשובה חזרה — והיא נהיית דף.
+          <strong>בלי שום נוכחות באתרי הצ׳אט</strong>: הצ׳אטים הציבוריים הם השותפים הטבעיים שלנו — לא נוגעים,
+          לא מזריקים, ושום עדכון שלהם לא שובר אותנו. <strong>Bridge V2</strong> — מגשר בין אתר מאוחסן בענן
+          לבין המודל המקומי שרץ אצלכם.
         </p>
         <div class="row" style="gap:10px;flex-wrap:wrap">
-          <a class="btn" href="/admin/ai-setup/extension-bridge.zip">⬇ הורדת Bridge V2</a>
-          <a class="btn secondary" href="/admin/ai-setup/extension-byot.zip">⬇ הורדת BYOT</a>
-          <a class="btn secondary" href="/admin/inject">📖 חבילת ההזרקה לצ׳אט</a>
+          <a class="btn" href="/admin/ai-setup/extension-byot.zip">⬇ מלווה ההעתקה</a>
+          <a class="btn secondary" href="/admin/ai-setup/extension-bridge.zip">⬇ Bridge V2</a>
+          <a class="btn secondary" href="/admin/agent">🔑 טוקן סוכן (המלווה צריך אחד)</a>
         </div>
         <p class="muted" style="margin-top:10px">
-          התקנה: פותחים <code dir="ltr">chrome://extensions</code>, מדליקים Developer mode, גוררים את קובץ ה-ZIP
-          (או Load unpacked על התיקייה אחרי חילוץ).
+          <strong>Chrome/Edge:</strong> <code dir="ltr">chrome://extensions</code> ← Developer mode ← גוררים את
+          ה-ZIP (או Load unpacked אחרי חילוץ). <strong>Firefox:</strong> <code dir="ltr">about:debugging</code>
+          ← This Firefox ← Load Temporary Add-on ← בוחרים את ה-ZIP.
         </p>
       </section>
     </div>
