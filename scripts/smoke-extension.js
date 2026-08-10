@@ -31,6 +31,16 @@ check('permissions are exactly storage + clipboardWrite',
 check('Firefox installability (gecko id + min version)',
   !!(manifest.browser_specific_settings && manifest.browser_specific_settings.gecko &&
      manifest.browser_specific_settings.gecko.id));
+// AMO gate (2026): every submission must declare data collection. We collect
+// NOTHING — the token/address live in local storage and travel only to the
+// user's own CMS — and "none" is the explicit way to say so.
+check('AMO data-collection declaration: required ["none"]',
+  JSON.stringify(((manifest.browser_specific_settings.gecko || {}).data_collection_permissions || {}).required) === '["none"]');
+check('Bridge V2 carries the same declaration',
+  (() => {
+    const m2 = JSON.parse(fs.readFileSync(path.join(EXT, '..', 'extension-v2a', 'manifest.json'), 'utf8'));
+    return JSON.stringify(((m2.browser_specific_settings.gecko || {}).data_collection_permissions || {}).required) === '["none"]';
+  })());
 check('popup is the whole product', manifest.action && manifest.action.default_popup === 'popup.html');
 
 // every referenced file exists (a missing icon silently breaks Load unpacked)

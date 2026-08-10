@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tapuziel — מלווה ההעתקה",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "כפתור אחד מעתיק חבילת BenTML מוכנה עם המחשבה שלכם. מדביקים בכל צ׳אט AI שיש לכם, שולחים בעצמכם, ומדביקים את התשובה חזרה — והיא הופכת לדף אמיתי. בלי נוכחות באתרי הצ׳אט, בלי מפתחות, בלי אוטומציה.",
   "permissions": [
     "storage",
@@ -24,7 +24,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "tapuziel-companion@whiteno1se",
-      "strict_min_version": "115.0"
+      "strict_min_version": "115.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }
