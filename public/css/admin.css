@@ -2596,6 +2596,9 @@ details.agent-snip-details summary { cursor: pointer; }
   border-radius: 4px;
   transition: outline-color var(--dur), background var(--dur), box-shadow var(--dur);
   box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.4);
+  /* a fatter hitbox that costs no layout: pad the target, pull the box back */
+  padding: 2px 4px;
+  margin: -2px -4px;
 }
 .inline-editable:hover {
   outline-color: color-mix(in srgb, var(--select) 45%, #fff);

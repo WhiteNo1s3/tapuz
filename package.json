@@ -21,7 +21,7 @@
     "admin": "node src/server.js",
     "db:init": "node scripts/init-db.js",
     "seed:admin": "node scripts/seed-dev-admin.js",
-    "export:static": "node -e 'require(\"./src/export\").exportAll()'",
+    "export:static": "node scripts/export-static.js",
     "test:bentml": "node scripts/smoke-bentml.js",
     "test:bentml-engine": "node scripts/smoke-bentml-engine.js",
     "test:homepage": "node scripts/smoke-homepage.js",

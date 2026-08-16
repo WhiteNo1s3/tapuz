@@ -1632,11 +1632,29 @@
     });
 
     el.addEventListener('dblclick', function (e) {
-      // Inline text fields handle their own dblclick; otherwise just select —
-      // the old scroll-to-panel was another shake source (v1.75)
+      // Inline text fields handle their own dblclick; otherwise the whole
+      // block is the hitbox: open the NEAREST text field's editor (v2.14 —
+      // nobody should have to hit a one-line box dead center). Blocks with
+      // no text fields keep the old behavior: just select, no shake (v1.75).
       if (e.target.closest('[data-inline-key]')) return;
       e.stopPropagation();
-      selectBlock(block.id);
+      var fields = el.querySelectorAll(
+        '[data-inline-id="' + cssEsc(block.id) + '"][data-inline-key]'
+      );
+      var best = null, bestDist = Infinity;
+      fields.forEach(function (f) {
+        var r = f.getBoundingClientRect();
+        var dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right);
+        var dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom);
+        var dist = dx * dx + dy * dy;
+        if (dist < bestDist) { bestDist = dist; best = f; }
+      });
+      if (best) {
+        e.preventDefault();
+        openTextEditor(block.id, best.getAttribute('data-inline-key'));
+      } else {
+        selectBlock(block.id);
+      }
     });
 
     handle.addEventListener('dragstart', function (e) {
@@ -1828,18 +1846,20 @@
       wrap.innerHTML =
         '<div class="preview-features">' +
         items
-          .map(function (it) {
+          .map(function (it, i) {
             return (
-              '<div class="preview-feature"><strong>' +
+              '<div class="preview-feature"><strong data-inline-key="items.' + i + '.title">' +
               esc(it.title || '') +
+              '</strong>' +
               (it.url ? ' <span style="font-size:.75rem;color:#0a66c2" title="' + escAttr(it.url) + '">🔗</span>' : '') +
-              '</strong><div>' +
+              '<div data-inline-key="items.' + i + '.description" style="min-height:1.2em">' +
               esc(it.description || '') +
               '</div></div>'
             );
           })
           .join('') +
         '</div>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -1849,11 +1869,15 @@
       wrap.innerHTML =
         '<' + listTag + ' style="margin:4px 0;padding-inline-start:20px;color:#334155">' +
         listItems
-          .map(function (it) {
-            return '<li>' + esc(typeof it === 'string' ? it : (it.text || '')) + '</li>';
+          .map(function (it, i) {
+            // string items edit items.N itself; object items edit items.N.text
+            var liKey = typeof it === 'string' ? 'items.' + i : 'items.' + i + '.text';
+            return '<li data-inline-key="' + escAttr(liKey) + '" style="min-height:1.2em">' +
+              esc(typeof it === 'string' ? it : (it.text || '')) + '</li>';
           })
           .join('') +
         '</' + listTag + '>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -2011,11 +2035,12 @@
         '<div class="preview-faq">' +
         (fqItems.length ? fqItems.map(function (it, i) {
           return '<div style="border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;overflow:hidden">' +
-            '<div style="padding:9px 12px;font-weight:600;background:#f8fafc">▾ ' + esc(it.question || 'שאלה…') + '</div>' +
-            (i === 0 ? '<div style="padding:9px 12px;color:#475569;font-size:.9rem">' + esc(it.answer || '') + '</div>' : '') +
+            '<div style="padding:9px 12px;font-weight:600;background:#f8fafc">▾ <span data-inline-key="items.' + i + '.question">' + esc(it.question || 'שאלה…') + '</span></div>' +
+            (i === 0 ? '<div data-inline-key="items.0.answer" style="padding:9px 12px;color:#475569;font-size:.9rem;min-height:1.2em">' + esc(it.answer || '') + '</div>' : '') +
             '</div>';
         }).join('') : '<div style="color:#94a3b8">? שאלות ותשובות — הוסיפו פריטים במאפיינים ←</div>') +
         '</div>';
+      if (fqItems.length) wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -2024,12 +2049,13 @@
       wrap.innerHTML =
         '<div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">' +
         '<div style="background:#dc2626;color:#fff;font-weight:700;padding:6px 12px;font-size:.85rem">📰 ' + esc(d.label || 'מבזקים') + '</div>' +
-        (npItems.length ? npItems.slice(0, 4).map(function (it) {
+        (npItems.length ? npItems.slice(0, 4).map(function (it, i) {
           return '<div style="display:flex;gap:10px;padding:7px 12px;border-top:1px solid #f1f5f9;font-size:.9rem">' +
-            '<span style="color:#dc2626;font-weight:700;direction:ltr">' + esc(it.time || '') + '</span>' +
-            '<span style="color:#334155">' + esc(it.text || '') + '</span></div>';
+            '<span data-inline-key="items.' + i + '.time" style="color:#dc2626;font-weight:700;direction:ltr">' + esc(it.time || '') + '</span>' +
+            '<span data-inline-key="items.' + i + '.text" style="color:#334155;flex:1">' + esc(it.text || '') + '</span></div>';
         }).join('') : '<div style="padding:10px 12px;color:#94a3b8">הוסיפו מבזקים במאפיינים ←</div>') +
         '</div>';
+      if (npItems.length) wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -2247,36 +2273,42 @@
 
     if (block.type === 'cards') {
       var cItems = d.items || [];
+      // placeholders (no real items yet) stay untagged — there is no items.N
+      // to edit until the side panel creates one
+      var cReal = cItems.length > 0;
       wrap.innerHTML =
         '<div class="preview-cards">' +
-        (cItems.length ? cItems : [{ title: 'כרטיס 1' }, { title: 'כרטיס 2' }, { title: 'כרטיס 3' }]).map(function (it) {
+        (cReal ? cItems : [{ title: 'כרטיס 1' }, { title: 'כרטיס 2' }, { title: 'כרטיס 3' }]).map(function (it, i) {
           return '<div class="preview-card">' +
             '<div class="preview-card-media"></div>' +
-            (it.tag ? '<span class="preview-card-tag">' + esc(it.tag) + '</span>' : '') +
-            '<div class="preview-card-title">' + esc(it.title || 'כותרת') + '</div>' +
-            (it.excerpt ? '<div class="preview-card-excerpt">' + esc(it.excerpt) + '</div>' : '') +
+            (it.tag ? '<span class="preview-card-tag"' + (cReal ? ' data-inline-key="items.' + i + '.tag"' : '') + '>' + esc(it.tag) + '</span>' : '') +
+            '<div class="preview-card-title"' + (cReal ? ' data-inline-key="items.' + i + '.title"' : '') + '>' + esc(it.title || 'כותרת') + '</div>' +
+            (it.excerpt ? '<div class="preview-card-excerpt"' + (cReal ? ' data-inline-key="items.' + i + '.excerpt"' : '') + '>' + esc(it.excerpt) + '</div>' : '') +
             '</div>';
         }).join('') +
         '</div>';
+      if (cReal) wireInlineEditable(wrap, block);
       return wrap;
     }
 
     if (block.type === 'carousel') {
       var slItems = d.items || [];
+      var slReal = slItems.length > 0;
       wrap.innerHTML =
         '<div class="preview-carousel">' +
-        (slItems.length ? slItems : [{ title: 'שקופית 1' }, { title: 'שקופית 2' }, { title: 'שקופית 3' }]).map(function (it) {
+        (slReal ? slItems : [{ title: 'שקופית 1' }, { title: 'שקופית 2' }, { title: 'שקופית 3' }]).map(function (it, i) {
           return '<div class="preview-card preview-slide">' +
             (it.image
               ? '<div class="preview-card-media" style="background-image:url(' + esc(it.image) + ');background-size:cover;background-position:center"></div>'
               : '<div class="preview-card-media"></div>') +
-            (it.tag ? '<span class="preview-card-tag">' + esc(it.tag) + '</span>' : '') +
-            '<div class="preview-card-title">' + esc(it.title || 'שקופית') + '</div>' +
-            (it.excerpt ? '<div class="preview-card-excerpt">' + esc(it.excerpt) + '</div>' : '') +
+            (it.tag ? '<span class="preview-card-tag"' + (slReal ? ' data-inline-key="items.' + i + '.tag"' : '') + '>' + esc(it.tag) + '</span>' : '') +
+            '<div class="preview-card-title"' + (slReal ? ' data-inline-key="items.' + i + '.title"' : '') + '>' + esc(it.title || 'שקופית') + '</div>' +
+            (it.excerpt ? '<div class="preview-card-excerpt"' + (slReal ? ' data-inline-key="items.' + i + '.excerpt"' : '') + '>' + esc(it.excerpt) + '</div>' : '') +
             '</div>';
         }).join('') +
         '<span class="preview-carousel-hint">↔ גלילה</span>' +
         '</div>';
+      if (slReal) wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -2987,6 +3019,30 @@
    * Commits to block.data and refreshes the side settings text.
    */
 
+  // Inline keys may be PATHS into block.data — 'items.2.text' reaches the
+  // third list item, so every repeated item is editable on the canvas, not
+  // just flat fields (and not just the first item, as before v2.14).
+  function getDataPath(obj, key) {
+    if (key.indexOf('.') === -1) return obj ? obj[key] : undefined;
+    var cur = obj;
+    var segs = key.split('.');
+    for (var i = 0; i < segs.length && cur != null; i++) cur = cur[segs[i]];
+    return cur;
+  }
+  function setDataPath(obj, key, val) {
+    if (key.indexOf('.') === -1) { obj[key] = val; return; }
+    var segs = key.split('.');
+    var cur = obj;
+    for (var i = 0; i < segs.length - 1; i++) {
+      var s = segs[i];
+      if (cur[s] == null || typeof cur[s] !== 'object') {
+        cur[s] = /^\d+$/.test(segs[i + 1]) ? [] : {};
+      }
+      cur = cur[s];
+    }
+    cur[segs[segs.length - 1]] = val;
+  }
+
   function wireInlineEditable(root, block) {
     if (!root) return;
     root.querySelectorAll('[data-inline-key]').forEach(function (el) {
@@ -3017,7 +3073,8 @@
     if (!block.data) block.data = {};
     selectBlock(blockId); // calm path — highlight + panel follow, no jump
     var isHtml = block.type === 'html' && key === 'content';
-    var original = block.data[key] != null ? String(block.data[key]) : '';
+    var curVal = getDataPath(block.data, key);
+    var original = curVal != null ? String(curVal) : '';
     var overlay = document.createElement('div');
     overlay.className = 'text-editor-modal';
     // The Word tools (v1.76, Ben: "there are no tools in text box like word
@@ -3082,7 +3139,7 @@
     function save() {
       if (ta.value !== original) {
         pushHistory();
-        block.data[key] = ta.value;
+        setDataPath(block.data, key, ta.value);
         markDirty();
         renderCanvas(); // scroll-pinned since v1.74 — repaint without a jump
         renderProperties();
