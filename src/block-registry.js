@@ -582,6 +582,10 @@ const BLOCK_REGISTRY = [
         name: 'size', labelHe: 'גודל', type: 'enum',
         enum: ['sm', 'md', 'lg', 'xl'], default: 'md',
         hint: 'שדה height הישן נגזר מהגודל (md = ‎1.5rem)'
+      },
+      {
+        name: 'height', labelHe: 'גובה מדויק', type: 'string',
+        hint: 'אורך CSS מדויק (למשל 106px) — נכתב בגרירת הגובה בבונה, וגובר על הגודל'
       }
     ],
     textField: null,
