@@ -50,7 +50,17 @@ const STYLE_KEYS = [
   ['background', 'style-background'],
   ['fontSize', 'style-fontsize'],
   ['padding', 'style-padding'],
-  ['radius', 'style-radius']
+  ['radius', 'style-radius'],
+  // v2.21 paint widening — every key styleDecls honors crosses the bridge,
+  // or the AI round-trip silently strips the owner's styling.
+  ['fontWeight', 'style-fontweight'],
+  ['margin', 'style-margin'],
+  ['border', 'style-border'],
+  ['borderColor', 'style-bordercolor'],
+  ['shadow', 'style-shadow'],
+  // hideOn predates this list and was never bridged: a page that round-tripped
+  // through .pzn (every AI edit) lost its per-device visibility. Real bug.
+  ['hideOn', 'style-hideon']
 ];
 
 function styleToProps(data, props) {
