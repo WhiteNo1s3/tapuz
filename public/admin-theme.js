@@ -228,6 +228,115 @@
     });
   };
 
+  // ── Theme LIBRARY (v2.21) — themes as artifacts, the WordPress attitude ──
+  function libStatus(msg, ok) {
+    var el = document.getElementById('th-lib-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = ok ? '#166534' : '#b91c1c';
+  }
+
+  function libApi(path, body) {
+    return fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json(); });
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderLibrary() {
+    var list = document.getElementById('th-lib-list');
+    if (!list) return;
+    fetch('/admin/api/theme/library').then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) { list.textContent = d.error || 'שגיאה'; return; }
+      if (!d.themes.length) {
+        list.innerHTML = '<div style="grid-column:1/-1;color:#64748b">אין עדיין ערכות שמורות — שמרו את הערכה הנוכחית בשם, או הדביקו ערכה מה-AI בייבוא למטה.</div>';
+        return;
+      }
+      list.innerHTML = d.themes.map(function (t) {
+        var dots = (t.palette || []).map(function (c) {
+          return '<span style="display:inline-block;width:18px;height:18px;border-radius:50%;border:1px solid #e2e8f0;background:' + esc(c) + '"></span>';
+        }).join('');
+        var srcLabel = t.source === 'ai' ? '🤖 נבנה עם AI' : t.source === 'import' ? '📦 יובא' : t.source === 'auto' ? '⏪ גיבוי אוטומטי' : '✋ נשמר ידנית';
+        return '<div style="border:1.5px solid #e2e8f0;border-radius:10px;padding:12px" data-thm="' + esc(t.id) + '">' +
+          '<div style="font-weight:700;margin-bottom:4px">' + esc(t.name) + '</div>' +
+          '<div style="display:flex;gap:5px;margin-bottom:6px">' + dots + '</div>' +
+          '<div style="font-size:0.75rem;color:#64748b;margin-bottom:10px">' + srcLabel + '</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button type="button" class="btn" data-lib-apply="' + esc(t.id) + '" style="font-size:0.82rem;padding:6px 10px">החל</button>' +
+          '<a class="btn secondary" href="/admin/api/theme/library/export?id=' + encodeURIComponent(t.id) + '" download style="font-size:0.82rem;padding:6px 10px">ייצוא</a>' +
+          '<button type="button" class="btn secondary" data-lib-remove="' + esc(t.id) + '" style="font-size:0.82rem;padding:6px 10px">מחיקה</button>' +
+          '</div></div>';
+      }).join('');
+
+      list.querySelectorAll('[data-lib-apply]').forEach(function (btn) {
+        btn.onclick = function () {
+          libApi('/admin/api/theme/library/apply', { id: btn.dataset.libApply }).then(function (d2) {
+            if (d2.ok) {
+              libStatus('הוחלה "' + d2.name + '"' + (d2.backedUp ? ' · העבודה הקודמת גובתה אוטומטית' : '') + ' — טוען מחדש…', true);
+              setTimeout(function () { location.reload(); }, 700);
+            } else libStatus(d2.error || 'שגיאה', false);
+          });
+        };
+      });
+      list.querySelectorAll('[data-lib-remove]').forEach(function (btn) {
+        btn.onclick = function () {
+          if (!confirm('למחוק את הערכה מהספרייה? (האתר החי לא מושפע)')) return;
+          libApi('/admin/api/theme/library/remove', { id: btn.dataset.libRemove }).then(function (d2) {
+            if (d2.ok) renderLibrary();
+            else libStatus(d2.error || 'שגיאה', false);
+          });
+        };
+      });
+    }).catch(function () { libStatus('שגיאת רשת', false); });
+  }
+
+  var libSave = document.getElementById('th-lib-save');
+  if (libSave) libSave.onclick = function () {
+    var name = (document.getElementById('th-lib-name') || {}).value || '';
+    libApi('/admin/api/theme/library', { name: name }).then(function (d) {
+      if (d.ok) {
+        libStatus('נשמרה "' + d.name + '" ✓', true);
+        var nameEl = document.getElementById('th-lib-name');
+        if (nameEl) nameEl.value = '';
+        renderLibrary();
+      } else libStatus(d.error || 'שגיאה', false);
+    }).catch(function () { libStatus('שגיאת רשת', false); });
+  };
+
+  // import-to-LIBRARY: the AI-built package becomes one of the available
+  // themes instead of replacing the live one
+  var importLib = document.getElementById('th-import-library');
+  if (importLib) importLib.onclick = function () {
+    var status = document.getElementById('th-import-status');
+    var raw = (document.getElementById('th-import-text') || {}).value || '';
+    var pkg;
+    try { pkg = JSON.parse(raw); } catch (e) {
+      if (status) { status.textContent = 'לא JSON תקין'; status.style.color = '#b91c1c'; }
+      return;
+    }
+    libApi('/admin/api/theme/library/import', { package: pkg }).then(function (d) {
+      if (!status) return;
+      if (d.ok) {
+        status.textContent = 'נשמרה לספרייה כ-"' + d.name + '" ✓ (האתר החי לא השתנה)';
+        status.style.color = '#166534';
+        renderLibrary();
+      } else {
+        status.textContent = d.error || 'שגיאה';
+        status.style.color = '#b91c1c';
+      }
+    }).catch(function () {
+      if (status) { status.textContent = 'שגיאת רשת'; status.style.color = '#b91c1c'; }
+    });
+  };
+
+  renderLibrary();
+
   renderLooks();
   // Initial preview
   setTimeout(preview, 50);
