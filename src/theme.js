@@ -34,6 +34,21 @@ const DEFAULT_OVERRIDES = {
   layout: {
     maxWidth: '900px',
     menuPlacement: 'top' // top | side
+  },
+  // Theme EFFECTS (v2.22) — site-wide custom CSS/JS as part of the theme
+  // itself (Ben's mouse-effect flow: an LLM in a FRESH chat writes the
+  // snippet, the owner pastes it here). Living inside overrides means
+  // effects ride overridesToCss (serve AND static export), theme packages,
+  // and the theme library with zero extra plumbing.
+  //
+  // TRUST, stated plainly (same line the html block draws in renderer.js):
+  // effect JS/CSS is trusted-author raw — it RUNS on the live site. Anyone
+  // who can edit the theme can therefore run script on visitors. Content
+  // from OUTSIDE stays scrubbed; what the OWNER pastes on purpose does not.
+  effects: {
+    css: '',
+    js: '',
+    note: ''   // what the effect is, in the owner's words — shown in the editor
   }
 };
 
@@ -197,7 +212,32 @@ function overridesToCss(overrides) {
   // inline block just stacked the top header and pushed the page down, and —
   // being injected AFTER the theme stylesheet — would also override the
   // theme's narrow-screen fallback.
+
+  // Theme effect CSS (v2.22) rides HERE, last, so an effect can override
+  // anything — and because both the serve path (renderPage's inline style)
+  // and the static export (copyThemeAssets → css/main.css) already funnel
+  // through this function, the effect ships everywhere with no extra wiring.
+  const effectCss = String((o.effects && o.effects.css) || '').trim();
+  if (effectCss) {
+    css += `\n/* ── theme effects (trusted-author, see DEFAULT_OVERRIDES.effects) ── */\n${effectCss}\n`;
+  }
   return css;
+}
+
+/**
+ * The effect's JS as a ready-to-embed script tag, or '' when no effect.
+ * Emitted into siteExtras (every served page AND the static export — inline
+ * scripts survive the export's style-strip). Trusted-author raw, same stance
+ * as the html block; the FRESH-chat prompt contracts the snippet to be a
+ * self-contained IIFE that waits for DOMContentLoaded on its own.
+ */
+function renderThemeEffectsJs(overrides) {
+  const o = mergeDeep(DEFAULT_OVERRIDES, overrides || {});
+  const js = String((o.effects && o.effects.js) || '').trim();
+  if (!js) return '';
+  // </script> inside the payload would end our tag mid-snippet and leak the
+  // rest as text — split the closer the standard way.
+  return `<script id="tapuz-theme-effects">\n${js.replace(/<\/script/gi, '<\\/script')}\n</script>`;
 }
 
 function getThemeSettings() {
@@ -279,6 +319,7 @@ module.exports = {
   loadOverrides,
   saveOverrides,
   overridesToCss,
+  renderThemeEffectsJs,
   getThemeSettings,
   saveThemeSettings,
   // theme packages (v0.99)

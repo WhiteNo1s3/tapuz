@@ -1035,7 +1035,10 @@ function renderPage(page, options = {}) {
   const siteExtras = renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
     renderAnalyticsBeacon(config) + require('./crm/consent').renderConsent(config) +
     require('./crm/pixels').renderPixels(config) +
-    require('./crm/cs-widget').renderTag(config);
+    require('./crm/cs-widget').renderTag(config) +
+    // theme effects JS (v2.22) — the theme's site-wide snippet (mouse effects
+    // etc.), last so every widget above exists before it runs
+    require('./theme').renderThemeEffectsJs(overrides);
   const seoJsonLd = seoLib.jsonLdScript(seoLib.buildJsonLd({
     title: pageTitle, description: pageDesc, image: ogAbs, isArticle, isHome,
     siteName: config.title || '',
