@@ -155,6 +155,22 @@ check('editor modal styled as fixed overlay', /\.text-editor-modal \{[^}]*positi
 // The buttons emit BenTML inline marks (@B/@I/@CODE/@LINK) — the language the
 // server already renders. The HTML code editor keeps NO word options.
 
+// ── v2.21 push-split: dropping BESIDE a block splits it, reachably ──
+// The 22px edge strips were the only split surface — a precision task on a
+// wide block. The body's outer horizontal band now resolves to the same
+// split hint, and the target previews the push (yields width + labeled
+// ghost) so the drop is never an act of faith.
+check('block body outer band resolves to a split hint',
+  /push-split/.test(builderSrc) && /mode: 'split', targetId: block\.id, side: pushSide/.test(builderSrc));
+check('push band is clamped, not a sliver (28–110px)',
+  /Math\.max\(28, Math\.min\(110, r\.width \* 0\.18\)\)/.test(builderSrc));
+check('split hover previews the push on body AND edge strips',
+  /'split-push-' \+ hint\.side/.test(builderSrc) && /'split-push-' \+ side/.test(builderSrc));
+check('drag cleanup clears the push classes', /'split-push-left',\s*\n\s*'split-push-right'/.test(builderSrc));
+check('admin.css animates the yield + draws the labeled ghost',
+  /\.canvas-block\.split-push-left \{ margin-left: 33\.33%/.test(css) &&
+  /המודול ינחת כאן/.test(css) && /margin \.18s ease/.test(css));
+
 check('editor window has the Word tools row (B/I/CODE/LINK)',
   /te-toolbar/.test(builderSrc) && /data-fmt="B"/.test(builderSrc) && /data-fmt="LINK"/.test(builderSrc));
 check('tools emit BenTML marks, not raw HTML',

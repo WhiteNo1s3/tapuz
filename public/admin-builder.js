@@ -1447,6 +1447,23 @@
       var half = e.clientY < r.top + r.height / 2 ? 0 : 1;
       var hint;
 
+      // v2.21 push-split (Ben: "split on the fly by PUSHING a module beside
+      // one"). The 22px edge strips were the only split surface — a precision
+      // task on a 1200px block. Now the outer horizontal band of the body
+      // (18%, clamped 28–110px) means "land BESIDE me"; the strips remain as
+      // the always-visible affordance. Same guards as bindSplitZone, same
+      // hint shape, same commitDrop.
+      if (!isColumnsContainer(block.type)) {
+        var bandX = Math.max(28, Math.min(110, r.width * 0.18));
+        var pushSide = e.clientX < r.left + bandX ? 'left'
+          : e.clientX > r.right - bandX ? 'right' : null;
+        if (pushSide && dragState.kind === 'block' &&
+            (dragState.blockId === block.id || isAncestor(dragState.blockId, block.id))) {
+          pushSide = null;
+        }
+        if (pushSide) return { mode: 'split', targetId: block.id, side: pushSide };
+      }
+
       if (!isBlocksContainer(block.type) && !isColumnsContainer(block.type)) {
         hint = ownListHint(half);
       } else {
@@ -1489,15 +1506,22 @@
       e.dataTransfer.dropEffect = dragState.kind === 'toolbox' ? 'copy' : 'move';
       setDropHint(hint);
       clearDropClasses();
-      el.classList.add(
-        hint.parentId === block.id ? 'drop-into'
-          : hint.index > (opts.index || 0) ? 'drop-after' : 'drop-before'
-      );
+      if (hint.mode === 'split') {
+        // the push preview: the block visibly yields its side to the incoming
+        // module — the drop stops being an act of faith
+        el.classList.add('split-target', 'split-push-' + hint.side);
+      } else {
+        el.classList.add(
+          hint.parentId === block.id ? 'drop-into'
+            : hint.index > (opts.index || 0) ? 'drop-after' : 'drop-before'
+        );
+      }
     });
 
     el.addEventListener('dragleave', function (e) {
       if (!el.contains(e.relatedTarget)) {
-        el.classList.remove('drop-before', 'drop-after', 'drop-into');
+        el.classList.remove('drop-before', 'drop-after', 'drop-into',
+          'split-target', 'split-push-left', 'split-push-right');
       }
     });
 
@@ -1680,7 +1704,7 @@
       clearDropClasses();
       zone.classList.add('split-active');
       var host = zone.closest('.canvas-block');
-      if (host) host.classList.add('split-target');
+      if (host) host.classList.add('split-target', 'split-push-' + side);
     });
     zone.addEventListener('dragleave', function (e) {
       if (!zone.contains(e.relatedTarget)) {
@@ -1706,7 +1730,8 @@
   function clearDropClasses() {
     document.querySelectorAll(
       '.drop-slot-active, .list-drop-active, .split-active, .split-target, .drop-hover,' +
-      ' .drop-hover-root, .drop-before, .drop-after, .drop-into'
+      ' .drop-hover-root, .drop-before, .drop-after, .drop-into,' +
+      ' .split-push-left, .split-push-right'
     ).forEach(function (el) {
       el.classList.remove(
         'drop-slot-active',
@@ -1717,7 +1742,9 @@
         'drop-hover-root',
         'drop-before',
         'drop-after',
-        'drop-into'
+        'drop-into',
+        'split-push-left',
+        'split-push-right'
       );
     });
   }
