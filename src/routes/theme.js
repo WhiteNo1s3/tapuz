@@ -54,6 +54,74 @@ router.post('/admin/api/theme/import', (req, res) => {
   }
 });
 
+// ─── Theme LIBRARY (v2.21) — themes as artifacts, the WordPress attitude.
+// Saved override-sets live in config/theme-library.json; applying is the only
+// door to the live theme and auto-backs-up unsaved work. An imported/AI-built
+// package lands HERE, never directly on the live site.
+router.get('/admin/api/theme/library', (req, res) => {
+  try {
+    res.json({ ok: true, themes: require('../theme-library').listThemes() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/theme/library', (req, res) => {
+  try {
+    const entry = require('../theme-library').saveCurrentAsTheme((req.body || {}).name);
+    res.json({ ok: true, id: entry.id, name: entry.name });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/theme/library/apply', (req, res) => {
+  try {
+    res.json(require('../theme-library').applyTheme((req.body || {}).id));
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/theme/library/import', (req, res) => {
+  try {
+    const entry = require('../theme-library').importPackageToLibrary((req.body || {}).package);
+    res.json({ ok: true, id: entry.id, name: entry.name });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/theme/library/remove', (req, res) => {
+  try {
+    const removed = require('../theme-library').removeTheme((req.body || {}).id);
+    if (!removed) return res.status(404).json({ ok: false, error: 'ערכת נושא לא נמצאה' });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/theme/library/rename', (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json({ ok: true, ...require('../theme-library').renameTheme(b.id, b.name) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.get('/admin/api/theme/library/export', (req, res) => {
+  try {
+    const pkg = require('../theme-library').exportTheme(String(req.query.id || ''));
+    const filename = 'tapuz-theme-' + new Date().toISOString().slice(0, 10) + '.json';
+    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.type('application/json').send(JSON.stringify(pkg, null, 2));
+  } catch (e) {
+    res.status(404).json({ ok: false, error: e.message });
+  }
+});
+
 router.get('/admin/theme', (req, res) => {
   const settings = getThemeSettings();
   const o = settings.overrides;
@@ -158,6 +226,17 @@ router.get('/admin/theme', (req, res) => {
         <button type="button" class="btn" id="th-save-build" style="background:#166534">שמור + בנה אתר</button>
       </div>
 
+      <section class="card" style="margin-bottom:24px" id="th-library-card">
+        <h3 class="sub-head">🗂 ספריית ערכות הנושא</h3>
+        <p class="lead">כמו וורדפרס: הערכה שבניתם — ביד או עם ה-AI — נשמרת <strong>כאחת מהערכות הזמינות</strong>, לא במקום הקודמת. שמרו את המצב הנוכחי בשם, החליפו ערכה בלחיצה — החלפה מגבה אוטומטית עבודה שלא נשמרה.</p>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+          <input id="th-lib-name" placeholder="שם לערכה הנוכחית (למשל: כתום חגיגי)" style="flex:1;min-width:200px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <button type="button" class="btn" id="th-lib-save">💾 שמור את הערכה הנוכחית</button>
+        </div>
+        <div id="th-lib-list" class="lead" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">טוען…</div>
+        <div id="th-lib-status" style="font-size:0.85rem;margin-top:10px"></div>
+      </section>
+
       <section class="card" style="margin-bottom:60px">
         <h3 class="sub-head">📦 ייצוא / ייבוא ערכת נושא</h3>
         <p class="lead">קובץ ניתן להעברה — ייצוא שומר את הצבעים/הפונטים/הפריסה הנוכחיים לקובץ, ייבוא מחיל קובץ כזה מאתר Tapuz אחר. שיתוף ערכות נושא, הצעד הראשון.</p>
@@ -168,6 +247,7 @@ router.get('/admin/theme', (req, res) => {
         <textarea id="th-import-text" rows="4" dir="ltr" placeholder='{"format":"tapuz-theme", ...}' style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
         <div class="row end">
           <span id="th-import-status" style="font-size:0.85rem"></span>
+          <button type="button" class="btn secondary" id="th-import-library">🗂 שמור לספרייה</button>
           <button type="button" class="btn secondary" id="th-import-apply">החל ערכת נושא מיובאת</button>
         </div>
       </section>
