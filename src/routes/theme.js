@@ -77,7 +77,10 @@ router.post('/admin/api/theme/library', (req, res) => {
 
 router.post('/admin/api/theme/library/apply', (req, res) => {
   try {
-    res.json(require('../theme-library').applyTheme((req.body || {}).id));
+    const result = require('../theme-library').applyTheme((req.body || {}).id);
+    // a theme switch must reach the exported site too, not just dynamic serves
+    try { require('../export').exportAll(); } catch (err) { console.error('[theme] rebuild after theme apply failed:', err.message); }
+    res.json(result);
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -110,6 +113,117 @@ router.post('/admin/api/theme/library/rename', (req, res) => {
     res.status(400).json({ ok: false, error: e.message });
   }
 });
+
+// ─── Theme EFFECTS (v2.22) — the FRESH-chat snippet flow. The owner
+// describes an effect ("עקבת עכבר כתומה"), copies a generated prompt whose
+// FIRST LINE demands a FRESH chat (Ben's requirement: a chat already primed
+// with the site-builder game answers in .pzn — the wrong language for an
+// effect snippet), pastes the reply back, and the css/js fences become the
+// theme's effect — part of overrides, so they ride packages + the library.
+router.get('/admin/api/theme/effects-prompt', (req, res) => {
+  try {
+    const brief = String(req.query.brief || '').trim().slice(0, 500);
+    res.type('text/markdown; charset=utf-8').send(buildEffectsPrompt(brief));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/theme/effects/paste', (req, res) => {
+  try {
+    const reply = String((req.body || {}).reply || '');
+    const css = extractFence(reply, ['css']);
+    const js = extractFence(reply, ['js', 'javascript']);
+    if (!css && !js) {
+      return res.status(400).json({
+        ok: false,
+        error: 'לא נמצא fence של css או js בתשובה — ודאו שהעתקתם את כל תשובת ה-AI, ושביקשתם אותה בצ׳אט חדש (FRESH)'
+      });
+    }
+    const themeLib = require('../theme');
+    const cur = themeLib.loadOverrides();
+    cur.effects = {
+      css: css || cur.effects.css,
+      js: js || cur.effects.js,
+      note: String((req.body || {}).note || cur.effects.note || '').slice(0, 300)
+    };
+    themeLib.saveOverrides(cur);
+    // the static export serves '/' before the dynamic path — an effect that
+    // only lives in overrides is invisible until a rebuild (crm.js pattern)
+    try { require('../export').exportAll(); } catch (err) { console.error('[theme] rebuild after effect paste failed:', err.message); }
+    res.json({ ok: true, cssChars: (css || '').length, jsChars: (js || '').length });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/theme/effects', (req, res) => {
+  try {
+    const b = req.body || {};
+    const themeLib = require('../theme');
+    const cur = themeLib.loadOverrides();
+    cur.effects = {
+      css: String(b.css == null ? cur.effects.css : b.css),
+      js: String(b.js == null ? cur.effects.js : b.js),
+      note: String(b.note == null ? cur.effects.note : b.note).slice(0, 300)
+    };
+    const saved = themeLib.saveOverrides(cur);
+    try { require('../export').exportAll(); } catch (err) { console.error('[theme] rebuild after effect save failed:', err.message); }
+    res.json({ ok: true, effects: saved.effects });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/** First fenced block matching one of the language tags, or ''. */
+function extractFence(text, langs) {
+  for (const lang of langs) {
+    const m = String(text).match(new RegExp('```' + lang + '\\s*\\n([\\s\\S]*?)```', 'i'));
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  return '';
+}
+
+/** The effect prompt — deliberately NOT the site-builder pack. */
+function buildEffectsPrompt(brief) {
+  return [
+    '# ⚠️ צ׳אט חדש בלבד (FRESH CHAT)',
+    '',
+    'את הבקשה הזו מדביקים ב**צ׳אט חדש לגמרי** — לא בצ׳אט שבו נבנו דפים עם',
+    'תפוזיאל. צ׳אט שכבר למד את שפת ה-`.pzn` יענה במסמך דפים — וזו בקשה אחרת',
+    'לגמרי: כאן מבקשים **קטע אפקט** לאתר, לא דף.',
+    '',
+    '## התפקיד',
+    '',
+    'את/ה מומחה/ית אפקטים ל-front-end. כתבו אפקט אתר עצמאי לפי התיאור למטה.',
+    '',
+    '## חוקים קשיחים',
+    '',
+    '1. **Vanilla בלבד** — בלי ספריות, בלי CDN, בלי `import`, בלי כתובות חיצוניות.',
+    '2. ה-JS הוא **IIFE עצמאי** שמחכה בעצמו ל-`DOMContentLoaded`, לא מניח שום דבר על הדף.',
+    '3. עדינות: האפקט לא שובר פריסה, לא חוסם קליקים, ומכבד `prefers-reduced-motion`.',
+    '4. האתר הוא **RTL עברית** — כיווניות נלקחת בחשבון.',
+    '5. בלי `</script>` בתוך מחרוזות.',
+    '',
+    '## פורמט התשובה — בדיוק כך, בלי מילה מסביב',
+    '',
+    'fence אחד של `css` (גם אם ריק) ו-fence אחד של `js`. שום טקסט לפני, בין או אחרי:',
+    '',
+    '```css',
+    '/* סגנונות האפקט */',
+    '```',
+    '',
+    '```js',
+    '(function () { /* האפקט */ })();',
+    '```',
+    '',
+    '---',
+    '',
+    '## האפקט המבוקש',
+    '',
+    brief || 'אפקט עכבר עדין בצבעי האתר (כתום תפוז) — עקבה רכה שנעלמת.'
+  ].join('\n');
+}
 
 router.get('/admin/api/theme/library/export', (req, res) => {
   try {
@@ -235,6 +349,23 @@ router.get('/admin/theme', (req, res) => {
         </div>
         <div id="th-lib-list" class="lead" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">טוען…</div>
         <div id="th-lib-status" style="font-size:0.85rem;margin-top:10px"></div>
+      </section>
+
+      <section class="card" style="margin-bottom:24px" id="th-effects-card">
+        <h3 class="sub-head">✨ אפקטים לאתר (חלק מערכת הנושא)</h3>
+        <p class="lead">אפקט עכבר, נצנוץ, רקע חי — מתארים, מעתיקים פרומפט, מדביקים <strong>בצ׳אט חדש (FRESH)</strong>, ומדביקים חזרה את התשובה. האפקט נשמר בערכת הנושא — נוסע עם ייצוא ועם הספרייה.</p>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <input id="th-fx-brief" placeholder="מה האפקט? למשל: עקבת עכבר כתומה שנעלמת" style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <button type="button" class="btn" id="th-fx-prompt">🧠 צור פרומפט והעתק</button>
+        </div>
+        <label class="field-label">תשובת ה-AI (מהצ׳אט החדש) — הדביקו הכול</label>
+        <textarea id="th-fx-reply" rows="4" dir="ltr" placeholder="fence של css + fence של js, כמו שהפרומפט ביקש" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
+        <div class="row end" style="margin-bottom:14px">
+          <span id="th-fx-status" style="font-size:0.85rem"></span>
+          <button type="button" class="btn secondary" id="th-fx-clear">🗑 נקה אפקט</button>
+          <button type="button" class="btn" id="th-fx-apply">קלוט את האפקט</button>
+        </div>
+        <div id="th-fx-current" style="font-size:0.85rem;color:#64748b"></div>
       </section>
 
       <section class="card" style="margin-bottom:60px">

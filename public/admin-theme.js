@@ -337,6 +337,73 @@
 
   renderLibrary();
 
+  // ── Theme EFFECTS (v2.22) — the FRESH-chat snippet flow ──
+  function fxStatus(msg, ok) {
+    var el = document.getElementById('th-fx-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = ok ? '#166534' : '#b91c1c';
+  }
+
+  function fxCurrent() {
+    var el = document.getElementById('th-fx-current');
+    if (!el) return;
+    fetch('/admin/api/theme').then(function (r) { return r.json(); }).then(function (d) {
+      var fx = (d.overrides || {}).effects || {};
+      var has = (fx.css || '').trim() || (fx.js || '').trim();
+      el.textContent = has
+        ? '✨ אפקט פעיל' + (fx.note ? ': ' + fx.note : '') +
+          ' (CSS ' + (fx.css || '').length + ' תווים · JS ' + (fx.js || '').length + ' תווים)'
+        : 'אין אפקט פעיל כרגע.';
+    }).catch(function () {});
+  }
+
+  var fxPrompt = document.getElementById('th-fx-prompt');
+  if (fxPrompt) fxPrompt.onclick = function () {
+    var brief = (document.getElementById('th-fx-brief') || {}).value || '';
+    fetch('/admin/api/theme/effects-prompt?brief=' + encodeURIComponent(brief))
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        return navigator.clipboard.writeText(text).then(function () {
+          fxStatus('✅ הפרומפט הועתק — הדביקו בצ׳אט חדש (FRESH), לא בצ׳אט של בניית הדפים', true);
+        });
+      })
+      .catch(function () { fxStatus('שגיאה בהעתקה', false); });
+  };
+
+  var fxApply = document.getElementById('th-fx-apply');
+  if (fxApply) fxApply.onclick = function () {
+    var reply = (document.getElementById('th-fx-reply') || {}).value || '';
+    var note = (document.getElementById('th-fx-brief') || {}).value || '';
+    fetch('/admin/api/theme/effects/paste', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reply: reply, note: note })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) {
+        fxStatus('נקלט ✓ (CSS ' + d.cssChars + ' · JS ' + d.jsChars + ' תווים) — האפקט חי בכל דף', true);
+        var ta = document.getElementById('th-fx-reply');
+        if (ta) ta.value = '';
+        fxCurrent();
+      } else fxStatus(d.error || 'שגיאה', false);
+    }).catch(function () { fxStatus('שגיאת רשת', false); });
+  };
+
+  var fxClear = document.getElementById('th-fx-clear');
+  if (fxClear) fxClear.onclick = function () {
+    if (!confirm('לנקות את האפקט מהאתר? (ערכות שמורות בספרייה שומרות את שלהן)')) return;
+    fetch('/admin/api/theme/effects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ css: '', js: '', note: '' })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) { fxStatus('נוקה ✓', true); fxCurrent(); }
+      else fxStatus(d.error || 'שגיאה', false);
+    }).catch(function () { fxStatus('שגיאת רשת', false); });
+  };
+
+  fxCurrent();
+
   renderLooks();
   // Initial preview
   setTimeout(preview, 50);
