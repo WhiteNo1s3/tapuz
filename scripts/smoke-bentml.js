@@ -252,5 +252,22 @@ try {
   check('BENTML 0.1 doc still compiles', false, e.toString());
 }
 
+// 6. the builder's source panel routes the OTHER dialect to the server.
+// The 🧠 prompt teaches AIs to answer in <bent-*> .pzn; pasting that reply
+// into the panel used to die in the line engine ("Expected version line
+// BENTML 0.2") without ever reaching the dual-dialect server compile —
+// Grok/GPT/Gemini all "failed" identically. Pin the client-side gate.
+{
+  const fs = require('fs');
+  const path = require('path');
+  const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-bentml-ui.js'), 'utf8');
+  check('panel sniffs the pzn dialect (looksLikePznSource)', ui.includes('function looksLikePznSource'));
+  check('panel skips the line engine for pzn paste', /E\s*&&\s*!looksLikePznSource\(source\)/.test(ui));
+  // the sniffer must match what AIs actually return: a <bent-*> tag document
+  const sniff = /<bent-[a-z]/i;
+  check('sniffer regex matches a bent-tag reply', sniff.test('<!DOCTYPE html>\n<html bent-version="0.1"><body><bent-hero id="h"></bent-hero></body></html>'));
+  check('sniffer regex leaves line-dialect sources alone', !sniff.test('BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\nTEXT { hi }\n'));
+}
+
 console.log(fail ? `\n${fail} failure(s)` : '\nAll bentml smoke checks passed');
 process.exit(fail ? 1 : 0);

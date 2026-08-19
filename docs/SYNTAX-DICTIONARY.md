@@ -378,6 +378,7 @@ Shape: `SPACE(params)`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `size` | `size` | enum sm\|md\|lg\|xl |  | "md" |
+| `height` | `height` | string |  |  |
 | `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
@@ -538,7 +539,7 @@ STATS {
 
 #### `LOGOS` → `logos`
 
-▣▣ **לוגואים / לקוחות** — רצועת לוגואים — PLACEHOLDER עד העלאת קבצים
+▣▣ **לוגואים / לקוחות** — רצועת לוגואים — התחילו מאריחי הדגמה, החליפו בלוגואים שלכם
 
 Shape: `LOGOS(params) { nested modules }`
 

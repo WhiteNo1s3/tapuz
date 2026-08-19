@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**252 routes across 37 files.**
+**255 routes across 37 files.**
 
 ## By file (what each module owns)
 
@@ -83,7 +83,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/revisions/:fullPath`
 - `POST /admin/api/revisions/restore`
 
-### `src/routes/copilot.js` — 11 routes
+### `src/routes/copilot.js` — 14 routes
 
 - `GET /admin/agent`
 - `GET /admin/ai`
@@ -94,6 +94,9 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/inject-pack`
 - `GET /admin/api/ai/settings`
 - `POST /admin/api/ai/settings`
+- `POST /admin/api/ai/test`
+- `GET /admin/ai-setup/extension-:which-:browser.zip`
+- `GET /admin/ai-setup`
 - `POST /admin/api/ai/chat`
 - `GET /admin/chat`
 
@@ -387,6 +390,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin` | GET | `src/routes/admin-home.js` |
 | `/admin/agent` | GET | `src/routes/copilot.js` |
 | `/admin/ai` | GET | `src/routes/copilot.js` |
+| `/admin/ai-setup` | GET | `src/routes/copilot.js` |
+| `/admin/ai-setup/extension-:which-:browser.zip` | GET | `src/routes/copilot.js` |
 | `/admin/analytics` | GET | `src/routes/analytics.js` |
 | `/admin/analytics.csv` | GET | `src/routes/analytics.js` |
 | `/admin/api/agent-tokens` | GET | `src/routes/agent-tokens.js` |
@@ -395,6 +400,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/ai/chat` | POST | `src/routes/copilot.js` |
 | `/admin/api/ai/settings` | GET | `src/routes/copilot.js` |
 | `/admin/api/ai/settings` | POST | `src/routes/copilot.js` |
+| `/admin/api/ai/test` | POST | `src/routes/copilot.js` |
 | `/admin/api/articles` | GET | `src/routes/content-api.js` |
 | `/admin/api/bentml/agent-pack` | GET | `src/routes/bentml-api.js` |
 | `/admin/api/bentml/apply` | POST | `src/routes/bentml-api.js` |

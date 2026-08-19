@@ -39,12 +39,26 @@ check('delivers via clipboard — the user pastes', /navigator\.clipboard\.write
 check('module carries no token / no external host', !/Bearer|Authorization|tzk_/.test(pb) && !/https?:\/\//.test(pb));
 
 // ── injection is retired EVERYWHERE (extension side) ─────────────────
-const providers = require(path.join(root, 'extension', 'providers.js'));
-check('all extension providers are copyFirst', providers.PROVIDERS.every((p) => p.copyFirst === true));
+// v2.18 deleted providers.js outright — the extension is a popup and nothing
+// else, so copy-first stopped being a per-provider flag and became the ONLY
+// behavior. The strongest form of the old check is that the injection
+// machinery does not exist at all.
+check('provider injection machinery is GONE (v2.18: popup and nothing else)',
+  !fs.existsSync(path.join(root, 'extension', 'providers.js')) &&
+  !fs.existsSync(path.join(root, 'extension', 'content-bridge.js')) &&
+  !fs.existsSync(path.join(root, 'extension', 'background.js')));
 const popupHtml = fs.readFileSync(path.join(root, 'extension', 'popup.html'), 'utf8');
-const popupJs = fs.readFileSync(path.join(root, 'extension', 'popup.js'), 'utf8');
 check('popup copy no longer promises injection', !/הזרק/.test(popupHtml));
-check('popup links to the prompt builder (the ecosystem)', /prompt-builder-link/.test(popupHtml) && /prompt-builder-link/.test(popupJs));
+// v2.18 replaced the "link back to the prompt builder" popup with a
+// self-contained copy companion: the popup fetches the pack itself over
+// /agent/v1 and the manifest declares ZERO presence on the LLM sites.
+const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
+check('manifest declares no content scripts and no host permissions (zero presence)',
+  !manifest.content_scripts && !manifest.host_permissions &&
+  (manifest.permissions || []).every((p) => ['storage', 'clipboardWrite'].includes(p)));
+const popupJs = fs.readFileSync(path.join(root, 'extension', 'popup.js'), 'utf8');
+check('popup builds the prompt itself (pack over /agent/v1) — the ecosystem moved in',
+  /agent\/v1/.test(popupJs) && /create-from-source/.test(popupJs));
 
 console.log('');
 console.log(fail ? 'SMOKE PROMPT BUILDER: FAIL' : 'SMOKE PROMPT BUILDER: PASS');
