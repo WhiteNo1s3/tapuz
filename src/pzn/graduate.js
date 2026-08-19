@@ -484,6 +484,119 @@ function parseVideoData(tokens, i, end, t) {
   return data;
 }
 
+// ── v2.22: the decompiler catches up to its own language ────────────────
+// table, audio, accordion and map got first-class modules over v0.8–v1.x,
+// but the decompiler still reported them as toolGaps and shipped verbatim
+// HTML. These parsers close the loop: seen on the web → mapped to the
+// module. Each REFUSES (returns null) when the source is richer than the
+// module can hold — the caller keeps the verbatim HTML, so nothing is lost.
+
+// Content that makes a table cell / fold body too rich for a text mapping.
+const RICH_CONTENT = new Set(['img', 'table', 'iframe', 'video', 'audio', 'form', 'ul', 'ol', 'picture', 'svg']);
+
+/** <audio> → the native audio block: src from the attr or the first <source>. */
+function parseAudioData(tokens, i, end, t) {
+  const a = t.attrs || {};
+  let src = a.src || '';
+  if (!src) {
+    for (let j = i + 1; j < end - 1; j++) {
+      if (tokens[j].name === 'source' && tokens[j].attrs && tokens[j].attrs.src) {
+        src = tokens[j].attrs.src; break;
+      }
+    }
+  }
+  if (!src) return null;
+  const data = { src };
+  if ('loop' in a) data.loop = true;
+  return data;
+}
+
+/**
+ * <table> → the native table block: rows of ' | '-joined cell text,
+ * header:true when the first row is <th>-based. Layout wrappers (div/span/p)
+ * inside cells are fine — their text is the cell; genuinely rich content
+ * (images, nested tables, forms) refuses the mapping.
+ */
+function parseTableData(tokens, i, end) {
+  const rows = [];
+  let header = false;
+  let cells = null;
+  let rowIsTh = false;
+  let cellStart = -1;
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind === 'open' && RICH_CONTENT.has(tk.name)) return null;
+    if (tk.kind === 'open' && tk.name === 'tr') { cells = []; rowIsTh = false; continue; }
+    if (tk.kind === 'close' && tk.name === 'tr') {
+      if (cells && cells.length && cells.some((c) => c.trim())) {
+        rows.push({ cells: cells.join(' | ') });
+        if (rowIsTh && rows.length === 1) header = true;
+      }
+      cells = null; continue;
+    }
+    if (tk.kind === 'open' && (tk.name === 'td' || tk.name === 'th')) {
+      cellStart = j + 1;
+      if (tk.name === 'th') rowIsTh = true;
+      continue;
+    }
+    if (tk.kind === 'close' && (tk.name === 'td' || tk.name === 'th')) {
+      if (cells) cells.push(textOf(tokens, cellStart, j));
+      continue;
+    }
+  }
+  if (rows.length < 1) return null;
+  return { header, rows };
+}
+
+/**
+ * A run of sibling <details> elements → ONE accordion block (the FAQ shape
+ * real sites ship). <summary> is the fold title, the rest of the fold is its
+ * text content. Any rich fold refuses the whole run.
+ * @returns {{ items: {title:string,content:string}[], next: number } | null}
+ */
+function parseDetailsRun(tokens, i, parentEnd) {
+  const items = [];
+  let j = i;
+  while (j < parentEnd && tokens[j].kind === 'open' && tokens[j].name === 'details') {
+    const dEnd = matchClose(tokens, j);
+    if (dEnd == null || dEnd > parentEnd) return null;
+    let title = '';
+    let sumFrom = -1;
+    let sumTo = -1;
+    for (let k = j + 1; k < dEnd - 1; k++) {
+      const tk = tokens[k];
+      if (tk.kind === 'open' && RICH_CONTENT.has(tk.name)) return null;
+      if (tk.kind === 'open' && tk.name === 'summary' && sumFrom === -1) sumFrom = k + 1;
+      if (tk.kind === 'close' && tk.name === 'summary' && sumTo === -1) sumTo = k;
+    }
+    if (sumFrom !== -1 && sumTo !== -1) title = textOf(tokens, sumFrom, sumTo);
+    const body = sumTo !== -1
+      ? textOf(tokens, sumTo + 1, dEnd - 1)
+      : textOf(tokens, j + 1, dEnd - 1);
+    items.push({ title: title || 'סעיף', content: body });
+    j = dEnd;
+    // hop whitespace-only text between sibling <details>
+    while (j < parentEnd && tokens[j].kind === 'text' && !tokens[j].value.trim()) j++;
+  }
+  if (!items.length) return null;
+  return { items, next: j };
+}
+
+/** A Google-Maps embed src → the map block's address, or null (stay an embed). */
+function mapsAddressOf(src) {
+  const s = String(src || '');
+  if (!/google\.[a-z.]{2,10}\/maps/i.test(s)) return null;
+  const q = s.match(/[?&](?:q|query)=([^&]+)/);
+  if (q) {
+    try { return decodeURIComponent(q[1].replace(/\+/g, ' ')).trim() || null; } catch (e) { return null; }
+  }
+  const place = s.match(/\/maps\/place\/([^/?#]+)/);
+  if (place) {
+    try { return decodeURIComponent(place[1].replace(/\+/g, ' ')).trim() || null; } catch (e) { return null; }
+  }
+  return null;
+}
+
 /**
  * @param {string} html
  * @param {{ bgMap?: Map<string,string> }} [opts]  class → CSS background URL
@@ -644,8 +757,15 @@ function htmlToBlocks(html, opts = {}) {
         mapped += 1; i = end; continue;
       }
       if (name === 'iframe') {
-        // youtube or any src → embed (renderer auto-embeds youtube, links out otherwise)
-        sink.push({ type: 'embed', id: nid('em'), data: { url: t.attrs.src || '' } });
+        // a Google-Maps embed with a readable address → the native map module
+        // (v2.22); youtube or any other src → embed (renderer auto-embeds
+        // youtube, links out otherwise)
+        const mapsAddr = mapsAddressOf(t.attrs.src);
+        if (mapsAddr) {
+          sink.push({ type: 'map', id: nid('map'), data: { address: mapsAddr } });
+        } else {
+          sink.push({ type: 'embed', id: nid('em'), data: { url: t.attrs.src || '' } });
+        }
         mapped += 1; i = end; continue;
       }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
@@ -722,10 +842,43 @@ function htmlToBlocks(html, opts = {}) {
         i = end; continue;
       }
 
-      // patterns we RECOGNIZE but have no first-class module for yet →
-      // keep verbatim (nothing lost) AND report the missing tool.
-      if (name === 'table' || name === 'audio') {
-        suggested.add(name);
+      // v2.22: table and audio STOPPED being toolGaps — the modules landed
+      // (v0.83 table, v1.x audio) and the decompiler now maps them. Only a
+      // source too rich for the module (images in cells, nested tables, a
+      // srcless <audio>) falls back to verbatim HTML + the gap report.
+      if (name === 'table') {
+        const data = parseTableData(tokens, i, end);
+        if (data) {
+          sink.push({ type: 'table', id: nid('tbl'), data });
+          mapped += 1; i = end; continue;
+        }
+        suggested.add('table');
+        let frag = '';
+        for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+        raw += frag;
+        i = end; continue;
+      }
+      if (name === 'audio') {
+        const data = parseAudioData(tokens, i, end, t);
+        if (data) {
+          sink.push({ type: 'audio', id: nid('au'), data });
+          mapped += 1; i = end; continue;
+        }
+        suggested.add('audio');
+        let frag = '';
+        for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+        raw += frag;
+        i = end; continue;
+      }
+
+      // a run of sibling <details> → ONE accordion (the FAQ shape); the run
+      // parser consumes every consecutive fold, so i jumps to its `next`
+      if (name === 'details') {
+        const run = parseDetailsRun(tokens, i, tokens.length);
+        if (run) {
+          sink.push({ type: 'accordion', id: nid('acc'), data: { items: run.items } });
+          mapped += 1; i = run.next; continue;
+        }
         let frag = '';
         for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
         raw += frag;
@@ -778,6 +931,10 @@ module.exports = {
   parseFormFields,
   parseNavItems,
   parseVideoData,
+  parseAudioData,
+  parseTableData,
+  parseDetailsRun,
+  mapsAddressOf,
   detectCardCluster,
   collectLinkRun,
   coalesceButtonRuns,

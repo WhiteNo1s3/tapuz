@@ -44,7 +44,11 @@ const {
   tokenToHtml,
   HEADING,
   CONTAINERS,
-  INLINE
+  INLINE,
+  parseAudioData,
+  parseTableData,
+  parseDetailsRun,
+  mapsAddressOf
 } = require('./graduate');
 
 // ─── role inference (the lab's naming.js, trimmed to what Tapuz maps) ───
@@ -415,7 +419,13 @@ function huntBlocks(html, opts = {}) {
         mapped += 1; i = end; continue;
       }
       if (name === 'iframe') {
-        sink.push({ type: 'embed', id: nid('em'), data: { url: (t.attrs && t.attrs.src) || '' } });
+        // v2.22: a Google-Maps embed with a readable address → the map module
+        const mapsAddr = mapsAddressOf((t.attrs && t.attrs.src) || '');
+        if (mapsAddr) {
+          sink.push({ type: 'map', id: nid('map'), data: { address: mapsAddr } });
+        } else {
+          sink.push({ type: 'embed', id: nid('em'), data: { url: (t.attrs && t.attrs.src) || '' } });
+        }
         mapped += 1; i = end; continue;
       }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
@@ -479,8 +489,39 @@ function huntBlocks(html, opts = {}) {
         }
         i = end; continue;
       }
-      if (name === 'table' || name === 'audio') {
-        suggested.add(name);
+      // v2.22: the decompiler caught up to its own language — table, audio
+      // and details-runs map to their modules; only sources too rich for the
+      // module fall back to verbatim HTML (+ the gap report for table/audio).
+      if (name === 'table') {
+        const tblData = parseTableData(tokens, i, end);
+        if (tblData) {
+          sink.push({ type: 'table', id: nid('tbl'), data: tblData });
+          mapped += 1; i = end; continue;
+        }
+        suggested.add('table');
+        let frag = '';
+        for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+        raw += frag;
+        i = end; continue;
+      }
+      if (name === 'audio') {
+        const auData = parseAudioData(tokens, i, end, t);
+        if (auData) {
+          sink.push({ type: 'audio', id: nid('au'), data: auData });
+          mapped += 1; i = end; continue;
+        }
+        suggested.add('audio');
+        let frag = '';
+        for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+        raw += frag;
+        i = end; continue;
+      }
+      if (name === 'details') {
+        const run = parseDetailsRun(tokens, i, tokens.length);
+        if (run) {
+          sink.push({ type: 'accordion', id: nid('acc'), data: { items: run.items } });
+          mapped += 1; i = run.next; continue;
+        }
         let frag = '';
         for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
         raw += frag;
