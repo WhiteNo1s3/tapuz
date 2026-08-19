@@ -80,9 +80,11 @@ check('video is no longer a toolGap', !g.suggestedTools.includes('video'));
 // <source> child form
 const g2 = htmlToBlocks('<video controls><source src="/x.webm" type="video/webm"></video>');
 check('decompile <video><source> → video block', g2.blocks.some((b) => b.type === 'video' && b.data.src === '/x.webm'));
-// audio still a gap (not graduated)
+// v2.22: audio graduated — the decompiler maps it to the native module
 const g3 = htmlToBlocks('<audio src="/a.mp3" controls></audio>');
-check('audio still reported as a toolGap', g3.suggestedTools.includes('audio'));
+check('audio decompiles to the native audio block (v2.22 closed this gap)',
+  g3.blocks.some((b) => b.type === 'audio' && b.data.src === '/a.mp3') &&
+  !g3.suggestedTools.includes('audio'));
 
 console.log('');
 console.log(fail ? 'SMOKE VIDEO: FAIL' : 'SMOKE VIDEO: PASS');

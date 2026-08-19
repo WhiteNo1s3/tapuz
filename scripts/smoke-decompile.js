@@ -51,10 +51,36 @@ async function checkRejects(name, fn) {
     g.blocks.some((b) => b.type === 'video' && b.data.src === '/clip.mp4') && !g.suggestedTools.includes('video'));
   check('card cluster → ONE cards block (v0.65 closed this gap)',
     g.blocks.some((b) => b.type === 'cards' && b.data.items.length === 3 && b.data.items[0].title === 'כתבה א'));
-  check('table still reported as toolGap', g.suggestedTools.includes('table'));
+  // v2.22: the decompiler caught up to its own language — table stopped being
+  // a toolGap, a text table maps to the real module
+  check('text table → the native table block (v2.22 closed this gap)',
+    g.blocks.some((b) => b.type === 'table' && b.data.rows.length === 1 && b.data.rows[0].cells === '1') &&
+    !g.suggestedTools.includes('table'));
   check('grid wrapper with children suggests columns', g.suggestedTools.includes('columns'));
-  check('remaining unmapped patterns preserved as provisional html (nothing lost)',
-    g.blocks.some((b) => b.type === 'html' && /table/.test(b.data.content)));
+
+  // the nothing-lost refusal: a table too rich for the module (image cells)
+  // still ships verbatim AND still reports the gap
+  const rich = htmlToBlocks('<table><tr><td><img src="/x.png"></td></tr></table>');
+  check('a RICH table refuses the mapping — verbatim html + toolGap (nothing lost)',
+    rich.blocks.some((b) => b.type === 'html' && /table/.test(b.data.content)) &&
+    rich.suggestedTools.includes('table'));
+
+  // v2.22 companions: audio, details-runs and maps embeds map to their modules
+  const extra = htmlToBlocks(
+    '<audio controls src="/pod.mp3"></audio>' +
+    '<details><summary>שאלה א</summary><p>תשובה א</p></details>' +
+    '<details><summary>שאלה ב</summary><p>תשובה ב</p></details>' +
+    '<iframe src="https://www.google.com/maps?q=%D7%93%D7%99%D7%96%D7%A0%D7%92%D7%95%D7%A3+99&output=embed"></iframe>'
+  );
+  check('audio → the native audio block (v2.22 closed this gap)',
+    extra.blocks.some((b) => b.type === 'audio' && b.data.src === '/pod.mp3') &&
+    !extra.suggestedTools.includes('audio'));
+  check('a run of sibling <details> → ONE accordion with every fold',
+    extra.blocks.filter((b) => b.type === 'accordion').length === 1 &&
+    extra.blocks.find((b) => b.type === 'accordion').data.items.length === 2 &&
+    extra.blocks.find((b) => b.type === 'accordion').data.items[1].content === 'תשובה ב');
+  check('a Google-Maps embed with an address → the map module, not a bare embed',
+    extra.blocks.some((b) => b.type === 'map' && /דיזנגוף 99/.test(b.data.address)));
 
   // ── whole-page decompile → valid .pzn ──────────────────────────────
   const page = `<!DOCTYPE html>
