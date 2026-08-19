@@ -1819,7 +1819,7 @@ body.builder-screen .canvas-header {
   border: 2px solid transparent;
   border-radius: 10px;
   padding: 4px 28px 8px 8px;
-  transition: border-color var(--dur), background var(--dur), box-shadow var(--dur), transform var(--dur);
+  transition: border-color var(--dur), background var(--dur), box-shadow var(--dur), transform var(--dur), margin .18s ease;
   cursor: default;
   background: #fff;
 }
@@ -2027,6 +2027,35 @@ body.is-dragging .canvas-block:hover .split-zone,
   border-color: var(--select) !important;
   box-shadow: 0 0 0 3px var(--select-glow);
 }
+
+/* v2.21 push-split preview: while a drag hovers a block's side band (or the
+   edge strip), the block VISIBLY yields a third of its width and a labeled
+   ghost occupies the vacated strip — dropping beside stops being an act of
+   faith. Push is exactly 33.33% so the ghost's percentages (which resolve
+   against the squeezed 66.67% box) come out round: 50% of new = 33.33% of old. */
+.canvas-block.split-push-left { margin-left: 33.33%; }
+.canvas-block.split-push-right { margin-right: 33.33%; }
+.canvas-block.split-push-left::after,
+.canvas-block.split-push-right::after {
+  content: 'המודול ינחת כאן';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: calc(50% - 14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--select);
+  border-radius: var(--r-sm, 8px);
+  background: var(--select-soft);
+  color: var(--select);
+  font-size: 12px;
+  font-weight: 700;
+  z-index: 4;
+  pointer-events: none;
+}
+.canvas-block.split-push-left::after { left: calc(-50% + 6px); }
+.canvas-block.split-push-right::after { right: calc(-50% + 6px); }
 
 .canvas.drop-hover-root, .canvas.list-drop-active {
   outline: 2px dashed var(--select);
