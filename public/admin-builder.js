@@ -1583,21 +1583,8 @@
     var content = document.createElement('div');
     content.className = 'block-content';
     content.appendChild(renderBlockBody(block));
-    // apply module style to visual host
-    (function applyStyleNow() {
-      var d = block.data || {};
-      var s = d.style || {};
-      content.style.textAlign = d.align === 'center' ? 'center' : d.align === 'end' ? 'end' : '';
-      content.style.color = s.color || '';
-      content.style.background = s.background || '';
-      content.style.fontSize = s.fontSize === 'sm' ? '0.9em' : s.fontSize === 'lg' ? '1.2em' : '';
-      content.style.padding = s.padding === 'sm' ? '0.35rem 0.5rem' : s.padding === 'md' ? '0.75rem 1rem' : s.padding === 'lg' ? '1.25rem 1.5rem' : '';
-      content.style.borderRadius = s.radius === 'sm' ? '6px' : s.radius === 'md' ? '12px' : s.radius === 'lg' ? '20px' : '';
-      // conditionally-hidden module: editable here, honest about the live page
-      content.style.opacity = s.hideOn ? '0.55' : '';
-      content.style.outline = s.hideOn ? '2px dashed #f59e0b' : '';
-      content.title = s.hideOn === 'mobile' ? 'מוסתר בנייד (מוצג כאן לעריכה)' : s.hideOn === 'desktop' ? 'מוסתר במחשב (מוצג כאן לעריכה)' : '';
-    })();
+    // apply module style to visual host — the one shared painter (paintHost)
+    paintHost(content, block.data || {});
 
     // side split zones (not for columns container itself — drop between/into cols instead)
     if (!isColumnsContainer(block.type)) {
@@ -2994,24 +2981,40 @@
     applyPreviewStyle(id);
   }
 
-  function applyPreviewStyle(id) {
-    var block = getBlock(id);
-    if (!block) return;
-    var host = document.querySelector('.canvas-block[data-id="' + cssEsc(id) + '"] .block-content');
-    if (!host) return;
-    var d = block.data || {};
-    var s = d.style || {};
+  /** The ONE canvas painter — every data.style key, applied to a block's
+   *  visual host. renderCanvas (applyStyleNow) and the live property edits
+   *  (applyPreviewStyle) both call this; keeping two hand-copies is exactly
+   *  how the paint drifted between canvas and page in the first place.
+   *  Named values must match renderer styleDecls one-for-one. */
+  function paintHost(host, d) {
+    var s = (d || {}).style || {};
     host.style.textAlign = d.align === 'center' ? 'center' : d.align === 'end' ? 'end' : '';
     host.style.color = s.color || '';
     host.style.background = s.background || '';
-    host.style.fontSize = s.fontSize === 'sm' ? '0.9em' : s.fontSize === 'lg' ? '1.2em' : '';
+    host.style.fontSize = s.fontSize === 'sm' ? '0.9em' : s.fontSize === 'lg' ? '1.2em' : s.fontSize === 'xl' ? '1.4em' : '';
     host.style.padding = s.padding === 'sm' ? '0.35rem 0.5rem' : s.padding === 'md' ? '0.75rem 1rem' : s.padding === 'lg' ? '1.25rem 1.5rem' : '';
     host.style.borderRadius = s.radius === 'sm' ? '6px' : s.radius === 'md' ? '12px' : s.radius === 'lg' ? '20px' : '';
+    host.style.fontWeight = s.fontWeight === 'light' ? '300' : s.fontWeight === 'bold' ? '700' : '';
+    host.style.marginBlock = s.margin === 'sm' ? '0.5rem' : s.margin === 'md' ? '1.25rem' : s.margin === 'lg' ? '2.5rem' : '';
+    host.style.border = s.border === 'sm' ? '1px solid ' + (s.borderColor || '#e2e8f0')
+      : s.border === 'md' ? '2px solid ' + (s.borderColor || '#e2e8f0')
+      : s.border === 'lg' ? '4px solid ' + (s.borderColor || '#e2e8f0') : '';
+    host.style.boxShadow = s.shadow === 'sm' ? '0 1px 3px rgba(0,0,0,.12)'
+      : s.shadow === 'md' ? '0 4px 14px rgba(0,0,0,.15)'
+      : s.shadow === 'lg' ? '0 12px 32px rgba(0,0,0,.22)' : '';
     // conditionally-hidden modules stay VISIBLE in the canvas but announce it —
     // the responsive preview (📱) shows the real per-device behavior
     host.style.opacity = s.hideOn ? '0.55' : '';
     host.style.outline = s.hideOn ? '2px dashed #f59e0b' : '';
     host.title = s.hideOn === 'mobile' ? 'מוסתר בנייד (מוצג כאן לעריכה)' : s.hideOn === 'desktop' ? 'מוסתר במחשב (מוצג כאן לעריכה)' : '';
+  }
+
+  function applyPreviewStyle(id) {
+    var block = getBlock(id);
+    if (!block) return;
+    var host = document.querySelector('.canvas-block[data-id="' + cssEsc(id) + '"] .block-content');
+    if (!host) return;
+    paintHost(host, block.data || {});
   }
 
   /**
@@ -3943,11 +3946,48 @@
           '<option value=""' + (!st.fontSize ? ' selected' : '') + '>רגיל</option>' +
           '<option value="sm"' + (st.fontSize === 'sm' ? ' selected' : '') + '>קטן</option>' +
           '<option value="lg"' + (st.fontSize === 'lg' ? ' selected' : '') + '>גדול</option>' +
+          '<option value="xl"' + (st.fontSize === 'xl' ? ' selected' : '') + '>ענק</option>' +
+        '</select>'
+      ) +
+      field(
+        'משקל גופן',
+        '<select data-style="fontWeight">' +
+          '<option value=""' + (!st.fontWeight ? ' selected' : '') + '>רגיל</option>' +
+          '<option value="light"' + (st.fontWeight === 'light' ? ' selected' : '') + '>דק</option>' +
+          '<option value="bold"' + (st.fontWeight === 'bold' ? ' selected' : '') + '>מודגש</option>' +
         '</select>'
       ) +
       field('צבע טקסט', '<input type="color" data-style="color" value="' + escAttr(st.color || '#334155') + '">') +
       field('רקע', '<input type="color" data-style="background" value="' + escAttr(st.background || '#ffffff') + '">') +
       '<button type="button" class="btn secondary" data-clear-bg="1" style="margin-bottom:8px;width:100%">נקה רקע</button>' +
+      field(
+        'מרווח חיצוני (מעל ומתחת)',
+        '<select data-style="margin">' +
+          '<option value=""' + (!st.margin ? ' selected' : '') + '>רגיל</option>' +
+          '<option value="sm"' + (st.margin === 'sm' ? ' selected' : '') + '>קטן</option>' +
+          '<option value="md"' + (st.margin === 'md' ? ' selected' : '') + '>בינוני</option>' +
+          '<option value="lg"' + (st.margin === 'lg' ? ' selected' : '') + '>גדול</option>' +
+        '</select>'
+      ) +
+      field(
+        'מסגרת',
+        '<select data-style="border">' +
+          '<option value=""' + (!st.border ? ' selected' : '') + '>ללא</option>' +
+          '<option value="sm"' + (st.border === 'sm' ? ' selected' : '') + '>דקה</option>' +
+          '<option value="md"' + (st.border === 'md' ? ' selected' : '') + '>בינונית</option>' +
+          '<option value="lg"' + (st.border === 'lg' ? ' selected' : '') + '>עבה</option>' +
+        '</select>'
+      ) +
+      field('צבע מסגרת', '<input type="color" data-style="borderColor" value="' + escAttr(st.borderColor || '#e2e8f0') + '">') +
+      field(
+        'צל',
+        '<select data-style="shadow">' +
+          '<option value=""' + (!st.shadow ? ' selected' : '') + '>ללא</option>' +
+          '<option value="sm"' + (st.shadow === 'sm' ? ' selected' : '') + '>עדין</option>' +
+          '<option value="md"' + (st.shadow === 'md' ? ' selected' : '') + '>בינוני</option>' +
+          '<option value="lg"' + (st.shadow === 'lg' ? ' selected' : '') + '>עמוק</option>' +
+        '</select>'
+      ) +
       field(
         'ריפוד פנימי',
         '<select data-style="padding">' +

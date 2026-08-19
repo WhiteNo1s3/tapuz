@@ -35,12 +35,29 @@ function styleDecls(data) {
   if (s.background) parts.push(`background:${escapeHtml(s.background)}`);
   if (s.fontSize === 'sm') parts.push('font-size:0.9em');
   if (s.fontSize === 'lg') parts.push('font-size:1.15em');
+  if (s.fontSize === 'xl') parts.push('font-size:1.4em');
   if (s.padding === 'sm') parts.push('padding:0.35rem 0.5rem');
   if (s.padding === 'md') parts.push('padding:0.75rem 1rem');
   if (s.padding === 'lg') parts.push('padding:1.25rem 1.5rem');
   if (s.radius === 'sm') parts.push('border-radius:6px');
   if (s.radius === 'md') parts.push('border-radius:12px');
   if (s.radius === 'lg') parts.push('border-radius:20px');
+  // v2.21 — the paint deepens (Ben: "abstract editing for paint … embarrassing
+  // vs Elementor"). Same philosophy as the first knobs: named values, never
+  // free CSS; every value here must ALSO exist in the builder canvas
+  // (applyStyleNow) and the panel, and ride the pzn bridge's STYLE_KEYS.
+  if (s.fontWeight === 'light') parts.push('font-weight:300');
+  if (s.fontWeight === 'bold') parts.push('font-weight:700');
+  if (s.margin === 'sm') parts.push('margin-block:0.5rem');
+  if (s.margin === 'md') parts.push('margin-block:1.25rem');
+  if (s.margin === 'lg') parts.push('margin-block:2.5rem');
+  if (['sm', 'md', 'lg'].includes(s.border)) {
+    const w = s.border === 'sm' ? '1px' : s.border === 'md' ? '2px' : '4px';
+    parts.push(`border:${w} solid ${escapeHtml(s.borderColor || '#e2e8f0')}`);
+  }
+  if (s.shadow === 'sm') parts.push('box-shadow:0 1px 3px rgba(0,0,0,.12)');
+  if (s.shadow === 'md') parts.push('box-shadow:0 4px 14px rgba(0,0,0,.15)');
+  if (s.shadow === 'lg') parts.push('box-shadow:0 12px 32px rgba(0,0,0,.22)');
   return parts.join(';');
 }
 
@@ -251,7 +268,7 @@ function renderBlock(block, direction = 'rtl') {
       // ITEM bodies carry inline marks per the cheatsheet ("Marks only inside
       // TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies") — same contract as
       // the quote case below; renderInlineMarks escapes everything it emits.
-      return `<${tag} dir="${direction}">${items.map(i => `<li dir="${direction}">${renderInlineMarks(i.text || i)}</li>`).join('')}</${tag}>`;
+      return `<${tag}${extra} dir="${direction}">${items.map(i => `<li dir="${direction}">${renderInlineMarks(i.text || i)}</li>`).join('')}</${tag}>`;
     }
     case 'quote': {
       const t = renderInlineMarks(block.data.text || '');
@@ -328,7 +345,7 @@ function renderBlock(block, direction = 'rtl') {
         return `<figure class="video-embed"${extra}><iframe src="https://www.youtube.com/embed/${yt[1]}" allowfullscreen loading="lazy" title="YouTube video"></iframe></figure>`;
       }
       const url = escapeHtml(safeHref(rawUrl));
-      return `<a href="${url}" target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
+      return `<a href="${url}"${extra} target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
     }
 
     case 'article-list': {
