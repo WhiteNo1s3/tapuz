@@ -51,7 +51,10 @@ check('css values cannot break out of the <style> tag (< > stripped)',
 // ── LOOKS integrity ──────────────────────────────────────────────────
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const looksKeys = Object.keys(LOOKS);
-check('six looks ship', looksKeys.length === 6);
+// v2.23 widened the shelf ("if we present a slim choice of themes, what are
+// we worth as a company?") — pin a floor, not an exact count, so adding a
+// look never breaks CI while losing one still does.
+check('the gallery ships at least ten looks', looksKeys.length >= 10);
 for (const key of looksKeys) {
   const look = LOOKS[key];
   const c = look.overrides.colors || {};

@@ -39,12 +39,14 @@ check('listing carries identity, never the full overrides blob',
 // ── a second look, then APPLY the first back ─────────────────────────
 theme.saveOverrides({ colors: { primary: '#b91c1c' } });
 const red = lib.saveCurrentAsTheme('אדום חגיגי');
-check('two entries coexist (a library, not a slot)', lib.listThemes().length === 2);
+// v2.23 seeds the LOOKS shelf into every library — count OWN entries only
+const ownThemes = () => lib.listThemes().filter((t) => t.source !== 'preset');
+check('two entries coexist (a library, not a slot)', ownThemes().length === 2);
 
 // live is now red AND saved — applying green must not create a backup
 const applied = lib.applyTheme(green.id);
 check('apply switches the live theme', theme.loadOverrides().colors.primary === '#166534');
-check('apply of saved work makes NO redundant backup', applied.backedUp === false && lib.listThemes().length === 2);
+check('apply of saved work makes NO redundant backup', applied.backedUp === false && ownThemes().length === 2);
 
 // unsaved live work: edit, then switch — the WordPress promise
 theme.saveOverrides({ colors: { primary: '#7c3aed' } });
