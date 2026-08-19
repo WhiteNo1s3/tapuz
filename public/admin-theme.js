@@ -73,6 +73,16 @@
         layout: {
           maxWidth: val('th-maxw', '900px') || '900px',
           menuPlacement: val('th-menu-place', 'top') || 'top'
+        },
+        // master-page chrome (v2.23) — the skeleton's look, as theme state
+        chrome: {
+          menuHover: val('th-ch-hover', 'color') || 'color',
+          menuHoverColor: val('th-ch-hovercolor'),
+          menuWeight: val('th-ch-weight', 'normal') || 'normal',
+          headerGlass: !!(document.getElementById('th-ch-glass') || {}).checked,
+          headerBg: val('th-ch-headerbg'),
+          footerBg: val('th-ch-footerbg'),
+          footerText: val('th-ch-footertext')
         }
       }
     };

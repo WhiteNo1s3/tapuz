@@ -35,6 +35,20 @@ const DEFAULT_OVERRIDES = {
     maxWidth: '900px',
     menuPlacement: 'top' // top | side
   },
+  // Master-page CHROME (v2.23) — the skeleton's look and behavior as THEME
+  // state (Ben: "the whole theme is a page builder for a master page —
+  // header and footer + effects on the menu with colors, hover effects,
+  // complete control"). Content lives in site-chrome (tagline/CTA/columns);
+  // the LOOK lives here, so it rides packages, the library, and effects.
+  chrome: {
+    menuHover: 'color',     // color | underline | pill | glow
+    menuHoverColor: '',     // '' = the primary color
+    menuWeight: 'normal',   // normal | bold
+    headerBg: '',           // '' = the surface color
+    headerGlass: false,     // translucent, blurred header over the page
+    footerBg: '',           // '' = theme default
+    footerText: ''          // '' = theme default
+  },
   // Theme EFFECTS (v2.22) — site-wide custom CSS/JS as part of the theme
   // itself (Ben's mouse-effect flow: an LLM in a FRESH chat writes the
   // snippet, the owner pastes it here). Living inside overrides means
@@ -213,6 +227,36 @@ function overridesToCss(overrides) {
   // being injected AFTER the theme stylesheet — would also override the
   // theme's narrow-screen fallback.
 
+  // Master-page chrome (v2.23) — emitted before the effect css so a custom
+  // effect can still override the chrome. Selectors are the theme's own
+  // (.site-header/.main-nav/.site-footer, themes/default/css/main.css).
+  const ch = o.chrome || {};
+  const hoverColor = cssValue(ch.menuHoverColor) || primary;
+  const headerBg = cssValue(ch.headerBg);
+  if (headerBg) css += `.site-header { background: ${headerBg}; }\n`;
+  if (ch.headerGlass === true || ch.headerGlass === 'true') {
+    css += `.site-header { background: color-mix(in srgb, ${headerBg || 'var(--color-surface, #fff)'} 78%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }\n`;
+  }
+  if (ch.menuWeight === 'bold') css += `.main-nav a { font-weight: 700; }\n`;
+  const hover = ['color', 'underline', 'pill', 'glow'].includes(ch.menuHover) ? ch.menuHover : 'color';
+  if (hover === 'underline') {
+    css += `.main-nav a { transition: color 0.15s, box-shadow 0.15s; }\n` +
+      `.main-nav a:hover { color: ${hoverColor}; box-shadow: inset 0 -2px 0 ${hoverColor}; }\n`;
+  } else if (hover === 'pill') {
+    css += `.main-nav a { padding: 5px 12px; border-radius: 999px; transition: color 0.15s, background 0.15s; }\n` +
+      `.main-nav a:hover { color: ${hoverColor}; background: color-mix(in srgb, ${hoverColor} 14%, transparent); }\n`;
+  } else if (hover === 'glow') {
+    css += `.main-nav a:hover { color: ${hoverColor}; text-shadow: 0 0 12px ${hoverColor}; }\n`;
+  } else if (cssValue(ch.menuHoverColor)) {
+    css += `.main-nav a:hover { color: ${hoverColor}; }\n`;
+  }
+  const footerBg = cssValue(ch.footerBg);
+  const footerText = cssValue(ch.footerText);
+  if (footerBg) css += `.site-footer { background: ${footerBg}; }\n`;
+  if (footerText) {
+    css += `.site-footer, .site-footer a, .footer-col-title { color: ${footerText}; }\n`;
+  }
+
   // Theme effect CSS (v2.22) rides HERE, last, so an effect can override
   // anything — and because both the serve path (renderPage's inline style)
   // and the static export (copyThemeAssets → css/main.css) already funnel
@@ -266,7 +310,11 @@ function saveThemeSettings(payload) {
   }
   saveConfig(config);
 
-  const overrides = saveOverrides(payload.overrides || payload);
+  // Merge the editor's sections ONTO THE CURRENT overrides, not implicitly
+  // onto the defaults. Before v2.22 the editor form covered every section so
+  // the distinction was invisible; now effects (and chrome) live OUTSIDE the
+  // form, and a plain "שמור ערכת נושא" must not silently wipe them.
+  const overrides = saveOverrides(mergeDeep(loadOverrides(), payload.overrides || payload));
   return getThemeSettings();
 }
 

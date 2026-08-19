@@ -330,6 +330,31 @@ router.get('/admin/theme', (req, res) => {
           </select>
         </section>
         <section class="card">
+          <h3 class="sub-head">🧱 מאסטר — תפריט, כותרת ותחתית</h3>
+          <p class="lead" style="margin-top:0">השלד של האתר: איך התפריט מגיב, איך הכותרת העליונה נראית, ומה צבעי התחתית. הכול חלק מערכת הנושא — נוסע עם הספרייה והייצוא.</p>
+          <label class="field-label">אפקט ריחוף בתפריט</label>
+          <select id="th-ch-hover" class="input mb">
+            <option value="color" ${(!o.chrome || o.chrome.menuHover === 'color') ? 'selected' : ''}>צבע בלבד</option>
+            <option value="underline" ${o.chrome && o.chrome.menuHover === 'underline' ? 'selected' : ''}>קו תחתון</option>
+            <option value="pill" ${o.chrome && o.chrome.menuHover === 'pill' ? 'selected' : ''}>גלולה (רקע מעוגל)</option>
+            <option value="glow" ${o.chrome && o.chrome.menuHover === 'glow' ? 'selected' : ''}>זוהר</option>
+          </select>
+          <label class="field-label">צבע הריחוף (ריק = הצבע הראשי)</label>
+          <input id="th-ch-hovercolor" value="${escAttr((o.chrome && o.chrome.menuHoverColor) || '')}" placeholder="#ea580c" dir="ltr" class="input mb">
+          <label class="field-label">משקל טקסט התפריט</label>
+          <select id="th-ch-weight" class="input mb">
+            <option value="normal" ${(!o.chrome || o.chrome.menuWeight !== 'bold') ? 'selected' : ''}>רגיל</option>
+            <option value="bold" ${o.chrome && o.chrome.menuWeight === 'bold' ? 'selected' : ''}>מודגש</option>
+          </select>
+          <label class="check-line mb"><input type="checkbox" id="th-ch-glass" ${o.chrome && o.chrome.headerGlass ? 'checked' : ''}> כותרת "זכוכית" — שקופה ומטושטשת מעל הדף</label>
+          <label class="field-label">רקע הכותרת העליונה (ריק = צבע המשטח)</label>
+          <input id="th-ch-headerbg" value="${escAttr((o.chrome && o.chrome.headerBg) || '')}" placeholder="#ffffff" dir="ltr" class="input mb">
+          <label class="field-label">רקע התחתית (ריק = ברירת מחדל)</label>
+          <input id="th-ch-footerbg" value="${escAttr((o.chrome && o.chrome.footerBg) || '')}" placeholder="#1c1917" dir="ltr" class="input mb">
+          <label class="field-label">צבע טקסט התחתית (ריק = ברירת מחדל)</label>
+          <input id="th-ch-footertext" value="${escAttr((o.chrome && o.chrome.footerText) || '')}" placeholder="#fffbf7" dir="ltr" class="input mb">
+        </section>
+        <section class="card">
           <h3 class="sub-head">תצוגה מקדימה</h3>
           <div id="th-preview" style="border:1px solid #e2e8f0;border-radius:10px;padding:20px"></div>
         </section>
