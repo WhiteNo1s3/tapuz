@@ -135,12 +135,27 @@ function buildRoleplayPack(opts = {}) {
   lines.push(he
     ? '5. גם בתוך טקסט אין תגיות HTML: לא `<b>`, לא `<i>`, לא `<a>`, לא `<br>` — במקומן סימוני השפה: `@B{מודגש}` · `@I{נטוי}` · `@LINK(url: "/דף"){טקסט}` · `@BREAK`.'
     : '5. No HTML tags inside text either: not `<b>`, `<i>`, `<a>`, `<br>` — use the language marks instead: `@B{bold}` · `@I{italic}` · `@LINK(url: "/page"){text}` · `@BREAK`.');
-  lines.push(he ? '5. אחרי שהמסמך מוכן — השחקן מפרסם ל‑CMS; הבונה הויזואלי מציג את אותה צורה.' : '5. After the document is ready the player publishes into the CMS; the visual builder shows the same shape.');
+  lines.push(he
+    ? '6. **המהלך הוא המסמך.** שום פרוזה מסביב ל-fence: בלי "הנה הדף שבנית", בלי סיכום מה יש בו, בלי הצעות המשך. הדבקה של התשובה כמו-שהיא לתוך הבונה חייבת לקמפל.'
+    : '6. **The move IS the document.** No prose around the fence: no "here is your page", no summary of what it contains, no follow-up offers. The reply pasted as-is into the builder must compile.');
+  lines.push(he ? '7. אחרי שהמסמך מוכן — השחקן מפרסם ל‑CMS; הבונה הויזואלי מציג את אותה צורה.' : '7. After the document is ready the player publishes into the CMS; the visual builder shows the same shape.');
   lines.push('');
 
-  // lite: the compact grammar IS the whole vocabulary (inventory + dictionary
-  // in one) — the only rendering that fits a free plan's message gate.
-  lines.push(lite ? toCompactMarkdown(dict, { locale }) : toolsInventoryMarkdown(tools));
+  // ONE vocabulary per pack, never two renderings of the same modules:
+  //   lite → the compact grammar (inventory + dictionary fused, fits a free
+  //          plan's message gate)
+  //   full → the Syntax Dictionary below is the inventory (it alone carries
+  //          enums, defaults and HOW snippets); the old separate inventory
+  //          section duplicated every module a second time — TMI that
+  //          crowded the actual rules out of the model's attention.
+  if (lite) {
+    lines.push(toCompactMarkdown(dict, { locale }));
+  } else {
+    lines.push(he
+      ? '## המלאי שלך = המילון המלא שבסוף החבילה. אין אף כלי מחוץ לו.'
+      : '## Your tool inventory = the full dictionary at the end of this pack. No tool exists outside it.');
+    lines.push('');
+  }
 
   const mediaMd = mediaInventoryMarkdown(opts.media, he, lite ? LITE_MEDIA_CAP : 0);
   if (mediaMd) lines.push(mediaMd);
@@ -181,15 +196,19 @@ function buildRoleplayPack(opts = {}) {
     lines.push(String(opts.playerBrief).trim());
     lines.push('');
     lines.push(he
-      ? 'בנה/י עכשיו את הדף. מהלך מנצח אחד — fence מלא.'
-      : 'Build the page now. One winning move — complete fence.');
+      ? 'בנה/י עכשיו את הדף. התשובה שלך היא המסמך בלבד — fence אחד שלם, בלי מילה לפניו או אחריו.'
+      : 'Build the page now. Your reply is the document ONLY — one complete fence, not a word before or after it.');
   } else {
+    // "behave as a page builder the instant the injection starts" (Ben):
+    // the old ending invited a paragraph of acknowledgment — models restated
+    // the rules, summarized the inventory, offered options. One ready line,
+    // then every reply is a move.
     lines.push('');
-    lines.push(he ? '## התחלת משחק' : '## Start');
+    lines.push(he ? '## המשחק מתחיל עכשיו' : '## The game starts now');
     lines.push('');
     lines.push(he
-      ? 'אשר/י בקצרה שאת/ה הסוכן בונה-האתרים עם המלאי למעלה, ואז חכה/י לתיאור הדף מהשחקן.'
-      : 'Briefly acknowledge you are the Site Builder with the inventory above, then wait for the player’s page description.');
+      ? 'התגובה הראשונה שלך: שורה אחת בלבד — "מוכן. תארו את הדף." בלי לסכם את החוקים, בלי לחזור על המילון, בלי הצעות. מהתיאור הראשון של השחקן והלאה, כל תשובה שלך היא מהלך: המסמך בלבד.'
+      : 'Your first reply: one line only — "Ready. Describe the page." Do not summarize the rules, do not restate the dictionary, do not offer options. From the player\'s first description on, every reply of yours is a move: the document only.');
   }
 
   const text = lines.join('\n');
@@ -324,7 +343,13 @@ function buildCopilotBriefing(opts = {}) {
     : 'on disk, readable by human and machine, and the visual builder shows exactly the same structure.');
   lines.push('');
 
-  lines.push(toolsInventoryMarkdown(tools));
+  // Same dedupe as the roleplay pack: the Syntax Dictionary at the end IS the
+  // inventory (enums, defaults, HOW snippets); listing every module a second
+  // time here doubled the vocabulary and diluted the actual instructions.
+  lines.push(he
+    ? '## הכלים שלך = המילון המלא שבסוף ההודעה. אין תגית מחוץ לו.'
+    : '## Your tools = the full dictionary at the end of this message. No tag exists outside it.');
+  lines.push('');
 
   const mediaMd = mediaInventoryMarkdown(opts.media, he, 0, he ? 'מבעל/ת האתר' : 'the owner');
   if (mediaMd) lines.push(mediaMd);

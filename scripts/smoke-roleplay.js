@@ -37,9 +37,22 @@ check('each tool has tag + how snippet + kind',
 const pack = buildRoleplayPack({ locale: 'he' });
 check('pack has the Site Builder role', /Site Builder|בונה אתרים/.test(pack.text));
 check('pack embeds the completion contract', /COMPLETION CONTRACT/.test(pack.text) && /PZN_READY/.test(pack.text));
-check('pack lists the tool inventory', /tool inventory/i.test(pack.text) && /\*\*hero\*\*/.test(pack.text));
-check('pack includes the full dictionary by default', /Syntax Dictionary/.test(pack.text));
+// v2.21: ONE vocabulary per pack. The full pack's inventory IS the dictionary
+// (the separate inventory section listed every module a second time — the TMI
+// Ben called out); a pointer names the dictionary as the only tool source.
+check('full pack carries the vocabulary ONCE (dictionary, not a duplicate inventory)',
+  /Syntax Dictionary/.test(pack.text) && !/tool inventory \(only these\)/i.test(pack.text));
+check('the pointer names the dictionary as the ONLY tool source', /המלאי שלך = המילון המלא/.test(pack.text));
 check('pack moduleCount matches the registry', pack.moduleCount === modNames.length);
+// "behave as a page builder the instant the injection starts": first reply is
+// one ready line, every later reply is the document only — no prose fences.
+check('pack forbids prose around the fence (the move IS the document)',
+  /המהלך הוא המסמך/.test(pack.text));
+check('pack opens play with one ready line, not an acknowledgment essay',
+  /המשחק מתחיל עכשיו/.test(pack.text) && /שורה אחת בלבד/.test(pack.text));
+const packWithQuest = buildRoleplayPack({ locale: 'he', playerBrief: 'דף אודות לסטודיו' });
+check('a quest pack demands the document ONLY as the reply',
+  /המסמך בלבד/.test(packWithQuest.text));
 
 // ── lite pack (v0.86 — the free-tier payload) ────────────────────────
 // Free chat plans (ChatGPT free etc.) reject the full pack at the message
