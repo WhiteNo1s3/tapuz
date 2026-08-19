@@ -272,7 +272,7 @@
         var dots = (t.palette || []).map(function (c) {
           return '<span style="display:inline-block;width:18px;height:18px;border-radius:50%;border:1px solid #e2e8f0;background:' + esc(c) + '"></span>';
         }).join('');
-        var srcLabel = t.source === 'ai' ? '🤖 נבנה עם AI' : t.source === 'import' ? '📦 יובא' : t.source === 'auto' ? '⏪ גיבוי אוטומטי' : '✋ נשמר ידנית';
+        var srcLabel = t.source === 'ai' ? '🤖 נבנה עם AI' : t.source === 'import' ? '📦 יובא' : t.source === 'auto' ? '⏪ גיבוי אוטומטי' : t.source === 'preset' ? '🎨 ערכה מובנית' : '✋ נשמר ידנית';
         return '<div style="border:1.5px solid #e2e8f0;border-radius:10px;padding:12px" data-thm="' + esc(t.id) + '">' +
           '<div style="font-weight:700;margin-bottom:4px">' + esc(t.name) + '</div>' +
           '<div style="display:flex;gap:5px;margin-bottom:6px">' + dots + '</div>' +

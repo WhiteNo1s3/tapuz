@@ -65,8 +65,59 @@ function paletteOf(overrides) {
     .filter((v) => typeof v === 'string' && v);
 }
 
+/**
+ * Seed the built-in LOOKS into the library (v2.23 — "if we present a slim
+ * choice of themes, what are we worth as a company?"). Each look becomes a
+ * full library entry (look merged onto the defaults), so a fresh site opens
+ * its theme screen to a REAL shelf. A per-key ledger keeps this honest:
+ * a look seeds exactly once — an owner who deletes a preset is respected,
+ * not overruled on the next listing — while looks added in future versions
+ * still arrive, because only their key is missing from the ledger.
+ */
+function seedPresetLooks() {
+  const lib = loadLibrary();
+  const seeded = Array.isArray(lib.seededLooks) ? lib.seededLooks : [];
+  const { LOOKS, DEFAULT_OVERRIDES } = theme;
+  let changed = false;
+  for (const [key, look] of Object.entries(LOOKS)) {
+    if (seeded.includes(key)) continue;
+    if (lib.themes.length < MAX_THEMES) {
+      lib.themes.push({
+        id: makeId(),
+        name: `${look.emoji} ${look.label}`,
+        source: 'preset',
+        preset: key,
+        createdAt: new Date().toISOString(),
+        overrides: JSON.parse(JSON.stringify(mergeLook(DEFAULT_OVERRIDES, look.overrides)))
+      });
+    }
+    seeded.push(key);
+    changed = true;
+  }
+  if (changed) {
+    lib.seededLooks = seeded;
+    saveLibrary(lib);
+  }
+}
+
+/** Local deep-merge (theme.js keeps its own private; same semantics). */
+function mergeLook(base, extra) {
+  const out = Array.isArray(base) ? base.slice() : { ...base };
+  if (!extra || typeof extra !== 'object') return out;
+  for (const k of Object.keys(extra)) {
+    if (extra[k] && typeof extra[k] === 'object' && !Array.isArray(extra[k]) &&
+        base[k] && typeof base[k] === 'object' && !Array.isArray(base[k])) {
+      out[k] = mergeLook(base[k], extra[k]);
+    } else if (extra[k] !== undefined) {
+      out[k] = extra[k];
+    }
+  }
+  return out;
+}
+
 /** Entries for the admin UI: identity + preview, overrides stay on disk. */
 function listThemes() {
+  seedPresetLooks();
   return loadLibrary().themes.map((t) => ({
     id: t.id,
     name: t.name,

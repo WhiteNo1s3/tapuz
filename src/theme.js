@@ -119,6 +119,45 @@ const LOOKS = {
       fonts: { headingFamily: '' },
       style: { radius: 'soft', shadow: 'soft', accent: 'solid' }
     }
+  },
+  // ── v2.23: the shelf widens (Ben: "if we present a slim choice of themes,
+  // what are we worth as a company?") — four looks that also exercise the
+  // master-page chrome, so a preset is a whole skeleton, not just a palette.
+  zahav: {
+    label: 'זהב', emoji: '🏆',
+    overrides: {
+      colors: { primary: '#d4a017', secondary: '#f59e0b', text: '#ede9e3', muted: '#a8a29e', border: '#3f3a33', bg: '#191612', lightBg: '#211d17', surface: '#242019' },
+      fonts: { headingFamily: 'Georgia, "Times New Roman", "Noto Serif Hebrew", serif' },
+      style: { radius: 'soft', shadow: 'deep', accent: 'gradient' },
+      chrome: { menuHover: 'glow', menuHoverColor: '#d4a017', menuWeight: 'normal', headerGlass: true, headerBg: '', footerBg: '#12100d', footerText: '#a8a29e' }
+    }
+  },
+  sadot: {
+    label: 'שדות', emoji: '🌿',
+    overrides: {
+      colors: { primary: '#166534', secondary: '#84cc16', text: '#1a2e1a', muted: '#6b7c6b', border: '#dbe7d5', bg: '#fbfdf8', lightBg: '#f0f7e9', surface: '#ffffff' },
+      fonts: { headingFamily: '' },
+      style: { radius: 'round', shadow: 'soft', accent: 'solid' },
+      chrome: { menuHover: 'pill', menuHoverColor: '', menuWeight: 'normal', headerGlass: false, headerBg: '', footerBg: '#1a2e1a', footerText: '#f0f7e9' }
+    }
+  },
+  neon: {
+    label: 'ניאון', emoji: '🕹',
+    overrides: {
+      colors: { primary: '#e11d90', secondary: '#a3e635', text: '#f3f0ff', muted: '#9089b0', border: '#312a52', bg: '#120f24', lightBg: '#181336', surface: '#1c1740' },
+      fonts: { headingFamily: '' },
+      style: { radius: 'sharp', shadow: 'deep', accent: 'gradient' },
+      chrome: { menuHover: 'glow', menuHoverColor: '#a3e635', menuWeight: 'bold', headerGlass: true, headerBg: '', footerBg: '#0c0a1a', footerText: '#9089b0' }
+    }
+  },
+  hitech: {
+    label: 'הייטק', emoji: '💠',
+    overrides: {
+      colors: { primary: '#4f46e5', secondary: '#06b6d4', text: '#0f172a', muted: '#64748b', border: '#e2e8f0', bg: '#ffffff', lightBg: '#f1f5f9', surface: '#f8fafc' },
+      fonts: { headingFamily: '' },
+      style: { radius: 'soft', shadow: 'soft', accent: 'gradient' },
+      chrome: { menuHover: 'underline', menuHoverColor: '', menuWeight: 'normal', headerGlass: true, headerBg: '', footerBg: '#0f172a', footerText: '#cbd5e1' }
+    }
   }
 };
 
