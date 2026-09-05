@@ -862,6 +862,35 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'social',
+    keyword: 'SOCIAL',
+    labelHe: 'רשתות חברתיות',
+    icon: '◎',
+    category: 'מדיה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'אייקוני רשת — פייסבוק, אינסטגרם, לינקדאין. לא כרום האתר.',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'רשתות', type: 'list',
+        itemFields: [
+          { name: 'network', labelHe: 'רשת', type: 'string', required: true },
+          { name: 'url', labelHe: 'קישור', type: 'url', required: true },
+          { name: 'label', labelHe: 'תווית', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי HANDLE (network + url)'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { network: 'facebook', url: 'https://facebook.com/', label: 'פייסבוק' },
+        { network: 'instagram', url: 'https://instagram.com/', label: 'אינסטגרם' },
+        { network: 'linkedin', url: 'https://linkedin.com/', label: 'לינקדאין' }
+      ]
+    }
+  },
+  {
     type: 'faq',
     keyword: 'FAQ',
     labelHe: 'שאלות נפוצות',

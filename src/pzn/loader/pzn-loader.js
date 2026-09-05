@@ -189,6 +189,9 @@ main#main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
 .bent-crumb + .bent-crumb::before { content: "/"; margin-inline: 0.45rem 0.5rem; color: #a8a29e; }
 .bent-crumb-link { color: #ea580c; text-decoration: none; }
 .bent-crumb-current { font-weight: 600; }
+.bent-social { margin: 1rem 0; }
+.bent-social-list { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem; margin: 0; padding: 0; list-style: none; }
+.bent-social-link { display: inline-flex; align-items: center; padding: 0.4rem 0.8rem; border: 1px solid #e7e5e4; border-radius: 999px; text-decoration: none; color: inherit; font-size: 0.9rem; }
 .bent-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1.25rem; margin: 1.25rem 0; padding: 0; list-style: none; counter-reset: bent-step; }
 .bent-step { text-align: center; margin: 0; padding: 0.5rem 0.5rem 0; }
 .bent-step-n, .bent-step-icon { display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; margin-inline: auto; margin-block-end: 0.5rem; border-radius: 999px; background: #ea580c; color: #fff; font-weight: 800; }

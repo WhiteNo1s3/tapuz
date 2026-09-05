@@ -55,6 +55,8 @@ const ALIASES = {
   breadcrumb: 'crumbs', breadcrumbs: 'crumbs', crumb: 'crumb', trail: 'crumbs',
   milestone: 'event', milestones: 'timeline', history: 'timeline', chrono: 'timeline',
   review: 'testimonial', testimonials: 'testimonial',
+  'social-icons': 'social', 'social-links': 'social', share: 'social',
+  handle: 'handle', 'social-link': 'handle',
   'logo-wall': 'logos', clients: 'logos', brands: 'logos', 'logo-cloud': 'logos',
   'image-grid': 'gallery', images: 'gallery', 'gallery-grid': 'gallery',
   cover: 'hero', jumbotron: 'hero', masthead: 'hero', 'banner-hero': 'hero',

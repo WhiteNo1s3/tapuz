@@ -336,6 +336,29 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('logos', data);
     }
+    case 'SOCIAL': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'HANDLE')
+        .map((c) => {
+          const item = {
+            network: (c.params && c.params.network) || '',
+            url: (c.params && c.params.url) || ''
+          };
+          const label = collapseSingleParagraph(c.text || '');
+          if (label) item.label = label;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { network: 'facebook', url: 'https://facebook.com/', label: 'פייסבוק' },
+              { network: 'instagram', url: 'https://instagram.com/', label: 'אינסטגרם' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('social', data);
+    }
     case 'FAQ': {
       const items = (node.children || [])
         .filter((c) => c.name === 'QA')
@@ -676,6 +699,7 @@ function buildBlock(node, warnings) {
     case 'STEP':
     case 'EVENT':
     case 'CRUMB':
+    case 'HANDLE':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });

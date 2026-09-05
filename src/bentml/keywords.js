@@ -289,6 +289,21 @@ const KEYWORDS = {
     children: ['LOGO'],
     params: {}
   },
+  SOCIAL: {
+    body: 'BLOCK-BODY',
+    jsonType: 'social',
+    children: ['HANDLE'],
+    params: {}
+  },
+  HANDLE: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'SOCIAL',
+    params: {
+      network: { type: 'string' },
+      url: { type: 'string', required: true }
+    }
+  },
   LOGO: {
     body: 'NO-BODY',
     childOnly: true,

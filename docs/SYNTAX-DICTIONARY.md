@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (43)
+## Modules (44)
 
 ### תוכן
 
@@ -550,6 +550,23 @@ Shape: `LOGOS(params) { nested modules }`
 
 ```bentml
 LOGOS {
+  …
+}
+```
+
+#### `SOCIAL` → `social`
+
+◎ **רשתות חברתיות** — אייקוני רשת — פייסבוק, אינסטגרם, לינקדאין. לא כרום האתר.
+
+Shape: `SOCIAL(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+SOCIAL {
   …
 }
 ```

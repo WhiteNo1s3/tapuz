@@ -364,6 +364,19 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}LOGOS${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'social': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [];
+          if (it.network) ps.push(`network: ${q(it.network)}`);
+          if (it.url) ps.push(`url: ${q(it.url)}`);
+          return `${pad}  HANDLE${paramList(ps)} { ${escBody(it.label || it.network || '')} }`;
+        })
+        .join('\n');
+      return `${pad}SOCIAL${paramList(params)} {\n${kids}\n${pad}}`;
+    }
     case 'faq': {
       const params = [];
       uni(params, d, idParams);

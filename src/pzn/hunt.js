@@ -51,6 +51,7 @@ const {
   parseTimelineData,
   parseFaqData,
   parseCrumbsData,
+  parseSocialData,
   tryStructuralModules,
   guessedTool,
   mapsAddressOf
@@ -64,6 +65,8 @@ const ROLE_FROM_CLASS = [
   [/footer|site-footer|page-footer/i, 'footer'],
   [/header|site-header|page-header|topbar|navbar|nav-bar/i, 'header'],
   [/breadcrumbs?|bent-crumbs/i, 'crumbs'],
+  [/testimonial|elementor-testimonial/i, 'testimonial'],
+  [/social-icons?|elementor-social|share-links?|share-buttons?/i, 'social'],
   [/\bnav\b|menu|menubar/i, 'nav'],
   [/swiper|slick|owl-carousel|bent-carousel/i, 'carousel'],
   [/gallery|carousel|slider/i, 'gallery'],
@@ -169,6 +172,7 @@ function isEmptyBlock(b) {
     case 'image': return !String(d.src || '').trim();
     case 'list': return !(d.items || []).some((it) => String(it.text || it || '').trim());
     case 'quote': return !String(d.text || '').trim();
+    case 'testimonial': return !String(d.quote || '').trim();
     case 'cards': return !(d.items || []).length;
     case 'steps':
     case 'timeline':
@@ -178,7 +182,8 @@ function isEmptyBlock(b) {
     case 'tabs':
     case 'crumbs':
     case 'stats':
-    case 'logos': return !(d.items || []).length;
+    case 'logos':
+    case 'social': return !(d.items || []).length;
     default: return false;
   }
 }
@@ -463,7 +468,13 @@ function huntBlocks(html, opts = {}) {
           sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
           mapped += 1; i = end; continue;
         }
+        const socialNav = parseSocialData(tokens, i, end, t);
+        if (socialNav) {
+          sink.push({ type: 'social', id: nid('social'), data: socialNav });
+          mapped += 1; i = end; continue;
+        }
         if (guessedTool(t) === 'crumbs') suggested.add('crumbs');
+        if (guessedTool(t) === 'social') suggested.add('social');
         rolesSeen.add('nav');
         const items = parseNavItems(tokens, i, end);
         if (items.length) {
@@ -530,18 +541,20 @@ function huntBlocks(html, opts = {}) {
         const role = inferRole(t);
         if (role !== 'block') rolesSeen.add(role);
 
+        // Named modules win over a generic row: Elementor FAQ/social
+        // widgets are often also flex/grids. Columns is the leftover cut.
+        const structural = tryStructuralModules(tokens, i, end, t, bgMap, to);
+        if (structural) {
+          sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
+          mapped += 1; i = structural.next; continue;
+        }
+
         // the percentage cut: a row of 2–4 columns → one columns block
         const colTry = tryColumns(t, i, end, depth);
         if (colTry) {
           if (colTry.block) sink.push(colTry.block);
           else if (colTry.inline) colTry.inline.forEach((b) => sink.push(b));
           i = end; continue;
-        }
-
-        const structural = tryStructuralModules(tokens, i, end, t, bgMap, to);
-        if (structural) {
-          sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
-          mapped += 1; i = structural.next; continue;
         }
         const lost = guessedTool(t);
         if (lost) suggested.add(lost);

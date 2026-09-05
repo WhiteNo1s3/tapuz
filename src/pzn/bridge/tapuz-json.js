@@ -234,6 +234,16 @@ function blockToModule(block) {
       return createModule('logos', baseOpts(block, {}, { children }));
     }
 
+    case 'social': {
+      const children = (data.items || []).map((item) =>
+        createModule('handle', {
+          props: pickProps(item || {}, ['network', 'url', 'label']),
+          text: (item && item.label) || ''
+        })
+      );
+      return createModule('social', baseOpts(block, {}, { children }));
+    }
+
     case 'faq': {
       const children = (data.items || []).map((item) =>
         createModule('qa', {
@@ -597,6 +607,18 @@ function moduleToBlock(node) {
         .filter((c) => c.name === 'logo')
         .map((c) => pickData(c.props || {}, ['src', 'alt', 'url']));
       return finishBlock(node, 'logos', data);
+    }
+
+    case 'social': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'handle')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['network', 'url', 'label']);
+          if (!item.label && c.text) item.label = c.text;
+          return item;
+        });
+      return finishBlock(node, 'social', data);
     }
 
     case 'faq': {

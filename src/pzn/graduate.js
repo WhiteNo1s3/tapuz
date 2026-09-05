@@ -732,7 +732,13 @@ function hintHay(t) {
 
 const PRICING_CLASS = /\b(?:pricing|price-table|price-cards?|pricing-table|bent-pricing|elementor-price)\b/i;
 const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|owl-carousel|splide|keen-slider|glide|bent-carousel|carousel|slider)\b/i;
-const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list)\b/i;
+const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list|dsm-faq|stattic-faq|elementor-widget-faq|elementor-accordion)\b/i;
+const FAQ_ITEM_CLASS = /\b(?:faq-item|faq-entry|dsm-faq--faq-content|elementor-accordion-item|e-faq-item)\b/i;
+const FAQ_CONTENT_CLASS = /\b(?:dsm-faq--faq-content|faq-body|faq-answer|elementor-tab-content|elementor-accordion-content)\b/i;
+const FAQ_TITLE_SKIP = /\b(?:dsm-faq--title)\b/i;
+const FAQ_LOOP_ITEM = /\be-loop-item\b/i;
+const TESTIMONIAL_CLASS = /\b(?:testimonial|review-card|bent-testimonial|elementor-testimonial)\b/i;
+const SOCIAL_CLASS = /\b(?:social-icons?|social-links?|share-icons?|share-links?|share-buttons?|elementor-social-icons(?:-wrapper)?|elementor-widget-social-icons|bent-social)\b/i;
 const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|bent-tabs|\btabs\b)\b/i;
 const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
 const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
@@ -744,6 +750,8 @@ const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
 function looksLikePricing(t) { return PRICING_CLASS.test(hintHay(t)); }
 function looksLikeCarousel(t) { return CAROUSEL_CLASS.test(hintHay(t)) || /^swiper/i.test((t && t.name) || ''); }
 function looksLikeFaq(t) { return FAQ_CLASS.test(hintHay(t)); }
+function looksLikeTestimonial(t) { return TESTIMONIAL_CLASS.test(hintHay(t)); }
+function looksLikeSocial(t) { return SOCIAL_CLASS.test(hintHay(t)); }
 function looksLikeTabs(t) { return TABS_CLASS.test(hintHay(t)); }
 function looksLikeHero(t) { return HERO_CLASS.test(hintHay(t)); }
 function looksLikeCrumbs(t) {
@@ -770,6 +778,8 @@ function guessedTool(t) {
   if (looksLikeCarousel(t)) return 'carousel';
   if (looksLikeTabs(t)) return 'tabs';
   if (looksLikeFaq(t)) return 'faq';
+  if (looksLikeTestimonial(t)) return 'testimonial';
+  if (looksLikeSocial(t)) return 'social';
   if (looksLikePricing(t)) return 'pricing';
   if (looksLikeHero(t)) return 'hero';
   if (looksLikeCrumbs(t)) return 'crumbs';
@@ -926,7 +936,7 @@ function parseCarouselData(tokens, i, end, t, bgMap) {
   return items.length >= 2 ? { items } : null;
 }
 
-function extractQa(tokens, s, e) {
+function extractQaPlain(tokens, s, e) {
   let question = '';
   let answer = '';
   for (let j = s + 1; j < e - 1; j++) {
@@ -934,15 +944,20 @@ function extractQa(tokens, s, e) {
     if (tk.kind !== 'open') continue;
     const close = matchClose(tokens, j);
     const tcls = (tk.attrs && tk.attrs.class) || '';
-    if (tk.name === 'summary' || HEADING.test(tk.name) || tk.name === 'dt'
-      || /question|faq-q|faq-question/i.test(tcls)) {
-      if (!question) question = unescapeHtml(textOf(tokens, j + 1, close - 1));
+    if (FAQ_TITLE_SKIP.test(tcls)) {
       j = close - 1;
       continue;
     }
-    if (tk.name === 'p' || tk.name === 'dd' || /answer|faq-a|faq-answer/i.test(tcls)) {
-      const p = unescapeHtml(textOf(tokens, j + 1, close - 1));
-      answer = answer ? `${answer}\n${p}` : p;
+    if (tk.name === 'summary' || HEADING.test(tk.name) || tk.name === 'dt'
+      || /question|faq-q|faq-question|elementor-tab-title|accordion-title/i.test(tcls)) {
+      if (!question) question = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p' || tk.name === 'dd'
+      || /answer|faq-a|faq-answer|elementor-tab-content|accordion-content/i.test(tcls)) {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (p) answer = answer ? `${answer}\n${p}` : p;
       j = close - 1;
     }
   }
@@ -950,8 +965,51 @@ function extractQa(tokens, s, e) {
   return { question, answer };
 }
 
+function extractQa(tokens, s, e) {
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (FAQ_CONTENT_CLASS.test(classHay(tk))) {
+      const close = matchClose(tokens, j);
+      const inner = extractQaPlain(tokens, j, close);
+      if (inner) return inner;
+      j = close - 1;
+    }
+  }
+  return extractQaPlain(tokens, s, e);
+}
+
+function isFaqItemToken(tk) {
+  if (!tk) return false;
+  if (tk.name === 'details') return true;
+  const hay = classHay(tk);
+  if (FAQ_ITEM_CLASS.test(hay) || FAQ_CONTENT_CLASS.test(hay)) return true;
+  return FAQ_LOOP_ITEM.test(hay) && /\bfaq\b/i.test(hay);
+}
+
+function collectQaDeep(tokens, from, to) {
+  const items = [];
+  for (let j = from; j < to; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (!isFaqItemToken(tk)) continue;
+    const close = matchClose(tokens, j);
+    if (close == null) continue;
+    const qa = extractQa(tokens, j, close);
+    if (qa) items.push(qa);
+    j = close - 1;
+  }
+  return items;
+}
+
 function collectQaItems(tokens, from, to) {
+  const deep = collectQaDeep(tokens, from, to);
+  if (deep.length >= 2) return deep;
   const spans = childSpans(tokens, from, to);
+  if (spans.length === 1 && CONTAINERS.has(tokens[spans[0][0]].name)) {
+    const inner = collectQaItems(tokens, spans[0][0] + 1, spans[0][1] - 1);
+    if (inner.length >= 2) return inner;
+  }
   const wrapped = [];
   for (const [s, e] of spans) {
     const name = tokens[s].name;
@@ -990,13 +1048,27 @@ function collectQaItems(tokens, from, to) {
     }
     if (q) pairs.push({ question: q, answer: a });
   }
-  return pairs;
+  return pairs.length >= 2 ? pairs : deep;
+}
+
+function countHeadings(tokens, from, to) {
+  let n = 0;
+  for (let j = from; j < to; j++) {
+    if (tokens[j].kind === 'open' && HEADING.test(tokens[j].name)) n += 1;
+  }
+  return n;
 }
 
 function parseFaqData(tokens, i, end, t) {
   if (!looksLikeFaq(t) && !(t && t.name === 'dl' && looksLikeFaq(t))) return null;
   const items = collectQaItems(tokens, i + 1, end - 1);
-  return items.length >= 2 ? { items } : null;
+  if (items.length < 2) return null;
+  // A page-sized wrapper that merely CONTAINS a FAQ (Elementor section
+  // chrome, loop templates) must descend — otherwise two Q&As steal the
+  // rest of the marketing page. Allow a title/subtitle above the list.
+  const headings = countHeadings(tokens, i + 1, end - 1);
+  if (headings > items.length + 2) return null;
+  return { items };
 }
 
 function collectTabLabels(tokens, i, end) {
@@ -1338,11 +1410,112 @@ function parseLogosData(tokens, i, end, t) {
   return items.length >= 2 ? { items } : null;
 }
 
+function networkFromHref(href) {
+  const h = String(href || '').toLowerCase();
+  if (/facebook\.com|\bfb\.com\b/.test(h)) return 'facebook';
+  if (/instagram\.com/.test(h)) return 'instagram';
+  if (/(?:^|\/\/)(?:www\.)?(?:x\.com|twitter\.com)/.test(h)) return 'twitter';
+  if (/linkedin\.com/.test(h)) return 'linkedin';
+  if (/youtube\.com|youtu\.be/.test(h)) return 'youtube';
+  if (/tiktok\.com/.test(h)) return 'tiktok';
+  if (/github\.com/.test(h)) return 'github';
+  if (/wordpress\.org|wordpress\.com/.test(h)) return 'wordpress';
+  if (/wa\.me|whatsapp/.test(h)) return 'whatsapp';
+  if (/(?:^|\/\/)(?:t\.me|telegram\.)/.test(h)) return 'telegram';
+  if (/pinterest\.com/.test(h)) return 'pinterest';
+  if (/mailto:/.test(h)) return 'email';
+  return '';
+}
+
+function networkFromClass(cls) {
+  const m = /(?:elementor-social-icon-|fa(?:[brs])?-|icon-|social-)([a-z0-9-]+)/i.exec(String(cls || ''));
+  if (!m) return '';
+  const name = m[1].toLowerCase().replace(/-square|-official|-f$|-in$/i, '');
+  if (!name || name === 'icon' || name === 'link') return '';
+  return name;
+}
+
+function extractSocialLink(tokens, s, e, tk) {
+  const href = (tk.attrs && tk.attrs.href) || '';
+  if (!href || href === '#') return null;
+  let network = networkFromClass((tk.attrs && tk.attrs.class) || '') || networkFromHref(href);
+  let label = ((tk.attrs && (tk.attrs['aria-label'] || tk.attrs.title)) || '').trim();
+  if (!label) {
+    const raw = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+    if (raw && raw.length < 40 && !/^[Mm]\s/.test(raw)) label = raw;
+  }
+  if (!network && !label) return null;
+  if (!network) network = 'link';
+  if (!label) label = network;
+  return { network, url: href, label };
+}
+
+function parseSocialData(tokens, i, end, t) {
+  if (!looksLikeSocial(t)) return null;
+  const items = [];
+  const seen = new Set();
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'a') continue;
+    const close = matchClose(tokens, j);
+    const item = extractSocialLink(tokens, j, close, tk);
+    if (item && !seen.has(item.url)) {
+      seen.add(item.url);
+      items.push(item);
+    }
+    j = close - 1;
+  }
+  return items.length >= 2 ? { items } : null;
+}
+
+function parseTestimonialData(tokens, i, end, t) {
+  if (!looksLikeTestimonial(t)) return null;
+  let quote = '';
+  let author = '';
+  let role = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (!quote && (/testimonial-content|testimonial-text|review-text|bent-testimonial-quote/i.test(tcls)
+      || tk.name === 'p' || tk.name === 'q')) {
+      const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (text) quote = text.replace(/^["“]+|["”]+$/g, '');
+      j = close - 1;
+      continue;
+    }
+    if (!author && (/testimonial-name|review-author|author-name|bent-testimonial-author/i.test(tcls)
+      || tk.name === 'cite')) {
+      author = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (!role && /testimonial-job|testimonial-role|review-role|author-role/i.test(tcls)) {
+      role = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+    }
+  }
+  if (!quote) {
+    quote = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+    if (author) quote = quote.replace(author, '').trim();
+    if (role) quote = quote.replace(role, '').trim();
+    quote = quote.replace(/^["“]+|["”]+$/g, '').trim();
+  }
+  if (!quote) return null;
+  const out = { quote };
+  if (author) out.author = author;
+  if (role) out.role = role;
+  return out;
+}
+
 function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   const crumbs = parseCrumbsData(tokens, i, end, t);
   if (crumbs) return { type: 'crumbs', data: crumbs, next: end };
   const stats = parseStatsData(tokens, i, end, t);
   if (stats) return { type: 'stats', data: stats, next: end };
+  const social = parseSocialData(tokens, i, end, t);
+  if (social) return { type: 'social', data: social, next: end };
   const logos = parseLogosData(tokens, i, end, t);
   if (logos) return { type: 'logos', data: logos, next: end };
   const pricing = parsePricingData(tokens, i, end, t);
@@ -1359,6 +1532,8 @@ function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   if (stepData) return { type: 'steps', data: stepData, next: end };
   const tlData = parseTimelineData(tokens, i, end, t);
   if (tlData) return { type: 'timeline', data: tlData, next: end };
+  const testimonial = parseTestimonialData(tokens, i, end, t);
+  if (testimonial) return { type: 'testimonial', data: testimonial, next: end };
   return null;
 }
 
@@ -1657,7 +1832,13 @@ function htmlToBlocks(html, opts = {}) {
           sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
           mapped += 1; i = end; continue;
         }
+        const socialNav = parseSocialData(tokens, i, end, t);
+        if (socialNav) {
+          sink.push({ type: 'social', id: nid('social'), data: socialNav });
+          mapped += 1; i = end; continue;
+        }
         if (looksLikeCrumbs(t)) suggested.add('crumbs');
+        if (looksLikeSocial(t)) suggested.add('social');
         const items = parseNavItems(tokens, i, end);
         if (items.length) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items } });
@@ -1808,6 +1989,8 @@ module.exports = {
   parseCrumbsData,
   parseStatsData,
   parseLogosData,
+  parseSocialData,
+  parseTestimonialData,
   tryStructuralModules,
   guessedTool,
   parseDetailsRun,

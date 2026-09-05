@@ -426,6 +426,47 @@ async function checkRejects(name, fn) {
     ownLogos.blocks.some((b) => b.type === 'logos' && b.data.items.length === 2
       && b.data.items[1].url === '/y'));
 
+  const elFaq = htmlToBlocks(
+    '<div class="elementor-widget elementor-widget-stattic-faq dsm-faq">'
+    + '<div class="e-loop-item faq type-faq">'
+    + '<div class="dsm-faq--title"><div class="elementor-heading-title">קטגוריה</div></div>'
+    + '<div class="dsm-faq--faq-content"><h3>איך מתחילים?</h3><p>יוצרים אתר.</p></div>'
+    + '</div>'
+    + '<div class="e-loop-item faq type-faq">'
+    + '<div class="dsm-faq--title"><div class="elementor-heading-title">קטגוריה</div></div>'
+    + '<div class="dsm-faq--faq-content"><h3>כמה זה עולה?</h3><p>חינם.</p></div>'
+    + '</div>'
+    + '</div>'
+  );
+  const elFaqB = elFaq.blocks.find((b) => b.type === 'faq');
+  check('Elementor DSM FAQ loop → faq (real questions, not category titles)',
+    !!elFaqB && elFaqB.data.items.length === 2
+    && elFaqB.data.items[0].question === 'איך מתחילים?'
+    && elFaqB.data.items[1].answer === 'חינם.'
+    && !elFaq.suggestedTools.includes('faq'));
+
+  const elQuote = htmlToBlocks(
+    '<div class="elementor-testimonial-wrapper">'
+    + '<div class="elementor-testimonial-content">“האתר עלה ביום.”</div>'
+    + '<div class="elementor-testimonial-name">תמר כהן</div>'
+    + '<div class="elementor-testimonial-job">מנהלת סטודיו</div>'
+    + '</div>'
+  );
+  const elT = elQuote.blocks.find((b) => b.type === 'testimonial');
+  check('Elementor testimonial widget → testimonial (quote, author, role)',
+    !!elT && /האתר עלה/.test(elT.data.quote)
+    && elT.data.author === 'תמר כהן' && elT.data.role === 'מנהלת סטודיו');
+
+  const elSocial = htmlToBlocks(
+    '<div class="elementor-widget-social-icons"><div class="elementor-social-icons-wrapper">'
+    + '<a class="elementor-social-icon elementor-social-icon-wordpress" href="https://wordpress.org/plugins/x">WordPress</a>'
+    + '<a class="elementor-social-icon elementor-social-icon-github" href="https://github.com/x">GitHub</a>'
+    + '</div></div>'
+  );
+  check('Elementor social-icons widget → social module',
+    elSocial.blocks.some((b) => b.type === 'social' && b.data.items.length === 2
+      && b.data.items[0].network === 'wordpress'));
+
   console.log('');
   console.log(fail ? 'SMOKE DECOMPILE: FAIL' : 'SMOKE DECOMPILE: PASS');
   process.exit(fail ? 1 : 0);

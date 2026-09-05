@@ -60,6 +60,7 @@
     { type: 'spacer', label: 'רווח', hint: 'sm–xl', icon: '↕', group: 'מבנה', keyword: 'SPACE' },
     { type: 'divider', label: 'קו מפריד', hint: 'line/dots', icon: '—', group: 'מבנה', keyword: 'DIVIDER' },
     { type: 'logos', label: 'לוגואים', hint: 'לקוחות', icon: '▣▣', group: 'מדיה', keyword: 'LOGOS' },
+    { type: 'social', label: 'רשתות', hint: 'אייקוני שיתוף', icon: '◎', group: 'מדיה', keyword: 'SOCIAL' },
     { type: 'contact-info', label: 'קשר', hint: 'טלפון/מייל', icon: '☎', group: 'מדיה', keyword: 'CONTACT' }
   ];
 
@@ -2042,6 +2043,18 @@
             ? '<img src="' + escAttr(it.src) + '" alt="' + escAttr(it.alt || '') + '" style="height:34px;max-width:110px;object-fit:contain">'
             : '<span style="color:#94a3b8">▣ ' + esc(it.alt || 'לוגו') + '</span>';
         }).join('') : '<span style="color:#94a3b8">▣▣ לוגואים — הוסיפו פריטים במאפיינים ←</span>') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'social') {
+      var soItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-social" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        (soItems.length ? soItems.map(function (it) {
+          return '<span style="border:1px solid #e2e8f0;border-radius:999px;padding:4px 10px;font-size:.85rem">' +
+            esc(it.label || it.network || 'רשת') + '</span>';
+        }).join('') : '<span style="color:#94a3b8">◎ רשתות — הוסיפו קישור במאפיינים ←</span>') +
         '</div>';
       return wrap;
     }

@@ -879,6 +879,33 @@ button:focus-visible,
 .bent-crumb-link:hover { text-decoration: underline; }
 .bent-crumb-current { color: inherit; font-weight: 600; }
 
+/* ── Social icons — labeled pills, CSS-only, page module not footer chrome ── */
+.bent-social { margin: 1rem 0; }
+.bent-social-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bent-social-item { margin: 0; padding: 0; }
+.bent-social-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--border, #e7e5e4);
+  border-radius: 999px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 0.9rem;
+}
+.bent-social-link:hover {
+  border-color: var(--accent, #ea580c);
+  color: var(--accent, #ea580c);
+}
+
 /* ── Steps (how-it-works) — CSS counters, stacks on a narrow viewport ── */
 .bent-steps {
   display: grid;

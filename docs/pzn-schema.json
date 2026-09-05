@@ -2385,6 +2385,68 @@
         }
       }
     },
+    "handle": {
+      "tag": "bent-handle",
+      "label": {
+        "he": "רשת",
+        "en": "Network"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "network": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": ""
+        },
+        "label": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "social": {
+      "tag": "bent-social",
+      "label": {
+        "he": "רשתות חברתיות",
+        "en": "Social"
+      },
+      "category": "media",
+      "container": true,
+      "accept": [
+        "handle"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
     "crumbs": {
       "tag": "bent-crumbs",
       "label": {
