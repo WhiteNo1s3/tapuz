@@ -1105,6 +1105,65 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'steps',
+    keyword: 'STEPS',
+    labelHe: 'שלבי תהליך',
+    icon: '①',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'איך זה עובד — שלבים ממוספרים בלי JavaScript',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'שלבים', type: 'list',
+        itemFields: [
+          { name: 'title', labelHe: 'כותרת השלב', type: 'string', required: true },
+          { name: 'text', labelHe: 'תיאור', type: 'textarea' },
+          { name: 'icon', labelHe: 'אייקון (אימוג׳י או נתיב)', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי STEP'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { title: 'מתארים', text: 'מספרים מה האתר צריך לעשות.' },
+        { title: 'בונים', text: 'מודולים על הקנבס — בלי קוד.' },
+        { title: 'מפרסמים', text: 'HTML נקי, חי בלחיצה.' }
+      ]
+    }
+  },
+  {
+    type: 'timeline',
+    keyword: 'TIMELINE',
+    labelHe: 'ציר זמן',
+    icon: '┊',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'הסיפור שלכם לאורך זמן — שנה, כותרת, תיאור',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'אירועים', type: 'list',
+        itemFields: [
+          { name: 'time', labelHe: 'תאריך / שנה', type: 'string' },
+          { name: 'title', labelHe: 'כותרת', type: 'string', required: true },
+          { name: 'text', labelHe: 'תיאור', type: 'textarea' },
+          { name: 'image', labelHe: 'תמונה', type: 'media' }
+        ],
+        hint: 'ב-BenTML: צאצאי EVENT'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { time: '2024', title: 'ההתחלה', text: 'פתחנו את הסטודיו.' },
+        { time: '2025', title: 'צמיחה', text: 'האתר עבר לתפוז.' },
+        { time: '2026', title: 'היום', text: 'ממשיכים לבנות.' }
+      ]
+    }
+  },
+  {
     type: 'nav',
     keyword: 'NAV',
     labelHe: 'תפריט ניווט',

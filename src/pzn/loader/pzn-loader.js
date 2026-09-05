@@ -183,6 +183,21 @@ main#main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
   .hero.hero-parallax, .parallax-section { background-attachment: scroll; }
 }
 @media (prefers-reduced-motion: reduce) { .marquee-track { animation: none; } }
+.bent-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1.25rem; margin: 1.25rem 0; padding: 0; list-style: none; counter-reset: bent-step; }
+.bent-step { text-align: center; margin: 0; padding: 0.5rem 0.5rem 0; }
+.bent-step-n, .bent-step-icon { display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; margin-inline: auto; margin-block-end: 0.5rem; border-radius: 999px; background: #ea580c; color: #fff; font-weight: 800; }
+.bent-step-n { counter-increment: bent-step; }
+.bent-step-n::before { content: counter(bent-step); }
+.bent-step-title { margin: 0 0 0.3rem; font-size: 1.05rem; }
+.bent-step-body { margin: 0; color: #57534e; }
+.bent-timeline { position: relative; list-style: none; margin: 1.25rem 0; padding: 0; padding-inline-start: 2rem; }
+.bent-timeline::before { content: ""; position: absolute; inset-inline-start: 0.45rem; top: 0.4rem; bottom: 0.4rem; width: 2px; background: #ea580c; opacity: 0.35; }
+.bent-event { position: relative; margin: 0; padding-block: 0.2rem 1.2rem; }
+.bent-event::before { content: ""; position: absolute; inset-inline-start: -1.68rem; top: 0.55rem; width: 10px; height: 10px; border-radius: 999px; background: #ea580c; box-shadow: 0 0 0 3px #fff; }
+.bent-event-time { display: block; font-size: 0.8rem; font-weight: 700; color: #ea580c; }
+.bent-event-title { margin: 0.15rem 0 0.35rem; font-size: 1.05rem; }
+.bent-event-body { margin: 0; color: #57534e; }
+.bent-event-image { display: block; max-width: 100%; height: auto; margin-top: 0.6rem; border-radius: 8px; }
 `.trim();
 
 /**

@@ -123,10 +123,10 @@ Sources: [builder.io Fusion launch](https://www.builder.io/news/fusion),
    templates gallery (v0.93 — /admin/new picks a layout; templates compose
    from registry defaults so they can't drift; neutral placeholder copy
    awaiting Ben's voice). Future tier: synced (live-linked) symbols.
-7. **Module hunt continues** — timeline, steps remain; ~~pricing-table
-   sugar~~ shipped in v1.05 (`pricing`/`plan`, both the canonical `.pzn`
-   system and the legacy BentML keyword dialect, zero-JS, highlighted-tier
-   support). CODE stays reserved; INPUT stays a FIELD child.
+7. **Module hunt continues** — ~~timeline, steps remain~~ shipped as
+   `steps`/`step` and `timeline`/`event` (zero-JS CSS counters + vertical
+   rail, decompiler maps classed process/how-it-works + `<dl>` / rich
+   `<ol>`). CODE stays reserved; INPUT stays a FIELD child.
 8. **From the builder.io benchmark (2026-07, Ben to prioritize):**
    - **A/B split testing** — we track conversions per page already; the
      missing half is serving variant A/B and attributing. Feasible on the

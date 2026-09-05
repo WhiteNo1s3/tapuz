@@ -427,6 +427,37 @@ const KEYWORDS = {
       highlighted: { type: 'boolean', default: false }
     }
   },
+  STEPS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'steps',
+    children: ['STEP'],
+    params: {}
+  },
+  STEP: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'STEPS',
+    params: {
+      title: { type: 'string', required: true },
+      icon: { type: 'string' }
+    }
+  },
+  TIMELINE: {
+    body: 'BLOCK-BODY',
+    jsonType: 'timeline',
+    children: ['EVENT'],
+    params: {}
+  },
+  EVENT: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TIMELINE',
+    params: {
+      time: { type: 'string' },
+      title: { type: 'string', required: true },
+      image: { type: 'string' }
+    }
+  },
   NAV: {
     body: 'BLOCK-BODY',
     jsonType: 'nav',

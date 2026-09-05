@@ -548,6 +548,178 @@ function parseTableData(tokens, i, end) {
   return { header, rows };
 }
 
+const STEPS_CLASS = /\b(?:steps?|process|how-it-works|howitworks|workflow|stepper|elementor-steps)\b/i;
+const TIMELINE_CLASS = /\b(?:timeline|milestones?|chrono|elementor-timeline)\b/i;
+
+function classHay(t) {
+  return `${(t && t.attrs && t.attrs.class) || ''} ${(t && t.attrs && t.attrs.id) || ''}`;
+}
+
+function looksLikeSteps(t) {
+  return STEPS_CLASS.test(classHay(t));
+}
+
+function looksLikeTimeline(t) {
+  return TIMELINE_CLASS.test(classHay(t));
+}
+
+/**
+ * Pull title / body / optional time-or-icon out of one item wrapper
+ * (an <li> or a step/event container).
+ */
+function extractProcessItem(tokens, s, e, kind) {
+  let title = '';
+  let text = '';
+  let time = '';
+  let icon = '';
+  let image = '';
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    if (!time && (tk.name === 'time' || /date|year|when|time/i.test(cls))) {
+      time = unescapeHtml(textOf(tokens, j + 1, close - 1));
+      j = close - 1;
+      continue;
+    }
+    if (!icon && tk.name === 'img' && kind === 'steps') {
+      const src = imageSrcOf(tk.attrs);
+      if (src) icon = src;
+      j = close - 1;
+      continue;
+    }
+    if (!image && tk.name === 'img' && kind === 'timeline') {
+      const src = imageSrcOf(tk.attrs);
+      if (src) image = src;
+      j = close - 1;
+      continue;
+    }
+    if (!title && HEADING.test(tk.name)) {
+      title = unescapeHtml(textOf(tokens, j + 1, close - 1));
+      j = close - 1;
+      continue;
+    }
+    if (!title && (tk.name === 'strong' || tk.name === 'b')) {
+      title = unescapeHtml(textOf(tokens, j + 1, close - 1));
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p') {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1));
+      text = text ? `${text}\n${p}` : p;
+      j = close - 1;
+      continue;
+    }
+  }
+  if (!title && !text && !time) {
+    const all = unescapeHtml(textOf(tokens, s + 1, e - 1));
+    if (!all) return null;
+    if (kind === 'timeline') {
+      const m = /^(\d{4}|[\d./-]{4,12})\s+(.+)$/.exec(all);
+      if (m) return { time: m[1], title: m[2], text: '', image: '' };
+    }
+    title = all;
+  }
+  if (kind === 'timeline') {
+    if (!time && !title && !text) return null;
+    return { time, title, text, image };
+  }
+  if (!title) return null;
+  return { title, text, icon };
+}
+
+function collectProcessItems(tokens, from, to, kind, depth = 0) {
+  const kids = [];
+  let j = from;
+  while (j < to) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') { j++; continue; }
+    const e = matchClose(tokens, j);
+    if (tk.name === 'li') {
+      kids.push([j, e]);
+    } else if (tk.name === 'ol' || tk.name === 'ul') {
+      const inner = collectProcessItems(tokens, j + 1, e - 1, kind, depth);
+      if (inner && inner.length) return inner;
+    } else if (CONTAINERS.has(tk.name)) {
+      kids.push([j, e]);
+    }
+    j = e;
+  }
+  if (kids.length === 1 && depth < 3) {
+    const [s, e] = kids[0];
+    const inner = collectProcessItems(tokens, s + 1, e - 1, kind, depth + 1);
+    if (inner && inner.length >= 2) return inner;
+  }
+  const items = [];
+  for (const [s, e] of kids) {
+    const it = extractProcessItem(tokens, s, e, kind);
+    if (it) items.push(it);
+  }
+  return items;
+}
+
+/**
+ * How-it-works / process steps. Class hint, or a rich <ol> (heading + body
+ * per item) so a plain numbered list stays a list.
+ * @returns {{ items: object[] } | null}
+ */
+function parseStepsData(tokens, i, end, t) {
+  const hinted = looksLikeSteps(t);
+  const isOl = t && t.name === 'ol';
+  const items = collectProcessItems(tokens, i + 1, end - 1, 'steps');
+  if (!items || items.length < 2) return null;
+  if (!hinted) {
+    if (!isOl) return null;
+    if (items.filter((it) => it.title && it.text).length < 2) return null;
+  }
+  return { items: items.map((it) => ({ title: it.title || '', text: it.text || '', icon: it.icon || '' })) };
+}
+
+function parseDlTimeline(tokens, i, end) {
+  const items = [];
+  let time = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const e = matchClose(tokens, j);
+    if (tk.name === 'dt') {
+      time = unescapeHtml(textOf(tokens, j + 1, e - 1));
+      j = e - 1;
+    } else if (tk.name === 'dd') {
+      const inner = extractProcessItem(tokens, j, e, 'timeline');
+      items.push({
+        time,
+        title: (inner && inner.title) || '',
+        text: (inner && inner.text) || unescapeHtml(textOf(tokens, j + 1, e - 1)),
+        image: (inner && inner.image) || ''
+      });
+      time = '';
+      j = e - 1;
+    } else {
+      j = e - 1;
+    }
+  }
+  return items.length >= 2 ? { items } : null;
+}
+
+/**
+ * Company-history rail. Class hint, or a <dl> of dt/dd pairs.
+ * @returns {{ items: object[] } | null}
+ */
+function parseTimelineData(tokens, i, end, t) {
+  if (t && t.name === 'dl') return parseDlTimeline(tokens, i, end);
+  if (!looksLikeTimeline(t)) return null;
+  const items = collectProcessItems(tokens, i + 1, end - 1, 'timeline');
+  if (!items || items.length < 2) return null;
+  return { items: items.map((it) => ({
+    time: it.time || '',
+    title: it.title || '',
+    text: it.text || '',
+    image: it.image || ''
+  })) };
+}
+
 /**
  * A run of sibling <details> elements → ONE accordion block (the FAQ shape
  * real sites ship). <summary> is the fold title, the rest of the fold is its
@@ -783,6 +955,16 @@ function htmlToBlocks(html, opts = {}) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
           mapped += 1; i = end; continue;
         }
+        const stepData = parseStepsData(tokens, i, end, t);
+        if (stepData) {
+          sink.push({ type: 'steps', id: nid('steps'), data: stepData });
+          mapped += 1; i = end; continue;
+        }
+        const tlData = parseTimelineData(tokens, i, end, t);
+        if (tlData) {
+          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
+          mapped += 1; i = end; continue;
+        }
         const items = [];
         for (let j = i + 1; j < end - 1; j++) {
           if (tokens[j].kind === 'open' && tokens[j].name === 'li') {
@@ -792,6 +974,18 @@ function htmlToBlocks(html, opts = {}) {
           }
         }
         if (items.length) { sink.push({ type: 'list', id: nid('list'), data: { ordered: name === 'ol', items } }); mapped += 1; }
+        i = end; continue;
+      }
+      if (name === 'dl') {
+        const tlData = parseTimelineData(tokens, i, end, t);
+        if (tlData) {
+          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
+          mapped += 1; i = end; continue;
+        }
+        suggested.add('timeline');
+        let frag = '';
+        for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+        raw += frag;
         i = end; continue;
       }
       // form → the form module (v0.58 closed this gap). Parse label/input/
@@ -886,6 +1080,18 @@ function htmlToBlocks(html, opts = {}) {
       }
 
       if (CONTAINERS.has(name)) {
+        const stepData = parseStepsData(tokens, i, end, t);
+        if (stepData) {
+          sink.push({ type: 'steps', id: nid('steps'), data: stepData });
+          mapped += 1; i = end; continue;
+        }
+        const tlData = parseTimelineData(tokens, i, end, t);
+        if (tlData) {
+          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
+          mapped += 1; i = end; continue;
+        }
+        if (looksLikeSteps(t)) suggested.add('steps');
+        if (looksLikeTimeline(t)) suggested.add('timeline');
         // descend: its children become blocks (the wrapper itself is dropped).
         // A grid/flex wrapper with several children hints at a columns layout.
         const before = sink.length;
@@ -933,6 +1139,8 @@ module.exports = {
   parseVideoData,
   parseAudioData,
   parseTableData,
+  parseStepsData,
+  parseTimelineData,
   parseDetailsRun,
   mapsAddressOf,
   detectCardCluster,
