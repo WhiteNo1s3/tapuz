@@ -361,6 +361,71 @@ async function checkRejects(name, fn) {
     ownPricing.blocks.some((b) => b.type === 'pricing' && b.data.items.length === 2
       && b.data.items[0].title === 'א'));
 
+  const classedStats = htmlToBlocks(
+    '<section class="stats">'
+    + '<div class="stat"><div class="stat-value">120+</div><div class="stat-label">לקוחות</div></div>'
+    + '<div class="stat"><div class="stat-value">15</div><div class="stat-label">שנים</div></div>'
+    + '<div class="stat"><div class="stat-value">98%</div><div class="stat-label">שביעות רצון</div></div>'
+    + '</section>'
+  );
+  const st = classedStats.blocks.find((b) => b.type === 'stats');
+  check('classed .stats → stats (value + label kept)',
+    !!st && st.data.items.length === 3 && st.data.items[0].value === '120+'
+    && st.data.items[2].label === 'שביעות רצון');
+
+  const counters = htmlToBlocks(
+    '<div class="counters">'
+    + '<div><h3>10K</h3><p>Users</p></div>'
+    + '<div><h3>4.9</h3><p>Rating</p></div>'
+    + '</div>'
+  );
+  check('classed .counters heading+p → stats',
+    counters.blocks.some((b) => b.type === 'stats' && b.data.items[0].value === '10K'
+      && b.data.items[1].label === 'Rating'));
+
+  const emptyStats = htmlToBlocks('<section class="stats"><p>coming soon</p></section>');
+  check('classed stats without numbers flattens AND reports stats toolGap',
+    !emptyStats.blocks.some((b) => b.type === 'stats') && emptyStats.suggestedTools.includes('stats'));
+
+  const ownStats = htmlToBlocks(renderBlock({
+    type: 'stats', id: 's', data: { columns: 3, items: [{ value: '9', label: 'A' }, { value: '8', label: 'B' }] }
+  }, 'rtl'));
+  check('our own stats-row HTML maps back to stats',
+    ownStats.blocks.some((b) => b.type === 'stats' && b.data.items.length === 2 && b.data.items[0].value === '9'));
+
+  const classedLogos = htmlToBlocks(
+    '<div class="logos">'
+    + '<img src="/a.svg" alt="Alpha">'
+    + '<a href="https://b.example"><img src="/b.svg" alt="Beta"></a>'
+    + '<div class="logo-cell"><img src="/c.svg" alt="Gamma"></div>'
+    + '</div>'
+  );
+  const lg = classedLogos.blocks.find((b) => b.type === 'logos');
+  check('classed .logos → logos (src, alt, optional url)',
+    !!lg && lg.data.items.length === 3 && lg.data.items[0].src === '/a.svg'
+    && lg.data.items[1].url === 'https://b.example' && lg.data.items[2].alt === 'Gamma');
+
+  const clients = htmlToBlocks(
+    '<ul class="clients">'
+    + '<li><img src="/c1.png" alt="One"></li>'
+    + '<li><img src="/c2.png" alt="Two"></li>'
+    + '</ul>'
+  );
+  check('classed .clients list → logos',
+    clients.blocks.some((b) => b.type === 'logos' && b.data.items.length === 2
+      && b.data.items[0].src === '/c1.png'));
+
+  const emptyLogos = htmlToBlocks('<div class="brands"><p>no marks yet</p></div>');
+  check('classed brands without images flattens AND reports logos toolGap',
+    !emptyLogos.blocks.some((b) => b.type === 'logos') && emptyLogos.suggestedTools.includes('logos'));
+
+  const ownLogos = htmlToBlocks(renderBlock({
+    type: 'logos', id: 'l', data: { items: [{ src: '/x.svg', alt: 'X' }, { src: '/y.svg', alt: 'Y', url: '/y' }] }
+  }, 'rtl'));
+  check('our own logos-strip HTML maps back to logos',
+    ownLogos.blocks.some((b) => b.type === 'logos' && b.data.items.length === 2
+      && b.data.items[1].url === '/y'));
+
   console.log('');
   console.log(fail ? 'SMOKE DECOMPILE: FAIL' : 'SMOKE DECOMPILE: PASS');
   process.exit(fail ? 1 : 0);

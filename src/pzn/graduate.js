@@ -736,7 +736,10 @@ const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list)\b/i;
 const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|bent-tabs|\btabs\b)\b/i;
 const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
 const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
+const STATS_CLASS = /\b(?:stats|counters?|metrics|kpis?|bent-stats|stats-row|numbers-row|stat-cells?)\b/i;
+const LOGOS_CLASS = /\b(?:logos?|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos)\b/i;
 const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
+const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
 
 function looksLikePricing(t) { return PRICING_CLASS.test(hintHay(t)); }
 function looksLikeCarousel(t) { return CAROUSEL_CLASS.test(hintHay(t)) || /^swiper/i.test((t && t.name) || ''); }
@@ -749,6 +752,8 @@ function looksLikeCrumbs(t) {
   const aria = (t.attrs && t.attrs['aria-label']) || '';
   return /breadcrumb/i.test(aria);
 }
+function looksLikeStats(t) { return STATS_CLASS.test(hintHay(t)); }
+function looksLikeLogos(t) { return LOGOS_CLASS.test(hintHay(t)); }
 
 /**
  * A class/tag that names a module we speak — or a landmark we refuse to
@@ -768,6 +773,8 @@ function guessedTool(t) {
   if (looksLikePricing(t)) return 'pricing';
   if (looksLikeHero(t)) return 'hero';
   if (looksLikeCrumbs(t)) return 'crumbs';
+  if (looksLikeStats(t)) return 'stats';
+  if (looksLikeLogos(t)) return 'logos';
   if (/\b(?:product|shop-item|woocommerce|product-card)\b/i.test(hay)) return 'cards';
   return null;
 }
@@ -1230,9 +1237,114 @@ function parseCrumbsData(tokens, i, end, t) {
   return items.length >= 2 ? { items } : null;
 }
 
+function extractStat(tokens, s, e) {
+  let value = '';
+  let label = '';
+  for (let j = s; j < e; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (!value && /stat-value|counter-number|count-number|metric-value|kpi-value|\bnumber\b|\bcount\b/i.test(tcls)) {
+      value = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      j = close - 1;
+      continue;
+    }
+    if (!label && /stat-label|counter-label|metric-label|kpi-label|\bcaption\b/i.test(tcls)) {
+      label = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      j = close - 1;
+      continue;
+    }
+    if (!value && HEADING.test(tk.name)) {
+      const txt = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      if (STAT_VALUE_RE.test(txt)) value = txt;
+      else if (!label) label = txt;
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p' || tk.name === 'span' || tk.name === 'strong') {
+      const txt = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      if (!value && STAT_VALUE_RE.test(txt) && txt.length <= 16) value = txt;
+      else if (!label && txt && !STAT_VALUE_RE.test(txt)) label = txt;
+      j = close - 1;
+    }
+  }
+  if (!value) {
+    const all = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+    const m = STAT_VALUE_RE.exec(all);
+    if (m) {
+      value = m[1].trim();
+      const rest = all.replace(m[1], '').replace(/\s+/g, ' ').trim();
+      if (!label) label = rest;
+    }
+  }
+  if (!value) return null;
+  return { value, label };
+}
+
+function parseStatsData(tokens, i, end, t) {
+  if (!looksLikeStats(t)) return null;
+  const items = [];
+  for (const [s, e] of childSpans(tokens, i + 1, end - 1)) {
+    const name = tokens[s].name;
+    if (!CONTAINERS.has(name) && name !== 'li') continue;
+    const stat = extractStat(tokens, s, e);
+    if (stat) items.push(stat);
+  }
+  if (items.length < 2) return null;
+  const columns = Math.min(Math.max(items.length, 2), 4);
+  return { items, columns };
+}
+
+function extractLogo(tokens, s, e) {
+  let src = '';
+  let alt = '';
+  let url = '';
+  const root = tokens[s];
+  if (root && root.name === 'a' && root.attrs && root.attrs.href) url = root.attrs.href;
+  for (let j = s; j < e; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (!src && (tk.name === 'img' || tk.name === 'source')) {
+      src = imageSrcOf(tk.attrs);
+      alt = (tk.attrs && tk.attrs.alt) || alt;
+    }
+    if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href) url = tk.attrs.href;
+  }
+  if (!src) return null;
+  const out = { src };
+  if (alt) out.alt = alt;
+  if (url && url !== '#') out.url = url;
+  return out;
+}
+
+function parseLogosData(tokens, i, end, t) {
+  if (!looksLikeLogos(t)) return null;
+  let from = i + 1;
+  let to = end - 1;
+  const kids = childSpans(tokens, from, to);
+  if (kids.length === 1 && /list|strip|track|row|inner|wrap/i.test(classHay(tokens[kids[0][0]]))) {
+    from = kids[0][0] + 1;
+    to = kids[0][1] - 1;
+  }
+  const items = [];
+  for (const [s, e] of childSpans(tokens, from, to)) {
+    const name = tokens[s].name;
+    if (name === 'img' || name === 'a' || name === 'li' || name === 'figure' || CONTAINERS.has(name)) {
+      const logo = extractLogo(tokens, s, e);
+      if (logo) items.push(logo);
+    }
+  }
+  return items.length >= 2 ? { items } : null;
+}
+
 function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   const crumbs = parseCrumbsData(tokens, i, end, t);
   if (crumbs) return { type: 'crumbs', data: crumbs, next: end };
+  const stats = parseStatsData(tokens, i, end, t);
+  if (stats) return { type: 'stats', data: stats, next: end };
+  const logos = parseLogosData(tokens, i, end, t);
+  if (logos) return { type: 'logos', data: logos, next: end };
   const pricing = parsePricingData(tokens, i, end, t);
   if (pricing) return { type: 'pricing', data: pricing, next: end };
   const carousel = parseCarouselData(tokens, i, end, t, bgMap);
@@ -1694,6 +1806,8 @@ module.exports = {
   parseTabsData,
   parseHeroData,
   parseCrumbsData,
+  parseStatsData,
+  parseLogosData,
   tryStructuralModules,
   guessedTool,
   parseDetailsRun,

@@ -164,6 +164,25 @@ const huntBgHero = huntBlocks(
 check('hunt: CSS background-image hero keeps the picture',
   !!firstOf(huntBgHero, 'hero') && firstOf(huntBgHero, 'hero').data.image === '/bg-hero.jpg');
 
+const huntStats = huntBlocks(
+  '<section class="metrics">'
+  + '<div><span class="stat-value">50</span><span class="stat-label">Projects</span></div>'
+  + '<div><span class="stat-value">12</span><span class="stat-label">Cities</span></div>'
+  + '</section>'
+);
+check('hunt: classed metrics → stats',
+  !!firstOf(huntStats, 'stats') && firstOf(huntStats, 'stats').data.items[1].label === 'Cities');
+
+const huntLogos = huntBlocks(
+  '<div class="brands"><img src="/p.svg" alt="P"><img src="/q.svg" alt="Q"></div>'
+);
+check('hunt: classed brands → logos',
+  !!firstOf(huntLogos, 'logos') && firstOf(huntLogos, 'logos').data.items.length === 2);
+
+const huntEmptyStats = huntBlocks('<div class="counters"><em>soon</em></div>');
+check('hunt: empty counters still reports stats toolGap',
+  !firstOf(huntEmptyStats, 'stats') && huntEmptyStats.suggestedTools.includes('stats'));
+
 console.log('');
 console.log(fail ? 'SMOKE HUNT: FAIL' : 'SMOKE HUNT: PASS');
 process.exit(fail ? 1 : 0);

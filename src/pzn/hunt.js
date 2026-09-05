@@ -74,6 +74,8 @@ const ROLE_FROM_CLASS = [
   [/nav-tabs|tab-content|\btabs\b/i, 'tabs'],
   [/breadcrumbs?|bent-crumbs/i, 'crumbs'],
   [/pricing|price-table|bent-pricing/i, 'pricing'],
+  [/\b(?:stats|counters?|metrics|kpis?|stats-row)\b/i, 'stats'],
+  [/\b(?:logos?|logo-strip|clients|brands|partners|logos-strip)\b/i, 'logos'],
   [/main|content|primary|article-body|post-content/i, 'main'],
   [/card|tile|teaser|cube/i, 'card'],
   [/cta|call-to-action|promo/i, 'cta']
@@ -174,7 +176,9 @@ function isEmptyBlock(b) {
     case 'carousel':
     case 'faq':
     case 'tabs':
-    case 'crumbs': return !(d.items || []).length;
+    case 'crumbs':
+    case 'stats':
+    case 'logos': return !(d.items || []).length;
     default: return false;
   }
 }
