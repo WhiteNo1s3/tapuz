@@ -50,6 +50,7 @@ const {
   parseDetailsRun,
   parseTimelineData,
   parseFaqData,
+  parseCrumbsData,
   tryStructuralModules,
   guessedTool,
   mapsAddressOf
@@ -62,6 +63,7 @@ const ROLE_FROM_CLASS = [
   [/sidebar|aside|\brail\b/i, 'sidebar'],
   [/footer|site-footer|page-footer/i, 'footer'],
   [/header|site-header|page-header|topbar|navbar|nav-bar/i, 'header'],
+  [/breadcrumbs?|bent-crumbs/i, 'crumbs'],
   [/\bnav\b|menu|menubar/i, 'nav'],
   [/swiper|slick|owl-carousel|bent-carousel/i, 'carousel'],
   [/gallery|carousel|slider/i, 'gallery'],
@@ -70,6 +72,7 @@ const ROLE_FROM_CLASS = [
   [/timeline|milestones?|chrono/i, 'timeline'],
   [/\bfaqs?\b|frequently-asked/i, 'faq'],
   [/nav-tabs|tab-content|\btabs\b/i, 'tabs'],
+  [/breadcrumbs?|bent-crumbs/i, 'crumbs'],
   [/pricing|price-table|bent-pricing/i, 'pricing'],
   [/main|content|primary|article-body|post-content/i, 'main'],
   [/card|tile|teaser|cube/i, 'card'],
@@ -170,7 +173,8 @@ function isEmptyBlock(b) {
     case 'pricing':
     case 'carousel':
     case 'faq':
-    case 'tabs': return !(d.items || []).length;
+    case 'tabs':
+    case 'crumbs': return !(d.items || []).length;
     default: return false;
   }
 }
@@ -450,6 +454,12 @@ function huntBlocks(html, opts = {}) {
         i = end; continue;
       }
       if (name === 'nav') {
+        const crumbNav = parseCrumbsData(tokens, i, end, t);
+        if (crumbNav) {
+          sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
+          mapped += 1; i = end; continue;
+        }
+        if (guessedTool(t) === 'crumbs') suggested.add('crumbs');
         rolesSeen.add('nav');
         const items = parseNavItems(tokens, i, end);
         if (items.length) {

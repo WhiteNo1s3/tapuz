@@ -735,6 +735,7 @@ const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|owl-carousel|splide|keen-sl
 const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list)\b/i;
 const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|bent-tabs|\btabs\b)\b/i;
 const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
+const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
 const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
 
 function looksLikePricing(t) { return PRICING_CLASS.test(hintHay(t)); }
@@ -742,6 +743,12 @@ function looksLikeCarousel(t) { return CAROUSEL_CLASS.test(hintHay(t)) || /^swip
 function looksLikeFaq(t) { return FAQ_CLASS.test(hintHay(t)); }
 function looksLikeTabs(t) { return TABS_CLASS.test(hintHay(t)); }
 function looksLikeHero(t) { return HERO_CLASS.test(hintHay(t)); }
+function looksLikeCrumbs(t) {
+  if (!t) return false;
+  if (CRUMBS_CLASS.test(hintHay(t))) return true;
+  const aria = (t.attrs && t.attrs['aria-label']) || '';
+  return /breadcrumb/i.test(aria);
+}
 
 /**
  * A class/tag that names a module we speak — or a landmark we refuse to
@@ -760,6 +767,7 @@ function guessedTool(t) {
   if (looksLikeFaq(t)) return 'faq';
   if (looksLikePricing(t)) return 'pricing';
   if (looksLikeHero(t)) return 'hero';
+  if (looksLikeCrumbs(t)) return 'crumbs';
   if (/\b(?:product|shop-item|woocommerce|product-card)\b/i.test(hay)) return 'cards';
   return null;
 }
@@ -1172,7 +1180,59 @@ function parseHeroData(tokens, i, end, t, bgMap) {
  * (Bootstrap tab-content after nav-tabs).
  * @returns {{ type: string, data: object, next: number } | null}
  */
+function extractCrumb(tokens, s, e) {
+  let label = '';
+  let url = '';
+  const root = tokens[s];
+  if (root && root.name === 'a') {
+    url = (root.attrs && root.attrs.href) || '';
+    label = unescapeHtml(textOf(tokens, s + 1, e - 1)).trim();
+  } else {
+    for (let j = s + 1; j < e - 1; j++) {
+      const tk = tokens[j];
+      if (tk.kind !== 'open') continue;
+      const close = matchClose(tokens, j);
+      if (tk.name === 'a') {
+        url = (tk.attrs && tk.attrs.href) || '';
+        label = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+        break;
+      }
+    }
+    if (!label) label = unescapeHtml(textOf(tokens, s + 1, e - 1)).trim();
+  }
+  if (!label) return null;
+  const out = { label };
+  if (url && url !== '#') out.url = url;
+  return out;
+}
+
+function parseCrumbsData(tokens, i, end, t) {
+  if (!looksLikeCrumbs(t)) return null;
+  const items = [];
+  function collect(from, to) {
+    for (let j = from; j < to; j++) {
+      const tk = tokens[j];
+      if (tk.kind !== 'open') continue;
+      const e = matchClose(tokens, j);
+      if (tk.name === 'ol' || tk.name === 'ul') {
+        collect(j + 1, e - 1);
+        j = e - 1;
+        continue;
+      }
+      if (tk.name === 'li' || tk.name === 'a' || tk.name === 'span') {
+        const item = extractCrumb(tokens, j, e);
+        if (item && !/^[/\u203A>»·•]+$/.test(item.label)) items.push(item);
+        j = e - 1;
+      }
+    }
+  }
+  collect(i + 1, end - 1);
+  return items.length >= 2 ? { items } : null;
+}
+
 function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
+  const crumbs = parseCrumbsData(tokens, i, end, t);
+  if (crumbs) return { type: 'crumbs', data: crumbs, next: end };
   const pricing = parsePricingData(tokens, i, end, t);
   if (pricing) return { type: 'pricing', data: pricing, next: end };
   const carousel = parseCarouselData(tokens, i, end, t, bgMap);
@@ -1480,6 +1540,12 @@ function htmlToBlocks(html, opts = {}) {
       // nav → the nav module (v0.60 closed this gap). Its <a> children become
       // nav links; drop wrapper <ul>/<li> (we read the anchors directly).
       if (name === 'nav') {
+        const crumbNav = parseCrumbsData(tokens, i, end, t);
+        if (crumbNav) {
+          sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
+          mapped += 1; i = end; continue;
+        }
+        if (looksLikeCrumbs(t)) suggested.add('crumbs');
         const items = parseNavItems(tokens, i, end);
         if (items.length) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items } });
@@ -1627,6 +1693,7 @@ module.exports = {
   parseFaqData,
   parseTabsData,
   parseHeroData,
+  parseCrumbsData,
   tryStructuralModules,
   guessedTool,
   parseDetailsRun,

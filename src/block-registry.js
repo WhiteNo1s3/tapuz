@@ -1164,6 +1164,34 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'crumbs',
+    keyword: 'CRUMBS',
+    labelHe: 'פירורי לחם',
+    icon: '›',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'נתיב הדף — בית › מדור › כאן',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'פירורים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
+          { name: 'url', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי CRUMB — האחרון הוא הדף הנוכחי'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { label: 'בית', url: '/' },
+        { label: 'מאמרים', url: '/articles' },
+        { label: 'הדף הזה' }
+      ]
+    }
+  },
+  {
     type: 'nav',
     keyword: 'NAV',
     labelHe: 'תפריט ניווט',

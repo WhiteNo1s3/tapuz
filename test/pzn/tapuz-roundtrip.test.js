@@ -189,6 +189,14 @@ const CASES = {
       { title: 'בונים', text: 'מודולים על הקנבס.' }
     ] }
   },
+  crumbs: {
+    type: 'crumbs', id: 'crm1',
+    data: { items: [
+      { label: 'בית', url: '/' },
+      { label: 'מאמרים', url: '/articles' },
+      { label: 'הדף הזה' }
+    ] }
+  },
   timeline: {
     type: 'timeline', id: 'tl1',
     data: { items: [

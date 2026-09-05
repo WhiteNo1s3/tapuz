@@ -301,6 +301,15 @@ function blockToModule(block) {
       return createModule('steps', baseOpts(block, {}, { children }));
     }
 
+    case 'crumbs': {
+      const children = (data.items || []).map((it) =>
+        createModule('crumb', {
+          props: pickProps(it || {}, ['label', 'url'])
+        })
+      );
+      return createModule('crumbs', baseOpts(block, {}, { children }));
+    }
+
     case 'timeline': {
       const children = (data.items || []).map((it) =>
         createModule('event', {
@@ -660,6 +669,18 @@ function moduleToBlock(node) {
           return item;
         });
       return finishBlock(node, 'steps', data);
+    }
+
+    case 'crumbs': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'crumb')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['label', 'url']);
+          if (!item.url) delete item.url;
+          return item;
+        });
+      return finishBlock(node, 'crumbs', data);
     }
 
     case 'timeline': {

@@ -855,6 +855,30 @@ button:focus-visible,
   .bent-plan-highlighted { transform: none; }
 }
 
+/* ── Breadcrumbs — CSS separators, RTL logical, last crumb is the page ── */
+.bent-crumbs { margin: 0.75rem 0 1.25rem; }
+.bent-crumbs-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.9rem;
+  color: var(--muted, #57534e);
+}
+.bent-crumb { display: inline-flex; align-items: center; }
+.bent-crumb + .bent-crumb::before {
+  content: "/";
+  margin-inline: 0.45rem 0.5rem;
+  color: #a8a29e;
+  pointer-events: none;
+}
+.bent-crumb-link { color: var(--accent, #ea580c); text-decoration: none; }
+.bent-crumb-link:hover { text-decoration: underline; }
+.bent-crumb-current { color: inherit; font-weight: 600; }
+
 /* ── Steps (how-it-works) — CSS counters, stacks on a narrow viewport ── */
 .bent-steps {
   display: grid;

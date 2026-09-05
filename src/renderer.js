@@ -492,6 +492,9 @@ function renderBlock(block, direction = 'rtl') {
       // how-it-works numbered process (module-hunt gap) — CSS counters, zero JS
       return require('./pzn/steps-html').renderStepsFromData(block.data || {}, direction, extra);
 
+    case 'crumbs':
+      return require('./pzn/crumbs-html').renderCrumbsFromData(block.data || {}, direction, extra);
+
     case 'timeline':
       // company-history rail (module-hunt gap) — CSS line + dots, zero JS
       return require('./pzn/timeline-html').renderTimelineFromData(block.data || {}, direction, extra);

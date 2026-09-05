@@ -52,6 +52,7 @@ const ALIASES = {
   metric: 'stat', number: 'stat', counter: 'stat', kpi: 'stat',
   metrics: 'stats', numbers: 'stats', counters: 'stats',
   process: 'steps', workflow: 'steps', stepper: 'steps', 'how-it-works': 'steps',
+  breadcrumb: 'crumbs', breadcrumbs: 'crumbs', crumb: 'crumb', trail: 'crumbs',
   milestone: 'event', milestones: 'timeline', history: 'timeline', chrono: 'timeline',
   review: 'testimonial', testimonials: 'testimonial',
   'logo-wall': 'logos', clients: 'logos', brands: 'logos', 'logo-cloud': 'logos',

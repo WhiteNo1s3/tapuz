@@ -1808,6 +1808,51 @@ register({
   }
 });
 
+// ─── Breadcrumbs (copy-this-site chrome that was flattening into nav) ───
+register({
+  name: 'crumb',
+  tag: 'bent-crumb',
+  category: 'layout',
+  label: { he: 'פירור', en: 'Crumb' },
+  icon: 'crumb',
+  container: false,
+  props: {
+    label: { type: 'string', default: '', label: { he: 'טקסט', en: 'Label' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../crumbs-html').renderCrumb(node.props || {}, !((node.props && node.props.url)));
+  }
+});
+
+register({
+  name: 'crumbs',
+  tag: 'bent-crumbs',
+  category: 'layout',
+  label: { he: 'פירורי לחם', en: 'Breadcrumbs' },
+  icon: 'crumbs',
+  container: true,
+  accept: ['crumb'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const kids = node.children || [];
+    const inner = kids.map((c, idx) => {
+      if (c.name !== 'crumb') return compileChild(c, ctx);
+      const current = idx === kids.length - 1 || !(c.props && c.props.url);
+      return require('../crumbs-html').renderCrumb(c.props || {}, current);
+    }).join('');
+    return require('../crumbs-html').renderCrumbs(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 module.exports = {
   register,
   ANIMATE_VALUES,

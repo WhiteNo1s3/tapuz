@@ -458,6 +458,20 @@ const KEYWORDS = {
       image: { type: 'string' }
     }
   },
+  CRUMBS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'crumbs',
+    children: ['CRUMB'],
+    params: {}
+  },
+  CRUMB: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'CRUMBS',
+    params: {
+      url: { type: 'string' }
+    }
+  },
   NAV: {
     body: 'BLOCK-BODY',
     jsonType: 'nav',

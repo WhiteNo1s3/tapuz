@@ -51,6 +51,7 @@
     { type: 'cta', label: 'CTA', hint: 'קריאה לפעולה', icon: '➤', group: 'תוכן', keyword: 'CTA' },
     { type: 'stats', label: 'מדדים', hint: 'מספרים', icon: '＃', group: 'תוכן', keyword: 'STATS' },
     { type: 'steps', label: 'שלבים', hint: 'איך זה עובד', icon: '①', group: 'מבנה', keyword: 'STEPS' },
+    { type: 'crumbs', label: 'פירורים', hint: 'נתיב הדף', icon: '›', group: 'מבנה', keyword: 'CRUMBS' },
     { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
     { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
@@ -2186,6 +2187,25 @@
             '</div>';
         }).join('') +
         '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'crumbs') {
+      var cItems = d.items || [];
+      var crumbs = cItems.length ? cItems : [
+        { label: 'בית', url: '/' },
+        { label: 'הדף הזה' }
+      ];
+      wrap.innerHTML =
+        '<ol class="preview-crumbs">' +
+        crumbs.map(function (it, idx) {
+          var last = idx === crumbs.length - 1;
+          return '<li class="preview-crumb">' +
+            (last || !it.url ? '<span>' + esc(it.label || 'כאן') + '</span>'
+              : '<a href="' + esc(it.url) + '">' + esc(it.label || '') + '</a>') +
+            '</li>';
+        }).join('') +
+        '</ol>';
       return wrap;
     }
 

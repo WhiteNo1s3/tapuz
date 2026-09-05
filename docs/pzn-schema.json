@@ -2352,6 +2352,63 @@
           "optional": true
         }
       }
+    },
+    "crumb": {
+      "tag": "bent-crumb",
+      "label": {
+        "he": "פירור",
+        "en": "Crumb"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "crumbs": {
+      "tag": "bent-crumbs",
+      "label": {
+        "he": "פירורי לחם",
+        "en": "Breadcrumbs"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "crumb"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     }
   }
 }

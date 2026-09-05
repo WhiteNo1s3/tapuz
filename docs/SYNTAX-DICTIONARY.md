@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (42)
+## Modules (43)
 
 ### תוכן
 
@@ -743,6 +743,23 @@ TIMELINE {
 ```
 
 ### מבנה
+
+#### `CRUMBS` → `crumbs`
+
+› **פירורי לחם** — נתיב הדף — בית › מדור › כאן
+
+Shape: `CRUMBS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+CRUMBS {
+  …
+}
+```
 
 #### `NAV` → `nav`
 

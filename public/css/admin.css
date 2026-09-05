@@ -2936,6 +2936,10 @@ body:not(.builder-screen) .bentml-status.warn { color: var(--warn); }
 .preview-plan-price { font-weight: 800; font-size: 1.1rem; color: #ea580c; margin: 4px 0; }
 .preview-plan-price small { font-weight: 500; font-size: 0.7rem; color: #94a3b8; }
 .preview-plan-features { list-style: none; padding: 0; margin: 6px 0 0; font-size: 0.78rem; color: #475569; display: grid; gap: 3px; }
+.preview-crumbs { display: flex; flex-wrap: wrap; gap: 0; list-style: none; margin: 0; padding: 4px 0; font-size: 0.78rem; color: #64748b; }
+.preview-crumb { display: inline-flex; align-items: center; }
+.preview-crumb + .preview-crumb::before { content: "/"; margin-inline: 6px; color: #cbd5e1; }
+.preview-crumb a { color: #ea580c; text-decoration: none; }
 .preview-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; counter-reset: preview-step; }
 .preview-step { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; text-align: center; }
 .preview-step-n { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 999px; background: #ea580c; color: #fff; font-size: 0.72rem; font-weight: 800; counter-increment: preview-step; }

@@ -550,6 +550,26 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('carousel', data);
     }
+    case 'CRUMBS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'CRUMB')
+        .map((c) => {
+          const item = { label: collapseSingleParagraph(c.text || '') };
+          const url = c.params && c.params.url;
+          if (url) item.url = url;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { label: 'בית', url: '/' },
+              { label: 'הדף' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('crumbs', data);
+    }
     case 'NAV': {
       const items = (node.children || [])
         .filter((c) => c.name === 'NAVITEM')
@@ -655,6 +675,7 @@ function buildBlock(node, warnings) {
     case 'PLAN':
     case 'STEP':
     case 'EVENT':
+    case 'CRUMB':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });
