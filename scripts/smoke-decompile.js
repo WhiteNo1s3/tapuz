@@ -271,6 +271,96 @@ async function checkRejects(name, fn) {
     && extras.blocks.some((b) => b.type === 'button' && b.data.text === 'הרשמה')
     && extras.blocks.filter((b) => b.type === 'button').length === 1);
 
+  // ── inbound maps + guessed-and-lost toolGap (never a silent flatten) ──
+  const swiper = htmlToBlocks(
+    '<div class="swiper"><div class="swiper-wrapper">'
+    + '<div class="swiper-slide"><img src="/a.jpg" alt=""><h3>שקופית א</h3></div>'
+    + '<div class="swiper-slide"><img src="/b.jpg" alt=""><h3>שקופית ב</h3></div>'
+    + '</div></div>'
+  );
+  check('Swiper → carousel (2 slides, pictures kept)',
+    swiper.blocks.some((b) => b.type === 'carousel' && (b.data.items || []).length === 2
+      && b.data.items[0].image === '/a.jpg' && b.data.items[0].title === 'שקופית א'));
+
+  const swiperEmpty = htmlToBlocks('<div class="swiper"><div class="swiper-wrapper"></div></div>');
+  check('empty Swiper flattens but still reports carousel toolGap',
+    !swiperEmpty.blocks.some((b) => b.type === 'carousel') && swiperEmpty.suggestedTools.includes('carousel'));
+
+  const bootTabs = htmlToBlocks(
+    '<ul class="nav nav-tabs">'
+    + '<li><a href="#one">אחד</a></li><li><a href="#two">שניים</a></li>'
+    + '</ul>'
+    + '<div class="tab-content">'
+    + '<div class="tab-pane" id="one"><p>תוכן אחד</p></div>'
+    + '<div class="tab-pane" id="two"><p>תוכן שניים</p></div>'
+    + '</div>'
+  );
+  const bootTab = bootTabs.blocks.find((b) => b.type === 'tabs');
+  check('Bootstrap tabs → tabs module (labels + pane text)',
+    !!bootTab && bootTab.data.items.length === 2 && bootTab.data.items[0].label === 'אחד'
+    && /תוכן אחד/.test(bootTab.data.items[0].content));
+
+  const classedFaq = htmlToBlocks(
+    '<section class="faq">'
+    + '<div class="faq-item"><h3>איך מתחילים?</h3><p>יוצרים אתר.</p></div>'
+    + '<div class="faq-item"><h3>כמה זה עולה?</h3><p>חינם.</p></div>'
+    + '</section>'
+  );
+  const faqB = classedFaq.blocks.find((b) => b.type === 'faq');
+  check('classed FAQ heading+p → faq module',
+    !!faqB && faqB.data.items.length === 2 && faqB.data.items[0].question === 'איך מתחילים?'
+    && faqB.data.items[1].answer === 'חינם.');
+
+  const faqDl = htmlToBlocks(
+    '<dl class="faq"><dt>שאלה א</dt><dd>תשובה א</dd><dt>שאלה ב</dt><dd>תשובה ב</dd></dl>'
+  );
+  check('classed <dl class="faq"> → faq, not a timeline',
+    faqDl.blocks.some((b) => b.type === 'faq' && b.data.items[0].question === 'שאלה א')
+    && !faqDl.blocks.some((b) => b.type === 'timeline'));
+
+  const pricingHtml = htmlToBlocks(
+    '<div class="pricing">'
+    + '<article class="plan"><h3>בסיסי</h3><span class="price">$9</span>'
+    + '<ul class="features"><li>אחת</li><li>שתיים</li></ul><a href="/s">התחילו</a></article>'
+    + '<article class="plan featured"><h3>פרו</h3><span class="price">$29/mo</span>'
+    + '<ul class="features"><li>הכל</li></ul><a href="/p">קדימה</a></article>'
+    + '</div>'
+  );
+  const pr = pricingHtml.blocks.find((b) => b.type === 'pricing');
+  check('classed pricing HTML → pricing (title, price, features, cta, highlight)',
+    !!pr && pr.data.items.length === 2 && pr.data.items[0].title === 'בסיסי'
+    && pr.data.items[0].price === '$9' && /אחת/.test(pr.data.items[0].features)
+    && pr.data.items[0].ctaUrl === '/s' && pr.data.items[1].highlighted === true);
+
+  const bgHero = htmlToBlocks(
+    '<section class="hero" style="background-image:url(/hero.jpg)">'
+    + '<h1>ברוכים הבאים</h1><p>הסטודיו</p><a href="/go">קדימה</a>'
+    + '</section>'
+  );
+  check('hero with CSS background-image keeps the picture',
+    bgHero.blocks.some((b) => b.type === 'hero' && b.data.title === 'ברוכים הבאים'
+      && b.data.image === '/hero.jpg' && b.data.buttonUrl === '/go'));
+
+  const bloatedHero = htmlToBlocks(
+    '<div class="hero">'
+    + [1, 2, 3, 4, 5, 6].map((n) => '<h2>סעיף ' + n + '</h2><p>תוכן ' + n + '</p>').join('')
+    + '</div>'
+  );
+  check('page-sized hero-classed wrapper flattens AND reports hero toolGap',
+    !bloatedHero.blocks.some((b) => b.type === 'hero')
+    && bloatedHero.suggestedTools.includes('hero')
+    && bloatedHero.blocks.filter((b) => b.type === 'heading').length >= 2);
+
+  const ownPricing = htmlToBlocks(require('../src/pzn/pricing-html').renderPricingFromData({
+    items: [
+      { title: 'א', price: '10', features: 'x', ctaLabel: 'קנו', ctaUrl: '/a' },
+      { title: 'ב', price: '20', features: 'y', highlighted: true }
+    ]
+  }, 'rtl'));
+  check('our own bent-pricing HTML maps back to pricing',
+    ownPricing.blocks.some((b) => b.type === 'pricing' && b.data.items.length === 2
+      && b.data.items[0].title === 'א'));
+
   console.log('');
   console.log(fail ? 'SMOKE DECOMPILE: FAIL' : 'SMOKE DECOMPILE: PASS');
   process.exit(fail ? 1 : 0);

@@ -69,6 +69,8 @@ const bigHero = huntBlocks('<div class="hero">' +
   [1, 2, 3, 4, 5, 6].map((n) => '<h2>סעיף ' + n + '</h2><p>תוכן ' + n + '</p>').join('') + '</div>');
 check('a page-sized hero-classed wrapper descends (shape test declines)',
   !firstOf(bigHero, 'hero') && bigHero.blocks.filter((b) => b.type === 'heading').length >= 2);
+check('the declined hero still reports hero on toolGap (not a silent flatten)',
+  bigHero.suggestedTools.includes('hero'));
 
 // ── responsive twins dedupe ──────────────────────────────────────────
 const twins = huntBlocks(`
@@ -131,6 +133,36 @@ const bentml = require('../src/bentml');
 const compiled = bentml.compile('BENTML 0.2\n\nMETA {\n  title: "t"\n}\n\nROW(ratio: "70%:30%") {\n  COL {\n    TEXT { a }\n  }\n  COL {\n    TEXT { b }\n  }\n}\n');
 const rowBlock = compiled.blocks.find((b) => b.type === 'columns');
 check('BenTML accepts ratio "70%:30%" and normalizes to 70:30', !!rowBlock && rowBlock.data.ratio === '70:30');
+
+const huntSwiper = huntBlocks(
+  '<div class="swiper"><div class="swiper-wrapper">'
+  + '<div class="swiper-slide"><img src="/s1.jpg"><h3>A</h3></div>'
+  + '<div class="swiper-slide"><img src="/s2.jpg"><h3>B</h3></div>'
+  + '</div></div>'
+);
+check('hunt: Swiper → carousel',
+  !!firstOf(huntSwiper, 'carousel') && firstOf(huntSwiper, 'carousel').data.items.length === 2);
+
+const huntFaq = huntBlocks(
+  '<section class="faq"><h3>Q1</h3><p>A1</p><h3>Q2</h3><p>A2</p></section>'
+);
+check('hunt: classed FAQ heading+p → faq',
+  !!firstOf(huntFaq, 'faq') && firstOf(huntFaq, 'faq').data.items[0].question === 'Q1');
+
+const huntPrice = huntBlocks(
+  '<div class="pricing">'
+  + '<div><h3>Basic</h3><span class="price">$10</span></div>'
+  + '<div><h3>Pro</h3><span class="price">$20</span></div>'
+  + '</div>'
+);
+check('hunt: classed pricing → pricing',
+  !!firstOf(huntPrice, 'pricing') && firstOf(huntPrice, 'pricing').data.items[1].title === 'Pro');
+
+const huntBgHero = huntBlocks(
+  '<section class="hero" style="background-image:url(/bg-hero.jpg)"><h1>Hi</h1><p>There</p></section>'
+);
+check('hunt: CSS background-image hero keeps the picture',
+  !!firstOf(huntBgHero, 'hero') && firstOf(huntBgHero, 'hero').data.image === '/bg-hero.jpg');
 
 console.log('');
 console.log(fail ? 'SMOKE HUNT: FAIL' : 'SMOKE HUNT: PASS');
