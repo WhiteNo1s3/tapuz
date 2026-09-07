@@ -216,9 +216,16 @@ function extractCard(tokens, from, to, bgMap) {
     if (!card.image && (tk.name === 'img' || tk.name === 'source')) {
       // real sites lazy-load: the true URL hides in data-src/srcset
       card.image = imageSrcOf(tk.attrs);
-    } else if (!card.title && HEADING.test(tk.name)) {
+    } else if (!card.title && (HEADING.test(tk.name)
+      || /(?:^|\s)(?:title|headline|arttitle|slot-?title|item-title|card-title|teaser-title)(?:\s|$)/i.test((tk.attrs && tk.attrs.class) || ''))) {
       const e = matchClose(tokens, j);
-      card.title = unescapeHtml(textOf(tokens, j + 1, e - 1)).slice(0, 200);
+      const title = unescapeHtml(textOf(tokens, j + 1, e - 1)).replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (title) card.title = title;
+      j = e - 1;
+    } else if (!card.excerpt && tk.name === 'time') {
+      const e = matchClose(tokens, j);
+      const when = timeText(tokens, j, e, tk);
+      if (when) card.excerpt = when;
       j = e - 1;
     } else if (!card.href && tk.name === 'a' && tk.attrs && tk.attrs.href) {
       card.href = tk.attrs.href;
@@ -401,9 +408,13 @@ function collectLinkRun(tokens, i, to) {
 
 /** <form> children → form-module fields (skips submit/hidden controls). */
 function parseFormFields(tokens, i, end) {
+  return collectFormFields(tokens, i + 1, end - 1);
+}
+
+function collectFormFields(tokens, from, to) {
   const fields = [];
   let pendingLabel = '';
-  for (let j = i + 1; j < end - 1; j++) {
+  for (let j = from; j < to; j++) {
     const tk = tokens[j];
     if (tk.kind === 'open' && tk.name === 'label') {
       const lend = matchClose(tokens, j);
@@ -447,6 +458,57 @@ function parseFormFields(tokens, i, end) {
     }
   }
   return fields;
+}
+
+/**
+ * ASP.NET and many news CMSes wrap the WHOLE page in <form>. Hidden-only
+ * or page-sized forms must descend — dumping them as leftover html is how
+ * Globes lost 140KB of headlines. A small contact/search form still maps.
+ */
+function isPageForm(tokens, i, end, fields) {
+  let headings = 0;
+  let articles = 0;
+  let imgs = 0;
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (HEADING.test(tk.name)) headings += 1;
+    if (tk.name === 'article' || tk.name === 'section') articles += 1;
+    if (tk.name === 'img') imgs += 1;
+  }
+  if (headings >= 3 || articles >= 2 || imgs >= 4) return true;
+  return fields.length === 0;
+}
+
+/** Consecutive sibling label/input/textarea/select → one form, or null. */
+function parseFieldRun(tokens, i, parentEnd) {
+  let j = i;
+  let last = i;
+  while (j < parentEnd) {
+    const tk = tokens[j];
+    if (tk.kind === 'text' && !String(tk.value || '').trim()) { j += 1; continue; }
+    if (tk.kind === 'open' && /^(label|input|textarea|select)$/.test(tk.name)) {
+      const e = matchClose(tokens, j);
+      if (e == null) break;
+      last = e;
+      j = e;
+      continue;
+    }
+    break;
+  }
+  const fields = collectFormFields(tokens, i, last);
+  if (!fields.length) return null;
+  return { fields, next: last };
+}
+
+/** <time> body, else datetime/dateTime/data-wcmdate — never leftover chrome. */
+function timeText(tokens, i, end, t) {
+  const body = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+  if (body) return body;
+  const raw = (t.attrs && (t.attrs.datetime || t.attrs.dateTime || t.attrs['data-wcmdate'] || t.attrs['data-date'])) || '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw));
+  if (m) return `${Number(m[3])}.${Number(m[2])}.${m[1]}`;
+  return String(raw).trim();
 }
 
 /** <nav> anchors → nav-module items (wrapper ul/li dropped). */
@@ -1652,6 +1714,8 @@ function htmlToBlocks(html, opts = {}) {
       const end = matchClose(tokens, i);
 
       if (SKIP_TAGS.has(name)) { i = end; continue; }
+      // JS crumbs tokenized as tags (`<date2_end)`) are not HTML — skip, don't leftover
+      if (!/^[a-z][a-z0-9:-]*$/i.test(name)) { i += 1; continue; }
       if (INLINE.has(name)) { raw += textOf(tokens, i, end) + ' '; i = end; continue; }
 
       // pending raw becomes a block before we emit a real module: plain text →
@@ -1671,6 +1735,22 @@ function htmlToBlocks(html, opts = {}) {
       if (name === 'p') {
         sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(textOf(tokens, i + 1, end - 1)) } });
         mapped += 1; i = end; continue;
+      }
+      if (name === 'time') {
+        const when = timeText(tokens, i, end, t);
+        if (when) {
+          sink.push({ type: 'text', id: nid('t'), data: { content: when } });
+          mapped += 1;
+        }
+        i = end; continue;
+      }
+      if (name === 'input' || name === 'textarea' || name === 'select' || name === 'label') {
+        const run = parseFieldRun(tokens, i, to);
+        if (run) {
+          sink.push({ type: 'form', id: nid('form'), data: { action: '', method: 'post', submit: 'שליחה', fields: run.fields } });
+          mapped += 1; i = run.next; continue;
+        }
+        i = end; continue;
       }
       if (name === 'blockquote' || name === 'q' || name === 'cite') {
         const qt = unescapeHtml(textOf(tokens, i + 1, end - 1));
@@ -1811,22 +1891,24 @@ function htmlToBlocks(html, opts = {}) {
       // (the module renders its own submit button).
       if (name === 'form') {
         const fields = parseFormFields(tokens, i, end);
+        if (isPageForm(tokens, i, end, fields)) {
+          suggested.add('form');
+          walk(i + 1, end - 1, sink);
+          i = end; continue;
+        }
         if (fields.length) {
           const method = /get/i.test((t.attrs && t.attrs.method) || '') ? 'get' : 'post';
           sink.push({ type: 'form', id: nid('form'), data: { action: (t.attrs && t.attrs.action) || '', method, submit: 'שליחה', fields } });
           mapped += 1;
         } else {
           suggested.add('form');
-          let frag = '';
-          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
-          raw += frag;
         }
         i = end; continue;
       }
 
       // nav → the nav module (v0.60 closed this gap). Its <a> children become
       // nav links; drop wrapper <ul>/<li> (we read the anchors directly).
-      if (name === 'nav') {
+      if (name === 'nav' || name === 'menu') {
         const crumbNav = parseCrumbsData(tokens, i, end, t);
         if (crumbNav) {
           sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
@@ -1845,9 +1927,7 @@ function htmlToBlocks(html, opts = {}) {
           mapped += 1;
         } else {
           suggested.add('nav');
-          let frag = '';
-          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
-          raw += frag;
+          walk(i + 1, end - 1, sink);
         }
         i = end; continue;
       }
@@ -1975,6 +2055,9 @@ module.exports = {
   htmlToBlocks,
   // shared internals for the v2 structure hunt (src/pzn/hunt.js)
   parseFormFields,
+  isPageForm,
+  parseFieldRun,
+  timeText,
   parseNavItems,
   parseVideoData,
   parseAudioData,

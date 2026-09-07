@@ -25,6 +25,9 @@ const { tokenize } = require('./language/parse');
 const { unescapeHtml } = require('./language/escape');
 const {
   parseFormFields,
+  isPageForm,
+  parseFieldRun,
+  timeText,
   parseNavItems,
   parseVideoData,
   detectCardCluster,
@@ -299,6 +302,7 @@ function huntBlocks(html, opts = {}) {
       const end = matchClose(tokens, i);
 
       if (SKIP_TAGS.has(name)) { i = end; continue; }
+      if (!/^[a-z][a-z0-9:-]*$/i.test(name)) { i += 1; continue; }
       if (INLINE.has(name)) { raw += textOf(tokens, i, end) + ' '; i = end; continue; }
 
       if (raw.trim()) { flushRaw(raw, sink); raw = ''; }
@@ -311,6 +315,22 @@ function huntBlocks(html, opts = {}) {
       if (name === 'p') {
         sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(textOf(tokens, i + 1, end - 1)) } });
         mapped += 1; i = end; continue;
+      }
+      if (name === 'time') {
+        const when = timeText(tokens, i, end, t);
+        if (when) {
+          sink.push({ type: 'text', id: nid('t'), data: { content: when } });
+          mapped += 1;
+        }
+        i = end; continue;
+      }
+      if (name === 'input' || name === 'textarea' || name === 'select' || name === 'label') {
+        const run = parseFieldRun(tokens, i, to);
+        if (run) {
+          sink.push({ type: 'form', id: nid('form'), data: { action: '', method: 'post', submit: 'שליחה', fields: run.fields } });
+          mapped += 1; i = run.next; continue;
+        }
+        i = end; continue;
       }
       if (name === 'blockquote' || name === 'q' || name === 'cite') {
         const qt = unescapeHtml(textOf(tokens, i + 1, end - 1));
@@ -450,19 +470,21 @@ function huntBlocks(html, opts = {}) {
       }
       if (name === 'form') {
         const fields = parseFormFields(tokens, i, end);
+        if (isPageForm(tokens, i, end, fields)) {
+          suggested.add('form');
+          walk(i + 1, end - 1, depth + 1, ctx).forEach((b) => sink.push(b));
+          i = end; continue;
+        }
         if (fields.length) {
           const method = /get/i.test((t.attrs && t.attrs.method) || '') ? 'get' : 'post';
           sink.push({ type: 'form', id: nid('form'), data: { action: (t.attrs && t.attrs.action) || '', method, submit: 'שליחה', fields } });
           mapped += 1;
         } else {
           suggested.add('form');
-          let frag = '';
-          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
-          raw += frag;
         }
         i = end; continue;
       }
-      if (name === 'nav') {
+      if (name === 'nav' || name === 'menu') {
         const crumbNav = parseCrumbsData(tokens, i, end, t);
         if (crumbNav) {
           sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
@@ -482,6 +504,7 @@ function huntBlocks(html, opts = {}) {
           mapped += 1;
         } else {
           suggested.add('nav');
+          walk(i + 1, end - 1, depth + 1, ctx).forEach((b) => sink.push(b));
         }
         i = end; continue;
       }
