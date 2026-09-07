@@ -57,7 +57,8 @@ const {
   parseSocialData,
   tryStructuralModules,
   guessedTool,
-  mapsAddressOf
+  mapsAddressOf,
+  looksLikeCarousel
 } = require('./graduate');
 
 // ─── role inference (the lab's naming.js, trimmed to what Tapuz maps) ───
@@ -120,7 +121,19 @@ function colWeight(t) {
     const p = Number(w[1]);
     if (p >= 5 && p <= 95) return p / 100;
   }
+  const px = /(?:^|;)\s*width\s*:\s*(\d+(?:\.\d+)?)px/i.exec(style);
+  if (px) {
+    const n = Number(px[1]);
+    if (n >= 40) return n;
+  }
   return null;
+}
+
+function isLayoutRow(t) {
+  const cls = String((t.attrs && t.attrs.class) || '');
+  if (/layoutContainer/i.test(cls)) return true;
+  // bootstrap `.row` — not `tie-row` / `flex-row` magazine chrome
+  return /(?:^|\s)row(?:\s|$)/i.test(cls);
 }
 
 /** Weights → integer percentages that always sum to exactly 100. */
@@ -235,7 +248,12 @@ function huntBlocks(html, opts = {}) {
    * the wrapper says row/grid or the children carry width hints. Whitespace
    * between columns is fine; any other content breaks pure-row detection.
    */
-  function tryColumns(t, i, end, depth) {
+  function tryColumns(t, i, end, ctx) {
+    // One ROW on a walk path — nested columns inside a COL flatten so
+    // keyword BenTML stays inside E105 (depth 4) and card walls survive.
+    if ((ctx.columnNest || 0) >= 1) return null;
+    if (looksLikeCarousel(t)) return null;
+    if (detectCardCluster(tokens, i + 1, end - 1, bgMap)) return null;
     const spans = [];
     let j = i + 1;
     while (j < end - 1) {
@@ -246,21 +264,25 @@ function huntBlocks(html, opts = {}) {
         continue;
       }
       if (tk.kind !== 'open') { j++; continue; }
-      if (!CONTAINERS.has(tk.name)) return null;
       const e = matchClose(tokens, j);
+      if (SKIP_TAGS.has(tk.name) || HEADING.test(tk.name) || tk.name === 'p' || tk.name === 'button') {
+        j = e;
+        continue;
+      }
+      if (!CONTAINERS.has(tk.name)) return null;
       spans.push([j, e]);
       j = e;
     }
-    if (spans.length < 2 || spans.length > 4) return null;
+    if (spans.length < 2 || spans.length > 8) return null;
 
     const weights = spans.map(([s]) => colWeight(tokens[s]));
-    const rowHint = inferRole(t) === 'row';
+    const rowHint = isLayoutRow(t) || inferRole(t) === 'row' && /(?:^|\s)(?:row|grid|columns)(?:\s|$)/i.test(String((t.attrs && t.attrs.class) || ''));
     if (!rowHint && !weights.some((w) => w != null)) return null;
 
     const cols = [];
     const kept = [];
     spans.forEach(([s, e], idx) => {
-      const colBlocks = walk(s + 1, e - 1, depth + 1, {});
+      const colBlocks = walk(s + 1, e - 1, 0, { ...ctx, columnNest: 1 });
       if (colBlocks.length) {
         cols.push({ blocks: colBlocks });
         kept.push(weights[idx] == null ? 1 : weights[idx]);
@@ -573,7 +595,7 @@ function huntBlocks(html, opts = {}) {
         }
 
         // the percentage cut: a row of 2–4 columns → one columns block
-        const colTry = tryColumns(t, i, end, depth);
+        const colTry = tryColumns(t, i, end, ctx);
         if (colTry) {
           if (colTry.block) sink.push(colTry.block);
           else if (colTry.inline) colTry.inline.forEach((b) => sink.push(b));

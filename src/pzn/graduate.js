@@ -125,7 +125,7 @@ function pickFromSrcset(set) {
 /** The true image URL of an <img>/<source> token's attributes. */
 function imageSrcOf(attrs) {
   const a = attrs || {};
-  const direct = attrOf(a, 'src', 'data-src', 'data-lazy-src', 'data-original', 'data-bg', 'data-image', 'data-url');
+  const direct = attrOf(a, 'src', 'data-src', 'data-lazy-src', 'data-original', 'data-bg', 'data-lazy-bg', 'data-image', 'data-url');
   let src = direct && !/^data:/i.test(direct) && direct !== 'about:blank' ? direct : '';
   if (!src) src = pickFromSrcset(attrOf(a, 'srcset', 'srcSet', 'data-srcset', 'data-src-set'));
   if (!src) src = direct; // a data: URL beats nothing
@@ -165,6 +165,8 @@ function classBgMap(html) {
 function bgOfAttrs(attrs, bgMap) {
   const inline = styleImageOf(attrs);
   if (inline) return inline;
+  const lazyBg = attrOf(attrs, 'data-lazy-bg', 'data-bg', 'data-background');
+  if (lazyBg && !/^data:/i.test(lazyBg)) return lazyBg.startsWith('//') ? 'https:' + lazyBg : lazyBg;
   if (!bgMap || !bgMap.size) return '';
   for (const cls of String((attrs || {}).class || '').split(/\s+/)) {
     if (cls && bgMap.has(cls)) return bgMap.get(cls);
@@ -222,10 +224,20 @@ function extractCard(tokens, from, to, bgMap) {
       const title = unescapeHtml(textOf(tokens, j + 1, e - 1)).replace(/\s+/g, ' ').trim().slice(0, 200);
       if (title) card.title = title;
       j = e - 1;
-    } else if (!card.excerpt && tk.name === 'time') {
+    } else if (!card.excerpt && (tk.name === 'time' || /slot-?sub-?title|slotSubTitle/i.test((tk.attrs && tk.attrs.class) || ''))) {
       const e = matchClose(tokens, j);
-      const when = timeText(tokens, j, e, tk);
-      if (when) card.excerpt = when;
+      if (tk.name === 'time') {
+        const when = timeText(tokens, j, e, tk);
+        if (when) card.excerpt = when;
+      } else {
+        const sub = unescapeHtml(textOf(tokens, j + 1, e - 1)).replace(/\s+/g, ' ').trim().slice(0, 300);
+        if (sub) card.excerpt = sub;
+      }
+      j = e - 1;
+    } else if (!card.tag && /authorInfo|authorField|articleAuthor|author/i.test((tk.attrs && tk.attrs.class) || '')) {
+      const e = matchClose(tokens, j);
+      const who = unescapeHtml(textOf(tokens, j + 1, e - 1)).replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (who) card.tag = who;
       j = e - 1;
     } else if (!card.href && tk.name === 'a' && tk.attrs && tk.attrs.href) {
       card.href = tk.attrs.href;
@@ -242,7 +254,9 @@ function extractCard(tokens, from, to, bgMap) {
   if (!card.image && bgImage) card.image = bgImage;
   // a real card = a headline plus a picture or a destination, teaser-sized
   if (!card.title || !(card.image || card.href)) return null;
-  if (textOf(tokens, from, to).length > CARD_TEXT_CAP) return null;
+  const cap = /slotView|slot-view|post-item|tie-standard/i.test((root.attrs && root.attrs.class) || '')
+    ? 900 : CARD_TEXT_CAP;
+  if (textOf(tokens, from, to).length > cap) return null;
   const out = { title: card.title };
   if (card.image) out.image = card.image;
   if (card.tag) out.tag = card.tag;
@@ -309,6 +323,26 @@ function anchorCard(tokens, i, end, bgMap) {
  * After a sink level is built, ≥4 CONSECUTIVE short-label button blocks
  * collapse into one nav — the shape survives no matter how it was nested.
  */
+function isChromeTextBlock(b) {
+  if (!b || b.type !== 'text') return false;
+  const c = String((b.data && b.data.content) || '').trim();
+  if (!c) return true;
+  return /window\.|googletag|YITSiteWidgets|function\s*\(|^\s*if\s*\(\s*window/.test(c);
+}
+
+function isBylineTextBlock(b) {
+  if (!b || b.type !== 'text') return false;
+  const c = String((b.data && b.data.content) || '').replace(/\s+/g, ' ').trim();
+  if (!c || c.length > 48) return false;
+  if (/^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(c)) return true;
+  if (/\|$/.test(c)) return true;
+  return /^(?:ynet|[\u0590-\u05FFA-Za-z][\u0590-\u05FFA-Za-z.\s]{0,36})$/.test(c);
+}
+
+function isTeaserGlue(b) {
+  return isChromeTextBlock(b) || isBylineTextBlock(b);
+}
+
 function coalesceButtonRuns(blocks) {
   const out = [];
   let run = [];
@@ -340,6 +374,7 @@ function coalesceButtonRuns(blocks) {
   for (const b of blocks) {
     const label = b.type === 'button' ? String((b.data || {}).text || '').trim() : '';
     if (b.type === 'button' && label) run.push(b);
+    else if (run.length && isTeaserGlue(b)) continue;
     else { flush(); out.push(b); }
   }
   flush();
@@ -793,7 +828,7 @@ function hintHay(t) {
 }
 
 const PRICING_CLASS = /\b(?:pricing|price-table|price-cards?|pricing-table|bent-pricing|elementor-price)\b/i;
-const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|owl-carousel|splide|keen-slider|glide|bent-carousel|carousel|slider)\b/i;
+const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|tie-slick-slider|owl-carousel|splide|keen-slider|glide|bent-carousel|carousel|slider)\b/i;
 const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list|dsm-faq|stattic-faq|elementor-widget-faq|elementor-accordion)\b/i;
 const FAQ_ITEM_CLASS = /\b(?:faq-item|faq-entry|dsm-faq--faq-content|elementor-accordion-item|e-faq-item)\b/i;
 const FAQ_CONTENT_CLASS = /\b(?:dsm-faq--faq-content|faq-body|faq-answer|elementor-tab-content|elementor-accordion-content)\b/i;
@@ -801,11 +836,11 @@ const FAQ_TITLE_SKIP = /\b(?:dsm-faq--title)\b/i;
 const FAQ_LOOP_ITEM = /\be-loop-item\b/i;
 const TESTIMONIAL_CLASS = /\b(?:testimonial|review-card|bent-testimonial|elementor-testimonial)\b/i;
 const SOCIAL_CLASS = /\b(?:social-icons?|social-links?|share-icons?|share-links?|share-buttons?|elementor-social-icons(?:-wrapper)?|elementor-widget-social-icons|bent-social)\b/i;
-const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|bent-tabs|\btabs\b)\b/i;
+const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|bent-tabs|is-flex-tabs|mag-box-filter|filter-links|\btabs\b)\b/i;
 const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
 const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
 const STATS_CLASS = /\b(?:stats|counters?|metrics|kpis?|bent-stats|stats-row|numbers-row|stat-cells?)\b/i;
-const LOGOS_CLASS = /\b(?:logos?|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos)\b/i;
+const LOGOS_CLASS = /\b(?:logos|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos|logo-list)\b/i;
 const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
 const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
 
@@ -978,6 +1013,24 @@ function extractSlide(tokens, s, e, bgMap) {
   return out;
 }
 
+const SLIDE_CLASS = /\b(?:swiper-slide|slick-slide|splide__slide|glide__slide|owl-item|tie-slide-\d+|slide)\b/i;
+
+function collectSlides(tokens, from, to, bgMap) {
+  const items = [];
+  for (let j = from; j < to; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    if (close == null) continue;
+    if (SLIDE_CLASS.test(classHay(tk))) {
+      const slide = extractSlide(tokens, j, close, bgMap);
+      if (slide) items.push(slide);
+      j = close - 1;
+    }
+  }
+  return items;
+}
+
 function parseCarouselData(tokens, i, end, t, bgMap) {
   if (!looksLikeCarousel(t)) return null;
   let from = i + 1;
@@ -985,15 +1038,19 @@ function parseCarouselData(tokens, i, end, t, bgMap) {
   const kids = childSpans(tokens, from, to);
   if (kids.length === 1) {
     const wrap = tokens[kids[0][0]];
-    if (/wrapper|track|swiper-wrapper|slick-list|slick-track|bent-carousel-track/i.test(classHay(wrap))) {
+    if (/wrapper|track|inner|swiper-wrapper|slick-list|slick-track|bent-carousel-track|tie-slick-slider/i.test(classHay(wrap))) {
       from = kids[0][0] + 1;
       to = kids[0][1] - 1;
     }
   }
-  const items = [];
-  for (const [s, e] of childSpans(tokens, from, to)) {
-    const slide = extractSlide(tokens, s, e, bgMap);
-    if (slide) items.push(slide);
+  let items = collectSlides(tokens, from, to, bgMap);
+  if (items.length < 2) {
+    items = [];
+    for (const [s, e] of childSpans(tokens, from, to)) {
+      if (/loader|spinner|nav/i.test(classHay(tokens[s]))) continue;
+      const slide = extractSlide(tokens, s, e, bgMap);
+      if (slide) items.push(slide);
+    }
   }
   return items.length >= 2 ? { items } : null;
 }
@@ -1200,8 +1257,35 @@ function pairTabItems(labels, panes) {
  * `.tab-content` after a `ul.nav-tabs` — `next` is the index past both.
  * @returns {{ items: object[], next: number } | null}
  */
+function parseFilterTabsData(tokens, i, end, t, parentTo) {
+  const hay = hintHay(t);
+  if (!/is-flex-tabs|mag-box-filter|filter-links/i.test(hay)) return null;
+  const labels = collectTabLabels(tokens, i, end);
+  if (labels.length < 2) return null;
+  let content = '';
+  const limit = parentTo == null ? tokens.length : parentTo;
+  let j = end;
+  while (j < limit && tokens[j] && tokens[j].kind === 'text' && !tokens[j].value.trim()) j++;
+  if (j < limit && tokens[j] && tokens[j].kind === 'open') {
+    const se = matchClose(tokens, j);
+    const h = classHay(tokens[j]);
+    if (/mag-box-container|posts-items|posts-list|tab-content/i.test(h) || CONTAINERS.has(tokens[j].name)) {
+      content = unescapeHtml(textOf(tokens, j + 1, se - 1)).replace(/\s+/g, ' ').trim().slice(0, 800);
+    }
+  }
+  if (!content) content = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim().slice(0, 200);
+  const items = labels.map((lb, idx) => ({
+    label: lb.label,
+    content: idx === 0 ? content : ''
+  }));
+  if (!items.some((it) => String(it.content || '').trim())) return null;
+  return { items, next: end };
+}
+
 function parseTabsData(tokens, i, end, t, parentTo) {
   if (!looksLikeTabs(t)) return null;
+  const filterTabs = parseFilterTabsData(tokens, i, end, t, parentTo);
+  if (filterTabs) return filterTabs;
   const hay = hintHay(t);
   const isNavTabs = /nav-tabs|nav-pills/i.test(hay);
   const isTabContent = /tab-content/i.test(hay) && !/nav-tabs/i.test(hay);
@@ -1443,8 +1527,10 @@ function extractLogo(tokens, s, e) {
       src = imageSrcOf(tk.attrs);
       alt = (tk.attrs && tk.attrs.alt) || alt;
     }
+    if (!src) src = bgOfAttrs(tk.attrs, null);
     if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href) url = tk.attrs.href;
   }
+  if (!src && root) src = bgOfAttrs(root.attrs, null);
   if (!src) return null;
   const out = { src };
   if (alt) out.alt = alt;
@@ -2078,6 +2164,7 @@ module.exports = {
   guessedTool,
   parseDetailsRun,
   mapsAddressOf,
+  looksLikeCarousel,
   detectCardCluster,
   collectLinkRun,
   coalesceButtonRuns,
