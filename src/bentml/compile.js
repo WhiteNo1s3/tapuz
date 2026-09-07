@@ -668,6 +668,34 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('progress', data);
     }
+    case 'HEADER': {
+      const data = {
+        blocks: (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean),
+        tone: p.tone || 'light',
+        layout: p.layout || 'row'
+      };
+      applyChrome(data, p);
+      return createBlock('header', data);
+    }
+    case 'FOOTER': {
+      const data = {
+        blocks: (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean),
+        tone: p.tone || 'dark'
+      };
+      if (p.credit) data.credit = p.credit;
+      applyChrome(data, p);
+      return createBlock('footer', data);
+    }
+    case 'WHATSAPP': {
+      const data = { label: collapseSingleParagraph(text) || 'דברו איתנו בוואטסאפ' };
+      if (p.phone) data.phone = p.phone;
+      if (p.message) data.message = p.message;
+      if (p.note) data.note = p.note;
+      if (p.url) data.url = p.url;
+      if (p.align && p.align !== 'start') data.align = p.align;
+      applyChrome(data, p);
+      return createBlock('whatsapp', data);
+    }
     case 'NAV': {
       const items = (node.children || [])
         .filter((c) => c.name === 'NAVITEM')

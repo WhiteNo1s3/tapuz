@@ -354,6 +354,21 @@ function blockToModule(block) {
       return createModule('progress', baseOpts(block, {}, { children }));
     }
 
+    case 'header':
+      return createModule('header', baseOpts(block, pickProps(data, ['tone', 'layout']), {
+        children: (data.blocks || []).map(blockToModule).filter(Boolean)
+      }));
+
+    case 'footer':
+      return createModule('footer', baseOpts(block, pickProps(data, ['tone', 'credit']), {
+        children: (data.blocks || []).map(blockToModule).filter(Boolean)
+      }));
+
+    case 'whatsapp':
+      return createModule('whatsapp', baseOpts(block, pickProps(data, ['phone', 'message', 'note', 'url', 'align']), {
+        text: data.label || ''
+      }));
+
     case 'timeline': {
       const children = (data.items || []).map((it) =>
         createModule('event', {
@@ -779,6 +794,24 @@ function moduleToBlock(node) {
           return item;
         });
       return finishBlock(node, 'progress', data);
+    }
+
+    case 'header': {
+      const data = pickData(props, ['tone', 'layout']);
+      data.blocks = (node.children || []).map(moduleToBlock).filter(Boolean);
+      return finishBlock(node, 'header', data);
+    }
+
+    case 'footer': {
+      const data = pickData(props, ['tone', 'credit']);
+      data.blocks = (node.children || []).map(moduleToBlock).filter(Boolean);
+      return finishBlock(node, 'footer', data);
+    }
+
+    case 'whatsapp': {
+      const data = pickData(props, ['phone', 'message', 'note', 'url', 'align']);
+      if (node.text) data.label = node.text;
+      return finishBlock(node, 'whatsapp', data);
     }
 
     case 'timeline': {

@@ -2065,6 +2065,94 @@ register({
   }
 });
 
+// ─── Gap-audit wave 4: page chrome (header / footer) + whatsapp ───
+// The landmarks the decompiler used to refuse to invent, and the wa.me link
+// every Israeli business site carries. header/footer are containers of any
+// module (logo image, nav, button, columns, social…) rendered as a band
+// INSIDE the page — the theme's .site-header/.site-footer master chrome is a
+// different thing and keeps wrapping every page.
+
+register({
+  name: 'header',
+  tag: 'bent-header',
+  category: 'layout',
+  label: { he: 'ראש עמוד', en: 'Page header' },
+  icon: 'header',
+  container: true,
+  accept: [],
+  props: {
+    tone: {
+      type: 'enum', values: ['light', 'dark', 'brand', 'none'], default: 'light', optional: true,
+      label: { he: 'רקע', en: 'Tone' }
+    },
+    layout: {
+      type: 'enum', values: ['row', 'stack'], default: 'row', optional: true,
+      label: { he: 'פריסה', en: 'Layout' }
+    },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../chrome-html').renderHeader(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'footer',
+  tag: 'bent-footer',
+  category: 'layout',
+  label: { he: 'תחתית עמוד', en: 'Page footer' },
+  icon: 'footer',
+  container: true,
+  accept: [],
+  props: {
+    tone: {
+      type: 'enum', values: ['dark', 'light', 'brand', 'none'], default: 'dark', optional: true,
+      label: { he: 'רקע', en: 'Tone' }
+    },
+    credit: { type: 'string', default: '', optional: true, label: { he: 'שורת זכויות', en: 'Credit line' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../chrome-html').renderFooter(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'whatsapp',
+  tag: 'bent-whatsapp',
+  category: 'content',
+  label: { he: 'וואטסאפ', en: 'WhatsApp' },
+  icon: 'whatsapp',
+  container: false,
+  props: {
+    phone: { type: 'string', default: '', optional: true, label: { he: 'טלפון (בינלאומי)', en: 'Phone (international)' } },
+    message: { type: 'string', default: '', optional: true, label: { he: 'הודעה מוכנה', en: 'Prepared message' } },
+    note: { type: 'string', default: '', optional: true, label: { he: 'שורת משנה', en: 'Subline' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור וואטסאפ מלא', en: 'Full WhatsApp URL' } },
+    align: {
+      type: 'enum', values: ['start', 'center', 'end'], default: 'start', optional: true,
+      label: { he: 'יישור', en: 'Align' }
+    },
+    label: { type: 'text', content: true, default: '', label: { he: 'טקסט הכפתור', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const props = Object.assign({}, node.props || {}, { label: node.text || (node.props && node.props.label) || '' });
+    return require('../whatsapp-html').renderWhatsapp(props, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 module.exports = {
   register,
   ANIMATE_VALUES,

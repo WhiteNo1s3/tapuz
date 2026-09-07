@@ -235,6 +235,21 @@ img.bent-member-photo { display: block; }
 .bent-bar-value { font-variant-numeric: tabular-nums; color: #9aa8bc; }
 .bent-bar-track { height: 0.55rem; border-radius: 999px; background: #1a2332; overflow: hidden; }
 .bent-bar-fill { height: 100%; border-radius: inherit; background: #f59e0b; }
+.bent-header, .bent-footer { margin: 1.25rem 0; padding: 0.9rem 1.1rem; border-radius: 10px; }
+.bent-header.tone-light, .bent-footer.tone-light { background: #f5f5f4; color: #1c1917; }
+.bent-header.tone-dark, .bent-footer.tone-dark { background: #1a2332; }
+.bent-header.tone-brand, .bent-footer.tone-brand { background: linear-gradient(135deg, #f59e0b, #d97706); color: #111; }
+.bent-header.tone-none, .bent-footer.tone-none { padding-inline: 0; }
+.bent-header-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem 1.25rem; }
+.bent-header.layout-stack .bent-header-inner { flex-direction: column; align-items: stretch; }
+.bent-header-inner > * { margin: 0; }
+.bent-footer-inner > * + * { margin-top: 1rem; }
+.bent-footer-credit { margin: 1.1rem 0 0; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.15); font-size: 0.8rem; text-align: center; opacity: 0.8; }
+.bent-whatsapp { display: inline-flex; align-items: center; gap: 0.7rem; margin: 0.6rem 0; padding: 0.65rem 1.2rem 0.65rem 0.9rem; border-radius: 999px; background: #25d366; color: #fff; text-decoration: none; font-weight: 700; line-height: 1.2; }
+.bent-whatsapp:hover { background: #1ebe5d; }
+.bent-wa-icon { flex: 0 0 auto; width: 1.6rem; height: 1.6rem; }
+.bent-wa-body { display: flex; flex-direction: column; align-items: flex-start; }
+.bent-wa-note { font-size: 0.76rem; font-weight: 400; opacity: 0.9; }
 `.trim();
 
 /**
