@@ -720,6 +720,823 @@ function parseTimelineData(tokens, i, end, t) {
   })) };
 }
 
+// ── inbound mappers for modules we already publish (copy-this-site) ──
+// Pricing / carousel / FAQ / tabs / hero already exist outbound. Real sites
+// ship Swiper, Bootstrap tabs, classed FAQ, pricing HTML and CSS-background
+// heroes. If we recognise the shape we map it; if we only guess, the walk
+// MUST put the tool on suggestedTools — silent flatten is a false success.
+
+function hintHay(t) {
+  return `${(t && t.name) || ''} ${classHay(t)}`;
+}
+
+const PRICING_CLASS = /\b(?:pricing|price-table|price-cards?|pricing-table|bent-pricing|elementor-price)\b/i;
+const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|owl-carousel|splide|keen-slider|glide|bent-carousel|carousel|slider)\b/i;
+const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list|dsm-faq|stattic-faq|elementor-widget-faq|elementor-accordion)\b/i;
+const FAQ_ITEM_CLASS = /\b(?:faq-item|faq-entry|dsm-faq--faq-content|elementor-accordion-item|e-faq-item)\b/i;
+const FAQ_CONTENT_CLASS = /\b(?:dsm-faq--faq-content|faq-body|faq-answer|elementor-tab-content|elementor-accordion-content)\b/i;
+const FAQ_TITLE_SKIP = /\b(?:dsm-faq--title)\b/i;
+const FAQ_LOOP_ITEM = /\be-loop-item\b/i;
+const TESTIMONIAL_CLASS = /\b(?:testimonial|review-card|bent-testimonial|elementor-testimonial)\b/i;
+const SOCIAL_CLASS = /\b(?:social-icons?|social-links?|share-icons?|share-links?|share-buttons?|elementor-social-icons(?:-wrapper)?|elementor-widget-social-icons|bent-social)\b/i;
+const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|bent-tabs|\btabs\b)\b/i;
+const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
+const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
+const STATS_CLASS = /\b(?:stats|counters?|metrics|kpis?|bent-stats|stats-row|numbers-row|stat-cells?)\b/i;
+const LOGOS_CLASS = /\b(?:logos?|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos)\b/i;
+const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
+const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
+
+function looksLikePricing(t) { return PRICING_CLASS.test(hintHay(t)); }
+function looksLikeCarousel(t) { return CAROUSEL_CLASS.test(hintHay(t)) || /^swiper/i.test((t && t.name) || ''); }
+function looksLikeFaq(t) { return FAQ_CLASS.test(hintHay(t)); }
+function looksLikeTestimonial(t) { return TESTIMONIAL_CLASS.test(hintHay(t)); }
+function looksLikeSocial(t) { return SOCIAL_CLASS.test(hintHay(t)); }
+function looksLikeTabs(t) { return TABS_CLASS.test(hintHay(t)); }
+function looksLikeHero(t) { return HERO_CLASS.test(hintHay(t)); }
+function looksLikeCrumbs(t) {
+  if (!t) return false;
+  if (CRUMBS_CLASS.test(hintHay(t))) return true;
+  const aria = (t.attrs && t.attrs['aria-label']) || '';
+  return /breadcrumb/i.test(aria);
+}
+function looksLikeStats(t) { return STATS_CLASS.test(hintHay(t)); }
+function looksLikeLogos(t) { return LOGOS_CLASS.test(hintHay(t)); }
+
+/**
+ * A class/tag that names a module we speak — or a landmark we refuse to
+ * invent (header/footer). Used when the mapper declines so the flatten
+ * is never a silent success.
+ * @returns {string|null}
+ */
+function guessedTool(t) {
+  if (!t) return null;
+  const hay = hintHay(t);
+  const name = t.name || '';
+  if (name === 'header' || /site-header|page-header/i.test(hay)) return 'header';
+  if (name === 'footer' || /site-footer|page-footer/i.test(hay)) return 'footer';
+  if (looksLikeCarousel(t)) return 'carousel';
+  if (looksLikeTabs(t)) return 'tabs';
+  if (looksLikeFaq(t)) return 'faq';
+  if (looksLikeTestimonial(t)) return 'testimonial';
+  if (looksLikeSocial(t)) return 'social';
+  if (looksLikePricing(t)) return 'pricing';
+  if (looksLikeHero(t)) return 'hero';
+  if (looksLikeCrumbs(t)) return 'crumbs';
+  if (looksLikeStats(t)) return 'stats';
+  if (looksLikeLogos(t)) return 'logos';
+  if (/\b(?:product|shop-item|woocommerce|product-card)\b/i.test(hay)) return 'cards';
+  return null;
+}
+
+function splitPricePeriod(raw) {
+  const s = String(raw || '').replace(/\s+/g, ' ').trim();
+  const m = /^(.+?)\s*(\/(?:mo|yr|month|year|חודש|שנה)|per\s+\w+)$/i.exec(s);
+  if (m) return { price: m[1].trim(), period: m[2].trim() };
+  return { price: s, period: '' };
+}
+
+function extractPlan(tokens, s, e) {
+  let title = '';
+  let price = '';
+  let period = '';
+  let features = '';
+  let ctaLabel = '';
+  let ctaUrl = '';
+  const root = tokens[s];
+  const rootCls = (root && root.attrs && root.attrs.class) || '';
+  const highlighted = /highlight|featured|popular|recommended|bent-plan-highlighted/i.test(rootCls);
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (!title && (HEADING.test(tk.name) || /bent-plan-title/i.test(tcls))) {
+      title = unescapeHtml(textOf(tokens, j + 1, close - 1));
+      j = close - 1;
+      continue;
+    }
+    if (!period && /bent-plan-period|period/i.test(tcls)) {
+      period = unescapeHtml(textOf(tokens, j + 1, close - 1));
+      j = close - 1;
+      continue;
+    }
+    if (!price && (tk.name === 'span' || tk.name === 'div' || tk.name === 'p' || tk.name === 'strong')
+      && /price|amount|cost|bent-plan-amount/i.test(tcls)) {
+      const parsed = splitPricePeriod(unescapeHtml(textOf(tokens, j + 1, close - 1)));
+      price = parsed.price;
+      if (!period && parsed.period) period = parsed.period;
+      j = close - 1;
+      continue;
+    }
+    if ((tk.name === 'ul' || tk.name === 'ol') && (!features || /feature/i.test(tcls))) {
+      const lines = [];
+      for (let k = j + 1; k < close - 1; k++) {
+        if (tokens[k].kind === 'open' && tokens[k].name === 'li') {
+          const le = matchClose(tokens, k);
+          const line = unescapeHtml(textOf(tokens, k + 1, le - 1)).trim();
+          if (line) lines.push(line);
+          k = le - 1;
+        }
+      }
+      if (lines.length) features = lines.join('\n');
+      j = close - 1;
+      continue;
+    }
+    if (!ctaLabel && (tk.name === 'a' || tk.name === 'button')) {
+      const label = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      if (label) {
+        ctaLabel = label;
+        ctaUrl = (tk.attrs && (tk.attrs.href || tk.attrs.formaction)) || '';
+      }
+      j = close - 1;
+    }
+  }
+  if (!price) {
+    const m = PRICE_RE.exec(unescapeHtml(textOf(tokens, s + 1, e - 1)));
+    if (m) {
+      const parsed = splitPricePeriod(m[0]);
+      price = parsed.price;
+      if (!period) period = parsed.period;
+    }
+  }
+  if (!title) return null;
+  const out = { title, highlighted };
+  if (price) out.price = price;
+  if (period) out.period = period;
+  if (features) out.features = features;
+  if (ctaLabel) out.ctaLabel = ctaLabel;
+  if (ctaUrl) out.ctaUrl = ctaUrl;
+  return out;
+}
+
+function parsePricingData(tokens, i, end, t) {
+  const hinted = looksLikePricing(t);
+  const items = [];
+  for (const [s, e] of childSpans(tokens, i + 1, end - 1)) {
+    if (!CONTAINERS.has(tokens[s].name) && tokens[s].name !== 'li') continue;
+    const plan = extractPlan(tokens, s, e);
+    if (plan) items.push(plan);
+  }
+  if (items.length < 2) return null;
+  if (!hinted && items.filter((it) => it.price).length < 2) return null;
+  return { items };
+}
+
+function extractSlide(tokens, s, e, bgMap) {
+  const card = extractCard(tokens, s, e, bgMap);
+  if (card) return card;
+  let image = '';
+  let title = '';
+  let href = '';
+  let excerpt = '';
+  for (let j = s; j < e; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    if (!image && (tk.name === 'img' || tk.name === 'source')) image = imageSrcOf(tk.attrs);
+    if (!image) image = bgOfAttrs(tk.attrs, bgMap) || image;
+    if (!title && HEADING.test(tk.name)) {
+      title = unescapeHtml(textOf(tokens, j + 1, close - 1));
+      j = close - 1;
+      continue;
+    }
+    if (!href && tk.name === 'a' && tk.attrs && tk.attrs.href) href = tk.attrs.href;
+    if (!excerpt && tk.name === 'p') {
+      excerpt = unescapeHtml(textOf(tokens, j + 1, close - 1));
+      j = close - 1;
+    }
+  }
+  if (!image && !title) return null;
+  const out = {};
+  if (image) out.image = image;
+  if (title) out.title = title;
+  if (href) out.href = href;
+  if (excerpt) out.excerpt = excerpt;
+  return out;
+}
+
+function parseCarouselData(tokens, i, end, t, bgMap) {
+  if (!looksLikeCarousel(t)) return null;
+  let from = i + 1;
+  let to = end - 1;
+  const kids = childSpans(tokens, from, to);
+  if (kids.length === 1) {
+    const wrap = tokens[kids[0][0]];
+    if (/wrapper|track|swiper-wrapper|slick-list|slick-track|bent-carousel-track/i.test(classHay(wrap))) {
+      from = kids[0][0] + 1;
+      to = kids[0][1] - 1;
+    }
+  }
+  const items = [];
+  for (const [s, e] of childSpans(tokens, from, to)) {
+    const slide = extractSlide(tokens, s, e, bgMap);
+    if (slide) items.push(slide);
+  }
+  return items.length >= 2 ? { items } : null;
+}
+
+function extractQaPlain(tokens, s, e) {
+  let question = '';
+  let answer = '';
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (FAQ_TITLE_SKIP.test(tcls)) {
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'summary' || HEADING.test(tk.name) || tk.name === 'dt'
+      || /question|faq-q|faq-question|elementor-tab-title|accordion-title/i.test(tcls)) {
+      if (!question) question = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p' || tk.name === 'dd'
+      || /answer|faq-a|faq-answer|elementor-tab-content|accordion-content/i.test(tcls)) {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (p) answer = answer ? `${answer}\n${p}` : p;
+      j = close - 1;
+    }
+  }
+  if (!question) return null;
+  return { question, answer };
+}
+
+function extractQa(tokens, s, e) {
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (FAQ_CONTENT_CLASS.test(classHay(tk))) {
+      const close = matchClose(tokens, j);
+      const inner = extractQaPlain(tokens, j, close);
+      if (inner) return inner;
+      j = close - 1;
+    }
+  }
+  return extractQaPlain(tokens, s, e);
+}
+
+function isFaqItemToken(tk) {
+  if (!tk) return false;
+  if (tk.name === 'details') return true;
+  const hay = classHay(tk);
+  if (FAQ_ITEM_CLASS.test(hay) || FAQ_CONTENT_CLASS.test(hay)) return true;
+  return FAQ_LOOP_ITEM.test(hay) && /\bfaq\b/i.test(hay);
+}
+
+function collectQaDeep(tokens, from, to) {
+  const items = [];
+  for (let j = from; j < to; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (!isFaqItemToken(tk)) continue;
+    const close = matchClose(tokens, j);
+    if (close == null) continue;
+    const qa = extractQa(tokens, j, close);
+    if (qa) items.push(qa);
+    j = close - 1;
+  }
+  return items;
+}
+
+function collectQaItems(tokens, from, to) {
+  const deep = collectQaDeep(tokens, from, to);
+  if (deep.length >= 2) return deep;
+  const spans = childSpans(tokens, from, to);
+  if (spans.length === 1 && CONTAINERS.has(tokens[spans[0][0]].name)) {
+    const inner = collectQaItems(tokens, spans[0][0] + 1, spans[0][1] - 1);
+    if (inner.length >= 2) return inner;
+  }
+  const wrapped = [];
+  for (const [s, e] of spans) {
+    const name = tokens[s].name;
+    if (name === 'details' || name === 'dl' || CONTAINERS.has(name) || name === 'li') {
+      if (name === 'dl') {
+        const inner = collectQaItems(tokens, s + 1, e - 1);
+        if (inner.length >= 2) return inner;
+      }
+      const qa = extractQa(tokens, s, e);
+      if (qa) wrapped.push(qa);
+    }
+  }
+  if (wrapped.length >= 2) return wrapped;
+  const pairs = [];
+  for (let n = 0; n < spans.length; n++) {
+    const [s, e] = spans[n];
+    const tk = tokens[s];
+    if (tk.name === 'dt') {
+      const q = unescapeHtml(textOf(tokens, s + 1, e - 1));
+      let a = '';
+      if (n + 1 < spans.length && tokens[spans[n + 1][0]].name === 'dd') {
+        const [ds, de] = spans[n + 1];
+        a = unescapeHtml(textOf(tokens, ds + 1, de - 1));
+        n += 1;
+      }
+      if (q) pairs.push({ question: q, answer: a });
+      continue;
+    }
+    if (!HEADING.test(tk.name)) continue;
+    const q = unescapeHtml(textOf(tokens, s + 1, e - 1));
+    let a = '';
+    if (n + 1 < spans.length && tokens[spans[n + 1][0]].name === 'p') {
+      const [ps, pe] = spans[n + 1];
+      a = unescapeHtml(textOf(tokens, ps + 1, pe - 1));
+      n += 1;
+    }
+    if (q) pairs.push({ question: q, answer: a });
+  }
+  return pairs.length >= 2 ? pairs : deep;
+}
+
+function countHeadings(tokens, from, to) {
+  let n = 0;
+  for (let j = from; j < to; j++) {
+    if (tokens[j].kind === 'open' && HEADING.test(tokens[j].name)) n += 1;
+  }
+  return n;
+}
+
+function parseFaqData(tokens, i, end, t) {
+  if (!looksLikeFaq(t) && !(t && t.name === 'dl' && looksLikeFaq(t))) return null;
+  const items = collectQaItems(tokens, i + 1, end - 1);
+  if (items.length < 2) return null;
+  // A page-sized wrapper that merely CONTAINS a FAQ (Elementor section
+  // chrome, loop templates) must descend — otherwise two Q&As steal the
+  // rest of the marketing page. Allow a title/subtitle above the list.
+  const headings = countHeadings(tokens, i + 1, end - 1);
+  if (headings > items.length + 2) return null;
+  return { items };
+}
+
+function collectTabLabels(tokens, i, end) {
+  const labels = [];
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (tk.name === 'a' || tk.name === 'button' || tk.name === 'label'
+      || /nav-link|tab-title|tab-label|bent-tab-label/i.test(tcls)) {
+      const close = matchClose(tokens, j);
+      const label = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      const href = (tk.attrs && (tk.attrs.href || tk.attrs['data-bs-target'] || tk.attrs['data-target'])) || '';
+      const forId = (tk.attrs && tk.attrs.for) || '';
+      const id = String(href || forId).replace(/^#/, '');
+      if (label && !/bent-tab-radio/i.test(tcls)) labels.push({ label, id });
+      j = close - 1;
+    }
+  }
+  return labels;
+}
+
+function collectTabPanes(tokens, i, end) {
+  const panes = [];
+  for (const [s, e] of childSpans(tokens, i + 1, end - 1)) {
+    const tk = tokens[s];
+    const hay = classHay(tk);
+    if (/nav-tabs|nav-pills|tab-list/i.test(hay)) continue;
+    const isPane = /tab-pane|bent-tab-panel|elementor-tab-content/i.test(hay);
+    if (!isPane && !CONTAINERS.has(tk.name)) continue;
+    if (!isPane && /nav-tabs|tabs-nav/i.test(hay)) continue;
+    const content = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+    let label = '';
+    for (let j = s + 1; j < e - 1; j++) {
+      if (tokens[j].kind === 'open' && HEADING.test(tokens[j].name)) {
+        const c = matchClose(tokens, j);
+        label = unescapeHtml(textOf(tokens, j + 1, c - 1));
+        break;
+      }
+    }
+    if (content || label) {
+      panes.push({ id: (tk.attrs && tk.attrs.id) || '', content, label });
+    }
+  }
+  return panes;
+}
+
+function pairTabItems(labels, panes) {
+  if (labels.length >= 2 && panes.length >= 1) {
+    return labels.map((lb, idx) => {
+      const byId = lb.id && panes.find((p) => p.id && (p.id === lb.id || lb.id.endsWith(p.id) || p.id.endsWith(lb.id)));
+      const pane = byId || panes[idx] || {};
+      return { label: lb.label, content: pane.content || '' };
+    }).filter((it) => it.label);
+  }
+  if (panes.length >= 2) {
+    return panes.map((p, idx) => ({
+      label: p.label || (labels[idx] && labels[idx].label) || ('טאב ' + (idx + 1)),
+      content: p.content || ''
+    }));
+  }
+  return [];
+}
+
+/**
+ * Bootstrap / Elementor / our own bent-tabs. May consume a sibling
+ * `.tab-content` after a `ul.nav-tabs` — `next` is the index past both.
+ * @returns {{ items: object[], next: number } | null}
+ */
+function parseTabsData(tokens, i, end, t, parentTo) {
+  if (!looksLikeTabs(t)) return null;
+  const hay = hintHay(t);
+  const isNavTabs = /nav-tabs|nav-pills/i.test(hay);
+  const isTabContent = /tab-content/i.test(hay) && !/nav-tabs/i.test(hay);
+  let labels = [];
+  let panes = [];
+  let next = end;
+  if (isNavTabs) {
+    labels = collectTabLabels(tokens, i, end);
+    let j = end;
+    const limit = parentTo == null ? tokens.length : parentTo;
+    while (j < limit && tokens[j] && tokens[j].kind === 'text' && !tokens[j].value.trim()) j++;
+    if (j < limit && tokens[j] && tokens[j].kind === 'open') {
+      const se = matchClose(tokens, j);
+      if (/tab-content/i.test(classHay(tokens[j]))) {
+        panes = collectTabPanes(tokens, j, se);
+        next = se;
+      }
+    }
+  } else if (isTabContent) {
+    panes = collectTabPanes(tokens, i, end);
+  } else {
+    for (const [s, e] of childSpans(tokens, i + 1, end - 1)) {
+      const h = classHay(tokens[s]);
+      if (/nav-tabs|nav-pills/i.test(h)) labels = collectTabLabels(tokens, s, e);
+      if (/tab-content/i.test(h)) panes = collectTabPanes(tokens, s, e);
+    }
+    if (!labels.length) labels = collectTabLabels(tokens, i, end);
+    if (!panes.length) panes = collectTabPanes(tokens, i, end);
+  }
+  const items = pairTabItems(labels, panes);
+  if (items.length < 2) return null;
+  if (!items.some((it) => String(it.content || '').trim())) return null;
+  return { items, next };
+}
+
+function measureHero(tokens, i, end) {
+  let headings = 0;
+  let paragraphs = 0;
+  let links = 0;
+  let images = 0;
+  let textLen = 0;
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind === 'text') { textLen += tk.value.trim().length; continue; }
+    if (tk.kind !== 'open') continue;
+    if (HEADING.test(tk.name)) headings++;
+    else if (tk.name === 'p') paragraphs++;
+    else if (tk.name === 'a' || tk.name === 'button') links++;
+    else if (tk.name === 'img') images++;
+  }
+  return { headings, paragraphs, links, images, textLen };
+}
+
+function heroShapeOk(shape, relaxed) {
+  if (shape.headings < 1) return false;
+  if (relaxed) {
+    return shape.headings <= 3 && shape.paragraphs <= 3 && shape.links <= 5
+      && shape.images <= 3 && shape.textLen <= 800;
+  }
+  return shape.headings <= 2 && shape.paragraphs <= 2 && shape.links <= 3
+    && shape.images <= 2 && shape.textLen <= 400;
+}
+
+function extractHero(tokens, i, end, bgMap) {
+  const data = {};
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (!data.title && HEADING.test(tk.name)) {
+      const e = matchClose(tokens, j);
+      data.title = unescapeHtml(textOf(tokens, j + 1, e - 1));
+      j = e - 1;
+    } else if (!data.subtitle && tk.name === 'p') {
+      const e = matchClose(tokens, j);
+      data.subtitle = unescapeHtml(textOf(tokens, j + 1, e - 1));
+      j = e - 1;
+    } else if (!data.buttonText && (tk.name === 'a' || tk.name === 'button')) {
+      const e = matchClose(tokens, j);
+      const label = unescapeHtml(textOf(tokens, j + 1, e - 1));
+      if (label) {
+        data.buttonText = label;
+        data.buttonUrl = (tk.attrs && (tk.attrs.href || tk.attrs.formaction)) || '#';
+      }
+      j = e - 1;
+    } else if (!data.image && (tk.name === 'img' || tk.name === 'source')) {
+      data.image = imageSrcOf(tk.attrs);
+    } else if (!data.image) {
+      const bg = bgOfAttrs(tk.attrs, bgMap);
+      if (bg) data.image = bg;
+    }
+  }
+  if (!data.image) {
+    const bg = bgOfAttrs(tokens[i].attrs, bgMap);
+    if (bg) data.image = bg;
+  }
+  return data.title ? data : null;
+}
+
+function parseHeroData(tokens, i, end, t, bgMap) {
+  const hinted = looksLikeHero(t);
+  const selfBg = bgOfAttrs(t && t.attrs, bgMap);
+  const data = extractHero(tokens, i, end, bgMap);
+  if (!data) return null;
+  const shape = measureHero(tokens, i, end);
+  if (hinted) {
+    // a classed hero may carry its picture as an <img> or a CSS background
+    return heroShapeOk(shape, !!(selfBg || data.image)) ? data : null;
+  }
+  // unclassed: only a CSS-background band with a tight hero shape — never
+  // a card wall that happens to contain pictures
+  if (!selfBg) return null;
+  return heroShapeOk(shape, false) ? data : null;
+}
+
+/**
+ * Shared inbound try for both walks. `next` may jump past a sibling
+ * (Bootstrap tab-content after nav-tabs).
+ * @returns {{ type: string, data: object, next: number } | null}
+ */
+function extractCrumb(tokens, s, e) {
+  let label = '';
+  let url = '';
+  const root = tokens[s];
+  if (root && root.name === 'a') {
+    url = (root.attrs && root.attrs.href) || '';
+    label = unescapeHtml(textOf(tokens, s + 1, e - 1)).trim();
+  } else {
+    for (let j = s + 1; j < e - 1; j++) {
+      const tk = tokens[j];
+      if (tk.kind !== 'open') continue;
+      const close = matchClose(tokens, j);
+      if (tk.name === 'a') {
+        url = (tk.attrs && tk.attrs.href) || '';
+        label = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+        break;
+      }
+    }
+    if (!label) label = unescapeHtml(textOf(tokens, s + 1, e - 1)).trim();
+  }
+  if (!label) return null;
+  const out = { label };
+  if (url && url !== '#') out.url = url;
+  return out;
+}
+
+function parseCrumbsData(tokens, i, end, t) {
+  if (!looksLikeCrumbs(t)) return null;
+  const items = [];
+  function collect(from, to) {
+    for (let j = from; j < to; j++) {
+      const tk = tokens[j];
+      if (tk.kind !== 'open') continue;
+      const e = matchClose(tokens, j);
+      if (tk.name === 'ol' || tk.name === 'ul') {
+        collect(j + 1, e - 1);
+        j = e - 1;
+        continue;
+      }
+      if (tk.name === 'li' || tk.name === 'a' || tk.name === 'span') {
+        const item = extractCrumb(tokens, j, e);
+        if (item && !/^[/\u203A>»·•]+$/.test(item.label)) items.push(item);
+        j = e - 1;
+      }
+    }
+  }
+  collect(i + 1, end - 1);
+  return items.length >= 2 ? { items } : null;
+}
+
+function extractStat(tokens, s, e) {
+  let value = '';
+  let label = '';
+  for (let j = s; j < e; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (!value && /stat-value|counter-number|count-number|metric-value|kpi-value|\bnumber\b|\bcount\b/i.test(tcls)) {
+      value = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      j = close - 1;
+      continue;
+    }
+    if (!label && /stat-label|counter-label|metric-label|kpi-label|\bcaption\b/i.test(tcls)) {
+      label = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      j = close - 1;
+      continue;
+    }
+    if (!value && HEADING.test(tk.name)) {
+      const txt = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      if (STAT_VALUE_RE.test(txt)) value = txt;
+      else if (!label) label = txt;
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p' || tk.name === 'span' || tk.name === 'strong') {
+      const txt = unescapeHtml(textOf(tokens, j + 1, close - 1)).trim();
+      if (!value && STAT_VALUE_RE.test(txt) && txt.length <= 16) value = txt;
+      else if (!label && txt && !STAT_VALUE_RE.test(txt)) label = txt;
+      j = close - 1;
+    }
+  }
+  if (!value) {
+    const all = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+    const m = STAT_VALUE_RE.exec(all);
+    if (m) {
+      value = m[1].trim();
+      const rest = all.replace(m[1], '').replace(/\s+/g, ' ').trim();
+      if (!label) label = rest;
+    }
+  }
+  if (!value) return null;
+  return { value, label };
+}
+
+function parseStatsData(tokens, i, end, t) {
+  if (!looksLikeStats(t)) return null;
+  const items = [];
+  for (const [s, e] of childSpans(tokens, i + 1, end - 1)) {
+    const name = tokens[s].name;
+    if (!CONTAINERS.has(name) && name !== 'li') continue;
+    const stat = extractStat(tokens, s, e);
+    if (stat) items.push(stat);
+  }
+  if (items.length < 2) return null;
+  const columns = Math.min(Math.max(items.length, 2), 4);
+  return { items, columns };
+}
+
+function extractLogo(tokens, s, e) {
+  let src = '';
+  let alt = '';
+  let url = '';
+  const root = tokens[s];
+  if (root && root.name === 'a' && root.attrs && root.attrs.href) url = root.attrs.href;
+  for (let j = s; j < e; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (!src && (tk.name === 'img' || tk.name === 'source')) {
+      src = imageSrcOf(tk.attrs);
+      alt = (tk.attrs && tk.attrs.alt) || alt;
+    }
+    if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href) url = tk.attrs.href;
+  }
+  if (!src) return null;
+  const out = { src };
+  if (alt) out.alt = alt;
+  if (url && url !== '#') out.url = url;
+  return out;
+}
+
+function parseLogosData(tokens, i, end, t) {
+  if (!looksLikeLogos(t)) return null;
+  let from = i + 1;
+  let to = end - 1;
+  const kids = childSpans(tokens, from, to);
+  if (kids.length === 1 && /list|strip|track|row|inner|wrap/i.test(classHay(tokens[kids[0][0]]))) {
+    from = kids[0][0] + 1;
+    to = kids[0][1] - 1;
+  }
+  const items = [];
+  for (const [s, e] of childSpans(tokens, from, to)) {
+    const name = tokens[s].name;
+    if (name === 'img' || name === 'a' || name === 'li' || name === 'figure' || CONTAINERS.has(name)) {
+      const logo = extractLogo(tokens, s, e);
+      if (logo) items.push(logo);
+    }
+  }
+  return items.length >= 2 ? { items } : null;
+}
+
+function networkFromHref(href) {
+  const h = String(href || '').toLowerCase();
+  if (/facebook\.com|\bfb\.com\b/.test(h)) return 'facebook';
+  if (/instagram\.com/.test(h)) return 'instagram';
+  if (/(?:^|\/\/)(?:www\.)?(?:x\.com|twitter\.com)/.test(h)) return 'twitter';
+  if (/linkedin\.com/.test(h)) return 'linkedin';
+  if (/youtube\.com|youtu\.be/.test(h)) return 'youtube';
+  if (/tiktok\.com/.test(h)) return 'tiktok';
+  if (/github\.com/.test(h)) return 'github';
+  if (/wordpress\.org|wordpress\.com/.test(h)) return 'wordpress';
+  if (/wa\.me|whatsapp/.test(h)) return 'whatsapp';
+  if (/(?:^|\/\/)(?:t\.me|telegram\.)/.test(h)) return 'telegram';
+  if (/pinterest\.com/.test(h)) return 'pinterest';
+  if (/mailto:/.test(h)) return 'email';
+  return '';
+}
+
+function networkFromClass(cls) {
+  const m = /(?:elementor-social-icon-|fa(?:[brs])?-|icon-|social-)([a-z0-9-]+)/i.exec(String(cls || ''));
+  if (!m) return '';
+  const name = m[1].toLowerCase().replace(/-square|-official|-f$|-in$/i, '');
+  if (!name || name === 'icon' || name === 'link') return '';
+  return name;
+}
+
+function extractSocialLink(tokens, s, e, tk) {
+  const href = (tk.attrs && tk.attrs.href) || '';
+  if (!href || href === '#') return null;
+  let network = networkFromClass((tk.attrs && tk.attrs.class) || '') || networkFromHref(href);
+  let label = ((tk.attrs && (tk.attrs['aria-label'] || tk.attrs.title)) || '').trim();
+  if (!label) {
+    const raw = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+    if (raw && raw.length < 40 && !/^[Mm]\s/.test(raw)) label = raw;
+  }
+  if (!network && !label) return null;
+  if (!network) network = 'link';
+  if (!label) label = network;
+  return { network, url: href, label };
+}
+
+function parseSocialData(tokens, i, end, t) {
+  if (!looksLikeSocial(t)) return null;
+  const items = [];
+  const seen = new Set();
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'a') continue;
+    const close = matchClose(tokens, j);
+    const item = extractSocialLink(tokens, j, close, tk);
+    if (item && !seen.has(item.url)) {
+      seen.add(item.url);
+      items.push(item);
+    }
+    j = close - 1;
+  }
+  return items.length >= 2 ? { items } : null;
+}
+
+function parseTestimonialData(tokens, i, end, t) {
+  if (!looksLikeTestimonial(t)) return null;
+  let quote = '';
+  let author = '';
+  let role = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (!quote && (/testimonial-content|testimonial-text|review-text|bent-testimonial-quote/i.test(tcls)
+      || tk.name === 'p' || tk.name === 'q')) {
+      const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (text) quote = text.replace(/^["“]+|["”]+$/g, '');
+      j = close - 1;
+      continue;
+    }
+    if (!author && (/testimonial-name|review-author|author-name|bent-testimonial-author/i.test(tcls)
+      || tk.name === 'cite')) {
+      author = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (!role && /testimonial-job|testimonial-role|review-role|author-role/i.test(tcls)) {
+      role = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+    }
+  }
+  if (!quote) {
+    quote = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+    if (author) quote = quote.replace(author, '').trim();
+    if (role) quote = quote.replace(role, '').trim();
+    quote = quote.replace(/^["“]+|["”]+$/g, '').trim();
+  }
+  if (!quote) return null;
+  const out = { quote };
+  if (author) out.author = author;
+  if (role) out.role = role;
+  return out;
+}
+
+function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
+  const crumbs = parseCrumbsData(tokens, i, end, t);
+  if (crumbs) return { type: 'crumbs', data: crumbs, next: end };
+  const stats = parseStatsData(tokens, i, end, t);
+  if (stats) return { type: 'stats', data: stats, next: end };
+  const social = parseSocialData(tokens, i, end, t);
+  if (social) return { type: 'social', data: social, next: end };
+  const logos = parseLogosData(tokens, i, end, t);
+  if (logos) return { type: 'logos', data: logos, next: end };
+  const pricing = parsePricingData(tokens, i, end, t);
+  if (pricing) return { type: 'pricing', data: pricing, next: end };
+  const carousel = parseCarouselData(tokens, i, end, t, bgMap);
+  if (carousel) return { type: 'carousel', data: carousel, next: end };
+  const faq = parseFaqData(tokens, i, end, t);
+  if (faq) return { type: 'faq', data: faq, next: end };
+  const tabs = parseTabsData(tokens, i, end, t, parentTo);
+  if (tabs) return { type: 'tabs', data: { items: tabs.items }, next: tabs.next };
+  const hero = parseHeroData(tokens, i, end, t, bgMap);
+  if (hero) return { type: 'hero', data: hero, next: end };
+  const stepData = parseStepsData(tokens, i, end, t);
+  if (stepData) return { type: 'steps', data: stepData, next: end };
+  const tlData = parseTimelineData(tokens, i, end, t);
+  if (tlData) return { type: 'timeline', data: tlData, next: end };
+  const testimonial = parseTestimonialData(tokens, i, end, t);
+  if (testimonial) return { type: 'testimonial', data: testimonial, next: end };
+  return null;
+}
+
 /**
  * A run of sibling <details> elements → ONE accordion block (the FAQ shape
  * real sites ship). <summary> is the fold title, the rest of the fold is its
@@ -949,20 +1766,16 @@ function htmlToBlocks(html, opts = {}) {
           sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
           mapped += 1; i = end; continue;
         }
+        const structuralList = tryStructuralModules(tokens, i, end, t, bgMap, to);
+        if (structuralList) {
+          sink.push({ type: structuralList.type, id: nid(structuralList.type), data: structuralList.data });
+          mapped += 1; i = structuralList.next; continue;
+        }
+        if (guessedTool(t)) suggested.add(guessedTool(t));
         // a ul of single short links is a menu — keep the hrefs (v0.67)
         const menu = navItemsFromList(tokens, i, end);
         if (menu) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
-          mapped += 1; i = end; continue;
-        }
-        const stepData = parseStepsData(tokens, i, end, t);
-        if (stepData) {
-          sink.push({ type: 'steps', id: nid('steps'), data: stepData });
-          mapped += 1; i = end; continue;
-        }
-        const tlData = parseTimelineData(tokens, i, end, t);
-        if (tlData) {
-          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
           mapped += 1; i = end; continue;
         }
         const items = [];
@@ -977,12 +1790,17 @@ function htmlToBlocks(html, opts = {}) {
         i = end; continue;
       }
       if (name === 'dl') {
+        const faqDl = parseFaqData(tokens, i, end, t);
+        if (faqDl) {
+          sink.push({ type: 'faq', id: nid('faq'), data: faqDl });
+          mapped += 1; i = end; continue;
+        }
         const tlData = parseTimelineData(tokens, i, end, t);
         if (tlData) {
           sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
           mapped += 1; i = end; continue;
         }
-        suggested.add('timeline');
+        suggested.add(looksLikeFaq(t) ? 'faq' : 'timeline');
         let frag = '';
         for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
         raw += frag;
@@ -998,6 +1816,7 @@ function htmlToBlocks(html, opts = {}) {
           sink.push({ type: 'form', id: nid('form'), data: { action: (t.attrs && t.attrs.action) || '', method, submit: 'שליחה', fields } });
           mapped += 1;
         } else {
+          suggested.add('form');
           let frag = '';
           for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
           raw += frag;
@@ -1008,11 +1827,24 @@ function htmlToBlocks(html, opts = {}) {
       // nav → the nav module (v0.60 closed this gap). Its <a> children become
       // nav links; drop wrapper <ul>/<li> (we read the anchors directly).
       if (name === 'nav') {
+        const crumbNav = parseCrumbsData(tokens, i, end, t);
+        if (crumbNav) {
+          sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
+          mapped += 1; i = end; continue;
+        }
+        const socialNav = parseSocialData(tokens, i, end, t);
+        if (socialNav) {
+          sink.push({ type: 'social', id: nid('social'), data: socialNav });
+          mapped += 1; i = end; continue;
+        }
+        if (looksLikeCrumbs(t)) suggested.add('crumbs');
+        if (looksLikeSocial(t)) suggested.add('social');
         const items = parseNavItems(tokens, i, end);
         if (items.length) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items } });
           mapped += 1;
         } else {
+          suggested.add('nav');
           let frag = '';
           for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
           raw += frag;
@@ -1029,6 +1861,7 @@ function htmlToBlocks(html, opts = {}) {
           sink.push({ type: 'video', id: nid('video'), data });
           mapped += 1;
         } else {
+          suggested.add('video');
           let frag = '';
           for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
           raw += frag;
@@ -1080,18 +1913,17 @@ function htmlToBlocks(html, opts = {}) {
       }
 
       if (CONTAINERS.has(name)) {
-        const stepData = parseStepsData(tokens, i, end, t);
-        if (stepData) {
-          sink.push({ type: 'steps', id: nid('steps'), data: stepData });
-          mapped += 1; i = end; continue;
+        const structural = tryStructuralModules(tokens, i, end, t, bgMap, to);
+        if (structural) {
+          sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
+          mapped += 1; i = structural.next; continue;
         }
-        const tlData = parseTimelineData(tokens, i, end, t);
-        if (tlData) {
-          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
-          mapped += 1; i = end; continue;
+        const lost = guessedTool(t);
+        if (lost) suggested.add(lost);
+        else {
+          if (looksLikeSteps(t)) suggested.add('steps');
+          if (looksLikeTimeline(t)) suggested.add('timeline');
         }
-        if (looksLikeSteps(t)) suggested.add('steps');
-        if (looksLikeTimeline(t)) suggested.add('timeline');
         // descend: its children become blocks (the wrapper itself is dropped).
         // A grid/flex wrapper with several children hints at a columns layout.
         const before = sink.length;
@@ -1108,8 +1940,16 @@ function htmlToBlocks(html, opts = {}) {
       }
 
       // custom elements / SPA shells (devsite-*, react-*) — walk children,
-      // never keep framework wrappers as raw blobs
+      // never keep framework wrappers as raw blobs. Swiper 9+ is
+      // <swiper-container>; if we flatten it, report carousel.
       if (name.includes('-')) {
+        const custom = tryStructuralModules(tokens, i, end, t, bgMap, to);
+        if (custom) {
+          sink.push({ type: custom.type, id: nid(custom.type), data: custom.data });
+          mapped += 1; i = custom.next; continue;
+        }
+        const lostCustom = guessedTool(t);
+        if (lostCustom) suggested.add(lostCustom);
         walk(i + 1, end - 1, sink);
         i = end; continue;
       }
@@ -1141,6 +1981,18 @@ module.exports = {
   parseTableData,
   parseStepsData,
   parseTimelineData,
+  parsePricingData,
+  parseCarouselData,
+  parseFaqData,
+  parseTabsData,
+  parseHeroData,
+  parseCrumbsData,
+  parseStatsData,
+  parseLogosData,
+  parseSocialData,
+  parseTestimonialData,
+  tryStructuralModules,
+  guessedTool,
   parseDetailsRun,
   mapsAddressOf,
   detectCardCluster,

@@ -271,6 +271,202 @@ async function checkRejects(name, fn) {
     && extras.blocks.some((b) => b.type === 'button' && b.data.text === 'הרשמה')
     && extras.blocks.filter((b) => b.type === 'button').length === 1);
 
+  // ── inbound maps + guessed-and-lost toolGap (never a silent flatten) ──
+  const swiper = htmlToBlocks(
+    '<div class="swiper"><div class="swiper-wrapper">'
+    + '<div class="swiper-slide"><img src="/a.jpg" alt=""><h3>שקופית א</h3></div>'
+    + '<div class="swiper-slide"><img src="/b.jpg" alt=""><h3>שקופית ב</h3></div>'
+    + '</div></div>'
+  );
+  check('Swiper → carousel (2 slides, pictures kept)',
+    swiper.blocks.some((b) => b.type === 'carousel' && (b.data.items || []).length === 2
+      && b.data.items[0].image === '/a.jpg' && b.data.items[0].title === 'שקופית א'));
+
+  const swiperEmpty = htmlToBlocks('<div class="swiper"><div class="swiper-wrapper"></div></div>');
+  check('empty Swiper flattens but still reports carousel toolGap',
+    !swiperEmpty.blocks.some((b) => b.type === 'carousel') && swiperEmpty.suggestedTools.includes('carousel'));
+
+  const bootTabs = htmlToBlocks(
+    '<ul class="nav nav-tabs">'
+    + '<li><a href="#one">אחד</a></li><li><a href="#two">שניים</a></li>'
+    + '</ul>'
+    + '<div class="tab-content">'
+    + '<div class="tab-pane" id="one"><p>תוכן אחד</p></div>'
+    + '<div class="tab-pane" id="two"><p>תוכן שניים</p></div>'
+    + '</div>'
+  );
+  const bootTab = bootTabs.blocks.find((b) => b.type === 'tabs');
+  check('Bootstrap tabs → tabs module (labels + pane text)',
+    !!bootTab && bootTab.data.items.length === 2 && bootTab.data.items[0].label === 'אחד'
+    && /תוכן אחד/.test(bootTab.data.items[0].content));
+
+  const classedFaq = htmlToBlocks(
+    '<section class="faq">'
+    + '<div class="faq-item"><h3>איך מתחילים?</h3><p>יוצרים אתר.</p></div>'
+    + '<div class="faq-item"><h3>כמה זה עולה?</h3><p>חינם.</p></div>'
+    + '</section>'
+  );
+  const faqB = classedFaq.blocks.find((b) => b.type === 'faq');
+  check('classed FAQ heading+p → faq module',
+    !!faqB && faqB.data.items.length === 2 && faqB.data.items[0].question === 'איך מתחילים?'
+    && faqB.data.items[1].answer === 'חינם.');
+
+  const faqDl = htmlToBlocks(
+    '<dl class="faq"><dt>שאלה א</dt><dd>תשובה א</dd><dt>שאלה ב</dt><dd>תשובה ב</dd></dl>'
+  );
+  check('classed <dl class="faq"> → faq, not a timeline',
+    faqDl.blocks.some((b) => b.type === 'faq' && b.data.items[0].question === 'שאלה א')
+    && !faqDl.blocks.some((b) => b.type === 'timeline'));
+
+  const pricingHtml = htmlToBlocks(
+    '<div class="pricing">'
+    + '<article class="plan"><h3>בסיסי</h3><span class="price">$9</span>'
+    + '<ul class="features"><li>אחת</li><li>שתיים</li></ul><a href="/s">התחילו</a></article>'
+    + '<article class="plan featured"><h3>פרו</h3><span class="price">$29/mo</span>'
+    + '<ul class="features"><li>הכל</li></ul><a href="/p">קדימה</a></article>'
+    + '</div>'
+  );
+  const pr = pricingHtml.blocks.find((b) => b.type === 'pricing');
+  check('classed pricing HTML → pricing (title, price, features, cta, highlight)',
+    !!pr && pr.data.items.length === 2 && pr.data.items[0].title === 'בסיסי'
+    && pr.data.items[0].price === '$9' && /אחת/.test(pr.data.items[0].features)
+    && pr.data.items[0].ctaUrl === '/s' && pr.data.items[1].highlighted === true);
+
+  const bgHero = htmlToBlocks(
+    '<section class="hero" style="background-image:url(/hero.jpg)">'
+    + '<h1>ברוכים הבאים</h1><p>הסטודיו</p><a href="/go">קדימה</a>'
+    + '</section>'
+  );
+  check('hero with CSS background-image keeps the picture',
+    bgHero.blocks.some((b) => b.type === 'hero' && b.data.title === 'ברוכים הבאים'
+      && b.data.image === '/hero.jpg' && b.data.buttonUrl === '/go'));
+
+  const bloatedHero = htmlToBlocks(
+    '<div class="hero">'
+    + [1, 2, 3, 4, 5, 6].map((n) => '<h2>סעיף ' + n + '</h2><p>תוכן ' + n + '</p>').join('')
+    + '</div>'
+  );
+  check('page-sized hero-classed wrapper flattens AND reports hero toolGap',
+    !bloatedHero.blocks.some((b) => b.type === 'hero')
+    && bloatedHero.suggestedTools.includes('hero')
+    && bloatedHero.blocks.filter((b) => b.type === 'heading').length >= 2);
+
+  const ownPricing = htmlToBlocks(require('../src/pzn/pricing-html').renderPricingFromData({
+    items: [
+      { title: 'א', price: '10', features: 'x', ctaLabel: 'קנו', ctaUrl: '/a' },
+      { title: 'ב', price: '20', features: 'y', highlighted: true }
+    ]
+  }, 'rtl'));
+  check('our own bent-pricing HTML maps back to pricing',
+    ownPricing.blocks.some((b) => b.type === 'pricing' && b.data.items.length === 2
+      && b.data.items[0].title === 'א'));
+
+  const classedStats = htmlToBlocks(
+    '<section class="stats">'
+    + '<div class="stat"><div class="stat-value">120+</div><div class="stat-label">לקוחות</div></div>'
+    + '<div class="stat"><div class="stat-value">15</div><div class="stat-label">שנים</div></div>'
+    + '<div class="stat"><div class="stat-value">98%</div><div class="stat-label">שביעות רצון</div></div>'
+    + '</section>'
+  );
+  const st = classedStats.blocks.find((b) => b.type === 'stats');
+  check('classed .stats → stats (value + label kept)',
+    !!st && st.data.items.length === 3 && st.data.items[0].value === '120+'
+    && st.data.items[2].label === 'שביעות רצון');
+
+  const counters = htmlToBlocks(
+    '<div class="counters">'
+    + '<div><h3>10K</h3><p>Users</p></div>'
+    + '<div><h3>4.9</h3><p>Rating</p></div>'
+    + '</div>'
+  );
+  check('classed .counters heading+p → stats',
+    counters.blocks.some((b) => b.type === 'stats' && b.data.items[0].value === '10K'
+      && b.data.items[1].label === 'Rating'));
+
+  const emptyStats = htmlToBlocks('<section class="stats"><p>coming soon</p></section>');
+  check('classed stats without numbers flattens AND reports stats toolGap',
+    !emptyStats.blocks.some((b) => b.type === 'stats') && emptyStats.suggestedTools.includes('stats'));
+
+  const ownStats = htmlToBlocks(renderBlock({
+    type: 'stats', id: 's', data: { columns: 3, items: [{ value: '9', label: 'A' }, { value: '8', label: 'B' }] }
+  }, 'rtl'));
+  check('our own stats-row HTML maps back to stats',
+    ownStats.blocks.some((b) => b.type === 'stats' && b.data.items.length === 2 && b.data.items[0].value === '9'));
+
+  const classedLogos = htmlToBlocks(
+    '<div class="logos">'
+    + '<img src="/a.svg" alt="Alpha">'
+    + '<a href="https://b.example"><img src="/b.svg" alt="Beta"></a>'
+    + '<div class="logo-cell"><img src="/c.svg" alt="Gamma"></div>'
+    + '</div>'
+  );
+  const lg = classedLogos.blocks.find((b) => b.type === 'logos');
+  check('classed .logos → logos (src, alt, optional url)',
+    !!lg && lg.data.items.length === 3 && lg.data.items[0].src === '/a.svg'
+    && lg.data.items[1].url === 'https://b.example' && lg.data.items[2].alt === 'Gamma');
+
+  const clients = htmlToBlocks(
+    '<ul class="clients">'
+    + '<li><img src="/c1.png" alt="One"></li>'
+    + '<li><img src="/c2.png" alt="Two"></li>'
+    + '</ul>'
+  );
+  check('classed .clients list → logos',
+    clients.blocks.some((b) => b.type === 'logos' && b.data.items.length === 2
+      && b.data.items[0].src === '/c1.png'));
+
+  const emptyLogos = htmlToBlocks('<div class="brands"><p>no marks yet</p></div>');
+  check('classed brands without images flattens AND reports logos toolGap',
+    !emptyLogos.blocks.some((b) => b.type === 'logos') && emptyLogos.suggestedTools.includes('logos'));
+
+  const ownLogos = htmlToBlocks(renderBlock({
+    type: 'logos', id: 'l', data: { items: [{ src: '/x.svg', alt: 'X' }, { src: '/y.svg', alt: 'Y', url: '/y' }] }
+  }, 'rtl'));
+  check('our own logos-strip HTML maps back to logos',
+    ownLogos.blocks.some((b) => b.type === 'logos' && b.data.items.length === 2
+      && b.data.items[1].url === '/y'));
+
+  const elFaq = htmlToBlocks(
+    '<div class="elementor-widget elementor-widget-stattic-faq dsm-faq">'
+    + '<div class="e-loop-item faq type-faq">'
+    + '<div class="dsm-faq--title"><div class="elementor-heading-title">קטגוריה</div></div>'
+    + '<div class="dsm-faq--faq-content"><h3>איך מתחילים?</h3><p>יוצרים אתר.</p></div>'
+    + '</div>'
+    + '<div class="e-loop-item faq type-faq">'
+    + '<div class="dsm-faq--title"><div class="elementor-heading-title">קטגוריה</div></div>'
+    + '<div class="dsm-faq--faq-content"><h3>כמה זה עולה?</h3><p>חינם.</p></div>'
+    + '</div>'
+    + '</div>'
+  );
+  const elFaqB = elFaq.blocks.find((b) => b.type === 'faq');
+  check('Elementor DSM FAQ loop → faq (real questions, not category titles)',
+    !!elFaqB && elFaqB.data.items.length === 2
+    && elFaqB.data.items[0].question === 'איך מתחילים?'
+    && elFaqB.data.items[1].answer === 'חינם.'
+    && !elFaq.suggestedTools.includes('faq'));
+
+  const elQuote = htmlToBlocks(
+    '<div class="elementor-testimonial-wrapper">'
+    + '<div class="elementor-testimonial-content">“האתר עלה ביום.”</div>'
+    + '<div class="elementor-testimonial-name">תמר כהן</div>'
+    + '<div class="elementor-testimonial-job">מנהלת סטודיו</div>'
+    + '</div>'
+  );
+  const elT = elQuote.blocks.find((b) => b.type === 'testimonial');
+  check('Elementor testimonial widget → testimonial (quote, author, role)',
+    !!elT && /האתר עלה/.test(elT.data.quote)
+    && elT.data.author === 'תמר כהן' && elT.data.role === 'מנהלת סטודיו');
+
+  const elSocial = htmlToBlocks(
+    '<div class="elementor-widget-social-icons"><div class="elementor-social-icons-wrapper">'
+    + '<a class="elementor-social-icon elementor-social-icon-wordpress" href="https://wordpress.org/plugins/x">WordPress</a>'
+    + '<a class="elementor-social-icon elementor-social-icon-github" href="https://github.com/x">GitHub</a>'
+    + '</div></div>'
+  );
+  check('Elementor social-icons widget → social module',
+    elSocial.blocks.some((b) => b.type === 'social' && b.data.items.length === 2
+      && b.data.items[0].network === 'wordpress'));
+
   console.log('');
   console.log(fail ? 'SMOKE DECOMPILE: FAIL' : 'SMOKE DECOMPILE: PASS');
   process.exit(fail ? 1 : 0);

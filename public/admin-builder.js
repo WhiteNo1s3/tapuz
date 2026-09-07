@@ -51,6 +51,7 @@
     { type: 'cta', label: 'CTA', hint: 'קריאה לפעולה', icon: '➤', group: 'תוכן', keyword: 'CTA' },
     { type: 'stats', label: 'מדדים', hint: 'מספרים', icon: '＃', group: 'תוכן', keyword: 'STATS' },
     { type: 'steps', label: 'שלבים', hint: 'איך זה עובד', icon: '①', group: 'מבנה', keyword: 'STEPS' },
+    { type: 'crumbs', label: 'פירורים', hint: 'נתיב הדף', icon: '›', group: 'מבנה', keyword: 'CRUMBS' },
     { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
     { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
@@ -59,6 +60,7 @@
     { type: 'spacer', label: 'רווח', hint: 'sm–xl', icon: '↕', group: 'מבנה', keyword: 'SPACE' },
     { type: 'divider', label: 'קו מפריד', hint: 'line/dots', icon: '—', group: 'מבנה', keyword: 'DIVIDER' },
     { type: 'logos', label: 'לוגואים', hint: 'לקוחות', icon: '▣▣', group: 'מדיה', keyword: 'LOGOS' },
+    { type: 'social', label: 'רשתות', hint: 'אייקוני שיתוף', icon: '◎', group: 'מדיה', keyword: 'SOCIAL' },
     { type: 'contact-info', label: 'קשר', hint: 'טלפון/מייל', icon: '☎', group: 'מדיה', keyword: 'CONTACT' }
   ];
 
@@ -2045,6 +2047,18 @@
       return wrap;
     }
 
+    if (block.type === 'social') {
+      var soItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-social" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        (soItems.length ? soItems.map(function (it) {
+          return '<span style="border:1px solid #e2e8f0;border-radius:999px;padding:4px 10px;font-size:.85rem">' +
+            esc(it.label || it.network || 'רשת') + '</span>';
+        }).join('') : '<span style="color:#94a3b8">◎ רשתות — הוסיפו קישור במאפיינים ←</span>') +
+        '</div>';
+      return wrap;
+    }
+
     if (block.type === 'faq') {
       var fqItems = d.items || [];
       wrap.innerHTML =
@@ -2186,6 +2200,25 @@
             '</div>';
         }).join('') +
         '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'crumbs') {
+      var cItems = d.items || [];
+      var crumbs = cItems.length ? cItems : [
+        { label: 'בית', url: '/' },
+        { label: 'הדף הזה' }
+      ];
+      wrap.innerHTML =
+        '<ol class="preview-crumbs">' +
+        crumbs.map(function (it, idx) {
+          var last = idx === crumbs.length - 1;
+          return '<li class="preview-crumb">' +
+            (last || !it.url ? '<span>' + esc(it.label || 'כאן') + '</span>'
+              : '<a href="' + esc(it.url) + '">' + esc(it.label || '') + '</a>') +
+            '</li>';
+        }).join('') +
+        '</ol>';
       return wrap;
     }
 
