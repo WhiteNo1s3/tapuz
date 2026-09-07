@@ -49,6 +49,9 @@ function buildCatalog(productVersion) {
       accept: m.accept || [],
       props
     };
+    // the standard describes every tag a .pzn file may carry — including the
+    // decompile-preview bands — but says which ones an author never writes
+    if (m.decompileOnly) catalog.modules[m.name].decompileOnly = true;
   }
   return catalog;
 }

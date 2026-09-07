@@ -1330,14 +1330,23 @@ const BLOCK_REGISTRY = [
     }
   },
 
-  // ─────────── gap-audit wave 4: page chrome + whatsapp ───────────
+  // ─────────── gap-audit wave 4: whatsapp + decompile-only chrome ───────────
   // The decompiler's hottest remaining toolGaps (walla, mako, rest.co.il,
-  // doctor.co.il): every real homepage carries a <header> and a <footer>,
-  // and Israeli business sites hang a wa.me link on everything. These are
-  // PAGE modules — they live inside the page body and never replace the
-  // site's own master chrome (עיצוב → מאסטר: כותרת ותחתית), which the theme
-  // layout wraps around every page. Decompiling a site keeps its header/
-  // footer as editable modules the admin can lift into the master or drop.
+  // doctor.co.il): Israeli business sites hang a wa.me link on everything,
+  // and every real homepage carries a <header> and a <footer>.
+  //
+  // whatsapp is a regular authoring module. header/footer are NOT (Ben's
+  // call): the real chrome is the theme's master layout (עיצוב → כותרת
+  // ותחתית), which is how sites are built and how the prompt→BenTML site
+  // flow works — a second, page-level header would duplicate that system
+  // and confuse authors. They exist ONLY so a decompiled site previews like
+  // a real Tapuziel site: the import maps the landmarks into these bands,
+  // the customer sees their chrome, and moves it into the master.
+  //
+  // `decompileOnly: true` is the switch: the toolbox, the agent primers and
+  // the dictionaries omit these types (authoringBlocks()), while the
+  // renderer, both BenTML dialects and the bridge keep speaking them so the
+  // imported draft round-trips.
   {
     type: 'whatsapp',
     keyword: 'WHATSAPP',
@@ -1374,12 +1383,13 @@ const BLOCK_REGISTRY = [
   {
     type: 'header',
     keyword: 'HEADER',
-    labelHe: 'ראש עמוד (Header)',
+    labelHe: 'ראש עמוד מיובא (Header)',
     icon: '⬒',
     category: 'מבנה',
     bodyClass: 'blocks',
     childrenOf: null,
-    hintHe: 'פס עליון בתוך הדף — לוגו, תפריט, כפתור. לא מחליף את כותרת האתר (מאסטר)',
+    decompileOnly: true,
+    hintHe: 'תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את כותרת האתר האמיתית עורכים בעיצוב → כותרת ותחתית',
     childrenKey: 'blocks',
     params: [
       {
@@ -1399,12 +1409,13 @@ const BLOCK_REGISTRY = [
   {
     type: 'footer',
     keyword: 'FOOTER',
-    labelHe: 'תחתית עמוד (Footer)',
+    labelHe: 'תחתית עמוד מיובאת (Footer)',
     icon: '⬓',
     category: 'מבנה',
     bodyClass: 'blocks',
     childrenOf: null,
-    hintHe: 'פס תחתון בתוך הדף — עמודות קישורים, רשתות, זכויות. לא מחליף את תחתית האתר (מאסטר)',
+    decompileOnly: true,
+    hintHe: 'תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את תחתית האתר האמיתית עורכים בעיצוב → כותרת ותחתית',
     childrenKey: 'blocks',
     params: [
       {
@@ -1663,11 +1674,23 @@ for (const def of BLOCK_REGISTRY) {
   else def.params.push(ANIMATE_PARAM);
 }
 
+/**
+ * The types an AUTHOR may reach for — the toolbox, the agent primers and the
+ * dictionaries read this, never BLOCK_REGISTRY directly. Excludes the
+ * decompile-only chrome bands (header/footer): those exist for the import
+ * preview and still render / round-trip, but are never offered as tools.
+ * @returns {object[]}
+ */
+function authoringBlocks() {
+  return BLOCK_REGISTRY.filter((e) => !e.decompileOnly);
+}
+
 module.exports = {
   BLOCK_REGISTRY,
   BLOCK_CATEGORIES,
   UNIVERSAL_PARAMS,
   INTEGRATIONS_DEFAULTS,
   getBlockDef,
-  defaultDataFor
+  defaultDataFor,
+  authoringBlocks
 };

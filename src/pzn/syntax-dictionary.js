@@ -29,8 +29,16 @@ const HIDDEN = new Set(['item', 'feature', 'stat', 'logo', 'qa', 'col', 'tab', '
 function buildDictionary() {
   const catalog = getCommandCatalog();
   const modules = [];
+  const decompileOnly = [];
 
   for (const def of listModules()) {
+    // the dictionary IS the agent's inventory — decompile-only modules (the
+    // imported header/footer bands) are named apart so an agent editing a
+    // decompiled draft recognises them, but is never handed them as tools
+    if (def.decompileOnly) {
+      decompileOnly.push({ name: def.name, tag: def.tag, label: def.label });
+      continue;
+    }
     const cmd = getCommand(def.name);
     const props = {};
     for (const [k, schema] of Object.entries(def.props || {})) {
@@ -93,7 +101,8 @@ function buildDictionary() {
       ]
     },
     categories: byCategory,
-    modules
+    modules,
+    decompileOnly
   };
 }
 

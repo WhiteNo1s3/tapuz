@@ -652,7 +652,10 @@ The v0.1 body keywords are exactly: `HEADING`, `TEXT`, `IMAGE`, `BUTTON`, `ROW`,
 **Reserved future keywords** — using them today is error **E201** with a "reserved for a future
 version" note: `INPUT`, `CODE`. (Everything else on the original v0.1 reserved list has since
 graduated: `SECTION`, `FORM`, `NAV`, `TABLE`, `VIDEO`, `AUDIO`, `ACCORDION`, `TABS`, `SLIDER`
-as `CAROUSEL`, and — gap-audit wave 4 — `HEADER` and `FOOTER` as page-chrome containers.)
+as `CAROUSEL`.) `HEADER` and `FOOTER` compile, but are **decompile-preview only**: the decompiler
+emits them so an imported site shows its chrome inside Tapuziel; authors and agents never write
+them — the site's real header and footer are theme chrome (עיצוב → כותרת ותחתית), and the
+toolbox, dictionaries and primers omit both keywords.
 
 Every keyword below also accepts the universal params `id`, `class`, `dir` (§7.4) — except
 `COL`, `ITEM`, `FEATURE`, `HTML`, and HERO children, per §7.4; they are omitted from the

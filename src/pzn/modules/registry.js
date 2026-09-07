@@ -2065,20 +2065,23 @@ register({
   }
 });
 
-// ─── Gap-audit wave 4: page chrome (header / footer) + whatsapp ───
-// The landmarks the decompiler used to refuse to invent, and the wa.me link
-// every Israeli business site carries. header/footer are containers of any
-// module (logo image, nav, button, columns, social…) rendered as a band
-// INSIDE the page — the theme's .site-header/.site-footer master chrome is a
-// different thing and keeps wrapping every page.
+// ─── Gap-audit wave 4: whatsapp + decompile-only chrome (header / footer) ───
+// whatsapp is a regular tool. header/footer are `decompileOnly` (Ben's
+// call): the real chrome is the theme's master layout (עיצוב → כותרת
+// ותחתית), so these bands exist only so a DECOMPILED site previews like a
+// real Tapuziel site — the import maps <header>/<footer> into them, the
+// customer sees their chrome, and moves it into the master. The command
+// catalog, dictionary and primers skip decompileOnly modules; the compiler,
+// the bridge and the repair layer keep speaking them so the draft round-trips.
 
 register({
   name: 'header',
   tag: 'bent-header',
   category: 'layout',
-  label: { he: 'ראש עמוד', en: 'Page header' },
+  label: { he: 'ראש עמוד מיובא', en: 'Imported page header' },
   icon: 'header',
   container: true,
+  decompileOnly: true,
   accept: [],
   props: {
     tone: {
@@ -2104,9 +2107,10 @@ register({
   name: 'footer',
   tag: 'bent-footer',
   category: 'layout',
-  label: { he: 'תחתית עמוד', en: 'Page footer' },
+  label: { he: 'תחתית עמוד מיובאת', en: 'Imported page footer' },
   icon: 'footer',
   container: true,
+  decompileOnly: true,
   accept: [],
   props: {
     tone: {

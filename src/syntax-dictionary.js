@@ -13,7 +13,8 @@ const {
   BLOCK_REGISTRY,
   BLOCK_CATEGORIES,
   UNIVERSAL_PARAMS,
-  getBlockDef
+  getBlockDef,
+  authoringBlocks
 } = require('./block-registry');
 const { KEYWORDS, RESERVED } = require('./bentml/keywords');
 
@@ -21,7 +22,10 @@ const { KEYWORDS, RESERVED } = require('./bentml/keywords');
  * Full dictionary object for API / docs generation.
  */
 function buildDictionary() {
-  const modules = BLOCK_REGISTRY.map((entry) => {
+  // the dictionary teaches AUTHORING — decompile-only types (the imported
+  // header/footer bands) are listed apart, so an agent recognises them in a
+  // decompiled draft but is never taught to mint them for a new page
+  const modules = authoringBlocks().map((entry) => {
     const kw = KEYWORDS[entry.keyword] || null;
     const snippet = buildSnippet(entry);
     return {
@@ -85,6 +89,13 @@ function buildDictionary() {
         'Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies',
         'No Markdown ** or [x](url)'
       ]
+    },
+    decompileOnly: BLOCK_REGISTRY.filter((e) => e.decompileOnly).map((e) => ({
+      type: e.type, keyword: e.keyword, labelHe: e.labelHe, hintHe: e.hintHe || ''
+    })),
+    decompileOnlyNote: {
+      he: 'מופיעים רק בטיוטות שנוצרו מפירוק אתר (תצוגת ייבוא). לא כלי כתיבה — כרום האתר האמיתי: עיצוב → כותרת ותחתית.',
+      en: 'Appear only in drafts produced by decompiling a site (import preview). Not authoring tools — the real site chrome is theme → header & footer.'
     },
     count: modules.length
   };
@@ -240,6 +251,18 @@ function toMarkdown(dict) {
   lines.push('');
   lines.push('These are **not** implemented yet. Using them in BenTML is an error today.');
   lines.push('');
+  if (d.decompileOnly && d.decompileOnly.length) {
+    lines.push('## Decompile-preview only (not authoring tools)');
+    lines.push('');
+    lines.push(d.decompileOnlyNote.en);
+    lines.push('');
+    lines.push(d.decompileOnlyNote.he);
+    lines.push('');
+    for (const m of d.decompileOnly) {
+      lines.push(`- \`${m.keyword}\` → \`${m.type}\` — **${m.labelHe}** — ${m.hintHe}`);
+    }
+    lines.push('');
+  }
 
   return lines.join('\n');
 }

@@ -542,11 +542,15 @@ const KEYWORDS = {
       color: { type: 'string' }
     }
   },
-  // gap-audit wave 4 — HEADER/FOOTER graduate from RESERVED as PAGE chrome
-  // (a band inside the page body; the site's master chrome stays the theme's)
+  // gap-audit wave 4 — HEADER/FOOTER leave RESERVED, but ONLY for the
+  // decompile-preview path (decompileOnly): the compiler must accept a
+  // decompiled draft that carries them, while the module catalog and the
+  // primers never offer them — the site's real chrome is the theme master
+  // (עיצוב → כותרת ותחתית)
   HEADER: {
     body: 'BLOCK-BODY',
     jsonType: 'header',
+    decompileOnly: true,
     params: {
       tone: { type: 'enum', default: 'light', values: ['light', 'dark', 'brand', 'none'] },
       layout: { type: 'enum', default: 'row', values: ['row', 'stack'] }
@@ -555,6 +559,7 @@ const KEYWORDS = {
   FOOTER: {
     body: 'BLOCK-BODY',
     jsonType: 'footer',
+    decompileOnly: true,
     params: {
       tone: { type: 'enum', default: 'dark', values: ['dark', 'light', 'brand', 'none'] },
       credit: { type: 'string', default: '' }

@@ -52,7 +52,7 @@ function previewFixed(source) {
  */
 function listModules() {
   return Object.entries(KEYWORDS)
-    .filter(([k]) => k !== 'META' && k !== 'HTML')
+    .filter(([k, def]) => k !== 'META' && k !== 'HTML' && !def.decompileOnly)
     .map(([name, def]) => ({
       keyword: name,
       body: def.body,

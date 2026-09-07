@@ -356,13 +356,13 @@ from it directly.
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
 
-#### `<bent-header>` — ראש עמוד / Page header · container
+#### `<bent-header>` — ראש עמוד מיובא / Imported page header · container
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `tone` · enum · light \| dark \| brand \| none · default `light`
   - `layout` · enum · row \| stack · default `row`
 
-#### `<bent-footer>` — תחתית עמוד / Page footer · container
+#### `<bent-footer>` — תחתית עמוד מיובאת / Imported page footer · container
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `tone` · enum · dark \| light \| brand \| none · default `dark`

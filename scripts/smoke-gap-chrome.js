@@ -13,11 +13,18 @@
  * reported when a band keeps provisional html (the rich-table rule).
  */
 
+const fs = require('fs');
+const path = require('path');
 const pzn = require('../src/pzn/index');
 const { renderBlock } = require('../src/renderer');
-const { getBlockDef, defaultDataFor } = require('../src/block-registry');
+const { getBlockDef, defaultDataFor, authoringBlocks } = require('../src/block-registry');
 const bentml = require('../src/bentml');
 const { RESERVED } = require('../src/bentml/keywords');
+const legacyDict = require('../src/syntax-dictionary');
+const pznDict = require('../src/pzn/syntax-dictionary');
+const { buildRoleplayPack } = require('../src/pzn/agent-roleplay');
+const { buildPznPrimer } = require('../src/pzn/agent-primer');
+const { buildCatalog } = require('../src/pzn/spec');
 const { htmlToBlocks } = require('../src/pzn/graduate');
 const { huntBlocks } = require('../src/pzn/hunt');
 const { decompileHtml } = require('../src/pzn/decompile');
@@ -76,6 +83,62 @@ check('registry labels are Hebrew-first', /ראש עמוד/.test(getBlockDef('he
   && /תחתית עמוד/.test(getBlockDef('footer').labelHe) && /וואטסאפ/.test(getBlockDef('whatsapp').labelHe));
 check('header/footer are blocks-containers (builder nests via childrenKey)',
   getBlockDef('header').childrenKey === 'blocks' && getBlockDef('footer').childrenKey === 'blocks');
+
+// ── the decompile-only policy (Ben's call): header/footer exist for the
+// import preview and NEVER as authoring tools — the theme master
+// (עיצוב → כותרת ותחתית) is the site's real chrome. whatsapp is a regular tool.
+check('header/footer are flagged decompileOnly; whatsapp is not',
+  getBlockDef('header').decompileOnly === true && getBlockDef('footer').decompileOnly === true
+  && !getBlockDef('whatsapp').decompileOnly);
+check('seeds/hints tell owners where the real chrome lives (Hebrew)',
+  /תצוגת ייבוא בלבד/.test(getBlockDef('header').hintHe) && /כותרת ותחתית/.test(getBlockDef('header').hintHe)
+  && /תצוגת ייבוא בלבד/.test(getBlockDef('footer').hintHe) && /כותרת ותחתית/.test(getBlockDef('footer').hintHe)
+  && /מיובא/.test(getBlockDef('header').labelHe) && /מיובאת/.test(getBlockDef('footer').labelHe));
+const authoring = authoringBlocks().map((e) => e.type);
+check('authoringBlocks(): no header/footer, whatsapp present',
+  !authoring.includes('header') && !authoring.includes('footer') && authoring.includes('whatsapp') && authoring.includes('nav'));
+const builderRoute = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'pages-builder.js'), 'utf8');
+check('server toolbox is built from authoringBlocks()', /authoringBlocks\(\)\.filter\(e => e\.category === cat/.test(builderRoute));
+const builderJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-builder.js'), 'utf8');
+check('client palette: fallback MODULES list carries whatsapp but no header/footer tool',
+  /type: 'whatsapp', label: 'וואטסאפ'/.test(builderJs)
+  && !/type: 'header', label:/.test(builderJs) && !/type: 'footer', label:/.test(builderJs));
+check('client palette: registry-driven MODULES filter decompileOnly, container map still nests the bands',
+  /REG\.blocks\.filter\(function \(e\) \{ return !e\.decompileOnly; \}\)\.map/.test(builderJs)
+  && /header: 'blocks', footer: 'blocks'/.test(builderJs));
+const lDict = legacyDict.buildDictionary();
+check('legacy dictionary: header/footer out of modules, listed apart as decompile-only; whatsapp in',
+  !lDict.modules.some((m) => m.type === 'header' || m.type === 'footer')
+  && lDict.modules.some((m) => m.type === 'whatsapp')
+  && lDict.decompileOnly.map((m) => m.keyword).sort().join(',') === 'FOOTER,HEADER');
+check('legacy dictionary markdown documents them as decompile-preview only',
+  /## Decompile-preview only \(not authoring tools\)/.test(legacyDict.toMarkdown(lDict)));
+const pDict = pznDict.buildDictionary();
+check('pzn dictionary (agent inventory): no bent-header/bent-footer tool; bent-whatsapp present',
+  !pDict.modules.some((m) => m.name === 'header' || m.name === 'footer')
+  && pDict.modules.some((m) => m.name === 'whatsapp')
+  && pDict.decompileOnly.map((m) => m.tag).sort().join(',') === 'bent-footer,bent-header'
+  && !pznDict.toAgentTools(pDict).some((t) => t.tool === 'header')
+  && !/bent-header|bent-footer/.test(pznDict.toMarkdown(pDict))
+  && !/bent-header|bent-footer/.test(pznDict.toCompactMarkdown(pDict)));
+check('roleplay pack + pzn primer never teach HEADER/FOOTER, do teach WHATSAPP', (() => {
+  const full = buildRoleplayPack({ locale: 'he' }).text;
+  const lite = buildRoleplayPack({ locale: 'he', size: 'lite' }).text;
+  const primer = buildPznPrimer();
+  return !/bent-header|bent-footer/.test(full) && !/bent-header|bent-footer/.test(lite) && !/bent-header|bent-footer/.test(primer)
+    && /bent-whatsapp/.test(full) && /bent-whatsapp/.test(lite) && /bent-whatsapp/.test(primer);
+})());
+check('bentml.listModules() (keyword catalog) omits HEADER/FOOTER, keeps WHATSAPP',
+  !bentml.listModules().some((m) => m.keyword === 'HEADER' || m.keyword === 'FOOTER')
+  && bentml.listModules().some((m) => m.keyword === 'WHATSAPP'));
+check('the .pzn standard still describes the bands (decompiled files carry them) and flags them',
+  buildCatalog('smoke').modules.header.decompileOnly === true && buildCatalog('smoke').modules.footer.decompileOnly === true
+  && !buildCatalog('smoke').modules.whatsapp.decompileOnly);
+check('author cheatsheet: WHATSAPP taught, HEADER/FOOTER named only as do-not-write',
+  (() => {
+    const sheet = fs.readFileSync(path.join(__dirname, '..', 'docs', 'bentml-cheatsheet.md'), 'utf8');
+    return /^WHATSAPP\(/m.test(sheet) && !/^HEADER\(/m.test(sheet) && !/^FOOTER\(/m.test(sheet) && /never write HEADER/.test(sheet);
+  })());
 
 // ── header ──
 const hdHtml = renderBlock({ type: 'header', id: 'h1', data: FIXTURES.header }, 'rtl');
