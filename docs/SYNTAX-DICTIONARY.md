@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (51)
+## Modules (49)
 
 ### תוכן
 
@@ -872,42 +872,6 @@ WHATSAPP(align: start) {
 
 ### מבנה
 
-#### `HEADER` → `header`
-
-⬒ **ראש עמוד (Header)** — פס עליון בתוך הדף — לוגו, תפריט, כפתור. לא מחליף את כותרת האתר (מאסטר)
-
-Shape: `HEADER(params) { nested modules }`
-
-| Param (JSON) | BenTML | Type | Required | Default |
-|---|---|---|---|---|
-| `tone` | `tone` | enum light\|dark\|brand\|none |  | "light" |
-| `layout` | `layout` | enum row\|stack |  | "row" |
-| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
-
-```bentml
-HEADER {
-  …
-}
-```
-
-#### `FOOTER` → `footer`
-
-⬓ **תחתית עמוד (Footer)** — פס תחתון בתוך הדף — עמודות קישורים, רשתות, זכויות. לא מחליף את תחתית האתר (מאסטר)
-
-Shape: `FOOTER(params) { nested modules }`
-
-| Param (JSON) | BenTML | Type | Required | Default |
-|---|---|---|---|---|
-| `tone` | `tone` | enum dark\|light\|brand\|none |  | "dark" |
-| `credit` | `credit` | string |  | "" |
-| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
-
-```bentml
-FOOTER {
-  …
-}
-```
-
 #### `NAV` → `nav`
 
 ≡ **תפריט ניווט** — שורת ניווט עם צבעים (רקע + טקסט)
@@ -1020,3 +984,12 @@ Universal on most keywords: `class`, `id`.
 `INPUT`, `CODE`
 
 These are **not** implemented yet. Using them in BenTML is an error today.
+
+## Decompile-preview only (not authoring tools)
+
+Appear only in drafts produced by decompiling a site (import preview). Not authoring tools — the real site chrome is theme → header & footer.
+
+מופיעים רק בטיוטות שנוצרו מפירוק אתר (תצוגת ייבוא). לא כלי כתיבה — כרום האתר האמיתי: עיצוב → כותרת ותחתית.
+
+- `HEADER` → `header` — **ראש עמוד מיובא (Header)** — תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את כותרת האתר האמיתית עורכים בעיצוב → כותרת ותחתית
+- `FOOTER` → `footer` — **תחתית עמוד מיובאת (Footer)** — תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את תחתית האתר האמיתית עורכים בעיצוב → כותרת ותחתית

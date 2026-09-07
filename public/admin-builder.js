@@ -56,8 +56,6 @@
     { type: 'countdown', label: 'ספירה לאחור', hint: 'טיימר למבצע', icon: '⏳', group: 'תוכן', keyword: 'COUNTDOWN' },
     { type: 'pricelist', label: 'מחירון', hint: 'תפריט / מחירים', icon: '₪', group: 'תוכן', keyword: 'PRICELIST' },
     { type: 'progress', label: 'מדדים', hint: 'פסי התקדמות', icon: '▰', group: 'תוכן', keyword: 'PROGRESS' },
-    { type: 'header', label: 'ראש עמוד', hint: 'לוגו | תפריט | כפתור', icon: '⬒', group: 'מבנה', keyword: 'HEADER' },
-    { type: 'footer', label: 'תחתית עמוד', hint: 'עמודות, רשתות, זכויות', icon: '⬓', group: 'מבנה', keyword: 'FOOTER' },
     { type: 'whatsapp', label: 'וואטסאפ', hint: 'כפתור צ׳אט', icon: '✆', group: 'תוכן', keyword: 'WHATSAPP' },
     { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
@@ -84,7 +82,11 @@
   var REG_BY_TYPE = {};
   if (REG) {
     REG.blocks.forEach(function (e) { REG_BY_TYPE[e.type] = e; });
-    MODULES = REG.blocks.map(function (e) {
+    // decompile-only types (the imported header/footer bands) stay in
+    // REG_BY_TYPE — a decompiled draft must still preview, nest and edit them
+    // — but never enter the MODULES palette: the real chrome is the theme
+    // master (עיצוב → כותרת ותחתית), not a toolbox module
+    MODULES = REG.blocks.filter(function (e) { return !e.decompileOnly; }).map(function (e) {
       return {
         type: e.type,
         label: e.labelHe || e.type,
@@ -110,6 +112,8 @@
    * per-type client edits. FALLBACK_CHILDREN_KEY keeps the known containers
    * working on older servers that don't inject window.__TAPUZ_REGISTRY__.
    */
+  // header/footer are decompile-only (never in MODULES) but a decompiled
+  // draft still nests blocks inside them, so the container map knows them
   var FALLBACK_CHILDREN_KEY = { card: 'blocks', parallax: 'blocks', section: 'blocks', header: 'blocks', footer: 'blocks', columns: 'columns' };
 
   function childrenKeyFor(type) {
@@ -171,8 +175,17 @@
     return isNaN(n) ? 24 : Math.max(4, Math.round(n));
   }
 
+  // Label/icon lookup for EVERY block a page may hold — including the
+  // decompile-only chrome bands the palette hides: a decompiled draft shows
+  // "ראש עמוד מיובא" on its band, never a bare "header".
   var MODULE_BY_TYPE = {};
   MODULES.forEach(function (m) { MODULE_BY_TYPE[m.type] = m; });
+  if (REG) {
+    REG.blocks.forEach(function (e) {
+      if (MODULE_BY_TYPE[e.type]) return;
+      MODULE_BY_TYPE[e.type] = { type: e.type, label: e.labelHe || e.type, hint: e.hintHe || '', icon: e.icon || '•', group: e.category || 'מבנה', keyword: e.keyword || String(e.type).toUpperCase() };
+    });
+  }
 
   function typeLabel(type) {
     return (MODULE_BY_TYPE[type] && MODULE_BY_TYPE[type].label) || type || '?';
@@ -1079,8 +1092,7 @@
   // ---- Canvas ----
 
   // ── Layers panel (v0.89) — the page as an outline (the Builder.io tree). ──
-  var MODULE_META = {};
-  MODULES.forEach(function (m) { MODULE_META[m.type] = m; });
+  var MODULE_META = MODULE_BY_TYPE;
 
   /** First human-recognizable snippet of a block's own text, for the row label. */
   function layerText(d) {

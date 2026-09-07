@@ -23,7 +23,7 @@ if (!process.env.TAPUZ_ROOT) {
 require('../src/db');
 const { extractPzn } = require('../src/pzn-extract');
 const { buildPznPrimer } = require('../src/pzn/agent-primer');
-const { moduleNames } = require('../src/pzn/modules/registry');
+const { moduleNames, listModules } = require('../src/pzn/modules/registry');
 const pzn = require('../src/pzn/index');
 const { createPage, getPageByFullPath, savePageSource } = require('../src/pages');
 
@@ -35,8 +35,14 @@ function check(name, cond) {
 
 // ── primer ───────────────────────────────────────────────────────────
 const primer = buildPznPrimer();
-const missing = moduleNames().filter((n) => !primer.includes(`<bent-${n}>`));
-check('primer covers every registered module', missing.length === 0);
+// decompile-only modules (the imported header/footer bands, gap-audit wave
+// 4) stay registered — repair must accept a decompiled draft — but are
+// deliberately NOT taught: the theme master is the site's real chrome
+const decompileOnly = new Set(listModules().filter((m) => m.decompileOnly).map((m) => m.name));
+const missing = moduleNames().filter((n) => !decompileOnly.has(n) && !primer.includes(`<bent-${n}>`));
+check('primer covers every registered authoring module', missing.length === 0);
+check('primer never teaches the decompile-only bands',
+  decompileOnly.size > 0 && [...decompileOnly].every((n) => !primer.includes(`<bent-${n}>`)));
 check('primer carries the reply contract', primer.includes('ONE fenced code block'));
 check('primer includes the page template', primer.includes('bent-version="0.1"'));
 

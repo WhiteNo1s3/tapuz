@@ -2710,8 +2710,8 @@
     "header": {
       "tag": "bent-header",
       "label": {
-        "he": "ראש עמוד",
-        "en": "Page header"
+        "he": "ראש עמוד מיובא",
+        "en": "Imported page header"
       },
       "category": "layout",
       "container": true,
@@ -2748,13 +2748,14 @@
           "default": "row",
           "optional": true
         }
-      }
+      },
+      "decompileOnly": true
     },
     "footer": {
       "tag": "bent-footer",
       "label": {
-        "he": "תחתית עמוד",
-        "en": "Page footer"
+        "he": "תחתית עמוד מיובאת",
+        "en": "Imported page footer"
       },
       "category": "layout",
       "container": true,
@@ -2787,7 +2788,8 @@
           "default": "",
           "optional": true
         }
-      }
+      },
+      "decompileOnly": true
     },
     "whatsapp": {
       "tag": "bent-whatsapp",
