@@ -56,6 +56,9 @@
     { type: 'countdown', label: 'ספירה לאחור', hint: 'טיימר למבצע', icon: '⏳', group: 'תוכן', keyword: 'COUNTDOWN' },
     { type: 'pricelist', label: 'מחירון', hint: 'תפריט / מחירים', icon: '₪', group: 'תוכן', keyword: 'PRICELIST' },
     { type: 'progress', label: 'מדדים', hint: 'פסי התקדמות', icon: '▰', group: 'תוכן', keyword: 'PROGRESS' },
+    { type: 'header', label: 'ראש עמוד', hint: 'לוגו | תפריט | כפתור', icon: '⬒', group: 'מבנה', keyword: 'HEADER' },
+    { type: 'footer', label: 'תחתית עמוד', hint: 'עמודות, רשתות, זכויות', icon: '⬓', group: 'מבנה', keyword: 'FOOTER' },
+    { type: 'whatsapp', label: 'וואטסאפ', hint: 'כפתור צ׳אט', icon: '✆', group: 'תוכן', keyword: 'WHATSAPP' },
     { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
     { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
@@ -107,7 +110,7 @@
    * per-type client edits. FALLBACK_CHILDREN_KEY keeps the known containers
    * working on older servers that don't inject window.__TAPUZ_REGISTRY__.
    */
-  var FALLBACK_CHILDREN_KEY = { card: 'blocks', parallax: 'blocks', columns: 'columns' };
+  var FALLBACK_CHILDREN_KEY = { card: 'blocks', parallax: 'blocks', section: 'blocks', header: 'blocks', footer: 'blocks', columns: 'columns' };
 
   function childrenKeyFor(type) {
     var def = registryDef(type);
@@ -2318,6 +2321,24 @@
             '</div>';
         }).join('') +
         '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'whatsapp') {
+      var waTarget = d.phone ? 'wa.me/' + esc(String(d.phone).replace(/\D+/g, '')) : (d.url ? esc(d.url) : '');
+      wrap.innerHTML =
+        '<div class="preview-whatsapp-wrap">' +
+        '<span class="preview-whatsapp">' +
+        '<span class="preview-wa-icon" aria-hidden="true">✆</span>' +
+        '<span class="preview-wa-body">' +
+        '<span class="preview-wa-label" data-inline-key="label">' + esc(d.label || 'דברו איתנו בוואטסאפ') + '</span>' +
+        (d.note ? '<span class="preview-wa-note">' + esc(d.note) + '</span>' : '') +
+        '</span></span>' +
+        (waTarget
+          ? '<div class="preview-wa-target">🔗 ' + waTarget + (d.message ? ' · "' + esc(d.message) + '"' : '') + '</div>'
+          : '<div class="preview-wa-target preview-wa-missing">מלאו טלפון (972…) או קישור wa.me במאפיינים ←</div>') +
+        '</div>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
