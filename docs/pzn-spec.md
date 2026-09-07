@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (64)
+## Modules (71)
 
 ### Category: content
 
@@ -199,6 +199,48 @@ from it directly.
   - `text` · text · **(body text, not an attribute)**
 
 #### `<bent-timeline>` — ציר זמן / Timeline · container (children: `bent-event`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-member>` — חבר צוות / Team member · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `name` · string
+  - `role` · string
+  - `image` · url
+  - `url` · url
+  - `bio` · text · **(body text, not an attribute)**
+
+#### `<bent-team>` — הצוות / Team · container (children: `bent-member`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-countdown>` — ספירה לאחור / Countdown · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `target` · string
+  - `done` · string
+  - `label` · text · **(body text, not an attribute)**
+
+#### `<bent-priceitem>` — פריט מחירון / Price item · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `name` · string
+  - `price` · string
+  - `desc` · text · **(body text, not an attribute)**
+
+#### `<bent-pricelist>` — מחירון / Price list · container (children: `bent-priceitem`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-bar>` — מדד / Bar · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `value` · integer · 0–100 · default `0`
+  - `color` · string
+  - `label` · text · **(body text, not an attribute)**
+
+#### `<bent-progress>` — מדדי התקדמות / Progress bars · container (children: `bent-bar`)
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
 

@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (44)
+## Modules (48)
 
 ### תוכן
 
@@ -777,6 +777,79 @@ CRUMBS {
   …
 }
 ```
+
+### תוכן
+
+#### `TEAM` → `team`
+
+👥 **הצוות** — חברי צוות — תמונה, שם, תפקיד
+
+Shape: `TEAM(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+TEAM {
+  …
+}
+```
+
+#### `COUNTDOWN` → `countdown`
+
+⏳ **ספירה לאחור** — טיימר למבצע או אירוע — מתעדכן לבד
+
+Shape: `COUNTDOWN(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `target` | `target` | string | yes | "" |
+| `done` | `done` | string |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+COUNTDOWN(target: "...") {
+  …
+}
+```
+
+#### `PRICELIST` → `pricelist`
+
+₪ **מחירון** — תפריט מסעדה או מחירון שירותים — שם ··· מחיר
+
+Shape: `PRICELIST(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+PRICELIST {
+  …
+}
+```
+
+#### `PROGRESS` → `progress`
+
+▰ **מדדי התקדמות** — פסי מיומנות או התקדמות — אחוזים בלי JavaScript
+
+Shape: `PROGRESS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+PROGRESS {
+  …
+}
+```
+
+### מבנה
 
 #### `NAV` → `nav`
 

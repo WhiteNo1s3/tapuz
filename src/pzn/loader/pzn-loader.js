@@ -207,6 +207,34 @@ main#main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
 .bent-event-title { margin: 0.15rem 0 0.35rem; font-size: 1.05rem; }
 .bent-event-body { margin: 0; color: #57534e; }
 .bent-event-image { display: block; max-width: 100%; height: auto; margin-top: 0.6rem; border-radius: 8px; }
+.bent-team { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1.25rem; margin: 1.25rem 0; padding: 0; }
+.bent-member { text-align: center; margin: 0; }
+.bent-member-photo { display: flex; align-items: center; justify-content: center; width: 5.5rem; height: 5.5rem; margin-inline: auto; margin-block-end: 0.6rem; border-radius: 999px; object-fit: cover; background: #1a2332; font-size: 2rem; }
+img.bent-member-photo { display: block; }
+.bent-member-name { display: block; margin: 0 0 0.15rem; font-weight: 700; color: inherit; text-decoration: none; }
+.bent-member-role { margin: 0 0 0.3rem; font-size: 0.88rem; font-weight: 600; color: #f59e0b; }
+.bent-member-bio { margin: 0; font-size: 0.9rem; color: #9aa8bc; }
+.bent-countdown { margin: 1.25rem 0; text-align: center; }
+.bent-count-label { margin: 0 0 0.5rem; font-weight: 600; }
+.bent-count-cells { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.7rem; }
+.bent-count-cell { display: flex; flex-direction: column; align-items: center; min-width: 3.8rem; padding: 0.55rem 0.45rem; border-radius: 8px; background: #1a2332; }
+.bent-count-num { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; color: #f59e0b; }
+.bent-count-unit { font-size: 0.78rem; color: #9aa8bc; }
+.bent-count-done { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.bent-pricelist { margin: 1.25rem 0; }
+.bent-priceitem { margin: 0 0 0.85rem; }
+.bent-priceitem-head { display: flex; align-items: baseline; gap: 0.5rem; }
+.bent-priceitem-name { font-weight: 600; }
+.bent-priceitem-dots { flex: 1; border-bottom: 2px dotted #2a3548; transform: translateY(-0.25em); }
+.bent-priceitem-price { font-weight: 700; font-variant-numeric: tabular-nums; color: #f59e0b; }
+.bent-priceitem-desc { margin: 0.15rem 0 0; font-size: 0.88rem; color: #9aa8bc; }
+.bent-progress { margin: 1.25rem 0; }
+.bent-bar { margin: 0 0 0.85rem; }
+.bent-bar-head { display: flex; justify-content: space-between; margin-block-end: 0.3rem; font-size: 0.9rem; }
+.bent-bar-label { font-weight: 600; }
+.bent-bar-value { font-variant-numeric: tabular-nums; color: #9aa8bc; }
+.bent-bar-track { height: 0.55rem; border-radius: 999px; background: #1a2332; overflow: hidden; }
+.bent-bar-fill { height: 100%; border-radius: inherit; background: #f59e0b; }
 `.trim();
 
 /**

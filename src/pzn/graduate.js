@@ -730,7 +730,9 @@ function hintHay(t) {
   return `${(t && t.name) || ''} ${classHay(t)}`;
 }
 
-const PRICING_CLASS = /\b(?:pricing|price-table|price-cards?|pricing-table|bent-pricing|elementor-price)\b/i;
+// NOT bare `elementor-price` — that also matched `elementor-price-list`, a
+// restaurant/service menu, which is the pricelist module (gap-audit wave 3)
+const PRICING_CLASS = /\b(?:pricing|price-table|price-cards?|pricing-table|bent-pricing|elementor-price-table)\b/i;
 const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|owl-carousel|splide|keen-slider|glide|bent-carousel|carousel|slider)\b/i;
 const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list|dsm-faq|stattic-faq|elementor-widget-faq|elementor-accordion)\b/i;
 const FAQ_ITEM_CLASS = /\b(?:faq-item|faq-entry|dsm-faq--faq-content|elementor-accordion-item|e-faq-item)\b/i;
@@ -743,6 +745,10 @@ const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|
 const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
 const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
 const STATS_CLASS = /\b(?:stats|counters?|metrics|kpis?|bent-stats|stats-row|numbers-row|stat-cells?)\b/i;
+const TEAM_CLASS = /\b(?:team|our-team|team-members?|staff|bent-team|elementor-widget-team-member)\b/i;
+const COUNTDOWN_CLASS = /\b(?:countdown|count-down|countdown-timer|elementor-countdown|bent-countdown)\b/i;
+const PRICELIST_CLASS = /\b(?:price-list|pricelist|menu-list|restaurant-menu|elementor-price-list|bent-pricelist)\b/i;
+const PROGRESS_CLASS = /\b(?:progress|progress-bars?|skill-bars?|skills|elementor-progress|bent-progress)\b/i;
 const LOGOS_CLASS = /\b(?:logos?|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos)\b/i;
 const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
 const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
@@ -762,6 +768,10 @@ function looksLikeCrumbs(t) {
 }
 function looksLikeStats(t) { return STATS_CLASS.test(hintHay(t)); }
 function looksLikeLogos(t) { return LOGOS_CLASS.test(hintHay(t)); }
+function looksLikeTeam(t) { return TEAM_CLASS.test(hintHay(t)); }
+function looksLikeCountdown(t) { return COUNTDOWN_CLASS.test(hintHay(t)); }
+function looksLikePricelist(t) { return PRICELIST_CLASS.test(hintHay(t)); }
+function looksLikeProgress(t) { return PROGRESS_CLASS.test(hintHay(t)); }
 
 /**
  * A class/tag that names a module we speak — or a landmark we refuse to
@@ -780,11 +790,15 @@ function guessedTool(t) {
   if (looksLikeFaq(t)) return 'faq';
   if (looksLikeTestimonial(t)) return 'testimonial';
   if (looksLikeSocial(t)) return 'social';
+  if (looksLikePricelist(t)) return 'pricelist'; // before pricing — "price-list" is a menu, not a table
   if (looksLikePricing(t)) return 'pricing';
   if (looksLikeHero(t)) return 'hero';
   if (looksLikeCrumbs(t)) return 'crumbs';
   if (looksLikeStats(t)) return 'stats';
   if (looksLikeLogos(t)) return 'logos';
+  if (looksLikeTeam(t)) return 'team';
+  if (looksLikeCountdown(t)) return 'countdown';
+  if (looksLikeProgress(t)) return 'progress';
   if (/\b(?:product|shop-item|woocommerce|product-card)\b/i.test(hay)) return 'cards';
   return null;
 }
@@ -1509,6 +1523,290 @@ function parseTestimonialData(tokens, i, end, t) {
   return out;
 }
 
+// ── gap-audit wave 3: team / countdown / pricelist / progress ──
+// The shapes the audit caught silently flattening (heading+cards soup,
+// three meaningless text blocks, dotted-menu text rows, bare percentages).
+
+/**
+ * First direct-child heading of a hinted container (the section title that
+ * sits beside the item grid). Returned to the walk as a `pre` block so
+ * mapping the module never swallows the heading.
+ * @returns {{ level: number, text: string } | null}
+ */
+function directHeading(tokens, i, end) {
+  for (const [s, e] of childSpans(tokens, i + 1, end - 1)) {
+    const m = HEADING.exec(tokens[s].name);
+    if (m) {
+      const text = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+      if (text) return { level: Number(m[1]), text };
+    }
+  }
+  return null;
+}
+
+/** One member card out of an item wrapper. @returns {object|null} */
+function extractMember(tokens, s, e) {
+  let name = '';
+  let role = '';
+  let bio = '';
+  let image = '';
+  let url = '';
+  let alt = '';
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    if (!image && tk.name === 'img') {
+      image = imageSrcOf(tk.attrs);
+      alt = (tk.attrs && tk.attrs.alt) || '';
+      continue;
+    }
+    if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href && tk.attrs.href !== '#') {
+      url = tk.attrs.href;
+      continue; // descend — the name/role usually live inside the link
+    }
+    if (!name && (HEADING.test(tk.name) || /\b(?:member-name|team-name|author-name|elementor-image-box-title)\b/i.test(cls))) {
+      name = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (!role && /\b(?:role|position|job|job-title|member-role|team-role|elementor-image-box-description)\b/i.test(cls)) {
+      role = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p') {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (!role && p && p.length <= 40) role = p;
+      else if (p) bio = bio ? `${bio}\n${p}` : p;
+      j = close - 1;
+    }
+  }
+  if (!name && alt) name = alt.replace(/\s+/g, ' ').trim();
+  if (!name) return null;
+  const out = { name };
+  if (role) out.role = role;
+  if (image) out.image = image;
+  if (bio) out.bio = bio;
+  if (url) out.url = url;
+  return out;
+}
+
+/** Member cards among child containers — one wrapper level unwraps itself. */
+function collectMemberItems(tokens, from, to, depth = 0) {
+  const kids = [];
+  let j = from;
+  while (j < to) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') { j++; continue; }
+    const e = matchClose(tokens, j);
+    if (tk.name === 'li' || CONTAINERS.has(tk.name)) kids.push([j, e]);
+    j = e;
+  }
+  if (kids.length === 1 && depth < 3) {
+    const [s, e] = kids[0];
+    const inner = collectMemberItems(tokens, s + 1, e - 1, depth + 1);
+    if (inner.length >= 2) return inner;
+  }
+  const items = [];
+  for (const [s, e] of kids) {
+    const it = extractMember(tokens, s, e);
+    if (it) items.push(it);
+  }
+  return items;
+}
+
+/**
+ * Team grid. Class hint required (member cards otherwise stay generic cards);
+ * needs ≥2 named members so one image-box never claims the module.
+ * @returns {{ items: object[] } | null}
+ */
+function parseTeamData(tokens, i, end, t) {
+  if (!looksLikeTeam(t)) return null;
+  const items = collectMemberItems(tokens, i + 1, end - 1);
+  if (items.length < 2) return null;
+  return { items, heading: directHeading(tokens, i, end) };
+}
+
+const COUNTDOWN_TARGET_ATTRS = ['data-date', 'data-target', 'data-deadline', 'data-end', 'data-due'];
+
+function countdownTargetOf(attrs) {
+  for (const k of COUNTDOWN_TARGET_ATTRS) {
+    const v = attrs && attrs[k];
+    if (v && Number.isFinite(Date.parse(v))) return v;
+  }
+  return null;
+}
+
+/**
+ * Countdown timer. Class hint + a parseable target date on the wrapper or a
+ * descendant. No target → null, and the walk reports the toolGap (the digits
+ * a widget rendered at scrape time are meaningless without the deadline).
+ * @returns {{ target: string } | null}
+ */
+function parseCountdownData(tokens, i, end, t) {
+  if (!looksLikeCountdown(t)) return null;
+  let target = countdownTargetOf(t && t.attrs);
+  for (let j = i + 1; j < end - 1 && !target; j++) {
+    if (tokens[j].kind === 'open') target = countdownTargetOf(tokens[j].attrs);
+  }
+  if (!target) return null;
+  return { target };
+}
+
+/** True when the span j..close holds no child elements (a text leaf). */
+function isLeafSpan(tokens, j, close) {
+  for (let k = j + 1; k < close - 1; k++) {
+    if (tokens[k].kind === 'open') return false;
+  }
+  return true;
+}
+
+/** One menu row (name ··· price, optional description). @returns {object|null} */
+function extractPriceItem(tokens, s, e) {
+  let name = '';
+  let price = '';
+  let desc = '';
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    // wrappers carry the same class words (elementor-price-list-text) —
+    // only LEAF elements may claim name/price, or a wrapper eats its span
+    // children and the row loses its parts
+    const leaf = isLeafSpan(tokens, j, close);
+    if (!name && (HEADING.test(tk.name) || tk.name === 'strong'
+      || (leaf && /\b(?:item-name|dish-name|price-list-title|menu-item-title|name|title)\b/i.test(cls)))) {
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && v.length <= 80) { name = v; j = close - 1; continue; }
+    }
+    if (!price && leaf && /\b(?:item-price|price-list-price|menu-price|price|amount|cost)\b/i.test(cls)) {
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && v.length <= 24 && /\d/.test(v)) { price = v; j = close - 1; continue; }
+    }
+    if (!desc && (tk.name === 'p' || /\b(?:desc|description)\b/i.test(cls))) {
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && v !== name && v !== price) { desc = v; j = close - 1; }
+    }
+  }
+  if (!price) {
+    const m = PRICE_RE.exec(unescapeHtml(textOf(tokens, s + 1, e - 1)));
+    if (m) price = m[0].replace(/\s+/g, ' ').trim();
+  }
+  if (!name) return null;
+  const out = { name };
+  if (price) out.price = price;
+  if (desc) out.desc = desc;
+  return out;
+}
+
+/**
+ * Price list (restaurant menu / service price list) — NOT the pricing table.
+ * Class hint required; ≥2 named rows and at least one carrying a price.
+ * @returns {{ items: object[] } | null}
+ */
+function parsePricelistData(tokens, i, end, t) {
+  if (!looksLikePricelist(t)) return null;
+  const items = [];
+  const collect = (from, to, depth) => {
+    for (const [s, e] of childSpans(tokens, from, to)) {
+      const tk = tokens[s];
+      if (tk.name === 'ul' || tk.name === 'ol') { collect(s + 1, e - 1, depth); continue; }
+      if (!CONTAINERS.has(tk.name) && tk.name !== 'li') continue;
+      const it = extractPriceItem(tokens, s, e);
+      if (it) items.push(it);
+      else if (depth < 3) collect(s + 1, e - 1, depth + 1);
+    }
+  };
+  collect(i + 1, end - 1, 0);
+  if (items.length < 2 || !items.some((it) => it.price)) return null;
+  return { items, heading: directHeading(tokens, i, end) };
+}
+
+/** Count value signals (data/aria/width%) so bar GROUPS recurse, not merge. */
+function countBarSignals(tokens, s, e) {
+  let n = 0;
+  for (let j = s; j < e; j++) {
+    if (tokens[j].kind === 'open' && barValueOf(tokens[j].attrs) != null) n++;
+  }
+  return n;
+}
+
+function barValueOf(attrs) {
+  if (!attrs) return null;
+  const raw = attrs['data-max'] != null ? attrs['data-max']
+    : attrs['data-value'] != null ? attrs['data-value']
+    : attrs['data-percent'] != null ? attrs['data-percent']
+    : attrs['aria-valuenow'] != null ? attrs['aria-valuenow']
+    : (/(?:^|;)\s*width\s*:\s*(\d{1,3}(?:\.\d+)?)%/.exec(attrs.style || '') || [])[1];
+  const n = Number(raw);
+  if (raw == null || !Number.isFinite(n)) return null;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+/** One labelled bar out of a row wrapper. @returns {object|null} */
+function extractBarItem(tokens, s, e) {
+  let label = '';
+  let value = null;
+  for (let j = s; j < e; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (value == null) value = barValueOf(tk.attrs);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    if (!label && /\b(?:progress-text|skill-name|bar-label|label|title|name)\b/i.test(cls)) {
+      const close = matchClose(tokens, j);
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && !/^\d+\s*%?$/.test(v)) label = v;
+    }
+  }
+  if (!label) {
+    label = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\d+(?:\.\d+)?\s*%/g, '').replace(/\s+/g, ' ').trim();
+  }
+  if (value == null || !label) return null;
+  return { label, value };
+}
+
+/**
+ * Progress / skill bars. Class hint + real value signals (data attrs, aria,
+ * or an inline width%) — bare percentage TEXT stays text.
+ * @returns {{ items: object[] } | null}
+ */
+function parseProgressData(tokens, i, end, t) {
+  if (!looksLikeProgress(t)) return null;
+  const items = [];
+  const collect = (from, to, depth) => {
+    for (const [s, e] of childSpans(tokens, from, to)) {
+      const tk = tokens[s];
+      if (!CONTAINERS.has(tk.name) && tk.name !== 'li') continue;
+      if (countBarSignals(tokens, s, e) > 1 && depth < 3) { collect(s + 1, e - 1, depth + 1); continue; }
+      const it = extractBarItem(tokens, s, e);
+      if (it) items.push(it);
+      else if (depth < 3) collect(s + 1, e - 1, depth + 1);
+    }
+  };
+  collect(i + 1, end - 1, 0);
+  if (!items.length) {
+    const solo = extractBarItem(tokens, i, end);
+    if (solo) items.push(solo);
+  }
+  if (!items.length) return null;
+  return { items, heading: directHeading(tokens, i, end) };
+}
+
+/**
+ * Wrap a parser result whose `heading` (a direct-child section title) must
+ * ride along as a `pre` block — the walk emits it before the module, so
+ * mapping never swallows the heading the old flatten used to keep.
+ */
+function withHeadingPre(type, data, next) {
+  const { heading, ...rest } = data;
+  const out = { type, data: rest, next };
+  if (heading) out.pre = [{ type: 'heading', data: heading }];
+  return out;
+}
+
 function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   const crumbs = parseCrumbsData(tokens, i, end, t);
   if (crumbs) return { type: 'crumbs', data: crumbs, next: end };
@@ -1518,8 +1816,16 @@ function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   if (social) return { type: 'social', data: social, next: end };
   const logos = parseLogosData(tokens, i, end, t);
   if (logos) return { type: 'logos', data: logos, next: end };
+  const pricelist = parsePricelistData(tokens, i, end, t); // before pricing — a "price list" is a menu
+  if (pricelist) return withHeadingPre('pricelist', pricelist, end);
   const pricing = parsePricingData(tokens, i, end, t);
   if (pricing) return { type: 'pricing', data: pricing, next: end };
+  const team = parseTeamData(tokens, i, end, t);
+  if (team) return withHeadingPre('team', team, end);
+  const countdown = parseCountdownData(tokens, i, end, t);
+  if (countdown) return { type: 'countdown', data: countdown, next: end };
+  const progress = parseProgressData(tokens, i, end, t);
+  if (progress) return withHeadingPre('progress', progress, end);
   const carousel = parseCarouselData(tokens, i, end, t, bgMap);
   if (carousel) return { type: 'carousel', data: carousel, next: end };
   const faq = parseFaqData(tokens, i, end, t);
@@ -1768,6 +2074,7 @@ function htmlToBlocks(html, opts = {}) {
         }
         const structuralList = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structuralList) {
+          for (const p of structuralList.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: structuralList.type, id: nid(structuralList.type), data: structuralList.data });
           mapped += 1; i = structuralList.next; continue;
         }
@@ -1915,6 +2222,7 @@ function htmlToBlocks(html, opts = {}) {
       if (CONTAINERS.has(name)) {
         const structural = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structural) {
+          for (const p of structural.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
           mapped += 1; i = structural.next; continue;
         }
@@ -1945,6 +2253,7 @@ function htmlToBlocks(html, opts = {}) {
       if (name.includes('-')) {
         const custom = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (custom) {
+          for (const p of custom.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: custom.type, id: nid(custom.type), data: custom.data });
           mapped += 1; i = custom.next; continue;
         }

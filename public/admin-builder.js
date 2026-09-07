@@ -52,6 +52,10 @@
     { type: 'stats', label: 'מדדים', hint: 'מספרים', icon: '＃', group: 'תוכן', keyword: 'STATS' },
     { type: 'steps', label: 'שלבים', hint: 'איך זה עובד', icon: '①', group: 'מבנה', keyword: 'STEPS' },
     { type: 'crumbs', label: 'פירורים', hint: 'נתיב הדף', icon: '›', group: 'מבנה', keyword: 'CRUMBS' },
+    { type: 'team', label: 'הצוות', hint: 'תמונה, שם, תפקיד', icon: '👥', group: 'תוכן', keyword: 'TEAM' },
+    { type: 'countdown', label: 'ספירה לאחור', hint: 'טיימר למבצע', icon: '⏳', group: 'תוכן', keyword: 'COUNTDOWN' },
+    { type: 'pricelist', label: 'מחירון', hint: 'תפריט / מחירים', icon: '₪', group: 'תוכן', keyword: 'PRICELIST' },
+    { type: 'progress', label: 'מדדים', hint: 'פסי התקדמות', icon: '▰', group: 'תוכן', keyword: 'PROGRESS' },
     { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
     { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
@@ -2236,6 +2240,81 @@
             '<span class="preview-step-n"></span>' +
             '<div class="preview-step-title">' + esc(it.title || 'שלב') + '</div>' +
             (it.text ? '<div class="preview-step-body">' + esc(it.text) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'team') {
+      var tmItems = d.items || [];
+      var members = tmItems.length ? tmItems : [
+        { name: 'דנה לוי', role: 'מנכ"לית' },
+        { name: 'יוסי כהן', role: 'סמנכ"ל' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-team">' +
+        members.map(function (it) {
+          return '<div class="preview-member">' +
+            (it.image ? '<img class="preview-member-photo" src="' + escAttr(it.image) + '" alt="">'
+              : '<span class="preview-member-photo">👤</span>') +
+            '<div class="preview-member-name">' + esc(it.name || 'שם') + '</div>' +
+            (it.role ? '<div class="preview-member-role">' + esc(it.role) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'countdown') {
+      var cdUnits = [['12', 'ימים'], ['08', 'שעות'], ['45', 'דקות'], ['30', 'שניות']];
+      wrap.innerHTML =
+        '<div class="preview-countdown">' +
+        (d.label ? '<div class="preview-countdown-label">' + esc(d.label) + '</div>' : '') +
+        '<div class="preview-countdown-cells">' +
+        cdUnits.map(function (u) {
+          return '<span class="preview-countdown-cell"><b>' + u[0] + '</b><small>' + u[1] + '</small></span>';
+        }).join('') +
+        '</div>' +
+        (d.target ? '' : '<div class="preview-countdown-note">קבעו תאריך יעד בהגדרות ←</div>') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'pricelist') {
+      var plItems = d.items || [];
+      var dishes = plItems.length ? plItems : [
+        { name: 'חומוס מלא', price: '32 ₪' },
+        { name: 'שקשוקה', price: '44 ₪' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-pricelist">' +
+        dishes.map(function (it) {
+          return '<div class="preview-priceitem">' +
+            '<span class="preview-priceitem-name">' + esc(it.name || 'פריט') + '</span>' +
+            '<span class="preview-priceitem-dots"></span>' +
+            '<span class="preview-priceitem-price">' + esc(it.price || '') + '</span>' +
+            '</div>' +
+            (it.desc ? '<div class="preview-priceitem-desc">' + esc(it.desc) + '</div>' : '');
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'progress') {
+      var pgItems = d.items || [];
+      var bars = pgItems.length ? pgItems : [
+        { label: 'עיצוב', value: 90 },
+        { label: 'פיתוח', value: 75 }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-progress">' +
+        bars.map(function (it) {
+          var v = Math.min(100, Math.max(0, Math.round(Number(it.value) || 0)));
+          return '<div class="preview-bar">' +
+            '<div class="preview-bar-head"><span>' + esc(it.label || 'מדד') + '</span><span>' + v + '%</span></div>' +
+            '<div class="preview-bar-track"><div class="preview-bar-fill" style="width:' + v + '%' +
+            (it.color ? ';background:' + escAttr(it.color) : '') + '"></div></div>' +
             '</div>';
         }).join('') +
         '</div>';

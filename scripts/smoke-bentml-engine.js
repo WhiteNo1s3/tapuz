@@ -155,7 +155,11 @@ const VOCAB_DATA = {
   steps: { items: [{ title: 'מתארים', text: 'מה האתר צריך.' }, { title: 'בונים', text: 'מודולים על הקנבס.' }] },
   timeline: { items: [{ time: '2024', title: 'ההתחלה', text: 'פתחנו.' }, { time: '2026', title: 'היום', text: 'ממשיכים.', image: '/uploads/now.jpg' }] },
   crumbs: { items: [{ label: 'בית', url: '/' }, { label: 'הדף הזה' }] },
-  social: { items: [{ network: 'facebook', url: 'https://facebook.com/tapuz', label: 'פייסבוק' }, { network: 'instagram', url: 'https://instagram.com/tapuz' }] }
+  social: { items: [{ network: 'facebook', url: 'https://facebook.com/tapuz', label: 'פייסבוק' }, { network: 'instagram', url: 'https://instagram.com/tapuz' }] },
+  team: { items: [{ name: 'דנה לוי', role: 'מנכ"לית', image: '/uploads/dana.jpg', bio: 'מובילה מהיום הראשון.' }, { name: 'יוסי כהן', role: 'סמנכ"ל' }] },
+  countdown: { target: '2027-01-01T00:00', label: 'עד סוף המבצע', done: 'המבצע הסתיים' },
+  pricelist: { items: [{ name: 'חומוס מלא', price: '32 ₪', desc: 'עם פטריות' }, { name: 'שקשוקה', price: '44 ₪' }] },
+  progress: { items: [{ label: 'עיצוב', value: 90 }, { label: 'פיתוח', value: 75, color: '#38bdf8' }] }
 };
 
 // types the language deliberately folds into another keyword's JSON

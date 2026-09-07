@@ -593,6 +593,81 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('crumbs', data);
     }
+    case 'TEAM': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'MEMBER')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { name: cp.name || '' };
+          if (cp.role) item.role = cp.role;
+          if (cp.image) item.image = cp.image;
+          if (cp.url) item.url = cp.url;
+          const bio = collapseSingleParagraph(c.text || '');
+          if (bio) item.bio = bio;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { name: 'דנה לוי', role: 'מנכ"לית' },
+              { name: 'יוסי כהן', role: 'סמנכ"ל טכנולוגיות' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('team', data);
+    }
+    case 'COUNTDOWN': {
+      const data = { target: p.target || '' };
+      const label = collapseSingleParagraph(node.text || '');
+      if (label) data.label = label;
+      if (p.done) data.done = p.done;
+      applyChrome(data, p);
+      return createBlock('countdown', data);
+    }
+    case 'PRICELIST': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'PRICEITEM')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { name: cp.name || '' };
+          if (cp.price) item.price = cp.price;
+          const desc = collapseSingleParagraph(c.text || '');
+          if (desc) item.desc = desc;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { name: 'חומוס מלא', price: '32 ₪' },
+              { name: 'שקשוקה', price: '44 ₪' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('pricelist', data);
+    }
+    case 'PROGRESS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'BAR')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { label: collapseSingleParagraph(c.text || '') };
+          if (cp.value != null) item.value = cp.value;
+          if (cp.color) item.color = cp.color;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { label: 'עיצוב', value: 90 },
+              { label: 'פיתוח', value: 75 }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('progress', data);
+    }
     case 'NAV': {
       const items = (node.children || [])
         .filter((c) => c.name === 'NAVITEM')
