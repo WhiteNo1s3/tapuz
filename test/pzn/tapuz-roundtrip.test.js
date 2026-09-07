@@ -175,6 +175,13 @@ const CASES = {
       { src: '/uploads/logo2.svg', alt: 'לקוח 2' }
     ] }
   },
+  social: {
+    type: 'social', id: 'so1',
+    data: { items: [
+      { network: 'facebook', url: 'https://facebook.com/studio', label: 'פייסבוק' },
+      { network: 'github', url: 'https://github.com/studio', label: 'גיטהאב' }
+    ] }
+  },
   faq: {
     type: 'faq', id: 'fq1',
     data: { items: [
@@ -187,6 +194,14 @@ const CASES = {
     data: { items: [
       { title: 'מתארים', text: 'מספרים מה צריך.', icon: '①' },
       { title: 'בונים', text: 'מודולים על הקנבס.' }
+    ] }
+  },
+  crumbs: {
+    type: 'crumbs', id: 'crm1',
+    data: { items: [
+      { label: 'בית', url: '/' },
+      { label: 'מאמרים', url: '/articles' },
+      { label: 'הדף הזה' }
     ] }
   },
   timeline: {

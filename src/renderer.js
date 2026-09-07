@@ -5,6 +5,7 @@ const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
 const { getMenuForLocation } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
+const { renderSocialFromData } = require('./pzn/social-html');
 
 function loadTheme(themeSlug = 'default') {
   const themeDir = path.join(THEMES_DIR, themeSlug);
@@ -439,6 +440,9 @@ function renderBlock(block, direction = 'rtl') {
       return `<section class="logos-strip"${extra} dir="${direction}">${cells}</section>`;
     }
 
+    case 'social':
+      return renderSocialFromData(block.data || {}, direction, extra);
+
     case 'faq': {
       const items = block.data.items || [];
       const rows = items
@@ -491,6 +495,9 @@ function renderBlock(block, direction = 'rtl') {
     case 'steps':
       // how-it-works numbered process (module-hunt gap) — CSS counters, zero JS
       return require('./pzn/steps-html').renderStepsFromData(block.data || {}, direction, extra);
+
+    case 'crumbs':
+      return require('./pzn/crumbs-html').renderCrumbsFromData(block.data || {}, direction, extra);
 
     case 'timeline':
       // company-history rail (module-hunt gap) — CSS line + dots, zero JS

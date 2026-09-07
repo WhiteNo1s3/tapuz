@@ -153,7 +153,9 @@ const VOCAB_DATA = {
   category: { slug: 'ספורט', limit: 6, showheader: true },
   pricing: { items: [{ title: 'מקצועי', price: '99', period: '/חודש', features: 'תכונה\nעוד תכונה', ctaLabel: 'התחילו', ctaUrl: '/signup', highlighted: true }] },
   steps: { items: [{ title: 'מתארים', text: 'מה האתר צריך.' }, { title: 'בונים', text: 'מודולים על הקנבס.' }] },
-  timeline: { items: [{ time: '2024', title: 'ההתחלה', text: 'פתחנו.' }, { time: '2026', title: 'היום', text: 'ממשיכים.', image: '/uploads/now.jpg' }] }
+  timeline: { items: [{ time: '2024', title: 'ההתחלה', text: 'פתחנו.' }, { time: '2026', title: 'היום', text: 'ממשיכים.', image: '/uploads/now.jpg' }] },
+  crumbs: { items: [{ label: 'בית', url: '/' }, { label: 'הדף הזה' }] },
+  social: { items: [{ network: 'facebook', url: 'https://facebook.com/tapuz', label: 'פייסבוק' }, { network: 'instagram', url: 'https://instagram.com/tapuz' }] }
 };
 
 // types the language deliberately folds into another keyword's JSON

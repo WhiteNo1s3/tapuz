@@ -48,8 +48,12 @@ const {
   parseAudioData,
   parseTableData,
   parseDetailsRun,
-  parseStepsData,
   parseTimelineData,
+  parseFaqData,
+  parseCrumbsData,
+  parseSocialData,
+  tryStructuralModules,
+  guessedTool,
   mapsAddressOf
 } = require('./graduate');
 
@@ -60,11 +64,21 @@ const ROLE_FROM_CLASS = [
   [/sidebar|aside|\brail\b/i, 'sidebar'],
   [/footer|site-footer|page-footer/i, 'footer'],
   [/header|site-header|page-header|topbar|navbar|nav-bar/i, 'header'],
+  [/breadcrumbs?|bent-crumbs/i, 'crumbs'],
+  [/testimonial|elementor-testimonial/i, 'testimonial'],
+  [/social-icons?|elementor-social|share-links?|share-buttons?/i, 'social'],
   [/\bnav\b|menu|menubar/i, 'nav'],
-  [/gallery|carousel|slider|swiper/i, 'gallery'],
+  [/swiper|slick|owl-carousel|bent-carousel/i, 'carousel'],
+  [/gallery|carousel|slider/i, 'gallery'],
   [/\brow\b|grid|columns|\bcols?\b|flex-row|split|two-col|three-col/i, 'row'],
   [/\bsteps?\b|process|how-it-works|workflow|stepper/i, 'steps'],
   [/timeline|milestones?|chrono/i, 'timeline'],
+  [/\bfaqs?\b|frequently-asked/i, 'faq'],
+  [/nav-tabs|tab-content|\btabs\b/i, 'tabs'],
+  [/breadcrumbs?|bent-crumbs/i, 'crumbs'],
+  [/pricing|price-table|bent-pricing/i, 'pricing'],
+  [/\b(?:stats|counters?|metrics|kpis?|stats-row)\b/i, 'stats'],
+  [/\b(?:logos?|logo-strip|clients|brands|partners|logos-strip)\b/i, 'logos'],
   [/main|content|primary|article-body|post-content/i, 'main'],
   [/card|tile|teaser|cube/i, 'card'],
   [/cta|call-to-action|promo/i, 'cta']
@@ -116,65 +130,6 @@ function toPercentages(weights) {
   return pcts;
 }
 
-// ─── hero shape test ─────────────────────────────────────────────────────
-
-/**
- * A hero is a SLOT layout (title, subtitle, one CTA, a background) — not a
- * whole page that happens to carry a hero class. Counting keeps stripe's
- * five-deep hero-in-hero markup from eating the page: the huge outer
- * wrappers fail the shape test and simply descend; one true hero remains.
- */
-function heroShape(tokens, i, end) {
-  let headings = 0, paragraphs = 0, links = 0, images = 0, textLen = 0;
-  for (let j = i + 1; j < end - 1; j++) {
-    const tk = tokens[j];
-    if (tk.kind === 'text') { textLen += tk.value.trim().length; continue; }
-    if (tk.kind !== 'open') continue;
-    if (HEADING.test(tk.name)) headings++;
-    else if (tk.name === 'p') paragraphs++;
-    else if (tk.name === 'a' || tk.name === 'button') links++;
-    else if (tk.name === 'img') images++;
-  }
-  return headings >= 1 && headings <= 2 && paragraphs <= 2 && links <= 3 && images <= 2 && textLen <= 400;
-}
-
-/** Pull the hero slots (title/subtitle/button/image) out of a hero range. */
-function extractHero(tokens, i, end, bgMap) {
-  const data = {};
-  for (let j = i + 1; j < end - 1; j++) {
-    const tk = tokens[j];
-    if (tk.kind !== 'open') continue;
-    if (!data.title && HEADING.test(tk.name)) {
-      const e = matchClose(tokens, j);
-      data.title = unescapeHtml(textOf(tokens, j + 1, e - 1));
-      j = e - 1;
-    } else if (!data.subtitle && tk.name === 'p') {
-      const e = matchClose(tokens, j);
-      data.subtitle = unescapeHtml(textOf(tokens, j + 1, e - 1));
-      j = e - 1;
-    } else if (!data.buttonText && (tk.name === 'a' || tk.name === 'button')) {
-      const e = matchClose(tokens, j);
-      const label = unescapeHtml(textOf(tokens, j + 1, e - 1));
-      if (label) {
-        data.buttonText = label;
-        data.buttonUrl = (tk.attrs && (tk.attrs.href || tk.attrs.formaction)) || '#';
-      }
-      j = e - 1;
-    } else if (!data.image && (tk.name === 'img' || tk.name === 'source')) {
-      data.image = imageSrcOf(tk.attrs);
-    } else if (!data.image) {
-      // hero backgrounds usually ride a CSS background-image, not an <img>
-      const bg = bgOfAttrs(tk.attrs, bgMap);
-      if (bg) data.image = bg;
-    }
-  }
-  if (!data.image) {
-    const bg = bgOfAttrs(tokens[i].attrs, bgMap);
-    if (bg) data.image = bg;
-  }
-  return data.title ? data : null;
-}
-
 // ─── sibling dedupe (responsive twins) ──────────────────────────────────
 
 /** One content key per block type — twins collapse when keys match. */
@@ -217,9 +172,18 @@ function isEmptyBlock(b) {
     case 'image': return !String(d.src || '').trim();
     case 'list': return !(d.items || []).some((it) => String(it.text || it || '').trim());
     case 'quote': return !String(d.text || '').trim();
+    case 'testimonial': return !String(d.quote || '').trim();
     case 'cards': return !(d.items || []).length;
     case 'steps':
-    case 'timeline': return !(d.items || []).length;
+    case 'timeline':
+    case 'pricing':
+    case 'carousel':
+    case 'faq':
+    case 'tabs':
+    case 'crumbs':
+    case 'stats':
+    case 'logos':
+    case 'social': return !(d.items || []).length;
     default: return false;
   }
 }
@@ -441,20 +405,16 @@ function huntBlocks(html, opts = {}) {
           sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
           mapped += 1; i = end; continue;
         }
-        // a ul of single short links is a menu — keep the hrefs (v0.67)
+        const structuralList = tryStructuralModules(tokens, i, end, t, bgMap, to);
+        if (structuralList) {
+          sink.push({ type: structuralList.type, id: nid(structuralList.type), data: structuralList.data });
+          mapped += 1; i = structuralList.next; continue;
+        }
+        const lostList = guessedTool(t);
+        if (lostList) suggested.add(lostList);
         const menu = navItemsFromList(tokens, i, end);
         if (menu) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
-          mapped += 1; i = end; continue;
-        }
-        const stepData = parseStepsData(tokens, i, end, t);
-        if (stepData) {
-          sink.push({ type: 'steps', id: nid('steps'), data: stepData });
-          mapped += 1; i = end; continue;
-        }
-        const tlData = parseTimelineData(tokens, i, end, t);
-        if (tlData) {
-          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
           mapped += 1; i = end; continue;
         }
         const items = [];
@@ -472,12 +432,17 @@ function huntBlocks(html, opts = {}) {
         i = end; continue;
       }
       if (name === 'dl') {
+        const faqDl = parseFaqData(tokens, i, end, t);
+        if (faqDl) {
+          sink.push({ type: 'faq', id: nid('faq'), data: faqDl });
+          mapped += 1; i = end; continue;
+        }
         const tlData = parseTimelineData(tokens, i, end, t);
         if (tlData) {
           sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
           mapped += 1; i = end; continue;
         }
-        suggested.add('timeline');
+        suggested.add(guessedTool(t) || 'timeline');
         let frag = '';
         for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
         raw += frag;
@@ -490,6 +455,7 @@ function huntBlocks(html, opts = {}) {
           sink.push({ type: 'form', id: nid('form'), data: { action: (t.attrs && t.attrs.action) || '', method, submit: 'שליחה', fields } });
           mapped += 1;
         } else {
+          suggested.add('form');
           let frag = '';
           for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
           raw += frag;
@@ -497,11 +463,25 @@ function huntBlocks(html, opts = {}) {
         i = end; continue;
       }
       if (name === 'nav') {
+        const crumbNav = parseCrumbsData(tokens, i, end, t);
+        if (crumbNav) {
+          sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
+          mapped += 1; i = end; continue;
+        }
+        const socialNav = parseSocialData(tokens, i, end, t);
+        if (socialNav) {
+          sink.push({ type: 'social', id: nid('social'), data: socialNav });
+          mapped += 1; i = end; continue;
+        }
+        if (guessedTool(t) === 'crumbs') suggested.add('crumbs');
+        if (guessedTool(t) === 'social') suggested.add('social');
         rolesSeen.add('nav');
         const items = parseNavItems(tokens, i, end);
         if (items.length) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items } });
           mapped += 1;
+        } else {
+          suggested.add('nav');
         }
         i = end; continue;
       }
@@ -511,6 +491,7 @@ function huntBlocks(html, opts = {}) {
           sink.push({ type: 'video', id: nid('video'), data });
           mapped += 1;
         } else {
+          suggested.add('video');
           let frag = '';
           for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
           raw += frag;
@@ -560,6 +541,14 @@ function huntBlocks(html, opts = {}) {
         const role = inferRole(t);
         if (role !== 'block') rolesSeen.add(role);
 
+        // Named modules win over a generic row: Elementor FAQ/social
+        // widgets are often also flex/grids. Columns is the leftover cut.
+        const structural = tryStructuralModules(tokens, i, end, t, bgMap, to);
+        if (structural) {
+          sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
+          mapped += 1; i = structural.next; continue;
+        }
+
         // the percentage cut: a row of 2–4 columns → one columns block
         const colTry = tryColumns(t, i, end, depth);
         if (colTry) {
@@ -567,31 +556,13 @@ function huntBlocks(html, opts = {}) {
           else if (colTry.inline) colTry.inline.forEach((b) => sink.push(b));
           i = end; continue;
         }
-
-        const stepData = parseStepsData(tokens, i, end, t);
-        if (stepData) {
-          sink.push({ type: 'steps', id: nid('steps'), data: stepData });
-          mapped += 1; i = end; continue;
-        }
-        const tlData = parseTimelineData(tokens, i, end, t);
-        if (tlData) {
-          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
-          mapped += 1; i = end; continue;
-        }
-
-        // hero role + hero shape → one hero block (role-collapse via ctx)
-        if (role === 'hero' && !ctx.inHero && heroShape(tokens, i, end)) {
-          const data = extractHero(tokens, i, end, bgMap);
-          if (data) {
-            sink.push({ type: 'hero', id: nid('hero'), data });
-            mapped += 1;
-            i = end; continue;
-          }
-        }
+        const lost = guessedTool(t);
+        if (lost) suggested.add(lost);
 
         // every other wrapper descends — structure comes from columns/cards/
-        // hero, never from empty grouping shells
-        const childCtx = role === 'hero' ? { ...ctx, inHero: true } : ctx;
+        // hero, never from empty grouping shells. A guessed hero that failed
+        // the shape test still reports toolGap above; inner heroes can map.
+        const childCtx = ctx;
         const kids = walk(i + 1, end - 1, depth + 1, childCtx);
         kids.forEach((b) => sink.push(b));
         // an empty wrapper whose CSS carries a background IS a picture
@@ -602,9 +573,16 @@ function huntBlocks(html, opts = {}) {
         i = end; continue;
       }
 
-      // custom elements / SPA shells (devsite-*, react-*) — walk children,
-      // never report framework tag names as toolGap
+      // custom elements / SPA shells (devsite-*, react-*) — walk children.
+      // Swiper 9+ is <swiper-container>; flatten must still report carousel.
       if (name.includes('-')) {
+        const custom = tryStructuralModules(tokens, i, end, t, bgMap, to);
+        if (custom) {
+          sink.push({ type: custom.type, id: nid(custom.type), data: custom.data });
+          mapped += 1; i = custom.next; continue;
+        }
+        const lostCustom = guessedTool(t);
+        if (lostCustom) suggested.add(lostCustom);
         walk(i + 1, end - 1, depth + 1, ctx).forEach((b) => sink.push(b));
         i = end; continue;
       }

@@ -862,6 +862,35 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'social',
+    keyword: 'SOCIAL',
+    labelHe: 'רשתות חברתיות',
+    icon: '◎',
+    category: 'מדיה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'אייקוני רשת — פייסבוק, אינסטגרם, לינקדאין. לא כרום האתר.',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'רשתות', type: 'list',
+        itemFields: [
+          { name: 'network', labelHe: 'רשת', type: 'string', required: true },
+          { name: 'url', labelHe: 'קישור', type: 'url', required: true },
+          { name: 'label', labelHe: 'תווית', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי HANDLE (network + url)'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { network: 'facebook', url: 'https://facebook.com/', label: 'פייסבוק' },
+        { network: 'instagram', url: 'https://instagram.com/', label: 'אינסטגרם' },
+        { network: 'linkedin', url: 'https://linkedin.com/', label: 'לינקדאין' }
+      ]
+    }
+  },
+  {
     type: 'faq',
     keyword: 'FAQ',
     labelHe: 'שאלות נפוצות',
@@ -1160,6 +1189,34 @@ const BLOCK_REGISTRY = [
         { time: '2024', title: 'ההתחלה', text: 'פתחנו את הסטודיו.' },
         { time: '2025', title: 'צמיחה', text: 'האתר עבר לתפוז.' },
         { time: '2026', title: 'היום', text: 'ממשיכים לבנות.' }
+      ]
+    }
+  },
+  {
+    type: 'crumbs',
+    keyword: 'CRUMBS',
+    labelHe: 'פירורי לחם',
+    icon: '›',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'נתיב הדף — בית › מדור › כאן',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'פירורים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
+          { name: 'url', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי CRUMB — האחרון הוא הדף הנוכחי'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { label: 'בית', url: '/' },
+        { label: 'מאמרים', url: '/articles' },
+        { label: 'הדף הזה' }
       ]
     }
   },

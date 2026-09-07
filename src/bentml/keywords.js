@@ -289,6 +289,21 @@ const KEYWORDS = {
     children: ['LOGO'],
     params: {}
   },
+  SOCIAL: {
+    body: 'BLOCK-BODY',
+    jsonType: 'social',
+    children: ['HANDLE'],
+    params: {}
+  },
+  HANDLE: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'SOCIAL',
+    params: {
+      network: { type: 'string' },
+      url: { type: 'string', required: true }
+    }
+  },
   LOGO: {
     body: 'NO-BODY',
     childOnly: true,
@@ -456,6 +471,20 @@ const KEYWORDS = {
       time: { type: 'string' },
       title: { type: 'string', required: true },
       image: { type: 'string' }
+    }
+  },
+  CRUMBS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'crumbs',
+    children: ['CRUMB'],
+    params: {}
+  },
+  CRUMB: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'CRUMBS',
+    params: {
+      url: { type: 'string' }
     }
   },
   NAV: {

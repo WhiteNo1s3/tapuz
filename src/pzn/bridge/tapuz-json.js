@@ -234,6 +234,16 @@ function blockToModule(block) {
       return createModule('logos', baseOpts(block, {}, { children }));
     }
 
+    case 'social': {
+      const children = (data.items || []).map((item) =>
+        createModule('handle', {
+          props: pickProps(item || {}, ['network', 'url', 'label']),
+          text: (item && item.label) || ''
+        })
+      );
+      return createModule('social', baseOpts(block, {}, { children }));
+    }
+
     case 'faq': {
       const children = (data.items || []).map((item) =>
         createModule('qa', {
@@ -299,6 +309,15 @@ function blockToModule(block) {
         })
       );
       return createModule('steps', baseOpts(block, {}, { children }));
+    }
+
+    case 'crumbs': {
+      const children = (data.items || []).map((it) =>
+        createModule('crumb', {
+          props: pickProps(it || {}, ['label', 'url'])
+        })
+      );
+      return createModule('crumbs', baseOpts(block, {}, { children }));
     }
 
     case 'timeline': {
@@ -590,6 +609,18 @@ function moduleToBlock(node) {
       return finishBlock(node, 'logos', data);
     }
 
+    case 'social': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'handle')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['network', 'url', 'label']);
+          if (!item.label && c.text) item.label = c.text;
+          return item;
+        });
+      return finishBlock(node, 'social', data);
+    }
+
     case 'faq': {
       const data = {};
       data.items = (node.children || [])
@@ -660,6 +691,18 @@ function moduleToBlock(node) {
           return item;
         });
       return finishBlock(node, 'steps', data);
+    }
+
+    case 'crumbs': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'crumb')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['label', 'url']);
+          if (!item.url) delete item.url;
+          return item;
+        });
+      return finishBlock(node, 'crumbs', data);
     }
 
     case 'timeline': {

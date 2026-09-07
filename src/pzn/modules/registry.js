@@ -1,6 +1,7 @@
 'use strict';
 
 const { escapeHtml, escapeAttr, escapeCssUrl, safeHref } = require('../language/escape');
+const { renderHandle, renderSocial } = require('../social-html');
 
 /**
  * Module registry = type system of the page.
@@ -1805,6 +1806,98 @@ register({
     const { id, cls } = attrsExtra(node);
     const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
     return require('../timeline-html').renderTimeline(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+// ─── Breadcrumbs (copy-this-site chrome that was flattening into nav) ───
+register({
+  name: 'crumb',
+  tag: 'bent-crumb',
+  category: 'layout',
+  label: { he: 'פירור', en: 'Crumb' },
+  icon: 'crumb',
+  container: false,
+  props: {
+    label: { type: 'string', default: '', label: { he: 'טקסט', en: 'Label' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return require('../crumbs-html').renderCrumb(node.props || {}, !((node.props && node.props.url)));
+  }
+});
+
+register({
+  name: 'handle',
+  tag: 'bent-handle',
+  category: 'media',
+  label: { he: 'רשת', en: 'Network' },
+  icon: 'social',
+  container: false,
+  props: {
+    network: { type: 'string', default: '', optional: true, label: { he: 'רשת', en: 'Network' } },
+    url: { type: 'url', default: '', label: { he: 'קישור', en: 'URL' } },
+    label: { type: 'string', default: '', optional: true, label: { he: 'תווית', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {});
+    if (!props.label && node.text) props.label = node.text;
+    return renderHandle(props);
+  }
+});
+
+register({
+  name: 'social',
+  tag: 'bent-social',
+  category: 'media',
+  label: { he: 'רשתות חברתיות', en: 'Social' },
+  icon: 'social',
+  container: true,
+  accept: ['handle'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'handle') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {});
+      if (!props.label && c.text) props.label = c.text;
+      return renderHandle(props);
+    }).join('');
+    return renderSocial(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'crumbs',
+  tag: 'bent-crumbs',
+  category: 'layout',
+  label: { he: 'פירורי לחם', en: 'Breadcrumbs' },
+  icon: 'crumbs',
+  container: true,
+  accept: ['crumb'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const kids = node.children || [];
+    const inner = kids.map((c, idx) => {
+      if (c.name !== 'crumb') return compileChild(c, ctx);
+      const current = idx === kids.length - 1 || !(c.props && c.props.url);
+      return require('../crumbs-html').renderCrumb(c.props || {}, current);
+    }).join('');
+    return require('../crumbs-html').renderCrumbs(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
   }
 });
 
