@@ -182,6 +182,20 @@ const CASES = {
       { question: 'כמה זה עולה?', answer: 'קוד פתוח — חינם.\nתמיכה בתשלום.' }
     ] }
   },
+  steps: {
+    type: 'steps', id: 'stps1',
+    data: { items: [
+      { title: 'מתארים', text: 'מספרים מה צריך.', icon: '①' },
+      { title: 'בונים', text: 'מודולים על הקנבס.' }
+    ] }
+  },
+  timeline: {
+    type: 'timeline', id: 'tl1',
+    data: { items: [
+      { time: '2024', title: 'ההתחלה', text: 'פתחנו את הסטודיו.' },
+      { time: '2026', title: 'היום', text: 'ממשיכים לבנות.', image: '/uploads/now.jpg' }
+    ] }
+  },
   'contact-info': { type: 'contact-info', id: 'ci1', data: { phone: '03-555-1234', email: 'hello@tapuziel.co.il', address: 'רחוב התפוז 8', hours: 'א׳–ה׳ 9:00–17:00' } },
   banner: { type: 'banner', id: 'bn1', data: { text: 'מבצע השקה — חודש ראשון חינם', tone: 'warn', align: 'center' } },
   hero: {
@@ -205,7 +219,7 @@ describe('Tapuz JSON ⇄ .pzn lossless round-trip (v0.40 QA gate 1)', () => {
     });
   }
 
-  it('round-trips a full mixed page (all 23 types together)', () => {
+  it(`round-trips a full mixed page (all ${Object.keys(CASES).length} types together)`, () => {
     assertLossless(page(Object.values(CASES)));
   });
 

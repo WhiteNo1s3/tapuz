@@ -484,6 +484,52 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('pricing', data);
     }
+    case 'STEPS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'STEP')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { title: cp.title || '' };
+          const text = collapseSingleParagraph(c.text || '');
+          if (text) item.text = text;
+          if (cp.icon) item.icon = cp.icon;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { title: 'מתארים', text: 'מספרים מה האתר צריך לעשות.' },
+              { title: 'בונים', text: 'מודולים על הקנבס — בלי קוד.' },
+              { title: 'מפרסמים', text: 'HTML נקי, חי בלחיצה.' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('steps', data);
+    }
+    case 'TIMELINE': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'EVENT')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { title: cp.title || '' };
+          if (cp.time) item.time = cp.time;
+          const text = collapseSingleParagraph(c.text || '');
+          if (text) item.text = text;
+          if (cp.image) item.image = cp.image;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { time: '2024', title: 'ההתחלה', text: 'פתחנו את הסטודיו.' },
+              { time: '2026', title: 'היום', text: 'ממשיכים לבנות.' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('timeline', data);
+    }
     case 'CAROUSEL': {
       const items = (node.children || [])
         .filter((c) => c.name === 'SLIDE')
@@ -607,6 +653,8 @@ function buildBlock(node, warnings) {
     case 'TICKERITEM':
     case 'NEWSPOPITEM':
     case 'PLAN':
+    case 'STEP':
+    case 'EVENT':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });

@@ -48,6 +48,8 @@ const {
   parseAudioData,
   parseTableData,
   parseDetailsRun,
+  parseStepsData,
+  parseTimelineData,
   mapsAddressOf
 } = require('./graduate');
 
@@ -61,6 +63,8 @@ const ROLE_FROM_CLASS = [
   [/\bnav\b|menu|menubar/i, 'nav'],
   [/gallery|carousel|slider|swiper/i, 'gallery'],
   [/\brow\b|grid|columns|\bcols?\b|flex-row|split|two-col|three-col/i, 'row'],
+  [/\bsteps?\b|process|how-it-works|workflow|stepper/i, 'steps'],
+  [/timeline|milestones?|chrono/i, 'timeline'],
   [/main|content|primary|article-body|post-content/i, 'main'],
   [/card|tile|teaser|cube/i, 'card'],
   [/cta|call-to-action|promo/i, 'cta']
@@ -214,6 +218,8 @@ function isEmptyBlock(b) {
     case 'list': return !(d.items || []).some((it) => String(it.text || it || '').trim());
     case 'quote': return !String(d.text || '').trim();
     case 'cards': return !(d.items || []).length;
+    case 'steps':
+    case 'timeline': return !(d.items || []).length;
     default: return false;
   }
 }
@@ -441,6 +447,16 @@ function huntBlocks(html, opts = {}) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
           mapped += 1; i = end; continue;
         }
+        const stepData = parseStepsData(tokens, i, end, t);
+        if (stepData) {
+          sink.push({ type: 'steps', id: nid('steps'), data: stepData });
+          mapped += 1; i = end; continue;
+        }
+        const tlData = parseTimelineData(tokens, i, end, t);
+        if (tlData) {
+          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
+          mapped += 1; i = end; continue;
+        }
         const items = [];
         for (let j = i + 1; j < end - 1; j++) {
           if (tokens[j].kind === 'open' && tokens[j].name === 'li') {
@@ -453,6 +469,18 @@ function huntBlocks(html, opts = {}) {
           sink.push({ type: 'list', id: nid('list'), data: { ordered: name === 'ol', items } });
           mapped += 1;
         }
+        i = end; continue;
+      }
+      if (name === 'dl') {
+        const tlData = parseTimelineData(tokens, i, end, t);
+        if (tlData) {
+          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
+          mapped += 1; i = end; continue;
+        }
+        suggested.add('timeline');
+        let frag = '';
+        for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
+        raw += frag;
         i = end; continue;
       }
       if (name === 'form') {
@@ -538,6 +566,17 @@ function huntBlocks(html, opts = {}) {
           if (colTry.block) sink.push(colTry.block);
           else if (colTry.inline) colTry.inline.forEach((b) => sink.push(b));
           i = end; continue;
+        }
+
+        const stepData = parseStepsData(tokens, i, end, t);
+        if (stepData) {
+          sink.push({ type: 'steps', id: nid('steps'), data: stepData });
+          mapped += 1; i = end; continue;
+        }
+        const tlData = parseTimelineData(tokens, i, end, t);
+        if (tlData) {
+          sink.push({ type: 'timeline', id: nid('tl'), data: tlData });
+          mapped += 1; i = end; continue;
         }
 
         // hero role + hero shape → one hero block (role-collapse via ctx)

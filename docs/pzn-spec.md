@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (56)
+## Modules (60)
 
 ### Category: content
 
@@ -190,6 +190,18 @@ from it directly.
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `header` · boolean · default `true`
 
+#### `<bent-event>` — אירוע בציר זמן / Timeline event · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `time` · string
+  - `title` · string
+  - `image` · url
+  - `text` · text · **(body text, not an attribute)**
+
+#### `<bent-timeline>` — ציר זמן / Timeline · container (children: `bent-event`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
 ### Category: layout
 
 #### `<bent-section>` — מיכל / Section · container
@@ -268,6 +280,17 @@ from it directly.
   - `highlighted` · boolean · default `false`
 
 #### `<bent-pricing>` — טבלת מחירים / Pricing table · container (children: `bent-plan`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-step>` — שלב / Step · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string
+  - `icon` · string
+  - `text` · text · **(body text, not an attribute)**
+
+#### `<bent-steps>` — שלבי תהליך / Steps · container (children: `bent-step`)
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
 

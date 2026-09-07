@@ -488,6 +488,14 @@ function renderBlock(block, direction = 'rtl') {
       // pricing-table sugar (v1.05) — the module-hunt gap from docs/COMPETITIVE.md
       return require('./pzn/pricing-html').renderPricingFromData(block.data || {}, direction, extra);
 
+    case 'steps':
+      // how-it-works numbered process (module-hunt gap) — CSS counters, zero JS
+      return require('./pzn/steps-html').renderStepsFromData(block.data || {}, direction, extra);
+
+    case 'timeline':
+      // company-history rail (module-hunt gap) — CSS line + dots, zero JS
+      return require('./pzn/timeline-html').renderTimelineFromData(block.data || {}, direction, extra);
+
     case 'carousel':
       // the cards unit, sliding: zero-JS scroll-snap strip (v0.79)
       return require('./pzn/carousel-html').renderCarouselFromData(block.data || {}, direction, extra);

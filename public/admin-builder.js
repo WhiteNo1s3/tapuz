@@ -50,6 +50,8 @@
     { type: 'map', label: 'מפה', hint: 'Google Maps', icon: '📍', group: 'מדיה', keyword: 'MAP' },
     { type: 'cta', label: 'CTA', hint: 'קריאה לפעולה', icon: '➤', group: 'תוכן', keyword: 'CTA' },
     { type: 'stats', label: 'מדדים', hint: 'מספרים', icon: '＃', group: 'תוכן', keyword: 'STATS' },
+    { type: 'steps', label: 'שלבים', hint: 'איך זה עובד', icon: '①', group: 'מבנה', keyword: 'STEPS' },
+    { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
     { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
     { type: 'columns', label: 'עמודות', hint: 'מיכלים + resize', icon: '▥', group: 'מבנה', keyword: 'ROW' },
@@ -2184,6 +2186,45 @@
             '</div>';
         }).join('') +
         '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'steps') {
+      var sItems = d.items || [];
+      var steps = sItems.length ? sItems : [
+        { title: 'מתארים', text: 'מה האתר צריך.' },
+        { title: 'בונים', text: 'מודולים על הקנבס.' },
+        { title: 'מפרסמים', text: 'HTML נקי, חי.' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-steps">' +
+        steps.map(function (it) {
+          return '<div class="preview-step">' +
+            '<span class="preview-step-n"></span>' +
+            '<div class="preview-step-title">' + esc(it.title || 'שלב') + '</div>' +
+            (it.text ? '<div class="preview-step-body">' + esc(it.text) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'timeline') {
+      var eItems = d.items || [];
+      var events = eItems.length ? eItems : [
+        { time: '2024', title: 'ההתחלה', text: 'פתחנו.' },
+        { time: '2026', title: 'היום', text: 'ממשיכים.' }
+      ];
+      wrap.innerHTML =
+        '<ol class="preview-timeline">' +
+        events.map(function (it) {
+          return '<li class="preview-event">' +
+            (it.time ? '<div class="preview-event-time">' + esc(it.time) + '</div>' : '') +
+            '<div class="preview-event-title">' + esc(it.title || 'אירוע') + '</div>' +
+            (it.text ? '<div class="preview-event-body">' + esc(it.text) + '</div>' : '') +
+            '</li>';
+        }).join('') +
+        '</ol>';
       return wrap;
     }
 

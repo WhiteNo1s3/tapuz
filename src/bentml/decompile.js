@@ -463,6 +463,31 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}PRICING${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'steps': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`title: ${q(it.title || '')}`];
+          if (it.icon) ps.push(`icon: ${q(it.icon)}`);
+          return childWithBody('STEP', ps, it.text, indent);
+        })
+        .join('\n');
+      return `${pad}STEPS${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'timeline': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`title: ${q(it.title || '')}`];
+          if (it.time) ps.push(`time: ${q(it.time)}`);
+          if (it.image) ps.push(`image: ${q(it.image)}`);
+          return childWithBody('EVENT', ps, it.text, indent);
+        })
+        .join('\n');
+      return `${pad}TIMELINE${paramList(params)} {\n${kids}\n${pad}}`;
+    }
     case 'carousel': {
       const params = [];
       if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);

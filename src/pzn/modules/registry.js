@@ -1721,6 +1721,93 @@ register({
   }
 });
 
+// ─── Steps + timeline (module-hunt gaps from docs/COMPETITIVE.md) ───
+// How-it-works numbered process and company-history rail. Zero JS;
+// CSS counters / a vertical line. Child modules are flat-props like plan.
+
+register({
+  name: 'step',
+  tag: 'bent-step',
+  category: 'layout',
+  label: { he: 'שלב', en: 'Step' },
+  icon: 'step',
+  container: false,
+  props: {
+    title: { type: 'string', default: '', label: { he: 'כותרת השלב', en: 'Title' } },
+    icon: { type: 'string', default: '', optional: true, label: { he: 'אייקון', en: 'Icon' } },
+    text: { type: 'text', content: true, default: '', label: { he: 'תיאור', en: 'Description' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {}, { text: node.text || (node.props && node.props.text) || '' });
+    return require('../steps-html').renderStep(props);
+  }
+});
+
+register({
+  name: 'steps',
+  tag: 'bent-steps',
+  category: 'layout',
+  label: { he: 'שלבי תהליך', en: 'Steps' },
+  icon: 'steps',
+  container: true,
+  accept: ['step'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../steps-html').renderSteps(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'event',
+  tag: 'bent-event',
+  category: 'content',
+  label: { he: 'אירוע בציר זמן', en: 'Timeline event' },
+  icon: 'event',
+  container: false,
+  props: {
+    time: { type: 'string', default: '', optional: true, label: { he: 'תאריך / שנה', en: 'Date / year' } },
+    title: { type: 'string', default: '', label: { he: 'כותרת', en: 'Title' } },
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Image' } },
+    text: { type: 'text', content: true, default: '', label: { he: 'תיאור', en: 'Description' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {}, { text: node.text || (node.props && node.props.text) || '' });
+    return require('../timeline-html').renderEvent(props);
+  }
+});
+
+register({
+  name: 'timeline',
+  tag: 'bent-timeline',
+  category: 'content',
+  label: { he: 'ציר זמן', en: 'Timeline' },
+  icon: 'timeline',
+  container: true,
+  accept: ['event'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => compileChild(c, ctx)).join('');
+    return require('../timeline-html').renderTimeline(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 module.exports = {
   register,
   ANIMATE_VALUES,

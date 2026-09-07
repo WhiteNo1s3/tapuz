@@ -291,6 +291,26 @@ function blockToModule(block) {
       return createModule('pricing', baseOpts(block, {}, { children }));
     }
 
+    case 'steps': {
+      const children = (data.items || []).map((it) =>
+        createModule('step', {
+          props: pickProps(it || {}, ['title', 'icon']),
+          text: (it && it.text) || ''
+        })
+      );
+      return createModule('steps', baseOpts(block, {}, { children }));
+    }
+
+    case 'timeline': {
+      const children = (data.items || []).map((it) =>
+        createModule('event', {
+          props: pickProps(it || {}, ['time', 'title', 'image']),
+          text: (it && it.text) || ''
+        })
+      );
+      return createModule('timeline', baseOpts(block, {}, { children }));
+    }
+
     case 'carousel': {
       const children = (data.items || []).map((it) =>
         createModule('slide', {
@@ -628,6 +648,30 @@ function moduleToBlock(node) {
         .filter((c) => c.name === 'plan')
         .map((c) => pickData(c.props || {}, ['title', 'price', 'period', 'features', 'ctaLabel', 'ctaUrl', 'highlighted']));
       return finishBlock(node, 'pricing', data);
+    }
+
+    case 'steps': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'step')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['title', 'icon']);
+          if (c.text) item.text = c.text;
+          return item;
+        });
+      return finishBlock(node, 'steps', data);
+    }
+
+    case 'timeline': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'event')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['time', 'title', 'image']);
+          if (c.text) item.text = c.text;
+          return item;
+        });
+      return finishBlock(node, 'timeline', data);
     }
 
     case 'carousel': {

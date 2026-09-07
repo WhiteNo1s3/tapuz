@@ -83,7 +83,7 @@ function extractLang(html) {
 // (halves, heroes, card walls) gets the modular read. toolGap is the union:
 // the vocabulary engine keeps every missing-tool sighting from every lens.
 
-const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery']);
+const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline']);
 
 /** Walk a block tree (columns/cards/card children included). */
 function eachBlock(blocks, fn) {

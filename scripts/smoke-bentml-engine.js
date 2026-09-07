@@ -151,7 +151,9 @@ const VOCAB_DATA = {
   audio: { src: '/uploads/episode.mp3', caption: 'פרק 1', loop: false },
   table: { header: true, rows: [{ cells: 'יום | שעות' }, { cells: 'ראשון | 9:00–17:00' }] },
   category: { slug: 'ספורט', limit: 6, showheader: true },
-  pricing: { items: [{ title: 'מקצועי', price: '99', period: '/חודש', features: 'תכונה\nעוד תכונה', ctaLabel: 'התחילו', ctaUrl: '/signup', highlighted: true }] }
+  pricing: { items: [{ title: 'מקצועי', price: '99', period: '/חודש', features: 'תכונה\nעוד תכונה', ctaLabel: 'התחילו', ctaUrl: '/signup', highlighted: true }] },
+  steps: { items: [{ title: 'מתארים', text: 'מה האתר צריך.' }, { title: 'בונים', text: 'מודולים על הקנבס.' }] },
+  timeline: { items: [{ time: '2024', title: 'ההתחלה', text: 'פתחנו.' }, { time: '2026', title: 'היום', text: 'ממשיכים.', image: '/uploads/now.jpg' }] }
 };
 
 // types the language deliberately folds into another keyword's JSON

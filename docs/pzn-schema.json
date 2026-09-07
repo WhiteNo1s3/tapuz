@@ -2223,6 +2223,135 @@
           "optional": true
         }
       }
+    },
+    "step": {
+      "tag": "bent-step",
+      "label": {
+        "he": "שלב",
+        "en": "Step"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "icon": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "steps": {
+      "tag": "bent-steps",
+      "label": {
+        "he": "שלבי תהליך",
+        "en": "Steps"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "step"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "event": {
+      "tag": "bent-event",
+      "label": {
+        "he": "אירוע בציר זמן",
+        "en": "Timeline event"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "time": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "timeline": {
+      "tag": "bent-timeline",
+      "label": {
+        "he": "ציר זמן",
+        "en": "Timeline"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "event"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     }
   }
 }

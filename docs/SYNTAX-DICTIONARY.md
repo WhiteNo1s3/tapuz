@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (40)
+## Modules (42)
 
 ### תוכן
 
@@ -705,6 +705,44 @@ PRICING {
   …
 }
 ```
+
+#### `STEPS` → `steps`
+
+① **שלבי תהליך** — איך זה עובד — שלבים ממוספרים בלי JavaScript
+
+Shape: `STEPS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+STEPS {
+  …
+}
+```
+
+### תוכן
+
+#### `TIMELINE` → `timeline`
+
+┊ **ציר זמן** — הסיפור שלכם לאורך זמן — שנה, כותרת, תיאור
+
+Shape: `TIMELINE(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+TIMELINE {
+  …
+}
+```
+
+### מבנה
 
 #### `NAV` → `nav`
 
