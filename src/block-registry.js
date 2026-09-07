@@ -1329,6 +1329,97 @@ const BLOCK_REGISTRY = [
       ]
     }
   },
+
+  // ─────────── gap-audit wave 4: page chrome + whatsapp ───────────
+  // The decompiler's hottest remaining toolGaps (walla, mako, rest.co.il,
+  // doctor.co.il): every real homepage carries a <header> and a <footer>,
+  // and Israeli business sites hang a wa.me link on everything. These are
+  // PAGE modules — they live inside the page body and never replace the
+  // site's own master chrome (עיצוב → מאסטר: כותרת ותחתית), which the theme
+  // layout wraps around every page. Decompiling a site keeps its header/
+  // footer as editable modules the admin can lift into the master or drop.
+  {
+    type: 'whatsapp',
+    keyword: 'WHATSAPP',
+    labelHe: 'וואטסאפ',
+    icon: '✆',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'כפתור צ׳אט מעוצב — טלפון + הודעה מוכנה, נפתח ב-wa.me',
+    params: [
+      {
+        name: 'phone', labelHe: 'טלפון (בינלאומי)', type: 'string', default: '',
+        hint: 'ספרות בלבד בפורמט בינלאומי, למשל 972501234567 — או מלאו קישור מלא למטה'
+      },
+      {
+        name: 'message', labelHe: 'הודעה מוכנה', type: 'textarea', default: '',
+        hint: 'הטקסט שיופיע כתוב מראש בצ׳אט של הגולש'
+      },
+      {
+        name: 'note', labelHe: 'שורת משנה', type: 'string', default: '',
+        hint: 'טקסט קטן מתחת לכפתור, למשל "מענה תוך דקות"'
+      },
+      {
+        name: 'url', labelHe: 'קישור וואטסאפ מלא', type: 'url', default: '',
+        hint: 'wa.me/… או api.whatsapp.com/send?… — במקום טלפון (קישורי wa.me/message/…)'
+      },
+      ALIGN_PARAM
+    ],
+    textField: 'label',
+    textFieldLabelHe: 'טקסט הכפתור',
+    textFieldType: 'input',
+    seed: { label: 'דברו איתנו בוואטסאפ', phone: '', message: '', note: '', url: '' }
+  },
+  {
+    type: 'header',
+    keyword: 'HEADER',
+    labelHe: 'ראש עמוד (Header)',
+    icon: '⬒',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'פס עליון בתוך הדף — לוגו, תפריט, כפתור. לא מחליף את כותרת האתר (מאסטר)',
+    childrenKey: 'blocks',
+    params: [
+      {
+        name: 'tone', labelHe: 'רקע', type: 'enum',
+        enum: ['light', 'dark', 'brand', 'none'], default: 'light',
+        hint: 'none = שקוף, בלי פס'
+      },
+      {
+        name: 'layout', labelHe: 'פריסה', type: 'enum',
+        enum: ['row', 'stack'], default: 'row',
+        hint: 'row = הילדים בשורה אחת (לוגו | תפריט | כפתור), stack = זה מתחת לזה'
+      }
+    ],
+    textField: null,
+    seed: { blocks: [], tone: 'light', layout: 'row' }
+  },
+  {
+    type: 'footer',
+    keyword: 'FOOTER',
+    labelHe: 'תחתית עמוד (Footer)',
+    icon: '⬓',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'פס תחתון בתוך הדף — עמודות קישורים, רשתות, זכויות. לא מחליף את תחתית האתר (מאסטר)',
+    childrenKey: 'blocks',
+    params: [
+      {
+        name: 'tone', labelHe: 'רקע', type: 'enum',
+        enum: ['dark', 'light', 'brand', 'none'], default: 'dark',
+        hint: 'none = שקוף, בלי פס'
+      },
+      {
+        name: 'credit', labelHe: 'שורת זכויות', type: 'string', default: '',
+        hint: 'למשל "© 2026 כל הזכויות שמורות" — מודפס בקטן בתחתית הפס'
+      }
+    ],
+    textField: null,
+    seed: { blocks: [], tone: 'dark', credit: '' }
+  },
   {
     type: 'nav',
     keyword: 'NAV',

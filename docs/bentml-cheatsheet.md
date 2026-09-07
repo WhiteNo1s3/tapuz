@@ -102,6 +102,13 @@ AUDIO(src: "/uploads/ep.mp3 or YouTube" REQUIRED, caption: "...", loop: true|fal
 TABLE(header: true|false) { TROW { יום | שעות } TROW { ראשון | 9:00–17:00 } ... }
       ← each TROW body is one row, cells split on | (like a markdown row);
         header: true (default) renders the first TROW as the header row
+HEADER(tone: light|dark|brand|none, layout: row|stack) { IMAGE… NAV… BUTTON… }
+      ← ראש עמוד: a band INSIDE the page (logo | menu | CTA) — not the site's master chrome
+FOOTER(tone: dark|light|brand|none, credit: "© 2026 …") { ROW… SOCIAL… TEXT… }
+      ← תחתית עמוד: link columns / social / text; credit prints small at the bottom
+WHATSAPP(phone: "972501234567", message: "שלום…", note: "מענה תוך דקות",
+         url: "https://wa.me/…", align: start|center|end) { דברו איתנו בוואטסאפ }
+      ← styled click-to-chat pill; phone → wa.me (050… becomes 972…), url only when no phone
 
 CHROME on any block (optional): id: "anchor", class: "hook",
   color/background: "#hex", fontsize/padding/radius: sm|md|lg — the theme resolves them.

@@ -2974,6 +2974,13 @@ img.preview-member-photo { display: block; }
 .preview-bar-head { display: flex; justify-content: space-between; font-size: 0.75rem; color: #1e293b; margin-bottom: 3px; }
 .preview-bar-track { height: 7px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
 .preview-bar-fill { height: 100%; border-radius: inherit; background: #ea580c; }
+.preview-whatsapp-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.preview-whatsapp { display: inline-flex; align-items: center; gap: 8px; padding: 7px 16px 7px 12px; border-radius: 999px; background: #25d366; color: #fff; font-weight: 700; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.35); }
+.preview-wa-icon { font-size: 1.15rem; line-height: 1; }
+.preview-wa-body { display: flex; flex-direction: column; align-items: flex-start; }
+.preview-wa-note { font-size: 0.68rem; font-weight: 400; opacity: 0.9; }
+.preview-wa-target { font-size: 0.7rem; color: #64748b; direction: ltr; unicode-bidi: plaintext; }
+.preview-wa-missing { color: #b45309; direction: rtl; }
 .preview-category-head { font-weight: 700; color: #1e293b; padding: 6px 10px; border-right: 4px solid #0a66c2; background: #f8fafc; border-radius: 6px; margin-bottom: 10px; }
 .preview-features { display: grid; gap: 8px; }
 .preview-feature {

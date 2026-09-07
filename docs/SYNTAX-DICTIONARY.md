@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (48)
+## Modules (51)
 
 ### תוכן
 
@@ -849,7 +849,64 @@ PROGRESS {
 }
 ```
 
+#### `WHATSAPP` → `whatsapp`
+
+✆ **וואטסאפ** — כפתור צ׳אט מעוצב — טלפון + הודעה מוכנה, נפתח ב-wa.me
+
+Shape: `WHATSAPP(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `phone` | `phone` | string |  | "" |
+| `message` | `message` | textarea |  | "" |
+| `note` | `note` | string |  | "" |
+| `url` | `url` | url |  | "" |
+| `align` | `align` | enum start\|center\|end |  | "start" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+WHATSAPP(align: start) {
+  …
+}
+```
+
 ### מבנה
+
+#### `HEADER` → `header`
+
+⬒ **ראש עמוד (Header)** — פס עליון בתוך הדף — לוגו, תפריט, כפתור. לא מחליף את כותרת האתר (מאסטר)
+
+Shape: `HEADER(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `tone` | `tone` | enum light\|dark\|brand\|none |  | "light" |
+| `layout` | `layout` | enum row\|stack |  | "row" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+HEADER {
+  …
+}
+```
+
+#### `FOOTER` → `footer`
+
+⬓ **תחתית עמוד (Footer)** — פס תחתון בתוך הדף — עמודות קישורים, רשתות, זכויות. לא מחליף את תחתית האתר (מאסטר)
+
+Shape: `FOOTER(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `tone` | `tone` | enum dark\|light\|brand\|none |  | "dark" |
+| `credit` | `credit` | string |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+FOOTER {
+  …
+}
+```
 
 #### `NAV` → `nav`
 
@@ -960,6 +1017,6 @@ Universal on most keywords: `class`, `id`.
 
 ## Reserved (future advanced modules)
 
-`INPUT`, `FOOTER`, `HEADER`, `CODE`
+`INPUT`, `CODE`
 
 These are **not** implemented yet. Using them in BenTML is an error today.

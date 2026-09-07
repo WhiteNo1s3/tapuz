@@ -542,6 +542,35 @@ const KEYWORDS = {
       color: { type: 'string' }
     }
   },
+  // gap-audit wave 4 — HEADER/FOOTER graduate from RESERVED as PAGE chrome
+  // (a band inside the page body; the site's master chrome stays the theme's)
+  HEADER: {
+    body: 'BLOCK-BODY',
+    jsonType: 'header',
+    params: {
+      tone: { type: 'enum', default: 'light', values: ['light', 'dark', 'brand', 'none'] },
+      layout: { type: 'enum', default: 'row', values: ['row', 'stack'] }
+    }
+  },
+  FOOTER: {
+    body: 'BLOCK-BODY',
+    jsonType: 'footer',
+    params: {
+      tone: { type: 'enum', default: 'dark', values: ['dark', 'light', 'brand', 'none'] },
+      credit: { type: 'string', default: '' }
+    }
+  },
+  WHATSAPP: {
+    body: 'TEXT-BODY',
+    jsonType: 'whatsapp',
+    params: {
+      phone: { type: 'string', default: '' },
+      message: { type: 'string', default: '' },
+      note: { type: 'string', default: '' },
+      url: { type: 'string', default: '' },
+      align: { type: 'enum', default: 'start', values: ['start', 'center', 'end'] }
+    }
+  },
   NAV: {
     body: 'BLOCK-BODY',
     jsonType: 'nav',
@@ -666,9 +695,10 @@ const RESERVED = new Set([
   // SECTION graduated v0.75 (container-as-tool), SLIDER graduated v0.79 as
   // CAROUSEL (the slide strip; a range-input SLIDER would be a FORM field),
   // AUDIO graduated v0.80 (media set complete), TABLE graduated v0.83
-  // (pipe-row syntax). INPUT stays a placeholder — form fields are the
+  // (pipe-row syntax), HEADER + FOOTER graduated in gap-audit wave 4 as
+  // page chrome modules. INPUT stays a placeholder — form fields are the
   // child `field` module (nav links = child `navitem`).
-  'INPUT', 'FOOTER', 'HEADER', 'CODE'
+  'INPUT', 'CODE'
 ]);
 
 const UNIVERSAL = new Set(['id', 'class', 'dir', 'animate']);

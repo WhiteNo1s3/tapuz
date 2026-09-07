@@ -76,9 +76,14 @@ check('the declined hero still reports hero on toolGap (not a silent flatten)',
 const twins = huntBlocks(`
   <header class="desktop"><h1>לוגו</h1><nav><a href="/">בית</a><a href="/x">עוד</a></nav></header>
   <div class="mobile-menu"><h1>לוגו</h1><nav><a href="/">בית</a><a href="/x">עוד</a></nav></div>`);
-check('desktop+mobile twins → one heading, one nav',
-  twins.blocks.filter((b) => b.type === 'heading').length === 1 &&
-  twins.blocks.filter((b) => b.type === 'nav').length === 1);
+// wave 4: the <header> itself maps to the header module, so its logo + nav
+// live INSIDE the band — and the mobile twin's copies are still deduped
+// against them (nothing rendered twice at the top level either)
+const flat = (blocks) => blocks.flatMap((b) => [b, ...flat((b.data && b.data.blocks) || [])]);
+check('desktop+mobile twins → one heading, one nav (inside the mapped header)',
+  flat(twins.blocks).filter((b) => b.type === 'heading').length === 1 &&
+  flat(twins.blocks).filter((b) => b.type === 'nav').length === 1 &&
+  twins.blocks.length === 1 && twins.blocks[0].type === 'header');
 
 // ── residue dropped, nothing real lost ───────────────────────────────
 const residue = huntBlocks('<h2>  </h2><img src=""><p>תוכן אמיתי</p><ul><li> </li></ul>');

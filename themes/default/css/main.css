@@ -1107,6 +1107,92 @@ a.bent-member-name:hover { color: var(--color-primary, #ea580c); }
 }
 @keyframes bent-bar-grow { from { width: 0; } }
 
+/* ── Page chrome — header / footer bands INSIDE the page (gap-audit wave 4).
+   Own class names on purpose: .site-header/.site-footer are the master
+   chrome (sticky, glass, footer palette from theme.js) and must not leak. ── */
+.bent-header,
+.bent-footer {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md, 8px);
+}
+.bent-header.tone-light,
+.bent-footer.tone-light {
+  background: var(--color-light-bg, #f8fafc);
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+.bent-header.tone-dark,
+.bent-footer.tone-dark {
+  background: #0f172a;
+  color: #f8fafc;
+}
+.bent-header.tone-brand,
+.bent-footer.tone-brand {
+  background: var(--accent-bg, linear-gradient(135deg, #0a66c2, #0369a1));
+  color: #fff;
+}
+.bent-header.tone-none,
+.bent-footer.tone-none { padding-inline: 0; }
+.bent-header.tone-dark a,
+.bent-header.tone-brand a,
+.bent-footer.tone-dark a,
+.bent-footer.tone-brand a { color: inherit; }
+.bent-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+.bent-header.layout-stack .bent-header-inner {
+  flex-direction: column;
+  align-items: stretch;
+}
+.bent-header-inner > * { margin: 0; }
+.bent-header-inner > .bent-image img { max-height: 3.5rem; width: auto; }
+.bent-header-inner > .bent-nav,
+.bent-header-inner > nav { flex: 1 1 auto; }
+.bent-footer {
+  padding-block: 2rem 1.25rem;
+  font-size: 0.95rem;
+}
+.bent-footer-inner > * + * { margin-top: 1.25rem; }
+.bent-footer-inner > .columns { margin: 0; }
+.bent-footer-credit {
+  margin: 1.5rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  font-size: 0.82rem;
+  text-align: center;
+  opacity: 0.8;
+}
+
+/* ── WhatsApp click-to-chat CTA — the in-page module, not the float ── */
+.bent-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.7rem 1.25rem 0.7rem 1rem;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: 0 6px 18px rgba(37, 211, 102, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.bent-whatsapp:hover {
+  background: #1ebe5d;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(37, 211, 102, 0.4);
+}
+.bent-whatsapp .bent-wa-icon { flex: 0 0 auto; width: 1.75rem; height: 1.75rem; }
+.bent-wa-body { display: flex; flex-direction: column; align-items: flex-start; }
+.bent-wa-note { font-size: 0.78rem; font-weight: 400; opacity: 0.9; }
+
 article.feature h3 {
   margin: 0 0 0.35rem;
   font-size: 1.1rem;
@@ -1125,7 +1211,7 @@ p, li { max-width: 70ch; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .card, .feature, .main-nav a::after, .skip-link, .whatsapp-float { transition: none; }
+  .card, .feature, .main-nav a::after, .skip-link, .whatsapp-float, .bent-whatsapp { transition: none; }
 }
 
 /* ── Signature visuals (v0.44) — heroes with fixed backgrounds, text

@@ -34,6 +34,7 @@ const {
   anchorCard,
   attrOf,
   LINK_RUN_MIN,
+  CHROME_LINK_RUN_MIN,
   LINK_LABEL_MAX,
   imageSrcOf,
   classBgMap,
@@ -54,6 +55,9 @@ const {
   parseSocialData,
   tryStructuralModules,
   guessedTool,
+  landmarkOf,
+  liftFooterCredit,
+  whatsappDataOf,
   mapsAddressOf
 } = require('./graduate');
 
@@ -158,9 +162,15 @@ function dedupeKey(b) {
  */
 function dedupeSiblings(blocks) {
   const seen = new Set();
+  const mark = (b) => { const k = dedupeKey(b); if (k != null) seen.add(k); };
   return blocks.filter((b) => {
     const key = dedupeKey(b);
-    if (key == null) return true;
+    if (key == null) {
+      // a mapped page header/footer counts its children as seen at this
+      // level — the mobile twin of the header must not re-emit the logo/nav
+      if (b.type === 'header' || b.type === 'footer') ((b.data || {}).blocks || []).forEach(mark);
+      return true;
+    }
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -192,6 +202,9 @@ function isEmptyBlock(b) {
     case 'progress':
     case 'social': return !(d.items || []).length;
     case 'countdown': return !String(d.target || '').trim();
+    case 'header':
+    case 'footer': return !(d.blocks || []).length && !String(d.credit || '').trim();
+    case 'whatsapp': return !String(d.phone || '').trim() && !String(d.url || '').trim();
     default: return false;
   }
 }
@@ -240,7 +253,7 @@ function huntBlocks(html, opts = {}) {
    * the wrapper says row/grid or the children carry width hints. Whitespace
    * between columns is fine; any other content breaks pure-row detection.
    */
-  function tryColumns(t, i, end, depth) {
+  function tryColumns(t, i, end, depth, ctx = {}) {
     const spans = [];
     let j = i + 1;
     while (j < end - 1) {
@@ -265,7 +278,7 @@ function huntBlocks(html, opts = {}) {
     const cols = [];
     const kept = [];
     spans.forEach(([s, e], idx) => {
-      const colBlocks = walk(s + 1, e - 1, depth + 1, {});
+      const colBlocks = walk(s + 1, e - 1, depth + 1, ctx);
       if (colBlocks.length) {
         cols.push({ blocks: colBlocks });
         kept.push(weights[idx] == null ? 1 : weights[idx]);
@@ -365,13 +378,19 @@ function huntBlocks(html, opts = {}) {
           sink.push({ type: 'cards', id: nid('cards'), data: { items: [teaser] } });
           mapped += 1; i = end; continue;
         }
-        // a run of ≥4 short bare links is a menu, not a button pile
+        // a run of ≥4 short bare links is a menu, not a button pile (≥2 in chrome)
         const run = collectLinkRun(tokens, i, to);
-        if (run.items.length >= LINK_RUN_MIN) {
+        if (run.items.length >= (ctx.inChrome ? CHROME_LINK_RUN_MIN : LINK_RUN_MIN)) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: run.items } });
           mapped += 1; i = run.end; continue;
         }
         const href = (t.attrs && t.attrs.href) || '#';
+        // a wa.me / api.whatsapp.com link IS the whatsapp module (wave 4)
+        const wa = whatsappDataOf(tokens, i, end, t);
+        if (wa) {
+          sink.push({ type: 'whatsapp', id: nid('wa'), data: wa });
+          mapped += 1; i = end; continue;
+        }
         let label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
         if (!label) {
           // a textless link is an icon or a picture link — keep the picture,
@@ -391,7 +410,6 @@ function huntBlocks(html, opts = {}) {
         if (/youtube\.com|youtu\.be/i.test(href)) {
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
         } else {
-          if (/wa\.me|whatsapp/i.test(href)) suggested.add('whatsapp');
           sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
         }
         mapped += 1; i = end; continue;
@@ -421,7 +439,7 @@ function huntBlocks(html, opts = {}) {
         }
         const lostList = guessedTool(t);
         if (lostList) suggested.add(lostList);
-        const menu = navItemsFromList(tokens, i, end);
+        const menu = navItemsFromList(tokens, i, end, ctx.inChrome ? CHROME_LINK_RUN_MIN : LINK_RUN_MIN);
         if (menu) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
           mapped += 1; i = end; continue;
@@ -559,14 +577,43 @@ function huntBlocks(html, opts = {}) {
           mapped += 1; i = structural.next; continue;
         }
 
+        // the page's header/footer landmark → ONE header/footer module holding
+        // its children (wave 4). A footer that is itself a row keeps the
+        // columns cut INSIDE the band. Provisional leftovers inside still
+        // report the gap (nothing lost, nothing silently claimed).
+        const landmark = landmarkOf(t);
+        if (landmark && !ctx.inChrome) {
+          const childCtx = Object.assign({}, ctx, { inChrome: true });
+          const leftoverBefore = leftover;
+          let kids;
+          const bandCols = tryColumns(t, i, end, depth, childCtx);
+          if (bandCols && bandCols.block) kids = [bandCols.block];
+          else if (bandCols && bandCols.inline) kids = bandCols.inline;
+          else kids = walk(i + 1, end - 1, depth + 1, childCtx);
+          if (kids.length) {
+            const data = { blocks: kids };
+            if (landmark === 'footer') {
+              const credit = liftFooterCredit(kids);
+              if (credit) data.credit = credit;
+            }
+            sink.push({ type: landmark, id: nid(landmark), data });
+            mapped += 1;
+            if (leftover > leftoverBefore) suggested.add(landmark);
+          }
+          // no children = nothing visible inside — the inner walk keeps every
+          // readable thing, so an empty band was never content
+          i = end; continue;
+        }
+
         // the percentage cut: a row of 2–4 columns → one columns block
-        const colTry = tryColumns(t, i, end, depth);
+        const colTry = tryColumns(t, i, end, depth, ctx);
         if (colTry) {
           if (colTry.block) sink.push(colTry.block);
           else if (colTry.inline) colTry.inline.forEach((b) => sink.push(b));
           i = end; continue;
         }
-        const lost = guessedTool(t);
+        // a landmark nested inside a mapped band is a wrapper, not a loss
+        const lost = landmark ? null : guessedTool(t);
         if (lost) suggested.add(lost);
 
         // every other wrapper descends — structure comes from columns/cards/
