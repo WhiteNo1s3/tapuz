@@ -29,6 +29,7 @@
 
 const { tokenize } = require('./language/parse');
 const { unescapeHtml } = require('./language/escape');
+const { parseWhatsappHref, DEFAULT_LABEL: WA_DEFAULT_LABEL } = require('./whatsapp-html');
 
 /** Reconstruct a token's HTML (for leftover fragments). */
 function tokenToHtml(t) {
@@ -348,7 +349,7 @@ function coalesceButtonRuns(blocks) {
 }
 
 /** A ul whose items are single short links is a MENU — keep the hrefs. */
-function navItemsFromList(tokens, i, end) {
+function navItemsFromList(tokens, i, end, minItems = LINK_RUN_MIN) {
   let liCount = 0;
   const items = [];
   for (let j = i + 1; j < end - 1; j++) {
@@ -369,9 +370,15 @@ function navItemsFromList(tokens, i, end) {
       j = liEnd - 1;
     }
   }
-  if (liCount >= LINK_RUN_MIN && items.length >= liCount * 0.8) return items;
+  if (liCount >= minItems && items.length >= liCount * 0.8) return items;
   return null;
 }
+
+// Inside a mapped header/footer band even TWO short links are a menu (footer
+// link columns, a logo + login pair) — the page-level minimum of four guards
+// against button piles, a guard chrome does not need. Links must survive as
+// links there, never flatten to a text list.
+const CHROME_LINK_RUN_MIN = 2;
 
 function collectLinkRun(tokens, i, to) {
   const items = [];
@@ -773,18 +780,81 @@ function looksLikeCountdown(t) { return COUNTDOWN_CLASS.test(hintHay(t)); }
 function looksLikePricelist(t) { return PRICELIST_CLASS.test(hintHay(t)); }
 function looksLikeProgress(t) { return PROGRESS_CLASS.test(hintHay(t)); }
 
+// ── page chrome landmarks (gap-audit wave 4) ──
+// The <header>/<footer> the walk used to refuse to invent. Exact class/id
+// TOKENS, not substrings: `card-header`, `modal-header`, `entry-header` are
+// section furniture, not the page's chrome. ARIA landmark roles count too.
+const HEADER_TOKENS = new Set(['header', 'site-header', 'page-header', 'main-header', 'top-header', 'header-wrapper', 'header-wrap', 'site-head', 'topbar', 'top-bar']);
+const FOOTER_TOKENS = new Set(['footer', 'site-footer', 'page-footer', 'main-footer', 'footer-wrapper', 'footer-wrap', 'bottom-bar', 'colophon']);
+
 /**
- * A class/tag that names a module we speak — or a landmark we refuse to
- * invent (header/footer). Used when the mapper declines so the flatten
- * is never a silent success.
+ * 'header' | 'footer' when the element IS the page's chrome landmark, else
+ * null. Shared by the flat walk and the hunt so both map the same shapes.
+ */
+function landmarkOf(t) {
+  if (!t || t.kind !== 'open') return null;
+  if (t.name === 'header') return 'header';
+  if (t.name === 'footer') return 'footer';
+  // only wrappers can BE the chrome — a <ul class="footer"> is a list in it
+  if (!CONTAINERS.has(t.name) && !String(t.name || '').includes('-')) return null;
+  const role = String((t.attrs && t.attrs.role) || '').toLowerCase();
+  if (role === 'banner') return 'header';
+  if (role === 'contentinfo') return 'footer';
+  for (const tok of classHay(t).toLowerCase().split(/\s+/)) {
+    if (HEADER_TOKENS.has(tok)) return 'header';
+    if (FOOTER_TOKENS.has(tok)) return 'footer';
+  }
+  return null;
+}
+
+const CREDIT_RE = /©|\(c\)|כל הזכויות שמורות|all rights reserved|copyright/i;
+
+/**
+ * A footer's copyright line becomes the module's `credit` param instead of
+ * a stray text block: the LAST short text child that reads like a credit.
+ * Mutates and returns the child list.
+ */
+function liftFooterCredit(kids) {
+  for (let k = kids.length - 1; k >= 0; k--) {
+    const b = kids[k];
+    if (b.type !== 'text') continue;
+    const content = String(b.data.content || '').trim();
+    if (content.length <= 160 && CREDIT_RE.test(content)) {
+      kids.splice(k, 1);
+      return content;
+    }
+    break; // only the trailing line — a credit never sits above real content
+  }
+  return '';
+}
+
+/**
+ * A wa.me / api.whatsapp.com anchor → whatsapp module data (gap-audit wave
+ * 4: the link real sites hang on everything used to be a button + a
+ * permanent toolGap). Label = the link text, else its aria name, else the
+ * Hebrew default — an icon-only link still becomes the styled CTA.
+ * @returns {object|null} null when the anchor is not a WhatsApp link
+ */
+function whatsappDataOf(tokens, i, end, t) {
+  const wa = parseWhatsappHref((t.attrs && t.attrs.href) || '');
+  if (!wa) return null;
+  let label = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+  if (!label) label = attrOf(t.attrs, 'aria-label', 'title').trim();
+  if (!label || label.length > 80) label = WA_DEFAULT_LABEL;
+  return Object.assign({ label }, wa);
+}
+
+/**
+ * A class/tag that names a module we speak. Used when the mapper declines
+ * so the flatten is never a silent success. header/footer are modules now
+ * (wave 4) — they land here only when the landmark mapping itself declines.
  * @returns {string|null}
  */
 function guessedTool(t) {
   if (!t) return null;
   const hay = hintHay(t);
-  const name = t.name || '';
-  if (name === 'header' || /site-header|page-header/i.test(hay)) return 'header';
-  if (name === 'footer' || /site-footer|page-footer/i.test(hay)) return 'footer';
+  const landmark = landmarkOf(t);
+  if (landmark) return landmark;
   if (looksLikeCarousel(t)) return 'carousel';
   if (looksLikeTabs(t)) return 'tabs';
   if (looksLikeFaq(t)) return 'faq';
@@ -1932,7 +2002,12 @@ function htmlToBlocks(html, opts = {}) {
     sink.push({ type: 'html', id: nid('html'), data: { content: trimmed, provisional: true } });
   }
 
-  function walk(from, to, sink) {
+  /**
+   * @param {{ inChrome?: boolean }} [ctx] inChrome = already inside a mapped
+   *        header/footer, so a nested landmark (header-in-header markup,
+   *        role collapse) just descends instead of nesting another band
+   */
+  function walk(from, to, sink, ctx = {}) {
     // the whole range repeating the card shape? → ONE cards block (v0.65).
     // Fires for wrapped clusters (via the CONTAINERS descend) and for bare
     // top-level sibling clusters alike.
@@ -2019,13 +2094,20 @@ function htmlToBlocks(html, opts = {}) {
           sink.push({ type: 'cards', id: nid('cards'), data: { items: [teaser] } });
           mapped += 1; i = end; continue;
         }
-        // a run of ≥4 short bare links is a menu, not a button pile
+        // a run of ≥4 short bare links is a menu, not a button pile (≥2 in chrome)
         const run = collectLinkRun(tokens, i, to);
-        if (run.items.length >= LINK_RUN_MIN) {
+        if (run.items.length >= (ctx.inChrome ? CHROME_LINK_RUN_MIN : LINK_RUN_MIN)) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: run.items } });
           mapped += 1; i = run.end; continue;
         }
         const href = t.attrs.href || '#';
+        // a wa.me / api.whatsapp.com link IS the whatsapp module (wave 4) —
+        // icon-only links included, the module renders its own glyph
+        const wa = whatsappDataOf(tokens, i, end, t);
+        if (wa) {
+          sink.push({ type: 'whatsapp', id: nid('wa'), data: wa });
+          mapped += 1; i = end; continue;
+        }
         let label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
         if (!label) {
           // a textless link is an icon or a picture link — keep the picture,
@@ -2046,7 +2128,6 @@ function htmlToBlocks(html, opts = {}) {
           // a YouTube link is better as an embed (renderer auto-embeds the player)
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
         } else {
-          if (/wa\.me|whatsapp/i.test(href)) suggested.add('whatsapp'); // real sites want a first-class whatsapp module
           sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
         }
         mapped += 1; i = end; continue;
@@ -2080,7 +2161,7 @@ function htmlToBlocks(html, opts = {}) {
         }
         if (guessedTool(t)) suggested.add(guessedTool(t));
         // a ul of single short links is a menu — keep the hrefs (v0.67)
-        const menu = navItemsFromList(tokens, i, end);
+        const menu = navItemsFromList(tokens, i, end, ctx.inChrome ? CHROME_LINK_RUN_MIN : LINK_RUN_MIN);
         if (menu) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
           mapped += 1; i = end; continue;
@@ -2226,7 +2307,33 @@ function htmlToBlocks(html, opts = {}) {
           sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
           mapped += 1; i = structural.next; continue;
         }
-        const lost = guessedTool(t);
+        // the page's header/footer landmark → ONE header/footer module with
+        // its children as nested blocks (wave 4). Nothing lost: inner
+        // structure we could not read stays as provisional html INSIDE the
+        // band — and then the gap is still reported, the rich-table rule.
+        const landmark = landmarkOf(t);
+        if (landmark && !ctx.inChrome) {
+          const kids = [];
+          const leftoverBefore = leftover;
+          walk(i + 1, end - 1, kids, Object.assign({}, ctx, { inChrome: true }));
+          const inner = coalesceButtonRuns(kids);
+          if (inner.length) {
+            const data = { blocks: inner };
+            if (landmark === 'footer') {
+              const credit = liftFooterCredit(inner);
+              if (credit) data.credit = credit;
+            }
+            sink.push({ type: landmark, id: nid(landmark), data });
+            mapped += 1;
+            if (leftover > leftoverBefore) suggested.add(landmark);
+          }
+          // no children = nothing visible inside (scripts, svg chrome) —
+          // the inner walk keeps every readable thing, so nothing was lost
+          i = end; continue;
+        }
+        // a landmark nested inside a mapped band (header-in-header markup)
+        // is just a wrapper — descend without reporting it lost
+        const lost = landmark ? null : guessedTool(t);
         if (lost) suggested.add(lost);
         else {
           if (looksLikeSteps(t)) suggested.add('steps');
@@ -2235,7 +2342,7 @@ function htmlToBlocks(html, opts = {}) {
         // descend: its children become blocks (the wrapper itself is dropped).
         // A grid/flex wrapper with several children hints at a columns layout.
         const before = sink.length;
-        walk(i + 1, end - 1, sink);
+        walk(i + 1, end - 1, sink, ctx);
         if (sink.length - before > 1 && /col|grid|row|flex/i.test(t.attrs.class || '')) {
           suggested.add('columns');
         }
@@ -2259,7 +2366,7 @@ function htmlToBlocks(html, opts = {}) {
         }
         const lostCustom = guessedTool(t);
         if (lostCustom) suggested.add(lostCustom);
-        walk(i + 1, end - 1, sink);
+        walk(i + 1, end - 1, sink, ctx);
         i = end; continue;
       }
 
@@ -2302,6 +2409,9 @@ module.exports = {
   parseTestimonialData,
   tryStructuralModules,
   guessedTool,
+  landmarkOf,
+  liftFooterCredit,
+  whatsappDataOf,
   parseDetailsRun,
   mapsAddressOf,
   detectCardCluster,
@@ -2312,6 +2422,7 @@ module.exports = {
   attrOf,
   pickFromSrcset,
   LINK_RUN_MIN,
+  CHROME_LINK_RUN_MIN,
   LINK_LABEL_MAX,
   imageSrcOf,
   styleImageOf,
