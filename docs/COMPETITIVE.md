@@ -94,7 +94,12 @@ Sources: [builder.io Fusion launch](https://www.builder.io/news/fusion),
    from an editor's sidebar (they 403 on click today, correct but not
    polished) and a finer editor-vs-author split — that's the agency-tier
    follow-up.
-3. **FOOTER/HEADER as modules vs site-chrome** — design fork, Ben's call.
+3. ~~**FOOTER/HEADER as modules vs site-chrome**~~ — resolved in gap-audit
+   wave 4 as BOTH: the site-chrome (מאסטר: כותרת ותחתית) stays the theme's
+   `.site-header`/`.site-footer` wrapping every page, and `HEADER`/`FOOTER`
+   graduated as PAGE modules (`bent-header`/`bent-footer` bands holding
+   nested blocks) so a decompiled site keeps its chrome editable instead of
+   reporting it lost. Plus `WHATSAPP`, the click-to-chat CTA.
 4. ~~**Search on the published site**~~ — shipped in v0.98: a build-time
    `search-index.json` (`pages.listSearchable()`, written by `exportAll()`
    only when turned on) + a floating client-side search widget

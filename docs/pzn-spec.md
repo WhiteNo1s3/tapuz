@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (71)
+## Modules (74)
 
 ### Category: content
 
@@ -244,6 +244,16 @@ from it directly.
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
 
+#### `<bent-whatsapp>` — וואטסאפ / WhatsApp · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `phone` · string
+  - `message` · string
+  - `note` · string
+  - `url` · url
+  - `align` · enum · start \| center \| end · default `start`
+  - `label` · text · **(body text, not an attribute)**
+
 ### Category: layout
 
 #### `<bent-section>` — מיכל / Section · container
@@ -345,6 +355,18 @@ from it directly.
 #### `<bent-crumbs>` — פירורי לחם / Breadcrumbs · container (children: `bent-crumb`)
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-header>` — ראש עמוד / Page header · container
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `tone` · enum · light \| dark \| brand \| none · default `light`
+  - `layout` · enum · row \| stack · default `row`
+
+#### `<bent-footer>` — תחתית עמוד / Page footer · container
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `tone` · enum · dark \| light \| brand \| none · default `dark`
+  - `credit` · string
 
 ### Category: data
 

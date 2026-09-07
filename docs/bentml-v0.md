@@ -650,8 +650,9 @@ The v0.1 body keywords are exactly: `HEADING`, `TEXT`, `IMAGE`, `BUTTON`, `ROW`,
 `FEATURES`, `FEATURE`, `EMBED`, `ARTICLES`, `MOTION`, `BACKDROP`, `HTML` — plus `META` (§4).
 
 **Reserved future keywords** — using them today is error **E201** with a "reserved for a future
-version" note: `SECTION`, `FORM`, `INPUT`, `NAV`, `FOOTER`, `HEADER`, `CODE`, `TABLE`, `VIDEO`,
-`AUDIO`, `ACCORDION`, `TABS`, `SLIDER`.
+version" note: `INPUT`, `CODE`. (Everything else on the original v0.1 reserved list has since
+graduated: `SECTION`, `FORM`, `NAV`, `TABLE`, `VIDEO`, `AUDIO`, `ACCORDION`, `TABS`, `SLIDER`
+as `CAROUSEL`, and — gap-audit wave 4 — `HEADER` and `FOOTER` as page-chrome containers.)
 
 Every keyword below also accepts the universal params `id`, `class`, `dir` (§7.4) — except
 `COL`, `ITEM`, `FEATURE`, `HTML`, and HERO children, per §7.4; they are omitted from the
