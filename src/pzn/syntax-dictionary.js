@@ -222,8 +222,8 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
   lines.push(he ? '## הכלים — דקדוק מקוצר (זה כל המילון)' : '## Tools — compact grammar (this IS the dictionary)');
   lines.push('');
   lines.push(he
-    ? 'שורה לכלי: `תג` · ⊃ = אילו ילדים נכנסים בתוכו · props (ערך1|ערך2 = הערכים המותרים, `*` = טקסט הגוף של התג, ↳ = חי רק בתוך מיכל).'
-    : 'One line per tool: `tag` · ⊃ = allowed children · props (a|b = allowed values, `*` = tag body text, ↳ = lives only inside a container).');
+    ? 'שורה לכלי: `תג` · ⊃ = אילו ילדים נכנסים בתוכו · props (ערך1|ערך2 = הערכים המותרים, `*` = טקסט הגוף של התג, ↳ = חי רק בתוך מיכל). לכל תג יש גם `id`, `class` ו-`animate=none|fade|rise|zoom` אופציונליים — לא חוזרים עליהם בשורות.'
+    : 'One line per tool: `tag` · ⊃ = allowed children · props (a|b = allowed values, `*` = tag body text, ↳ = lives only inside a container). Every tag also takes optional `id`, `class` and `animate=none|fade|rise|zoom` — not repeated per line.');
   lines.push('');
 
   const catOrder = ['content', 'layout', 'data', 'media', 'effects', 'advanced'];
@@ -234,7 +234,13 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
   for (const cat of cats) {
     lines.push(`### ${cat}`);
     for (const m of dict.categories[cat] || []) {
-      const props = Object.entries(m.props || {}).slice(0, 8).map(([k, p]) => {
+      // id/class/animate are universal — declared ONCE in the header above.
+      // animate alone repeated its full enum on ~60 lines (~1.7K chars), and
+      // the lite pack's free-plan budget (LITE_BUDGET_CHARS) paid for it —
+      // Ben's new modules pushed the pack past the gate exactly this way.
+      const props = Object.entries(m.props || {})
+        .filter(([k]) => k !== 'id' && k !== 'class' && k !== 'animate')
+        .slice(0, 8).map(([k, p]) => {
         let s = k;
         if (p.values) s += '=' + p.values.slice(0, 4).join('|') + (p.values.length > 4 ? '|…' : '');
         if (p.content) s += '*';
