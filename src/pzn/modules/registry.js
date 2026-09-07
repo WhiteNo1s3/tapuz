@@ -1901,6 +1901,170 @@ register({
   }
 });
 
+// ─── Gap-audit wave 3: team / countdown / pricelist / progress ───
+// The shapes every real business site ships (Elementor: image-box teams,
+// countdown, price list, progress) that were silently flattening to
+// text/cards. Zero JS except countdown's inline ticker.
+
+register({
+  name: 'member',
+  tag: 'bent-member',
+  category: 'content',
+  label: { he: 'חבר צוות', en: 'Team member' },
+  icon: 'member',
+  container: false,
+  props: {
+    name: { type: 'string', default: '', label: { he: 'שם', en: 'Name' } },
+    role: { type: 'string', default: '', optional: true, label: { he: 'תפקיד', en: 'Role' } },
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Photo' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    bio: { type: 'text', content: true, default: '', label: { he: 'כמה מילים', en: 'Bio' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {}, { bio: node.text || (node.props && node.props.bio) || '' });
+    return require('../team-html').renderMember(props);
+  }
+});
+
+register({
+  name: 'team',
+  tag: 'bent-team',
+  category: 'content',
+  label: { he: 'הצוות', en: 'Team' },
+  icon: 'team',
+  container: true,
+  accept: ['member'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'member') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {}, { bio: c.text || (c.props && c.props.bio) || '' });
+      return require('../team-html').renderMember(props);
+    }).join('');
+    return require('../team-html').renderTeam(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'countdown',
+  tag: 'bent-countdown',
+  category: 'content',
+  label: { he: 'ספירה לאחור', en: 'Countdown' },
+  icon: 'countdown',
+  container: false,
+  props: {
+    target: { type: 'string', default: '', label: { he: 'תאריך יעד', en: 'Target date' } },
+    done: { type: 'string', default: '', optional: true, label: { he: 'הודעה כשנגמר', en: 'Done message' } },
+    label: { type: 'text', content: true, default: '', label: { he: 'כותרת', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const props = Object.assign({}, node.props || {}, { label: node.text || (node.props && node.props.label) || '' });
+    return require('../countdown-html').renderCountdown(props, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'priceitem',
+  tag: 'bent-priceitem',
+  category: 'content',
+  label: { he: 'פריט מחירון', en: 'Price item' },
+  icon: 'priceitem',
+  container: false,
+  props: {
+    name: { type: 'string', default: '', label: { he: 'שם הפריט', en: 'Name' } },
+    price: { type: 'string', default: '', optional: true, label: { he: 'מחיר', en: 'Price' } },
+    desc: { type: 'text', content: true, default: '', label: { he: 'תיאור', en: 'Description' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {}, { desc: node.text || (node.props && node.props.desc) || '' });
+    return require('../pricelist-html').renderPriceItem(props);
+  }
+});
+
+register({
+  name: 'pricelist',
+  tag: 'bent-pricelist',
+  category: 'content',
+  label: { he: 'מחירון', en: 'Price list' },
+  icon: 'pricelist',
+  container: true,
+  accept: ['priceitem'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'priceitem') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {}, { desc: c.text || (c.props && c.props.desc) || '' });
+      return require('../pricelist-html').renderPriceItem(props);
+    }).join('');
+    return require('../pricelist-html').renderPricelist(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'bar',
+  tag: 'bent-bar',
+  category: 'content',
+  label: { he: 'מדד', en: 'Bar' },
+  icon: 'bar',
+  container: false,
+  props: {
+    value: { type: 'integer', default: 0, min: 0, max: 100, label: { he: 'ערך (0–100)', en: 'Value (0–100)' } },
+    color: { type: 'string', default: '', optional: true, label: { he: 'צבע', en: 'Color' } },
+    label: { type: 'text', content: true, default: '', label: { he: 'שם המדד', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {}, { label: node.text || (node.props && node.props.label) || '' });
+    return require('../progress-html').renderBar(props);
+  }
+});
+
+register({
+  name: 'progress',
+  tag: 'bent-progress',
+  category: 'content',
+  label: { he: 'מדדי התקדמות', en: 'Progress bars' },
+  icon: 'progress',
+  container: true,
+  accept: ['bar'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'bar') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {}, { label: c.text || (c.props && c.props.label) || '' });
+      return require('../progress-html').renderBar(props);
+    }).join('');
+    return require('../progress-html').renderProgress(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 module.exports = {
   register,
   ANIMATE_VALUES,

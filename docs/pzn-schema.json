@@ -2471,6 +2471,241 @@
           "optional": true
         }
       }
+    },
+    "member": {
+      "tag": "bent-member",
+      "label": {
+        "he": "חבר צוות",
+        "en": "Team member"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "role": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "bio": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "team": {
+      "tag": "bent-team",
+      "label": {
+        "he": "הצוות",
+        "en": "Team"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "member"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "countdown": {
+      "tag": "bent-countdown",
+      "label": {
+        "he": "ספירה לאחור",
+        "en": "Countdown"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "target": {
+          "type": "string",
+          "default": ""
+        },
+        "done": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "priceitem": {
+      "tag": "bent-priceitem",
+      "label": {
+        "he": "פריט מחירון",
+        "en": "Price item"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "price": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "desc": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "pricelist": {
+      "tag": "bent-pricelist",
+      "label": {
+        "he": "מחירון",
+        "en": "Price list"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "priceitem"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "bar": {
+      "tag": "bent-bar",
+      "label": {
+        "he": "מדד",
+        "en": "Bar"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "value": {
+          "type": "integer",
+          "min": 0,
+          "max": 100,
+          "default": 0
+        },
+        "color": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "progress": {
+      "tag": "bent-progress",
+      "label": {
+        "he": "מדדי התקדמות",
+        "en": "Progress bars"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "bar"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
     }
   }
 }

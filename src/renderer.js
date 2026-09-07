@@ -499,6 +499,22 @@ function renderBlock(block, direction = 'rtl') {
     case 'crumbs':
       return require('./pzn/crumbs-html').renderCrumbsFromData(block.data || {}, direction, extra);
 
+    case 'team':
+      // team grid (gap-audit wave 3) — photo, name, role, bio; zero JS
+      return require('./pzn/team-html').renderTeamFromData(block.data || {}, direction, extra);
+
+    case 'countdown':
+      // sale/event timer — server renders real digits, a tiny inline script ticks
+      return require('./pzn/countdown-html').renderCountdownFromData(block.data || {}, direction, extra);
+
+    case 'pricelist':
+      // restaurant menu / service price list — name … dots … price, zero JS
+      return require('./pzn/pricelist-html').renderPricelistFromData(block.data || {}, direction, extra);
+
+    case 'progress':
+      // skill/measure bars — inline width %, CSS animates, zero JS
+      return require('./pzn/progress-html').renderProgressFromData(block.data || {}, direction, extra);
+
     case 'timeline':
       // company-history rail (module-hunt gap) — CSS line + dots, zero JS
       return require('./pzn/timeline-html').renderTimelineFromData(block.data || {}, direction, extra);

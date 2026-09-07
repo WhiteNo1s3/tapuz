@@ -1221,6 +1221,115 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'team',
+    keyword: 'TEAM',
+    labelHe: 'הצוות',
+    icon: '👥',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'חברי צוות — תמונה, שם, תפקיד',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'חברי צוות', type: 'list',
+        itemFields: [
+          { name: 'name', labelHe: 'שם', type: 'string', required: true },
+          { name: 'role', labelHe: 'תפקיד', type: 'string' },
+          // NOT type media — one media field flips the whole list editor into
+          // gallery-thumbs mode and the name/role fields would vanish
+          { name: 'image', labelHe: 'תמונה (נתיב)', type: 'url' },
+          { name: 'bio', labelHe: 'כמה מילים', type: 'textarea' },
+          { name: 'url', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי MEMBER'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { name: 'דנה לוי', role: 'מנכ"לית', bio: 'מובילה את החברה מהיום הראשון.' },
+        { name: 'יוסי כהן', role: 'סמנכ"ל טכנולוגיות' },
+        { name: 'רינה ברק', role: 'מנהלת שיווק' }
+      ]
+    }
+  },
+  {
+    type: 'countdown',
+    keyword: 'COUNTDOWN',
+    labelHe: 'ספירה לאחור',
+    icon: '⏳',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'טיימר למבצע או אירוע — מתעדכן לבד',
+    params: [
+      { name: 'target', bentmlParam: 'target', labelHe: 'תאריך יעד (YYYY-MM-DDTHH:mm)', type: 'string', required: true, default: '' },
+      { name: 'done', bentmlParam: 'done', labelHe: 'הודעה כשנגמר', type: 'string', default: '' }
+    ],
+    textField: 'label',
+    textFieldLabelHe: 'כותרת מעל הספירה',
+    textFieldType: 'input',
+    seed: { target: '', label: 'עד סוף המבצע', done: 'המבצע הסתיים' }
+  },
+  {
+    type: 'pricelist',
+    keyword: 'PRICELIST',
+    labelHe: 'מחירון',
+    icon: '₪',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'תפריט מסעדה או מחירון שירותים — שם ··· מחיר',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'פריטים', type: 'list',
+        itemFields: [
+          { name: 'name', labelHe: 'שם הפריט', type: 'string', required: true },
+          { name: 'price', labelHe: 'מחיר', type: 'string' },
+          { name: 'desc', labelHe: 'תיאור', type: 'textarea' }
+        ],
+        hint: 'ב-BenTML: צאצאי PRICEITEM'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { name: 'חומוס מלא', price: '32 ₪', desc: 'עם פטריות וביצה קשה' },
+        { name: 'שקשוקה', price: '44 ₪' },
+        { name: 'סלט ירקות', price: '28 ₪' }
+      ]
+    }
+  },
+  {
+    type: 'progress',
+    keyword: 'PROGRESS',
+    labelHe: 'מדדי התקדמות',
+    icon: '▰',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'פסי מיומנות או התקדמות — אחוזים בלי JavaScript',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'מדדים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'שם המדד', type: 'string', required: true },
+          { name: 'value', labelHe: 'ערך (0–100)', type: 'integer', min: 0, max: 100 },
+          { name: 'color', labelHe: 'צבע (אופציונלי)', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי BAR'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { label: 'עיצוב', value: 90 },
+        { label: 'פיתוח', value: 75 },
+        { label: 'שיווק', value: 60 }
+      ]
+    }
+  },
+  {
     type: 'nav',
     keyword: 'NAV',
     labelHe: 'תפריט ניווט',

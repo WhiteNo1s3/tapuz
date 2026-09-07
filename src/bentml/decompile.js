@@ -530,6 +530,50 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}CRUMBS${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'team': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`name: ${q(it.name || '')}`];
+          if (it.role) ps.push(`role: ${q(it.role)}`);
+          if (it.image) ps.push(`image: ${q(it.image)}`);
+          if (it.url) ps.push(`url: ${q(it.url)}`);
+          return childWithBody('MEMBER', ps, it.bio, indent);
+        })
+        .join('\n');
+      return `${pad}TEAM${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'countdown': {
+      const params = [`target: ${q(d.target || '')}`];
+      if (d.done) params.push(`done: ${q(d.done)}`);
+      uni(params, d, idParams);
+      return `${pad}COUNTDOWN${paramList(params)} { ${escBody(d.label || '')} }`;
+    }
+    case 'pricelist': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`name: ${q(it.name || '')}`];
+          if (it.price) ps.push(`price: ${q(it.price)}`);
+          return childWithBody('PRICEITEM', ps, it.desc, indent);
+        })
+        .join('\n');
+      return `${pad}PRICELIST${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'progress': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`value: ${Number(it.value) || 0}`];
+          if (it.color) ps.push(`color: ${q(it.color)}`);
+          return `${pad}  BAR${paramList(ps)} { ${escBody(it.label || '')} }`;
+        })
+        .join('\n');
+      return `${pad}PROGRESS${paramList(params)} {\n${kids}\n${pad}}`;
+    }
     case 'nav': {
       const params = [];
       if (d.background) params.push(`background: ${q(d.background)}`);

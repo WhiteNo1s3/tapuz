@@ -487,6 +487,61 @@ const KEYWORDS = {
       url: { type: 'string' }
     }
   },
+  TEAM: {
+    body: 'BLOCK-BODY',
+    jsonType: 'team',
+    children: ['MEMBER'],
+    params: {}
+  },
+  MEMBER: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TEAM',
+    params: {
+      name: { type: 'string', required: true },
+      role: { type: 'string' },
+      image: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
+  COUNTDOWN: {
+    body: 'TEXT-BODY',
+    jsonType: 'countdown',
+    params: {
+      target: { type: 'string', required: true },
+      done: { type: 'string' }
+    }
+  },
+  PRICELIST: {
+    body: 'BLOCK-BODY',
+    jsonType: 'pricelist',
+    children: ['PRICEITEM'],
+    params: {}
+  },
+  PRICEITEM: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'PRICELIST',
+    params: {
+      name: { type: 'string', required: true },
+      price: { type: 'string' }
+    }
+  },
+  PROGRESS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'progress',
+    children: ['BAR'],
+    params: {}
+  },
+  BAR: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'PROGRESS',
+    params: {
+      value: { type: 'integer', default: 0 },
+      color: { type: 'string' }
+    }
+  },
   NAV: {
     body: 'BLOCK-BODY',
     jsonType: 'nav',

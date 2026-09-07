@@ -76,7 +76,11 @@ const ROLE_FROM_CLASS = [
   [/\bfaqs?\b|frequently-asked/i, 'faq'],
   [/nav-tabs|tab-content|\btabs\b/i, 'tabs'],
   [/breadcrumbs?|bent-crumbs/i, 'crumbs'],
+  [/price-list|pricelist|restaurant-menu|bent-pricelist/i, 'pricelist'],
   [/pricing|price-table|bent-pricing/i, 'pricing'],
+  [/\bteam\b|our-team|team-members?|\bstaff\b|bent-team/i, 'team'],
+  [/countdown|count-down|bent-countdown/i, 'countdown'],
+  [/progress-bars?|skill-bars?|\bskills\b|elementor-progress|bent-progress/i, 'progress'],
   [/\b(?:stats|counters?|metrics|kpis?|stats-row)\b/i, 'stats'],
   [/\b(?:logos?|logo-strip|clients|brands|partners|logos-strip)\b/i, 'logos'],
   [/main|content|primary|article-body|post-content/i, 'main'],
@@ -183,7 +187,11 @@ function isEmptyBlock(b) {
     case 'crumbs':
     case 'stats':
     case 'logos':
+    case 'team':
+    case 'pricelist':
+    case 'progress':
     case 'social': return !(d.items || []).length;
+    case 'countdown': return !String(d.target || '').trim();
     default: return false;
   }
 }
@@ -407,6 +415,7 @@ function huntBlocks(html, opts = {}) {
         }
         const structuralList = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structuralList) {
+          for (const p of structuralList.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: structuralList.type, id: nid(structuralList.type), data: structuralList.data });
           mapped += 1; i = structuralList.next; continue;
         }
@@ -545,6 +554,7 @@ function huntBlocks(html, opts = {}) {
         // widgets are often also flex/grids. Columns is the leftover cut.
         const structural = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structural) {
+          for (const p of structural.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
           mapped += 1; i = structural.next; continue;
         }
@@ -578,6 +588,7 @@ function huntBlocks(html, opts = {}) {
       if (name.includes('-')) {
         const custom = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (custom) {
+          for (const p of custom.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: custom.type, id: nid(custom.type), data: custom.data });
           mapped += 1; i = custom.next; continue;
         }

@@ -320,6 +320,40 @@ function blockToModule(block) {
       return createModule('crumbs', baseOpts(block, {}, { children }));
     }
 
+    case 'team': {
+      const children = (data.items || []).map((it) =>
+        createModule('member', {
+          props: pickProps(it || {}, ['name', 'role', 'image', 'url']),
+          text: (it && it.bio) || ''
+        })
+      );
+      return createModule('team', baseOpts(block, {}, { children }));
+    }
+
+    case 'countdown': {
+      return createModule('countdown', baseOpts(block, pickProps(data, ['target', 'done']), { text: data.label || '' }));
+    }
+
+    case 'pricelist': {
+      const children = (data.items || []).map((it) =>
+        createModule('priceitem', {
+          props: pickProps(it || {}, ['name', 'price']),
+          text: (it && it.desc) || ''
+        })
+      );
+      return createModule('pricelist', baseOpts(block, {}, { children }));
+    }
+
+    case 'progress': {
+      const children = (data.items || []).map((it) =>
+        createModule('bar', {
+          props: pickProps(it || {}, ['value', 'color']),
+          text: (it && it.label) || ''
+        })
+      );
+      return createModule('progress', baseOpts(block, {}, { children }));
+    }
+
     case 'timeline': {
       const children = (data.items || []).map((it) =>
         createModule('event', {
@@ -703,6 +737,48 @@ function moduleToBlock(node) {
           return item;
         });
       return finishBlock(node, 'crumbs', data);
+    }
+
+    case 'team': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'member')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['name', 'role', 'image', 'url']);
+          if (c.text) item.bio = c.text;
+          return item;
+        });
+      return finishBlock(node, 'team', data);
+    }
+
+    case 'countdown': {
+      const data = pickData(props, ['target', 'done']);
+      if (node.text) data.label = node.text;
+      return finishBlock(node, 'countdown', data);
+    }
+
+    case 'pricelist': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'priceitem')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['name', 'price']);
+          if (c.text) item.desc = c.text;
+          return item;
+        });
+      return finishBlock(node, 'pricelist', data);
+    }
+
+    case 'progress': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'bar')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['value', 'color']);
+          item.label = c.text || '';
+          return item;
+        });
+      return finishBlock(node, 'progress', data);
     }
 
     case 'timeline': {
