@@ -158,6 +158,10 @@ site. Menu has 10 items.
 - AI: `src/ai.js` (settings store `config/ai.json`, converse tool-loop,
   approval pendings) · `src/providers.js` (roster, loopback policy, keyUrl)
   · briefing `src/pzn/agent-roleplay.js` · tools `src/ai-tools.js`.
+- BenTML extractor (v2.20): `src/bentml/extract.js` — "take only the BenTML"
+  for BOTH dialects; every paste door and `pages.savePageSource` run it first.
+  New doors must call `pzn-source.toPznSource` (store) or `extractBentml`
+  (compile) — never parse raw model text. Gate: `npm run test:extract`.
 - BenTML engine: `src/bentml/` (parse/compile/decompile/keywords; browser
   bundle generated on demand) · pzn side: `src/pzn/`, renderer `src/renderer.js`.
 - Media: `src/media.js` (DB-indexed, `__demo__` virtual folder, throttled

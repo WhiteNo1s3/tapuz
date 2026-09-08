@@ -162,25 +162,27 @@ router.get('/agent/v1/source', requireAgent('read'), (req, res) => {
 
 router.post('/agent/v1/source', requireAgent('write'), (req, res) => {
   try {
-    const { fullPath, publish, loose } = req.body || {};
+    const { fullPath, publish } = req.body || {};
     let { source } = req.body || {};
     if (!fullPath || typeof source !== 'string') {
       return res.status(400).json({ ok: false, error: 'fullPath and source required' });
     }
-    if (loose) {
-      const { extractPzn } = require('../pzn-extract');
-      source = extractPzn(source);
-    }
+    // v2.20: `loose` is accepted but no longer needed — every reply is
+    // extracted (fence, chat, <html> brackets) and a keyword-dialect document
+    // ("BENTML 0.2") is compiled to .pzn before the strict save runs
+    const ex = require('../pzn-source').toPznSource(source);
+    source = ex.source;
     const { savePageSource } = require('../pages');
     let result;
     let repaired = false;
+    const meta = ex.page && ex.page.meta; // a keyword document's META → page index
     try {
-      result = savePageSource(fullPath, source, { publish: !!publish });
+      result = savePageSource(fullPath, source, { publish: !!publish, meta });
       if (publish) exportAll();
     } catch (strictErr) {
       // forgiving retry (v0.49): auto-repair and save as a DRAFT — never
       // publish an auto-corrected page; the admin reviews it in the builder.
-      result = savePageSource(fullPath, source, { publish: false, repair: true });
+      result = savePageSource(fullPath, source, { publish: false, repair: true, meta });
       repaired = true;
     }
     res.json({
@@ -190,10 +192,12 @@ router.post('/agent/v1/source', requireAgent('write'), (req, res) => {
       warnings: result.warnings,
       repaired,
       changes: result.changes || [],
-      published: !!publish && !repaired
+      published: !!publish && !repaired,
+      dialect: ex.dialect,
+      extracted: ex.extracted
     });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, fix: e.fix, issues: e.issues });
   }
 });
 
@@ -220,8 +224,10 @@ router.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) =>
     if (typeof source !== 'string' || !source.trim()) {
       return res.status(400).json({ ok: false, error: 'source required' });
     }
-    const { extractPzn } = require('../pzn-extract');
-    source = extractPzn(source);
+    // v2.20: take only the BenTML — fence, chat, <html> brackets gone — and
+    // accept BOTH dialects (a "BENTML 0.2" reply is compiled to .pzn here)
+    const ex = require('../pzn-source').toPznSource(source);
+    source = ex.source;
     const pznApi = require('../pzn/index');
     let doc;
     let repaired = false;
@@ -262,11 +268,11 @@ router.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) =>
     const existed = !!getPageByFullPath(slug);
     if (!existed) createPage({ title, slug, blocks: [] });
     const doPublish = !!publish && !repaired; // never auto-publish a repaired page
-    const result = savePageSource(slug, source, { publish: doPublish });
+    const result = savePageSource(slug, source, { publish: doPublish, meta: ex.page && ex.page.meta });
     if (doPublish) exportAll();
-    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings, repaired, changes, published: doPublish });
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings, repaired, changes, published: doPublish, dialect: ex.dialect, extracted: ex.extracted });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, issues: e.issues });
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, fix: e.fix, issues: e.issues });
   }
 });
 

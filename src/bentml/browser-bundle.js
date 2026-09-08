@@ -19,7 +19,10 @@ const MODULES = [
   ['keywords', path.join(__dirname, 'keywords.js')],
   ['parse', path.join(__dirname, 'parse.js')],
   ['compile', path.join(__dirname, 'compile.js')],
-  ['decompile', path.join(__dirname, 'decompile.js')]
+  ['decompile', path.join(__dirname, 'decompile.js')],
+  // v2.20: the extractor rides along so the builder's panel takes only the
+  // BenTML out of a pasted reply BEFORE choosing an engine (no roundtrip)
+  ['extract', path.join(__dirname, 'extract.js')]
 ];
 
 let cache = null; // { js, stamp }
@@ -53,7 +56,9 @@ function buildBentmlEngine() {
   parts.push('  decompile: __mods.decompile.decompile,');
   parts.push('  BentmlError: __mods.errors.BentmlError,');
   parts.push('  KEYWORDS: __mods.keywords.KEYWORDS,');
-  parts.push('  getKeyword: __mods.keywords.getKeyword');
+  parts.push('  getKeyword: __mods.keywords.getKeyword,');
+  parts.push('  extract: __mods.extract.extractBentml,');
+  parts.push('  sniffDialect: __mods.extract.sniffDialect');
   parts.push('};');
   parts.push('})();');
 

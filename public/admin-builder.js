@@ -5898,7 +5898,7 @@
       '<p style="color:#64748b;font-size:.86rem;margin:0 0 14px;line-height:1.5">ה‑AI שלכם, על המנוי שלכם. פעם אחת — תנו ל‑AI את מילון BenTML, ואז שוחחו איתו והדביקו את התשובה כאן.</p>' +
       '<button type="button" id="imp-primer" class="btn secondary" style="width:100%;margin-bottom:14px">📋 העתק מילון BenTML ל‑AI (פעם אחת)</button>' +
       '<label style="display:block;font-size:.82rem;color:#475569;margin-bottom:4px">הדביקו כאן את תשובת ה‑AI (אפשר עם טקסט מסביב — נחלץ את הקוד)</label>' +
-      '<textarea id="imp-src" dir="ltr" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:.82rem" placeholder="<!DOCTYPE html> …"></textarea>' +
+      '<textarea id="imp-src" dir="ltr" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:.82rem" placeholder="<!DOCTYPE html> …   /   BENTML 0.2 …"></textarea>' +
       '<div style="display:flex;gap:16px;margin:12px 0">' +
       '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="replace" checked> החלף את הדף</label>' +
       '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="append"> הוסף לסוף</label></div>' +
@@ -5942,6 +5942,8 @@
           applyCanvasPageBg();
           close();
           var note = data.repaired ? (' · תוקן אוטומטית (' + (data.changes || []).length + ')') : '';
+          // v2.20: the server took only the BenTML out of the reply — say so
+          if (data.extracted && data.extracted.length) note += ' · נחלץ מתוך ההודעה';
           showToast('יובאו ' + (data.blocks || []).length + ' מודולים' + note + ' ✓', 'ok');
         })
         .catch(function () { setStatus('שגיאת רשת בייבוא', 'err'); });

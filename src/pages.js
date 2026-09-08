@@ -520,10 +520,25 @@ function getPageSource(full_path, kind = 'draft') {
  * Page identity (full_path) comes from the argument — bent-slug is not a rename.
  * @returns {{ page: object, blocks: object[], warnings: object[] }}
  */
-function savePageSource(full_path, source, { publish = false, repair = false } = {}) {
+function savePageSource(full_path, source, { publish = false, repair = false, meta = null } = {}) {
   const existing = getPageByFullPath(full_path);
   if (!existing) throw new Error('Page not found');
   if (typeof source !== 'string' || !source.trim()) throw new Error('Source required');
+
+  // v2.20 — take only the BenTML. Every door funnels here, so the store never
+  // holds a code fence or a chat sentence, and a keyword-dialect reply
+  // ("BENTML 0.2") is compiled to the tag dialect the .pzn file speaks. The
+  // extractor is the identity on a clean document, so our own serialized
+  // sources pass through byte-for-byte. A broken keyword document throws its
+  // BentmlError (code/line/fix) — there is nothing the pzn repair could do.
+  // `meta` lets a door that already compiled a keyword document hand its META
+  // (description, author…) over, since the .pzn head has no home for it.
+  let lineMeta = meta || null;
+  {
+    const ex = require('./pzn-source').toPznSource(source);
+    source = ex.source;
+    if (ex.dialect === 'line' && ex.page && ex.page.meta) lineMeta = { ...(lineMeta || {}), ...ex.page.meta };
+  }
 
   // Strict by default. With repair:true (the extension / forgiving path), a
   // parse or validation failure is auto-corrected to a clean document instead
@@ -555,11 +570,17 @@ function savePageSource(full_path, source, { publish = false, repair = false } =
   }
 
   const view = pzn.toTapuzPage(doc);
+  // a keyword document's META (description, ogimage, author…) has no home in
+  // the .pzn head — it lives in the page index, exactly as the builder saves it
+  const metaFromLine = {};
+  for (const [k, v] of Object.entries(lineMeta || {})) {
+    if (v !== undefined && v !== null && v !== '') metaFromLine[k] = v;
+  }
   const saved = updatePage(full_path, {
     title: view.title || existing.title,
     direction: view.direction || existing.direction,
     tags: view.tags,
-    meta: { ...(existing.meta || {}), ...(view.meta || {}) },
+    meta: { ...(existing.meta || {}), ...(view.meta || {}), ...metaFromLine },
     draft_blocks: view.blocks,
     publish
   });

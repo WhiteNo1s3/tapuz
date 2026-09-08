@@ -62,7 +62,11 @@ function readPage(args) {
 
 /** Validate a document the way the create route does — same gate, one place. */
 function checkSource(raw) {
-  const source = require('./pzn-extract').extractPzn(String(raw || ''));
+  // v2.20: take only the BenTML — a fence, a chat sentence, <html> brackets
+  // around the keyword dialect, all gone; a keyword document is compiled to
+  // .pzn here, so the model may answer in either dialect
+  const ex = require('./pzn-source').toPznSource(String(raw || ''));
+  const source = ex.source;
   if (!source.trim()) throw new Error('source ריק');
   if (source.length > MAX_SOURCE) throw new Error('המסמך ארוך מדי');
   const pznApi = require('./pzn/index');
@@ -71,11 +75,11 @@ function checkSource(raw) {
   if (errors.length) throw new Error(errors.map((e) => e.code + ': ' + e.message).join('; '));
   const blocks = pznApi.toTapuzPage(doc).blocks;
   if (!blocks.length) throw new Error('המסמך לא מכיל אף מודול bent-*');
-  return { source, doc, blocks };
+  return { source, doc, blocks, meta: ex.page && ex.page.meta };
 }
 
 function createPage(args) {
-  const { source, doc, blocks } = checkSource(args && args.source);
+  const { source, doc, blocks, meta } = checkSource(args && args.source);
   const title = String((args && args.title) || doc.title || 'דף חדש');
   const { deriveSlug } = require('./pzn/intent');
   const slug = deriveSlug(String((args && args.slug) || doc.slug || '').trim() || title);
@@ -84,7 +88,7 @@ function createPage(args) {
     throw new Error('דף בשם "' + slug + '" כבר קיים — לעריכה השתמש/י ב-edit_page');
   }
   create({ title, slug, blocks: [] });
-  const r = savePageSource(slug, source, { publish: false });
+  const r = savePageSource(slug, source, { publish: false, meta });
   return { slug, title, created: true, blocks: r.blocks, warnings: r.warnings || [], moduleCount: blocks.length };
 }
 
@@ -94,10 +98,10 @@ function editPage(args) {
   const { getPageByFullPath, savePageSource } = require('./pages');
   const page = getPageByFullPath(slug);
   if (!page) throw new Error('אין דף בשם "' + slug + '"');
-  const { source, blocks } = checkSource(args && args.source);
+  const { source, blocks, meta } = checkSource(args && args.source);
   // publish:false — the edit lands in the DRAFT. The live page does not move
   // until the owner publishes it, and the previous draft is in the revisions.
-  const r = savePageSource(slug, source, { publish: false });
+  const r = savePageSource(slug, source, { publish: false, meta });
   return { slug, title: page.title, edited: true, blocks: r.blocks, warnings: r.warnings || [], moduleCount: blocks.length };
 }
 
