@@ -166,6 +166,33 @@ const classedDiv = htmlToBlocks(`
 `);
 check('decompile classed timeline div → timeline', tlFrom(classedDiv) && tlFrom(classedDiv).data.items[0].time === '2019');
 
+// a timeline-classed rich <ol> is a timeline, not steps (steps runs first
+// in tryStructuralModules but refuses timeline-hinted containers)
+const tlOl = htmlToBlocks(`
+  <ol class="timeline">
+    <li><time>2019</time><h3>Launch</h3><p>Opened doors.</p></li>
+    <li><time>2022</time><h3>Scale</h3><p>Grew the team.</p></li>
+  </ol>
+`);
+check('timeline-classed rich <ol> → timeline, not steps', !stepsFrom(tlOl) && tlFrom(tlOl) && tlFrom(tlOl).data.items[0].time === '2019');
+
+// in a steps-classed container, the numbered list wins over an intro
+// bullet list (first-list-wins bug)
+const introThenOl = htmlToBlocks(`
+  <div class="steps">
+    <ul>
+      <li>What you need: an account</li>
+      <li>What you need: five minutes</li>
+    </ul>
+    <ol>
+      <li><h3>Sign up</h3><p>Create an account.</p></li>
+      <li><h3>Build</h3><p>Drop modules.</p></li>
+      <li><h3>Publish</h3><p>Go live.</p></li>
+    </ol>
+  </div>
+`);
+check('steps container: <ol> beats intro <ul>', stepsBlock(stepsFrom(introThenOl), 3) && stepsFrom(introThenOl).data.items[0].title === 'Sign up');
+
 const hunted = huntBlocks(`
   <section class="how-it-works">
     <div><h3>A</h3><p>one</p></div>

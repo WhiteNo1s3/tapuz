@@ -728,6 +728,10 @@ function extractProcessItem(tokens, s, e, kind) {
 
 function collectProcessItems(tokens, from, to, kind, depth = 0) {
   const kids = [];
+  // Best nested-list candidate: an <ol> beats a <ul> (a hinted container's
+  // real sequence is the numbered list, not an intro bullet list), then more
+  // items beat fewer, then the first one seen wins.
+  let bestList = null;
   let j = from;
   while (j < to) {
     const tk = tokens[j];
@@ -737,12 +741,20 @@ function collectProcessItems(tokens, from, to, kind, depth = 0) {
       kids.push([j, e]);
     } else if (tk.name === 'ol' || tk.name === 'ul') {
       const inner = collectProcessItems(tokens, j + 1, e - 1, kind, depth);
-      if (inner && inner.length) return inner;
+      if (inner && inner.length) {
+        const ordered = tk.name === 'ol';
+        if (!bestList
+          || (ordered && !bestList.ordered)
+          || (ordered === bestList.ordered && inner.length > bestList.items.length)) {
+          bestList = { ordered, items: inner };
+        }
+      }
     } else if (CONTAINERS.has(tk.name)) {
       kids.push([j, e]);
     }
     j = e;
   }
+  if (bestList) return bestList.items;
   if (kids.length === 1 && depth < 3) {
     const [s, e] = kids[0];
     const inner = collectProcessItems(tokens, s + 1, e - 1, kind, depth + 1);
@@ -758,11 +770,13 @@ function collectProcessItems(tokens, from, to, kind, depth = 0) {
 
 /**
  * How-it-works / process steps. Class hint, or a rich <ol> (heading + body
- * per item) so a plain numbered list stays a list.
+ * per item) so a plain numbered list stays a list. Timeline-hinted containers
+ * refuse here so parseTimelineData (which runs after) can claim them.
  * @returns {{ items: object[] } | null}
  */
 function parseStepsData(tokens, i, end, t) {
   const hinted = looksLikeSteps(t);
+  if (!hinted && looksLikeTimeline(t)) return null;
   const isOl = t && t.name === 'ol';
   const items = collectProcessItems(tokens, i + 1, end - 1, 'steps');
   if (!items || items.length < 2) return null;
