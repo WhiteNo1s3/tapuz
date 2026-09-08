@@ -783,3 +783,20 @@ The honest next candidates are no longer architectural:
 - **AI tier realignment** — now that both tiers sit in one module, what BYOT
   (keyless, media by reference) vs BYOK (key, can create media) may each do
   is a design question with the code finally in one place to answer it.
+
+## The extractor seam (v2.20) — one door in front of every door
+
+Not a route extraction but the same discipline applied to INPUT: model text
+used to be parsed by whichever door received it, each with its own idea of
+"clean" (`extractPzn` at some, a `loose` flag at others, nothing at all for
+the keyword dialect). **`src/bentml/extract.js`** is now the single seam —
+dependency-free so the browser engine bundles it (`BentmlEngine.extract`),
+idempotent and the identity on a clean document so it is safe to run twice,
+and placed in front of the store (`pages.savePageSource`) so no future door
+can forget it. `src/pzn-source.js` grew `toPznSource` (any model text → a
+`.pzn` source, compiling a `BENTML 0.2` document on the way) and every route,
+tool and CLI command calls that or `extractBentml` before a parser ever sees
+the text. Gate: `test/pzn/extract.test.js` + `scripts/smoke-bentml-extract.js`
+(identity over every shipped `.pzn`/`.btml`, the wrapping matrix for both
+dialects, the store, browser ≡ server). Rule for new code: never parse raw
+model text — call `toPznSource` (store-bound) or `extractBentml` (compile-bound).

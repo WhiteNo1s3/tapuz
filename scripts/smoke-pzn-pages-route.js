@@ -176,6 +176,36 @@ const EMPTY_PLACEHOLDER_DOC = fullDoc({ title: 'כותרת הדף', slug: 'my-pa
     // ── create-from-source — slug collision → 409 ──
     const createDup = await req('POST', '/admin/api/pzn/create-from-source', { cookie, body: { source: BOT_DOC } });
     check('create-from-source colliding with an existing slug → 409', createDup.status === 409 && createDup.json.ok === false);
+
+    // ── v2.20: every door takes only the BenTML — either dialect, any wrapping ──
+    const LINE_DOC = 'BENTML 0.2\n\nMETA {\n  title: "דף מילים"\n  slug: "from-words"\n  description: "תיאור לגוגל"\n}\n\nHEADING(level: 1) { שלום מהמילים }\n\nTEXT { פסקה }';
+    const createLine = await req('POST', '/admin/api/pzn/create-from-source', { cookie, body: { source: 'Sure!\n```bentml\n' + LINE_DOC + '\n```\nEnjoy!' } });
+    check('create-from-source builds a page from a fenced keyword-dialect reply', createLine.status === 200 && createLine.json.ok && createLine.json.fullPath === 'from-words' && createLine.json.dialect === 'line');
+    const lineSrc = await req('GET', '/admin/api/pzn/source?fullPath=from-words&kind=draft', { cookie });
+    check('the stored draft is the .pzn dialect — no fence, no chat, no BENTML header',
+      lineSrc.status === 200 && /<bent-heading[^>]*>שלום מהמילים/.test(lineSrc.json.source) && !/```|BENTML 0\.2|Enjoy/.test(lineSrc.json.source));
+    const linePage = await req('GET', '/admin/api/pages', { cookie });
+    const fromWords = ((linePage.json && linePage.json.pages) || []).find((p) => p.full_path === 'from-words');
+    const fromWordsMeta = fromWords && (typeof fromWords.meta === 'string' ? JSON.parse(fromWords.meta || '{}') : (fromWords.meta || {}));
+    check('META description of a keyword document lands in the page index', !!fromWords && fromWordsMeta.description === 'תיאור לגוגל', JSON.stringify(fromWords && fromWords.meta));
+    const chattyPzn = 'הנה הדף:\n```html\n' + fullDoc({ title: 'דף עם פטפוט', slug: 'chatty', body: '<bent-text id="c">תוכן</bent-text>' }) + '\n```\nPZN_READY\nמקווה שזה עוזר!';
+    const createChatty = await req('POST', '/admin/api/pzn/create-from-source', { cookie, body: { source: chattyPzn } });
+    check('create-from-source strips the fence and the chat around a .pzn reply', createChatty.status === 200 && createChatty.json.ok && createChatty.json.fullPath === 'chatty');
+    const chattySrc = await req('GET', '/admin/api/pzn/source?fullPath=chatty&kind=draft', { cookie });
+    check('the stored draft starts at <!DOCTYPE and ends at </html>',
+      /^<!DOCTYPE html>/.test(chattySrc.json.source.trim()) && /<\/html>\s*$/.test(chattySrc.json.source) && !/PZN_READY|```/.test(chattySrc.json.source));
+    const saveNoLoose = await req('POST', '/admin/api/pzn/source', { cookie, body: { fullPath: 'source-target', source: 'תשובה:\n```\n' + GOOD_PZN + '\n```\nסוף' } });
+    check('POST source extracts even without loose:true', saveNoLoose.status === 200 && saveNoLoose.json.ok && Array.isArray(saveNoLoose.json.extracted) && saveNoLoose.json.extracted.length > 0);
+    const saveLineDoc = await req('POST', '/admin/api/pzn/source', { cookie, body: { fullPath: 'source-target', source: '<html>\n' + LINE_DOC + '\n</html>' } });
+    check('POST source accepts an <html>-wrapped keyword document', saveLineDoc.status === 200 && saveLineDoc.json.ok && saveLineDoc.json.dialect === 'line');
+    const lineDraft = await req('GET', '/admin/api/pzn/source?fullPath=source-target&kind=draft', { cookie });
+    check('…and stores it as a real tag document', /<bent-heading/.test(lineDraft.json.source) && !/BENTML 0\.2/.test(lineDraft.json.source));
+    const brokenSave = await req('POST', '/admin/api/pzn/source', { cookie, body: { fullPath: 'source-target', source: '```\nBENTML 0.2\n\nMETA {\n  title: "x"\n}\n\nTEXTX { y }\n```' } });
+    check('a broken keyword document fails the save with code + line + fix', brokenSave.status === 400 && brokenSave.json.code === 'E201' && brokenSave.json.line === 7 && !!brokenSave.json.fix);
+    const decompLine = await req('POST', '/admin/api/pzn/decompile', { cookie, body: { html: 'Sure:\n```\n' + LINE_DOC + '\n```', assets: false } });
+    check('decompile routes a fenced keyword-dialect paste through the forgiving pipeline', decompLine.status === 200 && decompLine.json.ok && /bentml/.test(decompLine.json.strategy) && decompLine.json.mapped === 2);
+    const decompReal = await req('POST', '/admin/api/pzn/decompile', { cookie, body: { html: RAW_HTML, assets: false } });
+    check('a plain HTML page still goes to the HTML decompiler, never mistaken for BenTML', decompReal.status === 200 && decompReal.json.ok && !/bentml/.test(decompReal.json.strategy));
   } finally {
     child.kill();
   }
