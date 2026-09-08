@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * QA — gap-audit wave 4: rating / hours / toc / author / compare / flipbox /
- * whatsapp — the rest of the backlog the audit ranked. Each module end to
- * end: registry + seed, render (+ escaping), pzn round-trip, legacy BentML
+ * QA — gap-audit wave 4: rating / hours / toc / author / compare / flipbox —
+ * the rest of the backlog the audit ranked. Each module end to end:
+ * registry + seed, render (+ escaping), pzn round-trip, legacy BentML
  * round-trip, and the decompiler mapping the real-world markup that used
- * to flatten (or, for whatsapp, used to be reported as a toolGap).
+ * to flatten. (whatsapp landed separately via #69 — smoke-gap-chrome owns it.)
  */
 
 const pzn = require('../src/pzn/index');
@@ -26,8 +26,7 @@ const FIXTURES = {
   toc: { title: 'תוכן עניינים', items: [{ label: 'הקדמה', anchor: '#intro' }, { label: 'שאלות', anchor: '#faq' }] },
   author: { name: 'דנה לוי', image: '/uploads/dana.jpg', bio: 'כותבת על טכנולוגיה.', url: '/author/dana', linkLabel: 'לכל הכתבות' },
   compare: { before: '/uploads/before.jpg', after: '/uploads/after.jpg', beforeLabel: 'לפני', afterLabel: 'אחרי' },
-  flipbox: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות.', buttonText: 'לפרטים', buttonUrl: '/warranty' },
-  whatsapp: { phone: '972-50-1234567', message: 'שלום, הגעתי מהאתר', text: 'דברו איתנו בוואטסאפ' }
+  flipbox: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות.', buttonText: 'לפרטים', buttonUrl: '/warranty' }
 };
 
 // ── shared: registry + pzn round-trip ──
@@ -87,17 +86,6 @@ check('flipbox render: front title + back text + button, focusable', /bent-flipb
   && /bent-flipbox-text">שלוש שנות אחריות/.test(fHtml) && /href="\/warranty">לפרטים/.test(fHtml) && /tabindex="0"/.test(fHtml));
 check('flipbox render: no script, zero JS', !/<script/i.test(fHtml));
 
-// ── whatsapp ──
-const wHtml = renderBlock({ type: 'whatsapp', id: 'w1', data: FIXTURES.whatsapp }, 'rtl');
-check('whatsapp render: wa.me link with digits-only phone + encoded message', /href="https:\/\/wa\.me\/972501234567\?text=/.test(wHtml)
-  && /rel="noopener"/.test(wHtml) && /דברו איתנו בוואטסאפ/.test(wHtml));
-check('whatsapp render: no number → inert pill, never a broken link', /<span[^>]*bent-whatsapp-empty/.test(renderBlock({
-  type: 'whatsapp', id: 'w2', data: { phone: '' }
-}, 'rtl')));
-check('whatsapp render: text is HTML-escaped', /&lt;b&gt;/.test(renderBlock({
-  type: 'whatsapp', id: 'w3', data: { phone: '972501234567', text: '<b>x</b>' }
-}, 'rtl')));
-
 // ── legacy BentML (line dialect) ──
 const legacy = bentml.compile(`BENTML 0.2
 
@@ -122,11 +110,9 @@ AUTHOR(name: "דנה לוי", image: "/uploads/dana.jpg", url: "/author/dana") {
 COMPARE(before: "/uploads/before.jpg", after: "/uploads/after.jpg")
 
 FLIPBOX(title: "אחריות מלאה", cta: "לפרטים", url: "/warranty") { שלוש שנות אחריות. }
-
-WHATSAPP(phone: "972501234567", message: "שלום") { דברו איתנו }
 `);
 const lTypes = legacy.blocks.map((b) => b.type);
-check('legacy compiles all seven keywords', ['rating', 'hours', 'toc', 'author', 'compare', 'flipbox', 'whatsapp'].every((t) => lTypes.includes(t)));
+check('legacy compiles all six keywords', ['rating', 'hours', 'toc', 'author', 'compare', 'flipbox'].every((t) => lTypes.includes(t)));
 const lRating = legacy.blocks.find((b) => b.type === 'rating');
 check('legacy RATING: decimal value + text', lRating.data.value === 4.5 && lRating.data.text === '4.5 מתוך 5');
 const lHours = legacy.blocks.find((b) => b.type === 'hours');
@@ -135,7 +121,7 @@ const lFlip = legacy.blocks.find((b) => b.type === 'flipbox');
 check('legacy FLIPBOX: cta/url → buttonText/buttonUrl', lFlip.data.buttonText === 'לפרטים' && lFlip.data.buttonUrl === '/warranty');
 const src = bentml.decompile({ title: 'x' }, Object.entries(FIXTURES).map(([type, data], n) => ({ type, id: type + '_' + n, data })));
 const round = bentml.compile(src);
-check('legacy decompile → recompile keeps all seven', ['rating', 'hours', 'toc', 'author', 'compare', 'flipbox', 'whatsapp']
+check('legacy decompile → recompile keeps all six', ['rating', 'hours', 'toc', 'author', 'compare', 'flipbox']
   .every((t) => round.blocks.some((b) => b.type === t)));
 
 // ── the decompiler maps what used to flatten (the audit fixtures) ──
@@ -207,16 +193,6 @@ const flipGrad = htmlToBlocks(`
 const gFlip = flipGrad.blocks.find((b) => b.type === 'flipbox');
 check('decompile Elementor flip box → flipbox (was: heading+text+button)', !!gFlip && gFlip.data.title === 'אחריות מלאה'
   && /שלוש שנות/.test(gFlip.data.backText) && gFlip.data.buttonText === 'פרטים' && gFlip.data.buttonUrl === '/warranty');
-
-const waGrad = htmlToBlocks('<div class="contact-cta"><a href="https://wa.me/972501234567?text=%D7%A9%D7%9C%D7%95%D7%9D" class="whatsapp-button">דברו איתנו בוואטסאפ</a></div>');
-const gWa = waGrad.blocks.find((b) => b.type === 'whatsapp');
-check('decompile wa.me link → whatsapp module (was: button + toolGap)', !!gWa && gWa.data.phone === '972501234567'
-  && gWa.data.message === 'שלום' && gWa.data.text === 'דברו איתנו בוואטסאפ');
-check('whatsapp is no longer a reported toolGap', !waGrad.suggestedTools.includes('whatsapp'));
-check('api.whatsapp.com/send?phone= also maps', htmlToBlocks('<a href="https://api.whatsapp.com/send?phone=972501234567">וואטסאפ</a>')
-  .blocks.some((b) => b.type === 'whatsapp' && b.data.phone === '972501234567'));
-check('numberless whatsapp link stays a button', htmlToBlocks('<a href="https://whatsapp.com/channel/abc">ערוץ</a>')
-  .blocks.some((b) => b.type === 'button'));
 
 console.log('');
 console.log(fail ? 'SMOKE GAP-WAVE4: FAIL' : 'SMOKE GAP-WAVE4: PASS');

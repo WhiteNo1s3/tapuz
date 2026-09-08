@@ -210,7 +210,9 @@ function getCommandCatalog() {
         en: 'Source is always benTML. HTML is compile output. class/CSS = advanced tool.'
       }
     },
-    modules: listModules().map((d) => getCommand(d.name))
+    // decompile-only modules (the imported header/footer bands) are not
+    // commands an agent may mint — the theme master is the real chrome
+    modules: listModules().filter((d) => !d.decompileOnly).map((d) => getCommand(d.name))
   };
 }
 

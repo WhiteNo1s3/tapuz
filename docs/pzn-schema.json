@@ -2707,6 +2707,148 @@
         }
       }
     },
+    "header": {
+      "tag": "bent-header",
+      "label": {
+        "he": "ראש עמוד מיובא",
+        "en": "Imported page header"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "tone": {
+          "type": "enum",
+          "enum": [
+            "light",
+            "dark",
+            "brand",
+            "none"
+          ],
+          "default": "light",
+          "optional": true
+        },
+        "layout": {
+          "type": "enum",
+          "enum": [
+            "row",
+            "stack"
+          ],
+          "default": "row",
+          "optional": true
+        }
+      },
+      "decompileOnly": true
+    },
+    "footer": {
+      "tag": "bent-footer",
+      "label": {
+        "he": "תחתית עמוד מיובאת",
+        "en": "Imported page footer"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "tone": {
+          "type": "enum",
+          "enum": [
+            "dark",
+            "light",
+            "brand",
+            "none"
+          ],
+          "default": "dark",
+          "optional": true
+        },
+        "credit": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      },
+      "decompileOnly": true
+    },
+    "whatsapp": {
+      "tag": "bent-whatsapp",
+      "label": {
+        "he": "וואטסאפ",
+        "en": "WhatsApp"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "phone": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "message": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "note": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "default": "start",
+          "optional": true
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
     "rating": {
       "tag": "bent-rating",
       "label": {
@@ -2995,43 +3137,6 @@
           "optional": true
         },
         "backText": {
-          "type": "text",
-          "default": "",
-          "content": true
-        }
-      }
-    },
-    "whatsapp": {
-      "tag": "bent-whatsapp",
-      "label": {
-        "he": "כפתור וואטסאפ",
-        "en": "WhatsApp button"
-      },
-      "category": "media",
-      "container": false,
-      "accept": [],
-      "props": {
-        "animate": {
-          "type": "enum",
-          "enum": [
-            "none",
-            "fade",
-            "rise",
-            "zoom"
-          ],
-          "default": "none",
-          "optional": true
-        },
-        "phone": {
-          "type": "string",
-          "default": ""
-        },
-        "message": {
-          "type": "string",
-          "default": "",
-          "optional": true
-        },
-        "text": {
           "type": "text",
           "default": "",
           "content": true

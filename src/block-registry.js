@@ -1329,6 +1329,108 @@ const BLOCK_REGISTRY = [
       ]
     }
   },
+
+  // ─────────── gap-audit wave 4: whatsapp + decompile-only chrome ───────────
+  // The decompiler's hottest remaining toolGaps (walla, mako, rest.co.il,
+  // doctor.co.il): Israeli business sites hang a wa.me link on everything,
+  // and every real homepage carries a <header> and a <footer>.
+  //
+  // whatsapp is a regular authoring module. header/footer are NOT (Ben's
+  // call): the real chrome is the theme's master layout (עיצוב → כותרת
+  // ותחתית), which is how sites are built and how the prompt→BenTML site
+  // flow works — a second, page-level header would duplicate that system
+  // and confuse authors. They exist ONLY so a decompiled site previews like
+  // a real Tapuziel site: the import maps the landmarks into these bands,
+  // the customer sees their chrome, and moves it into the master.
+  //
+  // `decompileOnly: true` is the switch: the toolbox, the agent primers and
+  // the dictionaries omit these types (authoringBlocks()), while the
+  // renderer, both BenTML dialects and the bridge keep speaking them so the
+  // imported draft round-trips.
+  {
+    type: 'whatsapp',
+    keyword: 'WHATSAPP',
+    labelHe: 'וואטסאפ',
+    icon: '✆',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'כפתור צ׳אט מעוצב — טלפון + הודעה מוכנה, נפתח ב-wa.me',
+    params: [
+      {
+        name: 'phone', labelHe: 'טלפון (בינלאומי)', type: 'string', default: '',
+        hint: 'ספרות בלבד בפורמט בינלאומי, למשל 972501234567 — או מלאו קישור מלא למטה'
+      },
+      {
+        name: 'message', labelHe: 'הודעה מוכנה', type: 'textarea', default: '',
+        hint: 'הטקסט שיופיע כתוב מראש בצ׳אט של הגולש'
+      },
+      {
+        name: 'note', labelHe: 'שורת משנה', type: 'string', default: '',
+        hint: 'טקסט קטן מתחת לכפתור, למשל "מענה תוך דקות"'
+      },
+      {
+        name: 'url', labelHe: 'קישור וואטסאפ מלא', type: 'url', default: '',
+        hint: 'wa.me/… או api.whatsapp.com/send?… — במקום טלפון (קישורי wa.me/message/…)'
+      },
+      ALIGN_PARAM
+    ],
+    textField: 'label',
+    textFieldLabelHe: 'טקסט הכפתור',
+    textFieldType: 'input',
+    seed: { label: 'דברו איתנו בוואטסאפ', phone: '', message: '', note: '', url: '' }
+  },
+  {
+    type: 'header',
+    keyword: 'HEADER',
+    labelHe: 'ראש עמוד מיובא (Header)',
+    icon: '⬒',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    decompileOnly: true,
+    hintHe: 'תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את כותרת האתר האמיתית עורכים בעיצוב → כותרת ותחתית',
+    childrenKey: 'blocks',
+    params: [
+      {
+        name: 'tone', labelHe: 'רקע', type: 'enum',
+        enum: ['light', 'dark', 'brand', 'none'], default: 'light',
+        hint: 'none = שקוף, בלי פס'
+      },
+      {
+        name: 'layout', labelHe: 'פריסה', type: 'enum',
+        enum: ['row', 'stack'], default: 'row',
+        hint: 'row = הילדים בשורה אחת (לוגו | תפריט | כפתור), stack = זה מתחת לזה'
+      }
+    ],
+    textField: null,
+    seed: { blocks: [], tone: 'light', layout: 'row' }
+  },
+  {
+    type: 'footer',
+    keyword: 'FOOTER',
+    labelHe: 'תחתית עמוד מיובאת (Footer)',
+    icon: '⬓',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    decompileOnly: true,
+    hintHe: 'תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את תחתית האתר האמיתית עורכים בעיצוב → כותרת ותחתית',
+    childrenKey: 'blocks',
+    params: [
+      {
+        name: 'tone', labelHe: 'רקע', type: 'enum',
+        enum: ['dark', 'light', 'brand', 'none'], default: 'dark',
+        hint: 'none = שקוף, בלי פס'
+      },
+      {
+        name: 'credit', labelHe: 'שורת זכויות', type: 'string', default: '',
+        hint: 'למשל "© 2026 כל הזכויות שמורות" — מודפס בקטן בתחתית הפס'
+      }
+    ],
+    textField: null,
+    seed: { blocks: [], tone: 'dark', credit: '' }
+  },
   {
     type: 'rating',
     keyword: 'RATING',
@@ -1460,24 +1562,6 @@ const BLOCK_REGISTRY = [
     textField: 'backText',
     textFieldLabelHe: 'טקסט (מאחור)',
     seed: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות על כל מוצר.', buttonText: 'לפרטים', buttonUrl: '#' }
-  },
-  {
-    type: 'whatsapp',
-    keyword: 'WHATSAPP',
-    labelHe: 'כפתור וואטסאפ',
-    icon: '💬',
-    category: 'מדיה',
-    bodyClass: 'text',
-    childrenOf: null,
-    hintHe: 'כפתור wa.me בתוך הדף — עם הודעה מוכנה',
-    params: [
-      { name: 'phone', bentmlParam: 'phone', labelHe: 'טלפון (בינלאומי, 972…)', type: 'string', required: true, default: '' },
-      { name: 'message', bentmlParam: 'message', labelHe: 'הודעה מוכנה', type: 'string', default: '' }
-    ],
-    textField: 'text',
-    textFieldLabelHe: 'טקסט הכפתור',
-    textFieldType: 'input',
-    seed: { phone: '', message: 'שלום, הגעתי מהאתר', text: 'דברו איתנו בוואטסאפ' }
   },
   {
     type: 'nav',
@@ -1722,11 +1806,23 @@ for (const def of BLOCK_REGISTRY) {
   else def.params.push(ANIMATE_PARAM);
 }
 
+/**
+ * The types an AUTHOR may reach for — the toolbox, the agent primers and the
+ * dictionaries read this, never BLOCK_REGISTRY directly. Excludes the
+ * decompile-only chrome bands (header/footer): those exist for the import
+ * preview and still render / round-trip, but are never offered as tools.
+ * @returns {object[]}
+ */
+function authoringBlocks() {
+  return BLOCK_REGISTRY.filter((e) => !e.decompileOnly);
+}
+
 module.exports = {
   BLOCK_REGISTRY,
   BLOCK_CATEGORIES,
   UNIVERSAL_PARAMS,
   INTEGRATIONS_DEFAULTS,
   getBlockDef,
-  defaultDataFor
+  defaultDataFor,
+  authoringBlocks
 };

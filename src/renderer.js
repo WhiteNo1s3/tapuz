@@ -535,8 +535,17 @@ function renderBlock(block, direction = 'rtl') {
     case 'flipbox':
       return require('./pzn/flipbox-html').renderFlipboxFromData(block.data || {}, direction, extra);
 
+    case 'header':
+      // page header band (gap-audit wave 4) — nested blocks in a row; its
+      // own bent-header class, never the master's .site-header
+      return require('./pzn/chrome-html').renderHeaderFromData(block.data || {}, direction, extra, renderBlock);
+
+    case 'footer':
+      // page footer band — nested blocks + a credit line; never .site-footer
+      return require('./pzn/chrome-html').renderFooterFromData(block.data || {}, direction, extra, renderBlock);
+
     case 'whatsapp':
-      // in-flow wa.me button — the site-chrome float stays config-driven
+      // click-to-chat CTA — phone + prepared message → wa.me, styled pill
       return require('./pzn/whatsapp-html').renderWhatsappFromData(block.data || {}, direction, extra);
 
     case 'timeline':

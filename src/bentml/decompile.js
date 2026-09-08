@@ -624,11 +624,31 @@ function decompileBlock(block, indent) {
       uni(params, d, idParams);
       return `${pad}FLIPBOX${paramList(params)} { ${escBody(d.backText || '')} }`;
     }
-    case 'whatsapp': {
-      const params = [`phone: ${q(d.phone || '')}`];
-      if (d.message) params.push(`message: ${q(d.message)}`);
+    case 'header': {
+      const params = [];
+      if (d.tone && d.tone !== 'light') params.push(`tone: ${d.tone}`);
+      if (d.layout && d.layout !== 'row') params.push(`layout: ${d.layout}`);
       uni(params, d, idParams);
-      return `${pad}WHATSAPP${paramList(params)} { ${escBody(d.text || '')} }`;
+      const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
+      return `${pad}HEADER${paramList(params)} {\n${kids || pad + '  '}\n${pad}}`;
+    }
+    case 'footer': {
+      const params = [];
+      if (d.tone && d.tone !== 'dark') params.push(`tone: ${d.tone}`);
+      if (d.credit) params.push(`credit: ${q(d.credit)}`);
+      uni(params, d, idParams);
+      const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
+      return `${pad}FOOTER${paramList(params)} {\n${kids || pad + '  '}\n${pad}}`;
+    }
+    case 'whatsapp': {
+      const params = [];
+      if (d.phone) params.push(`phone: ${q(d.phone)}`);
+      if (d.message) params.push(`message: ${q(d.message)}`);
+      if (d.note) params.push(`note: ${q(d.note)}`);
+      if (d.url) params.push(`url: ${q(d.url)}`);
+      if (d.align && d.align !== 'start') params.push(`align: ${d.align}`);
+      uni(params, d, idParams);
+      return `${pad}WHATSAPP${paramList(params)} { ${escBody(d.label || '')} }`;
     }
     case 'nav': {
       const params = [];

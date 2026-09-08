@@ -166,7 +166,9 @@ const VOCAB_DATA = {
   author: { name: 'דנה לוי', image: '/uploads/dana.jpg', bio: 'כותבת על טכנולוגיה.', url: '/author/dana', linkLabel: 'לכל הכתבות' },
   compare: { before: '/uploads/before.jpg', after: '/uploads/after.jpg', beforeLabel: 'לפני', afterLabel: 'אחרי' },
   flipbox: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות.', buttonText: 'לפרטים', buttonUrl: '/warranty' },
-  whatsapp: { phone: '972501234567', message: 'שלום, הגעתי מהאתר', text: 'דברו איתנו בוואטסאפ' }
+  header: { tone: 'dark', layout: 'row', blocks: [{ type: 'image', id: 'image_1', data: { src: '/uploads/logo.svg', alt: 'לוגו' } }, { type: 'nav', id: 'nav_1', data: { items: [{ label: 'בית', href: '/' }] } }] },
+  footer: { tone: 'dark', credit: '© 2026 כל הזכויות שמורות', blocks: [{ type: 'text', id: 'text_1', data: { content: 'תחתית' } }] },
+  whatsapp: { label: 'דברו איתנו בוואטסאפ', phone: '972501234567', message: 'שלום, אשמח לפרטים', note: 'מענה תוך דקות' }
 };
 
 // types the language deliberately folds into another keyword's JSON

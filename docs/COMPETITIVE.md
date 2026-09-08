@@ -94,7 +94,13 @@ Sources: [builder.io Fusion launch](https://www.builder.io/news/fusion),
    from an editor's sidebar (they 403 on click today, correct but not
    polished) and a finer editor-vs-author split — that's the agency-tier
    follow-up.
-3. **FOOTER/HEADER as modules vs site-chrome** — design fork, Ben's call.
+3. ~~**FOOTER/HEADER as modules vs site-chrome**~~ — Ben's call, gap-audit
+   wave 4: site-chrome wins. The theme master (עיצוב → כותרת ותחתית) is the
+   ONLY authoring surface for a site's header/footer — how real sites are
+   built and how the prompt→BenTML site flow works. `HEADER`/`FOOTER` exist
+   as `decompileOnly` types (`bent-header`/`bent-footer` bands) purely so a
+   decompiled site previews with its chrome inside Tapuziel; the toolbox,
+   dictionaries and primers hide them. `WHATSAPP` shipped as a regular module.
 4. ~~**Search on the published site**~~ — shipped in v0.98: a build-time
    `search-index.json` (`pages.listSearchable()`, written by `exportAll()`
    only when turned on) + a floating client-side search widget

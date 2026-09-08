@@ -41,9 +41,12 @@ async function checkRejects(name, fn) {
   `);
   check('iframe → embed block', g.blocks.some((b) => b.type === 'embed' && /youtube/.test(b.data.url)));
   check('youtube link → embed block', g.blocks.filter((b) => b.type === 'embed').length >= 2);
-  // wave 4 closed this gap: a wa.me link with a number IS the whatsapp module
-  check('whatsapp link decompiles to a whatsapp block (wave 4 closed this gap)',
-    g.blocks.some((b) => b.type === 'whatsapp' && b.data.phone === '972501234567') && !g.suggestedTools.includes('whatsapp'));
+  // wave 4 closed this gap: a wa.me link is the whatsapp module, not a button
+  // plus a permanent toolGap
+  check('whatsapp link → the whatsapp module (wave 4 closed this gap)',
+    g.blocks.some((b) => b.type === 'whatsapp' && b.data.phone === '972501234567' && b.data.label === 'ווטסאפ') &&
+    !g.blocks.some((b) => b.type === 'button' && /wa\.me/.test(b.data.url)) &&
+    !g.suggestedTools.includes('whatsapp'));
   check('form decompiles to a real form block (v0.58 closed this gap)',
     g.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 1) && !g.suggestedTools.includes('form'));
   check('nav decompiles to a nav block (v0.60 closed this gap)',

@@ -849,6 +849,27 @@ PROGRESS {
 }
 ```
 
+#### `WHATSAPP` → `whatsapp`
+
+✆ **וואטסאפ** — כפתור צ׳אט מעוצב — טלפון + הודעה מוכנה, נפתח ב-wa.me
+
+Shape: `WHATSAPP(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `phone` | `phone` | string |  | "" |
+| `message` | `message` | textarea |  | "" |
+| `note` | `note` | string |  | "" |
+| `url` | `url` | url |  | "" |
+| `align` | `align` | enum start\|center\|end |  | "start" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+WHATSAPP(align: start) {
+  …
+}
+```
+
 #### `RATING` → `rating`
 
 ★ **דירוג כוכבים** — ציון ביקורות — כוכבים מלאים וחצאים, בלי JavaScript
@@ -968,26 +989,6 @@ FLIPBOX(title: "...") {
 }
 ```
 
-### מדיה
-
-#### `WHATSAPP` → `whatsapp`
-
-💬 **כפתור וואטסאפ** — כפתור wa.me בתוך הדף — עם הודעה מוכנה
-
-Shape: `WHATSAPP(params) { text body }`
-
-| Param (JSON) | BenTML | Type | Required | Default |
-|---|---|---|---|---|
-| `phone` | `phone` | string | yes | "" |
-| `message` | `message` | string |  | "" |
-| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
-
-```bentml
-WHATSAPP(phone: "...") {
-  …
-}
-```
-
 ### מבנה
 
 #### `NAV` → `nav`
@@ -1099,6 +1100,15 @@ Universal on most keywords: `class`, `id`.
 
 ## Reserved (future advanced modules)
 
-`INPUT`, `FOOTER`, `HEADER`, `CODE`
+`INPUT`, `CODE`
 
 These are **not** implemented yet. Using them in BenTML is an error today.
+
+## Decompile-preview only (not authoring tools)
+
+Appear only in drafts produced by decompiling a site (import preview). Not authoring tools — the real site chrome is theme → header & footer.
+
+מופיעים רק בטיוטות שנוצרו מפירוק אתר (תצוגת ייבוא). לא כלי כתיבה — כרום האתר האמיתי: עיצוב → כותרת ותחתית.
+
+- `HEADER` → `header` — **ראש עמוד מיובא (Header)** — תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את כותרת האתר האמיתית עורכים בעיצוב → כותרת ותחתית
+- `FOOTER` → `footer` — **תחתית עמוד מיובאת (Footer)** — תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את תחתית האתר האמיתית עורכים בעיצוב → כותרת ותחתית

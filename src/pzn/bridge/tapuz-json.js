@@ -390,8 +390,20 @@ function blockToModule(block) {
       return createModule('flipbox', baseOpts(block, props, { text: data.backText || '' }));
     }
 
+    case 'header':
+      return createModule('header', baseOpts(block, pickProps(data, ['tone', 'layout']), {
+        children: (data.blocks || []).map(blockToModule).filter(Boolean)
+      }));
+
+    case 'footer':
+      return createModule('footer', baseOpts(block, pickProps(data, ['tone', 'credit']), {
+        children: (data.blocks || []).map(blockToModule).filter(Boolean)
+      }));
+
     case 'whatsapp':
-      return createModule('whatsapp', baseOpts(block, pickProps(data, ['phone', 'message']), { text: data.text || '' }));
+      return createModule('whatsapp', baseOpts(block, pickProps(data, ['phone', 'message', 'note', 'url', 'align']), {
+        text: data.label || ''
+      }));
 
     case 'timeline': {
       const children = (data.items || []).map((it) =>
@@ -863,9 +875,21 @@ function moduleToBlock(node) {
       return finishBlock(node, 'flipbox', data);
     }
 
+    case 'header': {
+      const data = pickData(props, ['tone', 'layout']);
+      data.blocks = (node.children || []).map(moduleToBlock).filter(Boolean);
+      return finishBlock(node, 'header', data);
+    }
+
+    case 'footer': {
+      const data = pickData(props, ['tone', 'credit']);
+      data.blocks = (node.children || []).map(moduleToBlock).filter(Boolean);
+      return finishBlock(node, 'footer', data);
+    }
+
     case 'whatsapp': {
-      const data = pickData(props, ['phone', 'message']);
-      if (node.text) data.text = node.text;
+      const data = pickData(props, ['phone', 'message', 'note', 'url', 'align']);
+      if (node.text) data.label = node.text;
       return finishBlock(node, 'whatsapp', data);
     }
 
