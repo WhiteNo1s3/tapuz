@@ -1432,6 +1432,138 @@ const BLOCK_REGISTRY = [
     seed: { blocks: [], tone: 'dark', credit: '' }
   },
   {
+    type: 'rating',
+    keyword: 'RATING',
+    labelHe: 'דירוג כוכבים',
+    icon: '★',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'ציון ביקורות — כוכבים מלאים וחצאים, בלי JavaScript',
+    params: [
+      { name: 'value', bentmlParam: 'value', labelHe: 'ציון', type: 'number', required: true, min: 0, max: 10, default: 5 },
+      { name: 'max', bentmlParam: 'max', labelHe: 'מתוך', type: 'integer', min: 1, max: 10, default: 5 }
+    ],
+    textField: 'text',
+    textFieldLabelHe: 'טקסט ליד הכוכבים',
+    textFieldType: 'input',
+    seed: { value: 4.5, max: 5, text: '4.5 מתוך 5 — 213 ביקורות' }
+  },
+  {
+    type: 'hours',
+    keyword: 'HOURS',
+    labelHe: 'שעות פתיחה',
+    icon: '🕘',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'ימים ושעות — "סגור" מסומן אוטומטית',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'שורות', type: 'list',
+        itemFields: [
+          { name: 'day', labelHe: 'יום / ימים', type: 'string', required: true },
+          { name: 'hours', labelHe: 'שעות (או "סגור")', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי DAY'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { day: 'ראשון–חמישי', hours: '9:00–19:00' },
+        { day: 'שישי', hours: '9:00–14:00' },
+        { day: 'שבת', hours: 'סגור' }
+      ]
+    }
+  },
+  {
+    type: 'toc',
+    keyword: 'TOC',
+    labelHe: 'תוכן עניינים',
+    icon: '☰',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'קישורי עוגן בתוך הדף — #מזהה של כותרת',
+    params: [
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת', type: 'string', default: 'תוכן עניינים' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'סעיפים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
+          { name: 'anchor', labelHe: 'עוגן (#מזהה)', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי TOCITEM'
+      }
+    ],
+    textField: null,
+    seed: {
+      title: 'תוכן עניינים',
+      items: [
+        { label: 'הקדמה', anchor: '#intro' },
+        { label: 'איך זה עובד', anchor: '#how' },
+        { label: 'שאלות נפוצות', anchor: '#faq' }
+      ]
+    }
+  },
+  {
+    type: 'author',
+    keyword: 'AUTHOR',
+    labelHe: 'כותב/ת',
+    icon: '✍',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'קופסת "על הכותב/ת" — תמונה, שם, כמה מילים, קישור',
+    params: [
+      { name: 'name', bentmlParam: 'name', labelHe: 'שם', type: 'string', required: true, default: '' },
+      { name: 'image', bentmlParam: 'image', labelHe: 'תמונה (נתיב)', type: 'url', default: '' },
+      { name: 'url', bentmlParam: 'url', labelHe: 'קישור', type: 'url', default: '' },
+      { name: 'linkLabel', bentmlParam: 'linkLabel', labelHe: 'טקסט הקישור', type: 'string', default: '' }
+    ],
+    textField: 'bio',
+    textFieldLabelHe: 'כמה מילים',
+    seed: { name: 'דנה לוי', image: '', bio: 'כותבת על טכנולוגיה ועסקים כבר עשור.', url: '', linkLabel: 'לכל הכתבות' }
+  },
+  {
+    type: 'compare',
+    keyword: 'COMPARE',
+    labelHe: 'לפני / אחרי',
+    icon: '◧',
+    category: 'מדיה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'שתי תמונות עם סליידר השוואה',
+    params: [
+      { name: 'before', bentmlParam: 'before', labelHe: 'תמונה לפני', type: 'media', required: true, default: '' },
+      { name: 'after', bentmlParam: 'after', labelHe: 'תמונה אחרי', type: 'media', required: true, default: '' },
+      { name: 'beforeLabel', bentmlParam: 'beforeLabel', labelHe: 'תווית לפני', type: 'string', default: 'לפני' },
+      { name: 'afterLabel', bentmlParam: 'afterLabel', labelHe: 'תווית אחרי', type: 'string', default: 'אחרי' }
+    ],
+    textField: null,
+    seed: { before: '', after: '', beforeLabel: 'לפני', afterLabel: 'אחרי' }
+  },
+  {
+    type: 'flipbox',
+    keyword: 'FLIPBOX',
+    labelHe: 'קופסה מתהפכת',
+    icon: '⟲',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'כותרת מקדימה, טקסט וכפתור מאחור — מתהפך במעבר עכבר',
+    params: [
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת (קדימה)', type: 'string', required: true, default: '' },
+      { name: 'icon', bentmlParam: 'icon', labelHe: 'אייקון (אימוג׳י או נתיב)', type: 'string', default: '' },
+      { name: 'buttonText', bentmlParam: 'cta', labelHe: 'טקסט כפתור (מאחור)', type: 'string', default: '' },
+      { name: 'buttonUrl', bentmlParam: 'url', labelHe: 'קישור כפתור', type: 'url', default: '' }
+    ],
+    textField: 'backText',
+    textFieldLabelHe: 'טקסט (מאחור)',
+    seed: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות על כל מוצר.', buttonText: 'לפרטים', buttonUrl: '#' }
+  },
+  {
     type: 'nav',
     keyword: 'NAV',
     labelHe: 'תפריט ניווט',

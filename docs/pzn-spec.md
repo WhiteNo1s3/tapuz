@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (74)
+## Modules (82)
 
 ### Category: content
 
@@ -254,6 +254,41 @@ from it directly.
   - `align` · enum · start \| center \| end · default `start`
   - `label` · text · **(body text, not an attribute)**
 
+#### `<bent-rating>` — דירוג כוכבים / Star rating · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `value` · number · default `5`
+  - `max` · integer · 1–10 · default `5`
+  - `text` · text · **(body text, not an attribute)**
+
+#### `<bent-day>` — יום / Day row · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `name` · string
+  - `hours` · text · **(body text, not an attribute)**
+
+#### `<bent-hours>` — שעות פתיחה / Opening hours · container (children: `bent-day`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-author>` — כותב/ת / Author box · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `name` · string
+  - `image` · url
+  - `url` · url
+  - `linkLabel` · string
+  - `bio` · text · **(body text, not an attribute)**
+
+#### `<bent-flipbox>` — קופסה מתהפכת / Flip box · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string
+  - `icon` · string
+  - `cta` · string
+  - `url` · url
+  - `backText` · text · **(body text, not an attribute)**
+
 ### Category: layout
 
 #### `<bent-section>` — מיכל / Section · container
@@ -367,6 +402,17 @@ from it directly.
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `tone` · enum · dark \| light \| brand \| none · default `dark`
   - `credit` · string
+
+#### `<bent-tocitem>` — סעיף / TOC entry · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `anchor` · string
+  - `label` · text · **(body text, not an attribute)**
+
+#### `<bent-toc>` — תוכן עניינים / Table of contents · container (children: `bent-tocitem`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string
 
 ### Category: data
 
@@ -516,6 +562,14 @@ from it directly.
 #### `<bent-social>` — רשתות חברתיות / Social · container (children: `bent-handle`)
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-compare>` — לפני / אחרי / Before / after · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `before` · url
+  - `after` · url
+  - `beforeLabel` · string
+  - `afterLabel` · string
 
 ### Category: effects
 

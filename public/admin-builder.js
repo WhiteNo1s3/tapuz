@@ -56,6 +56,12 @@
     { type: 'countdown', label: 'ספירה לאחור', hint: 'טיימר למבצע', icon: '⏳', group: 'תוכן', keyword: 'COUNTDOWN' },
     { type: 'pricelist', label: 'מחירון', hint: 'תפריט / מחירים', icon: '₪', group: 'תוכן', keyword: 'PRICELIST' },
     { type: 'progress', label: 'מדדים', hint: 'פסי התקדמות', icon: '▰', group: 'תוכן', keyword: 'PROGRESS' },
+    { type: 'rating', label: 'דירוג', hint: 'כוכבים', icon: '★', group: 'תוכן', keyword: 'RATING' },
+    { type: 'hours', label: 'שעות פתיחה', hint: 'ימים ושעות', icon: '🕘', group: 'תוכן', keyword: 'HOURS' },
+    { type: 'toc', label: 'תוכן עניינים', hint: 'עוגנים בדף', icon: '☰', group: 'מבנה', keyword: 'TOC' },
+    { type: 'author', label: 'כותב/ת', hint: 'על הכותב/ת', icon: '✍', group: 'תוכן', keyword: 'AUTHOR' },
+    { type: 'compare', label: 'לפני/אחרי', hint: 'סליידר השוואה', icon: '◧', group: 'מדיה', keyword: 'COMPARE' },
+    { type: 'flipbox', label: 'קופסה מתהפכת', hint: 'קדימה/אחורה', icon: '⟲', group: 'תוכן', keyword: 'FLIPBOX' },
     { type: 'whatsapp', label: 'וואטסאפ', hint: 'כפתור צ׳אט', icon: '✆', group: 'תוכן', keyword: 'WHATSAPP' },
     { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
@@ -2332,6 +2338,87 @@
             (it.color ? ';background:' + escAttr(it.color) : '') + '"></div></div>' +
             '</div>';
         }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'rating') {
+      var rMax = Math.max(1, Math.min(10, Math.round(Number(d.max)) || 5));
+      var rVal = Math.min(rMax, Math.max(0, Number(d.value) || 0));
+      var rStars = new Array(rMax + 1).join('★');
+      wrap.innerHTML =
+        '<div class="preview-rating">' +
+        '<span class="preview-rating-stars"><span class="preview-rating-base">' + rStars + '</span>' +
+        '<span class="preview-rating-fill" style="width:' + Math.round((rVal / rMax) * 100) + '%">' + rStars + '</span></span>' +
+        (d.text ? '<span class="preview-rating-text">' + esc(d.text) + '</span>' : '') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'hours') {
+      var hItems = d.items || [];
+      var rows = hItems.length ? hItems : [
+        { day: 'ראשון–חמישי', hours: '9:00–19:00' },
+        { day: 'שבת', hours: 'סגור' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-hours">' +
+        rows.map(function (it) {
+          return '<div class="preview-day">' +
+            '<span class="preview-day-name">' + esc(it.day || '') + '</span>' +
+            '<span class="preview-day-dots"></span>' +
+            '<span class="preview-day-hours">' + esc(it.hours || '') + '</span>' +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'toc') {
+      var tItems = d.items || [];
+      var entries = tItems.length ? tItems : [
+        { label: 'הקדמה', anchor: '#intro' },
+        { label: 'איך זה עובד', anchor: '#how' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-toc">' +
+        '<div class="preview-toc-title">' + esc(d.title || 'תוכן עניינים') + '</div>' +
+        '<ol class="preview-toc-list">' +
+        entries.map(function (it) { return '<li>' + esc(it.label || '') + '</li>'; }).join('') +
+        '</ol></div>';
+      return wrap;
+    }
+
+    if (block.type === 'author') {
+      wrap.innerHTML =
+        '<div class="preview-author">' +
+        (d.image ? '<img class="preview-author-photo" src="' + escAttr(d.image) + '" alt="">'
+          : '<span class="preview-author-photo">✍️</span>') +
+        '<div><div class="preview-author-name">' + esc(d.name || 'שם') + '</div>' +
+        (d.bio ? '<div class="preview-author-bio">' + esc(d.bio) + '</div>' : '') +
+        '</div></div>';
+      return wrap;
+    }
+
+    if (block.type === 'compare') {
+      wrap.innerHTML =
+        '<div class="preview-compare">' +
+        '<div class="preview-compare-half">' + (d.before ? '<img src="' + escAttr(d.before) + '" alt="">' : '<span>🖼</span>') +
+        '<b>' + esc(d.beforeLabel || 'לפני') + '</b></div>' +
+        '<div class="preview-compare-half">' + (d.after ? '<img src="' + escAttr(d.after) + '" alt="">' : '<span>🖼</span>') +
+        '<b>' + esc(d.afterLabel || 'אחרי') + '</b></div>' +
+        '</div>' +
+        (d.before && d.after ? '' : '<div class="preview-compare-note">בחרו שתי תמונות בהגדרות ←</div>');
+      return wrap;
+    }
+
+    if (block.type === 'flipbox') {
+      wrap.innerHTML =
+        '<div class="preview-flipbox">' +
+        '<div class="preview-flipbox-front">' + (d.icon ? '<span class="preview-flipbox-icon">' + esc(d.icon) + '</span>' : '') +
+        '<div class="preview-flipbox-title">' + esc(d.title || 'כותרת') + '</div></div>' +
+        '<div class="preview-flipbox-back">' + (d.backText ? '<div>' + esc(d.backText) + '</div>' : '') +
+        (d.buttonText ? '<span class="preview-flipbox-button">' + esc(d.buttonText) + '</span>' : '') + '</div>' +
         '</div>';
       return wrap;
     }

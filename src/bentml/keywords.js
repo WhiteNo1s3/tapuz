@@ -542,6 +542,74 @@ const KEYWORDS = {
       color: { type: 'string' }
     }
   },
+  RATING: {
+    body: 'TEXT-BODY',
+    jsonType: 'rating',
+    params: {
+      value: { type: 'number', required: true },
+      max: { type: 'integer', default: 5 }
+    }
+  },
+  HOURS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'hours',
+    children: ['DAY'],
+    params: {}
+  },
+  DAY: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'HOURS',
+    params: {
+      name: { type: 'string', required: true }
+    }
+  },
+  TOC: {
+    body: 'BLOCK-BODY',
+    jsonType: 'toc',
+    children: ['TOCITEM'],
+    params: {
+      title: { type: 'string' }
+    }
+  },
+  TOCITEM: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TOC',
+    params: {
+      anchor: { type: 'string' }
+    }
+  },
+  AUTHOR: {
+    body: 'TEXT-BODY',
+    jsonType: 'author',
+    params: {
+      name: { type: 'string', required: true },
+      image: { type: 'string' },
+      url: { type: 'string' },
+      linkLabel: { type: 'string' }
+    }
+  },
+  COMPARE: {
+    body: 'NO-BODY',
+    jsonType: 'compare',
+    params: {
+      before: { type: 'string', required: true },
+      after: { type: 'string', required: true },
+      beforeLabel: { type: 'string' },
+      afterLabel: { type: 'string' }
+    }
+  },
+  FLIPBOX: {
+    body: 'TEXT-BODY',
+    jsonType: 'flipbox',
+    params: {
+      title: { type: 'string', required: true },
+      icon: { type: 'string' },
+      cta: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
   // gap-audit wave 4 — HEADER/FOOTER leave RESERVED, but ONLY for the
   // decompile-preview path (decompileOnly): the compiler must accept a
   // decompiled draft that carries them, while the module catalog and the

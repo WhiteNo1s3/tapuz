@@ -160,6 +160,12 @@ const VOCAB_DATA = {
   countdown: { target: '2027-01-01T00:00', label: 'עד סוף המבצע', done: 'המבצע הסתיים' },
   pricelist: { items: [{ name: 'חומוס מלא', price: '32 ₪', desc: 'עם פטריות' }, { name: 'שקשוקה', price: '44 ₪' }] },
   progress: { items: [{ label: 'עיצוב', value: 90 }, { label: 'פיתוח', value: 75, color: '#38bdf8' }] },
+  rating: { value: 4.5, max: 5, text: '4.5 מתוך 5 — 213 ביקורות' },
+  hours: { items: [{ day: 'ראשון–חמישי', hours: '9:00–19:00' }, { day: 'שבת', hours: 'סגור' }] },
+  toc: { title: 'תוכן עניינים', items: [{ label: 'הקדמה', anchor: '#intro' }, { label: 'שאלות', anchor: '#faq' }] },
+  author: { name: 'דנה לוי', image: '/uploads/dana.jpg', bio: 'כותבת על טכנולוגיה.', url: '/author/dana', linkLabel: 'לכל הכתבות' },
+  compare: { before: '/uploads/before.jpg', after: '/uploads/after.jpg', beforeLabel: 'לפני', afterLabel: 'אחרי' },
+  flipbox: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות.', buttonText: 'לפרטים', buttonUrl: '/warranty' },
   header: { tone: 'dark', layout: 'row', blocks: [{ type: 'image', id: 'image_1', data: { src: '/uploads/logo.svg', alt: 'לוגו' } }, { type: 'nav', id: 'nav_1', data: { items: [{ label: 'בית', href: '/' }] } }] },
   footer: { tone: 'dark', credit: '© 2026 כל הזכויות שמורות', blocks: [{ type: 'text', id: 'text_1', data: { content: 'תחתית' } }] },
   whatsapp: { label: 'דברו איתנו בוואטסאפ', phone: '972501234567', message: 'שלום, אשמח לפרטים', note: 'מענה תוך דקות' }

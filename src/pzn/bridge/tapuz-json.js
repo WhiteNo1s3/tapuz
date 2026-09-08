@@ -354,6 +354,42 @@ function blockToModule(block) {
       return createModule('progress', baseOpts(block, {}, { children }));
     }
 
+    case 'rating':
+      return createModule('rating', baseOpts(block, pickProps(data, ['value', 'max']), { text: data.text || '' }));
+
+    case 'hours': {
+      const children = (data.items || []).map((it) =>
+        createModule('day', {
+          props: { name: (it && it.day) || '' },
+          text: (it && it.hours) || ''
+        })
+      );
+      return createModule('hours', baseOpts(block, {}, { children }));
+    }
+
+    case 'toc': {
+      const children = (data.items || []).map((it) =>
+        createModule('tocitem', {
+          props: pickProps(it || {}, ['anchor']),
+          text: (it && it.label) || ''
+        })
+      );
+      return createModule('toc', baseOpts(block, pickProps(data, ['title']), { children }));
+    }
+
+    case 'author':
+      return createModule('author', baseOpts(block, pickProps(data, ['name', 'image', 'url', 'linkLabel']), { text: data.bio || '' }));
+
+    case 'compare':
+      return createModule('compare', baseOpts(block, pickProps(data, ['before', 'after', 'beforeLabel', 'afterLabel'])));
+
+    case 'flipbox': {
+      const props = pickProps(data, ['title', 'icon']);
+      if (data.buttonText) props.cta = data.buttonText;
+      if (data.buttonUrl) props.url = data.buttonUrl;
+      return createModule('flipbox', baseOpts(block, props, { text: data.backText || '' }));
+    }
+
     case 'header':
       return createModule('header', baseOpts(block, pickProps(data, ['tone', 'layout']), {
         children: (data.blocks || []).map(blockToModule).filter(Boolean)
@@ -794,6 +830,49 @@ function moduleToBlock(node) {
           return item;
         });
       return finishBlock(node, 'progress', data);
+    }
+
+    case 'rating': {
+      const data = pickData(props, ['value', 'max']);
+      if (node.text) data.text = node.text;
+      return finishBlock(node, 'rating', data);
+    }
+
+    case 'hours': {
+      const data = {};
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'day')
+        .map((c) => ({ day: (c.props && c.props.name) || '', hours: c.text || '' }));
+      return finishBlock(node, 'hours', data);
+    }
+
+    case 'toc': {
+      const data = pickData(props, ['title']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'tocitem')
+        .map((c) => {
+          const item = pickData(c.props || {}, ['anchor']);
+          item.label = c.text || '';
+          return item;
+        });
+      return finishBlock(node, 'toc', data);
+    }
+
+    case 'author': {
+      const data = pickData(props, ['name', 'image', 'url', 'linkLabel']);
+      if (node.text) data.bio = node.text;
+      return finishBlock(node, 'author', data);
+    }
+
+    case 'compare':
+      return finishBlock(node, 'compare', pickData(props, ['before', 'after', 'beforeLabel', 'afterLabel']));
+
+    case 'flipbox': {
+      const data = pickData(props, ['title', 'icon']);
+      if (props.cta) data.buttonText = props.cta;
+      if (props.url) data.buttonUrl = props.url;
+      if (node.text) data.backText = node.text;
+      return finishBlock(node, 'flipbox', data);
     }
 
     case 'header': {

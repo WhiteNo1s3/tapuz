@@ -2157,6 +2157,193 @@ register({
   }
 });
 
+// ─── Gap-audit wave 4 (the backlog): rating / hours / toc / author / compare / flipbox ───
+// Zero JS except compare's inline range binding. (whatsapp landed above via #69.)
+
+register({
+  name: 'rating',
+  tag: 'bent-rating',
+  category: 'content',
+  label: { he: 'דירוג כוכבים', en: 'Star rating' },
+  icon: 'rating',
+  container: false,
+  props: {
+    value: { type: 'number', default: 5, label: { he: 'ציון', en: 'Score' } },
+    max: { type: 'integer', default: 5, min: 1, max: 10, optional: true, label: { he: 'מתוך', en: 'Out of' } },
+    text: { type: 'text', content: true, default: '', label: { he: 'טקסט', en: 'Text' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const props = Object.assign({}, node.props || {}, { text: node.text || (node.props && node.props.text) || '' });
+    return require('../rating-html').renderRating(props, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'day',
+  tag: 'bent-day',
+  category: 'content',
+  label: { he: 'יום', en: 'Day row' },
+  icon: 'day',
+  container: false,
+  props: {
+    name: { type: 'string', default: '', label: { he: 'יום / ימים', en: 'Day(s)' } },
+    hours: { type: 'text', content: true, default: '', label: { he: 'שעות', en: 'Hours' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = node.props || {};
+    return require('../hours-html').renderDay({ day: props.name, hours: node.text || props.hours || '' });
+  }
+});
+
+register({
+  name: 'hours',
+  tag: 'bent-hours',
+  category: 'content',
+  label: { he: 'שעות פתיחה', en: 'Opening hours' },
+  icon: 'hours',
+  container: true,
+  accept: ['day'],
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'day') return compileChild(c, ctx);
+      const props = c.props || {};
+      return require('../hours-html').renderDay({ day: props.name, hours: c.text || props.hours || '' });
+    }).join('');
+    return require('../hours-html').renderHours(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'tocitem',
+  tag: 'bent-tocitem',
+  category: 'layout',
+  label: { he: 'סעיף', en: 'TOC entry' },
+  icon: 'tocitem',
+  container: false,
+  props: {
+    anchor: { type: 'string', default: '', optional: true, label: { he: 'עוגן', en: 'Anchor' } },
+    label: { type: 'text', content: true, default: '', label: { he: 'טקסט', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {}, { label: node.text || (node.props && node.props.label) || '' });
+    return require('../toc-html').renderTocItem(props);
+  }
+});
+
+register({
+  name: 'toc',
+  tag: 'bent-toc',
+  category: 'layout',
+  label: { he: 'תוכן עניינים', en: 'Table of contents' },
+  icon: 'toc',
+  container: true,
+  accept: ['tocitem'],
+  props: {
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת', en: 'Title' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'tocitem') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {}, { label: c.text || (c.props && c.props.label) || '' });
+      return require('../toc-html').renderTocItem(props);
+    }).join('');
+    return require('../toc-html').renderToc(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'author',
+  tag: 'bent-author',
+  category: 'content',
+  label: { he: 'כותב/ת', en: 'Author box' },
+  icon: 'author',
+  container: false,
+  props: {
+    name: { type: 'string', default: '', label: { he: 'שם', en: 'Name' } },
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Photo' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    linkLabel: { type: 'string', default: '', optional: true, label: { he: 'טקסט הקישור', en: 'Link label' } },
+    bio: { type: 'text', content: true, default: '', label: { he: 'כמה מילים', en: 'Bio' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const props = Object.assign({}, node.props || {}, { bio: node.text || (node.props && node.props.bio) || '' });
+    return require('../author-html').renderAuthor(props, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'compare',
+  tag: 'bent-compare',
+  category: 'media',
+  label: { he: 'לפני / אחרי', en: 'Before / after' },
+  icon: 'compare',
+  container: false,
+  props: {
+    before: { type: 'url', default: '', label: { he: 'תמונה לפני', en: 'Before image' } },
+    after: { type: 'url', default: '', label: { he: 'תמונה אחרי', en: 'After image' } },
+    beforeLabel: { type: 'string', default: '', optional: true, label: { he: 'תווית לפני', en: 'Before label' } },
+    afterLabel: { type: 'string', default: '', optional: true, label: { he: 'תווית אחרי', en: 'After label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return require('../compare-html').renderCompare(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'flipbox',
+  tag: 'bent-flipbox',
+  category: 'content',
+  label: { he: 'קופסה מתהפכת', en: 'Flip box' },
+  icon: 'flipbox',
+  container: false,
+  props: {
+    title: { type: 'string', default: '', label: { he: 'כותרת (קדימה)', en: 'Front title' } },
+    icon: { type: 'string', default: '', optional: true, label: { he: 'אייקון', en: 'Icon' } },
+    cta: { type: 'string', default: '', optional: true, label: { he: 'טקסט כפתור', en: 'Button text' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור כפתור', en: 'Button link' } },
+    backText: { type: 'text', content: true, default: '', label: { he: 'טקסט (מאחור)', en: 'Back text' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const p = node.props || {};
+    return require('../flipbox-html').renderFlipbox({
+      title: p.title, icon: p.icon, buttonText: p.cta, buttonUrl: p.url,
+      backText: node.text || p.backText || ''
+    }, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 module.exports = {
   register,
   ANIMATE_VALUES,
