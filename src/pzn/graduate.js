@@ -749,6 +749,12 @@ const TEAM_CLASS = /\b(?:team|our-team|team-members?|staff|bent-team|elementor-w
 const COUNTDOWN_CLASS = /\b(?:countdown|count-down|countdown-timer|elementor-countdown|bent-countdown)\b/i;
 const PRICELIST_CLASS = /\b(?:price-list|pricelist|menu-list|restaurant-menu|elementor-price-list|bent-pricelist)\b/i;
 const PROGRESS_CLASS = /\b(?:progress|progress-bars?|skill-bars?|skills|elementor-progress|bent-progress)\b/i;
+const RATING_CLASS = /\b(?:star-rating|elementor-star-rating|elementor-widget-star-rating|rating|stars|bent-rating)\b/i;
+const HOURS_CLASS = /\b(?:opening-hours|business-hours|open-hours|hours-table|bent-hours)\b/i;
+const TOC_CLASS = /\b(?:toc|table-of-contents|elementor-toc|elementor-widget-table-of-contents|bent-toc)\b/i;
+const AUTHOR_CLASS = /\b(?:author-box|post-author|about-author|about-the-author|author-bio|author-card|bent-author)\b/i;
+const COMPARE_CLASS = /\b(?:twentytwenty(?:-container)?|image-compare|before-after|beforeafter|ba-slider|compare-slider|bent-compare)\b/i;
+const FLIPBOX_CLASS = /\b(?:flip-box|flipbox|elementor-flip-box|elementor-widget-flip-box|flip-card|bent-flipbox)\b/i;
 const LOGOS_CLASS = /\b(?:logos?|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos)\b/i;
 const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
 const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
@@ -772,6 +778,12 @@ function looksLikeTeam(t) { return TEAM_CLASS.test(hintHay(t)); }
 function looksLikeCountdown(t) { return COUNTDOWN_CLASS.test(hintHay(t)); }
 function looksLikePricelist(t) { return PRICELIST_CLASS.test(hintHay(t)); }
 function looksLikeProgress(t) { return PROGRESS_CLASS.test(hintHay(t)); }
+function looksLikeRating(t) { return RATING_CLASS.test(hintHay(t)); }
+function looksLikeHours(t) { return HOURS_CLASS.test(hintHay(t)); }
+function looksLikeToc(t) { return TOC_CLASS.test(hintHay(t)); }
+function looksLikeAuthor(t) { return AUTHOR_CLASS.test(hintHay(t)); }
+function looksLikeCompare(t) { return COMPARE_CLASS.test(hintHay(t)); }
+function looksLikeFlipbox(t) { return FLIPBOX_CLASS.test(hintHay(t)); }
 
 /**
  * A class/tag that names a module we speak — or a landmark we refuse to
@@ -799,6 +811,12 @@ function guessedTool(t) {
   if (looksLikeTeam(t)) return 'team';
   if (looksLikeCountdown(t)) return 'countdown';
   if (looksLikeProgress(t)) return 'progress';
+  if (looksLikeRating(t)) return 'rating';
+  if (looksLikeHours(t)) return 'hours';
+  if (looksLikeToc(t)) return 'toc';
+  if (looksLikeAuthor(t)) return 'author';
+  if (looksLikeCompare(t)) return 'compare';
+  if (looksLikeFlipbox(t)) return 'flipbox';
   if (/\b(?:product|shop-item|woocommerce|product-card)\b/i.test(hay)) return 'cards';
   return null;
 }
@@ -1795,6 +1813,285 @@ function parseProgressData(tokens, i, end, t) {
   return { items, heading: directHeading(tokens, i, end) };
 }
 
+// ── gap-audit wave 4: rating / hours / toc / author / compare / flipbox ──
+
+const SCORE_RE = /(\d+(?:[.,]\d+)?)\s*(?:\/|מתוך|out of|of)\s*(\d+)/i;
+
+/** A machine-readable score on an element: title="4.5/5", data-rating, aria-label. */
+function scoreOfAttrs(attrs) {
+  if (!attrs) return null;
+  for (const k of ['title', 'aria-label', 'data-rating-text']) {
+    const m = SCORE_RE.exec(attrs[k] || '');
+    if (m) return { value: Number(m[1].replace(',', '.')), max: Number(m[2]) };
+  }
+  for (const k of ['data-rating', 'data-score', 'data-value', 'data-stars']) {
+    const n = Number(attrs[k]);
+    if (attrs[k] != null && Number.isFinite(n)) return { value: n, max: Number(attrs['data-max']) || 5 };
+  }
+  return null;
+}
+
+/**
+ * Star rating. Class hint + a real score: an attribute (title/data/aria) or
+ * literal ★½☆ glyphs to count. Plain "4.5" text with no stars stays text.
+ * @returns {{ value: number, max?: number, text?: string } | null}
+ */
+function parseRatingData(tokens, i, end, t) {
+  if (!looksLikeRating(t)) return null;
+  let score = scoreOfAttrs(t && t.attrs);
+  for (let j = i + 1; j < end - 1 && !score; j++) {
+    if (tokens[j].kind === 'open') score = scoreOfAttrs(tokens[j].attrs);
+  }
+  const all = unescapeHtml(textOf(tokens, i + 1, end - 1));
+  if (!score) {
+    const full = (all.match(/★/g) || []).length;
+    const half = (all.match(/[½⯪]/g) || []).length;
+    const empty = (all.match(/☆/g) || []).length;
+    if (!full) return null;
+    score = { value: full + half * 0.5, max: full + half + empty || 5 };
+  }
+  if (!Number.isFinite(score.value)) return null;
+  const out = { value: Math.round(score.value * 10) / 10 };
+  if (score.max && score.max !== 5) out.max = score.max;
+  const text = all.replace(/[★☆½⯪]/g, '').replace(/\s+/g, ' ').trim();
+  if (text) out.text = text;
+  return out;
+}
+
+/** Leaf text elements (class, tag, text) directly readable inside a span. */
+function leafTexts(tokens, s, e) {
+  const out = [];
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    if (!isLeafSpan(tokens, j, close)) continue;
+    const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+    if (text) out.push({ cls: (tk.attrs && tk.attrs.class) || '', tag: tk.name, text });
+    j = close - 1;
+  }
+  return out;
+}
+
+/** One day/hours row out of a row wrapper. @returns {object|null} */
+function extractHoursRow(tokens, s, e) {
+  const leaves = leafTexts(tokens, s, e);
+  let day = '';
+  let hours = '';
+  for (const leaf of leaves) {
+    if (!day && (leaf.tag === 'dt' || leaf.tag === 'th' || /\b(?:day|days|weekday|label)\b/i.test(leaf.cls))) day = leaf.text;
+    else if (!hours && (leaf.tag === 'dd' || leaf.tag === 'time' || /\b(?:hours|time|open|closed)\b/i.test(leaf.cls))) hours = leaf.text;
+  }
+  if ((!day || !hours) && leaves.length === 2) {
+    day = day || leaves[0].text;
+    hours = hours || leaves[1].text;
+  }
+  if (!day || !hours) return null;
+  return { day, hours };
+}
+
+/**
+ * Opening hours. Class hint + ≥2 day/hours rows (row wrappers, table rows,
+ * or dt/dd pairs).
+ * @returns {{ items: object[], heading?: object } | null}
+ */
+function parseHoursData(tokens, i, end, t) {
+  if (!looksLikeHours(t)) return null;
+  const items = [];
+  const collect = (from, to, depth) => {
+    let pendingDay = '';
+    for (const [s, e] of childSpans(tokens, from, to)) {
+      const tk = tokens[s];
+      if (tk.name === 'dt') {
+        pendingDay = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+        continue;
+      }
+      if (tk.name === 'dd') {
+        const hours = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+        if (pendingDay && hours) items.push({ day: pendingDay, hours });
+        pendingDay = '';
+        continue;
+      }
+      if (['ul', 'ol', 'dl', 'table', 'tbody', 'thead'].includes(tk.name)) { collect(s + 1, e - 1, depth); continue; }
+      if (!CONTAINERS.has(tk.name) && tk.name !== 'li' && tk.name !== 'tr') continue;
+      const row = extractHoursRow(tokens, s, e);
+      if (row) items.push(row);
+      else if (depth < 3) collect(s + 1, e - 1, depth + 1);
+    }
+  };
+  collect(i + 1, end - 1, 0);
+  if (items.length < 2) return null;
+  return { items, heading: directHeading(tokens, i, end) };
+}
+
+/**
+ * Table of contents. Class hint + ≥2 same-page anchor links. A direct
+ * heading becomes the module's own title (it has one), not a pre block.
+ * @returns {{ title?: string, items: object[] } | null}
+ */
+function parseTocData(tokens, i, end, t) {
+  if (!looksLikeToc(t)) return null;
+  const items = [];
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'a') continue;
+    const close = matchClose(tokens, j);
+    const href = (tk.attrs && tk.attrs.href) || '';
+    const label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+    if (href.startsWith('#') && href.length > 1 && label) items.push({ label, anchor: href });
+    j = close - 1;
+  }
+  if (items.length < 2) return null;
+  const out = { items };
+  const heading = directHeading(tokens, i, end);
+  if (heading) out.title = heading.text;
+  else {
+    const titled = leafTexts(tokens, i, end).find((l) => /\b(?:toc-title|toc-heading|title)\b/i.test(l.cls));
+    if (titled) out.title = titled.text;
+  }
+  return out;
+}
+
+/**
+ * Author box. Class hint; photo + name (heading / classed) + bio paragraphs
+ * + the first real link. Needs a name (the img alt counts).
+ * @returns {object|null}
+ */
+function parseAuthorData(tokens, i, end, t) {
+  if (!looksLikeAuthor(t)) return null;
+  let name = '';
+  let image = '';
+  let alt = '';
+  let bio = '';
+  let url = '';
+  let linkLabel = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    if (!image && tk.name === 'img') {
+      image = imageSrcOf(tk.attrs);
+      alt = (tk.attrs && tk.attrs.alt) || '';
+      continue;
+    }
+    if (!name && (HEADING.test(tk.name) || /\b(?:author-name|name|byline)\b/i.test(cls))) {
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && v.length <= 80) { name = v; j = close - 1; continue; }
+    }
+    if (tk.name === 'p') {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (p) bio = bio ? `${bio}\n${p}` : p;
+      j = close - 1;
+      continue;
+    }
+    if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href && tk.attrs.href !== '#') {
+      const label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (label) { url = tk.attrs.href; linkLabel = label; j = close - 1; }
+    }
+  }
+  if (!name && alt) name = alt.replace(/^(?:מאת|by)\s+/i, '').trim();
+  if (!name) return null;
+  const out = { name };
+  if (image) out.image = image;
+  if (bio) out.bio = bio;
+  if (url) { out.url = url; out.linkLabel = linkLabel; }
+  return out;
+}
+
+/**
+ * Before/after slider. Class hint + two pictures; "before" is the one whose
+ * class or alt says so, else the first.
+ * @returns {object|null}
+ */
+function parseCompareData(tokens, i, end, t) {
+  if (!looksLikeCompare(t)) return null;
+  const imgs = [];
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'img') continue;
+    const src = imageSrcOf(tk.attrs);
+    if (src) imgs.push({ src, hay: `${(tk.attrs && tk.attrs.class) || ''} ${(tk.attrs && tk.attrs.alt) || ''}`, alt: (tk.attrs && tk.attrs.alt) || '' });
+  }
+  if (imgs.length < 2) return null;
+  // (?<!\p{L}) instead of \b — JS \b is ASCII-only and never brackets Hebrew
+  let before = imgs.find((im) => /(?<!\p{L})(?:before|לפני)(?!\p{L})/iu.test(im.hay));
+  let after = imgs.find((im) => im !== before && /(?<!\p{L})(?:after|אחרי)(?!\p{L})/iu.test(im.hay));
+  if (!before) before = imgs.find((im) => im !== after) || imgs[0];
+  if (!after) after = imgs.find((im) => im !== before) || imgs[1];
+  const out = { before: before.src, after: after.src };
+  if (before.alt && before.alt.length <= 16) out.beforeLabel = before.alt;
+  if (after.alt && after.alt.length <= 16) out.afterLabel = after.alt;
+  return out;
+}
+
+/**
+ * Flip box. Class hint; front (heading + icon) and back (text + button) by
+ * classed halves, else first heading / first paragraph / first link.
+ * @returns {object|null}
+ */
+function parseFlipboxData(tokens, i, end, t) {
+  if (!looksLikeFlipbox(t)) return null;
+  let title = '';
+  let icon = '';
+  let backText = '';
+  let buttonText = '';
+  let buttonUrl = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    if (!icon && tk.name === 'img') { icon = imageSrcOf(tk.attrs); continue; }
+    if (!title && HEADING.test(tk.name)) {
+      title = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p') {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (p) backText = backText ? `${backText}\n${p}` : p;
+      j = close - 1;
+      continue;
+    }
+    if (!buttonText && (tk.name === 'a' || tk.name === 'button')) {
+      const label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (label) {
+        buttonText = label;
+        buttonUrl = (tk.attrs && (tk.attrs.href || tk.attrs.formaction)) || '';
+        j = close - 1;
+      }
+    }
+  }
+  if (!title && !backText) return null;
+  const out = { title };
+  if (icon) out.icon = icon;
+  if (backText) out.backText = backText;
+  if (buttonText) { out.buttonText = buttonText; if (buttonUrl) out.buttonUrl = buttonUrl; }
+  return out;
+}
+
+/**
+ * A WhatsApp deep link → the whatsapp module's data (phone + preset message),
+ * or null when the link carries no number (then it stays a plain button).
+ */
+function whatsappFromHref(href) {
+  const s = String(href || '');
+  if (!/wa\.me|whatsapp/i.test(s)) return null;
+  let phone = '';
+  const path = /wa\.me\/(\+?[\d\s().-]{7,})/i.exec(s);
+  const param = /[?&]phone=(\+?[\d\s().-]{7,})/i.exec(s);
+  if (path) phone = path[1];
+  else if (param) phone = param[1];
+  phone = phone.replace(/\D/g, '');
+  if (phone.length < 7) return null;
+  const out = { phone };
+  const text = /[?&]text=([^&#]+)/i.exec(s);
+  if (text) {
+    try { out.message = decodeURIComponent(text[1].replace(/\+/g, ' ')).trim(); } catch (e) { /* keep undecoded out */ }
+  }
+  return out;
+}
+
 /**
  * Wrap a parser result whose `heading` (a direct-child section title) must
  * ride along as a `pre` block — the walk emits it before the module, so
@@ -1826,6 +2123,18 @@ function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   if (countdown) return { type: 'countdown', data: countdown, next: end };
   const progress = parseProgressData(tokens, i, end, t);
   if (progress) return withHeadingPre('progress', progress, end);
+  const rating = parseRatingData(tokens, i, end, t);
+  if (rating) return { type: 'rating', data: rating, next: end };
+  const hours = parseHoursData(tokens, i, end, t);
+  if (hours) return withHeadingPre('hours', hours, end);
+  const toc = parseTocData(tokens, i, end, t);
+  if (toc) return { type: 'toc', data: toc, next: end };
+  const author = parseAuthorData(tokens, i, end, t);
+  if (author) return { type: 'author', data: author, next: end };
+  const compare = parseCompareData(tokens, i, end, t);
+  if (compare) return { type: 'compare', data: compare, next: end };
+  const flipbox = parseFlipboxData(tokens, i, end, t);
+  if (flipbox) return { type: 'flipbox', data: flipbox, next: end };
   const carousel = parseCarouselData(tokens, i, end, t, bgMap);
   if (carousel) return { type: 'carousel', data: carousel, next: end };
   const faq = parseFaqData(tokens, i, end, t);
@@ -2046,8 +2355,12 @@ function htmlToBlocks(html, opts = {}) {
           // a YouTube link is better as an embed (renderer auto-embeds the player)
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
         } else {
-          if (/wa\.me|whatsapp/i.test(href)) suggested.add('whatsapp'); // real sites want a first-class whatsapp module
-          sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
+          // a wa.me link with a number IS the whatsapp module (wave 4 closed
+          // the gap the walk had been reporting since v0.6x); numberless
+          // whatsapp links stay a button
+          const wa = whatsappFromHref(href);
+          if (wa) sink.push({ type: 'whatsapp', id: nid('wa'), data: Object.assign(wa, { text: label }) });
+          else sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
         }
         mapped += 1; i = end; continue;
       }
@@ -2142,6 +2455,11 @@ function htmlToBlocks(html, opts = {}) {
         const socialNav = parseSocialData(tokens, i, end, t);
         if (socialNav) {
           sink.push({ type: 'social', id: nid('social'), data: socialNav });
+          mapped += 1; i = end; continue;
+        }
+        const tocNav = parseTocData(tokens, i, end, t);
+        if (tocNav) {
+          sink.push({ type: 'toc', id: nid('toc'), data: tocNav });
           mapped += 1; i = end; continue;
         }
         if (looksLikeCrumbs(t)) suggested.add('crumbs');
@@ -2302,6 +2620,7 @@ module.exports = {
   parseTestimonialData,
   tryStructuralModules,
   guessedTool,
+  whatsappFromHref,
   parseDetailsRun,
   mapsAddressOf,
   detectCardCluster,

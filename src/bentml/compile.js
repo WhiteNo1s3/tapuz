@@ -668,6 +668,81 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('progress', data);
     }
+    case 'RATING': {
+      const data = { value: p.value != null ? Number(p.value) : 5 };
+      if (p.max != null && Number(p.max) !== 5) data.max = Number(p.max);
+      const text = collapseSingleParagraph(node.text || '');
+      if (text) data.text = text;
+      applyChrome(data, p);
+      return createBlock('rating', data);
+    }
+    case 'HOURS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'DAY')
+        .map((c) => ({
+          day: (c.params && c.params.name) || '',
+          hours: collapseSingleParagraph(c.text || '')
+        }));
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { day: 'ראשון–חמישי', hours: '9:00–19:00' },
+              { day: 'שבת', hours: 'סגור' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('hours', data);
+    }
+    case 'TOC': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'TOCITEM')
+        .map((c) => {
+          const item = { label: collapseSingleParagraph(c.text || '') };
+          const anchor = c.params && c.params.anchor;
+          if (anchor) item.anchor = anchor;
+          return item;
+        });
+      const data = { items };
+      if (p.title) data.title = p.title;
+      applyChrome(data, p);
+      return createBlock('toc', data);
+    }
+    case 'AUTHOR': {
+      const data = { name: p.name || '' };
+      if (p.image) data.image = p.image;
+      const bio = collapseSingleParagraph(node.text || '');
+      if (bio) data.bio = bio;
+      if (p.url) data.url = p.url;
+      if (p.linkLabel) data.linkLabel = p.linkLabel;
+      applyChrome(data, p);
+      return createBlock('author', data);
+    }
+    case 'COMPARE': {
+      const data = { before: p.before || '', after: p.after || '' };
+      if (p.beforeLabel) data.beforeLabel = p.beforeLabel;
+      if (p.afterLabel) data.afterLabel = p.afterLabel;
+      applyChrome(data, p);
+      return createBlock('compare', data);
+    }
+    case 'FLIPBOX': {
+      const data = { title: p.title || '' };
+      if (p.icon) data.icon = p.icon;
+      const backText = collapseSingleParagraph(node.text || '');
+      if (backText) data.backText = backText;
+      if (p.cta) data.buttonText = p.cta;
+      if (p.url) data.buttonUrl = p.url;
+      applyChrome(data, p);
+      return createBlock('flipbox', data);
+    }
+    case 'WHATSAPP': {
+      const data = { phone: p.phone || '' };
+      if (p.message) data.message = p.message;
+      const text = collapseSingleParagraph(node.text || '');
+      if (text) data.text = text;
+      applyChrome(data, p);
+      return createBlock('whatsapp', data);
+    }
     case 'NAV': {
       const items = (node.children || [])
         .filter((c) => c.name === 'NAVITEM')

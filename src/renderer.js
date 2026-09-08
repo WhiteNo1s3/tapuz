@@ -515,6 +515,30 @@ function renderBlock(block, direction = 'rtl') {
       // skill/measure bars — inline width %, CSS animates, zero JS
       return require('./pzn/progress-html').renderProgressFromData(block.data || {}, direction, extra);
 
+    // gap-audit wave 4 — the rest of the backlog
+    case 'rating':
+      return require('./pzn/rating-html').renderRatingFromData(block.data || {}, direction, extra);
+
+    case 'hours':
+      return require('./pzn/hours-html').renderHoursFromData(block.data || {}, direction, extra);
+
+    case 'toc':
+      return require('./pzn/toc-html').renderTocFromData(block.data || {}, direction, extra);
+
+    case 'author':
+      return require('./pzn/author-html').renderAuthorFromData(block.data || {}, direction, extra);
+
+    case 'compare':
+      // before/after slider — inline range script, same static-export contract as countdown
+      return require('./pzn/compare-html').renderCompareFromData(block.data || {}, direction, extra);
+
+    case 'flipbox':
+      return require('./pzn/flipbox-html').renderFlipboxFromData(block.data || {}, direction, extra);
+
+    case 'whatsapp':
+      // in-flow wa.me button — the site-chrome float stays config-driven
+      return require('./pzn/whatsapp-html').renderWhatsappFromData(block.data || {}, direction, extra);
+
     case 'timeline':
       // company-history rail (module-hunt gap) — CSS line + dots, zero JS
       return require('./pzn/timeline-html').renderTimelineFromData(block.data || {}, direction, extra);

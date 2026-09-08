@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (48)
+## Modules (55)
 
 ### תוכן
 
@@ -845,6 +845,145 @@ Shape: `PROGRESS(params) { nested modules }`
 
 ```bentml
 PROGRESS {
+  …
+}
+```
+
+#### `RATING` → `rating`
+
+★ **דירוג כוכבים** — ציון ביקורות — כוכבים מלאים וחצאים, בלי JavaScript
+
+Shape: `RATING(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `value` | `value` | number | yes | 5 |
+| `max` | `max` | integer |  | 5 |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+RATING(value: "...") {
+  …
+}
+```
+
+#### `HOURS` → `hours`
+
+🕘 **שעות פתיחה** — ימים ושעות — "סגור" מסומן אוטומטית
+
+Shape: `HOURS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+HOURS {
+  …
+}
+```
+
+### מבנה
+
+#### `TOC` → `toc`
+
+☰ **תוכן עניינים** — קישורי עוגן בתוך הדף — #מזהה של כותרת
+
+Shape: `TOC(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `title` | `title` | string |  | "תוכן עניינים" |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+TOC {
+  …
+}
+```
+
+### תוכן
+
+#### `AUTHOR` → `author`
+
+✍ **כותב/ת** — קופסת "על הכותב/ת" — תמונה, שם, כמה מילים, קישור
+
+Shape: `AUTHOR(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `name` | `name` | string | yes | "" |
+| `image` | `image` | url |  | "" |
+| `url` | `url` | url |  | "" |
+| `linkLabel` | `linkLabel` | string |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+AUTHOR(name: "...") {
+  …
+}
+```
+
+### מדיה
+
+#### `COMPARE` → `compare`
+
+◧ **לפני / אחרי** — שתי תמונות עם סליידר השוואה
+
+Shape: `COMPARE(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `before` | `before` | media | yes | "" |
+| `after` | `after` | media | yes | "" |
+| `beforeLabel` | `beforeLabel` | string |  | "לפני" |
+| `afterLabel` | `afterLabel` | string |  | "אחרי" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+COMPARE(before: "...", after: "...")
+```
+
+### תוכן
+
+#### `FLIPBOX` → `flipbox`
+
+⟲ **קופסה מתהפכת** — כותרת מקדימה, טקסט וכפתור מאחור — מתהפך במעבר עכבר
+
+Shape: `FLIPBOX(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `title` | `title` | string | yes | "" |
+| `icon` | `icon` | string |  | "" |
+| `buttonText` | `cta` | string |  | "" |
+| `buttonUrl` | `url` | url |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+FLIPBOX(title: "...") {
+  …
+}
+```
+
+### מדיה
+
+#### `WHATSAPP` → `whatsapp`
+
+💬 **כפתור וואטסאפ** — כפתור wa.me בתוך הדף — עם הודעה מוכנה
+
+Shape: `WHATSAPP(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `phone` | `phone` | string | yes | "" |
+| `message` | `message` | string |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+WHATSAPP(phone: "...") {
   …
 }
 ```

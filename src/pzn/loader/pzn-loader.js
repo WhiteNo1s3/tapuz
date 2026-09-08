@@ -235,6 +235,48 @@ img.bent-member-photo { display: block; }
 .bent-bar-value { font-variant-numeric: tabular-nums; color: #9aa8bc; }
 .bent-bar-track { height: 0.55rem; border-radius: 999px; background: #1a2332; overflow: hidden; }
 .bent-bar-fill { height: 100%; border-radius: inherit; background: #f59e0b; }
+.bent-rating { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 1rem 0; }
+.bent-rating-stars { position: relative; display: inline-block; font-size: 1.3rem; line-height: 1; letter-spacing: 0.08em; color: #2a3548; white-space: nowrap; }
+.bent-rating-fill { position: absolute; inset-inline-start: 0; top: 0; overflow: hidden; white-space: nowrap; color: #f59e0b; }
+.bent-rating-text { font-size: 0.9rem; color: #9aa8bc; }
+.bent-hours { margin: 1.25rem 0; max-width: 32rem; }
+.bent-day { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.3rem 0; }
+.bent-day-name { font-weight: 600; }
+.bent-day-dots { flex: 1; border-bottom: 2px dotted #2a3548; transform: translateY(-0.25em); }
+.bent-day-closed .bent-day-hours { color: #9aa8bc; font-style: italic; }
+.bent-toc { margin: 1.25rem 0; padding: 1rem 1.25rem; border-inline-start: 4px solid #f59e0b; background: #1a2332; border-radius: 8px; }
+.bent-toc-title { margin: 0 0 0.5rem; font-weight: 700; }
+.bent-toc-list { margin: 0; padding-inline-start: 1.25rem; }
+.bent-tocitem { margin: 0.25rem 0; }
+.bent-tocitem-link { color: inherit; text-decoration: none; }
+.bent-author { display: flex; align-items: flex-start; gap: 1rem; margin: 1.25rem 0; padding: 1rem 1.25rem; border: 1px solid #2a3548; border-radius: 8px; }
+.bent-author-photo { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 4rem; height: 4rem; border-radius: 999px; object-fit: cover; background: #1a2332; font-size: 1.6rem; }
+img.bent-author-photo { display: block; }
+.bent-author-name { margin: 0 0 0.25rem; font-weight: 700; }
+.bent-author-bio { margin: 0 0 0.4rem; color: #9aa8bc; }
+.bent-author-link { font-size: 0.88rem; font-weight: 600; color: #f59e0b; text-decoration: none; }
+.bent-compare { margin: 1.25rem 0; }
+.bent-compare-frame { position: relative; overflow: hidden; border-radius: 8px; container-type: inline-size; }
+.bent-compare-after { display: block; width: 100%; height: auto; }
+.bent-compare-clip { position: absolute; inset-inline-start: 0; top: 0; bottom: 0; overflow: hidden; }
+.bent-compare-before { display: block; width: 100cqw; max-width: none; height: 100%; object-fit: cover; }
+.bent-compare-divider { position: absolute; top: 0; bottom: 0; width: 2px; margin-inline-start: -1px; background: #fff; pointer-events: none; }
+.bent-compare-badge { position: absolute; top: 0.6rem; padding: 0.2rem 0.6rem; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; font-size: 0.8rem; pointer-events: none; }
+.bent-compare-badge-before { inset-inline-start: 0.6rem; }
+.bent-compare-badge-after { inset-inline-end: 0.6rem; }
+.bent-compare-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+.bent-flipbox { perspective: 900px; margin: 1.25rem 0; min-height: 11rem; }
+.bent-flipbox-inner { position: relative; min-height: 11rem; transition: transform 0.55s ease; transform-style: preserve-3d; }
+.bent-flipbox:hover .bent-flipbox-inner, .bent-flipbox:focus-within .bent-flipbox-inner, .bent-flipbox:focus .bent-flipbox-inner { transform: rotateY(180deg); }
+.bent-flipbox-front, .bent-flipbox-back { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.6rem; padding: 1.25rem; text-align: center; border-radius: 8px; backface-visibility: hidden; }
+.bent-flipbox-front { background: #f59e0b; color: #0f1419; }
+.bent-flipbox-back { background: #1a2332; transform: rotateY(180deg); }
+.bent-flipbox-icon { font-size: 2rem; }
+.bent-flipbox-title { margin: 0; font-size: 1.1rem; color: inherit; }
+.bent-flipbox-text { margin: 0; }
+.bent-flipbox-button { display: inline-block; padding: 0.4rem 1rem; border-radius: 999px; background: #f59e0b; color: #0f1419; font-weight: 600; text-decoration: none; }
+.bent-whatsapp { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; padding: 0.55rem 1.1rem; border-radius: 999px; background: #25d366; color: #fff; font-weight: 600; text-decoration: none; }
+.bent-whatsapp-empty { background: #1a2332; color: #9aa8bc; }
 `.trim();
 
 /**

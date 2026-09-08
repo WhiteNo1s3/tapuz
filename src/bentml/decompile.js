@@ -574,6 +574,62 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}PROGRESS${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'rating': {
+      const params = [`value: ${Number(d.value) || 0}`];
+      if (d.max && Number(d.max) !== 5) params.push(`max: ${Number(d.max)}`);
+      uni(params, d, idParams);
+      return `${pad}RATING${paramList(params)} { ${escBody(d.text || '')} }`;
+    }
+    case 'hours': {
+      const params = [];
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => `${pad}  DAY(name: ${q(it.day || '')}) { ${escBody(it.hours || '')} }`)
+        .join('\n');
+      return `${pad}HOURS${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'toc': {
+      const params = [];
+      if (d.title) params.push(`title: ${q(d.title)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [];
+          if (it.anchor) ps.push(`anchor: ${q(it.anchor)}`);
+          return `${pad}  TOCITEM${paramList(ps)} { ${escBody(it.label || '')} }`;
+        })
+        .join('\n');
+      return `${pad}TOC${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'author': {
+      const params = [`name: ${q(d.name || '')}`];
+      if (d.image) params.push(`image: ${q(d.image)}`);
+      if (d.url) params.push(`url: ${q(d.url)}`);
+      if (d.linkLabel) params.push(`linkLabel: ${q(d.linkLabel)}`);
+      uni(params, d, idParams);
+      return `${pad}AUTHOR${paramList(params)} { ${escBody(d.bio || '')} }`;
+    }
+    case 'compare': {
+      const params = [`before: ${q(d.before || '')}`, `after: ${q(d.after || '')}`];
+      if (d.beforeLabel && d.beforeLabel !== 'לפני') params.push(`beforeLabel: ${q(d.beforeLabel)}`);
+      if (d.afterLabel && d.afterLabel !== 'אחרי') params.push(`afterLabel: ${q(d.afterLabel)}`);
+      uni(params, d, idParams);
+      return `${pad}COMPARE${paramList(params)}`;
+    }
+    case 'flipbox': {
+      const params = [`title: ${q(d.title || '')}`];
+      if (d.icon) params.push(`icon: ${q(d.icon)}`);
+      if (d.buttonText) params.push(`cta: ${q(d.buttonText)}`);
+      if (d.buttonUrl && d.buttonUrl !== '#') params.push(`url: ${q(d.buttonUrl)}`);
+      uni(params, d, idParams);
+      return `${pad}FLIPBOX${paramList(params)} { ${escBody(d.backText || '')} }`;
+    }
+    case 'whatsapp': {
+      const params = [`phone: ${q(d.phone || '')}`];
+      if (d.message) params.push(`message: ${q(d.message)}`);
+      uni(params, d, idParams);
+      return `${pad}WHATSAPP${paramList(params)} { ${escBody(d.text || '')} }`;
+    }
     case 'nav': {
       const params = [];
       if (d.background) params.push(`background: ${q(d.background)}`);

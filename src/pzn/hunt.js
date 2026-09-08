@@ -54,6 +54,7 @@ const {
   parseSocialData,
   tryStructuralModules,
   guessedTool,
+  whatsappFromHref,
   mapsAddressOf
 } = require('./graduate');
 
@@ -81,6 +82,12 @@ const ROLE_FROM_CLASS = [
   [/\bteam\b|our-team|team-members?|\bstaff\b|bent-team/i, 'team'],
   [/countdown|count-down|bent-countdown/i, 'countdown'],
   [/progress-bars?|skill-bars?|\bskills\b|elementor-progress|bent-progress/i, 'progress'],
+  [/star-rating|elementor-star-rating|bent-rating/i, 'rating'],
+  [/opening-hours|business-hours|open-hours|bent-hours/i, 'hours'],
+  [/\btoc\b|table-of-contents|bent-toc/i, 'toc'],
+  [/author-box|post-author|about-author|author-bio|bent-author/i, 'author'],
+  [/twentytwenty|image-compare|before-after|bent-compare/i, 'compare'],
+  [/flip-box|flipbox|elementor-flip-box|bent-flipbox/i, 'flipbox'],
   [/\b(?:stats|counters?|metrics|kpis?|stats-row)\b/i, 'stats'],
   [/\b(?:logos?|logo-strip|clients|brands|partners|logos-strip)\b/i, 'logos'],
   [/main|content|primary|article-body|post-content/i, 'main'],
@@ -190,8 +197,15 @@ function isEmptyBlock(b) {
     case 'team':
     case 'pricelist':
     case 'progress':
+    case 'hours':
+    case 'toc':
     case 'social': return !(d.items || []).length;
     case 'countdown': return !String(d.target || '').trim();
+    case 'rating': return !Number.isFinite(Number(d.value));
+    case 'author': return !String(d.name || '').trim();
+    case 'compare': return !String(d.before || '').trim() || !String(d.after || '').trim();
+    case 'flipbox': return !String(d.title || '').trim() && !String(d.backText || '').trim();
+    case 'whatsapp': return !String(d.phone || '').replace(/\D/g, '');
     default: return false;
   }
 }
@@ -391,8 +405,11 @@ function huntBlocks(html, opts = {}) {
         if (/youtube\.com|youtu\.be/i.test(href)) {
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
         } else {
-          if (/wa\.me|whatsapp/i.test(href)) suggested.add('whatsapp');
-          sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
+          // wave 4: a wa.me link with a number IS the whatsapp module (same
+          // mapping as graduate's walk — the gap is closed, never re-reported)
+          const wa = whatsappFromHref(href);
+          if (wa) sink.push({ type: 'whatsapp', id: nid('wa'), data: Object.assign(wa, { text: label }) });
+          else sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
         }
         mapped += 1; i = end; continue;
       }
