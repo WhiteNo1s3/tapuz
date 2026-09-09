@@ -158,7 +158,21 @@ const VOCAB_DATA = {
   crumbs: { items: [{ label: 'בית', url: '/' }, { label: 'הדף הזה' }] },
   header: { logo: '/demo/tile-1.svg', title: 'הסטודיו', url: '/', items: [{ label: 'בית', href: '/' }, { label: 'אודות', href: '/about' }] },
   footer: { copy: '© הסטודיו', items: [{ label: 'פרטיות', href: '/privacy' }] },
-  products: { columns: 3, items: [{ title: 'מוצר', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' }] }
+  products: { columns: 3, items: [{ title: 'מוצר', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' }] },
+  code: { lang: 'css', source: '.hero { color: inherit; }' },
+  author: { name: 'דנה כהן', role: 'עורכת', time: '9.9.2026', url: '/author/dana' },
+  tags: { items: [{ label: 'עיצוב', url: '/tag/design' }, { label: 'קוד', url: '/tag/code' }] },
+  search: { placeholder: 'חיפוש…', action: '/search', name: 'q', submit: 'חיפוש' },
+  newsletter: { title: 'הישארו מעודכנים', text: 'קבלו עדכונים למייל.', placeholder: 'האימייל שלכם', submit: 'הרשמה', action: '/api/form' },
+  pager: { items: [{ label: '1', url: '/p/1' }, { label: '2' }] },
+  consent: { text: 'אתר זה משתמש בעוגיות.', accept: 'אישור', reject: 'סירוב', policy: '/privacy', policyLabel: 'מדיניות פרטיות' },
+  related: { title: 'כתבות נוספות', items: [{ title: 'כתבה', excerpt: 'תקציר', href: '/a' }] },
+  comments: { title: 'תגובות', items: [{ author: 'דנה', time: 'אתמול', text: 'כתבה מצוינת.' }] },
+  slot: { label: 'פרסומת', src: '/demo/tile-1.svg', url: '/ad', advertiser: 'מותג' },
+  auth: { login: 'כניסה', loginurl: '/login', register: 'הרשמה', registerurl: '/signup' },
+  code: { lang: 'css', source: '.hero { color: inherit; }' },
+  author: { name: 'דנה כהן', role: 'עורכת', time: '9.9.2026', url: '/author/dana' },
+  tags: { items: [{ label: 'עיצוב', url: '/tag/design' }, { label: 'קוד', url: '/tag/code' }] }
 };
 
 // types the language deliberately folds into another keyword's JSON

@@ -368,6 +368,71 @@ function blockToModule(block) {
       return createModule('footer', baseOpts(block, pickProps(data, ['copy']), { children }));
     }
 
+    case 'search':
+      return createModule('search', baseOpts(block, pickProps(data, ['placeholder', 'action', 'name', 'submit', 'method'])));
+
+    case 'newsletter':
+      return createModule('newsletter', baseOpts(block, pickProps(data, ['title', 'placeholder', 'submit', 'action']), {
+        text: data.text || ''
+      }));
+
+    case 'pager': {
+      const children = (data.items || []).map((it) =>
+        createModule('page', {
+          props: pickProps(it || {}, ['label', 'url', 'current'])
+        })
+      );
+      return createModule('pager', baseOpts(block, pickProps(data, ['label']), { children }));
+    }
+
+    case 'consent':
+      return createModule('consent', baseOpts(block, pickProps(data, ['accept', 'reject', 'policy', 'policyLabel']), {
+        text: data.text || data.content || ''
+      }));
+
+    case 'related': {
+      const children = (data.items || []).map((it) =>
+        createModule('relcard', {
+          props: pickProps(it || {}, ['image', 'tag', 'title', 'excerpt', 'href'])
+        })
+      );
+      return createModule('related', baseOpts(block, pickProps(data, ['title']), { children }));
+    }
+
+    case 'comments': {
+      const children = (data.items || []).map((it) =>
+        createModule('comment', {
+          props: pickProps(it || {}, ['author', 'time']),
+          text: (it && it.text) || ''
+        })
+      );
+      return createModule('comments', baseOpts(block, pickProps(data, ['title']), { children }));
+    }
+
+    case 'slot':
+      return createModule('slot', baseOpts(block, pickProps(data, ['label', 'src', 'url', 'advertiser'])));
+
+    case 'auth':
+      return createModule('auth', baseOpts(block, pickProps(data, ['login', 'loginurl', 'register', 'registerurl']), {
+        text: data.text || ''
+      }));
+
+    case 'code':
+      return createModule('code', baseOpts(block, pickProps(data, ['lang', 'source'])));
+
+    case 'author':
+      return createModule('author', baseOpts(block, pickProps(data, ['name', 'role', 'image', 'url', 'time'])));
+
+    case 'tags': {
+      const children = (data.items || []).map((it) =>
+        createModule('tag', {
+          props: pickProps(it || {}, ['url']),
+          text: (it && it.label) || ''
+        })
+      );
+      return createModule('tags', baseOpts(block, pickProps(data, ['label']), { children }));
+    }
+
     case 'nav': {
       const children = (data.items || []).map((it) =>
         createModule('navitem', {
@@ -791,6 +856,97 @@ function moduleToBlock(node) {
 
     case 'headlink':
     case 'footlink':
+      return null;
+
+    case 'search':
+      return finishBlock(node, 'search', pickData(props, ['placeholder', 'action', 'name', 'submit', 'method']));
+
+    case 'newsletter': {
+      const data = pickData(props, ['title', 'placeholder', 'submit', 'action']);
+      if (node.text) data.text = node.text;
+      return finishBlock(node, 'newsletter', data);
+    }
+
+    case 'pager': {
+      const data = pickData(props, ['label']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'page')
+        .map((c) => {
+          const it = pickData(c.props || {}, ['label', 'url', 'current']);
+          if (!it.url) delete it.url;
+          if (!it.current) delete it.current;
+          return it;
+        });
+      return finishBlock(node, 'pager', data);
+    }
+
+    case 'page':
+      return null;
+
+    case 'consent': {
+      const data = pickData(props, ['accept', 'reject', 'policy', 'policyLabel']);
+      if (node.text) data.text = node.text;
+      return finishBlock(node, 'consent', data);
+    }
+
+    case 'related': {
+      const data = pickData(props, ['title']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'relcard')
+        .map((c) => {
+          const it = pickData(c.props || {}, ['image', 'tag', 'title', 'excerpt', 'href']);
+          if (c.text && !it.excerpt) it.excerpt = c.text;
+          return it;
+        });
+      return finishBlock(node, 'related', data);
+    }
+
+    case 'relcard':
+      return null;
+
+    case 'comments': {
+      const data = pickData(props, ['title']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'comment')
+        .map((c) => {
+          const it = pickData(c.props || {}, ['author', 'time']);
+          if (c.text) it.text = c.text;
+          return it;
+        });
+      return finishBlock(node, 'comments', data);
+    }
+
+    case 'comment':
+      return null;
+
+    case 'slot':
+      return finishBlock(node, 'slot', pickData(props, ['label', 'src', 'url', 'advertiser']));
+
+    case 'auth': {
+      const data = pickData(props, ['login', 'loginurl', 'register', 'registerurl']);
+      if (node.text) data.text = node.text;
+      return finishBlock(node, 'auth', data);
+    }
+
+    case 'code':
+      return finishBlock(node, 'code', pickData(props, ['lang', 'source']));
+
+    case 'author':
+      return finishBlock(node, 'author', pickData(props, ['name', 'role', 'image', 'url', 'time']));
+
+    case 'tags': {
+      const data = pickData(props, ['label']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'tag')
+        .map((c) => {
+          const it = pickData(c.props || {}, ['url']);
+          it.label = c.text || it.label || '';
+          return it;
+        });
+      return finishBlock(node, 'tags', data);
+    }
+
+    case 'tag':
       return null;
 
     case 'nav': {

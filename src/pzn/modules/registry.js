@@ -6,6 +6,12 @@ const {
   renderHeadLink, renderHeader, renderFootLink, renderFooter
 } = require('../chrome-html');
 const { renderProduct, renderProducts } = require('../products-html');
+const { renderCode, renderAuthor, renderTag, renderTags } = require('../blog-html');
+const {
+  renderSearch, renderNewsletter, renderPageItem, renderPager,
+  renderConsent, renderRelcard, renderRelated, renderComment, renderComments,
+  renderSlot, renderAuth
+} = require('../surface-html');
 
 /**
  * Module registry = type system of the page.
@@ -2043,6 +2049,358 @@ register({
       return renderProduct(c.props || {});
     }).join('');
     return renderProducts(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'search',
+  tag: 'bent-search',
+  category: 'layout',
+  label: { he: 'חיפוש', en: 'Search' },
+  icon: 'search',
+  container: false,
+  props: {
+    placeholder: { type: 'string', default: 'חיפוש…', optional: true, label: { he: 'מקום שמור', en: 'Placeholder' } },
+    action: { type: 'url', default: '/search', optional: true, label: { he: 'כתובת השליחה', en: 'Action' } },
+    name: { type: 'string', default: 'q', optional: true, label: { he: 'שם השדה', en: 'Field name' } },
+    submit: { type: 'string', default: 'חיפוש', optional: true, label: { he: 'טקסט הכפתור', en: 'Submit' } },
+    method: { type: 'enum', values: ['get', 'post'], default: 'get', optional: true, label: { he: 'שיטה', en: 'Method' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: { placeholder: 'חיפוש…', action: '/search', name: 'q', submit: 'חיפוש' },
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return renderSearch(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'newsletter',
+  tag: 'bent-newsletter',
+  category: 'layout',
+  label: { he: 'ניוזלטר', en: 'Newsletter' },
+  icon: 'mail',
+  container: false,
+  props: {
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת', en: 'Title' } },
+    placeholder: { type: 'string', default: 'האימייל שלכם', optional: true, label: { he: 'מקום שמור', en: 'Placeholder' } },
+    submit: { type: 'string', default: 'הרשמה', optional: true, label: { he: 'טקסט הכפתור', en: 'Submit' } },
+    action: { type: 'url', default: '/api/form', optional: true, label: { he: 'כתובת השליחה', en: 'Action' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const props = Object.assign({}, node.props || {});
+    if (!props.text && node.text) props.text = node.text;
+    return renderNewsletter(props, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'page',
+  tag: 'bent-page',
+  category: 'layout',
+  label: { he: 'עמוד', en: 'Page' },
+  icon: 'page',
+  container: false,
+  props: {
+    label: { type: 'string', default: '', label: { he: 'טקסט', en: 'Label' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    current: { type: 'boolean', default: false, optional: true, label: { he: 'עמוד נוכחי', en: 'Current' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {});
+    if (!props.label && node.text) props.label = node.text;
+    return renderPageItem(props, !!props.current || !props.url);
+  }
+});
+
+register({
+  name: 'pager',
+  tag: 'bent-pager',
+  category: 'layout',
+  label: { he: 'עימוד', en: 'Pager' },
+  icon: 'pager',
+  container: true,
+  accept: ['page'],
+  props: {
+    label: { type: 'string', default: '', optional: true, label: { he: 'תווית נגישות', en: 'Aria label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const kids = node.children || [];
+    const inner = kids.map((c, idx) => {
+      if (c.name !== 'page') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {});
+      if (!props.label && c.text) props.label = c.text;
+      const current = !!props.current || (idx === kids.length - 1 && !props.url);
+      return renderPageItem(props, current);
+    }).join('');
+    return renderPager(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'consent',
+  tag: 'bent-consent',
+  category: 'layout',
+  label: { he: 'הסכמה לעוגיות', en: 'Consent' },
+  icon: 'consent',
+  container: false,
+  props: {
+    accept: { type: 'string', default: 'אישור', optional: true, label: { he: 'אישור', en: 'Accept' } },
+    reject: { type: 'string', default: 'סירוב', optional: true, label: { he: 'סירוב', en: 'Reject' } },
+    policy: { type: 'url', default: '', optional: true, label: { he: 'מדיניות', en: 'Policy URL' } },
+    policyLabel: { type: 'string', default: '', optional: true, label: { he: 'טקסט המדיניות', en: 'Policy label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const props = Object.assign({}, node.props || {});
+    if (!props.text && node.text) props.text = node.text;
+    return renderConsent(props, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'relcard',
+  tag: 'bent-relcard',
+  category: 'media',
+  label: { he: 'כרטיס קשור', en: 'Related card' },
+  icon: 'card',
+  container: false,
+  props: {
+    title: { type: 'string', default: '', label: { he: 'כותרת', en: 'Title' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Image' } },
+    tag: { type: 'string', default: '', optional: true, label: { he: 'תגית', en: 'Tag' } },
+    excerpt: { type: 'string', default: '', optional: true, label: { he: 'תקציר', en: 'Excerpt' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {});
+    if (!props.excerpt && node.text) props.excerpt = node.text;
+    return renderRelcard(props);
+  }
+});
+
+register({
+  name: 'related',
+  tag: 'bent-related',
+  category: 'media',
+  label: { he: 'תוכן קשור', en: 'Related' },
+  icon: 'grid',
+  container: true,
+  accept: ['relcard'],
+  props: {
+    title: { type: 'string', default: 'כתבות נוספות', optional: true, label: { he: 'כותרת', en: 'Title' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'relcard') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {});
+      if (!props.excerpt && c.text) props.excerpt = c.text;
+      return renderRelcard(props);
+    }).join('');
+    return renderRelated(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'comment',
+  tag: 'bent-comment',
+  category: 'layout',
+  label: { he: 'תגובה', en: 'Comment' },
+  icon: 'comment',
+  container: false,
+  props: {
+    author: { type: 'string', default: '', optional: true, label: { he: 'שם', en: 'Author' } },
+    time: { type: 'string', default: '', optional: true, label: { he: 'זמן', en: 'Time' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {});
+    if (!props.text && node.text) props.text = node.text;
+    return renderComment(props);
+  }
+});
+
+register({
+  name: 'comments',
+  tag: 'bent-comments',
+  category: 'layout',
+  label: { he: 'תגובות', en: 'Comments' },
+  icon: 'comments',
+  container: true,
+  accept: ['comment'],
+  props: {
+    title: { type: 'string', default: 'תגובות', optional: true, label: { he: 'כותרת', en: 'Title' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'comment') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {});
+      if (!props.text && c.text) props.text = c.text;
+      return renderComment(props);
+    }).join('');
+    return renderComments(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'slot',
+  tag: 'bent-slot',
+  category: 'layout',
+  label: { he: 'משבצת פרסום', en: 'Ad slot' },
+  icon: 'slot',
+  container: false,
+  props: {
+    label: { type: 'string', default: 'פרסומת', optional: true, label: { he: 'תווית', en: 'Label' } },
+    src: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Image' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'URL' } },
+    advertiser: { type: 'string', default: '', optional: true, label: { he: 'מפרסם', en: 'Advertiser' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return renderSlot(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'auth',
+  tag: 'bent-auth',
+  category: 'layout',
+  label: { he: 'כניסה / הרשמה', en: 'Auth' },
+  icon: 'auth',
+  container: false,
+  props: {
+    login: { type: 'string', default: 'כניסה', optional: true, label: { he: 'כניסה', en: 'Login' } },
+    loginurl: { type: 'url', default: '/login', optional: true, label: { he: 'קישור כניסה', en: 'Login URL' } },
+    register: { type: 'string', default: 'הרשמה', optional: true, label: { he: 'הרשמה', en: 'Register' } },
+    registerurl: { type: 'url', default: '/signup', optional: true, label: { he: 'קישור הרשמה', en: 'Register URL' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    const props = Object.assign({}, node.props || {});
+    if (!props.text && node.text) props.text = node.text;
+    return renderAuth(props, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'code',
+  tag: 'bent-code',
+  category: 'content',
+  label: { he: 'בלוק קוד', en: 'Code' },
+  icon: 'code',
+  container: false,
+  props: {
+    lang: { type: 'string', default: '', optional: true, label: { he: 'שפה', en: 'Language' } },
+    source: { type: 'string', default: '', label: { he: 'קוד', en: 'Source' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return renderCode(node.props || {});
+  }
+});
+
+register({
+  name: 'author',
+  tag: 'bent-author',
+  category: 'content',
+  label: { he: 'כותב', en: 'Author' },
+  icon: 'author',
+  container: false,
+  props: {
+    name: { type: 'string', default: '', label: { he: 'שם', en: 'Name' } },
+    role: { type: 'string', default: '', optional: true, label: { he: 'תפקיד', en: 'Role' } },
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Image' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'URL' } },
+    time: { type: 'string', default: '', optional: true, label: { he: 'תאריך', en: 'Time' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return renderAuthor(node.props || {});
+  }
+});
+
+register({
+  name: 'tag',
+  tag: 'bent-tag',
+  category: 'layout',
+  label: { he: 'תגית', en: 'Tag' },
+  icon: 'tag',
+  container: false,
+  props: {
+    label: { type: 'string', default: '', label: { he: 'שם', en: 'Label' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'URL' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {});
+    if (!props.label && node.text) props.label = node.text;
+    return renderTag(props);
+  }
+});
+
+register({
+  name: 'tags',
+  tag: 'bent-tags',
+  category: 'layout',
+  label: { he: 'תגיות', en: 'Tags' },
+  icon: 'tags',
+  container: true,
+  accept: ['tag'],
+  props: {
+    label: { type: 'string', default: '', optional: true, label: { he: 'תווית', en: 'Label' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'tag') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {});
+      if (!props.label && c.text) props.label = c.text;
+      return renderTag(props);
+    }).join('');
+    return renderTags(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
   }
 });
 

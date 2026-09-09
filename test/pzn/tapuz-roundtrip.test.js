@@ -204,6 +204,56 @@ const CASES = {
       { label: 'הדף הזה' }
     ] }
   },
+  header: {
+    type: 'header', id: 'hd1',
+    data: { logo: '/demo/tile-1.svg', title: 'הסטודיו', url: '/', items: [{ label: 'בית', href: '/' }, { label: 'אודות', href: '/about' }] }
+  },
+  footer: {
+    type: 'footer', id: 'ft1',
+    data: { copy: '© הסטודיו', items: [{ label: 'פרטיות', href: '/privacy' }] }
+  },
+  products: {
+    type: 'products', id: 'pr1',
+    data: { columns: 3, items: [{ title: 'מוצר', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' }] }
+  },
+  search: {
+    type: 'search', id: 'sr1',
+    data: { placeholder: 'חיפוש באתר', action: '/search', name: 'q', submit: 'חיפוש' }
+  },
+  newsletter: {
+    type: 'newsletter', id: 'nl1',
+    data: { title: 'הישארו מעודכנים', text: 'קבלו עדכונים למייל.', placeholder: 'האימייל שלכם', submit: 'הרשמה', action: '/api/form' }
+  },
+  pager: {
+    type: 'pager', id: 'pg1',
+    data: { items: [{ label: '1', url: '/page/1' }, { label: '2', url: '/page/2' }, { label: '3', current: true }] }
+  },
+  consent: {
+    type: 'consent', id: 'cn1',
+    data: { text: 'אתר זה משתמש בעוגיות כדי לשפר את החוויה.', accept: 'אישור', reject: 'סירוב', policy: '/privacy', policyLabel: 'מדיניות פרטיות' }
+  },
+  related: {
+    type: 'related', id: 'rl1',
+    data: { title: 'כתבות נוספות', items: [
+      { title: 'כתבה קשורה', excerpt: 'תקציר קצר.', href: '/a', tag: 'חדשות' },
+      { title: 'עוד כתבה', excerpt: 'עוד תקציר.', href: '/b' }
+    ] }
+  },
+  comments: {
+    type: 'comments', id: 'cm1',
+    data: { title: 'תגובות', items: [
+      { author: 'דנה', time: 'אתמול', text: 'כתבה מצוינת.' },
+      { author: 'יוסי', time: 'היום', text: 'תודה על העדכון.' }
+    ] }
+  },
+  slot: {
+    type: 'slot', id: 'sl1',
+    data: { label: 'פרסומת', src: '/demo/ad.svg', url: 'https://example.com', advertiser: 'מותג' }
+  },
+  auth: {
+    type: 'auth', id: 'au1',
+    data: { login: 'כניסה', loginurl: '/login', register: 'הרשמה', registerurl: '/signup', text: 'שלום' }
+  },
   timeline: {
     type: 'timeline', id: 'tl1',
     data: { items: [

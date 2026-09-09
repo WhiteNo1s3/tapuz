@@ -52,6 +52,14 @@
     { type: 'stats', label: 'מדדים', hint: 'מספרים', icon: '＃', group: 'תוכן', keyword: 'STATS' },
     { type: 'steps', label: 'שלבים', hint: 'איך זה עובד', icon: '①', group: 'מבנה', keyword: 'STEPS' },
     { type: 'crumbs', label: 'פירורים', hint: 'נתיב הדף', icon: '›', group: 'מבנה', keyword: 'CRUMBS' },
+    { type: 'search', label: 'חיפוש', hint: 'שורת חיפוש', icon: '⌕', group: 'מבנה', keyword: 'SEARCH' },
+    { type: 'newsletter', label: 'ניוזלטר', hint: 'הרשמה למייל', icon: '✉', group: 'תוכן', keyword: 'NEWSLETTER' },
+    { type: 'pager', label: 'עימוד', hint: 'מספרי עמודים', icon: '1–', group: 'מבנה', keyword: 'PAGER' },
+    { type: 'consent', label: 'עוגיות', hint: 'הסכמה', icon: '✓', group: 'מבנה', keyword: 'CONSENT' },
+    { type: 'related', label: 'קשור', hint: 'כתבות נוספות', icon: '⧉', group: 'תוכן', keyword: 'RELATED' },
+    { type: 'comments', label: 'תגובות', hint: 'שרשור', icon: '💬', group: 'תוכן', keyword: 'COMMENTS' },
+    { type: 'slot', label: 'פרסומת', hint: 'משבצת מודעה', icon: '▤', group: 'מבנה', keyword: 'SLOT' },
+    { type: 'auth', label: 'כניסה', hint: 'כניסה / הרשמה', icon: '⎆', group: 'מבנה', keyword: 'AUTH' },
     { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
     { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
@@ -2386,6 +2394,112 @@
           }
         });
       }
+      return wrap;
+    }
+
+    if (block.type === 'search') {
+      wrap.innerHTML =
+        '<form class="preview-search" style="display:flex;gap:8px" onsubmit="return false">' +
+        '<input type="search" value="" placeholder="' + escAttr(d.placeholder || 'חיפוש…') + '" style="flex:1;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px">' +
+        '<span style="padding:8px 12px;background:#ea580c;color:#fff;border-radius:8px">' + esc(d.submit || 'חיפוש') + '</span>' +
+        '</form>';
+      return wrap;
+    }
+
+    if (block.type === 'newsletter') {
+      wrap.innerHTML =
+        '<div class="preview-newsletter" style="padding:12px;border:1px solid #fed7aa;border-radius:12px;background:#fff7ed">' +
+        '<div style="font-weight:700">' + esc(d.title || 'ניוזלטר') + '</div>' +
+        (d.text ? '<div style="color:#57534e;margin:4px 0 8px">' + esc(d.text) + '</div>' : '') +
+        '<div style="display:flex;gap:8px"><input placeholder="' + escAttr(d.placeholder || 'האימייל שלכם') + '" style="flex:1;padding:8px;border:1px solid #e2e8f0;border-radius:8px">' +
+        '<span style="padding:8px 12px;background:#ea580c;color:#fff;border-radius:8px">' + esc(d.submit || 'הרשמה') + '</span></div></div>';
+      return wrap;
+    }
+
+    if (block.type === 'pager') {
+      var pgItems = d.items || [];
+      wrap.innerHTML =
+        '<ol class="preview-pager" style="display:flex;gap:6px;list-style:none;margin:0;padding:0">' +
+        (pgItems.length ? pgItems : [{ label: '1' }, { label: '2' }, { label: '3' }]).map(function (it) {
+          return '<li style="padding:4px 10px;border:1px solid #e2e8f0;border-radius:8px">' + esc(it.label || '') + '</li>';
+        }).join('') + '</ol>';
+      return wrap;
+    }
+
+    if (block.type === 'consent') {
+      wrap.innerHTML =
+        '<div class="preview-consent" style="padding:12px;background:#1c1917;color:#fafaf9;border-radius:12px">' +
+        '<div>' + esc(d.text || 'אתר זה משתמש בעוגיות.') + '</div>' +
+        '<div style="margin-top:8px;display:flex;gap:8px">' +
+        '<span style="background:#ea580c;padding:4px 10px;border-radius:8px">' + esc(d.accept || 'אישור') + '</span>' +
+        '<span style="border:1px solid #444;padding:4px 10px;border-radius:8px">' + esc(d.reject || 'סירוב') + '</span></div></div>';
+      return wrap;
+    }
+
+    if (block.type === 'related') {
+      var rlItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-related"><div style="font-weight:700;margin-bottom:8px">' + esc(d.title || 'כתבות נוספות') + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">' +
+        (rlItems.length ? rlItems : [{ title: 'כתבה' }, { title: 'עוד' }]).map(function (it) {
+          return '<div class="preview-card"><div class="preview-card-title">' + esc(it.title || '') + '</div></div>';
+        }).join('') + '</div></div>';
+      return wrap;
+    }
+
+    if (block.type === 'comments') {
+      var cmItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-comments"><div style="font-weight:700;margin-bottom:8px">' + esc(d.title || 'תגובות') + '</div>' +
+        (cmItems.length ? cmItems : [{ author: 'אורח', text: 'תגובה…' }]).map(function (it) {
+          return '<div style="border-top:1px solid #e2e8f0;padding:8px 0"><b>' + esc(it.author || '') + '</b> ' +
+            '<span style="color:#78716c">' + esc(it.time || '') + '</span><div>' + esc(it.text || '') + '</div></div>';
+        }).join('') + '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'slot') {
+      wrap.innerHTML =
+        '<div class="preview-slot" style="padding:12px;border:1px dashed #d6d3d1;text-align:center;color:#a8a29e">' +
+        esc(d.label || 'פרסומת') + (d.advertiser ? ' · ' + esc(d.advertiser) : '') + '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'auth') {
+      wrap.innerHTML =
+        '<div class="preview-auth" style="display:flex;gap:10px;align-items:center">' +
+        (d.text ? '<span>' + esc(d.text) + '</span>' : '') +
+        '<span>' + esc(d.login || 'כניסה') + '</span>' +
+        '<span style="background:#ea580c;color:#fff;padding:4px 10px;border-radius:8px">' + esc(d.register || 'הרשמה') + '</span></div>';
+      return wrap;
+    }
+
+    if (block.type === 'code') {
+      wrap.innerHTML =
+        '<pre class="preview-code" style="margin:0;padding:10px 12px;background:#0f172a;color:#e2e8f0;border-radius:8px;overflow:auto;font-size:.82rem">' +
+        (d.lang ? '<div style="opacity:.6;font-size:.7rem;margin-bottom:6px">' + esc(d.lang) + '</div>' : '') +
+        esc(d.source || '// קוד') + '</pre>';
+      return wrap;
+    }
+
+    if (block.type === 'author') {
+      wrap.innerHTML =
+        '<div class="preview-author" style="display:flex;align-items:center;gap:10px">' +
+        (d.image ? '<img src="' + escAttr(d.image) + '" alt="" style="width:36px;height:36px;border-radius:999px;object-fit:cover">' : '') +
+        '<div><strong>' + esc(d.name || 'כותב') + '</strong>' +
+        (d.role || d.time ? '<div style="color:#78716c;font-size:.85rem">' + esc([d.role, d.time].filter(Boolean).join(' · ')) + '</div>' : '') +
+        '</div></div>';
+      return wrap;
+    }
+
+    if (block.type === 'tags') {
+      var tgItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-tags" style="display:flex;flex-wrap:wrap;gap:6px">' +
+        (tgItems.length ? tgItems : [{ label: 'עיצוב' }, { label: 'קוד' }]).map(function (it) {
+          return '<span style="border:1px solid #e2e8f0;border-radius:999px;padding:2px 10px;font-size:.85rem">' + esc(it.label || 'תג') + '</span>';
+        }).join('') +
+        '</div>';
       return wrap;
     }
 

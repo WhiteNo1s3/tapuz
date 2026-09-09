@@ -8,6 +8,12 @@ const { loadOverrides, overridesToCss } = require('./theme');
 const { renderSocialFromData } = require('./pzn/social-html');
 const { renderHeaderFromData, renderFooterFromData } = require('./pzn/chrome-html');
 const { renderProductsFromData } = require('./pzn/products-html');
+const { renderCodeFromData, renderAuthorFromData, renderTagsFromData } = require('./pzn/blog-html');
+const {
+  renderSearchFromData, renderNewsletterFromData, renderPagerFromData,
+  renderConsentFromData, renderRelatedFromData, renderCommentsFromData,
+  renderSlotFromData, renderAuthFromData
+} = require('./pzn/surface-html');
 
 function loadTheme(themeSlug = 'default') {
   const themeDir = path.join(THEMES_DIR, themeSlug);
@@ -490,6 +496,15 @@ function renderBlock(block, direction = 'rtl') {
     case 'products':
       return renderProductsFromData(block.data || {}, direction, extra);
 
+    case 'code':
+      return renderCodeFromData(block.data || {}, direction, extra);
+
+    case 'author':
+      return renderAuthorFromData(block.data || {}, direction, extra);
+
+    case 'tags':
+      return renderTagsFromData(block.data || {}, direction, extra);
+
     case 'cards':
       return require('./pzn/card-html').renderCardsFromData(block.data || {}, direction, extra);
 
@@ -517,6 +532,30 @@ function renderBlock(block, direction = 'rtl') {
 
     case 'footer':
       return renderFooterFromData(block.data || {}, direction, extra);
+
+    case 'search':
+      return renderSearchFromData(block.data || {}, direction, extra);
+
+    case 'newsletter':
+      return renderNewsletterFromData(block.data || {}, direction, extra);
+
+    case 'pager':
+      return renderPagerFromData(block.data || {}, direction, extra);
+
+    case 'consent':
+      return renderConsentFromData(block.data || {}, direction, extra);
+
+    case 'related':
+      return renderRelatedFromData(block.data || {}, direction, extra);
+
+    case 'comments':
+      return renderCommentsFromData(block.data || {}, direction, extra);
+
+    case 'slot':
+      return renderSlotFromData(block.data || {}, direction, extra);
+
+    case 'auth':
+      return renderAuthFromData(block.data || {}, direction, extra);
 
     case 'nav':
       // pass id/class as `extra` but the generic style decls as `decls` so the

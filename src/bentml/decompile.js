@@ -447,6 +447,34 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}FORM${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'code': {
+      const params = [`source: ${q(d.source || '')}`];
+      if (d.lang) params.push(`lang: ${q(d.lang)}`);
+      uni(params, d, idParams);
+      return `${pad}CODE${paramList(params)}`;
+    }
+    case 'author': {
+      const params = [`name: ${q(d.name || '')}`];
+      if (d.role) params.push(`role: ${q(d.role)}`);
+      if (d.image) params.push(`image: ${q(d.image)}`);
+      if (d.url && d.url !== '#') params.push(`url: ${q(d.url)}`);
+      if (d.time) params.push(`time: ${q(d.time)}`);
+      uni(params, d, idParams);
+      return `${pad}AUTHOR${paramList(params)}`;
+    }
+    case 'tags': {
+      const params = [];
+      if (d.label) params.push(`label: ${q(d.label)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [];
+          if (it.url) ps.push(`url: ${q(it.url)}`);
+          return `${pad}  TAG${paramList(ps)} { ${escBody(it.label || '')} }`;
+        })
+        .join('\n');
+      return `${pad}TAGS${paramList(params)} {\n${kids}\n${pad}}`;
+    }
     case 'products': {
       const params = [];
       if (d.columns != null && Number(d.columns) !== 3) params.push(`columns: ${Number(d.columns)}`);
@@ -571,6 +599,95 @@ function decompileBlock(block, indent) {
         })
         .join('\n');
       return `${pad}FOOTER${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'search': {
+      const params = [];
+      if (d.placeholder && d.placeholder !== 'חיפוש…') params.push(`placeholder: ${q(d.placeholder)}`);
+      if (d.action && d.action !== '/search') params.push(`action: ${q(d.action)}`);
+      if (d.name && d.name !== 'q') params.push(`name: ${q(d.name)}`);
+      if (d.submit && d.submit !== 'חיפוש') params.push(`submit: ${q(d.submit)}`);
+      if (d.method && d.method !== 'get') params.push(`method: ${d.method}`);
+      uni(params, d, idParams);
+      return `${pad}SEARCH${paramList(params)}`;
+    }
+    case 'newsletter': {
+      const params = [];
+      if (d.title) params.push(`title: ${q(d.title)}`);
+      if (d.placeholder && d.placeholder !== 'האימייל שלכם') params.push(`placeholder: ${q(d.placeholder)}`);
+      if (d.submit && d.submit !== 'הרשמה') params.push(`submit: ${q(d.submit)}`);
+      if (d.action && d.action !== '/api/form') params.push(`action: ${q(d.action)}`);
+      uni(params, d, idParams);
+      return `${pad}NEWSLETTER${paramList(params)} { ${escBody(d.text || '')} }`;
+    }
+    case 'pager': {
+      const params = [];
+      if (d.label) params.push(`label: ${q(d.label)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [];
+          if (it.url) ps.push(`url: ${q(it.url)}`);
+          if (it.current) ps.push('current: true');
+          return `${pad}  PAGE${paramList(ps)} { ${escBody(it.label || '')} }`;
+        })
+        .join('\n');
+      return `${pad}PAGER${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'consent': {
+      const params = [];
+      if (d.accept && d.accept !== 'אישור') params.push(`accept: ${q(d.accept)}`);
+      if (d.reject && d.reject !== 'סירוב') params.push(`reject: ${q(d.reject)}`);
+      if (d.policy) params.push(`policy: ${q(d.policy)}`);
+      if (d.policyLabel) params.push(`policylabel: ${q(d.policyLabel)}`);
+      uni(params, d, idParams);
+      return `${pad}CONSENT${paramList(params)} { ${escBody(d.text || d.content || '')} }`;
+    }
+    case 'related': {
+      const params = [];
+      if (d.title && d.title !== 'כתבות נוספות') params.push(`title: ${q(d.title)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`title: ${q(it.title || '')}`];
+          if (it.image) ps.push(`image: ${q(it.image)}`);
+          if (it.tag) ps.push(`tag: ${q(it.tag)}`);
+          if (it.href && it.href !== '#') ps.push(`url: ${q(it.href)}`);
+          return childWithBody('RELCARD', ps, it.excerpt, indent);
+        })
+        .join('\n');
+      return `${pad}RELATED${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'comments': {
+      const params = [];
+      if (d.title && d.title !== 'תגובות') params.push(`title: ${q(d.title)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [];
+          if (it.author) ps.push(`author: ${q(it.author)}`);
+          if (it.time) ps.push(`time: ${q(it.time)}`);
+          return childWithBody('COMMENT', ps, it.text, indent);
+        })
+        .join('\n');
+      return `${pad}COMMENTS${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'slot': {
+      const params = [];
+      if (d.label && d.label !== 'פרסומת') params.push(`label: ${q(d.label)}`);
+      if (d.src) params.push(`src: ${q(d.src)}`);
+      if (d.url) params.push(`url: ${q(d.url)}`);
+      if (d.advertiser) params.push(`advertiser: ${q(d.advertiser)}`);
+      uni(params, d, idParams);
+      return `${pad}SLOT${paramList(params)}`;
+    }
+    case 'auth': {
+      const params = [];
+      if (d.login && d.login !== 'כניסה') params.push(`login: ${q(d.login)}`);
+      if (d.loginurl && d.loginurl !== '/login') params.push(`loginurl: ${q(d.loginurl)}`);
+      if (d.register && d.register !== 'הרשמה') params.push(`register: ${q(d.register)}`);
+      if (d.registerurl && d.registerurl !== '/signup') params.push(`registerurl: ${q(d.registerurl)}`);
+      uni(params, d, idParams);
+      return `${pad}AUTH${paramList(params)} { ${escBody(d.text || '')} }`;
     }
     case 'nav': {
       const params = [];

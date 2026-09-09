@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (47)
+## Modules (58)
 
 ### תוכן
 
@@ -836,6 +836,222 @@ CRUMBS {
 }
 ```
 
+#### `SEARCH` → `search`
+
+⌕ **חיפוש** — שורת חיפוש — שדה אחד + כפתור, בלי JS
+
+Shape: `SEARCH(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `placeholder` | `placeholder` | string |  | "חיפוש…" |
+| `action` | `action` | url |  | "/search" |
+| `name` | `name` | string |  | "q" |
+| `submit` | `submit` | string |  | "חיפוש" |
+| `method` | `method` | enum get\|post |  | "get" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+SEARCH
+```
+
+### תוכן
+
+#### `NEWSLETTER` → `newsletter`
+
+✉ **ניוזלטר** — הרשמה למייל — כותרת, טקסט, שדה אימייל
+
+Shape: `NEWSLETTER(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `title` | `title` | string |  |  |
+| `placeholder` | `placeholder` | string |  | "האימייל שלכם" |
+| `submit` | `submit` | string |  | "הרשמה" |
+| `action` | `action` | url |  | "/api/form" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+NEWSLETTER {
+  …
+}
+```
+
+### מבנה
+
+#### `PAGER` → `pager`
+
+1– **עימוד** — מספרי עמודים — בית 1 2 3 הבא
+
+Shape: `PAGER(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `label` | `label` | string |  |  |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+PAGER {
+  …
+}
+```
+
+#### `CONSENT` → `consent`
+
+✓ **הסכמה לעוגיות** — באנר עוגיות — אישור ב-CSS בלי JavaScript
+
+Shape: `CONSENT(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `accept` | `accept` | string |  | "אישור" |
+| `reject` | `reject` | string |  | "סירוב" |
+| `policy` | `policy` | url |  |  |
+| `policyLabel` | `policylabel` | string |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+CONSENT {
+  …
+}
+```
+
+### תוכן
+
+#### `RELATED` → `related`
+
+⧉ **תוכן קשור** — כתבות נוספות — כרטיסים עם תמונה וכותרת
+
+Shape: `RELATED(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `title` | `title` | string |  | "כתבות נוספות" |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+RELATED {
+  …
+}
+```
+
+#### `COMMENTS` → `comments`
+
+💬 **תגובות** — שרשור תגובות — שם, זמן, טקסט
+
+Shape: `COMMENTS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `title` | `title` | string |  | "תגובות" |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+COMMENTS {
+  …
+}
+```
+
+### מבנה
+
+#### `SLOT` → `slot`
+
+▤ **משבצת פרסום** — מקום לפרסומת — תמונה, קישור, מפרסם
+
+Shape: `SLOT(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `label` | `label` | string |  | "פרסומת" |
+| `src` | `src` | media |  |  |
+| `url` | `url` | url |  |  |
+| `advertiser` | `advertiser` | string |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+SLOT
+```
+
+#### `AUTH` → `auth`
+
+⎆ **כניסה / הרשמה** — רצועת חשבון — כניסה והרשמה
+
+Shape: `AUTH(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `login` | `login` | string |  | "כניסה" |
+| `loginurl` | `loginurl` | url |  | "/login" |
+| `register` | `register` | string |  | "הרשמה" |
+| `registerurl` | `registerurl` | url |  | "/signup" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+AUTH {
+  …
+}
+```
+
+### תוכן
+
+#### `CODE` → `code`
+
+</> **בלוק קוד** — גדר קוד — בלי JS, גלילה אופקית
+
+Shape: `CODE(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `lang` | `lang` | string |  |  |
+| `source` | `source` | textarea | yes |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+CODE(source: "...")
+```
+
+#### `AUTHOR` → `author`
+
+✎ **כותב** — שורת כותב — שם, תפקיד, תמונה, תאריך
+
+Shape: `AUTHOR(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `name` | `name` | string | yes |  |
+| `role` | `role` | string |  |  |
+| `image` | `image` | media |  |  |
+| `url` | `url` | url |  |  |
+| `time` | `time` | string |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+AUTHOR(name: "...")
+```
+
+### מבנה
+
+#### `TAGS` → `tags`
+
+# **תגיות** — שבבי תגיות — ארכיון / נושא
+
+Shape: `TAGS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `label` | `label` | string |  |  |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+TAGS {
+  …
+}
+```
+
 #### `NAV` → `nav`
 
 ≡ **תפריט ניווט** — שורת ניווט עם צבעים (רקע + טקסט)
@@ -945,6 +1161,6 @@ Universal on most keywords: `class`, `id`.
 
 ## Reserved (future advanced modules)
 
-`INPUT`, `CODE`
+`INPUT`
 
 These are **not** implemented yet. Using them in BenTML is an error today.
