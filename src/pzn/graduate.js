@@ -855,10 +855,14 @@ const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
 const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
 const STATS_CLASS = /\b(?:stats|counters?|metrics|kpis?|bent-stats|stats-row|numbers-row|stat-cells?)\b/i;
 const LOGOS_CLASS = /\b(?:logos|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos|logo-list)\b/i;
+const PRODUCTS_CLASS = /\b(?:product-grid|product-list|products-grid|products-list|product-catalog|catalog-grid|shop-loop|shop-items|woocommerce|bent-products|products)\b/i;
+const PRODUCT_ITEM_CLASS = /\b(?:product-card|product-item|product-box|product-col|shop-item|catalog-item|woocommerce-loop-product|product)\b/i;
 const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
 const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
 
 function looksLikePricing(t) { return PRICING_CLASS.test(hintHay(t)); }
+function looksLikeProducts(t) { return PRODUCTS_CLASS.test(hintHay(t)); }
+function looksLikeProductItem(t) { return PRODUCT_ITEM_CLASS.test(hintHay(t)); }
 function looksLikeCarousel(t) { return CAROUSEL_CLASS.test(hintHay(t)) || /^swiper/i.test((t && t.name) || ''); }
 function looksLikeFaq(t) { return FAQ_CLASS.test(hintHay(t)); }
 function looksLikeTestimonial(t) { return TESTIMONIAL_CLASS.test(hintHay(t)); }
@@ -1028,7 +1032,7 @@ function guessedTool(t) {
   if (looksLikeCrumbs(t)) return 'crumbs';
   if (looksLikeStats(t)) return 'stats';
   if (looksLikeLogos(t)) return 'logos';
-  if (/\b(?:product|shop-item|woocommerce|product-card)\b/i.test(hay)) return 'cards';
+  if (looksLikeProducts(t) || looksLikeProductItem(t)) return 'products';
   return null;
 }
 
@@ -1114,6 +1118,7 @@ function extractPlan(tokens, s, e) {
 }
 
 function parsePricingData(tokens, i, end, t) {
+  if (looksLikeProducts(t)) return null;
   const hinted = looksLikePricing(t);
   const items = [];
   for (const [s, e] of childSpans(tokens, i + 1, end - 1)) {
@@ -1159,7 +1164,7 @@ function extractSlide(tokens, s, e, bgMap) {
   return out;
 }
 
-const SLIDE_CLASS = /\b(?:swiper-slide|slick-slide|splide__slide|glide__slide|owl-item|tie-slide-\d+|slide)\b/i;
+const SLIDE_CLASS = /\b(?:swiper-slide|slick-slide|splide__slide|glide__slide|owl-item|tie-slide-\d+|slider-item|slide)\b/i;
 
 function collectSlides(tokens, from, to, bgMap) {
   const items = [];
@@ -1177,23 +1182,44 @@ function collectSlides(tokens, from, to, bgMap) {
   return items;
 }
 
+function slidesFromDataItems(t) {
+  const raw = t && t.attrs && (t.attrs['data-items'] || t.attrs.dataItems);
+  if (!raw) return null;
+  let arr;
+  try { arr = JSON.parse(String(raw)); } catch {
+    return null;
+  }
+  if (!Array.isArray(arr) || arr.length < 2) return null;
+  const items = [];
+  for (const it of arr) {
+    if (!it || typeof it !== 'object') continue;
+    const slide = {};
+    if (it.Param1) slide.title = String(it.Param1).slice(0, 200);
+    if (it.Param3) slide.image = String(it.Param3);
+    if (it.Param2) slide.href = String(it.Param2);
+    if (slide.image || slide.title) items.push(slide);
+  }
+  return items.length >= 2 ? items : null;
+}
+
 function parseCarouselData(tokens, i, end, t, bgMap) {
   if (!looksLikeCarousel(t)) return null;
+  const dumped = slidesFromDataItems(t);
+  if (dumped) return { items: dumped };
   let from = i + 1;
   let to = end - 1;
   const kids = childSpans(tokens, from, to);
-  if (kids.length === 1) {
-    const wrap = tokens[kids[0][0]];
-    if (/wrapper|track|inner|swiper-wrapper|slick-list|slick-track|bent-carousel-track|tie-slick-slider/i.test(classHay(wrap))) {
-      from = kids[0][0] + 1;
-      to = kids[0][1] - 1;
-    }
+  const wrapKid = kids.find(([s]) =>
+    /wrapper|track|inner|swiper-wrapper|slick-list|slick-track|bent-carousel-track|tie-slick-slider/i.test(classHay(tokens[s])));
+  if (wrapKid) {
+    from = wrapKid[0] + 1;
+    to = wrapKid[1] - 1;
   }
   let items = collectSlides(tokens, from, to, bgMap);
   if (items.length < 2) {
     items = [];
     for (const [s, e] of childSpans(tokens, from, to)) {
-      if (/loader|spinner|nav/i.test(classHay(tokens[s]))) continue;
+      if (/loader|spinner|nav|pagination|button-prev|button-next|swiper-button|swiper-pagination|slick-dots|slick-arrow/i.test(classHay(tokens[s]))) continue;
       const slide = extractSlide(tokens, s, e, bgMap);
       if (slide) items.push(slide);
     }
@@ -1803,6 +1829,84 @@ function parseTestimonialData(tokens, i, end, t) {
   return out;
 }
 
+function extractProduct(tokens, s, e, bgMap) {
+  let title = '';
+  let price = '';
+  let image = '';
+  let url = '';
+  const root = tokens[s];
+  if (root.name === 'a' && root.attrs && root.attrs.href) url = root.attrs.href;
+  for (let j = s; j < e; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (!image && (tk.name === 'img' || tk.name === 'source')) {
+      image = imageSrcOf(tk.attrs);
+      j = close - 1;
+      continue;
+    }
+    if (!image) image = bgOfAttrs(tk.attrs, bgMap) || image;
+    if (!title && (HEADING.test(tk.name)
+      || /(?:^|\s)(?:title|name|product-title|product-name|woocommerce-loop-product__title|item-title)(?:\s|$)/i.test(tcls))) {
+      const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim().slice(0, 160);
+      if (text && !PRICE_RE.test(text)) title = text;
+      j = close - 1;
+      continue;
+    }
+    if (!price && /price|amount|cost|woocommerce-Price/i.test(tcls)) {
+      const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (text) price = text.slice(0, 40);
+      j = close - 1;
+      continue;
+    }
+    if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href) url = tk.attrs.href;
+  }
+  if (!price) {
+    const blob = unescapeHtml(textOf(tokens, s, e)).replace(/\s+/g, ' ');
+    const m = PRICE_RE.exec(blob);
+    if (m) price = m[0].trim();
+  }
+  if (!title || !(image || url || price)) return null;
+  if (textOf(tokens, s, e).length > 800) return null;
+  const out = { title };
+  if (price) out.price = price;
+  if (image) out.image = image;
+  if (url) out.url = url;
+  return out;
+}
+
+function parseProductsData(tokens, i, end, t, bgMap) {
+  if (looksLikePricing(t) && !looksLikeProducts(t)) return null;
+  let from = i + 1;
+  let to = end - 1;
+  const kids = childSpans(tokens, from, to);
+  if (kids.length === 1) {
+    const wrap = tokens[kids[0][0]];
+    if (/product|catalog|shop|grid|woocommerce/i.test(classHay(wrap)) || wrap.name === 'ul' || wrap.name === 'ol') {
+      from = kids[0][0] + 1;
+      to = kids[0][1] - 1;
+    }
+  }
+  const hinted = looksLikeProducts(t)
+    || childSpans(tokens, from, to).some(([s]) => looksLikeProductItem(tokens[s]));
+  if (!hinted) return null;
+  const items = [];
+  for (const [s, e] of childSpans(tokens, from, to)) {
+    const name = tokens[s].name;
+    if (!CONTAINERS.has(name) && name !== 'li' && name !== 'a') continue;
+    const item = extractProduct(tokens, s, e, bgMap);
+    if (item) items.push(item);
+  }
+  if (items.length < 2) return null;
+  if (!items.some((it) => it.price)) return null;
+  const out = { items: items.slice(0, 48) };
+  const hay = hintHay(t);
+  if (/col(?:umns)?[-_]?2|grid-2|two-col/i.test(hay)) out.columns = 2;
+  else if (/col(?:umns)?[-_]?4|grid-4|four-col/i.test(hay)) out.columns = 4;
+  return out;
+}
+
 function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   const header = parseHeaderData(tokens, i, end, t);
   if (header) return { type: 'header', data: header, next: end };
@@ -1816,6 +1920,8 @@ function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   if (social) return { type: 'social', data: social, next: end };
   const logos = parseLogosData(tokens, i, end, t);
   if (logos) return { type: 'logos', data: logos, next: end };
+  const products = parseProductsData(tokens, i, end, t, bgMap);
+  if (products) return { type: 'products', data: products, next: end };
   const pricing = parsePricingData(tokens, i, end, t);
   if (pricing) return { type: 'pricing', data: pricing, next: end };
   const carousel = parseCarouselData(tokens, i, end, t, bgMap);
@@ -2075,17 +2181,16 @@ function htmlToBlocks(html, opts = {}) {
       }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
       if (name === 'ul' || name === 'ol') {
-        // card-shaped <li>s are a card GRID, not a text list (walla renders
-        // its card walls as ul>li) — try the cluster first, list as fallback
-        const liCluster = detectCardCluster(tokens, i + 1, end - 1, bgMap);
-        if (liCluster) {
-          sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
-          mapped += 1; i = end; continue;
-        }
+        // priced catalog lists are PRODUCTS; news card walls stay CARDS
         const structuralList = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structuralList) {
           sink.push({ type: structuralList.type, id: nid(structuralList.type), data: structuralList.data });
           mapped += 1; i = structuralList.next; continue;
+        }
+        const liCluster = detectCardCluster(tokens, i + 1, end - 1, bgMap);
+        if (liCluster) {
+          sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
+          mapped += 1; i = end; continue;
         }
         if (guessedTool(t)) suggested.add(guessedTool(t));
         // a ul of single short links is a menu — keep the hrefs (v0.67)
@@ -2312,6 +2417,7 @@ module.exports = {
   parseTestimonialData,
   parseHeaderData,
   parseFooterData,
+  parseProductsData,
   tryStructuralModules,
   guessedTool,
   parseDetailsRun,

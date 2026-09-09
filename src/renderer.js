@@ -7,6 +7,7 @@ const { getMenuForLocation } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
 const { renderSocialFromData } = require('./pzn/social-html');
 const { renderHeaderFromData, renderFooterFromData } = require('./pzn/chrome-html');
+const { renderProductsFromData } = require('./pzn/products-html');
 
 function loadTheme(themeSlug = 'default') {
   const themeDir = path.join(THEMES_DIR, themeSlug);
@@ -485,6 +486,9 @@ function renderBlock(block, direction = 'rtl') {
 
     case 'form':
       return require('./pzn/form-html').renderFormFromData(block.data || {}, direction, extra);
+
+    case 'products':
+      return renderProductsFromData(block.data || {}, direction, extra);
 
     case 'cards':
       return require('./pzn/card-html').renderCardsFromData(block.data || {}, direction, extra);

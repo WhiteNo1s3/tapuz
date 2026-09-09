@@ -67,7 +67,10 @@ const ALIASES = {
   gap: 'spacer', space: 'spacer',
   contact: 'contact-info', 'contact-details': 'contact-info',
   'site-header': 'header', topbar: 'header', 'page-header': 'header', navbar: 'header',
-  'site-footer': 'footer', 'page-footer': 'footer'
+  'site-footer': 'footer', 'page-footer': 'footer',
+  catalog: 'products', 'product-grid': 'products', 'product-list': 'products',
+  products: 'products', woocommerce: 'products', 'shop-loop': 'products',
+  product: 'product'
 };
 
 /** Common model drift on PROP VALUES (v1.97): grok's demo — and any model

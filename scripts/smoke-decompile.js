@@ -136,7 +136,20 @@ async function checkRejects(name, fn) {
   check('title extracted + whitespace collapsed', r.meta.title === 'חדשות היום');
   check('dir/lang extracted', r.meta.dir === 'rtl' && r.meta.lang === 'he');
   check('slug derived from title', r.meta.slug.length > 0 && !/\s/.test(r.meta.slug));
-  check('main preferred over body (header chrome skipped)', !JSON.stringify(r.blocks).includes('skip-chrome'));
+  check('main preferred over body (junk header chrome skipped)', !JSON.stringify(r.blocks).includes('skip-chrome'));
+  const chromePage = decompileHtml(
+    '<html><body>'
+    + '<header class="site-header"><a href="/"><img src="/logo.png" alt="לוגו"></a>'
+    + '<nav><a href="/">בית</a><a href="/about">אודות</a></nav></header>'
+    + '<main><h1>תוכן</h1><p>פסקה.</p></main>'
+    + '<footer class="site-footer"><a href="/p">פרטיות</a><a href="/t">תנאים</a>'
+    + '<p class="copyright">© 2026</p></footer>'
+    + '</body></html>'
+  );
+  check('import keeps mappable HEADER/FOOTER outside <main>',
+    chromePage.blocks.some((b) => b.type === 'header')
+    && chromePage.blocks.some((b) => b.type === 'footer')
+    && /HEADER/.test(chromePage.bentml || '') && /FOOTER/.test(chromePage.bentml || ''));
   check('mapped h1+p+img+a', r.mapped >= 4);
   check('source is a complete document', /<!DOCTYPE html>/i.test(r.source) && /<\/html>/i.test(r.source));
   check('source parses + validates clean', (() => {
@@ -375,6 +388,45 @@ async function checkRejects(name, fn) {
   check('Swiper → carousel (2 slides, pictures kept)',
     swiper.blocks.some((b) => b.type === 'carousel' && (b.data.items || []).length === 2
       && b.data.items[0].image === '/a.jpg' && b.data.items[0].title === 'שקופית א'));
+
+  const bugSwiper = htmlToBlocks(
+    '<div class="swiper">'
+    + '<div class="swiper-wrapper">'
+    + '<div class="swiper-slide"><img src="/bug1.jpg" alt=""><h3>מבצע א</h3></div>'
+    + '<div class="swiper-slide"><img src="/bug2.jpg" alt=""><h3>מבצע ב</h3></div>'
+    + '</div>'
+    + '<div class="swiper-pagination"></div>'
+    + '<div class="swiper-button-prev"></div>'
+    + '<div class="swiper-button-next"></div>'
+    + '</div>'
+  );
+  check('Swiper + pagination siblings → carousel (bug.co.il hole)',
+    bugSwiper.blocks.some((b) => b.type === 'carousel' && (b.data.items || []).length === 2
+      && b.data.items[0].image === '/bug1.jpg')
+    && !bugSwiper.suggestedTools.includes('carousel'));
+
+  const bugDump = htmlToBlocks(
+    '<div class="slider not_loaded" data-items=\''
+    + JSON.stringify([
+      { Param1: 'מבצע א', Param2: '/a', Param3: 'https://cdn.bug.co.il/a.jpg' },
+      { Param1: 'מבצע ב', Param2: '/b', Param3: 'https://cdn.bug.co.il/b.jpg' }
+    ])
+    + '\'></div>'
+  );
+  check('bug.co.il data-items slider → carousel',
+    bugDump.blocks.some((b) => b.type === 'carousel' && (b.data.items || []).length === 2
+      && b.data.items[0].title === 'מבצע א' && /cdn.bug.co.il\/a/.test(b.data.items[0].image || ''))
+    && !bugDump.suggestedTools.includes('carousel'));
+
+  const kspGrid = htmlToBlocks(
+    '<div class="product-grid">'
+    + '<div class="product-item"><a href="/p/1"><img src="/k1.jpg" alt=""><h3>מחשב</h3><span class="price">₪100</span></a></div>'
+    + '<div class="product-item"><a href="/p/2"><img src="/k2.jpg" alt=""><h3>מסך</h3><span class="price">₪200</span></a></div>'
+    + '</div>'
+  );
+  check('product-grid → products module (not leftover cards)',
+    kspGrid.blocks.some((b) => b.type === 'products' && (b.data.items || []).length === 2)
+    && !kspGrid.suggestedTools.includes('products'));
 
   const swiperEmpty = htmlToBlocks('<div class="swiper"><div class="swiper-wrapper"></div></div>');
   check('empty Swiper flattens but still reports carousel toolGap',

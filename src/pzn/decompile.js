@@ -38,13 +38,32 @@ function extractBodyHtml(html) {
   const scope = body ? body[1] : raw;
   const scopeLen = sourceTextLen(scope);
   const main = /<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(raw);
-  if (main && sourceTextLen(main[1]) >= scopeLen * 0.25) return main[1];
+  if (main && sourceTextLen(main[1]) >= scopeLen * 0.25) {
+    return stitchPageChrome(scope, main[1]);
+  }
   const articleCount = (scope.match(/<article\b/gi) || []).length;
   if (articleCount === 1) {
     const article = /<article\b[^>]*>([\s\S]*?)<\/article>/i.exec(scope);
     if (article && sourceTextLen(article[1]) >= scopeLen * 0.5) return article[1];
   }
   return scope;
+}
+
+/** Keep mappable <header>/<footer> landmarks when we take <main>. Junk
+ * chrome (a lone "skip-chrome" paragraph) still stays outside the page. */
+function stitchPageChrome(scope, mainHtml) {
+  let out = mainHtml;
+  const header = /<header\b[^>]*>[\s\S]*?<\/header>/i.exec(scope);
+  if (header && !/<header\b/i.test(mainHtml)) {
+    const mapped = htmlToBlocks(header[0]);
+    if ((mapped.blocks || []).some((b) => b.type === 'header')) out = header[0] + out;
+  }
+  const footer = /<footer\b[^>]*>[\s\S]*?<\/footer>/i.exec(scope);
+  if (footer && !/<footer\b/i.test(mainHtml)) {
+    const mapped = htmlToBlocks(footer[0]);
+    if ((mapped.blocks || []).some((b) => b.type === 'footer')) out = out + footer[0];
+  }
+  return out;
 }
 
 /** The page's own idea of its address — for resolving relative URLs when
@@ -100,7 +119,7 @@ function extractLang(html) {
 // (halves, heroes, card walls) gets the modular read. toolGap is the union:
 // the vocabulary engine keeps every missing-tool sighting from every lens.
 
-const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline', 'pricing', 'carousel', 'faq', 'tabs', 'accordion', 'crumbs', 'stats', 'logos', 'social', 'testimonial', 'header', 'footer']);
+const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline', 'pricing', 'carousel', 'faq', 'tabs', 'accordion', 'crumbs', 'stats', 'logos', 'social', 'testimonial', 'header', 'footer', 'products']);
 
 /** Walk a block tree (columns/cards/card children included). */
 function eachBlock(blocks, fn) {

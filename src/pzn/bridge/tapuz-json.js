@@ -283,6 +283,15 @@ function blockToModule(block) {
       return createModule('form', baseOpts(block, pickProps(data, ['action', 'method', 'submit']), { children }));
     }
 
+    case 'products': {
+      const children = (data.items || []).map((it) =>
+        createModule('product', {
+          props: pickProps(it || {}, ['title', 'price', 'image', 'url'])
+        })
+      );
+      return createModule('products', baseOpts(block, pickProps(data, ['columns']), { children }));
+    }
+
     case 'cards': {
       const children = (data.items || []).map((it) =>
         createModule('mediacard', {
@@ -684,6 +693,17 @@ function moduleToBlock(node) {
         .map((c) => pickData(c.props || {}, ['label', 'name', 'type', 'placeholder', 'required', 'options']));
       return finishBlock(node, 'form', data);
     }
+
+    case 'products': {
+      const data = pickData(props, ['columns']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'product')
+        .map((c) => pickData(c.props || {}, ['title', 'price', 'image', 'url']));
+      return finishBlock(node, 'products', data);
+    }
+
+    case 'product':
+      return null;
 
     case 'cards': {
       const data = {};

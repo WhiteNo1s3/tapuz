@@ -2047,6 +2047,36 @@
       return wrap;
     }
 
+    if (block.type === 'header') {
+      var hdItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-header" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:8px 0;border-bottom:1px solid #e2e8f0">' +
+        '<div style="display:flex;align-items:center;gap:8px;font-weight:700">' +
+          (d.logo ? '<img src="' + escAttr(d.logo) + '" alt="" style="height:28px;width:auto">' : '') +
+          '<span>' + esc(d.title || 'כותרת עליונה') + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+        (hdItems.length ? hdItems.map(function (it) {
+          return '<span style="font-size:.9rem">' + esc(it.label || 'קישור') + '</span>';
+        }).join('') : '<span style="color:#94a3b8">⌂ קישורים — הוסיפו במאפיינים ←</span>') +
+        '</div></div>';
+      return wrap;
+    }
+
+    if (block.type === 'footer') {
+      var ftItems = d.items || [];
+      wrap.innerHTML =
+        '<div class="preview-footer" style="padding:10px 0 0;border-top:1px solid #e2e8f0">' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.9rem">' +
+        (ftItems.length ? ftItems.map(function (it) {
+          return '<span>' + esc(it.label || 'קישור') + '</span>';
+        }).join('') : '') +
+        '</div>' +
+        '<div style="margin-top:8px;color:#78716c;font-size:.85rem">' + esc(d.copy || '©') + '</div>' +
+        '</div>';
+      return wrap;
+    }
+
     if (block.type === 'social') {
       var soItems = d.items || [];
       wrap.innerHTML =
@@ -2356,6 +2386,25 @@
           }
         });
       }
+      return wrap;
+    }
+
+    if (block.type === 'products') {
+      var prItems = d.items || [];
+      var prReal = prItems.length > 0;
+      wrap.innerHTML =
+        '<div class="preview-products" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">' +
+        (prReal ? prItems : [{ title: 'מוצר 1', price: '₪99' }, { title: 'מוצר 2', price: '₪149' }, { title: 'מוצר 3', price: '₪79' }]).map(function (it, i) {
+          return '<div class="preview-card">' +
+            (it.image
+              ? '<div class="preview-card-media" style="background-image:url(' + esc(it.image) + ');background-size:cover;background-position:center"></div>'
+              : '<div class="preview-card-media"></div>') +
+            '<div class="preview-card-title"' + (prReal ? ' data-inline-key="items.' + i + '.title"' : '') + '>' + esc(it.title || 'מוצר') + '</div>' +
+            (it.price ? '<div style="font-weight:700;color:#ea580c"' + (prReal ? ' data-inline-key="items.' + i + '.price"' : '') + '>' + esc(it.price) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      if (prReal) wireInlineEditable(wrap, block);
       return wrap;
     }
 

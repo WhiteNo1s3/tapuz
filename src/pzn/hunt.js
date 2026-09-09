@@ -84,6 +84,7 @@ const ROLE_FROM_CLASS = [
   [/\b(?:stats|counters?|metrics|kpis?|stats-row)\b/i, 'stats'],
   [/\b(?:logos?|logo-strip|clients|brands|partners|logos-strip)\b/i, 'logos'],
   [/main|content|primary|article-body|post-content/i, 'main'],
+  [/product-grid|product-list|products|woocommerce|catalog|shop-loop/i, 'products'],
   [/card|tile|teaser|cube/i, 'card'],
   [/cta|call-to-action|promo/i, 'cta']
 ];
@@ -204,6 +205,7 @@ function isEmptyBlock(b) {
       return !d.logo && !d.title && !(d.items || []).length;
     case 'footer':
       return !d.copy && !(d.items || []).length;
+    case 'products': return !(d.items || []).length;
     default: return false;
   }
 }
@@ -446,15 +448,15 @@ function huntBlocks(html, opts = {}) {
       }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
       if (name === 'ul' || name === 'ol') {
-        const liCluster = detectCardCluster(tokens, i + 1, end - 1, bgMap);
-        if (liCluster) {
-          sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
-          mapped += 1; i = end; continue;
-        }
         const structuralList = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structuralList) {
           sink.push({ type: structuralList.type, id: nid(structuralList.type), data: structuralList.data });
           mapped += 1; i = structuralList.next; continue;
+        }
+        const liCluster = detectCardCluster(tokens, i + 1, end - 1, bgMap);
+        if (liCluster) {
+          sink.push({ type: 'cards', id: nid('cards'), data: { items: liCluster } });
+          mapped += 1; i = end; continue;
         }
         const lostList = guessedTool(t);
         if (lostList) suggested.add(lostList);

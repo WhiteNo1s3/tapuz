@@ -157,7 +157,8 @@ const VOCAB_DATA = {
   timeline: { items: [{ time: '2024', title: 'ההתחלה', text: 'פתחנו.' }, { time: '2026', title: 'היום', text: 'ממשיכים.', image: '/uploads/now.jpg' }] },
   crumbs: { items: [{ label: 'בית', url: '/' }, { label: 'הדף הזה' }] },
   header: { logo: '/demo/tile-1.svg', title: 'הסטודיו', url: '/', items: [{ label: 'בית', href: '/' }, { label: 'אודות', href: '/about' }] },
-  footer: { copy: '© הסטודיו', items: [{ label: 'פרטיות', href: '/privacy' }] }
+  footer: { copy: '© הסטודיו', items: [{ label: 'פרטיות', href: '/privacy' }] },
+  products: { columns: 3, items: [{ title: 'מוצר', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' }] }
 };
 
 // types the language deliberately folds into another keyword's JSON
