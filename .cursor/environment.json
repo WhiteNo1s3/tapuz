@@ -1,0 +1,17 @@
+{
+  "name": "Tapuziel",
+  "install": "bash -lc 'export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && nvm install 24 && nvm alias default 24 && npm ci'",
+  "terminals": [
+    {
+      "name": "tapuz-server",
+      "command": "bash -lc 'export NVM_DIR=\"$HOME/.nvm\" && . \"$NVM_DIR/nvm.sh\" && nvm use 24 && node src/server.js'",
+      "description": "Tapuziel CMS (Express + SQLite) on http://localhost:3000/admin. First run seeds the DB; run `npm run seed:admin` for a dev admin/admin login."
+    }
+  ],
+  "ports": [
+    {
+      "name": "tapuz web/admin",
+      "port": 3000
+    }
+  ]
+}
