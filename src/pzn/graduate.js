@@ -880,6 +880,138 @@ function looksLikeLogos(t) { return LOGOS_CLASS.test(hintHay(t)); }
  * is never a silent success.
  * @returns {string|null}
  */
+function looksLikeHeader(t) {
+  if (!t) return false;
+  if (t.name === 'header') return true;
+  return /site-header|page-header|topbar|navbar|nav-bar|bent-header/i.test(hintHay(t));
+}
+
+function looksLikeFooter(t) {
+  if (!t) return false;
+  if (t.name === 'footer') return true;
+  return /site-footer|page-footer|bent-footer/i.test(hintHay(t));
+}
+
+function collectChromeLinks(tokens, from, to) {
+  const items = [];
+  const seen = new Set();
+  for (let j = from; j < to; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'a') continue;
+    const close = matchClose(tokens, j);
+    const href = (tk.attrs && tk.attrs.href) || '';
+    if (!href || href === '#' || /^(javascript|data|vbscript):/i.test(href)) {
+      j = close - 1;
+      continue;
+    }
+    let pictured = false;
+    for (let k = j + 1; k < close - 1; k++) {
+      if (tokens[k].kind === 'open' && (tokens[k].name === 'img' || tokens[k].name === 'source')) {
+        pictured = true;
+        break;
+      }
+    }
+    if (pictured) {
+      j = close - 1;
+      continue;
+    }
+    let label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+    if (!label) label = attrOf(tk.attrs, 'aria-label', 'title').trim();
+    if (!label || label.length > LINK_LABEL_MAX) {
+      j = close - 1;
+      continue;
+    }
+    const key = href + '|' + label;
+    if (seen.has(key)) {
+      j = close - 1;
+      continue;
+    }
+    seen.add(key);
+    items.push({ label, href });
+    j = close - 1;
+  }
+  return items.slice(0, 24);
+}
+
+function parseHeaderData(tokens, i, end, t) {
+  if (!looksLikeHeader(t)) return null;
+  const headings = countHeadings(tokens, i + 1, end - 1);
+  const blob = unescapeHtml(textOf(tokens, i + 1, end - 1));
+  if (headings > 8 || blob.length > 3000) return null;
+  let logo = '';
+  let logoAlt = '';
+  let url = '';
+  let title = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    if (!logo && (tk.name === 'img' || tk.name === 'source')) {
+      logo = imageSrcOf(tk.attrs);
+      logoAlt = (tk.attrs && tk.attrs.alt) || '';
+      j = close - 1;
+      continue;
+    }
+    if (!logo) {
+      const bg = bgOfAttrs(tk.attrs, null);
+      if (bg && /logo/i.test(classHay(tk))) logo = bg;
+    }
+    if (!title && HEADING.test(tk.name)) {
+      title = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim().slice(0, 80);
+      j = close - 1;
+      continue;
+    }
+    if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href) {
+      const href = tk.attrs.href;
+      if (href && href !== '#' && !/^(javascript|data):/i.test(href)) {
+        let pictured = false;
+        for (let k = j + 1; k < close - 1; k++) {
+          if (tokens[k].kind === 'open' && (tokens[k].name === 'img' || tokens[k].name === 'source')) {
+            pictured = true;
+            break;
+          }
+        }
+        if (pictured || href === '/') url = href;
+      }
+    }
+  }
+  const items = collectChromeLinks(tokens, i + 1, end - 1);
+  if (!logo && !title && items.length < 2) return null;
+  const out = { items };
+  if (logo) out.logo = logo;
+  if (logoAlt) out.logoAlt = logoAlt;
+  if (title) out.title = title;
+  if (url) out.url = url;
+  return out;
+}
+
+function parseFooterData(tokens, i, end, t) {
+  if (!looksLikeFooter(t)) return null;
+  const headings = countHeadings(tokens, i + 1, end - 1);
+  const blob = unescapeHtml(textOf(tokens, i + 1, end - 1));
+  if (headings > 8 || blob.length > 4000) return null;
+  const items = collectChromeLinks(tokens, i + 1, end - 1);
+  let copy = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (/copyright|copy|site-info|legal/i.test(tcls) || tk.name === 'small' || tk.name === 'p') {
+      const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (text && (text.length <= 160 || /©|copyright|\d{4}/i.test(text))) {
+        copy = text.slice(0, 200);
+        if (/©|copyright|\d{4}/i.test(text)) break;
+      }
+    }
+    j = close - 1;
+  }
+  if (!copy && items.length < 2) return null;
+  const out = { items };
+  if (copy) out.copy = copy;
+  return out;
+}
+
 function guessedTool(t) {
   if (!t) return null;
   const hay = hintHay(t);
@@ -1672,6 +1804,10 @@ function parseTestimonialData(tokens, i, end, t) {
 }
 
 function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
+  const header = parseHeaderData(tokens, i, end, t);
+  if (header) return { type: 'header', data: header, next: end };
+  const footer = parseFooterData(tokens, i, end, t);
+  if (footer) return { type: 'footer', data: footer, next: end };
   const crumbs = parseCrumbsData(tokens, i, end, t);
   if (crumbs) return { type: 'crumbs', data: crumbs, next: end };
   const stats = parseStatsData(tokens, i, end, t);
@@ -2174,6 +2310,8 @@ module.exports = {
   parseLogosData,
   parseSocialData,
   parseTestimonialData,
+  parseHeaderData,
+  parseFooterData,
   tryStructuralModules,
   guessedTool,
   parseDetailsRun,

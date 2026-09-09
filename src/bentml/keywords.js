@@ -586,6 +586,40 @@ const KEYWORDS = {
       showheader: { type: 'boolean', default: true }
     }
   },
+  HEADER: {
+    body: 'BLOCK-BODY',
+    jsonType: 'header',
+    children: ['HEADLINK'],
+    params: {
+      logo: { type: 'string' },
+      title: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
+  HEADLINK: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'HEADER',
+    params: {
+      url: { type: 'string', required: true }
+    }
+  },
+  FOOTER: {
+    body: 'BLOCK-BODY',
+    jsonType: 'footer',
+    children: ['FOOTLINK'],
+    params: {
+      copy: { type: 'string' }
+    }
+  },
+  FOOTLINK: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'FOOTER',
+    params: {
+      url: { type: 'string', required: true }
+    }
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',
@@ -613,7 +647,7 @@ const RESERVED = new Set([
   // AUDIO graduated v0.80 (media set complete), TABLE graduated v0.83
   // (pipe-row syntax). INPUT stays a placeholder — form fields are the
   // child `field` module (nav links = child `navitem`).
-  'INPUT', 'FOOTER', 'HEADER', 'CODE'
+  'INPUT', 'CODE'
 ]);
 
 const UNIVERSAL = new Set(['id', 'class', 'dir', 'animate']);

@@ -339,6 +339,26 @@ function blockToModule(block) {
       return createModule('carousel', baseOpts(block, pickProps(data, ['height', 'peek']), { children }));
     }
 
+    case 'header': {
+      const children = (data.items || []).map((item) =>
+        createModule('headlink', {
+          props: pickProps(item || {}, ['href']),
+          text: (item && item.label) || ''
+        })
+      );
+      return createModule('header', baseOpts(block, pickProps(data, ['logo', 'title', 'url']), { children }));
+    }
+
+    case 'footer': {
+      const children = (data.items || []).map((item) =>
+        createModule('footlink', {
+          props: pickProps(item || {}, ['href']),
+          text: (item && item.label) || ''
+        })
+      );
+      return createModule('footer', baseOpts(block, pickProps(data, ['copy']), { children }));
+    }
+
     case 'nav': {
       const children = (data.items || []).map((it) =>
         createModule('navitem', {
@@ -724,6 +744,34 @@ function moduleToBlock(node) {
         .map((c) => pickData(c.props || {}, ['image', 'tag', 'title', 'excerpt', 'href']));
       return finishBlock(node, 'carousel', data);
     }
+
+    case 'header': {
+      const data = pickData(props, ['logo', 'title', 'url']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'headlink')
+        .map((c) => {
+          const it = pickData(c.props || {}, ['href']);
+          it.label = c.text || it.label || '';
+          return it;
+        });
+      return finishBlock(node, 'header', data);
+    }
+
+    case 'footer': {
+      const data = pickData(props, ['copy']);
+      data.items = (node.children || [])
+        .filter((c) => c.name === 'footlink')
+        .map((c) => {
+          const it = pickData(c.props || {}, ['href']);
+          it.label = c.text || it.label || '';
+          return it;
+        });
+      return finishBlock(node, 'footer', data);
+    }
+
+    case 'headlink':
+    case 'footlink':
+      return null;
 
     case 'nav': {
       const data = pickData(props, ['background', 'color', 'align']);

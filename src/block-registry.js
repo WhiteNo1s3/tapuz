@@ -1193,6 +1193,69 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'header',
+    keyword: 'HEADER',
+    labelHe: 'כותרת עליונה',
+    icon: '⌂',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'לוגו + שם + קישורים — מודול עמוד, לא כרום האתר',
+    params: [
+      { name: 'logo', labelHe: 'לוגו', type: 'media' },
+      { name: 'title', labelHe: 'שם האתר', type: 'string' },
+      { name: 'url', labelHe: 'קישור הלוגו', type: 'url' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'קישורים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
+          { name: 'href', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי HEADLINK'
+      }
+    ],
+    textField: null,
+    seed: {
+      logo: '/demo/tile-1.svg',
+      title: 'הסטודיו',
+      url: '/',
+      items: [
+        { label: 'בית', href: '/' },
+        { label: 'אודות', href: '/about' },
+        { label: 'צור קשר', href: '/contact' }
+      ]
+    }
+  },
+  {
+    type: 'footer',
+    keyword: 'FOOTER',
+    labelHe: 'כותרת תחתונה',
+    icon: '□',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'קישורים + קופירייט — מודול עמוד, לא כרום האתר',
+    params: [
+      { name: 'copy', labelHe: 'קופירייט', type: 'string' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'קישורים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
+          { name: 'href', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי FOOTLINK'
+      }
+    ],
+    textField: null,
+    seed: {
+      copy: '© הסטודיו',
+      items: [
+        { label: 'פרטיות', href: '/privacy' },
+        { label: 'תנאי שימוש', href: '/terms' }
+      ]
+    }
+  },
+  {
     type: 'crumbs',
     keyword: 'CRUMBS',
     labelHe: 'פירורי לחם',

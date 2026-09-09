@@ -593,6 +593,32 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('crumbs', data);
     }
+    case 'HEADER': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'HEADLINK')
+        .map((c) => ({
+          label: collapseSingleParagraph(c.text || ''),
+          href: (c.params && c.params.url) || '#'
+        }));
+      const data = { items };
+      if (p.logo) data.logo = p.logo;
+      if (p.title) data.title = p.title;
+      if (p.url) data.url = p.url;
+      applyChrome(data, p);
+      return createBlock('header', data);
+    }
+    case 'FOOTER': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'FOOTLINK')
+        .map((c) => ({
+          label: collapseSingleParagraph(c.text || ''),
+          href: (c.params && c.params.url) || '#'
+        }));
+      const data = { items };
+      if (p.copy) data.copy = p.copy;
+      applyChrome(data, p);
+      return createBlock('footer', data);
+    }
     case 'NAV': {
       const items = (node.children || [])
         .filter((c) => c.name === 'NAVITEM')
@@ -700,6 +726,8 @@ function buildBlock(node, warnings) {
     case 'EVENT':
     case 'CRUMB':
     case 'HANDLE':
+    case 'HEADLINK':
+    case 'FOOTLINK':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });

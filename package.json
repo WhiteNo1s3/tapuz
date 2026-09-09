@@ -97,6 +97,7 @@
     "test:steps": "node scripts/smoke-steps.js",
     "test:crumbs": "node scripts/smoke-crumbs.js",
     "test:social": "node scripts/smoke-social.js",
+    "test:header-footer": "node scripts/smoke-header-footer.js",
     "test:site-package": "node scripts/smoke-site-package.js",
     "test:menus-route": "node scripts/smoke-menus-route.js",
     "test:translations": "node scripts/smoke-translations.js",

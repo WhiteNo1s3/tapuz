@@ -155,7 +155,9 @@ const VOCAB_DATA = {
   pricing: { items: [{ title: 'מקצועי', price: '99', period: '/חודש', features: 'תכונה\nעוד תכונה', ctaLabel: 'התחילו', ctaUrl: '/signup', highlighted: true }] },
   steps: { items: [{ title: 'מתארים', text: 'מה האתר צריך.' }, { title: 'בונים', text: 'מודולים על הקנבס.' }] },
   timeline: { items: [{ time: '2024', title: 'ההתחלה', text: 'פתחנו.' }, { time: '2026', title: 'היום', text: 'ממשיכים.', image: '/uploads/now.jpg' }] },
-  crumbs: { items: [{ label: 'בית', url: '/' }, { label: 'הדף הזה' }] }
+  crumbs: { items: [{ label: 'בית', url: '/' }, { label: 'הדף הזה' }] },
+  header: { logo: '/demo/tile-1.svg', title: 'הסטודיו', url: '/', items: [{ label: 'בית', href: '/' }, { label: 'אודות', href: '/about' }] },
+  footer: { copy: '© הסטודיו', items: [{ label: 'פרטיות', href: '/privacy' }] }
 };
 
 // types the language deliberately folds into another keyword's JSON

@@ -2,6 +2,9 @@
 
 const { escapeHtml, escapeAttr, escapeCssUrl, safeHref } = require('../language/escape');
 const { renderHandle, renderSocial } = require('../social-html');
+const {
+  renderHeadLink, renderHeader, renderFootLink, renderFooter
+} = require('../chrome-html');
 
 /**
  * Module registry = type system of the page.
@@ -1873,6 +1876,102 @@ register({
       return renderHandle(props);
     }).join('');
     return renderSocial(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'headlink',
+  tag: 'bent-headlink',
+  category: 'layout',
+  label: { he: 'קישור כותרת', en: 'Header link' },
+  icon: 'link',
+  container: false,
+  props: {
+    label: { type: 'string', default: '', label: { he: 'טקסט', en: 'Label' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {});
+    if (!props.label && node.text) props.label = node.text;
+    return renderHeadLink(props);
+  }
+});
+
+register({
+  name: 'header',
+  tag: 'bent-header',
+  category: 'layout',
+  label: { he: 'כותרת עליונה', en: 'Header' },
+  icon: 'header',
+  container: true,
+  accept: ['headlink'],
+  props: {
+    logo: { type: 'url', default: '', optional: true, label: { he: 'לוגו', en: 'Logo' } },
+    title: { type: 'string', default: '', optional: true, label: { he: 'שם האתר', en: 'Title' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור הלוגו', en: 'Logo URL' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'headlink') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {});
+      if (!props.label && c.text) props.label = c.text;
+      return renderHeadLink(props);
+    }).join('');
+    return renderHeader(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'footlink',
+  tag: 'bent-footlink',
+  category: 'layout',
+  label: { he: 'קישור כותרת תחתונה', en: 'Footer link' },
+  icon: 'link',
+  container: false,
+  props: {
+    label: { type: 'string', default: '', label: { he: 'טקסט', en: 'Label' } },
+    href: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'Link' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    const props = Object.assign({}, node.props || {});
+    if (!props.label && node.text) props.label = node.text;
+    return renderFootLink(props);
+  }
+});
+
+register({
+  name: 'footer',
+  tag: 'bent-footer',
+  category: 'layout',
+  label: { he: 'כותרת תחתונה', en: 'Footer' },
+  icon: 'footer',
+  container: true,
+  accept: ['footlink'],
+  props: {
+    copy: { type: 'string', default: '', optional: true, label: { he: 'קופירייט', en: 'Copyright' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'footlink') return compileChild(c, ctx);
+      const props = Object.assign({}, c.props || {});
+      if (!props.label && c.text) props.label = c.text;
+      return renderFootLink(props);
+    }).join('');
+    return renderFooter(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
   }
 });
 

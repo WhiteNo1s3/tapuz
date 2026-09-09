@@ -531,6 +531,32 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}CRUMBS${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'header': {
+      const params = [];
+      if (d.logo) params.push(`logo: ${q(d.logo)}`);
+      if (d.title) params.push(`title: ${q(d.title)}`);
+      if (d.url) params.push(`url: ${q(d.url)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`url: ${q(it.href || it.url || '#')}`];
+          return `${pad}  HEADLINK${paramList(ps)} { ${escBody(it.label || '')} }`;
+        })
+        .join('\n');
+      return `${pad}HEADER${paramList(params)} {\n${kids}\n${pad}}`;
+    }
+    case 'footer': {
+      const params = [];
+      if (d.copy) params.push(`copy: ${q(d.copy)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`url: ${q(it.href || it.url || '#')}`];
+          return `${pad}  FOOTLINK${paramList(ps)} { ${escBody(it.label || '')} }`;
+        })
+        .join('\n');
+      return `${pad}FOOTER${paramList(params)} {\n${kids}\n${pad}}`;
+    }
     case 'nav': {
       const params = [];
       if (d.background) params.push(`background: ${q(d.background)}`);

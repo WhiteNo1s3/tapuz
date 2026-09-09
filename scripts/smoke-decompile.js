@@ -557,6 +557,21 @@ async function checkRejects(name, fn) {
     + '<a class="elementor-social-icon elementor-social-icon-github" href="https://github.com/x">GitHub</a>'
     + '</div></div>'
   );
+  const chromeH = htmlToBlocks(
+    '<header class="site-header"><a href="/"><img src="/logo.png" alt="לוגו"/></a>'
+    + '<nav><a href="/">בית</a><a href="/about">אודות</a></nav></header>'
+  );
+  check('<header> landmark → header module (not leftover chrome)',
+    chromeH.blocks.some((b) => b.type === 'header' && (b.data.items || []).length >= 2)
+    && !chromeH.suggestedTools.includes('header'));
+  const chromeF = htmlToBlocks(
+    '<footer class="site-footer"><a href="/p">פרטיות</a><a href="/t">תנאים</a>'
+    + '<p class="copyright">© 2026</p></footer>'
+  );
+  check('<footer> landmark → footer module',
+    chromeF.blocks.some((b) => b.type === 'footer' && /2026/.test(b.data.copy || ''))
+    && !chromeF.suggestedTools.includes('footer'));
+
   check('Elementor social-icons widget → social module',
     elSocial.blocks.some((b) => b.type === 'social' && b.data.items.length === 2
       && b.data.items[0].network === 'wordpress'));

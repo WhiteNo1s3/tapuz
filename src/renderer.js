@@ -6,6 +6,7 @@ const { loadConfig } = require('./config');
 const { getMenuForLocation } = require('./menus');
 const { loadOverrides, overridesToCss } = require('./theme');
 const { renderSocialFromData } = require('./pzn/social-html');
+const { renderHeaderFromData, renderFooterFromData } = require('./pzn/chrome-html');
 
 function loadTheme(themeSlug = 'default') {
   const themeDir = path.join(THEMES_DIR, themeSlug);
@@ -506,6 +507,12 @@ function renderBlock(block, direction = 'rtl') {
     case 'carousel':
       // the cards unit, sliding: zero-JS scroll-snap strip (v0.79)
       return require('./pzn/carousel-html').renderCarouselFromData(block.data || {}, direction, extra);
+
+    case 'header':
+      return renderHeaderFromData(block.data || {}, direction, extra);
+
+    case 'footer':
+      return renderFooterFromData(block.data || {}, direction, extra);
 
     case 'nav':
       // pass id/class as `extra` but the generic style decls as `decls` so the

@@ -906,6 +906,39 @@ button:focus-visible,
   color: var(--accent, #ea580c);
 }
 
+/* ── Page header / footer modules (not site-chrome .site-header) ── */
+.bent-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem 0;
+  margin: 0 0 1.25rem;
+  border-bottom: 1px solid var(--border, #e7e5e4);
+}
+.bent-header-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 700;
+}
+.bent-header-logo { display: block; max-height: 2.4rem; width: auto; }
+.bent-header-nav { display: flex; flex-wrap: wrap; gap: 0.85rem; }
+.bent-header-link { color: inherit; text-decoration: none; }
+.bent-header-link:hover { color: var(--accent, #ea580c); }
+.bent-footer {
+  margin: 2rem 0 0;
+  padding: 1.25rem 0 0;
+  border-top: 1px solid var(--border, #e7e5e4);
+}
+.bent-footer-nav { display: flex; flex-wrap: wrap; gap: 0.85rem 1.1rem; }
+.bent-footer-link { color: inherit; text-decoration: none; font-size: 0.9rem; }
+.bent-footer-link:hover { color: var(--accent, #ea580c); }
+.bent-footer-copy { margin: 0.85rem 0 0; font-size: 0.85rem; color: #78716c; }
+
 /* ── Steps (how-it-works) — CSS counters, stacks on a narrow viewport ── */
 .bent-steps {
   display: grid;

@@ -2447,6 +2447,140 @@
         }
       }
     },
+    "headlink": {
+      "tag": "bent-headlink",
+      "label": {
+        "he": "קישור כותרת",
+        "en": "Header link"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "href": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "header": {
+      "tag": "bent-header",
+      "label": {
+        "he": "כותרת עליונה",
+        "en": "Header"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "headlink"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "logo": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "footlink": {
+      "tag": "bent-footlink",
+      "label": {
+        "he": "קישור כותרת תחתונה",
+        "en": "Footer link"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "href": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "footer": {
+      "tag": "bent-footer",
+      "label": {
+        "he": "כותרת תחתונה",
+        "en": "Footer"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "footlink"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "copy": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
     "crumbs": {
       "tag": "bent-crumbs",
       "label": {

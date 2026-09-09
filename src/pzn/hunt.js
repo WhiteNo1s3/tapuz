@@ -200,6 +200,10 @@ function isEmptyBlock(b) {
     case 'stats':
     case 'logos':
     case 'social': return !(d.items || []).length;
+    case 'header':
+      return !d.logo && !d.title && !(d.items || []).length;
+    case 'footer':
+      return !d.copy && !(d.items || []).length;
     default: return false;
   }
 }

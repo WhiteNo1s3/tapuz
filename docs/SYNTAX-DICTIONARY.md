@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (44)
+## Modules (46)
 
 ### תוכן
 
@@ -761,6 +761,44 @@ TIMELINE {
 
 ### מבנה
 
+#### `HEADER` → `header`
+
+⌂ **כותרת עליונה** — לוגו + שם + קישורים — מודול עמוד, לא כרום האתר
+
+Shape: `HEADER(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `logo` | `logo` | media |  |  |
+| `title` | `title` | string |  |  |
+| `url` | `url` | url |  |  |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+HEADER {
+  …
+}
+```
+
+#### `FOOTER` → `footer`
+
+□ **כותרת תחתונה** — קישורים + קופירייט — מודול עמוד, לא כרום האתר
+
+Shape: `FOOTER(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `copy` | `copy` | string |  |  |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+FOOTER {
+  …
+}
+```
+
 #### `CRUMBS` → `crumbs`
 
 › **פירורי לחם** — נתיב הדף — בית › מדור › כאן
@@ -887,6 +925,6 @@ Universal on most keywords: `class`, `id`.
 
 ## Reserved (future advanced modules)
 
-`INPUT`, `FOOTER`, `HEADER`, `CODE`
+`INPUT`, `CODE`
 
 These are **not** implemented yet. Using them in BenTML is an error today.

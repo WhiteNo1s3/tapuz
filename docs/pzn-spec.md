@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (64)
+## Modules (68)
 
 ### Category: content
 
@@ -299,6 +299,30 @@ from it directly.
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `label` · string
   - `url` · url
+
+#### `<bent-headlink>` — קישור כותרת / Header link · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `label` · string
+  - `href` · url
+
+#### `<bent-header>` — כותרת עליונה / Header · container (children: `bent-headlink`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `logo` · url
+  - `title` · string
+  - `url` · url
+
+#### `<bent-footlink>` — קישור כותרת תחתונה / Footer link · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `label` · string
+  - `href` · url
+
+#### `<bent-footer>` — כותרת תחתונה / Footer · container (children: `bent-footlink`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `copy` · string
 
 #### `<bent-crumbs>` — פירורי לחם / Breadcrumbs · container (children: `bent-crumb`)
 
