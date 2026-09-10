@@ -29,6 +29,16 @@ function themeCssHref() {
   return '/css/main.css' + (themeCssVersion ? '?v=' + themeCssVersion : '');
 }
 
+/** The version of the stylesheet currently ON DISK (what visitors get), or ''. */
+function currentThemeCssVersion() {
+  try {
+    const css = fs.readFileSync(path.join(PUBLIC_DIR, 'css', 'main.css'), 'utf8');
+    return require('crypto').createHash('sha1').update(css).digest('hex').slice(0, 10);
+  } catch (e) {
+    return '';
+  }
+}
+
 function externalizeStyles(html) {
   const keep = (html.match(/<style id="tapuz-page-bg">[\s\S]*?<\/style>/) || [])[0] || '';
   let out = html.replace(/<style[\s\S]*?<\/style>/g, '');
@@ -245,6 +255,7 @@ module.exports = {
   removePageHtml,
   publicHtmlName,
   copyThemeAssets,
+  currentThemeCssVersion,
   externalizeStyles,
   scoreHomeCandidate
 };

@@ -87,6 +87,8 @@ function waitUp(tries = 40) {
     // ── the admin page itself renders, mounted correctly ──
     const page = await req('GET', '/admin/theme', { cookie });
     check('GET /admin/theme → 200, real page shell with the looks gallery + save buttons', page.status === 200 && /th-looks/.test(page.text) && /th-save/.test(page.text) && /TAPUZ_LOOKS/.test(page.text));
+    check('the theme page prints the deploy fingerprint (build id, site root, last build, css version)',
+      /th-deploy-status/.test(page.text) && /build \d[\w.+-]*/.test(page.text) && page.text.indexOf('site root ' + ROOT) !== -1 && /css v/.test(page.text));
 
     // ── GET settings API ──
     const before = await req('GET', '/admin/api/theme', { cookie });
@@ -111,6 +113,8 @@ function waitUp(tries = 40) {
     const indexPath = path.join(ROOT, 'public', 'index.html');
     const indexHtml = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, 'utf8') : '';
     check('exported pages link the stylesheet with a content version (host/browser caches cannot serve the old theme)', /href="\/css\/main\.css\?v=[0-9a-f]{6,}"/.test(indexHtml));
+    check('exported pages carry the build fingerprint (view-source on the live site says which code rendered it)',
+      /<meta name="generator" content="Tapuziel \d[\w.+-]*">/.test(indexHtml));
     const liveCss = await req('GET', '/css/main.css', { cookie });
     check('the live /css/main.css served by the app carries the saved primary', liveCss.status === 200 && liveCss.text.indexOf('#123456') !== -1);
 
