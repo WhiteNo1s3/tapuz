@@ -139,6 +139,24 @@
       setSelect('th-accent', o.style.accent);
     }
     if (o.fonts && o.fonts.headingFamily !== undefined) setSelect('th-font-heading', o.fonts.headingFamily);
+    // The master chrome IS part of a look (v2.23: zahav/neon/sadot/hitech
+    // promise a menu glow, a glass header, a footer palette). Before this
+    // the click filled colors only, so the glow "it tells" never reached the
+    // form, the save, or the site. A look without a chrome section resets
+    // the master to the defaults — a look is a whole personality, not a
+    // palette layered over the previous look's chrome.
+    var ch = Object.assign({
+      menuHover: 'color', menuHoverColor: '', menuWeight: 'normal',
+      headerGlass: false, headerBg: '', footerBg: '', footerText: ''
+    }, o.chrome || {});
+    setSelect('th-ch-hover', ch.menuHover);
+    setSelect('th-ch-hovercolor', ch.menuHoverColor);
+    setSelect('th-ch-weight', ch.menuWeight);
+    var glass = document.getElementById('th-ch-glass');
+    if (glass) glass.checked = ch.headerGlass === true || ch.headerGlass === 'true';
+    setSelect('th-ch-headerbg', ch.headerBg);
+    setSelect('th-ch-footerbg', ch.footerBg);
+    setSelect('th-ch-footertext', ch.footerText);
     preview();
   }
 
@@ -174,13 +192,17 @@
       body: JSON.stringify(payload())
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (!d.ok) return alert(d.error || 'שגיאה');
+      // every save now rebuilds the site on the server (the live pages are
+      // the static export, served before the renderer — a save that did not
+      // rebuild changed nothing anyone could see). "שמור + בנה" keeps its
+      // explicit rebuild and opens the site so the change is in front of you.
       if (thenBuild) {
         return fetch('/admin/build', { method: 'POST' }).then(function (r) { return r.json(); }).then(function () {
           alert('נשמר ונבנה ✓');
           window.open('/', '_blank');
         });
       }
-      alert('נשמר ✓');
+      alert('נשמר ✓ — האתר עודכן');
     }).catch(function () { alert('שגיאה בשמירה'); });
   }
 
