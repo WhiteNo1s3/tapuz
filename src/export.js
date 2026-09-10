@@ -18,11 +18,24 @@ function ensureDir(dir) {
  * @param {string} html
  * @returns {string}
  */
+// The exported stylesheet's content hash, refreshed by copyThemeAssets.
+// Every theme change (colors, chrome, effects) lands in /css/main.css under
+// the SAME url — and hosts cache it (Hostinger's LiteSpeed/CDN for hours,
+// browsers per their heuristics), so the site kept showing the OLD theme
+// after a rebuild. The version query makes each theme state a new url.
+let themeCssVersion = '';
+
+function themeCssHref() {
+  return '/css/main.css' + (themeCssVersion ? '?v=' + themeCssVersion : '');
+}
+
 function externalizeStyles(html) {
   const keep = (html.match(/<style id="tapuz-page-bg">[\s\S]*?<\/style>/) || [])[0] || '';
   let out = html.replace(/<style[\s\S]*?<\/style>/g, '');
-  if (!out.includes('href="/css/main.css"')) {
-    out = out.replace('</head>', '  <link rel="stylesheet" href="/css/main.css">\n</head>');
+  const href = themeCssHref();
+  out = out.replace(/href="\/css\/main\.css(?:\?v=[^"]*)?"/g, `href="${href}"`);
+  if (!out.includes('href="/css/main.css')) {
+    out = out.replace('</head>', `  <link rel="stylesheet" href="${href}">\n</head>`);
   }
   if (keep) out = out.replace('</head>', '  ' + keep + '\n</head>');
   return out;
@@ -37,7 +50,9 @@ function copyThemeAssets(themeSlug = 'default') {
   if (fs.existsSync(themeCss)) {
     const base = fs.readFileSync(themeCss, 'utf8');
     const overrides = overridesToCss(loadOverrides());
-    fs.writeFileSync(destFile, base + '\n\n/* Tapuz theme overrides */\n' + overrides, 'utf8');
+    const out = base + '\n\n/* Tapuz theme overrides */\n' + overrides;
+    themeCssVersion = require('crypto').createHash('sha1').update(out).digest('hex').slice(0, 10);
+    fs.writeFileSync(destFile, out, 'utf8');
   }
 }
 

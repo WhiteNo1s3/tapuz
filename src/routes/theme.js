@@ -23,9 +23,25 @@ router.get('/admin/api/theme', (req, res) => {
   }
 });
 
+/**
+ * Rebuild the static site after a theme change. The live pages ARE the export
+ * (express.static on PUBLIC_DIR is mounted before the renderer), so a theme
+ * save that does not rebuild changes nothing a visitor can see — Ben: "the
+ * adjustments are not working in the live site … it just making you feel in
+ * control". Every door that changes the live overrides walks through here.
+ */
+function rebuildSite(why) {
+  try {
+    require('../export').exportAll();
+  } catch (err) {
+    console.error(`[theme] rebuild after ${why} failed:`, err.message);
+  }
+}
+
 router.post('/admin/api/theme', (req, res) => {
   try {
     const settings = saveThemeSettings(req.body || {});
+    rebuildSite('theme save');
     res.json({ ok: true, ...settings });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -48,6 +64,7 @@ router.get('/admin/api/theme/export', (req, res) => {
 router.post('/admin/api/theme/import', (req, res) => {
   try {
     const overrides = require('../theme').importThemePackage((req.body || {}).package);
+    rebuildSite('theme import');
     res.json({ ok: true, overrides });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -132,8 +149,7 @@ router.get('/admin/api/theme/effects-prompt', (req, res) => {
 router.post('/admin/api/theme/effects/paste', (req, res) => {
   try {
     const reply = String((req.body || {}).reply || '');
-    const css = extractFence(reply, ['css']);
-    const js = extractFence(reply, ['js', 'javascript']);
+    const { css, js } = require('../theme').extractEffectParts(reply);
     if (!css && !js) {
       return res.status(400).json({
         ok: false,
@@ -183,6 +199,7 @@ function extractFence(text, langs) {
   }
   return '';
 }
+
 
 /** The effect prompt — deliberately NOT the site-builder pack. */
 function buildEffectsPrompt(brief) {

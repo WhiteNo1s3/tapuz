@@ -323,6 +323,41 @@ function renderThemeEffectsJs(overrides) {
   return `<script id="tapuz-theme-effects">\n${js.replace(/<\/script/gi, '<\\/script')}\n</script>`;
 }
 
+/** First fenced block matching one of the language tags, or ''. */
+function extractFence(text, langs) {
+  for (const lang of langs) {
+    const m = String(text).match(new RegExp('```' + lang + '\\s*\\n([\\s\\S]*?)```', 'i'));
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  return '';
+}
+
+/**
+ * The effect's css + js out of a chat reply. The prompt asks for a css fence
+ * and a js fence, but chats answer the way they like: an ```html fence with
+ * <style>/<script> inside, bare <style>…</style> + <script>…</script>, or
+ * only one of the two. Ben's mouse effect "did work with the roleplay but
+ * failed to show" — a reply the fence-only parser rejected or half-read is
+ * exactly that. Everything the owner pastes is trusted-author (see
+ * DEFAULT_OVERRIDES.effects); an external <script src> is dropped on purpose
+ * (rule 1 of the prompt: no CDN, no external addresses).
+ */
+function extractEffectParts(reply) {
+  const text = String(reply || '');
+  let css = extractFence(text, ['css']);
+  let js = extractFence(text, ['js', 'javascript']);
+  if (!css) {
+    const m = text.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    if (m && m[1].trim()) css = m[1].trim();
+  }
+  if (!js) {
+    const scripts = [...text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+      .filter((m) => !/\ssrc\s*=/i.test(m[1]) && m[2].trim());
+    if (scripts.length) js = scripts.map((m) => m[2].trim()).join('\n');
+  }
+  return { css, js };
+}
+
 function getThemeSettings() {
   const config = loadConfig();
   return {
@@ -407,6 +442,7 @@ module.exports = {
   saveOverrides,
   overridesToCss,
   renderThemeEffectsJs,
+  extractEffectParts,
   getThemeSettings,
   saveThemeSettings,
   // theme packages (v0.99)

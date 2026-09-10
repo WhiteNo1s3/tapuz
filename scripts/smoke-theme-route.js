@@ -102,6 +102,17 @@ function waitUp(tries = 40) {
     const after = await req('GET', '/admin/api/theme', { cookie });
     check('the saved override actually persists (round-trips on a fresh GET)', after.json.overrides.colors.primary === '#123456');
     check('an unset override field falls back to default, not wiped to blank', !!after.json.overrides.colors.text);
+    // the live pages are the static export (served before the renderer): a
+    // save that does not rebuild changes nothing a visitor sees (Ben: "the
+    // adjustments are not working in the live site")
+    const mainCssPath = path.join(ROOT, 'public', 'css', 'main.css');
+    const mainCss = fs.existsSync(mainCssPath) ? fs.readFileSync(mainCssPath, 'utf8') : '';
+    check('a plain theme save REBUILDS the site — exported css/main.css carries the new primary', mainCss.indexOf('#123456') !== -1);
+    const indexPath = path.join(ROOT, 'public', 'index.html');
+    const indexHtml = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, 'utf8') : '';
+    check('exported pages link the stylesheet with a content version (host/browser caches cannot serve the old theme)', /href="\/css\/main\.css\?v=[0-9a-f]{6,}"/.test(indexHtml));
+    const liveCss = await req('GET', '/css/main.css', { cookie });
+    check('the live /css/main.css served by the app carries the saved primary', liveCss.status === 200 && liveCss.text.indexOf('#123456') !== -1);
 
     // ── export — downloads a real portable package ──
     const exp = await req('GET', '/admin/api/theme/export', { cookie });
@@ -117,6 +128,12 @@ function waitUp(tries = 40) {
     check('POST /admin/api/theme/import applies a real package', goodImport.status === 200 && goodImport.json.ok && goodImport.json.overrides.colors.primary === '#654321');
     const afterImport = await req('GET', '/admin/api/theme', { cookie });
     check('imported overrides are actually live afterward', afterImport.json.overrides.colors.primary === '#654321');
+    const cssAfterImport = fs.existsSync(mainCssPath) ? fs.readFileSync(mainCssPath, 'utf8') : '';
+    check('a package import rebuilds the site too', cssAfterImport.indexOf('#654321') !== -1);
+    const indexAfterImport = fs.existsSync(indexPath) ? fs.readFileSync(indexPath, 'utf8') : '';
+    const vBefore = (indexHtml.match(/main\.css\?v=([0-9a-f]+)/) || [])[1];
+    const vAfter = (indexAfterImport.match(/main\.css\?v=([0-9a-f]+)/) || [])[1];
+    check('the stylesheet version CHANGES when the theme changes', !!vBefore && !!vAfter && vBefore !== vAfter);
   } finally {
     child.kill();
   }
