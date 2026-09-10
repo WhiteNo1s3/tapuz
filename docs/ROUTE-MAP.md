@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**265 routes across 37 files.**
+**269 routes across 37 files.**
 
 ## By file (what each module owns)
 
@@ -357,7 +357,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/team/:id/role`
 - `DELETE /admin/api/team/:id`
 
-### `src/routes/theme.js` — 15 routes
+### `src/routes/theme.js` — 19 routes
 
 - `GET /admin/api/theme`
 - `POST /admin/api/theme`
@@ -373,6 +373,10 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/theme/effects/paste`
 - `POST /admin/api/theme/effects`
 - `GET /admin/api/theme/library/export`
+- `GET /admin/api/theme/design-prompt`
+- `POST /admin/api/theme/design/paste`
+- `POST /admin/api/theme/preview`
+- `GET /admin/theme/preview/:id`
 - `GET /admin/theme`
 
 ### `src/routes/translations.js` — 3 routes
@@ -474,6 +478,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/team/:id/role` | POST | `src/routes/team.js` |
 | `/admin/api/theme` | GET | `src/routes/theme.js` |
 | `/admin/api/theme` | POST | `src/routes/theme.js` |
+| `/admin/api/theme/design-prompt` | GET | `src/routes/theme.js` |
+| `/admin/api/theme/design/paste` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/effects` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/effects-prompt` | GET | `src/routes/theme.js` |
 | `/admin/api/theme/effects/paste` | POST | `src/routes/theme.js` |
@@ -486,6 +492,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/theme/library/import` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/library/remove` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/library/rename` | POST | `src/routes/theme.js` |
+| `/admin/api/theme/preview` | POST | `src/routes/theme.js` |
 | `/admin/api/translations/link` | POST | `src/routes/translations.js` |
 | `/admin/api/translations/unlink` | POST | `src/routes/translations.js` |
 | `/admin/assets` | GET | `src/routes/media.js` |
@@ -622,6 +629,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/storage` | GET | `src/routes/storage.js` |
 | `/admin/team` | GET | `src/routes/team.js` |
 | `/admin/theme` | GET | `src/routes/theme.js` |
+| `/admin/theme/preview/:id` | GET | `src/routes/theme.js` |
 | `/admin/translations` | GET | `src/routes/translations.js` |
 | `/admin/upload` | POST | `src/routes/media.js` |
 | `/agent/v1/build` | POST | `src/routes/agent-bridge.js` |

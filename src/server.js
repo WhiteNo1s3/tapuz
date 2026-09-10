@@ -162,6 +162,17 @@ app.use((req, res, next) => {
     let px = { script: [], img: [], connect: [], frame: [] };
     try { px = require('./crm/pixels').cspSources(require('./config').loadConfig()); }
     catch (e) { /* a CSP must never fail open on a config error */ }
+    // Theme web fonts (v2.24) widen style-src/font-src by exactly Google
+    // Fonts, and only while the theme asks for a family — a theme on system
+    // fonts keeps the original policy, character for character.
+    let fontStyle = [];
+    let fontFile = [];
+    try {
+      if (require('./theme').googleFontFamilies(require('./theme').loadOverrides()).length) {
+        fontStyle = ['https://fonts.googleapis.com'];
+        fontFile = ['https://fonts.gstatic.com'];
+      }
+    } catch (e) { /* no fonts → no widening */ }
     const src = (base, extra) => (extra.length ? base + ' ' + [...new Set(extra)].join(' ') : base);
     res.setHeader('Content-Security-Policy', [
       "default-src 'self'",
@@ -170,9 +181,9 @@ app.use((req, res, next) => {
       // cannot inject <script> (raw HTML in body is forbidden; values escaped),
       // so residual risk is low; hashing these is a tracked follow-up.
       src("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com", px.script),
-      "style-src 'self' 'unsafe-inline'",
+      src("style-src 'self' 'unsafe-inline'", fontStyle),
       src("img-src 'self' data: https:", px.img),
-      "font-src 'self' data:",
+      src("font-src 'self' data:", fontFile),
       src("frame-src 'self' https://www.youtube.com https://www.google.com", px.frame),
       src("connect-src 'self'", px.connect),
       "object-src 'none'",

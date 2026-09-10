@@ -1,50 +1,69 @@
-// Theme builder — looks, live preview + save helpers (loaded by /admin/theme)
+// Theme studio — looks, the live canvas, the AI designer, save helpers
+// (loaded by /admin/theme). v2.24: the fake preview card became a CANVAS —
+// the real site rendered with whatever is being tried, before it is saved.
 (function () {
   var colorKeys = ['primary', 'secondary', 'text', 'muted', 'border', 'bg', 'lightBg', 'surface'];
-  var styleIds = ['th-radius', 'th-shadow', 'th-accent', 'th-font-heading'];
+  var formIds = ['th-title', 'th-font', 'th-font-heading', 'th-font-google', 'th-font-size', 'th-maxw', 'th-menu-place',
+    'th-logo-type', 'th-logo-text', 'th-logo-image', 'th-desc', 'th-radius', 'th-shadow', 'th-accent', 'th-buttons',
+    'th-bg-kind', 'th-bg-angle', 'th-ch-hover', 'th-ch-hovercolor', 'th-ch-weight', 'th-ch-glass', 'th-ch-headerbg',
+    'th-ch-headertext', 'th-ch-footerbg', 'th-ch-footertext', 'th-skin-note', 'th-skin-css'];
 
-  // mirror src/theme.js scales for the live preview (server stays the truth)
-  var RADIUS = { sharp: { md: '4px', lg: '6px' }, soft: { md: '8px', lg: '12px' }, round: { md: '14px', lg: '20px' } };
-  var SHADOW = {
-    flat: 'none',
-    soft: '0 10px 30px rgba(2, 8, 23, 0.12)',
-    deep: '0 18px 50px rgba(0, 0, 0, 0.45)'
-  };
-
+  function $(id) { return document.getElementById(id); }
   function val(id, fallback) {
-    var el = document.getElementById(id);
+    var el = $(id);
     return el && el.value !== undefined ? el.value : (fallback || '');
   }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function setStatus(id, msg, ok) {
+    var el = $(id);
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = ok === false ? '#b91c1c' : ok ? '#166534' : '#64748b';
+  }
+  function api(path, body) {
+    return fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json(); });
+  }
+  function rebuildNote(d) {
+    return d && d.rebuildError ? ' — ⚠️ אבל בניית האתר נכשלה: ' + d.rebuildError : '';
+  }
 
+  // ── the form ──────────────────────────────────────────────────────
   function bindColor(k) {
-    var c = document.getElementById('th-color-' + k);
-    var h = document.getElementById('th-color-' + k + '-hex');
+    var c = $('th-color-' + k);
+    var h = $('th-color-' + k + '-hex');
     if (!c || !h) return;
-    c.addEventListener('input', function () { h.value = c.value; preview(); });
+    c.addEventListener('input', function () { h.value = c.value; schedulePreview(); });
     h.addEventListener('change', function () {
       if (/^#[0-9a-fA-F]{6}$/.test(h.value)) c.value = h.value;
-      preview();
+      schedulePreview();
     });
   }
   colorKeys.forEach(bindColor);
-
-  ['th-title', 'th-font', 'th-font-size', 'th-maxw', 'th-menu-place', 'th-logo-type', 'th-logo-text', 'th-logo-image', 'th-desc']
-    .concat(styleIds)
-    .forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) {
-        el.addEventListener('input', preview);
-        el.addEventListener('change', preview);
-      }
-    });
+  formIds.forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener('input', schedulePreview);
+    el.addEventListener('change', schedulePreview);
+  });
 
   function colors() {
     var o = {};
     colorKeys.forEach(function (k) {
-      var c = document.getElementById('th-color-' + k);
+      var c = $('th-color-' + k);
       o[k] = c ? c.value : '#000000';
     });
     return o;
+  }
+
+  function googleFonts() {
+    return val('th-font-google').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
   }
 
   function payload() {
@@ -63,105 +82,165 @@
         fonts: {
           family: val('th-font'),
           headingFamily: val('th-font-heading'),
-          baseSize: val('th-font-size', '17px') || '17px'
+          baseSize: val('th-font-size', '17px') || '17px',
+          google: googleFonts()
         },
         style: {
           radius: val('th-radius', 'soft') || 'soft',
           shadow: val('th-shadow', 'soft') || 'soft',
-          accent: val('th-accent', 'solid') || 'solid'
+          accent: val('th-accent', 'solid') || 'solid',
+          buttons: val('th-buttons', 'filled') || 'filled'
         },
         layout: {
           maxWidth: val('th-maxw', '900px') || '900px',
           menuPlacement: val('th-menu-place', 'top') || 'top'
+        },
+        background: {
+          kind: val('th-bg-kind', 'solid') || 'solid',
+          angle: Number(val('th-bg-angle', '160')) || 160
         },
         // master-page chrome (v2.23) — the skeleton's look, as theme state
         chrome: {
           menuHover: val('th-ch-hover', 'color') || 'color',
           menuHoverColor: val('th-ch-hovercolor'),
           menuWeight: val('th-ch-weight', 'normal') || 'normal',
-          headerGlass: !!(document.getElementById('th-ch-glass') || {}).checked,
+          headerGlass: !!($('th-ch-glass') || {}).checked,
           headerBg: val('th-ch-headerbg'),
+          headerText: val('th-ch-headertext'),
           footerBg: val('th-ch-footerbg'),
           footerText: val('th-ch-footertext')
+        },
+        skin: {
+          css: val('th-skin-css'),
+          note: val('th-skin-note')
         }
       }
     };
   }
 
-  function preview() {
-    var p = payload();
-    var box = document.getElementById('th-preview');
-    if (!box) return;
-    var c = p.overrides.colors;
-    var st = p.overrides.style;
-    var r = RADIUS[st.radius] || RADIUS.soft;
-    var accentBg = st.accent === 'gradient'
-      ? 'linear-gradient(135deg, ' + c.primary + ', ' + c.secondary + ')'
-      : c.primary;
-    // font stacks carry double quotes ("Times New Roman") — single-quote them
-    // so they can live inside the double-quoted style="" attributes below
-    var q = function (f) { return String(f || '').replace(/"/g, "'"); };
-    var headingFont = q(p.overrides.fonts.headingFamily || p.overrides.fonts.family);
-    box.style.background = c.bg;
-    box.style.color = c.text;
-    box.style.fontFamily = p.overrides.fonts.family;
-    box.innerHTML =
-      '<div style="font-weight:800;font-size:1.25rem;margin-bottom:8px;color:' + c.primary + ';font-family:' + headingFont + '">' +
-      (p.siteTitle || 'Site').replace(/</g, '&lt;') + '</div>' +
-      '<p style="color:' + c.muted + ';margin:0 0 12px">טקסט משני לדוגמה</p>' +
-      '<div style="background:' + c.surface + ';border:1px solid ' + c.border + ';border-radius:' + r.lg + ';box-shadow:' + (SHADOW[st.shadow] || SHADOW.soft) + ';padding:14px;margin-bottom:14px">' +
-      '<div style="font-weight:700;margin-bottom:4px;font-family:' + headingFont + '">כרטיס לדוגמה</div>' +
-      '<p style="margin:0;color:' + c.muted + ';font-size:.9rem">כך ייראו כרטיסים, טפסים ומבזקים.</p>' +
-      '</div>' +
-      '<a href="#" style="display:inline-block;background:' + accentBg + ';color:#fff;padding:9px 18px;border-radius:' + r.md + ';text-decoration:none;font-weight:600">כפתור ראשי</a>' +
-      '<hr style="border:none;border-top:1px solid ' + c.border + ';margin:16px 0">' +
-      '<p style="margin:0">פסקת תוכן רגילה לבדיקת ניגודיות וקריאות.</p>';
+  // ── the canvas ────────────────────────────────────────────────────
+  var canvas = $('th-canvas');
+  var previewTimer = null;
+  var previewSeq = 0;
+  var lastPreviewId = 'live';
+
+  function canvasPath() {
+    return val('th-canvas-page') || '';
   }
+
+  /** Register a candidate with the server and point the canvas at it. */
+  function canvasShow(label, body) {
+    if (!canvas) return Promise.resolve();
+    var seq = ++previewSeq;
+    setStatus('th-canvas-status', 'מרנדר את האתר בערכה…');
+    return api('/admin/api/theme/preview', body).then(function (d) {
+      if (seq !== previewSeq) return; // a newer candidate won
+      if (!d.ok) { setStatus('th-canvas-status', d.error || 'שגיאה בתצוגה', false); return; }
+      lastPreviewId = d.id;
+      var src = '/admin/theme/preview/' + d.id + (canvasPath() ? '?path=' + encodeURIComponent(canvasPath()) : '');
+      canvas.src = src;
+      var open = $('th-canvas-open');
+      if (open) open.href = src;
+      var lbl = $('th-canvas-label');
+      if (lbl) lbl.textContent = 'מציג: ' + label + (d.fonts && d.fonts.length ? ' · גופנים: ' + d.fonts.join(', ') : '');
+      setStatus('th-canvas-status', d.hasEffect ? 'טוען… (הערכה כוללת אפקט — נבדוק שהוא רץ)' : 'הערכה הזו בלי אפקט JS.');
+      return d;
+    }).catch(function () { setStatus('th-canvas-status', 'שגיאת רשת בתצוגה', false); });
+  }
+
+  function schedulePreview() {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(function () {
+      canvasShow('הטופס (לא נשמר)', { overrides: payload().overrides });
+    }, 450);
+  }
+
+  // the framed page reports: did the effect run, did anything throw
+  window.addEventListener('message', function (ev) {
+    if (ev.origin !== location.origin || !ev.data || ev.data.type !== 'tapuz-theme-preview') return;
+    var d = ev.data;
+    if (d.errors && d.errors.length) {
+      setStatus('th-canvas-status', '❌ שגיאה בדף/באפקט: ' + d.errors.join(' · ') + ' — בקשו מהצ׳אט לתקן', false);
+    } else if (d.effect) {
+      setStatus('th-canvas-status', '✅ הדף נטען והאפקט רץ בלי שגיאות — הזיזו את העכבר בקנבס כדי לראות אותו.' + motionNote(), true);
+    } else {
+      setStatus('th-canvas-status', '✅ הדף נטען. ' + (d.path ? '(' + d.path + ')' : '') + ' אין אפקט JS בערכה הזו.');
+    }
+  });
+
+  var reducedMotion = false;
+  try { reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* no matchMedia */ }
+  function motionNote() {
+    return reducedMotion ? ' 🐢 (אצלכם "הפחתת תנועה" דולקת — אפקט שמכבד אותה יוסתר כאן)' : '';
+  }
+  if (reducedMotion && $('th-fx-motion')) $('th-fx-motion').style.display = 'block';
+
+  var pageSel = $('th-canvas-page');
+  if (pageSel) pageSel.addEventListener('change', function () {
+    if (!canvas) return;
+    canvas.src = '/admin/theme/preview/' + lastPreviewId + (canvasPath() ? '?path=' + encodeURIComponent(canvasPath()) : '');
+  });
+  var refresh = $('th-canvas-refresh');
+  if (refresh) refresh.onclick = function () { if (canvas) canvas.src = canvas.src; };
+  var desk = $('th-canvas-desktop');
+  var mob = $('th-canvas-mobile');
+  if (desk) desk.onclick = function () { if (canvas) { canvas.style.width = '100%'; canvas.style.height = '560px'; } };
+  if (mob) mob.onclick = function () { if (canvas) { canvas.style.width = '390px'; canvas.style.height = '700px'; } };
 
   // ── Looks: one-click whole personalities (data injected by the page) ──
   function setColor(k, v) {
-    var c = document.getElementById('th-color-' + k);
-    var h = document.getElementById('th-color-' + k + '-hex');
+    var c = $('th-color-' + k);
+    var h = $('th-color-' + k + '-hex');
     if (c && v) c.value = v;
     if (h && v) h.value = v;
   }
-  function setSelect(id, v) {
-    var el = document.getElementById(id);
-    if (el && v !== undefined) el.value = v;
+  function setValue(id, v) {
+    var el = $(id);
+    if (el && v !== undefined && v !== null) el.value = v;
   }
+
+  var DEFAULT_FONT = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Hebrew", sans-serif';
 
   function applyLook(look) {
     var o = look.overrides || {};
     Object.keys(o.colors || {}).forEach(function (k) { setColor(k, o.colors[k]); });
-    if (o.style) {
-      setSelect('th-radius', o.style.radius);
-      setSelect('th-shadow', o.style.shadow);
-      setSelect('th-accent', o.style.accent);
-    }
-    if (o.fonts && o.fonts.headingFamily !== undefined) setSelect('th-font-heading', o.fonts.headingFamily);
-    // The master chrome IS part of a look (v2.23: zahav/neon/sadot/hitech
-    // promise a menu glow, a glass header, a footer palette). Before this
-    // the click filled colors only, so the glow "it tells" never reached the
-    // form, the save, or the site. A look without a chrome section resets
-    // the master to the defaults — a look is a whole personality, not a
-    // palette layered over the previous look's chrome.
+    var st = Object.assign({ radius: 'soft', shadow: 'soft', accent: 'solid', buttons: 'filled' }, o.style || {});
+    setValue('th-radius', st.radius);
+    setValue('th-shadow', st.shadow);
+    setValue('th-accent', st.accent);
+    setValue('th-buttons', st.buttons);
+    // A look is a WHOLE personality: fonts, background, chrome and skin
+    // included. A look that says nothing about a section resets it to the
+    // default — never layers over the previous look's leftovers.
+    var f = o.fonts || {};
+    setValue('th-font', f.family !== undefined ? f.family : DEFAULT_FONT);
+    setValue('th-font-heading', f.headingFamily !== undefined ? f.headingFamily : '');
+    setValue('th-font-google', (f.google || []).join(', '));
+    var bg = Object.assign({ kind: 'solid', angle: 160 }, o.background || {});
+    setValue('th-bg-kind', bg.kind);
+    setValue('th-bg-angle', bg.angle);
     var ch = Object.assign({
       menuHover: 'color', menuHoverColor: '', menuWeight: 'normal',
-      headerGlass: false, headerBg: '', footerBg: '', footerText: ''
+      headerGlass: false, headerBg: '', headerText: '', footerBg: '', footerText: ''
     }, o.chrome || {});
-    setSelect('th-ch-hover', ch.menuHover);
-    setSelect('th-ch-hovercolor', ch.menuHoverColor);
-    setSelect('th-ch-weight', ch.menuWeight);
-    var glass = document.getElementById('th-ch-glass');
+    setValue('th-ch-hover', ch.menuHover);
+    setValue('th-ch-hovercolor', ch.menuHoverColor);
+    setValue('th-ch-weight', ch.menuWeight);
+    var glass = $('th-ch-glass');
     if (glass) glass.checked = ch.headerGlass === true || ch.headerGlass === 'true';
-    setSelect('th-ch-headerbg', ch.headerBg);
-    setSelect('th-ch-footerbg', ch.footerBg);
-    setSelect('th-ch-footertext', ch.footerText);
-    preview();
+    setValue('th-ch-headerbg', ch.headerBg);
+    setValue('th-ch-headertext', ch.headerText);
+    setValue('th-ch-footerbg', ch.footerBg);
+    setValue('th-ch-footertext', ch.footerText);
+    var skin = Object.assign({ css: '', note: '' }, o.skin || {});
+    setValue('th-skin-css', skin.css);
+    setValue('th-skin-note', skin.note);
+    clearTimeout(previewTimer);
+    canvasShow('מראה "' + (look.label || '') + '" (לא נשמר)', { overrides: payload().overrides });
   }
 
   function renderLooks() {
-    var host = document.getElementById('th-looks');
+    var host = $('th-looks');
     var looks = window.TAPUZ_LOOKS;
     if (!host || !looks) return;
     Object.keys(looks).forEach(function (key) {
@@ -174,10 +253,15 @@
       var dots = ['primary', 'secondary', 'surface', 'text'].map(function (k) {
         return '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;margin:0 2px;border:1px solid rgba(0,0,0,.12);background:' + (c[k] || '#ccc') + '"></span>';
       }).join('');
+      var extras = [];
+      if ((look.overrides.fonts || {}).google && look.overrides.fonts.google.length) extras.push('גופן');
+      if ((look.overrides.background || {}).kind && look.overrides.background.kind !== 'solid') extras.push('רקע');
+      if ((look.overrides.skin || {}).css) extras.push('עור');
       card.innerHTML =
         '<div style="font-size:1.5rem;line-height:1">' + (look.emoji || '🎨') + '</div>' +
         '<div style="font-weight:700;margin:6px 0 8px;color:' + (c.text || '#111') + '">' + look.label + '</div>' +
-        '<div>' + dots + '</div>';
+        '<div>' + dots + '</div>' +
+        (extras.length ? '<div style="font-size:.7rem;color:' + (c.muted || '#64748b') + ';margin-top:6px">' + extras.join(' · ') + '</div>' : '');
       card.addEventListener('mouseenter', function () { card.style.borderColor = '#94a3b8'; card.style.transform = 'translateY(-2px)'; });
       card.addEventListener('mouseleave', function () { card.style.borderColor = '#e2e8f0'; card.style.transform = 'none'; });
       card.addEventListener('click', function () { applyLook(look); });
@@ -185,109 +269,104 @@
     });
   }
 
+  // ── save ──────────────────────────────────────────────────────────
   function save(thenBuild) {
-    fetch('/admin/api/theme', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload())
-    }).then(function (r) { return r.json(); }).then(function (d) {
-      if (!d.ok) return alert(d.error || 'שגיאה');
-      // every save now rebuilds the site on the server (the live pages are
-      // the static export, served before the renderer — a save that did not
+    setStatus('th-save-status', 'שומר…');
+    api('/admin/api/theme', payload()).then(function (d) {
+      if (!d.ok) return setStatus('th-save-status', d.error || 'שגיאה', false);
+      // every save rebuilds the site on the server (the live pages are the
+      // static export, served before the renderer — a save that did not
       // rebuild changed nothing anyone could see). "שמור + בנה" keeps its
       // explicit rebuild and opens the site so the change is in front of you.
       if (thenBuild) {
         return fetch('/admin/build', { method: 'POST' }).then(function (r) { return r.json(); }).then(function () {
-          alert('נשמר ונבנה ✓');
+          setStatus('th-save-status', 'נשמר ונבנה ✓' + rebuildNote(d), !d.rebuildError);
           window.open('/', '_blank');
         });
       }
-      alert('נשמר ✓ — האתר עודכן');
-    }).catch(function () { alert('שגיאה בשמירה'); });
+      setStatus('th-save-status', 'נשמר ✓ — האתר עודכן' + rebuildNote(d), !d.rebuildError);
+      canvasShow('הערכה החיה', {});
+      fxCurrent();
+    }).catch(function () { setStatus('th-save-status', 'שגיאה בשמירה', false); });
   }
 
-  var saveBtn = document.getElementById('th-save');
+  var saveBtn = $('th-save');
   if (saveBtn) saveBtn.onclick = function () { save(false); };
-
-  var saveBuildBtn = document.getElementById('th-save-build');
+  var saveBuildBtn = $('th-save-build');
   if (saveBuildBtn) saveBuildBtn.onclick = function () { save(true); };
 
-  var resetBtn = document.getElementById('th-reset');
+  var resetBtn = $('th-reset');
   if (resetBtn) resetBtn.onclick = function () {
     if (!confirm('לאפס overrides לברירת מחדל?')) return;
     // the 'naki' look IS the default bundle — one source of truth
     var naki = (window.TAPUZ_LOOKS || {}).naki;
     var overrides = naki ? JSON.parse(JSON.stringify(naki.overrides)) : {};
     overrides.fonts = overrides.fonts || {};
-    overrides.fonts.family = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Hebrew", sans-serif';
+    overrides.fonts.family = DEFAULT_FONT;
     overrides.fonts.baseSize = '17px';
+    overrides.fonts.google = [];
     overrides.layout = { maxWidth: '900px', menuPlacement: 'top' };
-    fetch('/admin/api/theme', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ overrides: overrides })
-    }).then(function () { location.reload(); });
+    overrides.background = { kind: 'solid', angle: 160 };
+    overrides.skin = { css: '', note: '' };
+    api('/admin/api/theme', { overrides: overrides }).then(function () { location.reload(); });
   };
 
-  // ── Theme package import (v0.99) — paste an exported file's JSON, apply ──
-  var importBtn = document.getElementById('th-import-apply');
-  if (importBtn) importBtn.onclick = function () {
-    var status = document.getElementById('th-import-status');
-    var raw = (document.getElementById('th-import-text') || {}).value || '';
-    var pkg;
-    try {
-      pkg = JSON.parse(raw);
-    } catch (e) {
-      if (status) { status.textContent = 'לא JSON תקין'; status.style.color = '#b91c1c'; }
-      return;
-    }
-    fetch('/admin/api/theme/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ package: pkg })
-    }).then(function (r) { return r.json(); }).then(function (d) {
-      if (!status) return;
-      if (d.ok) {
-        status.textContent = 'הוחל ✓ — טוען מחדש…';
-        status.style.color = '#166534';
-        setTimeout(function () { location.reload(); }, 600);
-      } else {
-        status.textContent = d.error || 'שגיאה';
-        status.style.color = '#b91c1c';
-      }
-    }).catch(function () {
-      if (status) { status.textContent = 'שגיאת רשת'; status.style.color = '#b91c1c'; }
+  // ── Theme package import (v0.99 → v2.24 tolerant + file picker) ──
+  var importFile = $('th-import-file');
+  if (importFile) importFile.addEventListener('change', function () {
+    var f = importFile.files && importFile.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var ta = $('th-import-text');
+      if (ta) ta.value = String(reader.result || '');
+      setStatus('th-import-status', 'נקרא "' + f.name + '" — עכשיו 👁 / שמור / החל', true);
+    };
+    reader.readAsText(f);
+  });
+
+  function importText() {
+    return (($('th-import-text') || {}).value || '').trim();
+  }
+  var importPreview = $('th-import-preview');
+  if (importPreview) importPreview.onclick = function () {
+    if (!importText()) return setStatus('th-import-status', 'אין מה להציג — הדביקו או בחרו קובץ', false);
+    canvasShow('ערכה מיובאת (לא נשמרה)', { reply: importText() }).then(function (d) {
+      if (d && d.ok) setStatus('th-import-status', 'מוצג בקנבס למעלה ↑', true);
+      else if (d) setStatus('th-import-status', d.error || 'שגיאה', false);
     });
+  };
+  var importBtn = $('th-import-apply');
+  if (importBtn) importBtn.onclick = function () {
+    if (!importText()) return setStatus('th-import-status', 'אין מה לייבא — הדביקו או בחרו קובץ', false);
+    api('/admin/api/theme/import', { text: importText() }).then(function (d) {
+      if (d.ok) {
+        setStatus('th-import-status', 'הוחל ✓' + rebuildNote(d) + ' — טוען מחדש…', !d.rebuildError);
+        setTimeout(function () { location.reload(); }, 700);
+      } else setStatus('th-import-status', d.error || 'שגיאה', false);
+    }).catch(function () { setStatus('th-import-status', 'שגיאת רשת', false); });
+  };
+  // import-to-LIBRARY: the package becomes one of the available themes
+  // instead of replacing the live one
+  var importLib = $('th-import-library');
+  if (importLib) importLib.onclick = function () {
+    if (!importText()) return setStatus('th-import-status', 'אין מה לייבא — הדביקו או בחרו קובץ', false);
+    api('/admin/api/theme/library/import', { text: importText() }).then(function (d) {
+      if (d.ok) {
+        setStatus('th-import-status', 'נשמרה לספרייה כ-"' + d.name + '" ✓ (האתר החי לא השתנה)', true);
+        renderLibrary();
+      } else setStatus('th-import-status', d.error || 'שגיאה', false);
+    }).catch(function () { setStatus('th-import-status', 'שגיאת רשת', false); });
   };
 
   // ── Theme LIBRARY (v2.21) — themes as artifacts, the WordPress attitude ──
-  function libStatus(msg, ok) {
-    var el = document.getElementById('th-lib-status');
-    if (!el) return;
-    el.textContent = msg || '';
-    el.style.color = ok ? '#166534' : '#b91c1c';
-  }
-
-  function libApi(path, body) {
-    return fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
-    }).then(function (r) { return r.json(); });
-  }
-
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
   function renderLibrary() {
-    var list = document.getElementById('th-lib-list');
+    var list = $('th-lib-list');
     if (!list) return;
     fetch('/admin/api/theme/library').then(function (r) { return r.json(); }).then(function (d) {
       if (!d.ok) { list.textContent = d.error || 'שגיאה'; return; }
       if (!d.themes.length) {
-        list.innerHTML = '<div style="grid-column:1/-1;color:#64748b">אין עדיין ערכות שמורות — שמרו את הערכה הנוכחית בשם, או הדביקו ערכה מה-AI בייבוא למטה.</div>';
+        list.innerHTML = '<div style="grid-column:1/-1;color:#64748b">אין עדיין ערכות שמורות — שמרו את הערכה הנוכחית בשם, או הדביקו ערכה מה-AI למעלה.</div>';
         return;
       }
       list.innerHTML = d.themes.map(function (t) {
@@ -300,85 +379,120 @@
           '<div style="display:flex;gap:5px;margin-bottom:6px">' + dots + '</div>' +
           '<div style="font-size:0.75rem;color:#64748b;margin-bottom:10px">' + srcLabel + '</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button type="button" class="btn secondary" data-lib-preview="' + esc(t.id) + '" data-lib-name="' + esc(t.name) + '" style="font-size:0.82rem;padding:6px 10px" title="הצג בקנבס בלי לשנות כלום">👁</button>' +
           '<button type="button" class="btn" data-lib-apply="' + esc(t.id) + '" style="font-size:0.82rem;padding:6px 10px">החל</button>' +
           '<a class="btn secondary" href="/admin/api/theme/library/export?id=' + encodeURIComponent(t.id) + '" download style="font-size:0.82rem;padding:6px 10px">ייצוא</a>' +
           '<button type="button" class="btn secondary" data-lib-remove="' + esc(t.id) + '" style="font-size:0.82rem;padding:6px 10px">מחיקה</button>' +
           '</div></div>';
       }).join('');
 
+      list.querySelectorAll('[data-lib-preview]').forEach(function (btn) {
+        btn.onclick = function () {
+          canvasShow('ערכה "' + btn.dataset.libName + '" מהספרייה (לא הוחלה)', { libraryId: btn.dataset.libPreview });
+          var c = $('th-canvas-card');
+          if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+      });
       list.querySelectorAll('[data-lib-apply]').forEach(function (btn) {
         btn.onclick = function () {
-          libApi('/admin/api/theme/library/apply', { id: btn.dataset.libApply }).then(function (d2) {
+          api('/admin/api/theme/library/apply', { id: btn.dataset.libApply }).then(function (d2) {
             if (d2.ok) {
-              libStatus('הוחלה "' + d2.name + '"' + (d2.backedUp ? ' · העבודה הקודמת גובתה אוטומטית' : '') + ' — טוען מחדש…', true);
+              setStatus('th-lib-status', 'הוחלה "' + d2.name + '"' + (d2.backedUp ? ' · העבודה הקודמת גובתה אוטומטית' : '') + rebuildNote(d2) + ' — טוען מחדש…', !d2.rebuildError);
               setTimeout(function () { location.reload(); }, 700);
-            } else libStatus(d2.error || 'שגיאה', false);
+            } else setStatus('th-lib-status', d2.error || 'שגיאה', false);
           });
         };
       });
       list.querySelectorAll('[data-lib-remove]').forEach(function (btn) {
         btn.onclick = function () {
           if (!confirm('למחוק את הערכה מהספרייה? (האתר החי לא מושפע)')) return;
-          libApi('/admin/api/theme/library/remove', { id: btn.dataset.libRemove }).then(function (d2) {
+          api('/admin/api/theme/library/remove', { id: btn.dataset.libRemove }).then(function (d2) {
             if (d2.ok) renderLibrary();
-            else libStatus(d2.error || 'שגיאה', false);
+            else setStatus('th-lib-status', d2.error || 'שגיאה', false);
           });
         };
       });
-    }).catch(function () { libStatus('שגיאת רשת', false); });
+    }).catch(function () { setStatus('th-lib-status', 'שגיאת רשת', false); });
   }
 
-  var libSave = document.getElementById('th-lib-save');
+  var libSave = $('th-lib-save');
   if (libSave) libSave.onclick = function () {
-    var name = (document.getElementById('th-lib-name') || {}).value || '';
-    libApi('/admin/api/theme/library', { name: name }).then(function (d) {
+    var name = ($('th-lib-name') || {}).value || '';
+    api('/admin/api/theme/library', { name: name }).then(function (d) {
       if (d.ok) {
-        libStatus('נשמרה "' + d.name + '" ✓', true);
-        var nameEl = document.getElementById('th-lib-name');
+        setStatus('th-lib-status', 'נשמרה "' + d.name + '" ✓', true);
+        var nameEl = $('th-lib-name');
         if (nameEl) nameEl.value = '';
         renderLibrary();
-      } else libStatus(d.error || 'שגיאה', false);
-    }).catch(function () { libStatus('שגיאת רשת', false); });
-  };
-
-  // import-to-LIBRARY: the AI-built package becomes one of the available
-  // themes instead of replacing the live one
-  var importLib = document.getElementById('th-import-library');
-  if (importLib) importLib.onclick = function () {
-    var status = document.getElementById('th-import-status');
-    var raw = (document.getElementById('th-import-text') || {}).value || '';
-    var pkg;
-    try { pkg = JSON.parse(raw); } catch (e) {
-      if (status) { status.textContent = 'לא JSON תקין'; status.style.color = '#b91c1c'; }
-      return;
-    }
-    libApi('/admin/api/theme/library/import', { package: pkg }).then(function (d) {
-      if (!status) return;
-      if (d.ok) {
-        status.textContent = 'נשמרה לספרייה כ-"' + d.name + '" ✓ (האתר החי לא השתנה)';
-        status.style.color = '#166534';
-        renderLibrary();
-      } else {
-        status.textContent = d.error || 'שגיאה';
-        status.style.color = '#b91c1c';
-      }
-    }).catch(function () {
-      if (status) { status.textContent = 'שגיאת רשת'; status.style.color = '#b91c1c'; }
-    });
+      } else setStatus('th-lib-status', d.error || 'שגיאה', false);
+    }).catch(function () { setStatus('th-lib-status', 'שגיאת רשת', false); });
   };
 
   renderLibrary();
 
-  // ── Theme EFFECTS (v2.22) — the FRESH-chat snippet flow ──
-  function fxStatus(msg, ok) {
-    var el = document.getElementById('th-fx-status');
-    if (!el) return;
-    el.textContent = msg || '';
-    el.style.color = ok ? '#166534' : '#b91c1c';
+  // ── The AI DESIGNER (v2.24) — a theme from the owner's imagination ──
+  function designReply() {
+    return (($('th-design-reply') || {}).value || '').trim();
   }
+  function designBrief() {
+    return (($('th-design-brief') || {}).value || '').trim();
+  }
+  var designPrompt = $('th-design-prompt');
+  if (designPrompt) designPrompt.onclick = function () {
+    var q = new URLSearchParams({ brief: designBrief() });
+    if (($('th-design-current') || {}).checked) q.set('current', '1');
+    setStatus('th-design-status', 'בונה את הפרומפט…');
+    fetch('/admin/api/theme/design-prompt?' + q.toString())
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        return navigator.clipboard.writeText(text).then(function () {
+          var kb = (text.length / 1000).toFixed(1);
+          setStatus('th-design-status', '✅ הפרומפט הועתק (' + kb + 'K תווים) — הדביקו בצ׳אט חדש (FRESH), ואת התשובה הדביקו כאן למטה', true);
+        });
+      })
+      .catch(function () { setStatus('th-design-status', 'שגיאה בהעתקה', false); });
+  };
 
+  var designPreview = $('th-design-preview');
+  if (designPreview) designPreview.onclick = function () {
+    if (!designReply()) return setStatus('th-design-status', 'הדביקו קודם את תשובת ה-AI', false);
+    canvasShow('תשובת ה-AI (לא נשמרה)', { reply: designReply(), name: designBrief().slice(0, 60) }).then(function (d) {
+      if (d && d.ok) {
+        setStatus('th-design-status', 'הערכה "' + (d.name || '') + '" מוצגת בקנבס ↑ — אהבתם? שמרו לספרייה או החילו. לא? שנו את התיאור, צרו פרומפט חדש וחזרו.', true);
+        var c = $('th-canvas-card');
+        if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (d) setStatus('th-design-status', d.error || 'שגיאה', false);
+    });
+  };
+
+  function designSave(apply) {
+    if (!designReply()) return setStatus('th-design-status', 'הדביקו קודם את תשובת ה-AI', false);
+    setStatus('th-design-status', apply ? 'שומר ומחיל…' : 'שומר לספרייה…');
+    api('/admin/api/theme/design/paste', { reply: designReply(), name: designBrief().slice(0, 60), apply: !!apply }).then(function (d) {
+      if (!d.ok) return setStatus('th-design-status', d.error || 'שגיאה', false);
+      var what = 'הערכה "' + d.name + '" נשמרה לספרייה ✓ (' + (d.sections || []).join(', ') +
+        (d.parts && d.parts.cssChars ? ' · עור ' + d.parts.cssChars + ' תווים' : '') +
+        (d.parts && d.parts.jsChars ? ' · אפקט ' + d.parts.jsChars + ' תווים' : '') + ')';
+      if (d.applied) {
+        setStatus('th-design-status', what + ' — והוחלה על האתר' + (d.backedUp ? ' (העבודה הקודמת גובתה)' : '') + rebuildNote(d) + ' — טוען מחדש…', !d.rebuildError);
+        setTimeout(function () { location.reload(); }, 900);
+      } else {
+        setStatus('th-design-status', what + ' — "החל" בספרייה כשתרצו', true);
+        renderLibrary();
+      }
+    }).catch(function () { setStatus('th-design-status', 'שגיאת רשת', false); });
+  }
+  var designSaveBtn = $('th-design-save');
+  if (designSaveBtn) designSaveBtn.onclick = function () { designSave(false); };
+  var designApplyBtn = $('th-design-apply');
+  if (designApplyBtn) designApplyBtn.onclick = function () {
+    if (!confirm('לשמור את הערכה לספרייה ולהחיל אותה על האתר החי? (המצב הנוכחי יגובה אוטומטית)')) return;
+    designSave(true);
+  };
+
+  // ── Theme EFFECTS (v2.22) — the FRESH-chat snippet flow ──
   function fxCurrent() {
-    var el = document.getElementById('th-fx-current');
+    var el = $('th-fx-current');
     if (!el) return;
     fetch('/admin/api/theme').then(function (r) { return r.json(); }).then(function (d) {
       var fx = (d.overrides || {}).effects || {};
@@ -390,53 +504,50 @@
     }).catch(function () {});
   }
 
-  var fxPrompt = document.getElementById('th-fx-prompt');
+  var fxPrompt = $('th-fx-prompt');
   if (fxPrompt) fxPrompt.onclick = function () {
-    var brief = (document.getElementById('th-fx-brief') || {}).value || '';
+    var brief = ($('th-fx-brief') || {}).value || '';
     fetch('/admin/api/theme/effects-prompt?brief=' + encodeURIComponent(brief))
       .then(function (r) { return r.text(); })
       .then(function (text) {
         return navigator.clipboard.writeText(text).then(function () {
-          fxStatus('✅ הפרומפט הועתק — הדביקו בצ׳אט חדש (FRESH), לא בצ׳אט של בניית הדפים', true);
+          setStatus('th-fx-status', '✅ הפרומפט הועתק — הדביקו בצ׳אט חדש (FRESH), לא בצ׳אט של בניית הדפים', true);
         });
       })
-      .catch(function () { fxStatus('שגיאה בהעתקה', false); });
+      .catch(function () { setStatus('th-fx-status', 'שגיאה בהעתקה', false); });
   };
 
-  var fxApply = document.getElementById('th-fx-apply');
+  var fxApply = $('th-fx-apply');
   if (fxApply) fxApply.onclick = function () {
-    var reply = (document.getElementById('th-fx-reply') || {}).value || '';
-    var note = (document.getElementById('th-fx-brief') || {}).value || '';
-    fetch('/admin/api/theme/effects/paste', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reply: reply, note: note })
-    }).then(function (r) { return r.json(); }).then(function (d) {
+    var reply = ($('th-fx-reply') || {}).value || '';
+    var note = ($('th-fx-brief') || {}).value || '';
+    setStatus('th-fx-status', 'מקמפל וקולט…');
+    api('/admin/api/theme/effects/paste', { reply: reply, note: note }).then(function (d) {
       if (d.ok) {
-        fxStatus('נקלט ✓ (CSS ' + d.cssChars + ' · JS ' + d.jsChars + ' תווים) — האפקט חי בכל דף', true);
-        var ta = document.getElementById('th-fx-reply');
+        setStatus('th-fx-status', 'נקלט ✓ (CSS ' + d.cssChars + ' · JS ' + d.jsChars + ' תווים) — האפקט חי בכל דף; הקנבס למעלה מריץ אותו עכשיו' + rebuildNote(d), !d.rebuildError);
+        var ta = $('th-fx-reply');
         if (ta) ta.value = '';
         fxCurrent();
-      } else fxStatus(d.error || 'שגיאה', false);
-    }).catch(function () { fxStatus('שגיאת רשת', false); });
+        // the live theme now carries the effect; the canvas proves it runs
+        canvasShow('הערכה החיה + האפקט החדש', {}).then(function () {
+          var c = $('th-canvas-card');
+          if (c && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      } else setStatus('th-fx-status', d.error || 'שגיאה', false);
+    }).catch(function () { setStatus('th-fx-status', 'שגיאת רשת', false); });
   };
 
-  var fxClear = document.getElementById('th-fx-clear');
+  var fxClear = $('th-fx-clear');
   if (fxClear) fxClear.onclick = function () {
     if (!confirm('לנקות את האפקט מהאתר? (ערכות שמורות בספרייה שומרות את שלהן)')) return;
-    fetch('/admin/api/theme/effects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ css: '', js: '', note: '' })
-    }).then(function (r) { return r.json(); }).then(function (d) {
-      if (d.ok) { fxStatus('נוקה ✓', true); fxCurrent(); }
-      else fxStatus(d.error || 'שגיאה', false);
-    }).catch(function () { fxStatus('שגיאת רשת', false); });
+    api('/admin/api/theme/effects', { css: '', js: '', note: '' }).then(function (d) {
+      if (d.ok) { setStatus('th-fx-status', 'נוקה ✓' + rebuildNote(d), !d.rebuildError); fxCurrent(); canvasShow('הערכה החיה', {}); }
+      else setStatus('th-fx-status', d.error || 'שגיאה', false);
+    }).catch(function () { setStatus('th-fx-status', 'שגיאת רשת', false); });
   };
 
   fxCurrent();
-
   renderLooks();
-  // Initial preview
-  setTimeout(preview, 50);
+  // the canvas opens on the live theme (what the form holds right now)
+  canvasShow('הערכה החיה', {});
 })();
