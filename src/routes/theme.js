@@ -374,6 +374,7 @@ router.get('/admin/theme', (req, res) => {
         <section class="card">
           <h3 class="sub-head">תצוגה מקדימה</h3>
           <div id="th-preview" style="border:1px solid #e2e8f0;border-radius:10px;padding:20px"></div>
+          <div id="th-deploy-status" dir="ltr" style="margin-top:10px;font-size:0.78rem;color:#64748b;text-align:left;font-family:monospace;word-break:break-all" title="מה רץ כאן ואיפה האתר נשמר — להשוואה מול view-source של האתר החי (meta generator + main.css?v=)">${escAttr(require('../build-info').summaryLine())}</div>
         </section>
       </div>
       <div style="margin:24px 0 60px;display:flex;gap:10px;justify-content:flex-end">

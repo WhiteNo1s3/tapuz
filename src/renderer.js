@@ -988,6 +988,9 @@ function renderPage(page, options = {}) {
     ? `<style>\n${fs.readFileSync(cssPath, 'utf8')}\n</style>`
     : '';
   head += `<style id="tapuz-theme-overrides">\n${overrideCss}\n</style>`;
+  // build fingerprint (src/build-info.js) — survives the static export, so a
+  // view-source on the live site says WHICH code rendered it
+  head += `\n  <meta name="generator" content="Tapuziel ${escapeHtml(require('./build-info').buildId())}">`;
 
   const config = loadConfig();
   // S5a: GA4 gtag as high in <head> as our {{head}} slot allows. Public + export.
