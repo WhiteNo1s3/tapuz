@@ -162,6 +162,17 @@ app.use((req, res, next) => {
     let px = { script: [], img: [], connect: [], frame: [] };
     try { px = require('./crm/pixels').cspSources(require('./config').loadConfig()); }
     catch (e) { /* a CSP must never fail open on a config error */ }
+    // Theme web fonts (v2.24) widen style-src/font-src by exactly Google
+    // Fonts, and only while the theme asks for a family — a theme on system
+    // fonts keeps the original policy, character for character.
+    let fontStyle = [];
+    let fontFile = [];
+    try {
+      if (require('./theme').googleFontFamilies(require('./theme').loadOverrides()).length) {
+        fontStyle = ['https://fonts.googleapis.com'];
+        fontFile = ['https://fonts.gstatic.com'];
+      }
+    } catch (e) { /* no fonts → no widening */ }
     const src = (base, extra) => (extra.length ? base + ' ' + [...new Set(extra)].join(' ') : base);
     res.setHeader('Content-Security-Policy', [
       "default-src 'self'",
@@ -170,9 +181,9 @@ app.use((req, res, next) => {
       // cannot inject <script> (raw HTML in body is forbidden; values escaped),
       // so residual risk is low; hashing these is a tracked follow-up.
       src("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com", px.script),
-      "style-src 'self' 'unsafe-inline'",
+      src("style-src 'self' 'unsafe-inline'", fontStyle),
       src("img-src 'self' data: https:", px.img),
-      "font-src 'self' data:",
+      src("font-src 'self' data:", fontFile),
       src("frame-src 'self' https://www.youtube.com https://www.google.com", px.frame),
       src("connect-src 'self'", px.connect),
       "object-src 'none'",
@@ -523,6 +534,12 @@ const server = app.listen(PORT, () => {
   // package (seed/). Applied through the product's own page APIs, once per
   // package id, and never allowed to block or break boot.
   try { require('./seed-content').maybeSeed(); } catch (e) { console.error('[seed] failed: ' + e.message); }
+  // a deploy must reach the visitors: the export on disk is rebuilt when it
+  // was produced by a different build than the one now running (v2.26)
+  try {
+    const r = require('./export').refreshAfterDeploy();
+    if (r.rebuilt) console.log('[export] rebuilt the site for build ' + r.to + (r.from ? ' (was ' + r.from + ')' : ' (export carried no build stamp)'));
+  } catch (e) { console.error('[export] refresh after deploy failed: ' + e.message); }
   // CRM retention (v1.82, phase 5): enforce the policy on boot, then once a
   // day. `unref()` so this timer can never be the reason the process refuses
   // to exit — a housekeeping job must not outrank a shutdown.

@@ -154,12 +154,45 @@ function removePageHtml(fullPath, outputDir = PUBLIC_DIR) {
   return true;
 }
 
+// The build id that produced the export on disk, kept beside it.
+const BUILT_BY = '.built-by';
+
+/** The build id stamped on the export in outputDir, or ''. */
+function exportBuiltBy(outputDir = PUBLIC_DIR) {
+  try { return fs.readFileSync(path.join(outputDir, BUILT_BY), 'utf8').trim(); } catch (e) { return ''; }
+}
+
+/**
+ * Rebuild the static site after a deploy (v2.26). The live pages ARE the
+ * export, and the export is regenerated only when someone saves — so a new
+ * deploy kept serving the PREVIOUS code's pages (no build fingerprint, no
+ * versioned stylesheet, none of the new theme css) until the owner touched
+ * something. Ben: "I published and nothing changed." Called once at boot:
+ * when the export was produced by a different build than the one running
+ * (or carries no stamp at all), it is rebuilt. A site with no published
+ * pages is left alone (exportAll fails closed on zero pages anyway).
+ * @returns {{ rebuilt: boolean, from: string, to: string }}
+ */
+function refreshAfterDeploy(outputDir = PUBLIC_DIR) {
+  const to = require('./build-info').buildId();
+  const from = exportBuiltBy(outputDir);
+  if (from === to) return { rebuilt: false, from, to };
+  let published = 0;
+  try { published = listPages().filter((p) => p.status === 'published').length; } catch (e) { published = 0; }
+  if (!published) return { rebuilt: false, from, to };
+  exportAll(outputDir);
+  return { rebuilt: true, from, to };
+}
+
 function exportAll(outputDir = PUBLIC_DIR) {
   // Public build renders published snapshot only (blocks), never draft_blocks
   const pages = listPages().filter(p => p.status === 'published');
   const results = [];
 
   copyThemeAssets('default');
+  // which code produced this export — refreshAfterDeploy compares it to the
+  // running build so a deploy never keeps serving the previous code's pages
+  try { ensureDir(outputDir); fs.writeFileSync(path.join(outputDir, BUILT_BY), require('./build-info').buildId() + '\n', 'utf8'); } catch (e) { /* the stamp is advisory */ }
 
   // One homepage wins index.html — same crowning as exportPage/sitemap:
   // the user's explicit choice first, ranked pick as fallback, or none.
@@ -252,6 +285,9 @@ function writeSearchIndex(outputDir) {
 module.exports = {
   exportPage,
   exportAll,
+  refreshAfterDeploy,
+  exportBuiltBy,
+  BUILT_BY,
   removePageHtml,
   publicHtmlName,
   copyThemeAssets,

@@ -261,7 +261,19 @@ function renderBlock(block, direction = 'rtl') {
         const colContent = list.map(bb => renderBlock(bb, direction)).join('');
         return `<div class="col">${colContent || ''}</div>`;
       }).join('');
-      return `<div${colExtra} class="columns${ratios ? ' cols-ratio' : ''}" dir="${direction}">${inner}</div>`;
+      // v2.26 — gap/collapse/valign/width were registry params the renderer
+      // never emitted ("done on the data side"); now each one is a class the
+      // theme stylesheet answers (themes/default/css/main.css, .columns.*).
+      // cols-n-<N> lets the stylesheet wrap five or six cells on a tablet
+      // instead of cramming them, before they stack on a phone.
+      const d = block.data || {};
+      const cls = ['columns', `cols-n-${n}`];
+      if (ratios) cls.push('cols-ratio');
+      if (['none', 'sm', 'lg'].includes(d.gap)) cls.push(`gap-${d.gap}`);
+      if (['sm', 'lg', 'never'].includes(d.collapse)) cls.push(`collapse-${d.collapse}`);
+      if (['center', 'bottom', 'stretch'].includes(d.valign)) cls.push(`valign-${d.valign}`);
+      if (['wide', 'full'].includes(d.width)) cls.push(`cols-${d.width}`);
+      return `<div${colExtra} class="${cls.join(' ')}${extraClass}" dir="${direction}">${inner}</div>`;
     }
     case 'list': {
       const items = block.data.items || [];
@@ -960,6 +972,56 @@ function pageBackgroundStyle(bg) {
   return { css: `<style id="tapuz-page-bg">${rules.join('')}</style>`, bodyClass: 'tapuz-page-bg' };
 }
 
+/**
+ * The theme canvas shim (v2.24). /admin/theme frames a REAL page rendered
+ * with a candidate theme; this script (preview mode only, never on the live
+ * site) does two things: it reports whether the theme's effect ran cleanly —
+ * every error on the page, at load or later — to the editor via postMessage,
+ * and it rewrites clicks on in-site links to stay inside the preview so the
+ * owner can browse the whole site in the candidate theme.
+ */
+function renderThemePreviewShim(previewId) {
+  const id = String(previewId).replace(/[^A-Za-z0-9_-]/g, '');
+  return `<script id="tapuz-theme-preview-shim">
+(function () {
+  var errors = [];
+  function report() {
+    try {
+      if (window.__tapuzThemeEffectError) errors.push(String(window.__tapuzThemeEffectError));
+      window.parent.postMessage({ type: 'tapuz-theme-preview', id: '${id}', path: location.pathname + location.search,
+        effect: !!document.getElementById('tapuz-theme-effects'), errors: errors.slice(0, 5) }, location.origin);
+    } catch (e) { /* not framed */ }
+  }
+  window.addEventListener('error', function (ev) {
+    var where = ev && ev.filename ? '' : ' (סקריפט inline)';
+    errors.push(String((ev && ev.message) || ev) + where); report();
+  });
+  window.addEventListener('load', function () { setTimeout(report, 60); });
+  // the theme canvas (v2.25): an empty bench is header + footer around
+  // nothing — say so inside the frame, in plain admin grey, never in theme css
+  if (/[?&]canvas=1/.test(location.search)) {
+    var main = document.querySelector('#main > .container') || document.querySelector('#main');
+    if (main && !main.children.length && !main.textContent.trim()) {
+      main.innerHTML = '<div style="margin:3rem auto;max-width:560px;padding:2rem;border:2px dashed #94a3b8;border-radius:12px;text-align:center;color:#64748b;font-family:system-ui,sans-serif;font-size:1rem;line-height:1.7">🧩 הקנבס ריק — הכותרת והתחתית שלמעלה ולמטה הן הערכה.<br>הוסיפו מודולים מהפאנל שמתחת לקנבס: הדביקו BenTML, בחרו מודול, או מלאו בכל המודולים.</div>';
+    }
+  }
+  document.addEventListener('click', function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#' || /^(https?:|mailto:|tel:|javascript:)/i.test(href) || a.target === '_blank') return;
+    var url;
+    try { url = new URL(href, location.origin); } catch (e) { return; }
+    if (url.origin !== location.origin || url.pathname.indexOf('/admin/') === 0 || url.pathname.indexOf('/assets/') === 0) return;
+    ev.preventDefault();
+    var p = url.pathname.replace(/^\\//, '').replace(/\\.html$/, '');
+    try { p = decodeURIComponent(p); } catch (e) { /* keep raw */ }
+    location.href = '/admin/theme/preview/${id}?path=' + encodeURIComponent(p || '');
+  }, true);
+})();
+</script>`;
+}
+
 function renderPage(page, options = {}) {
   // Redirect pages: meta.redirect = target URL → tiny instant-redirect document
   if (page.meta && page.meta.redirect) {
@@ -982,11 +1044,16 @@ function renderPage(page, options = {}) {
   const content = (blockSource || []).map(b => renderBlock(b, direction)).join('\n');
 
   const cssPath = path.join(theme.dir, 'css', 'main.css');
-  const overrides = loadOverrides();
+  // options.overrides (v2.24) — the theme canvas renders a CANDIDATE theme
+  // (a look, the form, an AI reply) with the real pages, without saving it
+  const overrides = options.overrides || loadOverrides();
   const overrideCss = overridesToCss(overrides);
   let head = fs.existsSync(cssPath)
     ? `<style>\n${fs.readFileSync(cssPath, 'utf8')}\n</style>`
     : '';
+  // web fonts (v2.24) — <link>s, so they survive the export's style-strip
+  const fontLinks = require('./theme').renderThemeFontLinks(overrides);
+  if (fontLinks) head += `\n  ${fontLinks}\n  `;
   head += `<style id="tapuz-theme-overrides">\n${overrideCss}\n</style>`;
   // build fingerprint (src/build-info.js) — survives the static export, so a
   // view-source on the live site says WHICH code rendered it
@@ -1103,6 +1170,10 @@ function renderPage(page, options = {}) {
     renderAnalyticsBeacon(config) + require('./crm/consent').renderConsent(config) +
     require('./crm/pixels').renderPixels(config) +
     require('./crm/cs-widget').renderTag(config) +
+    // theme canvas shim (v2.24) — only when /admin/theme previews a candidate:
+    // reports effect errors to the editor and keeps in-site clicks inside the
+    // preview. Emitted BEFORE the effect so its error hook sees the effect run.
+    (options.preview ? renderThemePreviewShim(options.preview) : '') +
     // theme effects JS (v2.22) — the theme's site-wide snippet (mouse effects
     // etc.), last so every widget above exists before it runs
     require('./theme').renderThemeEffectsJs(overrides);

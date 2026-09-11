@@ -346,7 +346,7 @@ AUDIO(src: "...")
 
 #### `ROW` → `columns`
 
-▥ **עמודות** — 2–4 טורים זה לצד זה
+▥ **עמודות** — 2–6 טורים זה לצד זה
 
 Shape: `ROW(params) { nested modules }`
 
@@ -356,6 +356,7 @@ Shape: `ROW(params) { nested modules }`
 | `gap` | `gap` | enum none\|sm\|md\|lg |  | "md" |
 | `collapse` | `collapse` | enum sm\|md\|lg\|never |  | "md" |
 | `valign` | `valign` | enum top\|center\|bottom\|stretch |  | "top" |
+| `width` | `width` | enum content\|wide\|full |  | "content" |
 | `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml

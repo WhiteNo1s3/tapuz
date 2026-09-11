@@ -162,17 +162,31 @@ function saveCurrentAsTheme(name) {
  * import; the difference is where it goes.
  */
 function importPackageToLibrary(pkg) {
-  if (!pkg || typeof pkg !== 'object') throw new Error('קובץ ערכת הנושא אינו תקין (לא JSON)');
-  if (pkg.format !== theme.THEME_PACKAGE_FORMAT) {
-    throw new Error('זה לא קובץ ערכת נושא של Tapuz (format שגוי)');
-  }
-  if (typeof pkg.version !== 'number' || pkg.version > theme.THEME_PACKAGE_VERSION) {
-    throw new Error('גרסת קובץ ערכת הנושא חדשה מדי לגרסת Tapuz הזו');
-  }
-  if (!pkg.overrides || typeof pkg.overrides !== 'object') {
-    throw new Error('קובץ ערכת הנושא לא מכיל overrides');
-  }
-  return addEntry(pkg.name, pkg.overrides, 'import');
+  // v2.24: the same tolerant door as the live import — a package object,
+  // its JSON text, a fenced/chatted reply, a bare theme JSON — or (v2.26) a
+  // <bent-theme> document, whose <bent-canvas> rides along on the entry
+  const valid = theme.validateThemePackage(typeof pkg === 'string' ? theme.parseThemePackage(pkg) : pkg);
+  const entry = addEntry(valid.name, valid.overrides, 'import');
+  if (valid.canvas) attachCanvas(entry.id, valid.canvas);
+  return entry;
+}
+
+/** An AI-designed theme (the theme-designer roleplay's move) lands in the
+ *  library under its own name — never on the live site by itself. */
+function saveAiTheme(name, overrides, canvas) {
+  const entry = addEntry(name, overrides, 'ai');
+  if (canvas) attachCanvas(entry.id, canvas);
+  return entry;
+}
+
+/** Keep a bench fragment beside an entry (shown when the entry is previewed,
+ *  offered when it is applied). */
+function attachCanvas(id, canvas) {
+  const lib = loadLibrary();
+  const t = lib.themes.find((x) => x.id === id);
+  if (!t) return;
+  t.canvas = String(canvas || '').slice(0, 200000);
+  saveLibrary(lib);
 }
 
 /** An entry back out as a portable package (share it, feed it to another site). */
@@ -186,6 +200,13 @@ function exportTheme(id) {
     exportedAt: new Date().toISOString(),
     overrides: t.overrides
   };
+}
+
+/** An entry as a `.bent` document (v2.26). */
+function exportThemeBent(id) {
+  const t = getTheme(id);
+  if (!t) throw new Error('ערכת נושא לא נמצאה');
+  return require('./bentml/theme-dialect').serializeTheme({ name: t.name, overrides: t.overrides, canvas: t.canvas || '' });
 }
 
 /** Is the live state already represented (verbatim) by some library entry? */
@@ -252,7 +273,9 @@ module.exports = {
   getTheme,
   saveCurrentAsTheme,
   importPackageToLibrary,
+  saveAiTheme,
   exportTheme,
+  exportThemeBent,
   applyTheme,
   removeTheme,
   renameTheme
