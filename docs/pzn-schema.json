@@ -3048,6 +3048,16 @@
           "default": "",
           "optional": true
         },
+        "role": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "time": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
         "bio": {
           "type": "text",
           "default": "",
@@ -3211,6 +3221,531 @@
         "columns": {
           "type": "integer",
           "default": 3,
+          "optional": true
+        }
+      }
+    },
+    "search": {
+      "tag": "bent-search",
+      "label": {
+        "he": "חיפוש",
+        "en": "Search"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "placeholder": {
+          "type": "string",
+          "default": "חיפוש…",
+          "optional": true
+        },
+        "action": {
+          "type": "url",
+          "default": "/search",
+          "optional": true
+        },
+        "name": {
+          "type": "string",
+          "default": "q",
+          "optional": true
+        },
+        "submit": {
+          "type": "string",
+          "default": "חיפוש",
+          "optional": true
+        },
+        "method": {
+          "type": "enum",
+          "enum": [
+            "get",
+            "post"
+          ],
+          "default": "get",
+          "optional": true
+        }
+      }
+    },
+    "newsletter": {
+      "tag": "bent-newsletter",
+      "label": {
+        "he": "ניוזלטר",
+        "en": "Newsletter"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "placeholder": {
+          "type": "string",
+          "default": "האימייל שלכם",
+          "optional": true
+        },
+        "submit": {
+          "type": "string",
+          "default": "הרשמה",
+          "optional": true
+        },
+        "action": {
+          "type": "url",
+          "default": "/api/form",
+          "optional": true
+        }
+      }
+    },
+    "page": {
+      "tag": "bent-page",
+      "label": {
+        "he": "עמוד",
+        "en": "Page"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "current": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        }
+      }
+    },
+    "pager": {
+      "tag": "bent-pager",
+      "label": {
+        "he": "עימוד",
+        "en": "Pager"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "page"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "label": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "consent": {
+      "tag": "bent-consent",
+      "label": {
+        "he": "הסכמה לעוגיות",
+        "en": "Consent"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "accept": {
+          "type": "string",
+          "default": "אישור",
+          "optional": true
+        },
+        "reject": {
+          "type": "string",
+          "default": "סירוב",
+          "optional": true
+        },
+        "policy": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "policyLabel": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "relcard": {
+      "tag": "bent-relcard",
+      "label": {
+        "he": "כרטיס קשור",
+        "en": "Related card"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "href": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "tag": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "excerpt": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "related": {
+      "tag": "bent-related",
+      "label": {
+        "he": "תוכן קשור",
+        "en": "Related"
+      },
+      "category": "media",
+      "container": true,
+      "accept": [
+        "relcard"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": "כתבות נוספות",
+          "optional": true
+        }
+      }
+    },
+    "comment": {
+      "tag": "bent-comment",
+      "label": {
+        "he": "תגובה",
+        "en": "Comment"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "author": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "time": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "comments": {
+      "tag": "bent-comments",
+      "label": {
+        "he": "תגובות",
+        "en": "Comments"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "comment"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": "תגובות",
+          "optional": true
+        }
+      }
+    },
+    "slot": {
+      "tag": "bent-slot",
+      "label": {
+        "he": "משבצת פרסום",
+        "en": "Ad slot"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "label": {
+          "type": "string",
+          "default": "פרסומת",
+          "optional": true
+        },
+        "src": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "advertiser": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "auth": {
+      "tag": "bent-auth",
+      "label": {
+        "he": "כניסה / הרשמה",
+        "en": "Auth"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "login": {
+          "type": "string",
+          "default": "כניסה",
+          "optional": true
+        },
+        "loginurl": {
+          "type": "url",
+          "default": "/login",
+          "optional": true
+        },
+        "register": {
+          "type": "string",
+          "default": "הרשמה",
+          "optional": true
+        },
+        "registerurl": {
+          "type": "url",
+          "default": "/signup",
+          "optional": true
+        }
+      }
+    },
+    "code": {
+      "tag": "bent-code",
+      "label": {
+        "he": "בלוק קוד",
+        "en": "Code"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "lang": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "source": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "tag": {
+      "tag": "bent-tag",
+      "label": {
+        "he": "תגית",
+        "en": "Tag"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "tags": {
+      "tag": "bent-tags",
+      "label": {
+        "he": "תגיות",
+        "en": "Tags"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "tag"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "label": {
+          "type": "string",
+          "default": "",
           "optional": true
         }
       }

@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (84)
+## Modules (98)
 
 ### Category: content
 
@@ -278,6 +278,8 @@ from it directly.
   - `image` · url
   - `url` · url
   - `linkLabel` · string
+  - `role` · string
+  - `time` · string
   - `bio` · text · **(body text, not an attribute)**
 
 #### `<bent-flipbox>` — קופסה מתהפכת / Flip box · leaf
@@ -288,6 +290,12 @@ from it directly.
   - `cta` · string
   - `url` · url
   - `backText` · text · **(body text, not an attribute)**
+
+#### `<bent-code>` — בלוק קוד / Code · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `lang` · string
+  - `source` · string
 
 ### Category: layout
 
@@ -413,6 +421,81 @@ from it directly.
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `title` · string
+
+#### `<bent-search>` — חיפוש / Search · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `placeholder` · string · default `חיפוש…`
+  - `action` · url · default `/search`
+  - `name` · string · default `q`
+  - `submit` · string · default `חיפוש`
+  - `method` · enum · get \| post · default `get`
+
+#### `<bent-newsletter>` — ניוזלטר / Newsletter · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string
+  - `placeholder` · string · default `האימייל שלכם`
+  - `submit` · string · default `הרשמה`
+  - `action` · url · default `/api/form`
+
+#### `<bent-page>` — עמוד / Page · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `label` · string
+  - `url` · url
+  - `current` · boolean · default `false`
+
+#### `<bent-pager>` — עימוד / Pager · container (children: `bent-page`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `label` · string
+
+#### `<bent-consent>` — הסכמה לעוגיות / Consent · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `accept` · string · default `אישור`
+  - `reject` · string · default `סירוב`
+  - `policy` · url
+  - `policyLabel` · string
+
+#### `<bent-comment>` — תגובה / Comment · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `author` · string
+  - `time` · string
+
+#### `<bent-comments>` — תגובות / Comments · container (children: `bent-comment`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string · default `תגובות`
+
+#### `<bent-slot>` — משבצת פרסום / Ad slot · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `label` · string · default `פרסומת`
+  - `src` · url
+  - `url` · url
+  - `advertiser` · string
+
+#### `<bent-auth>` — כניסה / הרשמה / Auth · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `login` · string · default `כניסה`
+  - `loginurl` · url · default `/login`
+  - `register` · string · default `הרשמה`
+  - `registerurl` · url · default `/signup`
+
+#### `<bent-tag>` — תגית / Tag · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `label` · string
+  - `url` · url
+
+#### `<bent-tags>` — תגיות / Tags · container (children: `bent-tag`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `label` · string
 
 ### Category: data
 
@@ -583,6 +666,20 @@ from it directly.
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `columns` · integer · default `3`
+
+#### `<bent-relcard>` — כרטיס קשור / Related card · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string
+  - `href` · url
+  - `image` · url
+  - `tag` · string
+  - `excerpt` · string
+
+#### `<bent-related>` — תוכן קשור / Related · container (children: `bent-relcard`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string · default `כתבות נוספות`
 
 ### Category: effects
 

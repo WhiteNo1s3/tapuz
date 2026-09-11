@@ -80,7 +80,17 @@ const ALIASES = {
   gap: 'spacer', space: 'spacer',
   contact: 'contact-info', 'contact-details': 'contact-info',
   catalog: 'products', 'product-grid': 'products', 'product-list': 'products',
-  woocommerce: 'products', 'shop-loop': 'products'
+  woocommerce: 'products', 'shop-loop': 'products',
+  search: 'search', 'search-form': 'search', 'site-search': 'search',
+  newsletter: 'newsletter', subscribe: 'newsletter', mailchimp: 'newsletter',
+  pagination: 'pager', pager: 'pager', paginate: 'pager',
+  cookie: 'consent', gdpr: 'consent', 'cookie-banner': 'consent',
+  related: 'related', 'related-posts': 'related',
+  comments: 'comments',
+  advertisement: 'slot', 'ad-slot': 'slot', adsbygoogle: 'slot',
+  login: 'auth', signup: 'auth', 'account-menu': 'auth',
+  pre: 'code', snippet: 'code', 'code-block': 'code',
+  'post-tags': 'tags', 'tag-list': 'tags', 'tag-cloud': 'tags'
 };
 
 /** Common model drift on PROP VALUES (v1.97): grok's demo — and any model

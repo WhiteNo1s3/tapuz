@@ -82,6 +82,27 @@ function stitchPageChrome(scope, mainHtml) {
     const mapped = htmlToBlocks(footer[0]);
     if ((mapped.blocks || []).some((b) => b.type === 'footer' && isRealChrome(b))) out = out + footer[0];
   }
+  const mainTag = /<main\b[^>]*>[\s\S]*?<\/main>/i.exec(scope);
+  const prefix = mainTag ? scope.slice(0, scope.indexOf(mainTag[0])) : '';
+  const suffix = mainTag ? scope.slice(scope.indexOf(mainTag[0]) + mainTag[0].length) : '';
+  if (prefix && !/role=["']search["']|class="[^"]*bent-search|search-form/i.test(out)) {
+    const search = /<form\b[^>]*(?:role=["']search["']|action=["'][^"']*search)[^>]*>[\s\S]*?<\/form>/i.exec(prefix)
+      || /<form\b[^>]*class=["'][^"']*search[^"']*["'][^>]*>[\s\S]*?<\/form>/i.exec(prefix);
+    if (search) {
+      const mapped = htmlToBlocks(search[0]);
+      if ((mapped.blocks || []).some((b) => b.type === 'search') && !/<form\b[^>]*(?:role=["']search["']|search)/i.test(out)) {
+        out = search[0] + out;
+      }
+    }
+  }
+  if (suffix && !/cookie|consent-banner|bent-consent/i.test(out)) {
+    const consent = /<(?:div|aside|section)\b[^>]*class=["'][^"']*(?:cookie|gdpr|consent-banner)[^"']*["'][^>]*>[\s\S]*?<\/(?:div|aside|section)>/i.exec(suffix)
+      || /<(?:div|aside|section)\b[^>]*class=["'][^"']*(?:cookie|gdpr|consent-banner)[^"']*["'][^>]*>[\s\S]*?<\/(?:div|aside|section)>/i.exec(prefix);
+    if (consent) {
+      const mapped = htmlToBlocks(consent[0]);
+      if ((mapped.blocks || []).some((b) => b.type === 'consent')) out = out + consent[0];
+    }
+  }
   return out;
 }
 
@@ -138,7 +159,7 @@ function extractLang(html) {
 // (halves, heroes, card walls) gets the modular read. toolGap is the union:
 // the vocabulary engine keeps every missing-tool sighting from every lens.
 
-const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline', 'pricing', 'carousel', 'faq', 'tabs', 'accordion', 'crumbs', 'stats', 'logos', 'social', 'testimonial', 'team', 'countdown', 'pricelist', 'progress', 'header', 'footer', 'whatsapp', 'rating', 'hours', 'toc', 'author', 'compare', 'flipbox', 'products']);
+const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline', 'pricing', 'carousel', 'faq', 'tabs', 'accordion', 'crumbs', 'stats', 'logos', 'social', 'testimonial', 'team', 'countdown', 'pricelist', 'progress', 'header', 'footer', 'whatsapp', 'rating', 'hours', 'toc', 'author', 'compare', 'flipbox', 'products', 'search', 'newsletter', 'pager', 'consent', 'related', 'comments', 'slot', 'auth', 'code', 'tags']);
 
 /** Walk a block tree (columns/cards/card children included). */
 function eachBlock(blocks, fn) {

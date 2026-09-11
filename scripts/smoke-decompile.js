@@ -29,7 +29,8 @@ async function checkRejects(name, fn) {
     <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ"></iframe>
     <a href="https://youtu.be/abc123xyz">סרטון</a>
     <a href="https://wa.me/972501234567">ווטסאפ</a>
-    <form action="/x"><input name="q"/></form>
+    <form action="/x"><input name="name"/><input name="email" type="email"/></form>
+    <form role="search" action="/search"><input name="q"/></form>
     <table><tr><td>1</td></tr></table>
     <video src="/clip.mp4" poster="/p.jpg" controls></video>
     <nav><a href="/a">A</a></nav>
@@ -50,6 +51,8 @@ async function checkRejects(name, fn) {
     !g.suggestedTools.includes('whatsapp'));
   check('form decompiles to a real form block (v0.58 closed this gap)',
     g.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 1) && !g.suggestedTools.includes('form'));
+  check('role=search form decompiles to search, not generic form',
+    g.blocks.some((b) => b.type === 'search' && b.data.name === 'q'));
   const timeBlock = htmlToBlocks('<time class="DateDisplay" datetime="2026-09-07T19:11:07.322Z"></time>');
   check('<time datetime> (empty body, ynet DateDisplay) → text, not leftover html',
     timeBlock.blocks.some((b) => b.type === 'text' && b.data.content === '7.9.2026')

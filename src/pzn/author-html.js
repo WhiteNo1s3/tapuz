@@ -8,10 +8,13 @@
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
 
-/** Whole author box. props: {name, image, bio, url, linkLabel} */
+/** Whole author box. props: {name, image, bio, url, linkLabel, role, time}
+ * A post byline is the same module without a bio: name (linked when there
+ * is a url), then a role · date meta line. */
 function renderAuthor(props = {}, opts = {}) {
   const name = escapeHtml(props.name || '');
   const bio = escapeHtml(props.bio || '');
+  const meta = [props.role, props.time].filter(Boolean).map((s) => `<span>${escapeHtml(s)}</span>`).join('');
   const image = String(props.image || '').trim();
   const href = safeHref(props.url || '');
   const linkLabel = escapeHtml(props.linkLabel || 'לכל הכתבות');
@@ -21,9 +24,14 @@ function renderAuthor(props = {}, opts = {}) {
   return `<aside${opts.idAttr || ''} class="bent-author${opts.cls || ''}"${opts.extra || ''}${opts.dir || ''}>` +
     photo +
     '<div class="bent-author-body">' +
-    (name ? `<p class="bent-author-name">${name}</p>` : '') +
+    (name
+      ? (href && href !== '#' && !bio
+        ? `<p class="bent-author-name"><a href="${escapeAttr(href)}">${name}</a></p>`
+        : `<p class="bent-author-name">${name}</p>`)
+      : '') +
+    (meta ? `<p class="bent-author-meta">${meta}</p>` : '') +
     (bio ? `<p class="bent-author-bio">${bio}</p>` : '') +
-    (href && href !== '#' ? `<a class="bent-author-link" href="${escapeAttr(href)}">${linkLabel}</a>` : '') +
+    (href && href !== '#' && bio ? `<a class="bent-author-link" href="${escapeAttr(href)}">${linkLabel}</a>` : '') +
     '</div></aside>';
 }
 

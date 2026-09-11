@@ -170,7 +170,17 @@ const VOCAB_DATA = {
   header: { tone: 'dark', layout: 'row', blocks: [{ type: 'image', id: 'image_1', data: { src: '/uploads/logo.svg', alt: 'לוגו' } }, { type: 'nav', id: 'nav_1', data: { items: [{ label: 'בית', href: '/' }] } }] },
   footer: { tone: 'dark', credit: '© 2026 כל הזכויות שמורות', blocks: [{ type: 'text', id: 'text_1', data: { content: 'תחתית' } }] },
   whatsapp: { label: 'דברו איתנו בוואטסאפ', phone: '972501234567', message: 'שלום, אשמח לפרטים', note: 'מענה תוך דקות' },
-  products: { columns: 3, items: [{ title: 'מוצר', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' }] }
+  products: { columns: 3, items: [{ title: 'מוצר', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' }] },
+  code: { lang: 'css', source: '.hero { color: inherit; }' },
+  tags: { items: [{ label: 'עיצוב', url: '/tag/design' }, { label: 'קוד', url: '/tag/code' }] },
+  search: { placeholder: 'חיפוש…', action: '/search', name: 'q', submit: 'חיפוש' },
+  newsletter: { title: 'הישארו מעודכנים', text: 'קבלו עדכונים למייל.', placeholder: 'האימייל שלכם', submit: 'הרשמה', action: '/api/form' },
+  pager: { items: [{ label: '1', url: '/p/1' }, { label: '2' }] },
+  consent: { text: 'אתר זה משתמש בעוגיות.', accept: 'אישור', reject: 'סירוב', policy: '/privacy', policyLabel: 'מדיניות פרטיות' },
+  related: { title: 'כתבות נוספות', items: [{ title: 'כתבה', excerpt: 'תקציר', href: '/a' }] },
+  comments: { title: 'תגובות', items: [{ author: 'דנה', time: 'אתמול', text: 'כתבה מצוינת.' }] },
+  slot: { label: 'פרסומת', src: '/demo/tile-1.svg', url: '/ad', advertiser: 'מותג' },
+  auth: { login: 'כניסה', loginurl: '/login', register: 'הרשמה', registerurl: '/signup' }
 };
 
 // types the language deliberately folds into another keyword's JSON

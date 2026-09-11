@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en"><head><title>Blog archive</title></head>
+<body>
+<form class="search-form" role="search" action="/search" method="get">
+  <input type="search" name="q" placeholder="Search">
+  <button type="submit">Search</button>
+</form>
+<nav class="pagination" aria-label="Pages">
+  <a href="/blog/page/1">1</a>
+  <span aria-current="page">2</span>
+  <a href="/blog/page/3">3</a>
+</nav>
+<div class="related-posts">
+  <article><a href="/p/one"><h3>One</h3></a></article>
+  <article><a href="/p/two"><h3>Two</h3></a></article>
+</div>
+<section class="newsletter">
+  <h2>Subscribe</h2>
+  <form action="/subscribe" method="post">
+    <input type="email" name="email" placeholder="you@studio.com">
+    <button type="submit">Subscribe</button>
+  </form>
+</section>
+</body></html>

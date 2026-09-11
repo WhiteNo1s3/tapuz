@@ -62,7 +62,14 @@ const {
   liftFooterCredit,
   whatsappDataOf,
   mapsAddressOf,
-  looksLikeCarousel
+  looksLikeCarousel,
+  parseSearchData,
+  parseNewsletterData,
+  parsePagerData,
+  parseAuthData,
+  parseSlotData,
+  parseCodeData,
+  parseTagsData
 } = require('./graduate');
 
 // ─── role inference (the lab's naming.js, trimmed to what Tapuz maps) ───
@@ -92,13 +99,22 @@ const ROLE_FROM_CLASS = [
   [/star-rating|elementor-star-rating|bent-rating/i, 'rating'],
   [/opening-hours|business-hours|open-hours|bent-hours/i, 'hours'],
   [/\btoc\b|table-of-contents|bent-toc/i, 'toc'],
-  [/author-box|post-author|about-author|author-bio|bent-author/i, 'author'],
+  [/author-box|post-author|about-author|author-bio|bent-author|byline|entry-author/i, 'author'],
   [/twentytwenty|image-compare|before-after|bent-compare/i, 'compare'],
   [/flip-box|flipbox|elementor-flip-box|bent-flipbox/i, 'flipbox'],
   [/\b(?:stats|counters?|metrics|kpis?|stats-row)\b/i, 'stats'],
   [/\b(?:logos?|logo-strip|clients|brands|partners|logos-strip)\b/i, 'logos'],
   [/main|content|primary|article-body|post-content/i, 'main'],
   [/product-grid|product-list|products|woocommerce|catalog|shop-loop/i, 'products'],
+  [/post-tags|tag-list|tag-cloud|entry-tags/i, 'tags'],
+  [/search-form|site-search|header-search|bent-search/i, 'search'],
+  [/newsletter|subscribe|mailchimp|bent-newsletter/i, 'newsletter'],
+  [/pagination|pager|page-numbers|bent-pager/i, 'pager'],
+  [/cookie|gdpr|consent-banner|cookieconsent|bent-consent/i, 'consent'],
+  [/related-posts|related-articles|more-stories|bent-related/i, 'related'],
+  [/comment-list|commentlist|bent-comments|\bcomments\b/i, 'comments'],
+  [/adsbygoogle|ad-slot|advertisement|bent-slot/i, 'slot'],
+  [/account-menu|user-menu|login-bar|bent-auth/i, 'auth'],
   [/card|tile|teaser|cube/i, 'card'],
   [/cta|call-to-action|promo/i, 'cta']
 ];
@@ -234,8 +250,17 @@ function isEmptyBlock(b) {
     case 'whatsapp': return !String(d.phone || '').replace(/\D/g, '');
     case 'header':
     case 'footer': return !(d.blocks || []).length && !String(d.credit || '').trim();
-    case 'whatsapp': return !String(d.phone || '').trim() && !String(d.url || '').trim();
     case 'products': return !(d.items || []).length;
+    case 'code': return !String(d.source || '').trim();
+    case 'tags': return !(d.items || []).length;
+    case 'pager':
+    case 'related':
+    case 'comments': return !(d.items || []).length;
+    case 'search': return !String(d.action || d.placeholder || '').trim();
+    case 'newsletter': return !String(d.action || d.title || d.text || '').trim();
+    case 'consent': return !String(d.text || d.content || '').trim();
+    case 'slot': return !String(d.src || d.url || d.label || '').trim();
+    case 'auth': return !d.login && !d.register && !d.loginurl && !d.registerurl;
     default: return false;
   }
 }
@@ -481,6 +506,16 @@ function huntBlocks(html, opts = {}) {
         }
         mapped += 1; i = end; continue;
       }
+      if (name === 'pre') {
+        const code = parseCodeData(tokens, i, end, t);
+        if (code) {
+          sink.push({ type: 'code', id: nid('code'), data: code });
+          mapped += 1;
+        } else {
+          suggested.add('code');
+        }
+        i = end; continue;
+      }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
       if (name === 'ul' || name === 'ol') {
         // priced catalog lists are PRODUCTS; news card walls stay CARDS
@@ -533,7 +568,17 @@ function huntBlocks(html, opts = {}) {
         raw += frag;
         i = end; continue;
       }
-      if (name === 'form') {
+      if (name === 'form' || name === 'search') {
+        const search = parseSearchData(tokens, i, end, t);
+        if (search) {
+          sink.push({ type: 'search', id: nid('search'), data: search });
+          mapped += 1; i = end; continue;
+        }
+        const newsletter = parseNewsletterData(tokens, i, end, t);
+        if (newsletter) {
+          sink.push({ type: 'newsletter', id: nid('news'), data: newsletter });
+          mapped += 1; i = end; continue;
+        }
         const fields = parseFormFields(tokens, i, end);
         if (isPageForm(tokens, i, end, fields)) {
           suggested.add('form');
@@ -553,6 +598,21 @@ function huntBlocks(html, opts = {}) {
         const crumbNav = parseCrumbsData(tokens, i, end, t);
         if (crumbNav) {
           sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
+          mapped += 1; i = end; continue;
+        }
+        const pagerNav = parsePagerData(tokens, i, end, t);
+        if (pagerNav) {
+          sink.push({ type: 'pager', id: nid('pager'), data: pagerNav });
+          mapped += 1; i = end; continue;
+        }
+        const tagNav = parseTagsData(tokens, i, end, t);
+        if (tagNav) {
+          sink.push({ type: 'tags', id: nid('tags'), data: tagNav });
+          mapped += 1; i = end; continue;
+        }
+        const authNav = parseAuthData(tokens, i, end, t);
+        if (authNav) {
+          sink.push({ type: 'auth', id: nid('auth'), data: authNav });
           mapped += 1; i = end; continue;
         }
         const socialNav = parseSocialData(tokens, i, end, t);
@@ -578,11 +638,22 @@ function huntBlocks(html, opts = {}) {
         if (data) {
           sink.push({ type: 'video', id: nid('video'), data });
           mapped += 1;
-        } else {
-          suggested.add('video');
-          let frag = '';
-          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
-          raw += frag;
+        }
+        i = end; continue;
+      }
+      if (name === 'address') {
+        const addr = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+        if (addr) {
+          sink.push({ type: 'text', id: nid('t'), data: { content: addr } });
+          mapped += 1;
+        }
+        i = end; continue;
+      }
+      if (name === 'ins') {
+        const slot = parseSlotData(tokens, i, end, t);
+        if (slot) {
+          sink.push({ type: 'slot', id: nid('slot'), data: slot });
+          mapped += 1;
         }
         i = end; continue;
       }

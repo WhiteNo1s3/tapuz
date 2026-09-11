@@ -189,6 +189,23 @@ main#main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
 .bent-crumb + .bent-crumb::before { content: "/"; margin-inline: 0.45rem 0.5rem; color: #a8a29e; }
 .bent-crumb-link { color: #ea580c; text-decoration: none; }
 .bent-crumb-current { font-weight: 600; }
+.bent-search { display: flex; gap: 0.5rem; margin: 0.75rem 0; }
+.bent-search-input { flex: 1; padding: 0.5rem 0.7rem; border: 1px solid #e7e5e4; border-radius: 8px; }
+.bent-search-submit { padding: 0.5rem 0.9rem; border: 0; border-radius: 8px; background: #ea580c; color: #fff; }
+.bent-newsletter { margin: 1rem 0; padding: 1rem; border: 1px solid #e7e5e4; border-radius: 12px; background: #fff7ed; }
+.bent-newsletter-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.bent-pager-list { display: flex; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+.bent-pager-link, .bent-pager-current { padding: 0.3rem 0.6rem; border: 1px solid #e7e5e4; border-radius: 8px; text-decoration: none; }
+.bent-consent-toggle { position: absolute; opacity: 0; pointer-events: none; }
+.bent-consent-toggle:checked + .bent-consent { display: none; }
+.bent-consent { margin: 1rem 0; padding: 1rem; background: #1c1917; color: #fafaf9; border-radius: 12px; }
+.bent-consent-accept { background: #ea580c; color: #fff; padding: 0.35rem 0.8rem; border-radius: 8px; }
+.bent-related-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.85rem; }
+.bent-related-item { display: block; text-decoration: none; color: inherit; border: 1px solid #e7e5e4; border-radius: 10px; overflow: hidden; }
+.bent-comment { margin: 0.75rem 0; padding-top: 0.75rem; border-top: 1px solid #e7e5e4; }
+.bent-slot { margin: 1rem 0; padding: 0.75rem; border: 1px dashed #d6d3d1; text-align: center; }
+.bent-auth { display: flex; gap: 0.75rem; align-items: center; }
+.bent-auth-register { padding: 0.3rem 0.75rem; border-radius: 8px; background: #ea580c; color: #fff; text-decoration: none; }
 .bent-social { margin: 1rem 0; }
 .bent-social-list { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem; margin: 0; padding: 0; list-style: none; }
 .bent-social-link { display: inline-flex; align-items: center; padding: 0.4rem 0.8rem; border: 1px solid #e7e5e4; border-radius: 999px; text-decoration: none; color: inherit; font-size: 0.9rem; }

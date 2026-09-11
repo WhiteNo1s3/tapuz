@@ -29,6 +29,7 @@
 
 const { tokenize } = require('./language/parse');
 const { unescapeHtml } = require('./language/escape');
+const { createSurfaceParsers } = require('./surface-parse');
 const { parseWhatsappHref, DEFAULT_LABEL: WA_DEFAULT_LABEL } = require('./whatsapp-html');
 
 /** Reconstruct a token's HTML (for leftover fragments). */
@@ -913,6 +914,10 @@ function looksLikeFlipbox(t) { return FLIPBOX_CLASS.test(hintHay(t)); }
 // section furniture, not the page's chrome. ARIA landmark roles count too.
 const HEADER_TOKENS = new Set(['header', 'site-header', 'page-header', 'main-header', 'top-header', 'header-wrapper', 'header-wrap', 'site-head', 'topbar', 'top-bar']);
 const FOOTER_TOKENS = new Set(['footer', 'site-footer', 'page-footer', 'main-footer', 'footer-wrapper', 'footer-wrap', 'bottom-bar', 'colophon']);
+// a <header>/<footer> TAG that says it belongs to a post/card/section is that
+// section's furniture (WordPress `entry-header`, Bootstrap `card-footer`),
+// never the page's chrome — the blog corpus ships one per article
+const SECTION_FURNITURE = /(?:^|\s)(?:entry|post|article|card|section|widget|modal|panel|comment)-(?:header|footer)(?:\s|$)/i;
 
 /**
  * 'header' | 'footer' when the element IS the page's chrome landmark, else
@@ -920,8 +925,9 @@ const FOOTER_TOKENS = new Set(['footer', 'site-footer', 'page-footer', 'main-foo
  */
 function landmarkOf(t) {
   if (!t || t.kind !== 'open') return null;
-  if (t.name === 'header') return 'header';
-  if (t.name === 'footer') return 'footer';
+  if (t.name === 'header' || t.name === 'footer') {
+    return SECTION_FURNITURE.test(String((t.attrs && t.attrs.class) || '')) ? null : t.name;
+  }
   // only wrappers can BE the chrome — a <ul class="footer"> is a list in it
   if (!CONTAINERS.has(t.name) && !String(t.name || '').includes('-')) return null;
   const role = String((t.attrs && t.attrs.role) || '').toLowerCase();
@@ -977,6 +983,85 @@ function whatsappDataOf(tokens, i, end, t) {
  * (wave 4) — they land here only when the landmark mapping itself declines.
  * @returns {string|null}
  */
+/** Text links in a range (no pictures, no javascript:), de-duplicated by
+ * href+label — what the surface parsers read off an auth strip or a pager. */
+function collectChromeLinks(tokens, from, to) {
+  const items = [];
+  const seen = new Set();
+  for (let j = from; j < to; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'a') continue;
+    const close = matchClose(tokens, j);
+    const href = (tk.attrs && tk.attrs.href) || '';
+    if (!href || href === '#' || /^(javascript|data|vbscript):/i.test(href)) {
+      j = close - 1;
+      continue;
+    }
+    let pictured = false;
+    for (let k = j + 1; k < close - 1; k++) {
+      if (tokens[k].kind === 'open' && (tokens[k].name === 'img' || tokens[k].name === 'source')) {
+        pictured = true;
+        break;
+      }
+    }
+    if (pictured) {
+      j = close - 1;
+      continue;
+    }
+    let label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+    if (!label) label = attrOf(tk.attrs, 'aria-label', 'title').trim();
+    if (!label || label.length > LINK_LABEL_MAX) {
+      j = close - 1;
+      continue;
+    }
+    const key = href + '|' + label;
+    if (seen.has(key)) {
+      j = close - 1;
+      continue;
+    }
+    seen.add(key);
+    items.push({ label, href });
+    j = close - 1;
+  }
+  return items.slice(0, 24);
+}
+
+const {
+  parseSearchData,
+  parseNewsletterData,
+  parsePagerData,
+  parseConsentData,
+  parseRelatedData,
+  parseCommentsData,
+  parseSlotData,
+  parseAuthData,
+  looksLikeSearch,
+  looksLikeNewsletter,
+  looksLikePager,
+  looksLikeConsent,
+  looksLikeRelated,
+  looksLikeComments,
+  looksLikeSlot,
+  looksLikeAuth
+} = createSurfaceParsers({
+  parseFormFields,
+  collectFormFields,
+  isPageForm,
+  matchClose,
+  textOf,
+  unescapeHtml,
+  hintHay,
+  classHay,
+  extractCard,
+  childSpans,
+  HEADING,
+  parseNavItems,
+  collectChromeLinks,
+  timeText,
+  imageSrcOf,
+  countHeadings
+});
+
 function guessedTool(t) {
   if (!t) return null;
   const hay = hintHay(t);
@@ -1003,6 +1088,17 @@ function guessedTool(t) {
   if (looksLikeCompare(t)) return 'compare';
   if (looksLikeFlipbox(t)) return 'flipbox';
   if (looksLikeProducts(t) || looksLikeProductItem(t)) return 'products';
+  if (t && t.name === 'pre') return 'code';
+  if (looksLikeByline(t)) return 'author';
+  if (looksLikeTags(t)) return 'tags';
+  if (looksLikeSearch(t)) return 'search';
+  if (looksLikeNewsletter(t)) return 'newsletter';
+  if (looksLikePager(t)) return 'pager';
+  if (looksLikeConsent(t)) return 'consent';
+  if (looksLikeRelated(t)) return 'related';
+  if (looksLikeComments(t)) return 'comments';
+  if (looksLikeSlot(t)) return 'slot';
+  if (looksLikeAuth(t)) return 'auth';
   return null;
 }
 
@@ -2418,9 +2514,167 @@ function parseProductsData(tokens, i, end, t, bgMap) {
   return out;
 }
 
+function langOfCode(t) {
+  const hay = `${classHay(t)} ${attrOf(t.attrs || {}, 'rel', 'data-lang', 'lang')}`;
+  const m = /(?:language|lang)-([a-z0-9+#]+)/i.exec(hay);
+  if (m) return m[1].toLowerCase();
+  const named = /\b(css|js|javascript|typescript|tsx|jsx|html|xml|json|python|php|sql|bash|shell|scss|less)\b/i.exec(hay);
+  return named ? named[1].toLowerCase() : '';
+}
+
+function parseCodeData(tokens, i, end, t) {
+  if (!t || t.name !== 'pre') return null;
+  const source = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+$/, '');
+  if (!source.trim() || source.length > 20000) return null;
+  const out = { source };
+  let lang = langOfCode(t);
+  if (!lang) {
+    for (let j = i + 1; j < end - 1; j++) {
+      if (tokens[j].kind === 'open' && tokens[j].name === 'code') {
+        lang = langOfCode(tokens[j]);
+        break;
+      }
+    }
+  }
+  if (lang) out.lang = lang === 'js' ? 'javascript' : lang;
+  return out;
+}
+
+/** The post byline — rel=author, .byline, .entry-author, "posted by" — as
+ * opposed to the about-the-writer box AUTHOR_CLASS catches (wave 4). Both
+ * land on the same `author` module; a byline just has no bio. */
+function looksLikeByline(t) {
+  if (!t) return false;
+  if (t.attrs && /author/i.test(t.attrs.rel || '')) return true;
+  return /(?:^|\s)(?:author|byline|author-info|entry-author|posted-by)(?:\s|$)/i.test(hintHay(t));
+}
+
+function parseBylineData(tokens, i, end, t) {
+  if (!looksLikeByline(t)) return null;
+  if (countHeadings(tokens, i + 1, end - 1) > 3) return null;
+  const blob = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+  if (blob.length > 400) return null;
+  let name = '';
+  let role = '';
+  let image = '';
+  let url = '';
+  let time = '';
+  if (t.name === 'a' && t.attrs && t.attrs.href) {
+    url = t.attrs.href;
+    name = blob.slice(0, 80);
+  }
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const tcls = (tk.attrs && tk.attrs.class) || '';
+    if (!image && (tk.name === 'img' || tk.name === 'source')) {
+      image = imageSrcOf(tk.attrs);
+      j = close - 1;
+      continue;
+    }
+    // hCard tokens (fn / n) are exact class tokens, not substrings
+    if (!name && (HEADING.test(tk.name) || /(?:^|\s)(?:author-name|fn|n|name)(?:\s|$)/i.test(tcls))) {
+      const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (text && text.length <= 80) name = text;
+      j = close - 1;
+      continue;
+    }
+    if (!role && /(?:^|\s)(?:role|title|job|position|author-role|author-title)(?:\s|$)/i.test(tcls)) {
+      role = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim().slice(0, 60);
+      j = close - 1;
+      continue;
+    }
+    if (!time && tk.name === 'time') {
+      time = timeText(tokens, j, close, tk) || '';
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'a' && tk.attrs && tk.attrs.href) {
+      // the author link: its text is the name when nothing else said so
+      if (!url) url = tk.attrs.href;
+      if (!name && (/author/i.test(tk.attrs.rel || '') || !url || url === tk.attrs.href)) {
+        const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+        if (text && text.length <= 80) { name = text; j = close - 1; continue; }
+      }
+    }
+  }
+  // a byline that is only a name ("מאת דנה כהן") — never the whole
+  // name+role+date blob glued together
+  if (!name && !role && !time && blob && blob.length <= 80) name = blob.replace(/^(?:מאת|by)\s+/i, '').trim();
+  if (!name) return null;
+  const out = { name };
+  if (role) out.role = role;
+  if (image) out.image = image;
+  if (url) out.url = url;
+  if (time) out.time = time;
+  return out;
+}
+
+function looksLikeTags(t) {
+  return !!(t && /\b(?:post-tags|tag-list|tag-cloud|entry-tags|article-tags|bent-tags|\btags\b)\b/i.test(hintHay(t)));
+}
+
+function parseTagsData(tokens, i, end, t) {
+  if (!looksLikeTags(t)) return null;
+  const items = [];
+  const seen = new Set();
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'a') continue;
+    const close = matchClose(tokens, j);
+    const href = (tk.attrs && tk.attrs.href) || '';
+    const rel = (tk.attrs && tk.attrs.rel) || '';
+    let label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+    if (!label || label.length > 32) {
+      j = close - 1;
+      continue;
+    }
+    const tagged = /(?:^|\s)tag(?:s)?(?:\s|$)/i.test(rel + ' ' + ((tk.attrs && tk.attrs.class) || ''))
+      || /\/tag\//i.test(href)
+      || looksLikeTags(t);
+    if (!tagged) {
+      j = close - 1;
+      continue;
+    }
+    const key = href + '|' + label;
+    if (seen.has(key)) {
+      j = close - 1;
+      continue;
+    }
+    seen.add(key);
+    const item = { label };
+    if (href && href !== '#') item.url = href;
+    items.push(item);
+    j = close - 1;
+  }
+  if (items.length < 2) return null;
+  return { items: items.slice(0, 24) };
+}
+
 function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
+  const byline = parseBylineData(tokens, i, end, t); // rel=author / .byline — before anything else can claim the link
+  if (byline) return { type: 'author', data: byline, next: end };
+  const tags = parseTagsData(tokens, i, end, t);
+  if (tags) return { type: 'tags', data: tags, next: end };
+  const search = parseSearchData(tokens, i, end, t);
+  if (search) return { type: 'search', data: search, next: end };
+  const newsletter = parseNewsletterData(tokens, i, end, t);
+  if (newsletter) return { type: 'newsletter', data: newsletter, next: end };
+  const pager = parsePagerData(tokens, i, end, t);
+  if (pager) return { type: 'pager', data: pager, next: end };
   const crumbs = parseCrumbsData(tokens, i, end, t);
   if (crumbs) return { type: 'crumbs', data: crumbs, next: end };
+  const consent = parseConsentData(tokens, i, end, t);
+  if (consent) return { type: 'consent', data: consent, next: end };
+  const auth = parseAuthData(tokens, i, end, t);
+  if (auth) return { type: 'auth', data: auth, next: end };
+  const related = parseRelatedData(tokens, i, end, t, bgMap);
+  if (related) return { type: 'related', data: related, next: end };
+  const comments = parseCommentsData(tokens, i, end, t);
+  if (comments) return { type: 'comments', data: comments, next: end };
+  const slot = parseSlotData(tokens, i, end, t);
+  if (slot) return { type: 'slot', data: slot, next: end };
   const stats = parseStatsData(tokens, i, end, t);
   if (stats) return { type: 'stats', data: stats, next: end };
   const social = parseSocialData(tokens, i, end, t);
@@ -2717,6 +2971,16 @@ function htmlToBlocks(html, opts = {}) {
         }
         mapped += 1; i = end; continue;
       }
+      if (name === 'pre') {
+        const code = parseCodeData(tokens, i, end, t);
+        if (code) {
+          sink.push({ type: 'code', id: nid('code'), data: code });
+          mapped += 1;
+        } else {
+          suggested.add('code');
+        }
+        i = end; continue;
+      }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
       if (name === 'ul' || name === 'ol') {
         // priced catalog lists are PRODUCTS; card-shaped <li>s are a card
@@ -2771,7 +3035,17 @@ function htmlToBlocks(html, opts = {}) {
       // form → the form module (v0.58 closed this gap). Parse label/input/
       // textarea/select children into fields; skip submit/hidden controls
       // (the module renders its own submit button).
-      if (name === 'form') {
+      if (name === 'form' || name === 'search') {
+        const search = parseSearchData(tokens, i, end, t);
+        if (search) {
+          sink.push({ type: 'search', id: nid('search'), data: search });
+          mapped += 1; i = end; continue;
+        }
+        const newsletter = parseNewsletterData(tokens, i, end, t);
+        if (newsletter) {
+          sink.push({ type: 'newsletter', id: nid('news'), data: newsletter });
+          mapped += 1; i = end; continue;
+        }
         const fields = parseFormFields(tokens, i, end);
         if (isPageForm(tokens, i, end, fields)) {
           suggested.add('form');
@@ -2794,6 +3068,21 @@ function htmlToBlocks(html, opts = {}) {
         const crumbNav = parseCrumbsData(tokens, i, end, t);
         if (crumbNav) {
           sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
+          mapped += 1; i = end; continue;
+        }
+        const pagerNav = parsePagerData(tokens, i, end, t);
+        if (pagerNav) {
+          sink.push({ type: 'pager', id: nid('pager'), data: pagerNav });
+          mapped += 1; i = end; continue;
+        }
+        const tagNav = parseTagsData(tokens, i, end, t);
+        if (tagNav) {
+          sink.push({ type: 'tags', id: nid('tags'), data: tagNav });
+          mapped += 1; i = end; continue;
+        }
+        const authNav = parseAuthData(tokens, i, end, t);
+        if (authNav) {
+          sink.push({ type: 'auth', id: nid('auth'), data: authNav });
           mapped += 1; i = end; continue;
         }
         const socialNav = parseSocialData(tokens, i, end, t);
@@ -2827,11 +3116,24 @@ function htmlToBlocks(html, opts = {}) {
         if (data) {
           sink.push({ type: 'video', id: nid('video'), data });
           mapped += 1;
-        } else {
-          suggested.add('video');
-          let frag = '';
-          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
-          raw += frag;
+        }
+        i = end; continue;
+      }
+
+      if (name === 'address') {
+        const addr = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+        if (addr) {
+          sink.push({ type: 'text', id: nid('t'), data: { content: addr } });
+          mapped += 1;
+        }
+        i = end; continue;
+      }
+
+      if (name === 'ins') {
+        const slot = parseSlotData(tokens, i, end, t);
+        if (slot) {
+          sink.push({ type: 'slot', id: nid('slot'), data: slot });
+          mapped += 1;
         }
         i = end; continue;
       }
@@ -2990,6 +3292,17 @@ module.exports = {
   parseSocialData,
   parseTestimonialData,
   parseProductsData,
+  parseCodeData,
+  parseBylineData,
+  parseTagsData,
+  parseSearchData,
+  parseNewsletterData,
+  parsePagerData,
+  parseConsentData,
+  parseRelatedData,
+  parseCommentsData,
+  parseSlotData,
+  parseAuthData,
   tryStructuralModules,
   guessedTool,
   landmarkOf,

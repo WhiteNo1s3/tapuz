@@ -608,7 +608,9 @@ const KEYWORDS = {
       name: { type: 'string', required: true },
       image: { type: 'string' },
       url: { type: 'string' },
-      linkLabel: { type: 'string' }
+      linkLabel: { type: 'string' },
+      role: { type: 'string' },
+      time: { type: 'string' }
     }
   },
   COMPARE: {
@@ -764,6 +766,110 @@ const KEYWORDS = {
       showheader: { type: 'boolean', default: true }
     }
   },
+  SEARCH: {
+    body: 'NO-BODY',
+    jsonType: 'search',
+    params: {
+      placeholder: { type: 'string', default: 'חיפוש…' },
+      action: { type: 'string', default: '/search' },
+      name: { type: 'string', default: 'q' },
+      submit: { type: 'string', default: 'חיפוש' },
+      method: { type: 'enum', values: ['get', 'post'], default: 'get' }
+    }
+  },
+  NEWSLETTER: {
+    body: 'TEXT-BODY',
+    jsonType: 'newsletter',
+    params: {
+      title: { type: 'string' },
+      placeholder: { type: 'string', default: 'האימייל שלכם' },
+      submit: { type: 'string', default: 'הרשמה' },
+      action: { type: 'string', default: '/api/form' }
+    }
+  },
+  PAGER: {
+    body: 'BLOCK-BODY',
+    jsonType: 'pager',
+    children: ['PAGE'],
+    params: {
+      label: { type: 'string' }
+    }
+  },
+  PAGE: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'PAGER',
+    params: {
+      url: { type: 'string' },
+      current: { type: 'boolean', default: false }
+    }
+  },
+  CONSENT: {
+    body: 'TEXT-BODY',
+    jsonType: 'consent',
+    params: {
+      accept: { type: 'string', default: 'אישור' },
+      reject: { type: 'string' },
+      policy: { type: 'string' },
+      policylabel: { type: 'string' }
+    }
+  },
+  RELATED: {
+    body: 'BLOCK-BODY',
+    jsonType: 'related',
+    children: ['RELCARD'],
+    params: {
+      title: { type: 'string' }
+    }
+  },
+  RELCARD: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'RELATED',
+    params: {
+      title: { type: 'string', required: true },
+      image: { type: 'string' },
+      tag: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
+  COMMENTS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'comments',
+    children: ['COMMENT'],
+    params: {
+      title: { type: 'string' }
+    }
+  },
+  COMMENT: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'COMMENTS',
+    params: {
+      author: { type: 'string' },
+      time: { type: 'string' }
+    }
+  },
+  SLOT: {
+    body: 'NO-BODY',
+    jsonType: 'slot',
+    params: {
+      label: { type: 'string', default: 'פרסומת' },
+      src: { type: 'string' },
+      url: { type: 'string' },
+      advertiser: { type: 'string' }
+    }
+  },
+  AUTH: {
+    body: 'TEXT-BODY',
+    jsonType: 'auth',
+    params: {
+      login: { type: 'string', default: 'כניסה' },
+      loginurl: { type: 'string', default: '/login' },
+      register: { type: 'string', default: 'הרשמה' },
+      registerurl: { type: 'string', default: '/signup' }
+    }
+  },
   CONTACT: {
     body: 'NO-BODY',
     jsonType: 'contact-info',
@@ -772,6 +878,30 @@ const KEYWORDS = {
       email: { type: 'string' },
       address: { type: 'string' },
       hours: { type: 'string' }
+    }
+  },
+  CODE: {
+    body: 'NO-BODY',
+    jsonType: 'code',
+    params: {
+      lang: { type: 'string' },
+      source: { type: 'string', required: true }
+    }
+  },
+  TAGS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'tags',
+    children: ['TAG'],
+    params: {
+      label: { type: 'string' }
+    }
+  },
+  TAG: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TAGS',
+    params: {
+      url: { type: 'string' }
     }
   },
   BANNER: {
@@ -792,7 +922,7 @@ const RESERVED = new Set([
   // (pipe-row syntax), HEADER + FOOTER graduated in gap-audit wave 4 as
   // page chrome modules. INPUT stays a placeholder — form fields are the
   // child `field` module (nav links = child `navitem`).
-  'INPUT', 'CODE'
+  'INPUT'
 ]);
 
 const UNIVERSAL = new Set(['id', 'class', 'dir', 'animate']);

@@ -1562,7 +1562,9 @@ const BLOCK_REGISTRY = [
       { name: 'name', bentmlParam: 'name', labelHe: 'שם', type: 'string', required: true, default: '' },
       { name: 'image', bentmlParam: 'image', labelHe: 'תמונה (נתיב)', type: 'url', default: '' },
       { name: 'url', bentmlParam: 'url', labelHe: 'קישור', type: 'url', default: '' },
-      { name: 'linkLabel', bentmlParam: 'linkLabel', labelHe: 'טקסט הקישור', type: 'string', default: '' }
+      { name: 'linkLabel', bentmlParam: 'linkLabel', labelHe: 'טקסט הקישור', type: 'string', default: '' },
+      { name: 'role', bentmlParam: 'role', labelHe: 'תפקיד', type: 'string', default: '' },
+      { name: 'time', bentmlParam: 'time', labelHe: 'תאריך', type: 'string', default: '' }
     ],
     textField: 'bio',
     textFieldLabelHe: 'כמה מילים',
@@ -1604,6 +1606,236 @@ const BLOCK_REGISTRY = [
     textField: 'backText',
     textFieldLabelHe: 'טקסט (מאחור)',
     seed: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות על כל מוצר.', buttonText: 'לפרטים', buttonUrl: '#' }
+  },
+  {
+    type: 'search',
+    keyword: 'SEARCH',
+    labelHe: 'חיפוש',
+    icon: '⌕',
+    category: 'מבנה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'שורת חיפוש — שדה אחד + כפתור, בלי JS',
+    params: [
+      { name: 'placeholder', bentmlParam: 'placeholder', labelHe: 'מקום שמור', type: 'string', default: 'חיפוש…' },
+      { name: 'action', bentmlParam: 'action', labelHe: 'כתובת השליחה', type: 'url', default: '/search' },
+      { name: 'name', bentmlParam: 'name', labelHe: 'שם השדה', type: 'string', default: 'q' },
+      { name: 'submit', bentmlParam: 'submit', labelHe: 'טקסט הכפתור', type: 'string', default: 'חיפוש' },
+      {
+        name: 'method', bentmlParam: 'method', labelHe: 'שיטה', type: 'enum',
+        enum: ['get', 'post'], default: 'get', omitDefault: true
+      }
+    ],
+    textField: null,
+    seed: { placeholder: 'חיפוש…', action: '/search', name: 'q', submit: 'חיפוש' }
+  },
+  {
+    type: 'newsletter',
+    keyword: 'NEWSLETTER',
+    labelHe: 'ניוזלטר',
+    icon: '✉',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'הרשמה למייל — כותרת, טקסט, שדה אימייל',
+    params: [
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת', type: 'string' },
+      { name: 'placeholder', bentmlParam: 'placeholder', labelHe: 'מקום שמור', type: 'string', default: 'האימייל שלכם' },
+      { name: 'submit', bentmlParam: 'submit', labelHe: 'טקסט הכפתור', type: 'string', default: 'הרשמה' },
+      { name: 'action', bentmlParam: 'action', labelHe: 'כתובת השליחה', type: 'url', default: '/api/form' }
+    ],
+    textField: 'text',
+    seed: { title: 'הישארו מעודכנים', text: 'קבלו עדכונים ישירות למייל.', placeholder: 'האימייל שלכם', submit: 'הרשמה', action: '/api/form' }
+  },
+  {
+    type: 'pager',
+    keyword: 'PAGER',
+    labelHe: 'עימוד',
+    icon: '1–',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'מספרי עמודים — בית 1 2 3 הבא',
+    params: [
+      { name: 'label', bentmlParam: 'label', labelHe: 'תווית נגישות', type: 'string' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'עמודים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
+          { name: 'url', labelHe: 'קישור', type: 'url' },
+          { name: 'current', labelHe: 'עמוד נוכחי', type: 'boolean' }
+        ],
+        hint: 'ב-BenTML: צאצאי PAGE'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { label: '1', url: '/page/1' },
+        { label: '2', url: '/page/2' },
+        { label: '3', current: true }
+      ]
+    }
+  },
+  {
+    type: 'consent',
+    keyword: 'CONSENT',
+    labelHe: 'הסכמה לעוגיות',
+    icon: '✓',
+    category: 'מבנה',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'באנר עוגיות — אישור ב-CSS בלי JavaScript',
+    params: [
+      { name: 'accept', bentmlParam: 'accept', labelHe: 'אישור', type: 'string', default: 'אישור' },
+      { name: 'reject', bentmlParam: 'reject', labelHe: 'סירוב', type: 'string', default: 'סירוב' },
+      { name: 'policy', bentmlParam: 'policy', labelHe: 'קישור מדיניות', type: 'url' },
+      { name: 'policyLabel', bentmlParam: 'policylabel', labelHe: 'טקסט המדיניות', type: 'string' }
+    ],
+    textField: 'text',
+    seed: { text: 'אתר זה משתמש בעוגיות כדי לשפר את החוויה.', accept: 'אישור', reject: 'סירוב', policy: '/privacy', policyLabel: 'מדיניות פרטיות' }
+  },
+  {
+    type: 'related',
+    keyword: 'RELATED',
+    labelHe: 'תוכן קשור',
+    icon: '⧉',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'כתבות נוספות — כרטיסים עם תמונה וכותרת',
+    params: [
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת', type: 'string', default: 'כתבות נוספות' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'כרטיסים', type: 'list',
+        itemFields: [
+          { name: 'image', labelHe: 'תמונה', type: 'media' },
+          { name: 'tag', labelHe: 'תגית', type: 'string' },
+          { name: 'title', labelHe: 'כותרת', type: 'string', required: true },
+          { name: 'excerpt', labelHe: 'תקציר', type: 'string' },
+          { name: 'href', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי RELCARD'
+      }
+    ],
+    textField: null,
+    seed: {
+      title: 'כתבות נוספות',
+      items: [
+        { title: 'כתבה קשורה', excerpt: 'תקציר קצר.', href: '/a', tag: 'חדשות' },
+        { title: 'עוד כתבה', excerpt: 'עוד תקציר.', href: '/b', tag: 'תרבות' }
+      ]
+    }
+  },
+  {
+    type: 'comments',
+    keyword: 'COMMENTS',
+    labelHe: 'תגובות',
+    icon: '💬',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'שרשור תגובות — שם, זמן, טקסט',
+    params: [
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת', type: 'string', default: 'תגובות' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'תגובות', type: 'list',
+        itemFields: [
+          { name: 'author', labelHe: 'שם', type: 'string' },
+          { name: 'time', labelHe: 'זמן', type: 'string' },
+          { name: 'text', labelHe: 'טקסט', type: 'textarea', required: true }
+        ],
+        hint: 'ב-BenTML: צאצאי COMMENT'
+      }
+    ],
+    textField: null,
+    seed: {
+      title: 'תגובות',
+      items: [
+        { author: 'דנה', time: 'אתמול', text: 'כתבה מצוינת.' },
+        { author: 'יוסי', time: 'היום', text: 'תודה על העדכון.' }
+      ]
+    }
+  },
+  {
+    type: 'slot',
+    keyword: 'SLOT',
+    labelHe: 'משבצת פרסום',
+    icon: '▤',
+    category: 'מבנה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'מקום לפרסומת — תמונה, קישור, מפרסם',
+    params: [
+      { name: 'label', bentmlParam: 'label', labelHe: 'תווית', type: 'string', default: 'פרסומת' },
+      { name: 'src', bentmlParam: 'src', labelHe: 'תמונה', type: 'media' },
+      { name: 'url', bentmlParam: 'url', labelHe: 'קישור', type: 'url' },
+      { name: 'advertiser', bentmlParam: 'advertiser', labelHe: 'מפרסם', type: 'string' }
+    ],
+    textField: null,
+    seed: { label: 'פרסומת', src: '', url: '', advertiser: '' }
+  },
+  {
+    type: 'auth',
+    keyword: 'AUTH',
+    labelHe: 'כניסה / הרשמה',
+    icon: '⎆',
+    category: 'מבנה',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'רצועת חשבון — כניסה והרשמה',
+    params: [
+      { name: 'login', bentmlParam: 'login', labelHe: 'כניסה', type: 'string', default: 'כניסה' },
+      { name: 'loginurl', bentmlParam: 'loginurl', labelHe: 'קישור כניסה', type: 'url', default: '/login' },
+      { name: 'register', bentmlParam: 'register', labelHe: 'הרשמה', type: 'string', default: 'הרשמה' },
+      { name: 'registerurl', bentmlParam: 'registerurl', labelHe: 'קישור הרשמה', type: 'url', default: '/signup' }
+    ],
+    textField: 'text',
+    seed: { login: 'כניסה', loginurl: '/login', register: 'הרשמה', registerurl: '/signup', text: '' }
+  },
+  {
+    type: 'code',
+    keyword: 'CODE',
+    labelHe: 'בלוק קוד',
+    icon: '‹›',
+    category: 'תוכן',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'גדר קוד — בלי JS, גלילה אופקית',
+    params: [
+      { name: 'lang', bentmlParam: 'lang', labelHe: 'שפה', type: 'string' },
+      { name: 'source', bentmlParam: 'source', labelHe: 'קוד', type: 'textarea', required: true }
+    ],
+    textField: null,
+    seed: { lang: 'css', source: '.hero { color: inherit; }' }
+  },
+  {
+    type: 'tags',
+    keyword: 'TAGS',
+    labelHe: 'תגיות',
+    icon: '#',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'שבבי תגיות — ארכיון / נושא',
+    params: [
+      { name: 'label', bentmlParam: 'label', labelHe: 'תווית נגישות', type: 'string' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'תגיות', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'שם', type: 'string', required: true },
+          { name: 'url', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי TAG'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { label: 'עיצוב', url: '/tag/design' },
+        { label: 'קוד', url: '/tag/code' }
+      ]
+    }
   },
   {
     type: 'nav',

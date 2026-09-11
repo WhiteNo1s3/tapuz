@@ -732,6 +732,8 @@ function buildBlock(node, warnings) {
       if (bio) data.bio = bio;
       if (p.url) data.url = p.url;
       if (p.linkLabel) data.linkLabel = p.linkLabel;
+      if (p.role) data.role = p.role;
+      if (p.time) data.time = p.time;
       applyChrome(data, p);
       return createBlock('author', data);
     }
@@ -769,6 +771,132 @@ function buildBlock(node, warnings) {
       if (p.credit) data.credit = p.credit;
       applyChrome(data, p);
       return createBlock('footer', data);
+    }
+    case 'CODE': {
+      const data = { source: String(p.source || '') };
+      if (p.lang) data.lang = p.lang;
+      applyChrome(data, p);
+      return createBlock('code', data);
+    }
+    case 'TAGS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'TAG')
+        .map((c) => {
+          const item = { label: collapseSingleParagraph(c.text || '') };
+          const url = c.params && c.params.url;
+          if (url) item.url = url;
+          return item;
+        });
+      const data = { items };
+      if (p.label) data.label = p.label;
+      applyChrome(data, p);
+      return createBlock('tags', data);
+    }
+    case 'SEARCH': {
+      const data = {
+        placeholder: p.placeholder || 'חיפוש…',
+        action: p.action || '/search',
+        name: p.name || 'q',
+        submit: p.submit || 'חיפוש'
+      };
+      if (p.method === 'post') data.method = 'post';
+      applyChrome(data, p);
+      return createBlock('search', data);
+    }
+    case 'NEWSLETTER': {
+      const data = {
+        placeholder: p.placeholder || 'האימייל שלכם',
+        submit: p.submit || 'הרשמה',
+        action: p.action || '/api/form'
+      };
+      if (p.title) data.title = p.title;
+      const body = collapseSingleParagraph(text);
+      if (body) data.text = body;
+      applyChrome(data, p);
+      return createBlock('newsletter', data);
+    }
+    case 'PAGER': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'PAGE')
+        .map((c) => {
+          const item = { label: collapseSingleParagraph(c.text || '') };
+          const url = c.params && c.params.url;
+          if (url) item.url = url;
+          if (c.params && (c.params.current === true || c.params.current === 'true')) item.current = true;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [{ label: '1', url: '?p=1' }, { label: '2' }]
+      };
+      if (p.label) data.label = p.label;
+      applyChrome(data, p);
+      return createBlock('pager', data);
+    }
+    case 'CONSENT': {
+      const data = {
+        text: collapseSingleParagraph(text) || 'אתר זה משתמש בעוגיות כדי לשפר את החוויה.',
+        accept: p.accept || 'אישור'
+      };
+      if (p.reject) data.reject = p.reject;
+      if (p.policy) data.policy = p.policy;
+      if (p.policylabel) data.policyLabel = p.policylabel;
+      applyChrome(data, p);
+      return createBlock('consent', data);
+    }
+    case 'RELATED': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'RELCARD')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { title: cp.title || '' };
+          if (cp.image) item.image = cp.image;
+          if (cp.tag) item.tag = cp.tag;
+          const excerpt = collapseSingleParagraph(c.text || '');
+          if (excerpt) item.excerpt = excerpt;
+          if (cp.url) item.href = cp.url;
+          return item;
+        });
+      const data = { items };
+      if (p.title) data.title = p.title;
+      applyChrome(data, p);
+      return createBlock('related', data);
+    }
+    case 'COMMENTS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'COMMENT')
+        .map((c) => {
+          const item = { text: collapseSingleParagraph(c.text || '') };
+          const cp = c.params || {};
+          if (cp.author) item.author = cp.author;
+          if (cp.time) item.time = cp.time;
+          return item;
+        });
+      const data = { items };
+      if (p.title) data.title = p.title;
+      applyChrome(data, p);
+      return createBlock('comments', data);
+    }
+    case 'SLOT': {
+      const data = { label: p.label || 'פרסומת' };
+      if (p.src) data.src = p.src;
+      if (p.url) data.url = p.url;
+      if (p.advertiser) data.advertiser = p.advertiser;
+      applyChrome(data, p);
+      return createBlock('slot', data);
+    }
+    case 'AUTH': {
+      const data = {
+        login: p.login || 'כניסה',
+        loginurl: p.loginurl || '/login',
+        register: p.register || 'הרשמה',
+        registerurl: p.registerurl || '/signup'
+      };
+      const hello = collapseSingleParagraph(text);
+      if (hello) data.text = hello;
+      applyChrome(data, p);
+      return createBlock('auth', data);
     }
     case 'WHATSAPP': {
       const data = { label: collapseSingleParagraph(text) || 'דברו איתנו בוואטסאפ' };
@@ -888,6 +1016,10 @@ function buildBlock(node, warnings) {
     case 'CRUMB':
     case 'HANDLE':
     case 'PRODUCT':
+    case 'PAGE':
+    case 'RELCARD':
+    case 'COMMENT':
+    case 'TAG':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });
