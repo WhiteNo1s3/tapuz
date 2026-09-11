@@ -23,7 +23,7 @@ if (!process.env.TAPUZ_ROOT) {
 require('../src/db');
 const { extractPzn } = require('../src/pzn-extract');
 const { buildPznPrimer } = require('../src/pzn/agent-primer');
-const { moduleNames } = require('../src/pzn/modules/registry');
+const { moduleNames, listModules } = require('../src/pzn/modules/registry');
 const pzn = require('../src/pzn/index');
 const { createPage, getPageByFullPath, savePageSource } = require('../src/pages');
 
@@ -35,8 +35,14 @@ function check(name, cond) {
 
 // ── primer ───────────────────────────────────────────────────────────
 const primer = buildPznPrimer();
-const missing = moduleNames().filter((n) => !primer.includes(`<bent-${n}>`));
-check('primer covers every registered module', missing.length === 0);
+// decompile-only modules (the imported header/footer bands, gap-audit wave
+// 4) stay registered — repair must accept a decompiled draft — but are
+// deliberately NOT taught: the theme master is the site's real chrome
+const decompileOnly = new Set(listModules().filter((m) => m.decompileOnly).map((m) => m.name));
+const missing = moduleNames().filter((n) => !decompileOnly.has(n) && !primer.includes(`<bent-${n}>`));
+check('primer covers every registered authoring module', missing.length === 0);
+check('primer never teaches the decompile-only bands',
+  decompileOnly.size > 0 && [...decompileOnly].every((n) => !primer.includes(`<bent-${n}>`)));
 check('primer carries the reply contract', primer.includes('ONE fenced code block'));
 check('primer includes the page template', primer.includes('bent-version="0.1"'));
 
@@ -71,6 +77,19 @@ check('extract from ~~~ fence', extractPzn('~~~\n' + doc + '\n~~~').trim() === d
 check('extract prefers the document fence over other fences',
   extractPzn('קודם קצת CSS:\n```css\n.x{color:red}\n```\nוהדף:\n```html\n' + doc + '\n```').trim() === doc.trim());
 
+// v2.20 — take only the BenTML, whatever the chat wrapped around it
+const emptyTemplate = '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8" /><title>כותרת הדף</title><meta name="bent-slug" content="my-page" /></head>\n<body>\n  <!-- bent-* modules here -->\n</body>\n</html>';
+check('extract drops trailing chat + PZN_READY after the fence', extractPzn(botReply + '\nPZN_READY\nזהו!').trim() === doc.trim());
+check('extract prefers the REAL page over the echoed empty template',
+  extractPzn('לפי התבנית:\n```html\n' + emptyTemplate + '\n```\nוהדף:\n```html\n' + doc + '\n```').trim() === doc.trim());
+check('extract handles a 4-backtick outer fence', extractPzn('````\n```html\n' + doc + '\n```\n````').trim() === doc.trim());
+check('extract removes <html> brackets around a BENTML keyword document',
+  extractPzn('<html>\nBENTML 0.2\n\nMETA {\n  title: "x"\n}\n\nTEXT { y }\n</html>') === 'BENTML 0.2\n\nMETA {\n  title: "x"\n}\n\nTEXT { y }');
+const { toPznSource } = require('../src/pzn-source');
+const words = toPznSource('Sure!\n```bentml\nBENTML 0.2\n\nMETA {\n  title: "דף מילים"\n  slug: "words"\n}\n\nHEADING(level: 1) { שלום }\n```\nEnjoy!');
+check('toPznSource compiles a keyword-dialect reply to a .pzn document',
+  words.dialect === 'line' && /<bent-heading[^>]*>שלום<\/bent-heading>/.test(words.source) && /bent-slug" content="words"/.test(words.source));
+
 // ── preview (parse + validate + compile, like the endpoint) ─────────
 const parsed = pzn.parse(extractPzn(botReply));
 const errors = pzn.validate(parsed, { strict: false }).filter((i) => i.severity === 'error');
@@ -86,6 +105,10 @@ const page = getPageByFullPath('target');
 check('title synced from bot source', page.title === 'דף מהבוט');
 check('draft file holds the bot page', fs.readFileSync(
   require('../src/pzn-store').pznPathFor('target', 'draft'), 'utf8').includes('שלום מהבוט'));
+// the store itself takes only the BenTML (v2.20): a chatty paste never lands with its fence
+savePageSource('target', 'הנה:\n```html\n' + doc + '\n```\nבהצלחה!');
+check('savePageSource stores the bare document, not the chat',
+  fs.readFileSync(require('../src/pzn-store').pznPathFor('target', 'draft'), 'utf8').trim() === doc.trim());
 
 // ── create-from-source path (slug from bent-slug) ────────────────────
 const slug = (parsed.slug || '').trim();

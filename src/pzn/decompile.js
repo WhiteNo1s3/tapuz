@@ -100,7 +100,7 @@ function extractLang(html) {
 // (halves, heroes, card walls) gets the modular read. toolGap is the union:
 // the vocabulary engine keeps every missing-tool sighting from every lens.
 
-const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline', 'pricing', 'carousel', 'faq', 'tabs', 'accordion', 'crumbs', 'stats', 'logos', 'social', 'testimonial']);
+const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline', 'pricing', 'carousel', 'faq', 'tabs', 'accordion', 'crumbs', 'stats', 'logos', 'social', 'testimonial', 'team', 'countdown', 'pricelist', 'progress', 'header', 'footer', 'whatsapp', 'rating', 'hours', 'toc', 'author', 'compare', 'flipbox']);
 
 /** Walk a block tree (columns/cards/card children included). */
 function eachBlock(blocks, fn) {
@@ -122,6 +122,7 @@ function blockTextLen(blocks) {
     const d = b.data || {};
     n += String(d.text || '').length + String(d.content || '').length;
     n += String(d.title || '').length + String(d.subtitle || '').length + String(d.buttonText || '').length;
+    n += String(d.label || '').length + String(d.credit || '').length;
     for (const it of d.items || []) {
       if (typeof it === 'string') n += it.length;
       else n += String(it.text || '').length + String(it.label || '').length + String(it.title || '').length + String(it.excerpt || '').length;

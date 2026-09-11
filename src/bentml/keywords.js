@@ -73,7 +73,9 @@ const KEYWORDS = {
       ratio: { type: 'string' },
       gap: { type: 'enum', default: 'md', values: ['none', 'sm', 'md', 'lg'] },
       collapse: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'never'] },
-      valign: { type: 'enum', default: 'top', values: ['top', 'center', 'bottom', 'stretch'] }
+      valign: { type: 'enum', default: 'top', values: ['top', 'center', 'bottom', 'stretch'] },
+      // v2.26 — the row breaks out of the content column (content|wide|full)
+      width: { type: 'enum', default: 'content', values: ['content', 'wide', 'full'] }
     }
   },
   COL: {
@@ -487,6 +489,163 @@ const KEYWORDS = {
       url: { type: 'string' }
     }
   },
+  TEAM: {
+    body: 'BLOCK-BODY',
+    jsonType: 'team',
+    children: ['MEMBER'],
+    params: {}
+  },
+  MEMBER: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TEAM',
+    params: {
+      name: { type: 'string', required: true },
+      role: { type: 'string' },
+      image: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
+  COUNTDOWN: {
+    body: 'TEXT-BODY',
+    jsonType: 'countdown',
+    params: {
+      target: { type: 'string', required: true },
+      done: { type: 'string' }
+    }
+  },
+  PRICELIST: {
+    body: 'BLOCK-BODY',
+    jsonType: 'pricelist',
+    children: ['PRICEITEM'],
+    params: {}
+  },
+  PRICEITEM: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'PRICELIST',
+    params: {
+      name: { type: 'string', required: true },
+      price: { type: 'string' }
+    }
+  },
+  PROGRESS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'progress',
+    children: ['BAR'],
+    params: {}
+  },
+  BAR: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'PROGRESS',
+    params: {
+      value: { type: 'integer', default: 0 },
+      color: { type: 'string' }
+    }
+  },
+  RATING: {
+    body: 'TEXT-BODY',
+    jsonType: 'rating',
+    params: {
+      value: { type: 'number', required: true },
+      max: { type: 'integer', default: 5 }
+    }
+  },
+  HOURS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'hours',
+    children: ['DAY'],
+    params: {}
+  },
+  DAY: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'HOURS',
+    params: {
+      name: { type: 'string', required: true }
+    }
+  },
+  TOC: {
+    body: 'BLOCK-BODY',
+    jsonType: 'toc',
+    children: ['TOCITEM'],
+    params: {
+      title: { type: 'string' }
+    }
+  },
+  TOCITEM: {
+    body: 'TEXT-BODY',
+    childOnly: true,
+    parent: 'TOC',
+    params: {
+      anchor: { type: 'string' }
+    }
+  },
+  AUTHOR: {
+    body: 'TEXT-BODY',
+    jsonType: 'author',
+    params: {
+      name: { type: 'string', required: true },
+      image: { type: 'string' },
+      url: { type: 'string' },
+      linkLabel: { type: 'string' }
+    }
+  },
+  COMPARE: {
+    body: 'NO-BODY',
+    jsonType: 'compare',
+    params: {
+      before: { type: 'string', required: true },
+      after: { type: 'string', required: true },
+      beforeLabel: { type: 'string' },
+      afterLabel: { type: 'string' }
+    }
+  },
+  FLIPBOX: {
+    body: 'TEXT-BODY',
+    jsonType: 'flipbox',
+    params: {
+      title: { type: 'string', required: true },
+      icon: { type: 'string' },
+      cta: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
+  // gap-audit wave 4 — HEADER/FOOTER leave RESERVED, but ONLY for the
+  // decompile-preview path (decompileOnly): the compiler must accept a
+  // decompiled draft that carries them, while the module catalog and the
+  // primers never offer them — the site's real chrome is the theme master
+  // (עיצוב → כותרת ותחתית)
+  HEADER: {
+    body: 'BLOCK-BODY',
+    jsonType: 'header',
+    decompileOnly: true,
+    params: {
+      tone: { type: 'enum', default: 'light', values: ['light', 'dark', 'brand', 'none'] },
+      layout: { type: 'enum', default: 'row', values: ['row', 'stack'] }
+    }
+  },
+  FOOTER: {
+    body: 'BLOCK-BODY',
+    jsonType: 'footer',
+    decompileOnly: true,
+    params: {
+      tone: { type: 'enum', default: 'dark', values: ['dark', 'light', 'brand', 'none'] },
+      credit: { type: 'string', default: '' }
+    }
+  },
+  WHATSAPP: {
+    body: 'TEXT-BODY',
+    jsonType: 'whatsapp',
+    params: {
+      phone: { type: 'string', default: '' },
+      message: { type: 'string', default: '' },
+      note: { type: 'string', default: '' },
+      url: { type: 'string', default: '' },
+      align: { type: 'enum', default: 'start', values: ['start', 'center', 'end'] }
+    }
+  },
   NAV: {
     body: 'BLOCK-BODY',
     jsonType: 'nav',
@@ -611,9 +770,10 @@ const RESERVED = new Set([
   // SECTION graduated v0.75 (container-as-tool), SLIDER graduated v0.79 as
   // CAROUSEL (the slide strip; a range-input SLIDER would be a FORM field),
   // AUDIO graduated v0.80 (media set complete), TABLE graduated v0.83
-  // (pipe-row syntax). INPUT stays a placeholder — form fields are the
+  // (pipe-row syntax), HEADER + FOOTER graduated in gap-audit wave 4 as
+  // page chrome modules. INPUT stays a placeholder — form fields are the
   // child `field` module (nav links = child `navitem`).
-  'INPUT', 'FOOTER', 'HEADER', 'CODE'
+  'INPUT', 'CODE'
 ]);
 
 const UNIVERSAL = new Set(['id', 'class', 'dir', 'animate']);

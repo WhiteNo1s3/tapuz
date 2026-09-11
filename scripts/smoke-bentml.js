@@ -261,8 +261,15 @@ try {
   const fs = require('fs');
   const path = require('path');
   const ui = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-bentml-ui.js'), 'utf8');
-  check('panel sniffs the pzn dialect (looksLikePznSource)', ui.includes('function looksLikePznSource'));
-  check('panel skips the line engine for pzn paste', /E\s*&&\s*!looksLikePznSource\(source\)/.test(ui));
+  check('panel keeps the pzn sniffer as the no-engine fallback (looksLikePznSource)', ui.includes('function looksLikePznSource'));
+  // v2.20: the bundled extractor runs FIRST (fence / chat / <html> brackets
+  // gone), THEN the dialect chooses the engine — pzn to the server, line local
+  check('panel extracts before choosing an engine (E.extract)', /E\.extract\s*\?\s*E\.extract\(source\)/.test(ui));
+  check('panel routes the pzn dialect to the server compile', /dialect\s*!==\s*'pzn'/.test(ui));
+  check('panel maps error lines back through lineOffset', /lineOffset/.test(ui));
+  check('panel file is plain text (no NUL bytes — git diffs it)', ui.indexOf('\u0000') === -1);
+  const { buildBentmlEngine } = require('../src/bentml/browser-bundle');
+  check('engine bundle exposes extract + sniffDialect', /extract: __mods\.extract\.extractBentml/.test(buildBentmlEngine()));
   // the sniffer must match what AIs actually return: a <bent-*> tag document
   const sniff = /<bent-[a-z]/i;
   check('sniffer regex matches a bent-tag reply', sniff.test('<!DOCTYPE html>\n<html bent-version="0.1"><body><bent-hero id="h"></bent-hero></body></html>'));

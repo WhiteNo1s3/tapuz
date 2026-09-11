@@ -541,7 +541,7 @@ const BLOCK_REGISTRY = [
     category: 'מבנה',
     bodyClass: 'blocks',
     childrenOf: null,
-    hintHe: '2–4 טורים זה לצד זה',
+    hintHe: '2–6 טורים זה לצד זה',
     childrenKey: 'columns',
     params: [
       {
@@ -561,6 +561,13 @@ const BLOCK_REGISTRY = [
         name: 'valign', labelHe: 'יישור אנכי', type: 'enum',
         enum: ['top', 'center', 'bottom', 'stretch'], default: 'top',
         hint: 'stretch = כרטיסים בגובה אחיד'
+      },
+      {
+        // v2.26 — a row can break out of the content column (Elementor's
+        // "stretch section"): wide = up to 1400px centered, full = the viewport
+        name: 'width', labelHe: 'רוחב השורה', type: 'enum',
+        enum: ['content', 'wide', 'full'], default: 'content', omitDefault: true,
+        hint: 'content = רוחב התוכן · wide = עד 1400px · full = כל רוחב המסך'
       }
     ],
     textField: null,
@@ -1221,6 +1228,349 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'team',
+    keyword: 'TEAM',
+    labelHe: 'הצוות',
+    icon: '👥',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'חברי צוות — תמונה, שם, תפקיד',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'חברי צוות', type: 'list',
+        itemFields: [
+          { name: 'name', labelHe: 'שם', type: 'string', required: true },
+          { name: 'role', labelHe: 'תפקיד', type: 'string' },
+          // NOT type media — one media field flips the whole list editor into
+          // gallery-thumbs mode and the name/role fields would vanish
+          { name: 'image', labelHe: 'תמונה (נתיב)', type: 'url' },
+          { name: 'bio', labelHe: 'כמה מילים', type: 'textarea' },
+          { name: 'url', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי MEMBER'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { name: 'דנה לוי', role: 'מנכ"לית', bio: 'מובילה את החברה מהיום הראשון.' },
+        { name: 'יוסי כהן', role: 'סמנכ"ל טכנולוגיות' },
+        { name: 'רינה ברק', role: 'מנהלת שיווק' }
+      ]
+    }
+  },
+  {
+    type: 'countdown',
+    keyword: 'COUNTDOWN',
+    labelHe: 'ספירה לאחור',
+    icon: '⏳',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'טיימר למבצע או אירוע — מתעדכן לבד',
+    params: [
+      { name: 'target', bentmlParam: 'target', labelHe: 'תאריך יעד (YYYY-MM-DDTHH:mm)', type: 'string', required: true, default: '' },
+      { name: 'done', bentmlParam: 'done', labelHe: 'הודעה כשנגמר', type: 'string', default: '' }
+    ],
+    textField: 'label',
+    textFieldLabelHe: 'כותרת מעל הספירה',
+    textFieldType: 'input',
+    seed: { target: '', label: 'עד סוף המבצע', done: 'המבצע הסתיים' }
+  },
+  {
+    type: 'pricelist',
+    keyword: 'PRICELIST',
+    labelHe: 'מחירון',
+    icon: '₪',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'תפריט מסעדה או מחירון שירותים — שם ··· מחיר',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'פריטים', type: 'list',
+        itemFields: [
+          { name: 'name', labelHe: 'שם הפריט', type: 'string', required: true },
+          { name: 'price', labelHe: 'מחיר', type: 'string' },
+          { name: 'desc', labelHe: 'תיאור', type: 'textarea' }
+        ],
+        hint: 'ב-BenTML: צאצאי PRICEITEM'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { name: 'חומוס מלא', price: '32 ₪', desc: 'עם פטריות וביצה קשה' },
+        { name: 'שקשוקה', price: '44 ₪' },
+        { name: 'סלט ירקות', price: '28 ₪' }
+      ]
+    }
+  },
+  {
+    type: 'progress',
+    keyword: 'PROGRESS',
+    labelHe: 'מדדי התקדמות',
+    icon: '▰',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'פסי מיומנות או התקדמות — אחוזים בלי JavaScript',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'מדדים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'שם המדד', type: 'string', required: true },
+          { name: 'value', labelHe: 'ערך (0–100)', type: 'integer', min: 0, max: 100 },
+          { name: 'color', labelHe: 'צבע (אופציונלי)', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי BAR'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { label: 'עיצוב', value: 90 },
+        { label: 'פיתוח', value: 75 },
+        { label: 'שיווק', value: 60 }
+      ]
+    }
+  },
+
+  // ─────────── gap-audit wave 4: whatsapp + decompile-only chrome ───────────
+  // The decompiler's hottest remaining toolGaps (walla, mako, rest.co.il,
+  // doctor.co.il): Israeli business sites hang a wa.me link on everything,
+  // and every real homepage carries a <header> and a <footer>.
+  //
+  // whatsapp is a regular authoring module. header/footer are NOT (Ben's
+  // call): the real chrome is the theme's master layout (עיצוב → כותרת
+  // ותחתית), which is how sites are built and how the prompt→BenTML site
+  // flow works — a second, page-level header would duplicate that system
+  // and confuse authors. They exist ONLY so a decompiled site previews like
+  // a real Tapuziel site: the import maps the landmarks into these bands,
+  // the customer sees their chrome, and moves it into the master.
+  //
+  // `decompileOnly: true` is the switch: the toolbox, the agent primers and
+  // the dictionaries omit these types (authoringBlocks()), while the
+  // renderer, both BenTML dialects and the bridge keep speaking them so the
+  // imported draft round-trips.
+  {
+    type: 'whatsapp',
+    keyword: 'WHATSAPP',
+    labelHe: 'וואטסאפ',
+    icon: '✆',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'כפתור צ׳אט מעוצב — טלפון + הודעה מוכנה, נפתח ב-wa.me',
+    params: [
+      {
+        name: 'phone', labelHe: 'טלפון (בינלאומי)', type: 'string', default: '',
+        hint: 'ספרות בלבד בפורמט בינלאומי, למשל 972501234567 — או מלאו קישור מלא למטה'
+      },
+      {
+        name: 'message', labelHe: 'הודעה מוכנה', type: 'textarea', default: '',
+        hint: 'הטקסט שיופיע כתוב מראש בצ׳אט של הגולש'
+      },
+      {
+        name: 'note', labelHe: 'שורת משנה', type: 'string', default: '',
+        hint: 'טקסט קטן מתחת לכפתור, למשל "מענה תוך דקות"'
+      },
+      {
+        name: 'url', labelHe: 'קישור וואטסאפ מלא', type: 'url', default: '',
+        hint: 'wa.me/… או api.whatsapp.com/send?… — במקום טלפון (קישורי wa.me/message/…)'
+      },
+      ALIGN_PARAM
+    ],
+    textField: 'label',
+    textFieldLabelHe: 'טקסט הכפתור',
+    textFieldType: 'input',
+    seed: { label: 'דברו איתנו בוואטסאפ', phone: '', message: '', note: '', url: '' }
+  },
+  {
+    type: 'header',
+    keyword: 'HEADER',
+    labelHe: 'ראש עמוד מיובא (Header)',
+    icon: '⬒',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    decompileOnly: true,
+    hintHe: 'תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את כותרת האתר האמיתית עורכים בעיצוב → כותרת ותחתית',
+    childrenKey: 'blocks',
+    params: [
+      {
+        name: 'tone', labelHe: 'רקע', type: 'enum',
+        enum: ['light', 'dark', 'brand', 'none'], default: 'light',
+        hint: 'none = שקוף, בלי פס'
+      },
+      {
+        name: 'layout', labelHe: 'פריסה', type: 'enum',
+        enum: ['row', 'stack'], default: 'row',
+        hint: 'row = הילדים בשורה אחת (לוגו | תפריט | כפתור), stack = זה מתחת לזה'
+      }
+    ],
+    textField: null,
+    seed: { blocks: [], tone: 'light', layout: 'row' }
+  },
+  {
+    type: 'footer',
+    keyword: 'FOOTER',
+    labelHe: 'תחתית עמוד מיובאת (Footer)',
+    icon: '⬓',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    decompileOnly: true,
+    hintHe: 'תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את תחתית האתר האמיתית עורכים בעיצוב → כותרת ותחתית',
+    childrenKey: 'blocks',
+    params: [
+      {
+        name: 'tone', labelHe: 'רקע', type: 'enum',
+        enum: ['dark', 'light', 'brand', 'none'], default: 'dark',
+        hint: 'none = שקוף, בלי פס'
+      },
+      {
+        name: 'credit', labelHe: 'שורת זכויות', type: 'string', default: '',
+        hint: 'למשל "© 2026 כל הזכויות שמורות" — מודפס בקטן בתחתית הפס'
+      }
+    ],
+    textField: null,
+    seed: { blocks: [], tone: 'dark', credit: '' }
+  },
+  {
+    type: 'rating',
+    keyword: 'RATING',
+    labelHe: 'דירוג כוכבים',
+    icon: '★',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'ציון ביקורות — כוכבים מלאים וחצאים, בלי JavaScript',
+    params: [
+      { name: 'value', bentmlParam: 'value', labelHe: 'ציון', type: 'number', required: true, min: 0, max: 10, default: 5 },
+      { name: 'max', bentmlParam: 'max', labelHe: 'מתוך', type: 'integer', min: 1, max: 10, default: 5 }
+    ],
+    textField: 'text',
+    textFieldLabelHe: 'טקסט ליד הכוכבים',
+    textFieldType: 'input',
+    seed: { value: 4.5, max: 5, text: '4.5 מתוך 5 — 213 ביקורות' }
+  },
+  {
+    type: 'hours',
+    keyword: 'HOURS',
+    labelHe: 'שעות פתיחה',
+    icon: '🕘',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'ימים ושעות — "סגור" מסומן אוטומטית',
+    params: [
+      {
+        name: 'items', bentmlParam: null, labelHe: 'שורות', type: 'list',
+        itemFields: [
+          { name: 'day', labelHe: 'יום / ימים', type: 'string', required: true },
+          { name: 'hours', labelHe: 'שעות (או "סגור")', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי DAY'
+      }
+    ],
+    textField: null,
+    seed: {
+      items: [
+        { day: 'ראשון–חמישי', hours: '9:00–19:00' },
+        { day: 'שישי', hours: '9:00–14:00' },
+        { day: 'שבת', hours: 'סגור' }
+      ]
+    }
+  },
+  {
+    type: 'toc',
+    keyword: 'TOC',
+    labelHe: 'תוכן עניינים',
+    icon: '☰',
+    category: 'מבנה',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'קישורי עוגן בתוך הדף — #מזהה של כותרת',
+    params: [
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת', type: 'string', default: 'תוכן עניינים' },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'סעיפים', type: 'list',
+        itemFields: [
+          { name: 'label', labelHe: 'טקסט', type: 'string', required: true },
+          { name: 'anchor', labelHe: 'עוגן (#מזהה)', type: 'string' }
+        ],
+        hint: 'ב-BenTML: צאצאי TOCITEM'
+      }
+    ],
+    textField: null,
+    seed: {
+      title: 'תוכן עניינים',
+      items: [
+        { label: 'הקדמה', anchor: '#intro' },
+        { label: 'איך זה עובד', anchor: '#how' },
+        { label: 'שאלות נפוצות', anchor: '#faq' }
+      ]
+    }
+  },
+  {
+    type: 'author',
+    keyword: 'AUTHOR',
+    labelHe: 'כותב/ת',
+    icon: '✍',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'קופסת "על הכותב/ת" — תמונה, שם, כמה מילים, קישור',
+    params: [
+      { name: 'name', bentmlParam: 'name', labelHe: 'שם', type: 'string', required: true, default: '' },
+      { name: 'image', bentmlParam: 'image', labelHe: 'תמונה (נתיב)', type: 'url', default: '' },
+      { name: 'url', bentmlParam: 'url', labelHe: 'קישור', type: 'url', default: '' },
+      { name: 'linkLabel', bentmlParam: 'linkLabel', labelHe: 'טקסט הקישור', type: 'string', default: '' }
+    ],
+    textField: 'bio',
+    textFieldLabelHe: 'כמה מילים',
+    seed: { name: 'דנה לוי', image: '', bio: 'כותבת על טכנולוגיה ועסקים כבר עשור.', url: '', linkLabel: 'לכל הכתבות' }
+  },
+  {
+    type: 'compare',
+    keyword: 'COMPARE',
+    labelHe: 'לפני / אחרי',
+    icon: '◧',
+    category: 'מדיה',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'שתי תמונות עם סליידר השוואה',
+    params: [
+      { name: 'before', bentmlParam: 'before', labelHe: 'תמונה לפני', type: 'media', required: true, default: '' },
+      { name: 'after', bentmlParam: 'after', labelHe: 'תמונה אחרי', type: 'media', required: true, default: '' },
+      { name: 'beforeLabel', bentmlParam: 'beforeLabel', labelHe: 'תווית לפני', type: 'string', default: 'לפני' },
+      { name: 'afterLabel', bentmlParam: 'afterLabel', labelHe: 'תווית אחרי', type: 'string', default: 'אחרי' }
+    ],
+    textField: null,
+    seed: { before: '', after: '', beforeLabel: 'לפני', afterLabel: 'אחרי' }
+  },
+  {
+    type: 'flipbox',
+    keyword: 'FLIPBOX',
+    labelHe: 'קופסה מתהפכת',
+    icon: '⟲',
+    category: 'תוכן',
+    bodyClass: 'text',
+    childrenOf: null,
+    hintHe: 'כותרת מקדימה, טקסט וכפתור מאחור — מתהפך במעבר עכבר',
+    params: [
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת (קדימה)', type: 'string', required: true, default: '' },
+      { name: 'icon', bentmlParam: 'icon', labelHe: 'אייקון (אימוג׳י או נתיב)', type: 'string', default: '' },
+      { name: 'buttonText', bentmlParam: 'cta', labelHe: 'טקסט כפתור (מאחור)', type: 'string', default: '' },
+      { name: 'buttonUrl', bentmlParam: 'url', labelHe: 'קישור כפתור', type: 'url', default: '' }
+    ],
+    textField: 'backText',
+    textFieldLabelHe: 'טקסט (מאחור)',
+    seed: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות על כל מוצר.', buttonText: 'לפרטים', buttonUrl: '#' }
+  },
+  {
     type: 'nav',
     keyword: 'NAV',
     labelHe: 'תפריט ניווט',
@@ -1463,11 +1813,23 @@ for (const def of BLOCK_REGISTRY) {
   else def.params.push(ANIMATE_PARAM);
 }
 
+/**
+ * The types an AUTHOR may reach for — the toolbox, the agent primers and the
+ * dictionaries read this, never BLOCK_REGISTRY directly. Excludes the
+ * decompile-only chrome bands (header/footer): those exist for the import
+ * preview and still render / round-trip, but are never offered as tools.
+ * @returns {object[]}
+ */
+function authoringBlocks() {
+  return BLOCK_REGISTRY.filter((e) => !e.decompileOnly);
+}
+
 module.exports = {
   BLOCK_REGISTRY,
   BLOCK_CATEGORIES,
   UNIVERSAL_PARAMS,
   INTEGRATIONS_DEFAULTS,
   getBlockDef,
-  defaultDataFor
+  defaultDataFor,
+  authoringBlocks
 };

@@ -29,6 +29,7 @@
 
 const { tokenize } = require('./language/parse');
 const { unescapeHtml } = require('./language/escape');
+const { parseWhatsappHref, DEFAULT_LABEL: WA_DEFAULT_LABEL } = require('./whatsapp-html');
 
 /** Reconstruct a token's HTML (for leftover fragments). */
 function tokenToHtml(t) {
@@ -390,7 +391,7 @@ function coalesceButtonRuns(blocks) {
 }
 
 /** A ul whose items are single short links is a MENU — keep the hrefs. */
-function navItemsFromList(tokens, i, end) {
+function navItemsFromList(tokens, i, end, minItems = LINK_RUN_MIN) {
   let liCount = 0;
   const items = [];
   for (let j = i + 1; j < end - 1; j++) {
@@ -411,9 +412,15 @@ function navItemsFromList(tokens, i, end) {
       j = liEnd - 1;
     }
   }
-  if (liCount >= LINK_RUN_MIN && items.length >= liCount * 0.8) return items;
+  if (liCount >= minItems && items.length >= liCount * 0.8) return items;
   return null;
 }
+
+// Inside a mapped header/footer band even TWO short links are a menu (footer
+// link columns, a logo + login pair) — the page-level minimum of four guards
+// against button piles, a guard chrome does not need. Links must survive as
+// links there, never flatten to a text list.
+const CHROME_LINK_RUN_MIN = 2;
 
 function collectLinkRun(tokens, i, to) {
   const items = [];
@@ -841,7 +848,9 @@ function hintHay(t) {
   return `${(t && t.name) || ''} ${classHay(t)}`;
 }
 
-const PRICING_CLASS = /\b(?:pricing|price-table|price-cards?|pricing-table|bent-pricing|elementor-price)\b/i;
+// NOT bare `elementor-price` — that also matched `elementor-price-list`, a
+// restaurant/service menu, which is the pricelist module (gap-audit wave 3)
+const PRICING_CLASS = /\b(?:pricing|price-table|price-cards?|pricing-table|bent-pricing|elementor-price-table)\b/i;
 const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|tie-slick-slider|owl-carousel|splide|keen-slider|glide|bent-carousel|carousel|slider)\b/i;
 const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list|dsm-faq|stattic-faq|elementor-widget-faq|elementor-accordion)\b/i;
 const FAQ_ITEM_CLASS = /\b(?:faq-item|faq-entry|dsm-faq--faq-content|elementor-accordion-item|e-faq-item)\b/i;
@@ -854,7 +863,17 @@ const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|
 const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
 const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
 const STATS_CLASS = /\b(?:stats|counters?|metrics|kpis?|bent-stats|stats-row|numbers-row|stat-cells?)\b/i;
-const LOGOS_CLASS = /\b(?:logos|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos|logo-list)\b/i;
+const TEAM_CLASS = /\b(?:team|our-team|team-members?|staff|bent-team|elementor-widget-team-member)\b/i;
+const COUNTDOWN_CLASS = /\b(?:countdown|count-down|countdown-timer|elementor-countdown|bent-countdown)\b/i;
+const PRICELIST_CLASS = /\b(?:price-list|pricelist|menu-list|restaurant-menu|elementor-price-list|bent-pricelist)\b/i;
+const PROGRESS_CLASS = /\b(?:progress|progress-bars?|skill-bars?|skills|elementor-progress|bent-progress)\b/i;
+const RATING_CLASS = /\b(?:star-rating|elementor-star-rating|elementor-widget-star-rating|rating|stars|bent-rating)\b/i;
+const HOURS_CLASS = /\b(?:opening-hours|business-hours|open-hours|hours-table|bent-hours)\b/i;
+const TOC_CLASS = /\b(?:toc|table-of-contents|elementor-toc|elementor-widget-table-of-contents|bent-toc)\b/i;
+const AUTHOR_CLASS = /\b(?:author-box|post-author|about-author|about-the-author|author-bio|author-card|bent-author)\b/i;
+const COMPARE_CLASS = /\b(?:twentytwenty(?:-container)?|image-compare|before-after|beforeafter|ba-slider|compare-slider|bent-compare)\b/i;
+const FLIPBOX_CLASS = /\b(?:flip-box|flipbox|elementor-flip-box|elementor-widget-flip-box|flip-card|bent-flipbox)\b/i;
+const LOGOS_CLASS = /\b(?:logos?|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos|logo-list)\b/i;
 const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
 const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
 
@@ -873,29 +892,112 @@ function looksLikeCrumbs(t) {
 }
 function looksLikeStats(t) { return STATS_CLASS.test(hintHay(t)); }
 function looksLikeLogos(t) { return LOGOS_CLASS.test(hintHay(t)); }
+function looksLikeTeam(t) { return TEAM_CLASS.test(hintHay(t)); }
+function looksLikeCountdown(t) { return COUNTDOWN_CLASS.test(hintHay(t)); }
+function looksLikePricelist(t) { return PRICELIST_CLASS.test(hintHay(t)); }
+function looksLikeProgress(t) { return PROGRESS_CLASS.test(hintHay(t)); }
+function looksLikeRating(t) { return RATING_CLASS.test(hintHay(t)); }
+function looksLikeHours(t) { return HOURS_CLASS.test(hintHay(t)); }
+function looksLikeToc(t) { return TOC_CLASS.test(hintHay(t)); }
+function looksLikeAuthor(t) { return AUTHOR_CLASS.test(hintHay(t)); }
+function looksLikeCompare(t) { return COMPARE_CLASS.test(hintHay(t)); }
+function looksLikeFlipbox(t) { return FLIPBOX_CLASS.test(hintHay(t)); }
+
+// ── page chrome landmarks (gap-audit wave 4) ──
+// The <header>/<footer> the walk used to refuse to invent. Exact class/id
+// TOKENS, not substrings: `card-header`, `modal-header`, `entry-header` are
+// section furniture, not the page's chrome. ARIA landmark roles count too.
+const HEADER_TOKENS = new Set(['header', 'site-header', 'page-header', 'main-header', 'top-header', 'header-wrapper', 'header-wrap', 'site-head', 'topbar', 'top-bar']);
+const FOOTER_TOKENS = new Set(['footer', 'site-footer', 'page-footer', 'main-footer', 'footer-wrapper', 'footer-wrap', 'bottom-bar', 'colophon']);
 
 /**
- * A class/tag that names a module we speak — or a landmark we refuse to
- * invent (header/footer). Used when the mapper declines so the flatten
- * is never a silent success.
+ * 'header' | 'footer' when the element IS the page's chrome landmark, else
+ * null. Shared by the flat walk and the hunt so both map the same shapes.
+ */
+function landmarkOf(t) {
+  if (!t || t.kind !== 'open') return null;
+  if (t.name === 'header') return 'header';
+  if (t.name === 'footer') return 'footer';
+  // only wrappers can BE the chrome — a <ul class="footer"> is a list in it
+  if (!CONTAINERS.has(t.name) && !String(t.name || '').includes('-')) return null;
+  const role = String((t.attrs && t.attrs.role) || '').toLowerCase();
+  if (role === 'banner') return 'header';
+  if (role === 'contentinfo') return 'footer';
+  for (const tok of classHay(t).toLowerCase().split(/\s+/)) {
+    if (HEADER_TOKENS.has(tok)) return 'header';
+    if (FOOTER_TOKENS.has(tok)) return 'footer';
+  }
+  return null;
+}
+
+const CREDIT_RE = /©|\(c\)|כל הזכויות שמורות|all rights reserved|copyright/i;
+
+/**
+ * A footer's copyright line becomes the module's `credit` param instead of
+ * a stray text block: the LAST short text child that reads like a credit.
+ * Mutates and returns the child list.
+ */
+function liftFooterCredit(kids) {
+  for (let k = kids.length - 1; k >= 0; k--) {
+    const b = kids[k];
+    if (b.type !== 'text') continue;
+    const content = String(b.data.content || '').trim();
+    if (content.length <= 160 && CREDIT_RE.test(content)) {
+      kids.splice(k, 1);
+      return content;
+    }
+    break; // only the trailing line — a credit never sits above real content
+  }
+  return '';
+}
+
+/**
+ * A wa.me / api.whatsapp.com anchor → whatsapp module data (gap-audit wave
+ * 4: the link real sites hang on everything used to be a button + a
+ * permanent toolGap). Label = the link text, else its aria name, else the
+ * Hebrew default — an icon-only link still becomes the styled CTA.
+ * @returns {object|null} null when the anchor is not a WhatsApp link
+ */
+function whatsappDataOf(tokens, i, end, t) {
+  const wa = parseWhatsappHref((t.attrs && t.attrs.href) || '');
+  if (!wa) return null;
+  let label = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+  if (!label) label = attrOf(t.attrs, 'aria-label', 'title').trim();
+  if (!label || label.length > 80) label = WA_DEFAULT_LABEL;
+  return Object.assign({ label }, wa);
+}
+
+/**
+ * A class/tag that names a module we speak. Used when the mapper declines
+ * so the flatten is never a silent success. header/footer are modules now
+ * (wave 4) — they land here only when the landmark mapping itself declines.
  * @returns {string|null}
  */
 function guessedTool(t) {
   if (!t) return null;
   const hay = hintHay(t);
-  const name = t.name || '';
-  if (name === 'header' || /site-header|page-header/i.test(hay)) return 'header';
-  if (name === 'footer' || /site-footer|page-footer/i.test(hay)) return 'footer';
+  const landmark = landmarkOf(t);
+  if (landmark) return landmark;
   if (looksLikeCarousel(t)) return 'carousel';
   if (looksLikeTabs(t)) return 'tabs';
   if (looksLikeFaq(t)) return 'faq';
   if (looksLikeTestimonial(t)) return 'testimonial';
   if (looksLikeSocial(t)) return 'social';
+  if (looksLikePricelist(t)) return 'pricelist'; // before pricing — "price-list" is a menu, not a table
   if (looksLikePricing(t)) return 'pricing';
   if (looksLikeHero(t)) return 'hero';
   if (looksLikeCrumbs(t)) return 'crumbs';
   if (looksLikeStats(t)) return 'stats';
   if (looksLikeLogos(t)) return 'logos';
+  if (looksLikeTeam(t)) return 'team';
+  if (looksLikeCountdown(t)) return 'countdown';
+  if (looksLikeProgress(t)) return 'progress';
+  if (looksLikeRating(t)) return 'rating';
+  if (looksLikeHours(t)) return 'hours';
+  if (looksLikeToc(t)) return 'toc';
+  if (looksLikeAuthor(t)) return 'author';
+  if (looksLikeCompare(t)) return 'compare';
+  if (looksLikeFlipbox(t)) return 'flipbox';
   if (/\b(?:product|shop-item|woocommerce|product-card)\b/i.test(hay)) return 'cards';
   return null;
 }
@@ -1671,6 +1773,547 @@ function parseTestimonialData(tokens, i, end, t) {
   return out;
 }
 
+// ── gap-audit wave 3: team / countdown / pricelist / progress ──
+// The shapes the audit caught silently flattening (heading+cards soup,
+// three meaningless text blocks, dotted-menu text rows, bare percentages).
+
+/**
+ * First direct-child heading of a hinted container (the section title that
+ * sits beside the item grid). Returned to the walk as a `pre` block so
+ * mapping the module never swallows the heading.
+ * @returns {{ level: number, text: string } | null}
+ */
+function directHeading(tokens, i, end) {
+  for (const [s, e] of childSpans(tokens, i + 1, end - 1)) {
+    const m = HEADING.exec(tokens[s].name);
+    if (m) {
+      const text = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+      if (text) return { level: Number(m[1]), text };
+    }
+  }
+  return null;
+}
+
+/** One member card out of an item wrapper. @returns {object|null} */
+function extractMember(tokens, s, e) {
+  let name = '';
+  let role = '';
+  let bio = '';
+  let image = '';
+  let url = '';
+  let alt = '';
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    if (!image && tk.name === 'img') {
+      image = imageSrcOf(tk.attrs);
+      alt = (tk.attrs && tk.attrs.alt) || '';
+      continue;
+    }
+    if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href && tk.attrs.href !== '#') {
+      url = tk.attrs.href;
+      continue; // descend — the name/role usually live inside the link
+    }
+    if (!name && (HEADING.test(tk.name) || /\b(?:member-name|team-name|author-name|elementor-image-box-title)\b/i.test(cls))) {
+      name = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (!role && /\b(?:role|position|job|job-title|member-role|team-role|elementor-image-box-description)\b/i.test(cls)) {
+      role = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p') {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (!role && p && p.length <= 40) role = p;
+      else if (p) bio = bio ? `${bio}\n${p}` : p;
+      j = close - 1;
+    }
+  }
+  if (!name && alt) name = alt.replace(/\s+/g, ' ').trim();
+  if (!name) return null;
+  const out = { name };
+  if (role) out.role = role;
+  if (image) out.image = image;
+  if (bio) out.bio = bio;
+  if (url) out.url = url;
+  return out;
+}
+
+/** Member cards among child containers — one wrapper level unwraps itself. */
+function collectMemberItems(tokens, from, to, depth = 0) {
+  const kids = [];
+  let j = from;
+  while (j < to) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') { j++; continue; }
+    const e = matchClose(tokens, j);
+    if (tk.name === 'li' || CONTAINERS.has(tk.name)) kids.push([j, e]);
+    j = e;
+  }
+  if (kids.length === 1 && depth < 3) {
+    const [s, e] = kids[0];
+    const inner = collectMemberItems(tokens, s + 1, e - 1, depth + 1);
+    if (inner.length >= 2) return inner;
+  }
+  const items = [];
+  for (const [s, e] of kids) {
+    const it = extractMember(tokens, s, e);
+    if (it) items.push(it);
+  }
+  return items;
+}
+
+/**
+ * Team grid. Class hint required (member cards otherwise stay generic cards);
+ * needs ≥2 named members so one image-box never claims the module.
+ * @returns {{ items: object[] } | null}
+ */
+function parseTeamData(tokens, i, end, t) {
+  if (!looksLikeTeam(t)) return null;
+  const items = collectMemberItems(tokens, i + 1, end - 1);
+  if (items.length < 2) return null;
+  return { items, heading: directHeading(tokens, i, end) };
+}
+
+const COUNTDOWN_TARGET_ATTRS = ['data-date', 'data-target', 'data-deadline', 'data-end', 'data-due'];
+
+function countdownTargetOf(attrs) {
+  for (const k of COUNTDOWN_TARGET_ATTRS) {
+    const v = attrs && attrs[k];
+    if (v && Number.isFinite(Date.parse(v))) return v;
+  }
+  return null;
+}
+
+/**
+ * Countdown timer. Class hint + a parseable target date on the wrapper or a
+ * descendant. No target → null, and the walk reports the toolGap (the digits
+ * a widget rendered at scrape time are meaningless without the deadline).
+ * @returns {{ target: string } | null}
+ */
+function parseCountdownData(tokens, i, end, t) {
+  if (!looksLikeCountdown(t)) return null;
+  let target = countdownTargetOf(t && t.attrs);
+  for (let j = i + 1; j < end - 1 && !target; j++) {
+    if (tokens[j].kind === 'open') target = countdownTargetOf(tokens[j].attrs);
+  }
+  if (!target) return null;
+  return { target };
+}
+
+/** True when the span j..close holds no child elements (a text leaf). */
+function isLeafSpan(tokens, j, close) {
+  for (let k = j + 1; k < close - 1; k++) {
+    if (tokens[k].kind === 'open') return false;
+  }
+  return true;
+}
+
+/** One menu row (name ··· price, optional description). @returns {object|null} */
+function extractPriceItem(tokens, s, e) {
+  let name = '';
+  let price = '';
+  let desc = '';
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    // wrappers carry the same class words (elementor-price-list-text) —
+    // only LEAF elements may claim name/price, or a wrapper eats its span
+    // children and the row loses its parts
+    const leaf = isLeafSpan(tokens, j, close);
+    if (!name && (HEADING.test(tk.name) || tk.name === 'strong'
+      || (leaf && /\b(?:item-name|dish-name|price-list-title|menu-item-title|name|title)\b/i.test(cls)))) {
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && v.length <= 80) { name = v; j = close - 1; continue; }
+    }
+    if (!price && leaf && /\b(?:item-price|price-list-price|menu-price|price|amount|cost)\b/i.test(cls)) {
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && v.length <= 24 && /\d/.test(v)) { price = v; j = close - 1; continue; }
+    }
+    if (!desc && (tk.name === 'p' || /\b(?:desc|description)\b/i.test(cls))) {
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && v !== name && v !== price) { desc = v; j = close - 1; }
+    }
+  }
+  if (!price) {
+    const m = PRICE_RE.exec(unescapeHtml(textOf(tokens, s + 1, e - 1)));
+    if (m) price = m[0].replace(/\s+/g, ' ').trim();
+  }
+  if (!name) return null;
+  const out = { name };
+  if (price) out.price = price;
+  if (desc) out.desc = desc;
+  return out;
+}
+
+/**
+ * Price list (restaurant menu / service price list) — NOT the pricing table.
+ * Class hint required; ≥2 named rows and at least one carrying a price.
+ * @returns {{ items: object[] } | null}
+ */
+function parsePricelistData(tokens, i, end, t) {
+  if (!looksLikePricelist(t)) return null;
+  const items = [];
+  const collect = (from, to, depth) => {
+    for (const [s, e] of childSpans(tokens, from, to)) {
+      const tk = tokens[s];
+      if (tk.name === 'ul' || tk.name === 'ol') { collect(s + 1, e - 1, depth); continue; }
+      if (!CONTAINERS.has(tk.name) && tk.name !== 'li') continue;
+      const it = extractPriceItem(tokens, s, e);
+      if (it) items.push(it);
+      else if (depth < 3) collect(s + 1, e - 1, depth + 1);
+    }
+  };
+  collect(i + 1, end - 1, 0);
+  if (items.length < 2 || !items.some((it) => it.price)) return null;
+  return { items, heading: directHeading(tokens, i, end) };
+}
+
+/** Count value signals (data/aria/width%) so bar GROUPS recurse, not merge. */
+function countBarSignals(tokens, s, e) {
+  let n = 0;
+  for (let j = s; j < e; j++) {
+    if (tokens[j].kind === 'open' && barValueOf(tokens[j].attrs) != null) n++;
+  }
+  return n;
+}
+
+function barValueOf(attrs) {
+  if (!attrs) return null;
+  const raw = attrs['data-max'] != null ? attrs['data-max']
+    : attrs['data-value'] != null ? attrs['data-value']
+    : attrs['data-percent'] != null ? attrs['data-percent']
+    : attrs['aria-valuenow'] != null ? attrs['aria-valuenow']
+    : (/(?:^|;)\s*width\s*:\s*(\d{1,3}(?:\.\d+)?)%/.exec(attrs.style || '') || [])[1];
+  const n = Number(raw);
+  if (raw == null || !Number.isFinite(n)) return null;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+/** One labelled bar out of a row wrapper. @returns {object|null} */
+function extractBarItem(tokens, s, e) {
+  let label = '';
+  let value = null;
+  for (let j = s; j < e; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (value == null) value = barValueOf(tk.attrs);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    if (!label && /\b(?:progress-text|skill-name|bar-label|label|title|name)\b/i.test(cls)) {
+      const close = matchClose(tokens, j);
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && !/^\d+\s*%?$/.test(v)) label = v;
+    }
+  }
+  if (!label) {
+    label = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\d+(?:\.\d+)?\s*%/g, '').replace(/\s+/g, ' ').trim();
+  }
+  if (value == null || !label) return null;
+  return { label, value };
+}
+
+/**
+ * Progress / skill bars. Class hint + real value signals (data attrs, aria,
+ * or an inline width%) — bare percentage TEXT stays text.
+ * @returns {{ items: object[] } | null}
+ */
+function parseProgressData(tokens, i, end, t) {
+  if (!looksLikeProgress(t)) return null;
+  const items = [];
+  const collect = (from, to, depth) => {
+    for (const [s, e] of childSpans(tokens, from, to)) {
+      const tk = tokens[s];
+      if (!CONTAINERS.has(tk.name) && tk.name !== 'li') continue;
+      if (countBarSignals(tokens, s, e) > 1 && depth < 3) { collect(s + 1, e - 1, depth + 1); continue; }
+      const it = extractBarItem(tokens, s, e);
+      if (it) items.push(it);
+      else if (depth < 3) collect(s + 1, e - 1, depth + 1);
+    }
+  };
+  collect(i + 1, end - 1, 0);
+  if (!items.length) {
+    const solo = extractBarItem(tokens, i, end);
+    if (solo) items.push(solo);
+  }
+  if (!items.length) return null;
+  return { items, heading: directHeading(tokens, i, end) };
+}
+
+// ── gap-audit wave 4: rating / hours / toc / author / compare / flipbox ──
+
+const SCORE_RE = /(\d+(?:[.,]\d+)?)\s*(?:\/|מתוך|out of|of)\s*(\d+)/i;
+
+/** A machine-readable score on an element: title="4.5/5", data-rating, aria-label. */
+function scoreOfAttrs(attrs) {
+  if (!attrs) return null;
+  for (const k of ['title', 'aria-label', 'data-rating-text']) {
+    const m = SCORE_RE.exec(attrs[k] || '');
+    if (m) return { value: Number(m[1].replace(',', '.')), max: Number(m[2]) };
+  }
+  for (const k of ['data-rating', 'data-score', 'data-value', 'data-stars']) {
+    const n = Number(attrs[k]);
+    if (attrs[k] != null && Number.isFinite(n)) return { value: n, max: Number(attrs['data-max']) || 5 };
+  }
+  return null;
+}
+
+/**
+ * Star rating. Class hint + a real score: an attribute (title/data/aria) or
+ * literal ★½☆ glyphs to count. Plain "4.5" text with no stars stays text.
+ * @returns {{ value: number, max?: number, text?: string } | null}
+ */
+function parseRatingData(tokens, i, end, t) {
+  if (!looksLikeRating(t)) return null;
+  let score = scoreOfAttrs(t && t.attrs);
+  for (let j = i + 1; j < end - 1 && !score; j++) {
+    if (tokens[j].kind === 'open') score = scoreOfAttrs(tokens[j].attrs);
+  }
+  const all = unescapeHtml(textOf(tokens, i + 1, end - 1));
+  if (!score) {
+    const full = (all.match(/★/g) || []).length;
+    const half = (all.match(/[½⯪]/g) || []).length;
+    const empty = (all.match(/☆/g) || []).length;
+    if (!full) return null;
+    score = { value: full + half * 0.5, max: full + half + empty || 5 };
+  }
+  if (!Number.isFinite(score.value)) return null;
+  const out = { value: Math.round(score.value * 10) / 10 };
+  if (score.max && score.max !== 5) out.max = score.max;
+  const text = all.replace(/[★☆½⯪]/g, '').replace(/\s+/g, ' ').trim();
+  if (text) out.text = text;
+  return out;
+}
+
+/** Leaf text elements (class, tag, text) directly readable inside a span. */
+function leafTexts(tokens, s, e) {
+  const out = [];
+  for (let j = s + 1; j < e - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    if (!isLeafSpan(tokens, j, close)) continue;
+    const text = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+    if (text) out.push({ cls: (tk.attrs && tk.attrs.class) || '', tag: tk.name, text });
+    j = close - 1;
+  }
+  return out;
+}
+
+/** One day/hours row out of a row wrapper. @returns {object|null} */
+function extractHoursRow(tokens, s, e) {
+  const leaves = leafTexts(tokens, s, e);
+  let day = '';
+  let hours = '';
+  for (const leaf of leaves) {
+    if (!day && (leaf.tag === 'dt' || leaf.tag === 'th' || /\b(?:day|days|weekday|label)\b/i.test(leaf.cls))) day = leaf.text;
+    else if (!hours && (leaf.tag === 'dd' || leaf.tag === 'time' || /\b(?:hours|time|open|closed)\b/i.test(leaf.cls))) hours = leaf.text;
+  }
+  if ((!day || !hours) && leaves.length === 2) {
+    day = day || leaves[0].text;
+    hours = hours || leaves[1].text;
+  }
+  if (!day || !hours) return null;
+  return { day, hours };
+}
+
+/**
+ * Opening hours. Class hint + ≥2 day/hours rows (row wrappers, table rows,
+ * or dt/dd pairs).
+ * @returns {{ items: object[], heading?: object } | null}
+ */
+function parseHoursData(tokens, i, end, t) {
+  if (!looksLikeHours(t)) return null;
+  const items = [];
+  const collect = (from, to, depth) => {
+    let pendingDay = '';
+    for (const [s, e] of childSpans(tokens, from, to)) {
+      const tk = tokens[s];
+      if (tk.name === 'dt') {
+        pendingDay = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+        continue;
+      }
+      if (tk.name === 'dd') {
+        const hours = unescapeHtml(textOf(tokens, s + 1, e - 1)).replace(/\s+/g, ' ').trim();
+        if (pendingDay && hours) items.push({ day: pendingDay, hours });
+        pendingDay = '';
+        continue;
+      }
+      if (['ul', 'ol', 'dl', 'table', 'tbody', 'thead'].includes(tk.name)) { collect(s + 1, e - 1, depth); continue; }
+      if (!CONTAINERS.has(tk.name) && tk.name !== 'li' && tk.name !== 'tr') continue;
+      const row = extractHoursRow(tokens, s, e);
+      if (row) items.push(row);
+      else if (depth < 3) collect(s + 1, e - 1, depth + 1);
+    }
+  };
+  collect(i + 1, end - 1, 0);
+  if (items.length < 2) return null;
+  return { items, heading: directHeading(tokens, i, end) };
+}
+
+/**
+ * Table of contents. Class hint + ≥2 same-page anchor links. A direct
+ * heading becomes the module's own title (it has one), not a pre block.
+ * @returns {{ title?: string, items: object[] } | null}
+ */
+function parseTocData(tokens, i, end, t) {
+  if (!looksLikeToc(t)) return null;
+  const items = [];
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'a') continue;
+    const close = matchClose(tokens, j);
+    const href = (tk.attrs && tk.attrs.href) || '';
+    const label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+    if (href.startsWith('#') && href.length > 1 && label) items.push({ label, anchor: href });
+    j = close - 1;
+  }
+  if (items.length < 2) return null;
+  const out = { items };
+  const heading = directHeading(tokens, i, end);
+  if (heading) out.title = heading.text;
+  else {
+    const titled = leafTexts(tokens, i, end).find((l) => /\b(?:toc-title|toc-heading|title)\b/i.test(l.cls));
+    if (titled) out.title = titled.text;
+  }
+  return out;
+}
+
+/**
+ * Author box. Class hint; photo + name (heading / classed) + bio paragraphs
+ * + the first real link. Needs a name (the img alt counts).
+ * @returns {object|null}
+ */
+function parseAuthorData(tokens, i, end, t) {
+  if (!looksLikeAuthor(t)) return null;
+  let name = '';
+  let image = '';
+  let alt = '';
+  let bio = '';
+  let url = '';
+  let linkLabel = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    const cls = (tk.attrs && tk.attrs.class) || '';
+    if (!image && tk.name === 'img') {
+      image = imageSrcOf(tk.attrs);
+      alt = (tk.attrs && tk.attrs.alt) || '';
+      continue;
+    }
+    if (!name && (HEADING.test(tk.name) || /\b(?:author-name|name|byline)\b/i.test(cls))) {
+      const v = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (v && v.length <= 80) { name = v; j = close - 1; continue; }
+    }
+    if (tk.name === 'p') {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (p) bio = bio ? `${bio}\n${p}` : p;
+      j = close - 1;
+      continue;
+    }
+    if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href && tk.attrs.href !== '#') {
+      const label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (label) { url = tk.attrs.href; linkLabel = label; j = close - 1; }
+    }
+  }
+  if (!name && alt) name = alt.replace(/^(?:מאת|by)\s+/i, '').trim();
+  if (!name) return null;
+  const out = { name };
+  if (image) out.image = image;
+  if (bio) out.bio = bio;
+  if (url) { out.url = url; out.linkLabel = linkLabel; }
+  return out;
+}
+
+/**
+ * Before/after slider. Class hint + two pictures; "before" is the one whose
+ * class or alt says so, else the first.
+ * @returns {object|null}
+ */
+function parseCompareData(tokens, i, end, t) {
+  if (!looksLikeCompare(t)) return null;
+  const imgs = [];
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open' || tk.name !== 'img') continue;
+    const src = imageSrcOf(tk.attrs);
+    if (src) imgs.push({ src, hay: `${(tk.attrs && tk.attrs.class) || ''} ${(tk.attrs && tk.attrs.alt) || ''}`, alt: (tk.attrs && tk.attrs.alt) || '' });
+  }
+  if (imgs.length < 2) return null;
+  // (?<!\p{L}) instead of \b — JS \b is ASCII-only and never brackets Hebrew
+  let before = imgs.find((im) => /(?<!\p{L})(?:before|לפני)(?!\p{L})/iu.test(im.hay));
+  let after = imgs.find((im) => im !== before && /(?<!\p{L})(?:after|אחרי)(?!\p{L})/iu.test(im.hay));
+  if (!before) before = imgs.find((im) => im !== after) || imgs[0];
+  if (!after) after = imgs.find((im) => im !== before) || imgs[1];
+  const out = { before: before.src, after: after.src };
+  if (before.alt && before.alt.length <= 16) out.beforeLabel = before.alt;
+  if (after.alt && after.alt.length <= 16) out.afterLabel = after.alt;
+  return out;
+}
+
+/**
+ * Flip box. Class hint; front (heading + icon) and back (text + button) by
+ * classed halves, else first heading / first paragraph / first link.
+ * @returns {object|null}
+ */
+function parseFlipboxData(tokens, i, end, t) {
+  if (!looksLikeFlipbox(t)) return null;
+  let title = '';
+  let icon = '';
+  let backText = '';
+  let buttonText = '';
+  let buttonUrl = '';
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    if (!icon && tk.name === 'img') { icon = imageSrcOf(tk.attrs); continue; }
+    if (!title && HEADING.test(tk.name)) {
+      title = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      j = close - 1;
+      continue;
+    }
+    if (tk.name === 'p') {
+      const p = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (p) backText = backText ? `${backText}\n${p}` : p;
+      j = close - 1;
+      continue;
+    }
+    if (!buttonText && (tk.name === 'a' || tk.name === 'button')) {
+      const label = unescapeHtml(textOf(tokens, j + 1, close - 1)).replace(/\s+/g, ' ').trim();
+      if (label) {
+        buttonText = label;
+        buttonUrl = (tk.attrs && (tk.attrs.href || tk.attrs.formaction)) || '';
+        j = close - 1;
+      }
+    }
+  }
+  if (!title && !backText) return null;
+  const out = { title };
+  if (icon) out.icon = icon;
+  if (backText) out.backText = backText;
+  if (buttonText) { out.buttonText = buttonText; if (buttonUrl) out.buttonUrl = buttonUrl; }
+  return out;
+}
+
+/**
+ * Wrap a parser result whose `heading` (a direct-child section title) must
+ * ride along as a `pre` block — the walk emits it before the module, so
+ * mapping never swallows the heading the old flatten used to keep.
+ */
+function withHeadingPre(type, data, next) {
+  const { heading, ...rest } = data;
+  const out = { type, data: rest, next };
+  if (heading) out.pre = [{ type: 'heading', data: heading }];
+  return out;
+}
+
 function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   const crumbs = parseCrumbsData(tokens, i, end, t);
   if (crumbs) return { type: 'crumbs', data: crumbs, next: end };
@@ -1680,8 +2323,28 @@ function tryStructuralModules(tokens, i, end, t, bgMap, parentTo) {
   if (social) return { type: 'social', data: social, next: end };
   const logos = parseLogosData(tokens, i, end, t);
   if (logos) return { type: 'logos', data: logos, next: end };
+  const pricelist = parsePricelistData(tokens, i, end, t); // before pricing — a "price list" is a menu
+  if (pricelist) return withHeadingPre('pricelist', pricelist, end);
   const pricing = parsePricingData(tokens, i, end, t);
   if (pricing) return { type: 'pricing', data: pricing, next: end };
+  const team = parseTeamData(tokens, i, end, t);
+  if (team) return withHeadingPre('team', team, end);
+  const countdown = parseCountdownData(tokens, i, end, t);
+  if (countdown) return { type: 'countdown', data: countdown, next: end };
+  const progress = parseProgressData(tokens, i, end, t);
+  if (progress) return withHeadingPre('progress', progress, end);
+  const rating = parseRatingData(tokens, i, end, t);
+  if (rating) return { type: 'rating', data: rating, next: end };
+  const hours = parseHoursData(tokens, i, end, t);
+  if (hours) return withHeadingPre('hours', hours, end);
+  const toc = parseTocData(tokens, i, end, t);
+  if (toc) return { type: 'toc', data: toc, next: end };
+  const author = parseAuthorData(tokens, i, end, t);
+  if (author) return { type: 'author', data: author, next: end };
+  const compare = parseCompareData(tokens, i, end, t);
+  if (compare) return { type: 'compare', data: compare, next: end };
+  const flipbox = parseFlipboxData(tokens, i, end, t);
+  if (flipbox) return { type: 'flipbox', data: flipbox, next: end };
   const carousel = parseCarouselData(tokens, i, end, t, bgMap);
   if (carousel) return { type: 'carousel', data: carousel, next: end };
   const faq = parseFaqData(tokens, i, end, t);
@@ -1788,7 +2451,12 @@ function htmlToBlocks(html, opts = {}) {
     sink.push({ type: 'html', id: nid('html'), data: { content: trimmed, provisional: true } });
   }
 
-  function walk(from, to, sink) {
+  /**
+   * @param {{ inChrome?: boolean }} [ctx] inChrome = already inside a mapped
+   *        header/footer, so a nested landmark (header-in-header markup,
+   *        role collapse) just descends instead of nesting another band
+   */
+  function walk(from, to, sink, ctx = {}) {
     // the whole range repeating the card shape? → ONE cards block (v0.65).
     // Fires for wrapped clusters (via the CONTAINERS descend) and for bare
     // top-level sibling clusters alike.
@@ -1893,13 +2561,20 @@ function htmlToBlocks(html, opts = {}) {
           sink.push({ type: 'cards', id: nid('cards'), data: { items: [teaser] } });
           mapped += 1; i = end; continue;
         }
-        // a run of ≥4 short bare links is a menu, not a button pile
+        // a run of ≥4 short bare links is a menu, not a button pile (≥2 in chrome)
         const run = collectLinkRun(tokens, i, to);
-        if (run.items.length >= LINK_RUN_MIN) {
+        if (run.items.length >= (ctx.inChrome ? CHROME_LINK_RUN_MIN : LINK_RUN_MIN)) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: run.items } });
           mapped += 1; i = run.end; continue;
         }
         const href = t.attrs.href || '#';
+        // a wa.me / api.whatsapp.com link IS the whatsapp module (wave 4) —
+        // icon-only links included, the module renders its own glyph
+        const wa = whatsappDataOf(tokens, i, end, t);
+        if (wa) {
+          sink.push({ type: 'whatsapp', id: nid('wa'), data: wa });
+          mapped += 1; i = end; continue;
+        }
         let label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
         if (!label) {
           // a textless link is an icon or a picture link — keep the picture,
@@ -1920,7 +2595,6 @@ function htmlToBlocks(html, opts = {}) {
           // a YouTube link is better as an embed (renderer auto-embeds the player)
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
         } else {
-          if (/wa\.me|whatsapp/i.test(href)) suggested.add('whatsapp'); // real sites want a first-class whatsapp module
           sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
         }
         mapped += 1; i = end; continue;
@@ -1948,12 +2622,13 @@ function htmlToBlocks(html, opts = {}) {
         }
         const structuralList = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structuralList) {
+          for (const p of structuralList.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: structuralList.type, id: nid(structuralList.type), data: structuralList.data });
           mapped += 1; i = structuralList.next; continue;
         }
         if (guessedTool(t)) suggested.add(guessedTool(t));
         // a ul of single short links is a menu — keep the hrefs (v0.67)
-        const menu = navItemsFromList(tokens, i, end);
+        const menu = navItemsFromList(tokens, i, end, ctx.inChrome ? CHROME_LINK_RUN_MIN : LINK_RUN_MIN);
         if (menu) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
           mapped += 1; i = end; continue;
@@ -2017,6 +2692,11 @@ function htmlToBlocks(html, opts = {}) {
         const socialNav = parseSocialData(tokens, i, end, t);
         if (socialNav) {
           sink.push({ type: 'social', id: nid('social'), data: socialNav });
+          mapped += 1; i = end; continue;
+        }
+        const tocNav = parseTocData(tokens, i, end, t);
+        if (tocNav) {
+          sink.push({ type: 'toc', id: nid('toc'), data: tocNav });
           mapped += 1; i = end; continue;
         }
         if (looksLikeCrumbs(t)) suggested.add('crumbs');
@@ -2095,10 +2775,37 @@ function htmlToBlocks(html, opts = {}) {
       if (CONTAINERS.has(name)) {
         const structural = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structural) {
+          for (const p of structural.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
           mapped += 1; i = structural.next; continue;
         }
-        const lost = guessedTool(t);
+        // the page's header/footer landmark → ONE header/footer module with
+        // its children as nested blocks (wave 4). Nothing lost: inner
+        // structure we could not read stays as provisional html INSIDE the
+        // band — and then the gap is still reported, the rich-table rule.
+        const landmark = landmarkOf(t);
+        if (landmark && !ctx.inChrome) {
+          const kids = [];
+          const leftoverBefore = leftover;
+          walk(i + 1, end - 1, kids, Object.assign({}, ctx, { inChrome: true }));
+          const inner = coalesceButtonRuns(kids);
+          if (inner.length) {
+            const data = { blocks: inner };
+            if (landmark === 'footer') {
+              const credit = liftFooterCredit(inner);
+              if (credit) data.credit = credit;
+            }
+            sink.push({ type: landmark, id: nid(landmark), data });
+            mapped += 1;
+            if (leftover > leftoverBefore) suggested.add(landmark);
+          }
+          // no children = nothing visible inside (scripts, svg chrome) —
+          // the inner walk keeps every readable thing, so nothing was lost
+          i = end; continue;
+        }
+        // a landmark nested inside a mapped band (header-in-header markup)
+        // is just a wrapper — descend without reporting it lost
+        const lost = landmark ? null : guessedTool(t);
         if (lost) suggested.add(lost);
         else {
           if (looksLikeSteps(t)) suggested.add('steps');
@@ -2107,7 +2814,7 @@ function htmlToBlocks(html, opts = {}) {
         // descend: its children become blocks (the wrapper itself is dropped).
         // A grid/flex wrapper with several children hints at a columns layout.
         const before = sink.length;
-        walk(i + 1, end - 1, sink);
+        walk(i + 1, end - 1, sink, ctx);
         if (sink.length - before > 1 && /col|grid|row|flex/i.test(t.attrs.class || '')) {
           suggested.add('columns');
         }
@@ -2125,12 +2832,13 @@ function htmlToBlocks(html, opts = {}) {
       if (name.includes('-')) {
         const custom = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (custom) {
+          for (const p of custom.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: custom.type, id: nid(custom.type), data: custom.data });
           mapped += 1; i = custom.next; continue;
         }
         const lostCustom = guessedTool(t);
         if (lostCustom) suggested.add(lostCustom);
-        walk(i + 1, end - 1, sink);
+        walk(i + 1, end - 1, sink, ctx);
         i = end; continue;
       }
 
@@ -2176,6 +2884,9 @@ module.exports = {
   parseTestimonialData,
   tryStructuralModules,
   guessedTool,
+  landmarkOf,
+  liftFooterCredit,
+  whatsappDataOf,
   parseDetailsRun,
   mapsAddressOf,
   looksLikeCarousel,
@@ -2187,6 +2898,7 @@ module.exports = {
   attrOf,
   pickFromSrcset,
   LINK_RUN_MIN,
+  CHROME_LINK_RUN_MIN,
   LINK_LABEL_MAX,
   imageSrcOf,
   styleImageOf,

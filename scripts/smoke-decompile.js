@@ -42,8 +42,12 @@ async function checkRejects(name, fn) {
   `);
   check('iframe → embed block', g.blocks.some((b) => b.type === 'embed' && /youtube/.test(b.data.url)));
   check('youtube link → embed block', g.blocks.filter((b) => b.type === 'embed').length >= 2);
-  check('whatsapp link stays a button + suggests a whatsapp tool',
-    g.blocks.some((b) => b.type === 'button' && /wa\.me/.test(b.data.url)) && g.suggestedTools.includes('whatsapp'));
+  // wave 4 closed this gap: a wa.me link is the whatsapp module, not a button
+  // plus a permanent toolGap
+  check('whatsapp link → the whatsapp module (wave 4 closed this gap)',
+    g.blocks.some((b) => b.type === 'whatsapp' && b.data.phone === '972501234567' && b.data.label === 'ווטסאפ') &&
+    !g.blocks.some((b) => b.type === 'button' && /wa\.me/.test(b.data.url)) &&
+    !g.suggestedTools.includes('whatsapp'));
   check('form decompiles to a real form block (v0.58 closed this gap)',
     g.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 1) && !g.suggestedTools.includes('form'));
   const timeBlock = htmlToBlocks('<time class="DateDisplay" datetime="2026-09-07T19:11:07.322Z"></time>');

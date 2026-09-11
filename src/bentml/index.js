@@ -12,6 +12,7 @@
 const { parse, deriveSlug } = require('./parse');
 const { compile, compileAndRender } = require('./compile');
 const { decompile } = require('./decompile');
+const { extractBentml, sniffDialect } = require('./extract');
 const { BentmlError } = require('./errors');
 const { KEYWORDS, getKeyword } = require('./keywords');
 const { renderPage } = require('../renderer');
@@ -52,7 +53,7 @@ function previewFixed(source) {
  */
 function listModules() {
   return Object.entries(KEYWORDS)
-    .filter(([k]) => k !== 'META' && k !== 'HTML')
+    .filter(([k, def]) => k !== 'META' && k !== 'HTML' && !def.decompileOnly)
     .map(([name, def]) => ({
       keyword: name,
       body: def.body,
@@ -67,6 +68,9 @@ module.exports = {
   parse,
   compile,
   decompile,
+  // v2.20: take only the BenTML out of a model's reply (both dialects)
+  extract: extractBentml,
+  sniffDialect,
   preview: previewFixed,
   deriveSlug,
   BentmlError,

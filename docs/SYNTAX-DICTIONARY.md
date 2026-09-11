@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (44)
+## Modules (55)
 
 ### תוכן
 
@@ -346,7 +346,7 @@ AUDIO(src: "...")
 
 #### `ROW` → `columns`
 
-▥ **עמודות** — 2–4 טורים זה לצד זה
+▥ **עמודות** — 2–6 טורים זה לצד זה
 
 Shape: `ROW(params) { nested modules }`
 
@@ -356,6 +356,7 @@ Shape: `ROW(params) { nested modules }`
 | `gap` | `gap` | enum none\|sm\|md\|lg |  | "md" |
 | `collapse` | `collapse` | enum sm\|md\|lg\|never |  | "md" |
 | `valign` | `valign` | enum top\|center\|bottom\|stretch |  | "top" |
+| `width` | `width` | enum content\|wide\|full |  | "content" |
 | `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
@@ -778,6 +779,219 @@ CRUMBS {
 }
 ```
 
+### תוכן
+
+#### `TEAM` → `team`
+
+👥 **הצוות** — חברי צוות — תמונה, שם, תפקיד
+
+Shape: `TEAM(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+TEAM {
+  …
+}
+```
+
+#### `COUNTDOWN` → `countdown`
+
+⏳ **ספירה לאחור** — טיימר למבצע או אירוע — מתעדכן לבד
+
+Shape: `COUNTDOWN(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `target` | `target` | string | yes | "" |
+| `done` | `done` | string |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+COUNTDOWN(target: "...") {
+  …
+}
+```
+
+#### `PRICELIST` → `pricelist`
+
+₪ **מחירון** — תפריט מסעדה או מחירון שירותים — שם ··· מחיר
+
+Shape: `PRICELIST(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+PRICELIST {
+  …
+}
+```
+
+#### `PROGRESS` → `progress`
+
+▰ **מדדי התקדמות** — פסי מיומנות או התקדמות — אחוזים בלי JavaScript
+
+Shape: `PROGRESS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+PROGRESS {
+  …
+}
+```
+
+#### `WHATSAPP` → `whatsapp`
+
+✆ **וואטסאפ** — כפתור צ׳אט מעוצב — טלפון + הודעה מוכנה, נפתח ב-wa.me
+
+Shape: `WHATSAPP(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `phone` | `phone` | string |  | "" |
+| `message` | `message` | textarea |  | "" |
+| `note` | `note` | string |  | "" |
+| `url` | `url` | url |  | "" |
+| `align` | `align` | enum start\|center\|end |  | "start" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+WHATSAPP(align: start) {
+  …
+}
+```
+
+#### `RATING` → `rating`
+
+★ **דירוג כוכבים** — ציון ביקורות — כוכבים מלאים וחצאים, בלי JavaScript
+
+Shape: `RATING(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `value` | `value` | number | yes | 5 |
+| `max` | `max` | integer |  | 5 |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+RATING(value: "...") {
+  …
+}
+```
+
+#### `HOURS` → `hours`
+
+🕘 **שעות פתיחה** — ימים ושעות — "סגור" מסומן אוטומטית
+
+Shape: `HOURS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+HOURS {
+  …
+}
+```
+
+### מבנה
+
+#### `TOC` → `toc`
+
+☰ **תוכן עניינים** — קישורי עוגן בתוך הדף — #מזהה של כותרת
+
+Shape: `TOC(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `title` | `title` | string |  | "תוכן עניינים" |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+TOC {
+  …
+}
+```
+
+### תוכן
+
+#### `AUTHOR` → `author`
+
+✍ **כותב/ת** — קופסת "על הכותב/ת" — תמונה, שם, כמה מילים, קישור
+
+Shape: `AUTHOR(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `name` | `name` | string | yes | "" |
+| `image` | `image` | url |  | "" |
+| `url` | `url` | url |  | "" |
+| `linkLabel` | `linkLabel` | string |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+AUTHOR(name: "...") {
+  …
+}
+```
+
+### מדיה
+
+#### `COMPARE` → `compare`
+
+◧ **לפני / אחרי** — שתי תמונות עם סליידר השוואה
+
+Shape: `COMPARE(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `before` | `before` | media | yes | "" |
+| `after` | `after` | media | yes | "" |
+| `beforeLabel` | `beforeLabel` | string |  | "לפני" |
+| `afterLabel` | `afterLabel` | string |  | "אחרי" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+COMPARE(before: "...", after: "...")
+```
+
+### תוכן
+
+#### `FLIPBOX` → `flipbox`
+
+⟲ **קופסה מתהפכת** — כותרת מקדימה, טקסט וכפתור מאחור — מתהפך במעבר עכבר
+
+Shape: `FLIPBOX(params) { text body }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `title` | `title` | string | yes | "" |
+| `icon` | `icon` | string |  | "" |
+| `buttonText` | `cta` | string |  | "" |
+| `buttonUrl` | `url` | url |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+FLIPBOX(title: "...") {
+  …
+}
+```
+
+### מבנה
+
 #### `NAV` → `nav`
 
 ≡ **תפריט ניווט** — שורת ניווט עם צבעים (רקע + טקסט)
@@ -887,6 +1101,15 @@ Universal on most keywords: `class`, `id`.
 
 ## Reserved (future advanced modules)
 
-`INPUT`, `FOOTER`, `HEADER`, `CODE`
+`INPUT`, `CODE`
 
 These are **not** implemented yet. Using them in BenTML is an error today.
+
+## Decompile-preview only (not authoring tools)
+
+Appear only in drafts produced by decompiling a site (import preview). Not authoring tools — the real site chrome is theme → header & footer.
+
+מופיעים רק בטיוטות שנוצרו מפירוק אתר (תצוגת ייבוא). לא כלי כתיבה — כרום האתר האמיתי: עיצוב → כותרת ותחתית.
+
+- `HEADER` → `header` — **ראש עמוד מיובא (Header)** — תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את כותרת האתר האמיתית עורכים בעיצוב → כותרת ותחתית
+- `FOOTER` → `footer` — **תחתית עמוד מיובאת (Footer)** — תצוגת ייבוא בלבד — נוצר רק מפירוק אתר. את תחתית האתר האמיתית עורכים בעיצוב → כותרת ותחתית

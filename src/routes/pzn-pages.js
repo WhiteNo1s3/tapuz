@@ -14,7 +14,7 @@
 
 const express = require('express');
 const { exportAll } = require('../export');
-const { looksLikePzn, pznSourceToBlocks } = require('../pzn-source');
+const { sniffDialect, pznSourceToBlocks, toPznSource } = require('../pzn-source');
 
 const router = express.Router();
 
@@ -35,31 +35,30 @@ router.get('/admin/api/pzn/source', (req, res) => {
 
 /**
  * Save raw .pzn source as the page draft (publish: true also publishes).
- * loose: true — the source is a raw pasted AI reply; extract the .pzn
- * document out of prose/code fences first (the paste flow).
+ * v2.20: `loose` is accepted for compatibility but no longer needed — every
+ * paste is extracted (fences, chat, <html> brackets) and a keyword-dialect
+ * reply ("BENTML 0.2") is compiled to .pzn before the strict save runs.
  */
 router.post('/admin/api/pzn/source', (req, res) => {
+  let ex = null;
   try {
-    const { fullPath, publish, loose } = req.body || {};
+    const { fullPath, publish } = req.body || {};
     let { source } = req.body || {};
     if (!fullPath || typeof source !== 'string') {
       return res.status(400).json({ ok: false, error: 'fullPath and source required' });
     }
-    if (loose) {
-      const { extractPzn } = require('../pzn-extract');
-      source = extractPzn(source);
-    }
+    ex = toPznSource(source); // a broken keyword document throws line + fix
+    source = ex.source;
     const { savePageSource } = require('../pages');
-    const result = savePageSource(fullPath, source, { publish: !!publish });
+    const result = savePageSource(fullPath, source, { publish: !!publish, meta: ex.page && ex.page.meta });
     if (publish) exportAll(); // publish from the paste flow means LIVE now
-    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings });
+    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings, dialect: ex.dialect, extracted: ex.extracted });
   } catch (e) {
     // Strict save failed — compute an auto-correction the user can apply with
     // one click (v0.49 "auto-correct, then you apply"). No save happens here.
     let repairInfo = {};
     try {
-      let src = (req.body || {}).source;
-      if ((req.body || {}).loose) { const { extractPzn } = require('../pzn-extract'); src = extractPzn(src); }
+      const src = ex ? ex.source : (req.body || {}).source;
       const { repair } = require('../pzn/repair');
       const r = repair(src);
       if (r.ok && !r.remaining.length && r.changes.length) {
@@ -72,6 +71,7 @@ router.post('/admin/api/pzn/source', (req, res) => {
       code: e.code || 'E_PZN',
       line: e.line,
       column: e.column,
+      fix: e.fix,
       issues: e.issues,
       ...repairInfo
     });
@@ -107,10 +107,11 @@ router.post('/admin/api/pzn/decompile', async (req, res) => {
     if (url && String(url).trim()) {
       r = await decompileUrl(String(url).trim(), { title, slug });
     } else if (typeof html === 'string' && html.trim()) {
-      if (looksLikePzn(html)) {
-        // the paste is already BenTML (an AI reply) — the HTML decompiler
-        // would shred bent-* tags into provisional blobs (v0.69). Route it
-        // through the forgiving import instead; same draft-creating flow.
+      if (sniffDialect(html) !== 'unknown') {
+        // the paste is already BenTML (an AI reply — either dialect, with or
+        // without a fence and chat around it) — the HTML decompiler would
+        // shred bent-* tags into provisional blobs (v0.69). Route it through
+        // the forgiving import instead; same draft-creating flow.
         const pznApi = require('../pzn/index');
         const { deriveSlug } = require('../pzn/intent');
         const { view, repaired } = pznSourceToBlocks(html);
@@ -225,8 +226,10 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
     if (typeof source !== 'string' || !source.trim()) {
       return res.status(400).json({ ok: false, error: 'source required' });
     }
-    const { extractPzn } = require('../pzn-extract');
-    source = extractPzn(source);
+    // v2.20: take only the BenTML — fence, chat, <html> brackets gone — and
+    // accept BOTH dialects (a "BENTML 0.2" reply is compiled to .pzn here)
+    const ex = toPznSource(source);
+    source = ex.source;
     const pznApi = require('../pzn/index');
     // repair-first (v2.19.1): this is the route the copilot chat's "צור דף"
     // calls, and it was the ONE create path with no forgiveness — a model
@@ -273,14 +276,15 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
     createPage({ title, slug, blocks: [] });
     // a repaired document never auto-publishes — the owner reviews the fixes
     const doPublish = !!publish && !repaired;
-    const result = savePageSource(slug, source, { publish: doPublish });
+    const result = savePageSource(slug, source, { publish: doPublish, meta: ex.page && ex.page.meta });
     if (doPublish) exportAll(); // publish from the paste flow means LIVE now
     res.json({
       ok: true, fullPath: slug, created: true, blocks: result.blocks,
-      warnings: result.warnings, repaired, changes, published: doPublish
+      warnings: result.warnings, repaired, changes, published: doPublish,
+      dialect: ex.dialect, extracted: ex.extracted
     });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column });
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column, fix: e.fix });
   }
 });
 

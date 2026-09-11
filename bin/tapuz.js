@@ -155,9 +155,10 @@ if (command === 'bentml-compile' || command === 'bentml_compile') {
     console.error('Usage: tapuz bentml-compile <file.btml> [--json]');
     process.exit(1);
   }
-  const { compile, BentmlError } = require('../src/bentml');
+  const { compile, BentmlError, extract } = require('../src/bentml');
   try {
-    const source = fs.readFileSync(file, 'utf8');
+    // v2.20: a file saved straight out of a chat (fence, prose) compiles too
+    const source = extract(fs.readFileSync(file, 'utf8')).source;
     const result = compile(source);
     if (args.includes('--json')) {
       console.log(JSON.stringify(result, null, 2));
@@ -214,9 +215,9 @@ if (command === 'bentml-preview' || command === 'bentml_preview') {
     console.error('Usage: tapuz bentml-preview <file.btml>');
     process.exit(1);
   }
-  const { preview, BentmlError } = require('../src/bentml');
+  const { preview, BentmlError, extract } = require('../src/bentml');
   try {
-    const source = fs.readFileSync(file, 'utf8');
+    const source = extract(fs.readFileSync(file, 'utf8')).source;
     const result = preview(source);
     process.stdout.write(result.html);
   } catch (e) {

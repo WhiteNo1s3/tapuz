@@ -135,6 +135,7 @@ function buildBlock(node, warnings) {
       };
       // the cut speaks percent too: "70%:30%" and "70:30" are the same split
       if (p.ratio) data.ratio = String(p.ratio).split(':').map((s) => s.trim().replace(/%$/, '')).join(':');
+      if (p.width && p.width !== 'content') data.width = p.width;
       applyChrome(data, p);
       return createBlock('columns', data);
     }
@@ -592,6 +593,176 @@ function buildBlock(node, warnings) {
       };
       applyChrome(data, p);
       return createBlock('crumbs', data);
+    }
+    case 'TEAM': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'MEMBER')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { name: cp.name || '' };
+          if (cp.role) item.role = cp.role;
+          if (cp.image) item.image = cp.image;
+          if (cp.url) item.url = cp.url;
+          const bio = collapseSingleParagraph(c.text || '');
+          if (bio) item.bio = bio;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { name: 'דנה לוי', role: 'מנכ"לית' },
+              { name: 'יוסי כהן', role: 'סמנכ"ל טכנולוגיות' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('team', data);
+    }
+    case 'COUNTDOWN': {
+      const data = { target: p.target || '' };
+      const label = collapseSingleParagraph(node.text || '');
+      if (label) data.label = label;
+      if (p.done) data.done = p.done;
+      applyChrome(data, p);
+      return createBlock('countdown', data);
+    }
+    case 'PRICELIST': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'PRICEITEM')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { name: cp.name || '' };
+          if (cp.price) item.price = cp.price;
+          const desc = collapseSingleParagraph(c.text || '');
+          if (desc) item.desc = desc;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { name: 'חומוס מלא', price: '32 ₪' },
+              { name: 'שקשוקה', price: '44 ₪' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('pricelist', data);
+    }
+    case 'PROGRESS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'BAR')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { label: collapseSingleParagraph(c.text || '') };
+          if (cp.value != null) item.value = cp.value;
+          if (cp.color) item.color = cp.color;
+          return item;
+        });
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { label: 'עיצוב', value: 90 },
+              { label: 'פיתוח', value: 75 }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('progress', data);
+    }
+    case 'RATING': {
+      const data = { value: p.value != null ? Number(p.value) : 5 };
+      if (p.max != null && Number(p.max) !== 5) data.max = Number(p.max);
+      const text = collapseSingleParagraph(node.text || '');
+      if (text) data.text = text;
+      applyChrome(data, p);
+      return createBlock('rating', data);
+    }
+    case 'HOURS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'DAY')
+        .map((c) => ({
+          day: (c.params && c.params.name) || '',
+          hours: collapseSingleParagraph(c.text || '')
+        }));
+      const data = {
+        items: items.length
+          ? items
+          : [
+              { day: 'ראשון–חמישי', hours: '9:00–19:00' },
+              { day: 'שבת', hours: 'סגור' }
+            ]
+      };
+      applyChrome(data, p);
+      return createBlock('hours', data);
+    }
+    case 'TOC': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'TOCITEM')
+        .map((c) => {
+          const item = { label: collapseSingleParagraph(c.text || '') };
+          const anchor = c.params && c.params.anchor;
+          if (anchor) item.anchor = anchor;
+          return item;
+        });
+      const data = { items };
+      if (p.title) data.title = p.title;
+      applyChrome(data, p);
+      return createBlock('toc', data);
+    }
+    case 'AUTHOR': {
+      const data = { name: p.name || '' };
+      if (p.image) data.image = p.image;
+      const bio = collapseSingleParagraph(node.text || '');
+      if (bio) data.bio = bio;
+      if (p.url) data.url = p.url;
+      if (p.linkLabel) data.linkLabel = p.linkLabel;
+      applyChrome(data, p);
+      return createBlock('author', data);
+    }
+    case 'COMPARE': {
+      const data = { before: p.before || '', after: p.after || '' };
+      if (p.beforeLabel) data.beforeLabel = p.beforeLabel;
+      if (p.afterLabel) data.afterLabel = p.afterLabel;
+      applyChrome(data, p);
+      return createBlock('compare', data);
+    }
+    case 'FLIPBOX': {
+      const data = { title: p.title || '' };
+      if (p.icon) data.icon = p.icon;
+      const backText = collapseSingleParagraph(node.text || '');
+      if (backText) data.backText = backText;
+      if (p.cta) data.buttonText = p.cta;
+      if (p.url) data.buttonUrl = p.url;
+      applyChrome(data, p);
+      return createBlock('flipbox', data);
+    }
+    case 'HEADER': {
+      const data = {
+        blocks: (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean),
+        tone: p.tone || 'light',
+        layout: p.layout || 'row'
+      };
+      applyChrome(data, p);
+      return createBlock('header', data);
+    }
+    case 'FOOTER': {
+      const data = {
+        blocks: (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean),
+        tone: p.tone || 'dark'
+      };
+      if (p.credit) data.credit = p.credit;
+      applyChrome(data, p);
+      return createBlock('footer', data);
+    }
+    case 'WHATSAPP': {
+      const data = { label: collapseSingleParagraph(text) || 'דברו איתנו בוואטסאפ' };
+      if (p.phone) data.phone = p.phone;
+      if (p.message) data.message = p.message;
+      if (p.note) data.note = p.note;
+      if (p.url) data.url = p.url;
+      if (p.align && p.align !== 'start') data.align = p.align;
+      applyChrome(data, p);
+      return createBlock('whatsapp', data);
     }
     case 'NAV': {
       const items = (node.children || [])

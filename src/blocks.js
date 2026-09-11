@@ -5,7 +5,9 @@ const BLOCK_TYPES = [
   'list', 'quote', 'card', 'section', 'hero', 'testimonial', 'gallery', 'features', 'embed',
   'article-list', 'map', 'cta', 'stats', 'logos', 'faq', 'contact-info', 'banner',
   'marquee', 'parallax', 'tabs', 'accordion', 'form', 'cards', 'nav', 'ticker', 'newspop', 'video', 'category',
-  'carousel', 'audio', 'table', 'pricing', 'steps', 'timeline', 'crumbs', 'social', 'html'
+  'carousel', 'audio', 'table', 'pricing', 'steps', 'timeline', 'crumbs', 'social',
+  'team', 'countdown', 'pricelist', 'progress', 'header', 'footer', 'whatsapp',
+  'rating', 'hours', 'toc', 'author', 'compare', 'flipbox', 'html'
 ];
 
 function createBlock(type, data = {}) {

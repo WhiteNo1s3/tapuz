@@ -127,6 +127,31 @@ const BROKEN_BUT_REPAIRABLE = `<bent-paragraph>זה אמור להפוך לטקס
     check('repair with no source → 400, not a crash', badRepair.status === 400 && badRepair.json.ok === false);
     const badPreview = await req('POST', '/admin/api/pzn/preview', { cookie, body: { source: '<bent-heading level="99">x</bent-heading>' } });
     check('preview of invalid BenTML (bad level) → 400 with real validation issues', badPreview.status === 400 && badPreview.json.ok === false && Array.isArray(badPreview.json.issues));
+
+    // ── v2.20: take only the BenTML — both dialects, any wrapping, every door ──
+    const LINE_DOC = 'BENTML 0.2\n\nMETA {\n  title: "דף מהמילים"\n}\n\nHEADING(level: 1) { שלום מילים }\n\nTEXT { פסקה }';
+    const chatty = 'Sure! Here it is:\n```bentml\n' + LINE_DOC + '\n```\nLet me know!';
+    const tbLine = await req('POST', '/admin/api/pzn/to-blocks', { cookie, body: { source: chatty } });
+    check('to-blocks accepts a fenced keyword-dialect reply (BENTML 0.2 → blocks)',
+      tbLine.status === 200 && tbLine.json.ok && tbLine.json.dialect === 'line' && tbLine.json.title === 'דף מהמילים' && tbLine.json.blocks.some((b) => b.type === 'heading'));
+    check('to-blocks reports what it stripped (fence + chat)', Array.isArray(tbLine.json.extracted) && tbLine.json.extracted.some((c) => c.code === 'FENCE'));
+    const tbWrapped = await req('POST', '/admin/api/pzn/to-blocks', { cookie, body: { source: 'הנה:\n<html>\n' + LINE_DOC + '\n</html>\nזהו' } });
+    check('to-blocks removes the <html> brackets a chat wrapped around BENTML', tbWrapped.status === 200 && tbWrapped.json.ok && tbWrapped.json.dialect === 'line' && tbWrapped.json.blocks.length === 2);
+    const prevLine = await req('POST', '/admin/api/pzn/preview', { cookie, body: { source: chatty } });
+    check('preview renders a keyword-dialect reply', prevLine.status === 200 && prevLine.json.ok && /שלום מילים/.test(prevLine.json.html));
+    const repLine = await req('POST', '/admin/api/pzn/repair', { cookie, body: { source: chatty } });
+    check('repair accepts a keyword-dialect reply (compiled to .pzn, nothing to fix)', repLine.status === 200 && repLine.json.ok && /<bent-heading/.test(repLine.json.repairedSource));
+    const brokenLine = await req('POST', '/admin/api/pzn/to-blocks', { cookie, body: { source: '```\nBENTML 0.2\n\nMETA {\n  title: "x"\n}\n\nTEXTX { y }\n```' } });
+    check('a broken keyword document answers with code + line + fix, not a crash', brokenLine.status === 400 && brokenLine.json.ok === false && brokenLine.json.code === 'E201' && brokenLine.json.line === 7 && !!brokenLine.json.fix);
+    // the /admin/api/bentml/compile door — the builder panel's server path
+    const compileFenced = await req('POST', '/admin/api/bentml/compile', { cookie, body: { source: 'בשמחה:\n```html\n' + GOOD_PZN + '\n```\nבהצלחה' } });
+    check('bentml/compile takes a fenced, chatty .pzn reply', compileFenced.status === 200 && compileFenced.json.ok && compileFenced.json.dialect === 'pzn' && compileFenced.json.blocks.length === 2 && compileFenced.json.lineOffset === 2);
+    const compileWrapped = await req('POST', '/admin/api/bentml/compile', { cookie, body: { source: 'הנה:\n<html>\n' + LINE_DOC + '\n</html>' } });
+    check('bentml/compile takes an <html>-wrapped keyword document', compileWrapped.status === 200 && compileWrapped.json.ok && compileWrapped.json.dialect === 'line' && compileWrapped.json.blocks.length === 2 && compileWrapped.json.lineOffset === 2);
+    const compileErr = await req('POST', '/admin/api/bentml/compile', { cookie, body: { source: 'x\n\n```\nBENTML 0.2\n\nMETA {\n  title: "x"\n}\n\nTEXTX { y }\n```' } });
+    check('bentml/compile maps the error line back onto the pasted text (7 + 3 fence lines = 10)', compileErr.status === 400 && compileErr.json.code === 'E201' && compileErr.json.line === 10);
+    const previewPzn = await req('POST', '/admin/api/bentml/preview', { cookie, body: { source: '```html\n' + GOOD_PZN + '\n```' } });
+    check('bentml/preview renders a fenced .pzn reply', previewPzn.status === 200 && previewPzn.json.ok && previewPzn.json.dialect === 'pzn' && /שלום/.test(previewPzn.json.html));
   } finally {
     child.kill();
   }
