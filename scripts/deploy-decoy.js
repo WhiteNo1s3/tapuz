@@ -61,6 +61,25 @@ console.log(
   'Static export: npm run export:static'
 );
 
+// ── build fingerprint (v2.24): stamp WHICH code this deploy is. `.build-id`
+// = <version>+<utc stamp>[.<git sha>]; every rendered page carries it as
+// <meta name="generator"> and /admin/theme prints it (src/build-info.js), so
+// "did my change reach the site" is one view-source away. Best-effort.
+try {
+  const path = require('path');
+  const version = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')).version || '0';
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '-');
+  let sha = '';
+  try {
+    sha = require('child_process').execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch (e) { /* an archive deploy has no .git — the stamp alone still dates the build */ }
+  const id = version + '+' + stamp + (sha ? '.' + sha : '');
+  fs.writeFileSync('.build-id', id + '\n');
+  console.log('[build] fingerprint ' + id + ' (written to .build-id)');
+} catch (e) {
+  console.log('[build] fingerprint failed: ' + e.message);
+}
+
 // ── deploy diagnostics (v2.13) — the build log is our only eye on the server.
 // The wizard-skip class of bug is always "which SITE_ROOT is the app really
 // using, and what does that root's config claim?" — so the build answers it

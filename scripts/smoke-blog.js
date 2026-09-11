@@ -55,7 +55,7 @@ META {
   title: "בלוג"
 }
 
-AUTHOR(name: "דנה כהן", role: "עורכת")
+AUTHOR(name: "דנה כהן", role: "עורכת") { }
 
 TAGS {
   TAG(url: "/tag/css") { CSS }

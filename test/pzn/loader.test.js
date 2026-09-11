@@ -13,7 +13,8 @@ const {
   getCommand,
   getCommandCatalog,
   getAgentCommandSheet,
-  moduleNames
+  moduleNames,
+  listModules
 } = require('../../src/pzn/index');
 
 describe('module commands + perks', () => {
@@ -30,10 +31,16 @@ describe('module commands + perks', () => {
     }
   });
 
-  it('agent sheet exposes insert syntax for all modules', () => {
+  it('agent sheet exposes insert syntax for all authoring modules', () => {
     const sheet = getAgentCommandSheet();
     assert.ok(sheet.rules.length);
-    assert.equal(sheet.commands.length, moduleNames().length);
+    // decompile-only modules (the imported header/footer bands) stay
+    // registered for the draft preview but are never handed to agents
+    const authoring = listModules().filter((m) => !m.decompileOnly).map((m) => m.name);
+    const decompileOnly = listModules().filter((m) => m.decompileOnly).map((m) => m.name);
+    assert.equal(sheet.commands.length, authoring.length);
+    assert.ok(decompileOnly.length >= 2, 'header/footer are registered as decompile-only');
+    assert.ok(decompileOnly.every((n) => !sheet.commands.some((c) => c.type === n || c.tag === `bent-${n}`)));
     assert.ok(sheet.commands.every((c) => c.insert && c.tag));
   });
 

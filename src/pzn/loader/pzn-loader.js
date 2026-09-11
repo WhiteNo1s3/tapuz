@@ -224,6 +224,89 @@ main#main { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
 .bent-event-title { margin: 0.15rem 0 0.35rem; font-size: 1.05rem; }
 .bent-event-body { margin: 0; color: #57534e; }
 .bent-event-image { display: block; max-width: 100%; height: auto; margin-top: 0.6rem; border-radius: 8px; }
+.bent-team { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1.25rem; margin: 1.25rem 0; padding: 0; }
+.bent-member { text-align: center; margin: 0; }
+.bent-member-photo { display: flex; align-items: center; justify-content: center; width: 5.5rem; height: 5.5rem; margin-inline: auto; margin-block-end: 0.6rem; border-radius: 999px; object-fit: cover; background: #1a2332; font-size: 2rem; }
+img.bent-member-photo { display: block; }
+.bent-member-name { display: block; margin: 0 0 0.15rem; font-weight: 700; color: inherit; text-decoration: none; }
+.bent-member-role { margin: 0 0 0.3rem; font-size: 0.88rem; font-weight: 600; color: #f59e0b; }
+.bent-member-bio { margin: 0; font-size: 0.9rem; color: #9aa8bc; }
+.bent-countdown { margin: 1.25rem 0; text-align: center; }
+.bent-count-label { margin: 0 0 0.5rem; font-weight: 600; }
+.bent-count-cells { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.7rem; }
+.bent-count-cell { display: flex; flex-direction: column; align-items: center; min-width: 3.8rem; padding: 0.55rem 0.45rem; border-radius: 8px; background: #1a2332; }
+.bent-count-num { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; color: #f59e0b; }
+.bent-count-unit { font-size: 0.78rem; color: #9aa8bc; }
+.bent-count-done { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.bent-pricelist { margin: 1.25rem 0; }
+.bent-priceitem { margin: 0 0 0.85rem; }
+.bent-priceitem-head { display: flex; align-items: baseline; gap: 0.5rem; }
+.bent-priceitem-name { font-weight: 600; }
+.bent-priceitem-dots { flex: 1; border-bottom: 2px dotted #2a3548; transform: translateY(-0.25em); }
+.bent-priceitem-price { font-weight: 700; font-variant-numeric: tabular-nums; color: #f59e0b; }
+.bent-priceitem-desc { margin: 0.15rem 0 0; font-size: 0.88rem; color: #9aa8bc; }
+.bent-progress { margin: 1.25rem 0; }
+.bent-bar { margin: 0 0 0.85rem; }
+.bent-bar-head { display: flex; justify-content: space-between; margin-block-end: 0.3rem; font-size: 0.9rem; }
+.bent-bar-label { font-weight: 600; }
+.bent-bar-value { font-variant-numeric: tabular-nums; color: #9aa8bc; }
+.bent-bar-track { height: 0.55rem; border-radius: 999px; background: #1a2332; overflow: hidden; }
+.bent-bar-fill { height: 100%; border-radius: inherit; background: #f59e0b; }
+.bent-rating { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 1rem 0; }
+.bent-rating-stars { position: relative; display: inline-block; font-size: 1.3rem; line-height: 1; letter-spacing: 0.08em; color: #2a3548; white-space: nowrap; }
+.bent-rating-fill { position: absolute; inset-inline-start: 0; top: 0; overflow: hidden; white-space: nowrap; color: #f59e0b; }
+.bent-rating-text { font-size: 0.9rem; color: #9aa8bc; }
+.bent-hours { margin: 1.25rem 0; max-width: 32rem; }
+.bent-day { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.3rem 0; }
+.bent-day-name { font-weight: 600; }
+.bent-day-dots { flex: 1; border-bottom: 2px dotted #2a3548; transform: translateY(-0.25em); }
+.bent-day-closed .bent-day-hours { color: #9aa8bc; font-style: italic; }
+.bent-toc { margin: 1.25rem 0; padding: 1rem 1.25rem; border-inline-start: 4px solid #f59e0b; background: #1a2332; border-radius: 8px; }
+.bent-toc-title { margin: 0 0 0.5rem; font-weight: 700; }
+.bent-toc-list { margin: 0; padding-inline-start: 1.25rem; }
+.bent-tocitem { margin: 0.25rem 0; }
+.bent-tocitem-link { color: inherit; text-decoration: none; }
+.bent-author { display: flex; align-items: flex-start; gap: 1rem; margin: 1.25rem 0; padding: 1rem 1.25rem; border: 1px solid #2a3548; border-radius: 8px; }
+.bent-author-photo { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 4rem; height: 4rem; border-radius: 999px; object-fit: cover; background: #1a2332; font-size: 1.6rem; }
+img.bent-author-photo { display: block; }
+.bent-author-name { margin: 0 0 0.25rem; font-weight: 700; }
+.bent-author-bio { margin: 0 0 0.4rem; color: #9aa8bc; }
+.bent-author-link { font-size: 0.88rem; font-weight: 600; color: #f59e0b; text-decoration: none; }
+.bent-compare { margin: 1.25rem 0; }
+.bent-compare-frame { position: relative; overflow: hidden; border-radius: 8px; container-type: inline-size; }
+.bent-compare-after { display: block; width: 100%; height: auto; }
+.bent-compare-clip { position: absolute; inset-inline-start: 0; top: 0; bottom: 0; overflow: hidden; }
+.bent-compare-before { display: block; width: 100cqw; max-width: none; height: 100%; object-fit: cover; }
+.bent-compare-divider { position: absolute; top: 0; bottom: 0; width: 2px; margin-inline-start: -1px; background: #fff; pointer-events: none; }
+.bent-compare-badge { position: absolute; top: 0.6rem; padding: 0.2rem 0.6rem; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; font-size: 0.8rem; pointer-events: none; }
+.bent-compare-badge-before { inset-inline-start: 0.6rem; }
+.bent-compare-badge-after { inset-inline-end: 0.6rem; }
+.bent-compare-range { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+.bent-flipbox { perspective: 900px; margin: 1.25rem 0; min-height: 11rem; }
+.bent-flipbox-inner { position: relative; min-height: 11rem; transition: transform 0.55s ease; transform-style: preserve-3d; }
+.bent-flipbox:hover .bent-flipbox-inner, .bent-flipbox:focus-within .bent-flipbox-inner, .bent-flipbox:focus .bent-flipbox-inner { transform: rotateY(180deg); }
+.bent-flipbox-front, .bent-flipbox-back { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.6rem; padding: 1.25rem; text-align: center; border-radius: 8px; backface-visibility: hidden; }
+.bent-flipbox-front { background: #f59e0b; color: #0f1419; }
+.bent-flipbox-back { background: #1a2332; transform: rotateY(180deg); }
+.bent-flipbox-icon { font-size: 2rem; }
+.bent-flipbox-title { margin: 0; font-size: 1.1rem; color: inherit; }
+.bent-flipbox-text { margin: 0; }
+.bent-flipbox-button { display: inline-block; padding: 0.4rem 1rem; border-radius: 999px; background: #f59e0b; color: #0f1419; font-weight: 600; text-decoration: none; }
+.bent-header, .bent-footer { margin: 1.25rem 0; padding: 0.9rem 1.1rem; border-radius: 10px; }
+.bent-header.tone-light, .bent-footer.tone-light { background: #f5f5f4; color: #1c1917; }
+.bent-header.tone-dark, .bent-footer.tone-dark { background: #1a2332; }
+.bent-header.tone-brand, .bent-footer.tone-brand { background: linear-gradient(135deg, #f59e0b, #d97706); color: #111; }
+.bent-header.tone-none, .bent-footer.tone-none { padding-inline: 0; }
+.bent-header-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem 1.25rem; }
+.bent-header.layout-stack .bent-header-inner { flex-direction: column; align-items: stretch; }
+.bent-header-inner > * { margin: 0; }
+.bent-footer-inner > * + * { margin-top: 1rem; }
+.bent-footer-credit { margin: 1.1rem 0 0; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.15); font-size: 0.8rem; text-align: center; opacity: 0.8; }
+.bent-whatsapp { display: inline-flex; align-items: center; gap: 0.7rem; margin: 0.6rem 0; padding: 0.65rem 1.2rem 0.65rem 0.9rem; border-radius: 999px; background: #25d366; color: #fff; text-decoration: none; font-weight: 700; line-height: 1.2; }
+.bent-whatsapp:hover { background: #1ebe5d; }
+.bent-wa-icon { flex: 0 0 auto; width: 1.6rem; height: 1.6rem; }
+.bent-wa-body { display: flex; flex-direction: column; align-items: flex-start; }
+.bent-wa-note { font-size: 0.76rem; font-weight: 400; opacity: 0.9; }
 `.trim();
 
 /**

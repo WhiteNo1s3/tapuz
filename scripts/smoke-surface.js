@@ -203,11 +203,15 @@ const hunted = huntBlocks(
 check('hunt maps search-form → search',
   (hunted.blocks || []).some((b) => b.type === 'search'));
 
+// a post's own <header class="entry-header"> is section furniture, not the
+// page chrome (main's landmark rule: a bare <header>/role=banner with a
+// title IS the chrome — see smoke-gap-chrome)
 const sectionHeader = htmlToBlocks(
-  '<header><h2>חדשות</h2></header><article><h3>כתבה</h3></article>'
+  '<article><header class="entry-header"><h2>חדשות</h2></header><h3>כתבה</h3></article>'
 );
-check('title-only <header> is not a header module',
-  !sectionHeader.blocks.some((b) => b.type === 'header'));
+check('<header class="entry-header"> inside a post is not a header module',
+  !sectionHeader.blocks.some((b) => b.type === 'header')
+  && sectionHeader.blocks.some((b) => b.type === 'heading'));
 
 const own = htmlToBlocks(renderBlock(searchBlock, 'rtl'));
 check('our own bent-search HTML maps back',

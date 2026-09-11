@@ -1,6 +1,6 @@
 # The `.pzn` page format — standard
 
-**Spec version 0.1** · generated from `tapuziel@2.12.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
+**Spec version 0.1** · generated from `tapuziel@2.20.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
 
 `.pzn` is an open, constrained-HTML page format. A `.pzn` file **is** HTML —
 but the body may contain **only registered `bent-*` module tags**, never raw
@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (85)
+## Modules (98)
 
 ### Category: content
 
@@ -202,20 +202,100 @@ from it directly.
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
 
-#### `<bent-code>` — בלוק קוד / Code · leaf
-
-  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
-  - `lang` · string
-  - `source` · string
-
-#### `<bent-author>` — כותב / Author · leaf
+#### `<bent-member>` — חבר צוות / Team member · leaf
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `name` · string
   - `role` · string
   - `image` · url
   - `url` · url
+  - `bio` · text · **(body text, not an attribute)**
+
+#### `<bent-team>` — הצוות / Team · container (children: `bent-member`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-countdown>` — ספירה לאחור / Countdown · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `target` · string
+  - `done` · string
+  - `label` · text · **(body text, not an attribute)**
+
+#### `<bent-priceitem>` — פריט מחירון / Price item · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `name` · string
+  - `price` · string
+  - `desc` · text · **(body text, not an attribute)**
+
+#### `<bent-pricelist>` — מחירון / Price list · container (children: `bent-priceitem`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-bar>` — מדד / Bar · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `value` · integer · 0–100 · default `0`
+  - `color` · string
+  - `label` · text · **(body text, not an attribute)**
+
+#### `<bent-progress>` — מדדי התקדמות / Progress bars · container (children: `bent-bar`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-whatsapp>` — וואטסאפ / WhatsApp · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `phone` · string
+  - `message` · string
+  - `note` · string
+  - `url` · url
+  - `align` · enum · start \| center \| end · default `start`
+  - `label` · text · **(body text, not an attribute)**
+
+#### `<bent-rating>` — דירוג כוכבים / Star rating · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `value` · number · default `5`
+  - `max` · integer · 1–10 · default `5`
+  - `text` · text · **(body text, not an attribute)**
+
+#### `<bent-day>` — יום / Day row · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `name` · string
+  - `hours` · text · **(body text, not an attribute)**
+
+#### `<bent-hours>` — שעות פתיחה / Opening hours · container (children: `bent-day`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-author>` — כותב/ת / Author box · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `name` · string
+  - `image` · url
+  - `url` · url
+  - `linkLabel` · string
+  - `role` · string
   - `time` · string
+  - `bio` · text · **(body text, not an attribute)**
+
+#### `<bent-flipbox>` — קופסה מתהפכת / Flip box · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string
+  - `icon` · string
+  - `cta` · string
+  - `url` · url
+  - `backText` · text · **(body text, not an attribute)**
+
+#### `<bent-code>` — בלוק קוד / Code · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `lang` · string
+  - `source` · string
 
 ### Category: layout
 
@@ -315,33 +395,32 @@ from it directly.
   - `label` · string
   - `url` · url
 
-#### `<bent-headlink>` — קישור כותרת / Header link · leaf
-
-  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
-  - `label` · string
-  - `href` · url
-
-#### `<bent-header>` — כותרת עליונה / Header · container (children: `bent-headlink`)
-
-  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
-  - `logo` · url
-  - `title` · string
-  - `url` · url
-
-#### `<bent-footlink>` — קישור כותרת תחתונה / Footer link · leaf
-
-  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
-  - `label` · string
-  - `href` · url
-
-#### `<bent-footer>` — כותרת תחתונה / Footer · container (children: `bent-footlink`)
-
-  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
-  - `copy` · string
-
 #### `<bent-crumbs>` — פירורי לחם / Breadcrumbs · container (children: `bent-crumb`)
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-header>` — ראש עמוד מיובא / Imported page header · container
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `tone` · enum · light \| dark \| brand \| none · default `light`
+  - `layout` · enum · row \| stack · default `row`
+
+#### `<bent-footer>` — תחתית עמוד מיובאת / Imported page footer · container
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `tone` · enum · dark \| light \| brand \| none · default `dark`
+  - `credit` · string
+
+#### `<bent-tocitem>` — סעיף / TOC entry · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `anchor` · string
+  - `label` · text · **(body text, not an attribute)**
+
+#### `<bent-toc>` — תוכן עניינים / Table of contents · container (children: `bent-tocitem`)
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `title` · string
 
 #### `<bent-search>` — חיפוש / Search · leaf
 
@@ -566,6 +645,14 @@ from it directly.
 #### `<bent-social>` — רשתות חברתיות / Social · container (children: `bent-handle`)
 
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-compare>` — לפני / אחרי / Before / after · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `before` · url
+  - `after` · url
+  - `beforeLabel` · string
+  - `afterLabel` · string
 
 #### `<bent-product>` — מוצר / Product · leaf
 

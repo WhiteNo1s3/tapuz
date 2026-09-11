@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * Blog-article modules a marketer edits on the canvas: code fence, author
- * byline, tag chips. CSS-only published HTML — no highlighter JS.
+ * Blog-article modules a marketer edits on the canvas: code fence and tag
+ * chips (the author box lives in author-html.js — a byline is the same
+ * module with role/time and no bio). CSS-only published HTML — no highlighter JS.
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
@@ -24,28 +25,6 @@ function renderCode(props = {}, opts = {}) {
 
 function renderCodeFromData(data = {}, dir = '', extra = '') {
   return renderCode(data, { dir: dirAttr(dir), extra });
-}
-
-function renderAuthor(props = {}, opts = {}) {
-  const name = escapeHtml(props.name || '');
-  const role = escapeHtml(props.role || '');
-  const time = escapeHtml(props.time || '');
-  const href = safeHref(props.url || '');
-  const img = props.image
-    ? `<img class="bent-author-image" src="${escapeAttr(safeHref(props.image))}" alt="${escapeAttr(props.name || '')}" />`
-    : '';
-  const who = name
-    ? (href && href !== '#'
-      ? `<a class="bent-author-name" href="${escapeAttr(href)}">${name}</a>`
-      : `<span class="bent-author-name">${name}</span>`)
-    : '';
-  const meta = [role, time].filter(Boolean).map((s) => `<span>${s}</span>`).join('');
-  return `<div${opts.idAttr || ''} class="bent-author${opts.cls || ''}"${opts.extra || ''}${opts.dir || ''}>` +
-    `${img}<div class="bent-author-body">${who}${meta ? `<p class="bent-author-meta">${meta}</p>` : ''}</div></div>`;
-}
-
-function renderAuthorFromData(data = {}, dir = '', extra = '') {
-  return renderAuthor(data, { dir: dirAttr(dir), extra });
 }
 
 function renderTag(props = {}) {
@@ -70,8 +49,6 @@ function renderTagsFromData(data = {}, dir = '', extra = '') {
 module.exports = {
   renderCode,
   renderCodeFromData,
-  renderAuthor,
-  renderAuthorFromData,
   renderTag,
   renderTags,
   renderTagsFromData

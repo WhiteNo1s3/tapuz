@@ -156,11 +156,22 @@ const VOCAB_DATA = {
   steps: { items: [{ title: 'מתארים', text: 'מה האתר צריך.' }, { title: 'בונים', text: 'מודולים על הקנבס.' }] },
   timeline: { items: [{ time: '2024', title: 'ההתחלה', text: 'פתחנו.' }, { time: '2026', title: 'היום', text: 'ממשיכים.', image: '/uploads/now.jpg' }] },
   crumbs: { items: [{ label: 'בית', url: '/' }, { label: 'הדף הזה' }] },
-  header: { logo: '/demo/tile-1.svg', title: 'הסטודיו', url: '/', items: [{ label: 'בית', href: '/' }, { label: 'אודות', href: '/about' }] },
-  footer: { copy: '© הסטודיו', items: [{ label: 'פרטיות', href: '/privacy' }] },
+  social: { items: [{ network: 'facebook', url: 'https://facebook.com/tapuz', label: 'פייסבוק' }, { network: 'instagram', url: 'https://instagram.com/tapuz' }] },
+  team: { items: [{ name: 'דנה לוי', role: 'מנכ"לית', image: '/uploads/dana.jpg', bio: 'מובילה מהיום הראשון.' }, { name: 'יוסי כהן', role: 'סמנכ"ל' }] },
+  countdown: { target: '2027-01-01T00:00', label: 'עד סוף המבצע', done: 'המבצע הסתיים' },
+  pricelist: { items: [{ name: 'חומוס מלא', price: '32 ₪', desc: 'עם פטריות' }, { name: 'שקשוקה', price: '44 ₪' }] },
+  progress: { items: [{ label: 'עיצוב', value: 90 }, { label: 'פיתוח', value: 75, color: '#38bdf8' }] },
+  rating: { value: 4.5, max: 5, text: '4.5 מתוך 5 — 213 ביקורות' },
+  hours: { items: [{ day: 'ראשון–חמישי', hours: '9:00–19:00' }, { day: 'שבת', hours: 'סגור' }] },
+  toc: { title: 'תוכן עניינים', items: [{ label: 'הקדמה', anchor: '#intro' }, { label: 'שאלות', anchor: '#faq' }] },
+  author: { name: 'דנה לוי', image: '/uploads/dana.jpg', bio: 'כותבת על טכנולוגיה.', url: '/author/dana', linkLabel: 'לכל הכתבות' },
+  compare: { before: '/uploads/before.jpg', after: '/uploads/after.jpg', beforeLabel: 'לפני', afterLabel: 'אחרי' },
+  flipbox: { title: 'אחריות מלאה', icon: '🛡️', backText: 'שלוש שנות אחריות.', buttonText: 'לפרטים', buttonUrl: '/warranty' },
+  header: { tone: 'dark', layout: 'row', blocks: [{ type: 'image', id: 'image_1', data: { src: '/uploads/logo.svg', alt: 'לוגו' } }, { type: 'nav', id: 'nav_1', data: { items: [{ label: 'בית', href: '/' }] } }] },
+  footer: { tone: 'dark', credit: '© 2026 כל הזכויות שמורות', blocks: [{ type: 'text', id: 'text_1', data: { content: 'תחתית' } }] },
+  whatsapp: { label: 'דברו איתנו בוואטסאפ', phone: '972501234567', message: 'שלום, אשמח לפרטים', note: 'מענה תוך דקות' },
   products: { columns: 3, items: [{ title: 'מוצר', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' }] },
   code: { lang: 'css', source: '.hero { color: inherit; }' },
-  author: { name: 'דנה כהן', role: 'עורכת', time: '9.9.2026', url: '/author/dana' },
   tags: { items: [{ label: 'עיצוב', url: '/tag/design' }, { label: 'קוד', url: '/tag/code' }] },
   search: { placeholder: 'חיפוש…', action: '/search', name: 'q', submit: 'חיפוש' },
   newsletter: { title: 'הישארו מעודכנים', text: 'קבלו עדכונים למייל.', placeholder: 'האימייל שלכם', submit: 'הרשמה', action: '/api/form' },
@@ -169,10 +180,7 @@ const VOCAB_DATA = {
   related: { title: 'כתבות נוספות', items: [{ title: 'כתבה', excerpt: 'תקציר', href: '/a' }] },
   comments: { title: 'תגובות', items: [{ author: 'דנה', time: 'אתמול', text: 'כתבה מצוינת.' }] },
   slot: { label: 'פרסומת', src: '/demo/tile-1.svg', url: '/ad', advertiser: 'מותג' },
-  auth: { login: 'כניסה', loginurl: '/login', register: 'הרשמה', registerurl: '/signup' },
-  code: { lang: 'css', source: '.hero { color: inherit; }' },
-  author: { name: 'דנה כהן', role: 'עורכת', time: '9.9.2026', url: '/author/dana' },
-  tags: { items: [{ label: 'עיצוב', url: '/tag/design' }, { label: 'קוד', url: '/tag/code' }] }
+  auth: { login: 'כניסה', loginurl: '/login', register: 'הרשמה', registerurl: '/signup' }
 };
 
 // types the language deliberately folds into another keyword's JSON

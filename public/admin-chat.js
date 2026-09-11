@@ -221,8 +221,9 @@
   }
 
   function replyActions(reply) {
-    // a reply that carries a page offers one-click creation
-    if (!/<bent-|<!DOCTYPE html/i.test(reply)) return '';
+    // a reply that carries a page offers one-click creation — in either
+    // dialect: a <bent-*> tag document or a "BENTML 0.2" keyword document
+    if (!/<bent-|<!DOCTYPE html|^\s*BENTML\s+v?\d+\.\d+/im.test(reply)) return '';
     return '<div class="actions">' +
       '<button type="button" class="act primary" data-act="create">🪄 צור דף מהתשובה (טיוטה)</button>' +
       '<button type="button" class="act" data-act="copy">העתק</button>' +

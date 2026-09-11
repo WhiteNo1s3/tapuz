@@ -37,6 +37,7 @@ const {
   anchorCard,
   attrOf,
   LINK_RUN_MIN,
+  CHROME_LINK_RUN_MIN,
   LINK_LABEL_MAX,
   imageSrcOf,
   classBgMap,
@@ -57,6 +58,9 @@ const {
   parseSocialData,
   tryStructuralModules,
   guessedTool,
+  landmarkOf,
+  liftFooterCredit,
+  whatsappDataOf,
   mapsAddressOf,
   looksLikeCarousel,
   parseSearchData,
@@ -87,12 +91,21 @@ const ROLE_FROM_CLASS = [
   [/\bfaqs?\b|frequently-asked/i, 'faq'],
   [/nav-tabs|tab-content|\btabs\b/i, 'tabs'],
   [/breadcrumbs?|bent-crumbs/i, 'crumbs'],
+  [/price-list|pricelist|restaurant-menu|bent-pricelist/i, 'pricelist'],
   [/pricing|price-table|bent-pricing/i, 'pricing'],
+  [/\bteam\b|our-team|team-members?|\bstaff\b|bent-team/i, 'team'],
+  [/countdown|count-down|bent-countdown/i, 'countdown'],
+  [/progress-bars?|skill-bars?|\bskills\b|elementor-progress|bent-progress/i, 'progress'],
+  [/star-rating|elementor-star-rating|bent-rating/i, 'rating'],
+  [/opening-hours|business-hours|open-hours|bent-hours/i, 'hours'],
+  [/\btoc\b|table-of-contents|bent-toc/i, 'toc'],
+  [/author-box|post-author|about-author|author-bio|bent-author|byline|entry-author/i, 'author'],
+  [/twentytwenty|image-compare|before-after|bent-compare/i, 'compare'],
+  [/flip-box|flipbox|elementor-flip-box|bent-flipbox/i, 'flipbox'],
   [/\b(?:stats|counters?|metrics|kpis?|stats-row)\b/i, 'stats'],
   [/\b(?:logos?|logo-strip|clients|brands|partners|logos-strip)\b/i, 'logos'],
   [/main|content|primary|article-body|post-content/i, 'main'],
   [/product-grid|product-list|products|woocommerce|catalog|shop-loop/i, 'products'],
-  [/byline|author-box|author-bio|entry-author/i, 'author'],
   [/post-tags|tag-list|tag-cloud|entry-tags/i, 'tags'],
   [/search-form|site-search|header-search|bent-search/i, 'search'],
   [/newsletter|subscribe|mailchimp|bent-newsletter/i, 'newsletter'],
@@ -188,9 +201,15 @@ function dedupeKey(b) {
  */
 function dedupeSiblings(blocks) {
   const seen = new Set();
+  const mark = (b) => { const k = dedupeKey(b); if (k != null) seen.add(k); };
   return blocks.filter((b) => {
     const key = dedupeKey(b);
-    if (key == null) return true;
+    if (key == null) {
+      // a mapped page header/footer counts its children as seen at this
+      // level — the mobile twin of the header must not re-emit the logo/nav
+      if (b.type === 'header' || b.type === 'footer') ((b.data || {}).blocks || []).forEach(mark);
+      return true;
+    }
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -217,14 +236,22 @@ function isEmptyBlock(b) {
     case 'crumbs':
     case 'stats':
     case 'logos':
+    case 'team':
+    case 'pricelist':
+    case 'progress':
+    case 'hours':
+    case 'toc':
     case 'social': return !(d.items || []).length;
+    case 'countdown': return !String(d.target || '').trim();
+    case 'rating': return !Number.isFinite(Number(d.value));
+    case 'author': return !String(d.name || '').trim();
+    case 'compare': return !String(d.before || '').trim() || !String(d.after || '').trim();
+    case 'flipbox': return !String(d.title || '').trim() && !String(d.backText || '').trim();
+    case 'whatsapp': return !String(d.phone || '').replace(/\D/g, '');
     case 'header':
-      return !d.logo && !d.title && !(d.items || []).length;
-    case 'footer':
-      return !d.copy && !(d.items || []).length;
+    case 'footer': return !(d.blocks || []).length && !String(d.credit || '').trim();
     case 'products': return !(d.items || []).length;
     case 'code': return !String(d.source || '').trim();
-    case 'author': return !String(d.name || '').trim();
     case 'tags': return !(d.items || []).length;
     case 'pager':
     case 'related':
@@ -282,7 +309,7 @@ function huntBlocks(html, opts = {}) {
    * the wrapper says row/grid or the children carry width hints. Whitespace
    * between columns is fine; any other content breaks pure-row detection.
    */
-  function tryColumns(t, i, end, ctx) {
+  function tryColumns(t, i, end, depth, ctx = {}) {
     // One ROW on a walk path — nested columns inside a COL flatten so
     // keyword BenTML stays inside E105 (depth 4) and card walls survive.
     if ((ctx.columnNest || 0) >= 1) return null;
@@ -316,7 +343,7 @@ function huntBlocks(html, opts = {}) {
     const cols = [];
     const kept = [];
     spans.forEach(([s, e], idx) => {
-      const colBlocks = walk(s + 1, e - 1, 0, { ...ctx, columnNest: 1 });
+      const colBlocks = walk(s + 1, e - 1, depth + 1, { ...ctx, columnNest: 1 });
       if (colBlocks.length) {
         cols.push({ blocks: colBlocks });
         kept.push(weights[idx] == null ? 1 : weights[idx]);
@@ -433,13 +460,19 @@ function huntBlocks(html, opts = {}) {
           sink.push({ type: 'cards', id: nid('cards'), data: { items: [teaser] } });
           mapped += 1; i = end; continue;
         }
-        // a run of ≥4 short bare links is a menu, not a button pile
+        // a run of ≥4 short bare links is a menu, not a button pile (≥2 in chrome)
         const run = collectLinkRun(tokens, i, to);
-        if (run.items.length >= LINK_RUN_MIN) {
+        if (run.items.length >= (ctx.inChrome ? CHROME_LINK_RUN_MIN : LINK_RUN_MIN)) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: run.items } });
           mapped += 1; i = run.end; continue;
         }
         const href = (t.attrs && t.attrs.href) || '#';
+        // a wa.me / api.whatsapp.com link IS the whatsapp module (wave 4)
+        const wa = whatsappDataOf(tokens, i, end, t);
+        if (wa) {
+          sink.push({ type: 'whatsapp', id: nid('wa'), data: wa });
+          mapped += 1; i = end; continue;
+        }
         let label = unescapeHtml(textOf(tokens, i + 1, end - 1)).trim();
         if (!label) {
           // a textless link is an icon or a picture link — keep the picture,
@@ -459,7 +492,6 @@ function huntBlocks(html, opts = {}) {
         if (/youtube\.com|youtu\.be/i.test(href)) {
           sink.push({ type: 'embed', id: nid('em'), data: { url: href } });
         } else {
-          if (/wa\.me|whatsapp/i.test(href)) suggested.add('whatsapp');
           sink.push({ type: 'button', id: nid('b'), data: { text: label, url: href } });
         }
         mapped += 1; i = end; continue;
@@ -486,8 +518,10 @@ function huntBlocks(html, opts = {}) {
       }
       if (name === 'hr') { sink.push({ type: 'divider', id: nid('d'), data: {} }); mapped += 1; i = end; continue; }
       if (name === 'ul' || name === 'ol') {
+        // priced catalog lists are PRODUCTS; news card walls stay CARDS
         const structuralList = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structuralList) {
+          for (const p of structuralList.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: structuralList.type, id: nid(structuralList.type), data: structuralList.data });
           mapped += 1; i = structuralList.next; continue;
         }
@@ -498,7 +532,7 @@ function huntBlocks(html, opts = {}) {
         }
         const lostList = guessedTool(t);
         if (lostList) suggested.add(lostList);
-        const menu = navItemsFromList(tokens, i, end);
+        const menu = navItemsFromList(tokens, i, end, ctx.inChrome ? CHROME_LINK_RUN_MIN : LINK_RUN_MIN);
         if (menu) {
           sink.push({ type: 'nav', id: nid('nav'), data: { items: menu } });
           mapped += 1; i = end; continue;
@@ -670,18 +704,48 @@ function huntBlocks(html, opts = {}) {
         // widgets are often also flex/grids. Columns is the leftover cut.
         const structural = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (structural) {
+          for (const p of structural.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: structural.type, id: nid(structural.type), data: structural.data });
           mapped += 1; i = structural.next; continue;
         }
 
+        // the page's header/footer landmark → ONE header/footer module holding
+        // its children (wave 4). A footer that is itself a row keeps the
+        // columns cut INSIDE the band. Provisional leftovers inside still
+        // report the gap (nothing lost, nothing silently claimed).
+        const landmark = landmarkOf(t);
+        if (landmark && !ctx.inChrome) {
+          const childCtx = Object.assign({}, ctx, { inChrome: true });
+          const leftoverBefore = leftover;
+          let kids;
+          const bandCols = tryColumns(t, i, end, depth, childCtx);
+          if (bandCols && bandCols.block) kids = [bandCols.block];
+          else if (bandCols && bandCols.inline) kids = bandCols.inline;
+          else kids = walk(i + 1, end - 1, depth + 1, childCtx);
+          if (kids.length) {
+            const data = { blocks: kids };
+            if (landmark === 'footer') {
+              const credit = liftFooterCredit(kids);
+              if (credit) data.credit = credit;
+            }
+            sink.push({ type: landmark, id: nid(landmark), data });
+            mapped += 1;
+            if (leftover > leftoverBefore) suggested.add(landmark);
+          }
+          // no children = nothing visible inside — the inner walk keeps every
+          // readable thing, so an empty band was never content
+          i = end; continue;
+        }
+
         // the percentage cut: a row of 2–4 columns → one columns block
-        const colTry = tryColumns(t, i, end, ctx);
+        const colTry = tryColumns(t, i, end, depth, ctx);
         if (colTry) {
           if (colTry.block) sink.push(colTry.block);
           else if (colTry.inline) colTry.inline.forEach((b) => sink.push(b));
           i = end; continue;
         }
-        const lost = guessedTool(t);
+        // a landmark nested inside a mapped band is a wrapper, not a loss
+        const lost = landmark ? null : guessedTool(t);
         if (lost) suggested.add(lost);
 
         // every other wrapper descends — structure comes from columns/cards/
@@ -703,6 +767,7 @@ function huntBlocks(html, opts = {}) {
       if (name.includes('-')) {
         const custom = tryStructuralModules(tokens, i, end, t, bgMap, to);
         if (custom) {
+          for (const p of custom.pre || []) { sink.push({ type: p.type, id: nid(p.type), data: p.data }); mapped += 1; }
           sink.push({ type: custom.type, id: nid(custom.type), data: custom.data });
           mapped += 1; i = custom.next; continue;
         }

@@ -204,14 +204,6 @@ const CASES = {
       { label: 'הדף הזה' }
     ] }
   },
-  header: {
-    type: 'header', id: 'hd1',
-    data: { logo: '/demo/tile-1.svg', title: 'הסטודיו', url: '/', items: [{ label: 'בית', href: '/' }, { label: 'אודות', href: '/about' }] }
-  },
-  footer: {
-    type: 'footer', id: 'ft1',
-    data: { copy: '© הסטודיו', items: [{ label: 'פרטיות', href: '/privacy' }] }
-  },
   products: {
     type: 'products', id: 'pr1',
     data: { columns: 3, items: [{ title: 'מוצר', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' }] }

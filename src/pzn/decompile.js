@@ -49,19 +49,38 @@ function extractBodyHtml(html) {
   return scope;
 }
 
-/** Keep mappable <header>/<footer> landmarks when we take <main>. Junk
- * chrome (a lone "skip-chrome" paragraph) still stays outside the page. */
+/** Blocks that make a decompiled header/footer band real site chrome — a
+ * logo, a menu, a link row, social handles — as opposed to a lone paragraph
+ * the walk would happily wrap in a band. */
+const CHROME_SIGNAL_TYPES = new Set(['nav', 'image', 'button', 'social', 'columns', 'logos', 'whatsapp', 'form']);
+
+function isRealChrome(block) {
+  const kids = (block && block.data && block.data.blocks) || [];
+  const flat = [];
+  const walk = (list) => list.forEach((b) => {
+    flat.push(b);
+    if (b.type === 'columns') (b.data && b.data.columns || []).forEach((c) => walk(c.blocks || []));
+  });
+  walk(kids);
+  return flat.some((b) => CHROME_SIGNAL_TYPES.has(b.type));
+}
+
+/** Keep the <header>/<footer> landmarks when we take <main> — IF the walk
+ * maps them to real chrome (wave 4 header/footer bands with a nav, logo,
+ * link row…). Junk chrome (a lone "skip-chrome" paragraph) stays outside
+ * the page as before, so the customer's draft previews their chrome
+ * without dragging in a stray sentence. */
 function stitchPageChrome(scope, mainHtml) {
   let out = mainHtml;
   const header = /<header\b[^>]*>[\s\S]*?<\/header>/i.exec(scope);
   if (header && !/<header\b/i.test(mainHtml)) {
     const mapped = htmlToBlocks(header[0]);
-    if ((mapped.blocks || []).some((b) => b.type === 'header')) out = header[0] + out;
+    if ((mapped.blocks || []).some((b) => b.type === 'header' && isRealChrome(b))) out = header[0] + out;
   }
   const footer = /<footer\b[^>]*>[\s\S]*?<\/footer>/i.exec(scope);
   if (footer && !/<footer\b/i.test(mainHtml)) {
     const mapped = htmlToBlocks(footer[0]);
-    if ((mapped.blocks || []).some((b) => b.type === 'footer')) out = out + footer[0];
+    if ((mapped.blocks || []).some((b) => b.type === 'footer' && isRealChrome(b))) out = out + footer[0];
   }
   const mainTag = /<main\b[^>]*>[\s\S]*?<\/main>/i.exec(scope);
   const prefix = mainTag ? scope.slice(0, scope.indexOf(mainTag[0])) : '';
@@ -140,7 +159,7 @@ function extractLang(html) {
 // (halves, heroes, card walls) gets the modular read. toolGap is the union:
 // the vocabulary engine keeps every missing-tool sighting from every lens.
 
-const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline', 'pricing', 'carousel', 'faq', 'tabs', 'accordion', 'crumbs', 'stats', 'logos', 'social', 'testimonial', 'header', 'footer', 'products', 'search', 'newsletter', 'pager', 'consent', 'related', 'comments', 'slot', 'auth', 'code', 'author', 'tags']);
+const STRUCTURAL_TYPES = new Set(['columns', 'cards', 'hero', 'nav', 'form', 'video', 'embed', 'gallery', 'steps', 'timeline', 'pricing', 'carousel', 'faq', 'tabs', 'accordion', 'crumbs', 'stats', 'logos', 'social', 'testimonial', 'team', 'countdown', 'pricelist', 'progress', 'header', 'footer', 'whatsapp', 'rating', 'hours', 'toc', 'author', 'compare', 'flipbox', 'products', 'search', 'newsletter', 'pager', 'consent', 'related', 'comments', 'slot', 'auth', 'code', 'tags']);
 
 /** Walk a block tree (columns/cards/card children included). */
 function eachBlock(blocks, fn) {
@@ -162,6 +181,7 @@ function blockTextLen(blocks) {
     const d = b.data || {};
     n += String(d.text || '').length + String(d.content || '').length;
     n += String(d.title || '').length + String(d.subtitle || '').length + String(d.buttonText || '').length;
+    n += String(d.label || '').length + String(d.credit || '').length;
     for (const it of d.items || []) {
       if (typeof it === 'string') n += it.length;
       else n += String(it.text || '').length + String(it.label || '').length + String(it.title || '').length + String(it.excerpt || '').length;

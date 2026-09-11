@@ -191,6 +191,15 @@ async function main() {
     const cfsDup = await req('POST', '/agent/v1/create-from-source', { token: writeTok, body: { source: botReply } });
     check('create-from-source collision → 409', cfsDup.status === 409);
     check('create-from-source needs write scope', (await req('POST', '/agent/v1/create-from-source', { token: readTok, body: { source: botReply } })).status === 403);
+    // v2.20: the bridge takes only the BenTML — a keyword-dialect reply, still
+    // wearing the <html> brackets a chat put around it, becomes a real page
+    const wordsReply = '<html>\nBENTML 0.2\n\nMETA {\n  title: "מהמילים דרך הגשר"\n  slug: "from-words-agent"\n}\n\nHEADING(level: 1) { שלום מהגשר }\n\nTEXT { פסקה }\n</html>';
+    const cfsWords = await req('POST', '/agent/v1/create-from-source', { token: writeTok, body: { source: wordsReply, publish: true } });
+    check('create-from-source accepts an <html>-wrapped BENTML 0.2 reply', cfsWords.status === 200 && cfsWords.json.ok && cfsWords.json.fullPath === 'from-words-agent' && cfsWords.json.dialect === 'line');
+    const cfsWordsSrc = await req('GET', '/agent/v1/source?fullPath=from-words-agent', { token: readTok });
+    check('…and stores it as a clean .pzn document', cfsWordsSrc.status === 200 && /<bent-heading/.test(cfsWordsSrc.json.source) && !/BENTML 0\.2|<html>\n/.test(cfsWordsSrc.json.source));
+    const srcFenced = await req('POST', '/agent/v1/source', { token: writeTok, body: { fullPath: 'from-words-agent', source: 'Sure:\n```html\n<bent-text id="t9">עודכן דרך הגשר</bent-text>\n```\nDone.' } });
+    check('POST /agent/v1/source extracts a fenced reply without loose:true', srcFenced.status === 200 && srcFenced.json.ok && srcFenced.json.blocks.length === 1 && Array.isArray(srcFenced.json.extracted) && srcFenced.json.extracted.length > 0);
     // v0.73 BYOK: the provider constants endpoint — the CMS is the authority
     // on where each LLM API lives; the extension fetches this, never hardcodes.
     const prov = await req('GET', '/agent/v1/providers', { token: readTok });
