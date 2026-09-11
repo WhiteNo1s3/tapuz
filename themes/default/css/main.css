@@ -195,12 +195,53 @@ p { margin-bottom: 1.1rem; }
 }
 .columns.cols-ratio > .col { min-width: 0; }
 
+/* ── Row settings (v2.26) — gap / valign / width are the ROW's registry
+   params (block-registry.js 'columns'), emitted as classes by the renderer.
+   width=wide/full breaks the row out of the content column, the classic
+   "stretch section": centered, never wider than the viewport. */
+.columns.gap-none { gap: 0; }
+.columns.gap-sm { gap: 0.75rem; --col-gap: 0.75rem; }
+.columns.gap-lg { gap: 2.75rem; --col-gap: 2.75rem; }
+.columns.valign-center { align-items: center; }
+.columns.valign-bottom { align-items: flex-end; }
+.columns.valign-stretch { align-items: stretch; }
+.columns.valign-stretch > .col > .card,
+.columns.valign-stretch > .col > .bent-card { height: 100%; box-sizing: border-box; }
+.columns.cols-wide {
+  width: min(1400px, calc(100vw - 2rem));
+  margin-inline: calc(50% - min(700px, 50vw - 1rem));
+}
+.columns.cols-full {
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  padding-inline: 1rem;
+  box-sizing: border-box;
+}
+
+/* ── Responsive rows (v2.26) — a row behaves like a site, not a cramped
+   strip of cards: five or six cells WRAP to a 3-up grid on a tablet, four
+   cells to 2-up, and every row stacks at its collapse point
+   (collapse=sm 640px · md 768px, the default · lg 1024px · never). */
+@media (max-width: 1024px) {
+  .columns.cols-n-5:not(.cols-ratio),
+  .columns.cols-n-6:not(.cols-ratio) { flex-wrap: wrap; }
+  .columns.cols-n-5:not(.cols-ratio) > .col,
+  .columns.cols-n-6:not(.cols-ratio) > .col { flex: 1 1 calc(33.333% - 1.75rem); }
+  .columns.cols-n-4:not(.cols-ratio) { flex-wrap: wrap; }
+  .columns.cols-n-4:not(.cols-ratio) > .col { flex: 1 1 calc(50% - 1.75rem); }
+  .columns.collapse-lg { flex-direction: column; gap: 1.25rem; }
+  .columns.collapse-lg > .col { flex: 1 1 auto; }
+  .columns.collapse-lg.cols-ratio { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .columns:not(.collapse-sm):not(.collapse-never) { flex-direction: column; gap: 1.25rem; }
+  .columns:not(.collapse-sm):not(.collapse-never) > .col { flex: 1 1 auto; }
+  .columns.cols-ratio:not(.collapse-sm):not(.collapse-never) { grid-template-columns: 1fr; }
+}
 @media (max-width: 640px) {
-  .columns {
-    flex-direction: column;
-    gap: 1.25rem;
-  }
-  .columns.cols-ratio { grid-template-columns: 1fr; }
+  .columns.collapse-sm { flex-direction: column; gap: 1.25rem; }
+  .columns.collapse-sm > .col { flex: 1 1 auto; }
+  .columns.collapse-sm.cols-ratio { grid-template-columns: 1fr; }
 }
 
 /* ===== Features ===== */
@@ -906,39 +947,6 @@ button:focus-visible,
   color: var(--accent, #ea580c);
 }
 
-/* ── Page header / footer modules (not site-chrome .site-header) ── */
-.bent-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1.25rem;
-  padding: 0.75rem 0;
-  margin: 0 0 1.25rem;
-  border-bottom: 1px solid var(--border, #e7e5e4);
-}
-.bent-header-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  text-decoration: none;
-  color: inherit;
-  font-weight: 700;
-}
-.bent-header-logo { display: block; max-height: 2.4rem; width: auto; }
-.bent-header-nav { display: flex; flex-wrap: wrap; gap: 0.85rem; }
-.bent-header-link { color: inherit; text-decoration: none; }
-.bent-header-link:hover { color: var(--accent, #ea580c); }
-.bent-footer {
-  margin: 2rem 0 0;
-  padding: 1.25rem 0 0;
-  border-top: 1px solid var(--border, #e7e5e4);
-}
-.bent-footer-nav { display: flex; flex-wrap: wrap; gap: 0.85rem 1.1rem; }
-.bent-footer-link { color: inherit; text-decoration: none; font-size: 0.9rem; }
-.bent-footer-link:hover { color: var(--accent, #ea580c); }
-.bent-footer-copy { margin: 0.85rem 0 0; font-size: 0.85rem; color: #78716c; }
-
 /* ── Steps (how-it-works) — CSS counters, stacks on a narrow viewport ── */
 .bent-steps {
   display: grid;
@@ -1027,6 +1035,357 @@ button:focus-visible,
   border-radius: var(--radius-md, 8px);
 }
 
+/* ── Team — photo, name, role, bio grid (gap-audit wave 3) ── */
+.bent-team {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  padding: 0;
+}
+.bent-member { text-align: center; margin: 0; }
+.bent-member-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 6.5rem;
+  height: 6.5rem;
+  margin-inline: auto;
+  margin-block-end: 0.7rem;
+  border-radius: 999px;
+  object-fit: cover;
+  background: var(--color-bg-soft, #f5f5f4);
+  font-size: 2.4rem;
+}
+img.bent-member-photo { display: block; }
+.bent-member-name {
+  display: block;
+  margin: 0 0 0.15rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+}
+a.bent-member-name:hover { color: var(--color-primary, #ea580c); }
+.bent-member-role {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-primary, #ea580c);
+}
+.bent-member-bio { margin: 0; font-size: 0.92rem; color: var(--color-muted, #57534e); }
+
+/* ── Countdown — timer cells; the inline script ticks them ── */
+.bent-countdown { margin: 1.5rem 0; text-align: center; }
+.bent-count-label { margin: 0 0 0.6rem; font-weight: 600; }
+.bent-count-cells {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.bent-count-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 4rem;
+  padding: 0.6rem 0.5rem;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-soft, #f5f5f4);
+}
+.bent-count-num {
+  font-size: 1.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary, #ea580c);
+}
+.bent-count-unit { font-size: 0.8rem; color: var(--color-muted, #57534e); }
+.bent-count-done { margin: 0; font-size: 1.15rem; font-weight: 700; }
+
+/* ── Price list — name ··· dotted leader ··· price (menu shape) ── */
+.bent-pricelist { margin: 1.25rem 0; }
+.bent-priceitem { margin: 0 0 0.9rem; }
+.bent-priceitem-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.bent-priceitem-name { font-weight: 600; }
+.bent-priceitem-dots {
+  flex: 1;
+  border-bottom: 2px dotted var(--border, #d6d3d1);
+  transform: translateY(-0.25em);
+}
+.bent-priceitem-price {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary, #ea580c);
+}
+.bent-priceitem-desc { margin: 0.15rem 0 0; font-size: 0.9rem; color: var(--color-muted, #57534e); }
+
+/* ── Progress bars — inline width %, animated by CSS only ── */
+.bent-progress { margin: 1.25rem 0; }
+.bent-bar { margin: 0 0 0.9rem; }
+.bent-bar-head {
+  display: flex;
+  justify-content: space-between;
+  margin-block-end: 0.3rem;
+  font-size: 0.92rem;
+}
+.bent-bar-label { font-weight: 600; }
+.bent-bar-value { font-variant-numeric: tabular-nums; color: var(--color-muted, #57534e); }
+.bent-bar-track {
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--color-bg-soft, #f5f5f4);
+  overflow: hidden;
+}
+.bent-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary, #ea580c);
+  animation: bent-bar-grow 0.9s ease-out;
+}
+@keyframes bent-bar-grow { from { width: 0; } }
+
+/* ── Rating — two star layers, the fill clipped to the score (wave 4) ── */
+.bent-rating { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 1rem 0; }
+.bent-rating-stars {
+  position: relative;
+  display: inline-block;
+  font-size: 1.4rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: var(--border, #d6d3d1);
+  white-space: nowrap;
+}
+.bent-rating-fill {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: #f59e0b;
+}
+.bent-rating-text { font-size: 0.92rem; color: var(--color-muted, #57534e); }
+
+/* ── Opening hours — day ··· hours rows, closed days muted ── */
+.bent-hours { margin: 1.25rem 0; max-width: 32rem; }
+.bent-day { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.35rem 0; }
+.bent-day-name { font-weight: 600; }
+.bent-day-dots { flex: 1; border-bottom: 2px dotted var(--border, #d6d3d1); transform: translateY(-0.25em); }
+.bent-day-hours { font-variant-numeric: tabular-nums; }
+.bent-day-closed .bent-day-hours { color: var(--color-muted, #57534e); font-style: italic; }
+
+/* ── Table of contents — anchor list ── */
+.bent-toc {
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  border-inline-start: 4px solid var(--color-primary, #ea580c);
+  background: var(--color-bg-soft, #f5f5f4);
+  border-radius: var(--radius-md, 8px);
+}
+.bent-toc-title { margin: 0 0 0.5rem; font-weight: 700; }
+.bent-toc-list { margin: 0; padding-inline-start: 1.25rem; }
+.bent-tocitem { margin: 0.25rem 0; }
+.bent-tocitem-link { color: inherit; text-decoration: none; }
+.bent-tocitem-link:hover { color: var(--color-primary, #ea580c); text-decoration: underline; }
+
+/* ── Author box — photo beside name/bio/link ── */
+.bent-author {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border, #e7e5e4);
+  border-radius: var(--radius-md, 8px);
+}
+.bent-author-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  object-fit: cover;
+  background: var(--color-bg-soft, #f5f5f4);
+  font-size: 1.8rem;
+}
+img.bent-author-photo { display: block; }
+.bent-author-body { flex: 1; min-width: 0; }
+.bent-author-name { margin: 0 0 0.25rem; font-weight: 700; }
+.bent-author-bio { margin: 0 0 0.5rem; color: var(--color-muted, #57534e); }
+.bent-author-link { font-size: 0.9rem; font-weight: 600; color: var(--color-primary, #ea580c); text-decoration: none; }
+.bent-author-link:hover { text-decoration: underline; }
+
+/* ── Before / after — the range input drives the clip width ── */
+.bent-compare { margin: 1.5rem 0; }
+.bent-compare-frame { position: relative; overflow: hidden; border-radius: var(--radius-md, 8px); container-type: inline-size; }
+.bent-compare-after { display: block; width: 100%; height: auto; }
+.bent-compare-clip { position: absolute; inset-inline-start: 0; top: 0; bottom: 0; overflow: hidden; }
+.bent-compare-before { display: block; width: 100cqw; max-width: none; height: 100%; object-fit: cover; }
+.bent-compare-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-inline-start: -1px;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.bent-compare-badge {
+  position: absolute;
+  top: 0.6rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+.bent-compare-badge-before { inset-inline-start: 0.6rem; }
+.bent-compare-badge-after { inset-inline-end: 0.6rem; }
+.bent-compare-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+/* ── Flip box — CSS-only 3D flip on hover / focus ── */
+.bent-flipbox { perspective: 900px; margin: 1.25rem 0; min-height: 12rem; outline: none; }
+.bent-flipbox-inner {
+  position: relative;
+  min-height: 12rem;
+  transition: transform 0.55s ease;
+  transform-style: preserve-3d;
+}
+.bent-flipbox:hover .bent-flipbox-inner,
+.bent-flipbox:focus-within .bent-flipbox-inner,
+.bent-flipbox:focus .bent-flipbox-inner { transform: rotateY(180deg); }
+.bent-flipbox-front,
+.bent-flipbox-back {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1.25rem;
+  text-align: center;
+  border-radius: var(--radius-md, 8px);
+  backface-visibility: hidden;
+}
+.bent-flipbox-front { background: var(--color-primary, #ea580c); color: #fff; }
+.bent-flipbox-back { background: var(--color-bg-soft, #f5f5f4); transform: rotateY(180deg); }
+.bent-flipbox-icon { font-size: 2rem; }
+img.bent-flipbox-icon { width: 2.5rem; height: 2.5rem; object-fit: contain; }
+.bent-flipbox-title { margin: 0; font-size: 1.15rem; color: inherit; }
+.bent-flipbox-text { margin: 0; }
+.bent-flipbox-button {
+  display: inline-block;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  background: var(--color-primary, #ea580c);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+@media (prefers-reduced-motion: reduce) { .bent-flipbox-inner { transition: none; } }
+
+/* ── Page chrome — header / footer bands INSIDE the page (gap-audit wave 4).
+   Own class names on purpose: .site-header/.site-footer are the master
+   chrome (sticky, glass, footer palette from theme.js) and must not leak. ── */
+.bent-header,
+.bent-footer {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md, 8px);
+}
+.bent-header.tone-light,
+.bent-footer.tone-light {
+  background: var(--color-light-bg, #f8fafc);
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+.bent-header.tone-dark,
+.bent-footer.tone-dark {
+  background: #0f172a;
+  color: #f8fafc;
+}
+.bent-header.tone-brand,
+.bent-footer.tone-brand {
+  background: var(--accent-bg, linear-gradient(135deg, #0a66c2, #0369a1));
+  color: #fff;
+}
+.bent-header.tone-none,
+.bent-footer.tone-none { padding-inline: 0; }
+.bent-header.tone-dark a,
+.bent-header.tone-brand a,
+.bent-footer.tone-dark a,
+.bent-footer.tone-brand a { color: inherit; }
+.bent-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+}
+.bent-header.layout-stack .bent-header-inner {
+  flex-direction: column;
+  align-items: stretch;
+}
+.bent-header-inner > * { margin: 0; }
+.bent-header-inner > .bent-image img { max-height: 3.5rem; width: auto; }
+.bent-header-inner > .bent-nav,
+.bent-header-inner > nav { flex: 1 1 auto; }
+.bent-footer {
+  padding-block: 2rem 1.25rem;
+  font-size: 0.95rem;
+}
+.bent-footer-inner > * + * { margin-top: 1.25rem; }
+.bent-footer-inner > .columns { margin: 0; }
+.bent-footer-credit {
+  margin: 1.5rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  font-size: 0.82rem;
+  text-align: center;
+  opacity: 0.8;
+}
+
+/* ── WhatsApp click-to-chat CTA — the in-page module, not the float ── */
+.bent-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.7rem 1.25rem 0.7rem 1rem;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: 0 6px 18px rgba(37, 211, 102, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.bent-whatsapp:hover {
+  background: #1ebe5d;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(37, 211, 102, 0.4);
+}
+.bent-whatsapp .bent-wa-icon { flex: 0 0 auto; width: 1.75rem; height: 1.75rem; }
+.bent-wa-body { display: flex; flex-direction: column; align-items: flex-start; }
+.bent-wa-note { font-size: 0.78rem; font-weight: 400; opacity: 0.9; }
+
 article.feature h3 {
   margin: 0 0 0.35rem;
   font-size: 1.1rem;
@@ -1045,7 +1404,7 @@ p, li { max-width: 70ch; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .card, .feature, .main-nav a::after, .skip-link, .whatsapp-float { transition: none; }
+  .card, .feature, .main-nav a::after, .skip-link, .whatsapp-float, .bent-whatsapp { transition: none; }
 }
 
 /* ── Signature visuals (v0.44) — heroes with fixed backgrounds, text

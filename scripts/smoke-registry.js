@@ -30,7 +30,8 @@ const {
 const { KEYWORDS, RESERVED } = require('../src/bentml/keywords');
 const { BLOCK_TYPES } = require('../src/blocks');
 
-const PARAM_TYPES = ['string', 'enum', 'integer', 'boolean', 'ratio', 'list', 'media', 'url', 'textarea'];
+// 'number' (wave 4): a decimal score — rating 4.5 — the one family integer can't carry
+const PARAM_TYPES = ['string', 'enum', 'integer', 'number', 'boolean', 'ratio', 'list', 'media', 'url', 'textarea'];
 const BODY_CLASSES = ['text', 'blocks', 'none', 'raw'];
 const BODY_CLASS_BY_KEYWORD_BODY = {
   'TEXT-BODY': 'text',
@@ -41,7 +42,7 @@ const BODY_CLASS_BY_KEYWORD_BODY = {
 // registry param type → keywords.js param type
 const KEYWORD_TYPE_OF = {
   string: 'string', url: 'string', media: 'string', textarea: 'string', ratio: 'string',
-  integer: 'integer', enum: 'enum', boolean: 'boolean'
+  integer: 'integer', number: 'number', enum: 'enum', boolean: 'boolean'
 };
 // keyword params deliberately not surfaced in the registry (parsed by the
 // compiler but never stored in JSON / rendered / decompiled today).
@@ -131,15 +132,19 @@ for (const e of BLOCK_REGISTRY) {
       check(p.enum === undefined, `${pid}: non-enum param has no enum array`);
     }
     if (p.min !== undefined || p.max !== undefined) {
-      check(p.type === 'integer', `${pid}: min/max only on integer params`);
-      if (p.min !== undefined) check(Number.isInteger(p.min), `${pid}: min is an integer`);
-      if (p.max !== undefined) check(Number.isInteger(p.max), `${pid}: max is an integer`);
+      check(p.type === 'integer' || p.type === 'number', `${pid}: min/max only on integer/number params`);
+      if (p.min !== undefined) check(Number.isFinite(p.min), `${pid}: min is a number`);
+      if (p.max !== undefined) check(Number.isFinite(p.max), `${pid}: max is a number`);
       if (p.min !== undefined && p.max !== undefined) check(p.min <= p.max, `${pid}: min <= max`);
     }
     if (p.default !== undefined) {
       if (p.type === 'enum') check(p.enum.includes(p.default), `${pid}: default '${p.default}' is in enum`);
       else if (p.type === 'integer') {
         check(Number.isInteger(p.default), `${pid}: integer default`);
+        if (p.min !== undefined) check(p.default >= p.min, `${pid}: default >= min`);
+        if (p.max !== undefined) check(p.default <= p.max, `${pid}: default <= max`);
+      } else if (p.type === 'number') {
+        check(Number.isFinite(p.default), `${pid}: number default`);
         if (p.min !== undefined) check(p.default >= p.min, `${pid}: default >= min`);
         if (p.max !== undefined) check(p.default <= p.max, `${pid}: default <= max`);
       } else if (p.type === 'boolean') check(typeof p.default === 'boolean', `${pid}: boolean default`);

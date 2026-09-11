@@ -1,76 +1,74 @@
 'use strict';
 
 /**
- * Page-level header / footer modules — CSS-only chrome a marketer can
- * edit on the canvas (logo, title, links, copyright). Distinct from the
- * site manifest's `.site-header` / `.site-footer` in src/pzn/site/layout.js:
- * those wrap every published page; these live in the page body as blocks.
+ * Shared PAGE-chrome HTML — the header / footer modules (gap-audit wave 4).
+ *
+ * Every real homepage the decompile audit hit (walla, mako, rest.co.il,
+ * doctor.co.il) carries a <header> and a <footer>, and until now the walk
+ * refused to invent them: the children flattened and the landmark went to
+ * toolGap. These are page modules — a band INSIDE the page body holding
+ * nested blocks (logo image, nav, button, columns, social, text…).
+ *
+ * They deliberately use their own class names (bent-header / bent-footer),
+ * never the theme's .site-header / .site-footer: the site's master chrome
+ * (עיצוב → מאסטר: כותרת ותחתית) wraps every page from the layout and its
+ * theme.js CSS targets those selectors. A page header must not go sticky,
+ * glass, or footer-palette just because the master is configured that way.
+ *
+ * One renderer for compile (pzn) and renderer.js so they cannot diverge.
  */
 
-const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { escapeHtml, escapeAttr } = require('./language/escape');
 
-function renderHeadLink(props = {}) {
-  const label = escapeHtml(props.label || '');
-  const href = escapeAttr(safeHref(props.href || props.url || ''));
-  return `<a class="bent-header-link" href="${href}">${label}</a>`;
+const HEADER_TONES = ['light', 'dark', 'brand', 'none'];
+const FOOTER_TONES = ['dark', 'light', 'brand', 'none'];
+const HEADER_LAYOUTS = ['row', 'stack'];
+
+function pick(value, allowed, fallback) {
+  return allowed.includes(String(value)) ? String(value) : fallback;
 }
 
-function renderHeader(props = {}, itemsHtml = '', opts = {}) {
-  const logoSrc = safeHref(props.logo || '');
-  const logoAlt = escapeAttr(props.logoAlt || props.title || '');
-  const home = escapeAttr(safeHref(props.url || '/'));
-  const title = escapeHtml(props.title || '');
-  let brand = '';
-  if (logoSrc && logoSrc !== '#') {
-    brand += `<img class="bent-header-logo" src="${escapeAttr(logoSrc)}" alt="${logoAlt}" />`;
-  }
-  if (title) brand += `<span class="bent-header-title">${title}</span>`;
-  const brandInner = brand
-    ? `<a class="bent-header-brand" href="${home}">${brand}</a>`
-    : '';
-  const nav = itemsHtml
-    ? `<nav class="bent-header-nav" aria-label="${escapeAttr(props.navLabel || 'ניווט')}">${itemsHtml}</nav>`
-    : '';
-  return `<header${opts.idAttr || ''} class="bent-header${opts.cls || ''}"${opts.extra || ''}${opts.dir || ''}>` +
-    `${brandInner}${nav}</header>`;
+/** The header band around already-rendered child blocks. props: {tone, layout} */
+function renderHeader(props = {}, innerHtml = '', opts = {}) {
+  const tone = pick(props.tone, HEADER_TONES, 'light');
+  const layout = pick(props.layout, HEADER_LAYOUTS, 'row');
+  return `<header${opts.idAttr || ''} class="bent-header tone-${tone} layout-${layout}${opts.cls || ''}"${opts.extra || ''}${opts.dir || ''}>` +
+    `<div class="bent-header-inner">${innerHtml}</div></header>`;
 }
 
-function renderHeaderFromData(data = {}, dir = '', extra = '') {
-  const items = data.items || [];
-  const inner = items.map((it) => renderHeadLink(it || {})).join('');
+/** The footer band around already-rendered child blocks. props: {tone, credit} */
+function renderFooter(props = {}, innerHtml = '', opts = {}) {
+  const tone = pick(props.tone, FOOTER_TONES, 'dark');
+  const credit = String(props.credit || '').trim();
+  return `<footer${opts.idAttr || ''} class="bent-footer tone-${tone}${opts.cls || ''}"${opts.extra || ''}${opts.dir || ''}>` +
+    `<div class="bent-footer-inner">${innerHtml}</div>` +
+    (credit ? `<p class="bent-footer-credit">${escapeHtml(credit)}</p>` : '') +
+    '</footer>';
+}
+
+/**
+ * Convenience for renderer.js: whole header block from block.data. The
+ * renderer hands in its own renderBlock so nested blocks render through the
+ * same switch (chrome, styling, animation) as top-level ones.
+ */
+function renderHeaderFromData(data = {}, dir = '', extra = '', renderChild) {
+  const inner = (data.blocks || []).map((b) => renderChild(b, dir)).join('');
   const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
   return renderHeader(data, inner, { dir: dirAttr, extra });
 }
 
-function renderFootLink(props = {}) {
-  const label = escapeHtml(props.label || '');
-  const href = escapeAttr(safeHref(props.href || props.url || ''));
-  return `<a class="bent-footer-link" href="${href}">${label}</a>`;
-}
-
-function renderFooter(props = {}, itemsHtml = '', opts = {}) {
-  const nav = itemsHtml
-    ? `<nav class="bent-footer-nav" aria-label="${escapeAttr(props.navLabel || 'קישורי כותרת תחתונה')}">${itemsHtml}</nav>`
-    : '';
-  const copy = props.copy
-    ? `<p class="bent-footer-copy">${escapeHtml(props.copy)}</p>`
-    : '';
-  return `<footer${opts.idAttr || ''} class="bent-footer${opts.cls || ''}"${opts.extra || ''}${opts.dir || ''}>` +
-    `${nav}${copy}</footer>`;
-}
-
-function renderFooterFromData(data = {}, dir = '', extra = '') {
-  const items = data.items || [];
-  const inner = items.map((it) => renderFootLink(it || {})).join('');
+function renderFooterFromData(data = {}, dir = '', extra = '', renderChild) {
+  const inner = (data.blocks || []).map((b) => renderChild(b, dir)).join('');
   const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
   return renderFooter(data, inner, { dir: dirAttr, extra });
 }
 
 module.exports = {
-  renderHeadLink,
+  HEADER_TONES,
+  FOOTER_TONES,
+  HEADER_LAYOUTS,
   renderHeader,
-  renderHeaderFromData,
-  renderFootLink,
   renderFooter,
+  renderHeaderFromData,
   renderFooterFromData
 };

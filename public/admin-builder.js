@@ -52,6 +52,17 @@
     { type: 'stats', label: 'מדדים', hint: 'מספרים', icon: '＃', group: 'תוכן', keyword: 'STATS' },
     { type: 'steps', label: 'שלבים', hint: 'איך זה עובד', icon: '①', group: 'מבנה', keyword: 'STEPS' },
     { type: 'crumbs', label: 'פירורים', hint: 'נתיב הדף', icon: '›', group: 'מבנה', keyword: 'CRUMBS' },
+    { type: 'team', label: 'הצוות', hint: 'תמונה, שם, תפקיד', icon: '👥', group: 'תוכן', keyword: 'TEAM' },
+    { type: 'countdown', label: 'ספירה לאחור', hint: 'טיימר למבצע', icon: '⏳', group: 'תוכן', keyword: 'COUNTDOWN' },
+    { type: 'pricelist', label: 'מחירון', hint: 'תפריט / מחירים', icon: '₪', group: 'תוכן', keyword: 'PRICELIST' },
+    { type: 'progress', label: 'מדדים', hint: 'פסי התקדמות', icon: '▰', group: 'תוכן', keyword: 'PROGRESS' },
+    { type: 'rating', label: 'דירוג', hint: 'כוכבים', icon: '★', group: 'תוכן', keyword: 'RATING' },
+    { type: 'hours', label: 'שעות פתיחה', hint: 'ימים ושעות', icon: '🕘', group: 'תוכן', keyword: 'HOURS' },
+    { type: 'toc', label: 'תוכן עניינים', hint: 'עוגנים בדף', icon: '☰', group: 'מבנה', keyword: 'TOC' },
+    { type: 'author', label: 'כותב/ת', hint: 'על הכותב/ת', icon: '✍', group: 'תוכן', keyword: 'AUTHOR' },
+    { type: 'compare', label: 'לפני/אחרי', hint: 'סליידר השוואה', icon: '◧', group: 'מדיה', keyword: 'COMPARE' },
+    { type: 'flipbox', label: 'קופסה מתהפכת', hint: 'קדימה/אחורה', icon: '⟲', group: 'תוכן', keyword: 'FLIPBOX' },
+    { type: 'whatsapp', label: 'וואטסאפ', hint: 'כפתור צ׳אט', icon: '✆', group: 'תוכן', keyword: 'WHATSAPP' },
     { type: 'timeline', label: 'ציר זמן', hint: 'הסיפור לאורך זמן', icon: '┊', group: 'תוכן', keyword: 'TIMELINE' },
     { type: 'faq', label: 'שאלות', hint: 'FAQ', icon: '?', group: 'תוכן', keyword: 'FAQ' },
     { type: 'banner', label: 'באנר', hint: 'הודעה', icon: '▬', group: 'מבנה', keyword: 'BANNER' },
@@ -77,7 +88,11 @@
   var REG_BY_TYPE = {};
   if (REG) {
     REG.blocks.forEach(function (e) { REG_BY_TYPE[e.type] = e; });
-    MODULES = REG.blocks.map(function (e) {
+    // decompile-only types (the imported header/footer bands) stay in
+    // REG_BY_TYPE — a decompiled draft must still preview, nest and edit them
+    // — but never enter the MODULES palette: the real chrome is the theme
+    // master (עיצוב → כותרת ותחתית), not a toolbox module
+    MODULES = REG.blocks.filter(function (e) { return !e.decompileOnly; }).map(function (e) {
       return {
         type: e.type,
         label: e.labelHe || e.type,
@@ -103,7 +118,9 @@
    * per-type client edits. FALLBACK_CHILDREN_KEY keeps the known containers
    * working on older servers that don't inject window.__TAPUZ_REGISTRY__.
    */
-  var FALLBACK_CHILDREN_KEY = { card: 'blocks', parallax: 'blocks', columns: 'columns' };
+  // header/footer are decompile-only (never in MODULES) but a decompiled
+  // draft still nests blocks inside them, so the container map knows them
+  var FALLBACK_CHILDREN_KEY = { card: 'blocks', parallax: 'blocks', section: 'blocks', header: 'blocks', footer: 'blocks', columns: 'columns' };
 
   function childrenKeyFor(type) {
     var def = registryDef(type);
@@ -164,8 +181,17 @@
     return isNaN(n) ? 24 : Math.max(4, Math.round(n));
   }
 
+  // Label/icon lookup for EVERY block a page may hold — including the
+  // decompile-only chrome bands the palette hides: a decompiled draft shows
+  // "ראש עמוד מיובא" on its band, never a bare "header".
   var MODULE_BY_TYPE = {};
   MODULES.forEach(function (m) { MODULE_BY_TYPE[m.type] = m; });
+  if (REG) {
+    REG.blocks.forEach(function (e) {
+      if (MODULE_BY_TYPE[e.type]) return;
+      MODULE_BY_TYPE[e.type] = { type: e.type, label: e.labelHe || e.type, hint: e.hintHe || '', icon: e.icon || '•', group: e.category || 'מבנה', keyword: e.keyword || String(e.type).toUpperCase() };
+    });
+  }
 
   function typeLabel(type) {
     return (MODULE_BY_TYPE[type] && MODULE_BY_TYPE[type].label) || type || '?';
@@ -1072,8 +1098,7 @@
   // ---- Canvas ----
 
   // ── Layers panel (v0.89) — the page as an outline (the Builder.io tree). ──
-  var MODULE_META = {};
-  MODULES.forEach(function (m) { MODULE_META[m.type] = m; });
+  var MODULE_META = MODULE_BY_TYPE;
 
   /** First human-recognizable snippet of a block's own text, for the row label. */
   function layerText(d) {
@@ -2047,36 +2072,6 @@
       return wrap;
     }
 
-    if (block.type === 'header') {
-      var hdItems = d.items || [];
-      wrap.innerHTML =
-        '<div class="preview-header" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:8px 0;border-bottom:1px solid #e2e8f0">' +
-        '<div style="display:flex;align-items:center;gap:8px;font-weight:700">' +
-          (d.logo ? '<img src="' + escAttr(d.logo) + '" alt="" style="height:28px;width:auto">' : '') +
-          '<span>' + esc(d.title || 'כותרת עליונה') + '</span>' +
-        '</div>' +
-        '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
-        (hdItems.length ? hdItems.map(function (it) {
-          return '<span style="font-size:.9rem">' + esc(it.label || 'קישור') + '</span>';
-        }).join('') : '<span style="color:#94a3b8">⌂ קישורים — הוסיפו במאפיינים ←</span>') +
-        '</div></div>';
-      return wrap;
-    }
-
-    if (block.type === 'footer') {
-      var ftItems = d.items || [];
-      wrap.innerHTML =
-        '<div class="preview-footer" style="padding:10px 0 0;border-top:1px solid #e2e8f0">' +
-        '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.9rem">' +
-        (ftItems.length ? ftItems.map(function (it) {
-          return '<span>' + esc(it.label || 'קישור') + '</span>';
-        }).join('') : '') +
-        '</div>' +
-        '<div style="margin-top:8px;color:#78716c;font-size:.85rem">' + esc(d.copy || '©') + '</div>' +
-        '</div>';
-      return wrap;
-    }
-
     if (block.type === 'social') {
       var soItems = d.items || [];
       wrap.innerHTML =
@@ -2269,6 +2264,180 @@
             '</div>';
         }).join('') +
         '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'team') {
+      var tmItems = d.items || [];
+      var members = tmItems.length ? tmItems : [
+        { name: 'דנה לוי', role: 'מנכ"לית' },
+        { name: 'יוסי כהן', role: 'סמנכ"ל' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-team">' +
+        members.map(function (it) {
+          return '<div class="preview-member">' +
+            (it.image ? '<img class="preview-member-photo" src="' + escAttr(it.image) + '" alt="">'
+              : '<span class="preview-member-photo">👤</span>') +
+            '<div class="preview-member-name">' + esc(it.name || 'שם') + '</div>' +
+            (it.role ? '<div class="preview-member-role">' + esc(it.role) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'countdown') {
+      var cdUnits = [['12', 'ימים'], ['08', 'שעות'], ['45', 'דקות'], ['30', 'שניות']];
+      wrap.innerHTML =
+        '<div class="preview-countdown">' +
+        (d.label ? '<div class="preview-countdown-label">' + esc(d.label) + '</div>' : '') +
+        '<div class="preview-countdown-cells">' +
+        cdUnits.map(function (u) {
+          return '<span class="preview-countdown-cell"><b>' + u[0] + '</b><small>' + u[1] + '</small></span>';
+        }).join('') +
+        '</div>' +
+        (d.target ? '' : '<div class="preview-countdown-note">קבעו תאריך יעד בהגדרות ←</div>') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'pricelist') {
+      var plItems = d.items || [];
+      var dishes = plItems.length ? plItems : [
+        { name: 'חומוס מלא', price: '32 ₪' },
+        { name: 'שקשוקה', price: '44 ₪' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-pricelist">' +
+        dishes.map(function (it) {
+          return '<div class="preview-priceitem">' +
+            '<span class="preview-priceitem-name">' + esc(it.name || 'פריט') + '</span>' +
+            '<span class="preview-priceitem-dots"></span>' +
+            '<span class="preview-priceitem-price">' + esc(it.price || '') + '</span>' +
+            '</div>' +
+            (it.desc ? '<div class="preview-priceitem-desc">' + esc(it.desc) + '</div>' : '');
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'progress') {
+      var pgItems = d.items || [];
+      var bars = pgItems.length ? pgItems : [
+        { label: 'עיצוב', value: 90 },
+        { label: 'פיתוח', value: 75 }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-progress">' +
+        bars.map(function (it) {
+          var v = Math.min(100, Math.max(0, Math.round(Number(it.value) || 0)));
+          return '<div class="preview-bar">' +
+            '<div class="preview-bar-head"><span>' + esc(it.label || 'מדד') + '</span><span>' + v + '%</span></div>' +
+            '<div class="preview-bar-track"><div class="preview-bar-fill" style="width:' + v + '%' +
+            (it.color ? ';background:' + escAttr(it.color) : '') + '"></div></div>' +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'rating') {
+      var rMax = Math.max(1, Math.min(10, Math.round(Number(d.max)) || 5));
+      var rVal = Math.min(rMax, Math.max(0, Number(d.value) || 0));
+      var rStars = new Array(rMax + 1).join('★');
+      wrap.innerHTML =
+        '<div class="preview-rating">' +
+        '<span class="preview-rating-stars"><span class="preview-rating-base">' + rStars + '</span>' +
+        '<span class="preview-rating-fill" style="width:' + Math.round((rVal / rMax) * 100) + '%">' + rStars + '</span></span>' +
+        (d.text ? '<span class="preview-rating-text">' + esc(d.text) + '</span>' : '') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'hours') {
+      var hItems = d.items || [];
+      var rows = hItems.length ? hItems : [
+        { day: 'ראשון–חמישי', hours: '9:00–19:00' },
+        { day: 'שבת', hours: 'סגור' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-hours">' +
+        rows.map(function (it) {
+          return '<div class="preview-day">' +
+            '<span class="preview-day-name">' + esc(it.day || '') + '</span>' +
+            '<span class="preview-day-dots"></span>' +
+            '<span class="preview-day-hours">' + esc(it.hours || '') + '</span>' +
+            '</div>';
+        }).join('') +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'toc') {
+      var tItems = d.items || [];
+      var entries = tItems.length ? tItems : [
+        { label: 'הקדמה', anchor: '#intro' },
+        { label: 'איך זה עובד', anchor: '#how' }
+      ];
+      wrap.innerHTML =
+        '<div class="preview-toc">' +
+        '<div class="preview-toc-title">' + esc(d.title || 'תוכן עניינים') + '</div>' +
+        '<ol class="preview-toc-list">' +
+        entries.map(function (it) { return '<li>' + esc(it.label || '') + '</li>'; }).join('') +
+        '</ol></div>';
+      return wrap;
+    }
+
+    if (block.type === 'author') {
+      wrap.innerHTML =
+        '<div class="preview-author">' +
+        (d.image ? '<img class="preview-author-photo" src="' + escAttr(d.image) + '" alt="">'
+          : '<span class="preview-author-photo">✍️</span>') +
+        '<div><div class="preview-author-name">' + esc(d.name || 'שם') + '</div>' +
+        (d.bio ? '<div class="preview-author-bio">' + esc(d.bio) + '</div>' : '') +
+        '</div></div>';
+      return wrap;
+    }
+
+    if (block.type === 'compare') {
+      wrap.innerHTML =
+        '<div class="preview-compare">' +
+        '<div class="preview-compare-half">' + (d.before ? '<img src="' + escAttr(d.before) + '" alt="">' : '<span>🖼</span>') +
+        '<b>' + esc(d.beforeLabel || 'לפני') + '</b></div>' +
+        '<div class="preview-compare-half">' + (d.after ? '<img src="' + escAttr(d.after) + '" alt="">' : '<span>🖼</span>') +
+        '<b>' + esc(d.afterLabel || 'אחרי') + '</b></div>' +
+        '</div>' +
+        (d.before && d.after ? '' : '<div class="preview-compare-note">בחרו שתי תמונות בהגדרות ←</div>');
+      return wrap;
+    }
+
+    if (block.type === 'flipbox') {
+      wrap.innerHTML =
+        '<div class="preview-flipbox">' +
+        '<div class="preview-flipbox-front">' + (d.icon ? '<span class="preview-flipbox-icon">' + esc(d.icon) + '</span>' : '') +
+        '<div class="preview-flipbox-title">' + esc(d.title || 'כותרת') + '</div></div>' +
+        '<div class="preview-flipbox-back">' + (d.backText ? '<div>' + esc(d.backText) + '</div>' : '') +
+        (d.buttonText ? '<span class="preview-flipbox-button">' + esc(d.buttonText) + '</span>' : '') + '</div>' +
+        '</div>';
+      return wrap;
+    }
+
+    if (block.type === 'whatsapp') {
+      var waTarget = d.phone ? 'wa.me/' + esc(String(d.phone).replace(/\D+/g, '')) : (d.url ? esc(d.url) : '');
+      wrap.innerHTML =
+        '<div class="preview-whatsapp-wrap">' +
+        '<span class="preview-whatsapp">' +
+        '<span class="preview-wa-icon" aria-hidden="true">✆</span>' +
+        '<span class="preview-wa-body">' +
+        '<span class="preview-wa-label" data-inline-key="label">' + esc(d.label || 'דברו איתנו בוואטסאפ') + '</span>' +
+        (d.note ? '<span class="preview-wa-note">' + esc(d.note) + '</span>' : '') +
+        '</span></span>' +
+        (waTarget
+          ? '<div class="preview-wa-target">🔗 ' + waTarget + (d.message ? ' · "' + esc(d.message) + '"' : '') + '</div>'
+          : '<div class="preview-wa-target preview-wa-missing">מלאו טלפון (972…) או קישור wa.me במאפיינים ←</div>') +
+        '</div>';
+      wireInlineEditable(wrap, block);
       return wrap;
     }
 
@@ -5748,7 +5917,7 @@
       '<p style="color:#64748b;font-size:.86rem;margin:0 0 14px;line-height:1.5">ה‑AI שלכם, על המנוי שלכם. פעם אחת — תנו ל‑AI את מילון BenTML, ואז שוחחו איתו והדביקו את התשובה כאן.</p>' +
       '<button type="button" id="imp-primer" class="btn secondary" style="width:100%;margin-bottom:14px">📋 העתק מילון BenTML ל‑AI (פעם אחת)</button>' +
       '<label style="display:block;font-size:.82rem;color:#475569;margin-bottom:4px">הדביקו כאן את תשובת ה‑AI (אפשר עם טקסט מסביב — נחלץ את הקוד)</label>' +
-      '<textarea id="imp-src" dir="ltr" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:.82rem" placeholder="<!DOCTYPE html> …"></textarea>' +
+      '<textarea id="imp-src" dir="ltr" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:.82rem" placeholder="<!DOCTYPE html> …   /   BENTML 0.2 …"></textarea>' +
       '<div style="display:flex;gap:16px;margin:12px 0">' +
       '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="replace" checked> החלף את הדף</label>' +
       '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="append"> הוסף לסוף</label></div>' +
@@ -5792,6 +5961,8 @@
           applyCanvasPageBg();
           close();
           var note = data.repaired ? (' · תוקן אוטומטית (' + (data.changes || []).length + ')') : '';
+          // v2.20: the server took only the BenTML out of the reply — say so
+          if (data.extracted && data.extracted.length) note += ' · נחלץ מתוך ההודעה';
           showToast('יובאו ' + (data.blocks || []).length + ' מודולים' + note + ' ✓', 'ok');
         })
         .catch(function () { setStatus('שגיאת רשת בייבוא', 'err'); });

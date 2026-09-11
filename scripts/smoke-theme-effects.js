@@ -67,6 +67,29 @@ check('export strips inline styles but the effect JS survives',
 copyThemeAssets('default');
 const mainCss = fs.readFileSync(path.join(ROOT, 'public', 'css', 'main.css'), 'utf8');
 check('exported css/main.css carries the effect css', mainCss.indexOf(FX_CSS) !== -1);
+// cache-busting: the exported link carries the stylesheet's content version,
+// and the version moves with the theme — a host cache (Hostinger) or a browser
+// that kept the old main.css can never hide a theme change or an effect
+const exportedVersioned = externalizeStyles(html);
+const v1 = (exportedVersioned.match(/href="\/css\/main\.css\?v=([0-9a-f]+)"/) || [])[1];
+check('exported page links main.css with a content version', !!v1);
+theme.saveOverrides({ effects: { css: FX_CSS + '\n.tapuz-fx-dot-2{opacity:.5}', js: FX_JS } });
+copyThemeAssets('default');
+const v2 = (externalizeStyles(html).match(/href="\/css\/main\.css\?v=([0-9a-f]+)"/) || [])[1];
+check('the version changes when the effect css changes', !!v2 && v2 !== v1);
+theme.saveOverrides({ effects: { css: FX_CSS, js: FX_JS, note: 'עקבת עכבר' } });
+
+// ── the paste-back reads what chats actually send, not only the fences ──
+const parts = theme.extractEffectParts;
+const fenced = parts('```css\n.a{color:red}\n```\n\n```js\n(function(){})();\n```');
+check('fenced reply → css + js', fenced.css === '.a{color:red}' && fenced.js === '(function(){})();');
+const tagged = parts('Sure! Add this to your site:\n<style>\n.b{top:0}\n</style>\n<script>\n(function(){ /* b */ })();\n</script>\nEnjoy!');
+check('bare <style>/<script> reply (no fences) → css + js', tagged.css === '.b{top:0}' && tagged.js === '(function(){ /* b */ })();');
+const htmlFenced = parts('```html\n<style>.c{left:0}</style>\n<script>(function(){ /* c */ })();</script>\n```');
+check('an ```html fence with style + script inside → css + js', htmlFenced.css === '.c{left:0}' && htmlFenced.js === '(function(){ /* c */ })();');
+const external = parts('<script src="https://cdn.example.com/lib.js"></script>\n<script>(function(){ /* d */ })();</script>');
+check('an external <script src> is dropped, the inline one kept', external.js === '(function(){ /* d */ })();' && external.css === '');
+check('a reply with nothing usable → empty parts', parts('no code here').css === '' && parts('no code here').js === '');
 
 // ── effects ride packages and the library ────────────────────────────
 const pkg = theme.exportThemePackage('עם אפקט');

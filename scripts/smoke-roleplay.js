@@ -20,10 +20,17 @@ function check(name, cond) {
 
 const dict = buildDictionary();
 const tools = toAgentTools(dict);
-const modNames = listModules().map((m) => m.name);
+// the agent's inventory = every registered module an AUTHOR may use. The
+// decompile-only chrome bands (header/footer, gap-audit wave 4) are named
+// apart in dict.decompileOnly and never handed to agents as tools.
+const modNames = listModules().filter((m) => !m.decompileOnly).map((m) => m.name);
+const decompileOnlyNames = listModules().filter((m) => m.decompileOnly).map((m) => m.name);
 
 // ── dictionary is live off the registry ──────────────────────────────
-check('dictionary covers every registered module', dict.count === modNames.length);
+check('dictionary covers every registered authoring module', dict.count === modNames.length);
+check('decompile-only modules are named apart, never as tools',
+  dict.decompileOnly.map((m) => m.name).sort().join(',') === decompileOnlyNames.sort().join(',')
+  && decompileOnlyNames.every((n) => !tools.some((t) => t.tool === n)));
 check('tools exclude child-only leaves (except col)',
   tools.every((t) => !HIDDEN.has(t.tool) || t.tool === 'col') && tools.some((t) => t.tool === 'col'));
 check('tabs + accordion containers are in the inventory',

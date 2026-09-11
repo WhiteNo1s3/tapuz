@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const bentml = require('../bentml');
-const { looksLikePzn, pznSourceToBlocks } = require('../pzn-source');
+const { extractBentml, pznSourceToBlocks } = require('../pzn-source');
 const { getPageByFullPath, updatePage, publishPage } = require('../pages');
 
 const router = express.Router();
@@ -74,6 +74,7 @@ router.get('/admin/api/bentml/agent-pack', (req, res) => {
 });
 
 router.post('/admin/api/bentml/compile', (req, res) => {
+  let ex = null;
   try {
     const source = req.body && req.body.source;
     if (typeof source !== 'string') {
@@ -81,33 +82,44 @@ router.post('/admin/api/bentml/compile', (req, res) => {
     }
     // the advanced tab accepts BOTH dialects (v0.69): an AI primed with the
     // dictionary answers in <bent-*> .pzn — pasting that here used to be
-    // rejected by the keyword compiler ("does not accept the code")
-    if (looksLikePzn(source)) {
-      const { view, repaired, changes } = pznSourceToBlocks(source);
+    // rejected by the keyword compiler ("does not accept the code").
+    // v2.20: take only the BenTML first — fence, chat, <html> brackets around
+    // the keyword dialect, the echoed empty template — THEN route by dialect.
+    ex = extractBentml(source);
+    if (ex.dialect === 'pzn') {
+      const { view, repaired, changes } = pznSourceToBlocks(ex.source);
       return res.json({
         ok: true,
         page: { title: view.title },
         blocks: view.blocks,
         warnings: repaired ? changes.map((c) => String(c && c.message || c)) : [],
         dialect: 'pzn',
-        repaired
+        repaired,
+        extracted: ex.changes,
+        lineOffset: ex.lineOffset
       });
     }
-    const result = bentml.compile(source);
+    const result = bentml.compile(ex.found ? ex.source : source);
     res.json({
       ok: true,
       page: result.page,
       blocks: result.blocks,
-      warnings: result.warnings
+      warnings: result.warnings,
+      dialect: 'line',
+      extracted: ex.changes,
+      lineOffset: ex.lineOffset
     });
   } catch (e) {
     res.status(400).json({
       ok: false,
       error: e.message,
       code: e.code || 'E_BENTML',
-      line: e.line,
+      // error lines are relative to the extracted document — map them back
+      // onto the text the caller actually sent
+      line: e.line != null && ex && ex.found ? e.line + (ex.lineOffset || 0) : e.line,
       column: e.column,
-      fix: e.fix
+      fix: e.fix,
+      issues: e.issues
     });
   }
 });
@@ -118,13 +130,34 @@ router.post('/admin/api/bentml/preview', (req, res) => {
     if (typeof source !== 'string') {
       return res.status(400).json({ error: 'source (BenTML string) required' });
     }
-    const result = bentml.preview(source);
+    // v2.20: both dialects, extracted first
+    const ex = extractBentml(source);
+    if (ex.dialect === 'pzn') {
+      const { view, repaired, changes } = pznSourceToBlocks(ex.source);
+      const { renderPage } = require('../renderer');
+      const html = renderPage({
+        title: view.title, direction: view.direction, theme: 'default', blocks: view.blocks,
+        status: 'draft', tags: view.tags, meta: view.meta, full_path: view.slug || 'preview'
+      });
+      return res.json({
+        ok: true,
+        page: { title: view.title, slug: view.slug, direction: view.direction },
+        blocks: view.blocks,
+        warnings: repaired ? changes.map((c) => String(c && c.message || c)) : [],
+        html,
+        dialect: 'pzn',
+        extracted: ex.changes
+      });
+    }
+    const result = bentml.preview(ex.found ? ex.source : source);
     res.json({
       ok: true,
       page: result.page,
       blocks: result.blocks,
       warnings: result.warnings,
-      html: result.html
+      html: result.html,
+      dialect: 'line',
+      extracted: ex.changes
     });
   } catch (e) {
     res.status(400).json({
@@ -159,15 +192,27 @@ router.post('/admin/api/bentml/apply', (req, res) => {
     const existing = getPageByFullPath(fullPath);
     if (!existing) return res.status(404).json({ error: 'Page not found' });
 
-    const result = bentml.compile(source);
+    // v2.20: both dialects, extracted first
+    const ex = extractBentml(source);
+    let result;
+    if (ex.dialect === 'pzn') {
+      const { view, repaired, changes } = pznSourceToBlocks(ex.source);
+      result = {
+        page: { title: view.title, direction: view.direction, tags: view.tags, meta: view.meta || {} },
+        blocks: view.blocks,
+        warnings: repaired ? changes.map((c) => String(c && c.message || c)) : []
+      };
+    } else {
+      result = bentml.compile(ex.found ? ex.source : source);
+    }
     const patch = {
       title: result.page.title,
       direction: result.page.direction,
-      theme: result.page.theme,
       tags: result.page.tags,
-      meta: { ...(existing.meta || {}), ...result.page.meta },
+      meta: { ...(existing.meta || {}), ...(result.page.meta || {}) },
       draft_blocks: result.blocks
     };
+    if (result.page.theme) patch.theme = result.page.theme;
     updatePage(fullPath, patch);
     if (publish) {
       // publishPage copies draft → published when available
@@ -179,7 +224,9 @@ router.post('/admin/api/bentml/apply', (req, res) => {
       fullPath,
       blocks: result.blocks,
       page: result.page,
-      warnings: result.warnings
+      warnings: result.warnings,
+      dialect: ex.dialect,
+      extracted: ex.changes
     });
   } catch (e) {
     res.status(400).json({

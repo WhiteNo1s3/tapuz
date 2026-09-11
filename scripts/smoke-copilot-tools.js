@@ -73,6 +73,15 @@ check('a document with no bent-* modules is refused', (() => {
   try { tools.getTool('create_page').run({ source: '<!DOCTYPE html><html><head><title>x</title></head><body></body></html>' }); return false; }
   catch (e) { return true; }
 })());
+// v2.20: the tools take only the BenTML — a model may answer in the keyword
+// dialect, wrapped in a fence and chat; the page still lands as .pzn
+const words = tools.getTool('create_page').run({
+  source: 'Sure!\n```bentml\nBENTML 0.2\n\nMETA {\n  title: "דף מילים"\n  slug: "tool-words"\n}\n\nHEADING(level: 1) { שלום מהמילים }\n```\nEnjoy!'
+});
+check('create_page accepts a fenced keyword-dialect document', words.created && words.slug === 'tool-words' && words.moduleCount === 1);
+check('…and stores it as a .pzn tag document',
+  /<bent-heading[^>]*>שלום מהמילים/.test(require('../src/pages').getPageSource('tool-words', 'draft')) &&
+  !/BENTML 0\.2|```/.test(require('../src/pages').getPageSource('tool-words', 'draft')));
 const edited = tools.getTool('edit_page').run({ slug: 'existing', source: PZN('דף קיים', 'אחרי עריכה') });
 check('edit_page rewrites the draft', edited.edited);
 check('edit_page does NOT publish the change (the live page is untouched)', (() => {

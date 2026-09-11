@@ -3,7 +3,7 @@
   "title": "Tapuziel .pzn page language",
   "description": "Constrained-HTML page format (benTML dialect). Body may contain only registered bent-* module tags.",
   "specVersion": "0.1",
-  "generatedFrom": "tapuziel@2.12.0-alpha",
+  "generatedFrom": "tapuziel@2.20.0-alpha",
   "modules": {
     "heading": {
       "tag": "bent-heading",
@@ -2447,140 +2447,6 @@
         }
       }
     },
-    "headlink": {
-      "tag": "bent-headlink",
-      "label": {
-        "he": "קישור כותרת",
-        "en": "Header link"
-      },
-      "category": "layout",
-      "container": false,
-      "accept": [],
-      "props": {
-        "animate": {
-          "type": "enum",
-          "enum": [
-            "none",
-            "fade",
-            "rise",
-            "zoom"
-          ],
-          "default": "none",
-          "optional": true
-        },
-        "label": {
-          "type": "string",
-          "default": ""
-        },
-        "href": {
-          "type": "url",
-          "default": "",
-          "optional": true
-        }
-      }
-    },
-    "header": {
-      "tag": "bent-header",
-      "label": {
-        "he": "כותרת עליונה",
-        "en": "Header"
-      },
-      "category": "layout",
-      "container": true,
-      "accept": [
-        "headlink"
-      ],
-      "props": {
-        "animate": {
-          "type": "enum",
-          "enum": [
-            "none",
-            "fade",
-            "rise",
-            "zoom"
-          ],
-          "default": "none",
-          "optional": true
-        },
-        "logo": {
-          "type": "url",
-          "default": "",
-          "optional": true
-        },
-        "title": {
-          "type": "string",
-          "default": "",
-          "optional": true
-        },
-        "url": {
-          "type": "url",
-          "default": "",
-          "optional": true
-        }
-      }
-    },
-    "footlink": {
-      "tag": "bent-footlink",
-      "label": {
-        "he": "קישור כותרת תחתונה",
-        "en": "Footer link"
-      },
-      "category": "layout",
-      "container": false,
-      "accept": [],
-      "props": {
-        "animate": {
-          "type": "enum",
-          "enum": [
-            "none",
-            "fade",
-            "rise",
-            "zoom"
-          ],
-          "default": "none",
-          "optional": true
-        },
-        "label": {
-          "type": "string",
-          "default": ""
-        },
-        "href": {
-          "type": "url",
-          "default": "",
-          "optional": true
-        }
-      }
-    },
-    "footer": {
-      "tag": "bent-footer",
-      "label": {
-        "he": "כותרת תחתונה",
-        "en": "Footer"
-      },
-      "category": "layout",
-      "container": true,
-      "accept": [
-        "footlink"
-      ],
-      "props": {
-        "animate": {
-          "type": "enum",
-          "enum": [
-            "none",
-            "fade",
-            "rise",
-            "zoom"
-          ],
-          "default": "none",
-          "optional": true
-        },
-        "copy": {
-          "type": "string",
-          "default": "",
-          "optional": true
-        }
-      }
-    },
     "crumbs": {
       "tag": "bent-crumbs",
       "label": {
@@ -2603,6 +2469,677 @@
           ],
           "default": "none",
           "optional": true
+        }
+      }
+    },
+    "member": {
+      "tag": "bent-member",
+      "label": {
+        "he": "חבר צוות",
+        "en": "Team member"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "role": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "bio": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "team": {
+      "tag": "bent-team",
+      "label": {
+        "he": "הצוות",
+        "en": "Team"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "member"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "countdown": {
+      "tag": "bent-countdown",
+      "label": {
+        "he": "ספירה לאחור",
+        "en": "Countdown"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "target": {
+          "type": "string",
+          "default": ""
+        },
+        "done": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "priceitem": {
+      "tag": "bent-priceitem",
+      "label": {
+        "he": "פריט מחירון",
+        "en": "Price item"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "price": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "desc": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "pricelist": {
+      "tag": "bent-pricelist",
+      "label": {
+        "he": "מחירון",
+        "en": "Price list"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "priceitem"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "bar": {
+      "tag": "bent-bar",
+      "label": {
+        "he": "מדד",
+        "en": "Bar"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "value": {
+          "type": "integer",
+          "min": 0,
+          "max": 100,
+          "default": 0
+        },
+        "color": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "progress": {
+      "tag": "bent-progress",
+      "label": {
+        "he": "מדדי התקדמות",
+        "en": "Progress bars"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "bar"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "header": {
+      "tag": "bent-header",
+      "label": {
+        "he": "ראש עמוד מיובא",
+        "en": "Imported page header"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "tone": {
+          "type": "enum",
+          "enum": [
+            "light",
+            "dark",
+            "brand",
+            "none"
+          ],
+          "default": "light",
+          "optional": true
+        },
+        "layout": {
+          "type": "enum",
+          "enum": [
+            "row",
+            "stack"
+          ],
+          "default": "row",
+          "optional": true
+        }
+      },
+      "decompileOnly": true
+    },
+    "footer": {
+      "tag": "bent-footer",
+      "label": {
+        "he": "תחתית עמוד מיובאת",
+        "en": "Imported page footer"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "tone": {
+          "type": "enum",
+          "enum": [
+            "dark",
+            "light",
+            "brand",
+            "none"
+          ],
+          "default": "dark",
+          "optional": true
+        },
+        "credit": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      },
+      "decompileOnly": true
+    },
+    "whatsapp": {
+      "tag": "bent-whatsapp",
+      "label": {
+        "he": "וואטסאפ",
+        "en": "WhatsApp"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "phone": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "message": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "note": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "align": {
+          "type": "enum",
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "default": "start",
+          "optional": true
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "rating": {
+      "tag": "bent-rating",
+      "label": {
+        "he": "דירוג כוכבים",
+        "en": "Star rating"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "value": {
+          "type": "number",
+          "default": 5
+        },
+        "max": {
+          "type": "integer",
+          "min": 1,
+          "max": 10,
+          "default": 5,
+          "optional": true
+        },
+        "text": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "day": {
+      "tag": "bent-day",
+      "label": {
+        "he": "יום",
+        "en": "Day row"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "hours": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "hours": {
+      "tag": "bent-hours",
+      "label": {
+        "he": "שעות פתיחה",
+        "en": "Opening hours"
+      },
+      "category": "content",
+      "container": true,
+      "accept": [
+        "day"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "tocitem": {
+      "tag": "bent-tocitem",
+      "label": {
+        "he": "סעיף",
+        "en": "TOC entry"
+      },
+      "category": "layout",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "anchor": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "label": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "toc": {
+      "tag": "bent-toc",
+      "label": {
+        "he": "תוכן עניינים",
+        "en": "Table of contents"
+      },
+      "category": "layout",
+      "container": true,
+      "accept": [
+        "tocitem"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "author": {
+      "tag": "bent-author",
+      "label": {
+        "he": "כותב/ת",
+        "en": "Author box"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "linkLabel": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "bio": {
+          "type": "text",
+          "default": "",
+          "content": true
+        }
+      }
+    },
+    "compare": {
+      "tag": "bent-compare",
+      "label": {
+        "he": "לפני / אחרי",
+        "en": "Before / after"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "before": {
+          "type": "url",
+          "default": ""
+        },
+        "after": {
+          "type": "url",
+          "default": ""
+        },
+        "beforeLabel": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "afterLabel": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "flipbox": {
+      "tag": "bent-flipbox",
+      "label": {
+        "he": "קופסה מתהפכת",
+        "en": "Flip box"
+      },
+      "category": "content",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "icon": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "cta": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "backText": {
+          "type": "text",
+          "default": "",
+          "content": true
         }
       }
     },

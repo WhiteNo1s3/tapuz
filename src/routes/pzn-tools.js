@@ -14,7 +14,7 @@
  */
 
 const express = require('express');
-const { pznSourceToBlocks } = require('../pzn-source');
+const { pznSourceToBlocks, toPznSource } = require('../pzn-source');
 
 const router = express.Router();
 
@@ -24,11 +24,13 @@ const router = express.Router();
  */
 router.post('/admin/api/pzn/repair', (req, res) => {
   try {
-    let { source, loose } = req.body || {};
+    let { source } = req.body || {};
     if (typeof source !== 'string' || !source.trim()) {
       return res.status(400).json({ ok: false, error: 'source required' });
     }
-    if (loose) { const { extractPzn } = require('../pzn-extract'); source = extractPzn(source); }
+    // v2.20: always extract (`loose` accepted, no longer needed); a keyword
+    // document is compiled to .pzn first — a broken one answers line + fix
+    source = toPznSource(source).source;
     const { repair } = require('../pzn/repair');
     const r = repair(source);
     res.json({
@@ -39,7 +41,7 @@ router.post('/admin/api/pzn/repair', (req, res) => {
       error: r.error
     });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    res.status(400).json({ ok: false, error: e.message, code: e.code, line: e.line, fix: e.fix });
   }
 });
 
@@ -76,10 +78,10 @@ router.post('/admin/api/pzn/to-blocks', (req, res) => {
     if (typeof source !== 'string' || !source.trim()) {
       return res.status(400).json({ ok: false, error: 'source required' });
     }
-    const { view, repaired, changes } = pznSourceToBlocks(source);
-    res.json({ ok: true, blocks: view.blocks, title: view.title, repaired, changes });
+    const { view, repaired, changes, dialect, extracted } = pznSourceToBlocks(source);
+    res.json({ ok: true, blocks: view.blocks, title: view.title, repaired, changes, dialect, extracted });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message, issues: e.issues });
+    res.status(400).json({ ok: false, error: e.message, issues: e.issues, code: e.code, line: e.line, fix: e.fix });
   }
 });
 
@@ -102,18 +104,16 @@ router.get('/admin/api/pzn/primer', (req, res) => {
   }
 });
 
-/** Compile pasted source to preview HTML without saving. loose extracts first. */
+/** Compile pasted source to preview HTML without saving. Always extracts first (v2.20). */
 router.post('/admin/api/pzn/preview', (req, res) => {
   try {
-    const { loose } = req.body || {};
     let { source } = req.body || {};
     if (typeof source !== 'string' || !source.trim()) {
       return res.status(400).json({ ok: false, error: 'source required' });
     }
-    if (loose !== false) {
-      const { extractPzn } = require('../pzn-extract');
-      source = extractPzn(source);
-    }
+    // the extractor is the identity on a clean document, so the old
+    // loose:false strict preview is unchanged; a keyword document is compiled
+    source = toPznSource(source).source;
     const pznApi = require('../pzn/index');
     const doc = pznApi.parse(source);
     const issues = pznApi.validate(doc, { strict: false });
@@ -137,7 +137,7 @@ router.post('/admin/api/pzn/preview', (req, res) => {
       warnings: issues.filter((i) => i.severity === 'warning')
     });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column });
+    res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column, fix: e.fix });
   }
 });
 

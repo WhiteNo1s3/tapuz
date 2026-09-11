@@ -1,5 +1,37 @@
 # BenTML status — the language is real and it dances
 
+## v2.20 (2026-09-08) — take only the BenTML, any time, anywhere
+
+Ben's rule, now a law of the system: whatever a model wrapped around its page,
+Tapuziel keeps **only the BenTML**. One extractor — `src/bentml/extract.js`,
+dependency-free, bundled into the browser engine as `BentmlEngine.extract` —
+runs first at every door, in front of both parsers and in front of the store.
+
+| Door | What runs |
+|------|-----------|
+| Builder source panel (`admin-bentml-ui.js` → `compileText`) | `E.extract` → line dialect stays local, `.pzn` goes to the server; error lines mapped back via `lineOffset` |
+| 🤖 ייבא מ‑AI modal, `/admin/ai` paste page | `POST /admin/api/pzn/to-blocks` · `preview` · `repair` · `source` · `create-from-source` — all extract, both dialects |
+| Copilot chat "🪄 צור דף" + `create_page` / `edit_page` tools | `pzn-source.toPznSource` |
+| Extension paste box, any agent | `/agent/v1/source`, `/agent/v1/create-from-source` |
+| `/admin/new` import box | `pzn/decompile` sniffs the dialect first — a fenced or chatty reply is BenTML, a real page is HTML |
+| CLI `tapuz bentml-compile` / `bentml-preview` | extract, then compile |
+| **The store** — `pages.savePageSource` | extract + compile a keyword document to `.pzn`; a clean file passes byte-for-byte |
+
+What is stripped: prose before/after (incl. `PZN_READY`) · fences of any flavour
+(``` / ~~~, any info string, 4-backtick outer fence, code glued to the opener,
+an unclosed fence) · `<html>/<body>/<pre>/<code>/<!DOCTYPE>` wrappers around the
+keyword dialect · entity-escaped copies · zero-width / BOM · a missing
+`BENTML 0.2` line (added) · a tag document that forgot `<body>` (added). Several
+candidates (the empty template echoed first, then the real page) → the richest
+wins. Both dialects land everywhere; `toPznSource` compiles `BENTML 0.2` to the
+tag document the `.pzn` store speaks, META description/author reach the page index.
+
+Laws, pinned by test: **identity** on every shipped `.pzn` / `.btml` (CRLF
+checkouts included) · **idempotent** · **browser ≡ server**.
+`node --test test/pzn/extract.test.js` · `npm run test:extract` · new cases in
+`smoke-pzn-paste`, `smoke-bentml`, `smoke-pzn-tools-route`, `smoke-pzn-pages-route`,
+`smoke-agent-bridge`, `smoke-copilot-tools`.
+
 ## v0.77 (2026-07-17) — BenTML runs in the browser, covers everything, syncs both ways
 
 | Layer | Status |

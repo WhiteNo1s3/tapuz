@@ -215,9 +215,10 @@ router.get('/admin/edit/:fullPath', (req, res) => {
   // Toolbox is GENERATED from the block registry (src/block-registry.js),
   // grouped by category — a new block type appears here automatically.
   // Categories fold closed (first one open) so the palette never drowns the
-  // canvas; a search field cuts across all of them.
+  // canvas; a search field cuts across all of them. Decompile-only types
+  // (the imported header/footer bands) are not tools: authoringBlocks().
   const toolboxHtml = blockRegistry.BLOCK_CATEGORIES.map((cat, catIndex) => {
-    const entries = blockRegistry.BLOCK_REGISTRY.filter(e => e.category === cat && !e.childrenOf);
+    const entries = blockRegistry.authoringBlocks().filter(e => e.category === cat && !e.childrenOf);
     if (!entries.length) return '';
     const buttons = entries.map(e => `
             <button type="button" class="tool-btn" data-type="${escapeAdmin(e.type)}" title="${escapeAdmin(e.hintHe || e.labelHe)}">
