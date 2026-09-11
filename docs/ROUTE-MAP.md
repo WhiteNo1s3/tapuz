@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**269 routes across 37 files.**
+**271 routes across 37 files.**
 
 ## By file (what each module owns)
 
@@ -357,7 +357,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/team/:id/role`
 - `DELETE /admin/api/team/:id`
 
-### `src/routes/theme.js` — 19 routes
+### `src/routes/theme.js` — 21 routes
 
 - `GET /admin/api/theme`
 - `POST /admin/api/theme`
@@ -375,6 +375,8 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/theme/library/export`
 - `GET /admin/api/theme/design-prompt`
 - `POST /admin/api/theme/design/paste`
+- `GET /admin/api/theme/canvas`
+- `POST /admin/api/theme/canvas`
 - `POST /admin/api/theme/preview`
 - `GET /admin/theme/preview/:id`
 - `GET /admin/theme`
@@ -478,6 +480,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/team/:id/role` | POST | `src/routes/team.js` |
 | `/admin/api/theme` | GET | `src/routes/theme.js` |
 | `/admin/api/theme` | POST | `src/routes/theme.js` |
+| `/admin/api/theme/canvas` | GET | `src/routes/theme.js` |
+| `/admin/api/theme/canvas` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/design-prompt` | GET | `src/routes/theme.js` |
 | `/admin/api/theme/design/paste` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/effects` | POST | `src/routes/theme.js` |

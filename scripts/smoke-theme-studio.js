@@ -22,6 +22,11 @@
  *      the live site, carries the preview shim, and browses by ?path=
  *   6. an AI theme lands in the library (source 'ai'); apply is a second,
  *      explicit move that rebuilds the site
+ *   7. the BENCH (v2.25): the canvas is not a page — it starts empty, fills
+ *      with modules pasted as BenTML (from anywhere), picked from the
+ *      palette, or the whole showcase; it renders inside the candidate
+ *      theme's chrome, lives beside the theme, and the designer prompt
+ *      lists what is on it
  */
 
 const fs = require('fs');
@@ -283,6 +288,62 @@ function waitUp(tries = 40) {
     check('POST import with garbage → 400, live untouched', impBad.status === 400 && (await req('GET', '/admin/api/theme', { cookie })).json.overrides.colors.primary === '#101010');
     const impObj = await req('POST', '/admin/api/theme/import', { cookie, body: { package: { format: 'tapuz-theme', version: 1, name: 'v1', overrides: { colors: { primary: '#202020' } } } } });
     check('POST import with a v1 package object still works (backward compatible)', impObj.status === 200 && impObj.json.overrides.colors.primary === '#202020');
+
+    // ── 7. the bench — a canvas of nothing, filled with modules ──────
+    const bench0 = await req('GET', '/admin/api/theme/canvas', { cookie });
+    check('GET canvas → empty bench + the module palette (55+ authoring modules, grouped)',
+      bench0.status === 200 && bench0.json.ok && bench0.json.count === 0 && bench0.json.palette.length >= 50 && bench0.json.palette.every((p) => p.type && p.label && p.category));
+    check('the studio page carries the bench panel and opens the canvas in bench mode',
+      /th-bench-append/.test(page.text) && /th-bench-type/.test(page.text) && /value="__canvas"/.test(page.text) && /preview\/live\?canvas=1/.test(page.text) && /th-canvas-full/.test(page.text));
+    const pvLive = await req('POST', '/admin/api/theme/preview', { cookie, body: {} });
+    const empty = await req('GET', '/admin/theme/preview/' + pvLive.json.id + '?canvas=1', { cookie });
+    check('an empty bench renders the theme chrome around NOTHING (header + footer, no page content, noindex)',
+      empty.status === 200 && /class="site-header/.test(empty.text) && /class="site-footer/.test(empty.text) && /<title>קנבס הערכה/.test(empty.text) &&
+      /noindex/.test(empty.text) && !/class="bent-cards/.test(empty.text) && /<main id="main" class="main-content">\s*<div class="container">\s*<\/div>/.test(empty.text) && /הקנבס ריק/.test(empty.text));
+    const pasted = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'append-source', source: 'בשמחה! הנה:\n```html\n<!DOCTYPE html><html lang="he" dir="rtl"><head><title>x</title></head><body><bent-hero id="h1"><bent-heading level="1">פתיח</bent-heading></bent-hero><bent-cards id="c1" columns="3"></bent-cards></body></html>\n```\nתהנו!' } });
+    check('POST canvas append-source takes only the BenTML out of a chat reply → modules on the bench',
+      pasted.status === 200 && pasted.json.ok && pasted.json.count === 2 && pasted.json.added === 2 && pasted.json.modules.map((m) => m.type).join(',') === 'hero,cards');
+    const addForm = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'add-module', type: 'form' } });
+    check('add-module appends a sample module with its label', addForm.json.count === 3 && addForm.json.modules[2].type === 'form' && !!addForm.json.modules[2].label);
+    const moved = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'move', id: addForm.json.modules[2].id, dir: 'up' } });
+    check('move reorders the bench', moved.json.modules.map((m) => m.type).join(',') === 'hero,form,cards');
+    const benchFrame = await req('GET', '/admin/theme/preview/' + pv.json.id + '?canvas=1', { cookie });
+    check('the bench renders INSIDE the candidate theme (the AI theme\'s primary + its skin) with the pasted modules',
+      benchFrame.status === 200 && /--color-primary: #7c2d12/.test(benchFrame.text) && /class="hero/.test(benchFrame.text) && /class="bent-form/.test(benchFrame.text) && /class="bent-cards/.test(benchFrame.text));
+    const promptBench = await req('GET', '/admin/api/theme/design-prompt', { cookie });
+    check('the designer prompt lists the modules on the bench for the skin to dress', /המודולים שעל הקנבס/.test(promptBench.text) && /`hero` · `form` · `cards`/.test(promptBench.text));
+    const removed = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'remove', id: addForm.json.modules[2].id } });
+    check('remove takes a module off the bench', removed.json.count === 2);
+    const showcase = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'showcase' } });
+    check('showcase fills the bench with the whole toolbox tour (20+ modules)', showcase.json.count >= 20);
+    const replaced = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'replace-source', source: '<bent-form id="only"></bent-form>' } });
+    check('replace-source swaps the whole bench (a bare fragment is fine)', replaced.json.count === 1 && replaced.json.modules[0].type === 'form');
+    const badPaste2 = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'append-source', source: 'no modules here' } });
+    check('a paste with no modules → 400 with a plain error, bench untouched', badPaste2.status === 400 && /לא/.test(badPaste2.json.error) && (await req('GET', '/admin/api/theme/canvas', { cookie })).json.count === 1);
+    // rows — five modules side by side (Ben: "compete with Elementor")
+    const row = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'add-row', count: 5 } });
+    const rowMod = row.json.modules[row.json.modules.length - 1];
+    check('add-row appends a row of 5 cells', row.status === 200 && rowMod.row === true && rowMod.columns.length === 5 && /5 עמודות/.test(rowMod.label));
+    for (let i = 0; i < 5; i++) await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'add-module', type: 'card', rowId: rowMod.id, col: i } });
+    const filled = (await req('GET', '/admin/api/theme/canvas', { cookie })).json.modules.find((m) => m.id === rowMod.id);
+    check('add-module into each cell → five cards in one row', filled.columns.every((c) => c.length === 1 && c[0].type === 'card'));
+    const cellPaste = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'append-source', source: '<bent-form id="pf"></bent-form>', rowId: rowMod.id, col: 4 } });
+    check('append-source into a cell lands the pasted module in that cell', cellPaste.json.modules.find((m) => m.id === rowMod.id).columns[4].map((x) => x.type).join('+') === 'card+form');
+    const rowFrame = await req('GET', '/admin/theme/preview/' + pv.json.id + '?canvas=1', { cookie });
+    check('the row renders as a columns block with five .col cells, each holding its module',
+      rowFrame.status === 200 && (rowFrame.text.match(/<div class="col">/g) || []).length >= 5 && /class="columns"[^>]*>(?:\s*<div class="col"><div class="card bent-card)/.test(rowFrame.text));
+    const rmInCell = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'remove', id: filled.columns[0][0].id } });
+    check('remove reaches inside a cell', rmInCell.json.modules.find((m) => m.id === rowMod.id).columns[0].length === 0);
+    const rowCap = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'add-row', count: 40 } });
+    check('a row is capped at 6 cells', rowCap.json.modules[rowCap.json.modules.length - 1].columns.length === 6);
+    const badCell = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'add-module', type: 'card', rowId: rowMod.id, col: 9 } });
+    check('a cell that does not exist → 400', badCell.status === 400);
+    check('the studio page offers the row control (2–6 columns)', /th-bench-row/.test(page.text) && /th-bench-cols/.test(page.text) && /value="6"/.test(page.text));
+    const cleared = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'clear' } });
+    check('clear → a canvas of nothing again', cleared.json.count === 0);
+    check('the bench never became a site page', !(await req('GET', '/admin/api/theme', { cookie })).text.includes('__theme-canvas') && !fs.existsSync(path.join(ROOT, 'public', '__theme-canvas.html')));
+    check('the bench lives beside the theme, not inside it (config/theme-canvas.json, not in overrides)',
+      fs.existsSync(path.join(ROOT, 'config', 'theme-canvas.json')) && !('canvas' in (await req('GET', '/admin/api/theme', { cookie })).json.overrides));
   } finally {
     child.kill();
   }

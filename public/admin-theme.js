@@ -125,7 +125,16 @@
   var lastPreviewId = 'live';
 
   function canvasPath() {
-    return val('th-canvas-page') || '';
+    var v = val('th-canvas-page');
+    return v === '__canvas' ? '' : v;
+  }
+  function onBench() {
+    var sel = $('th-canvas-page');
+    return !sel || sel.value === '__canvas';
+  }
+  function previewSrc(id) {
+    var q = onBench() ? '?canvas=1' : (canvasPath() ? '?path=' + encodeURIComponent(canvasPath()) : '');
+    return '/admin/theme/preview/' + id + q;
   }
 
   /** Register a candidate with the server and point the canvas at it. */
@@ -137,7 +146,7 @@
       if (seq !== previewSeq) return; // a newer candidate won
       if (!d.ok) { setStatus('th-canvas-status', d.error || 'שגיאה בתצוגה', false); return; }
       lastPreviewId = d.id;
-      var src = '/admin/theme/preview/' + d.id + (canvasPath() ? '?path=' + encodeURIComponent(canvasPath()) : '');
+      var src = previewSrc(d.id);
       canvas.src = src;
       var open = $('th-canvas-open');
       if (open) open.href = src;
@@ -178,14 +187,157 @@
   var pageSel = $('th-canvas-page');
   if (pageSel) pageSel.addEventListener('change', function () {
     if (!canvas) return;
-    canvas.src = '/admin/theme/preview/' + lastPreviewId + (canvasPath() ? '?path=' + encodeURIComponent(canvasPath()) : '');
+    canvas.src = previewSrc(lastPreviewId);
+    var bench = $('th-bench');
+    if (bench) bench.style.display = onBench() ? '' : 'none';
   });
   var refresh = $('th-canvas-refresh');
   if (refresh) refresh.onclick = function () { if (canvas) canvas.src = canvas.src; };
   var desk = $('th-canvas-desktop');
   var mob = $('th-canvas-mobile');
-  if (desk) desk.onclick = function () { if (canvas) { canvas.style.width = '100%'; canvas.style.height = '560px'; } };
+  if (desk) desk.onclick = function () { if (canvas) { canvas.style.width = '100%'; canvas.style.height = '640px'; } };
+  // ⛶ — the bench is theme-WIDE: fill the window with it
+  var full = $('th-canvas-full');
+  var wrap = $('th-canvas-wrap');
+  var isFull = false;
+  function setFull(on) {
+    if (!wrap || !canvas) return;
+    isFull = on;
+    if (on) {
+      wrap.style.cssText += ';position:fixed;inset:0;z-index:9999;border-radius:0;padding:8px;background:#0f172a';
+      canvas.style.width = '100%'; canvas.style.height = 'calc(100vh - 16px)';
+      if (full) full.textContent = '✕';
+    } else {
+      wrap.style.position = ''; wrap.style.inset = ''; wrap.style.zIndex = ''; wrap.style.borderRadius = ''; wrap.style.padding = ''; wrap.style.background = '';
+      canvas.style.width = '100%'; canvas.style.height = '640px';
+      if (full) full.textContent = '⛶';
+    }
+  }
+  if (full) full.onclick = function () { setFull(!isFull); };
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && isFull) setFull(false); });
   if (mob) mob.onclick = function () { if (canvas) { canvas.style.width = '390px'; canvas.style.height = '700px'; } };
+
+  // ── The BENCH (v2.25) — modules on the theme canvas ──
+  function benchStatus(msg, ok) { setStatus('th-bench-status', msg, ok); }
+  function renderBench(d) {
+    var list = $('th-bench-list');
+    var count = $('th-bench-count');
+    if (!list) return;
+    var mods = d.modules || [];
+    var total = 0;
+    mods.forEach(function (m) { total += m.row ? m.columns.reduce(function (n, c) { return n + c.length; }, 0) : 1; });
+    if (count) count.textContent = mods.length ? total + ' מודולים' + (mods.some(function (m) { return m.row; }) ? ' · ' + mods.filter(function (m) { return m.row; }).length + ' שורות' : '') : 'ריק — קנבס של כלום';
+    var chip = function (m, i, n, inCell) {
+      return '<span style="display:inline-flex;align-items:center;gap:4px;border:1px solid #cbd5e1;border-radius:999px;padding:3px 6px 3px 10px;font-size:0.8rem;background:#fff">' +
+        esc(m.icon ? m.icon + ' ' : '') + esc(m.label) +
+        (i > 0 ? '<button type="button" data-bench-move="' + esc(m.id) + '" data-dir="up" title="' + (inCell ? 'למעלה בתא' : 'למעלה') + '" style="border:none;background:none;cursor:pointer;padding:0 2px">↑</button>' : '') +
+        (i < n - 1 ? '<button type="button" data-bench-move="' + esc(m.id) + '" data-dir="down" title="' + (inCell ? 'למטה בתא' : 'למטה') + '" style="border:none;background:none;cursor:pointer;padding:0 2px">↓</button>' : '') +
+        '<button type="button" data-bench-remove="' + esc(m.id) + '" title="הסר מהקנבס" style="border:none;background:none;cursor:pointer;color:#b91c1c;padding:0 2px">✕</button></span>';
+    };
+    list.style.flexDirection = 'column';
+    list.style.alignItems = 'stretch';
+    list.innerHTML = mods.map(function (m, i) {
+      if (!m.row) return '<div style="display:flex;gap:6px;flex-wrap:wrap">' + chip(m, i, mods.length, false) + '</div>';
+      // a ROW: its cells side by side, each a drop target for the palette or a paste
+      var cells = m.columns.map(function (cell, ci) {
+        return '<div style="flex:1;min-width:0;border:1px dashed #94a3b8;border-radius:8px;padding:6px;background:#f8fafc;display:flex;flex-direction:column;gap:4px">' +
+          '<div style="font-size:0.7rem;color:#64748b;display:flex;justify-content:space-between;align-items:center"><span>עמודה ' + (ci + 1) + '</span>' +
+          '<span><button type="button" data-cell-add="' + esc(m.id) + '" data-col="' + ci + '" title="הוסף לתא את המודול שנבחר בארגז" style="border:none;background:none;cursor:pointer;color:#166534;font-weight:700">➕</button>' +
+          '<button type="button" data-cell-paste="' + esc(m.id) + '" data-col="' + ci + '" title="הדבק לתא את ה-BenTML מהתיבה למטה" style="border:none;background:none;cursor:pointer;color:#1d4ed8">📥</button></span></div>' +
+          (cell.length ? cell.map(function (x, xi) { return chip(x, xi, cell.length, true); }).join('') : '<span style="font-size:0.72rem;color:#94a3b8">ריק</span>') +
+          '</div>';
+      }).join('');
+      return '<div style="border:1.5px solid #cbd5e1;border-radius:10px;padding:8px;background:#fff">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.8rem"><strong>▦ ' + esc(m.label) + '</strong><span style="flex:1"></span>' +
+        (i > 0 ? '<button type="button" data-bench-move="' + esc(m.id) + '" data-dir="up" title="שורה למעלה" style="border:none;background:none;cursor:pointer">↑</button>' : '') +
+        (i < mods.length - 1 ? '<button type="button" data-bench-move="' + esc(m.id) + '" data-dir="down" title="שורה למטה" style="border:none;background:none;cursor:pointer">↓</button>' : '') +
+        '<button type="button" data-bench-remove="' + esc(m.id) + '" title="הסר את השורה כולה" style="border:none;background:none;cursor:pointer;color:#b91c1c">✕</button></div>' +
+        '<div style="display:flex;gap:6px">' + cells + '</div></div>';
+    }).join('');
+    list.querySelectorAll('[data-cell-add]').forEach(function (b) {
+      b.onclick = function () { benchOp({ op: 'add-module', type: val('th-bench-type'), rowId: b.dataset.cellAdd, col: Number(b.dataset.col) }); };
+    });
+    list.querySelectorAll('[data-cell-paste]').forEach(function (b) {
+      b.onclick = function () {
+        if (!benchSource()) return benchStatus('הדביקו קודם BenTML / .pzn בתיבה למטה', false);
+        benchOp({ op: 'append-source', source: benchSource(), rowId: b.dataset.cellPaste, col: Number(b.dataset.col) });
+        var ta = $('th-bench-source'); if (ta) ta.value = '';
+      };
+    });
+    list.querySelectorAll('[data-bench-remove]').forEach(function (b) {
+      b.onclick = function () { benchOp({ op: 'remove', id: b.dataset.benchRemove }); };
+    });
+    list.querySelectorAll('[data-bench-move]').forEach(function (b) {
+      b.onclick = function () { benchOp({ op: 'move', id: b.dataset.benchMove, dir: b.dataset.dir }); };
+    });
+    var sel = $('th-bench-type');
+    if (sel && d.palette && !sel.options.length) {
+      var groups = {};
+      d.palette.forEach(function (p) { (groups[p.category || 'אחר'] = groups[p.category || 'אחר'] || []).push(p); });
+      sel.innerHTML = Object.keys(groups).map(function (g) {
+        return '<optgroup label="' + esc(g) + '">' + groups[g].map(function (p) {
+          return '<option value="' + esc(p.type) + '">' + esc((p.icon ? p.icon + ' ' : '') + p.label) + '</option>';
+        }).join('') + '</optgroup>';
+      }).join('');
+    }
+  }
+  function reloadBench() {
+    // the bench changed: re-render it in the current candidate
+    var sel = $('th-canvas-page');
+    if (sel) sel.value = '__canvas';
+    var bench = $('th-bench');
+    if (bench) bench.style.display = '';
+    if (canvas) canvas.src = previewSrc(lastPreviewId);
+  }
+  function benchOp(body) {
+    benchStatus('מעדכן את הקנבס…');
+    api('/admin/api/theme/canvas', body).then(function (d) {
+      if (!d.ok) return benchStatus(d.error || 'שגיאה', false);
+      renderBench(d);
+      var w = d.warnings && d.warnings.length ? ' · תוקן: ' + d.warnings.slice(0, 2).join(' | ') : '';
+      benchStatus((d.added ? 'נוספו ' + d.added + ' · ' : '') + 'על הקנבס עכשיו ' + d.count + ' מודולים ✓' + w, true);
+      reloadBench();
+    }).catch(function () { benchStatus('שגיאת רשת', false); });
+  }
+  function benchSource() { return (($('th-bench-source') || {}).value || '').trim(); }
+  var benchAppend = $('th-bench-append');
+  if (benchAppend) benchAppend.onclick = function () {
+    if (!benchSource()) return benchStatus('הדביקו קודם BenTML / .pzn', false);
+    benchOp({ op: 'append-source', source: benchSource() });
+    var ta = $('th-bench-source'); if (ta) ta.value = '';
+  };
+  var benchReplace = $('th-bench-replace');
+  if (benchReplace) benchReplace.onclick = function () {
+    if (!benchSource()) return benchStatus('הדביקו קודם BenTML / .pzn', false);
+    benchOp({ op: 'replace-source', source: benchSource() });
+    var ta = $('th-bench-source'); if (ta) ta.value = '';
+  };
+  var benchAdd = $('th-bench-add');
+  if (benchAdd) benchAdd.onclick = function () { benchOp({ op: 'add-module', type: val('th-bench-type') }); };
+  var benchRow = $('th-bench-row');
+  if (benchRow) benchRow.onclick = function () { benchOp({ op: 'add-row', count: Number(val('th-bench-cols', '3')) || 3 }); };
+  var benchShow = $('th-bench-showcase');
+  if (benchShow) benchShow.onclick = function () { benchOp({ op: 'showcase' }); };
+  var benchClear = $('th-bench-clear');
+  if (benchClear) benchClear.onclick = function () {
+    if (!confirm('לרוקן את הקנבס? (הערכה עצמה לא משתנה)')) return;
+    benchOp({ op: 'clear' });
+  };
+  var benchPrompt = $('th-bench-prompt');
+  if (benchPrompt) benchPrompt.onclick = function () {
+    // the SITE-BUILDER roleplay (the modules game) — compose modules in your
+    // own chat, paste the reply into the bench
+    var q = new URLSearchParams({ format: 'roleplay', locale: 'he' });
+    var brief = (($('th-bench-brief') || {}).value || '').trim();
+    if (brief) q.set('brief', brief);
+    benchStatus('בונה את הפרומפט…');
+    fetch('/admin/api/inject-pack?' + q.toString()).then(function (r) { return r.text(); }).then(function (text) {
+      return navigator.clipboard.writeText(text).then(function () {
+        benchStatus('✅ פרומפט בונה-הדפים הועתק (' + (text.length / 1000).toFixed(1) + 'K) — הדביקו בצ׳אט, ואת התשובה הדביקו כאן למטה', true);
+      });
+    }).catch(function () { benchStatus('שגיאה בהעתקה', false); });
+  };
+  fetch('/admin/api/theme/canvas').then(function (r) { return r.json(); }).then(function (d) { if (d.ok) renderBench(d); }).catch(function () {});
 
   // ── Looks: one-click whole personalities (data injected by the page) ──
   function setColor(k, v) {

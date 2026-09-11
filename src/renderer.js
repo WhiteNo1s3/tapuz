@@ -985,6 +985,14 @@ function renderThemePreviewShim(previewId) {
     errors.push(String((ev && ev.message) || ev) + where); report();
   });
   window.addEventListener('load', function () { setTimeout(report, 60); });
+  // the theme canvas (v2.25): an empty bench is header + footer around
+  // nothing — say so inside the frame, in plain admin grey, never in theme css
+  if (/[?&]canvas=1/.test(location.search)) {
+    var main = document.querySelector('#main > .container') || document.querySelector('#main');
+    if (main && !main.children.length && !main.textContent.trim()) {
+      main.innerHTML = '<div style="margin:3rem auto;max-width:560px;padding:2rem;border:2px dashed #94a3b8;border-radius:12px;text-align:center;color:#64748b;font-family:system-ui,sans-serif;font-size:1rem;line-height:1.7">🧩 הקנבס ריק — הכותרת והתחתית שלמעלה ולמטה הן הערכה.<br>הוסיפו מודולים מהפאנל שמתחת לקנבס: הדביקו BenTML, בחרו מודול, או מלאו בכל המודולים.</div>';
+    }
+  }
   document.addEventListener('click', function (ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
     if (!a) return;

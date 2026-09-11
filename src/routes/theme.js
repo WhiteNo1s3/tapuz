@@ -293,7 +293,8 @@ router.get('/admin/api/theme/design-prompt', (req, res) => {
     const brief = String(req.query.brief || '').trim().slice(0, 1500);
     const current = String(req.query.current || '') === '1' ? require('../theme').loadOverrides() : null;
     const pack = require('../theme-roleplay').buildThemePrompt({
-      brief, current, siteTitle: cfg.title || '', description: cfg.description || ''
+      brief, current, siteTitle: cfg.title || '', description: cfg.description || '',
+      canvasModules: require('../theme-canvas').moduleTypes()
     });
     res.type('text/markdown; charset=utf-8').send(pack.text);
   } catch (e) {
@@ -319,6 +320,38 @@ router.post('/admin/api/theme/design/paste', (req, res) => {
     }
     res.json({ ok: true, id: entry.id, name: entry.name, applied, backedUp, rebuildError, parts: found.parts,
       sections: Object.keys(found.overrides) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── The theme CANVAS bench (v2.25) — "a canvas of nothing … paste modules
+// to create the theme, manually or with the AI chatbot roleplay … it is not
+// a page, so it needs to be theme-wide." The bench is a block list beside the
+// theme (theme-canvas.js); every operation returns the whole new state.
+router.get('/admin/api/theme/canvas', (req, res) => {
+  try {
+    const canvas = require('../theme-canvas');
+    const { blocks } = canvas.loadCanvas();
+    res.json({ ok: true, count: canvas.countModules(blocks), modules: canvas.summarize(blocks), palette: canvas.palette() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/theme/canvas', (req, res) => {
+  try {
+    const b = req.body || {};
+    const canvas = require('../theme-canvas');
+    // rows (v2.25): add-module / append-source may aim at a cell of a row
+    const target = b.rowId ? { rowId: String(b.rowId), col: Number(b.col) } : null;
+    const arg = b.op === 'move' ? { id: b.id, dir: b.dir }
+      : b.op === 'remove' ? b.id
+        : b.op === 'add-row' ? { count: b.count }
+          : b.op === 'add-module' ? (target ? { type: b.type, rowId: target.rowId, col: target.col } : b.type)
+            : (target ? { source: b.source, rowId: target.rowId, col: target.col } : b.source);
+    const result = canvas.apply(String(b.op || ''), arg);
+    res.json({ ok: true, count: result.count, added: result.added, modules: result.modules, warnings: result.warnings });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -378,8 +411,12 @@ router.get('/admin/theme/preview/:id', (req, res) => {
     const { listPages, getPageByFullPath } = require('../pages');
     const published = listPages().filter((p) => p.status === 'published');
     const wanted = String(req.query.path || '').trim();
-    let page = wanted ? getPageByFullPath(wanted) : null;
+    // the theme canvas (v2.25) — the bench, not a page: rendered inside the
+    // theme's chrome like any page, but it lives in config, never in the site
+    let page = String(req.query.canvas || '') === '1' ? require('../theme-canvas').canvasPage() : null;
+    if (!page && wanted) page = getPageByFullPath(wanted);
     if (!page || page.status !== 'published') {
+      page = null;
       const homePath = require('../seo').resolveHomePath(
         published.map((p) => getPageByFullPath(p.full_path) || p), loadConfig().homepage
       );
@@ -452,16 +489,42 @@ router.get('/admin/theme', (req, res) => {
           <h3 class="sub-head" style="margin:0">🖼 הקנבס — האתר שלכם, חי</h3>
           <span id="th-canvas-label" style="font-size:0.85rem;color:#64748b">מציג: הערכה החיה</span>
           <span style="flex:1"></span>
-          <select id="th-canvas-page" class="input compact" title="איזה דף להציג בקנבס"><option value="">דף הבית</option>${pages}</select>
+          <select id="th-canvas-page" class="input compact" title="מה להציג בקנבס: הבנץ׳ של הערכה או דף אמיתי מהאתר"><option value="__canvas">🧩 קנבס הערכה (לא דף)</option><option value="">🌐 דף הבית</option>${pages}</select>
+          <button type="button" class="btn secondary" id="th-canvas-full" title="מסך מלא">⛶</button>
           <button type="button" class="btn secondary" id="th-canvas-desktop" title="מסך רחב">🖥</button>
           <button type="button" class="btn secondary" id="th-canvas-mobile" title="נייד">📱</button>
           <button type="button" class="btn secondary" id="th-canvas-refresh" title="רענון">↻</button>
-          <a class="btn secondary" id="th-canvas-open" href="/admin/theme/preview/live" target="_blank" title="פתיחה בחלון נפרד">⧉</a>
+          <a class="btn secondary" id="th-canvas-open" href="/admin/theme/preview/live?canvas=1" target="_blank" title="פתיחה בחלון נפרד">⧉</a>
         </div>
         <div id="th-canvas-wrap" style="background:#e2e8f0;border:1px solid #cbd5e1;border-radius:12px;padding:10px;display:flex;justify-content:center">
-          <iframe id="th-canvas" title="תצוגה מקדימה של האתר בערכה" src="/admin/theme/preview/live" style="width:100%;max-width:100%;height:560px;border:none;border-radius:8px;background:#fff;transition:width .2s"></iframe>
+          <iframe id="th-canvas" title="תצוגה מקדימה של הערכה" src="/admin/theme/preview/live?canvas=1" style="width:100%;max-width:100%;height:640px;border:none;border-radius:8px;background:#fff;transition:width .2s"></iframe>
         </div>
         <div id="th-canvas-status" style="font-size:0.85rem;color:#64748b;margin-top:8px;min-height:1.2em">הקנבס מציג את הערכה החיה. כל שינוי בטופס, לחיצה על מראה, או תשובת AI — מתעדכן כאן לפני השמירה.</div>
+        <div id="th-bench" style="margin-top:14px;border-top:1px dashed #cbd5e1;padding-top:12px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+            <strong>🧩 המודולים על הקנבס</strong>
+            <span id="th-bench-count" style="font-size:0.85rem;color:#64748b">ריק</span>
+            <span style="flex:1"></span>
+            <select id="th-bench-type" class="input compact" title="מודול מהארגז — עם תוכן לדוגמה"></select>
+            <button type="button" class="btn secondary" id="th-bench-add">➕ הוסף מודול</button>
+            <select id="th-bench-cols" class="input compact" title="כמה מודולים זה לצד זה בשורה"><option value="2">2 עמודות</option><option value="3" selected>3 עמודות</option><option value="4">4 עמודות</option><option value="5">5 עמודות</option><option value="6">6 עמודות</option></select>
+            <button type="button" class="btn secondary" id="th-bench-row" title="שורה של תאים — מודולים זה לצד זה, כמו באלמנטור">▦ הוסף שורה</button>
+            <button type="button" class="btn secondary" id="th-bench-showcase" title="כל המודולים של סיור הארגז, בלחיצה אחת">🎉 מלא בכל המודולים</button>
+            <button type="button" class="btn secondary" id="th-bench-clear">🧹 רוקן</button>
+          </div>
+          <div id="th-bench-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin-bottom:10px"></div>
+          <p class="lead" style="margin:0 0 8px;font-size:0.85rem">הקנבס הוא <strong>לא דף</strong> — הוא הספסל שעליו בונים את הערכה: מודולים שרוצים לראות בערכה, מכל מקום. הדביקו BenTML / ‎.pzn מהבונה, מהרולפליי של בונה-הדפים בצ׳אט שלכם, או מכל תשובת AI — אנחנו לוקחים רק את המודולים. הקנבס נשמר לצד הערכה, ונשאר כשמחליפים ערכה.</p>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+            <input id="th-bench-brief" placeholder="מה לבנות עם הרולפליי? למשל: דף מוצר עם גלריה, מחירון וטופס" style="flex:1;min-width:220px;padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px">
+            <button type="button" class="btn secondary" id="th-bench-prompt" title="הפרומפט של בונה הדפים (משחק המודולים) — להדבקה בצ׳אט שלכם; את התשובה מדביקים למטה">🧠 פרומפט בונה-דפים</button>
+          </div>
+          <textarea id="th-bench-source" rows="3" dir="ltr" placeholder="<bent-hero>…</bent-hero> — או כל תשובת צ׳אט שמכילה מודולים" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:monospace;font-size:0.82rem;margin-bottom:8px"></textarea>
+          <div class="row end">
+            <span id="th-bench-status" style="font-size:0.85rem;flex:1"></span>
+            <button type="button" class="btn secondary" id="th-bench-replace">♻ החלף את הקנבס</button>
+            <button type="button" class="btn" id="th-bench-append">➕ הוסף לקנבס</button>
+          </div>
+        </div>
         <div id="th-deploy-status" dir="ltr" style="margin-top:6px;font-size:0.75rem;color:#94a3b8;text-align:left;font-family:monospace;word-break:break-all" title="מה רץ כאן ואיפה האתר נשמר — להשוואה מול view-source של האתר החי (meta generator + main.css?v=)">${escAttr(require('../build-info').summaryLine())}</div>
       </section>
 

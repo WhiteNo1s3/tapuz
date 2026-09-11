@@ -109,7 +109,9 @@ function knobsDoc() {
 
 /**
  * The whole pack.
- * @param {{ brief?: string, siteTitle?: string, description?: string, current?: object|null }} opts
+ * @param {{ brief?: string, siteTitle?: string, description?: string, current?: object|null, canvasModules?: string[] }} opts
+ *   canvasModules — the module types on the theme canvas (theme-canvas.js), so
+ *   the skin dresses what the owner will actually look at.
  *   current — the live overrides, when the player wants to iterate ON the
  *   current theme ("make it warmer") instead of designing from scratch.
  */
@@ -184,6 +186,15 @@ function buildThemePrompt(opts = {}) {
   if (roots.length) {
     lines.push('');
     lines.push('שורשי המודולים (כל מודול תוכן הוא `.bent-<שם>`): ' + roots.join(' '));
+  }
+  const onCanvas = Array.isArray(opts.canvasModules) ? opts.canvasModules.filter(Boolean) : [];
+  if (onCanvas.length) {
+    lines.push('');
+    lines.push('### המודולים שעל הקנבס של השחקן — העור חייב להלביש את אלה (הם מה שיוצג)');
+    lines.push('');
+    lines.push(onCanvas.map((t) => '`' + t + '`').join(' · '));
+    lines.push('');
+    lines.push('(מודול `X` מעוצב דרך `.bent-X` — למשל `cards` → `.bent-cards`/`.bent-card`; `hero` → `.hero`; `form` → `.bent-form`; `features` → `.features`/`.feature`.)');
   }
   lines.push('');
 
