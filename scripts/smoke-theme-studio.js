@@ -246,6 +246,17 @@ function waitUp(tries = 40) {
     const login = await req('POST', '/admin/login', { form: { username: 'owner', password: 'owner-pass-1' } });
     const cookie = String(login.headers['set-cookie'] || '').split(';')[0];
 
+    // a deploy reaches the visitors (v2.26): the server rebuilt the export at
+    // boot because the export on disk carried no build stamp / another build's
+    const builtBy = path.join(ROOT, 'public', '.built-by');
+    check('at boot the server rebuilt the export and stamped it with the running build id',
+      fs.existsSync(builtBy) && fs.readFileSync(builtBy, 'utf8').trim() === require('../src/build-info').buildId() && /<meta name="generator" content="Tapuziel /.test(fs.readFileSync(path.join(ROOT, 'public', 'index.html'), 'utf8')));
+    const exp = require('../src/export');
+    fs.writeFileSync(builtBy, 'some-older-build\n');
+    const refreshed = exp.refreshAfterDeploy();
+    check('refreshAfterDeploy rebuilds when the stamp differs and reports from → to', refreshed.rebuilt === true && refreshed.from === 'some-older-build' && refreshed.to === require('../src/build-info').buildId());
+    check('refreshAfterDeploy is a no-op when the export already matches the running build', exp.refreshAfterDeploy().rebuilt === false);
+
     const page = await req('GET', '/admin/theme', { cookie });
     check('GET /admin/theme → the studio: designer card, canvas iframe, looks, skin, file import',
       page.status === 200 && /th-design-card/.test(page.text) && /<iframe id="th-canvas"/.test(page.text) && /th-looks/.test(page.text) &&

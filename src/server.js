@@ -534,6 +534,12 @@ const server = app.listen(PORT, () => {
   // package (seed/). Applied through the product's own page APIs, once per
   // package id, and never allowed to block or break boot.
   try { require('./seed-content').maybeSeed(); } catch (e) { console.error('[seed] failed: ' + e.message); }
+  // a deploy must reach the visitors: the export on disk is rebuilt when it
+  // was produced by a different build than the one now running (v2.26)
+  try {
+    const r = require('./export').refreshAfterDeploy();
+    if (r.rebuilt) console.log('[export] rebuilt the site for build ' + r.to + (r.from ? ' (was ' + r.from + ')' : ' (export carried no build stamp)'));
+  } catch (e) { console.error('[export] refresh after deploy failed: ' + e.message); }
   // CRM retention (v1.82, phase 5): enforce the policy on boot, then once a
   // day. `unref()` so this timer can never be the reason the process refuses
   // to exit — a housekeeping job must not outrank a shutdown.
