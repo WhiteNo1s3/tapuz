@@ -151,7 +151,7 @@
       var open = $('th-canvas-open');
       if (open) open.href = src;
       var lbl = $('th-canvas-label');
-      if (lbl) lbl.textContent = 'מציג: ' + label + (d.fonts && d.fonts.length ? ' · גופנים: ' + d.fonts.join(', ') : '');
+      if (lbl) lbl.textContent = 'מציג: ' + label + (d.fonts && d.fonts.length ? ' · גופנים: ' + d.fonts.join(', ') : '') + (d.benchModules != null ? ' · קנבס מהמועמד (' + d.benchModules + ' מודולים)' : '');
       setStatus('th-canvas-status', d.hasEffect ? 'טוען… (הערכה כוללת אפקט — נבדוק שהוא רץ)' : 'הערכה הזו בלי אפקט JS.');
       return d;
     }).catch(function () { setStatus('th-canvas-status', 'שגיאת רשת בתצוגה', false); });
@@ -219,9 +219,35 @@
 
   // ── The BENCH (v2.25) — modules on the theme canvas ──
   function benchStatus(msg, ok) { setStatus('th-bench-status', msg, ok); }
+  /** Sensible width ratios for a row of n cells — the equal split, one
+   *  double cell at each end / the middle, and a triple lead. */
+  function ratioPresets(n) {
+    var eq = []; for (var i = 0; i < n; i++) eq.push(1);
+    var out = [eq.join(':')];
+    if (n >= 2) {
+      var a = eq.slice(); a[0] = 2; out.push(a.join(':'));
+      var z = eq.slice(); z[n - 1] = 2; out.push(z.join(':'));
+      var t = eq.slice(); t[0] = 3; out.push(t.join(':'));
+    }
+    if (n >= 3) { var mid = eq.slice(); mid[Math.floor(n / 2)] = 2; out.push(mid.join(':')); }
+    return out;
+  }
+  var benchSourceCache = '';
+  var benchSrcBtn = $('th-bench-src');
+  if (benchSrcBtn) benchSrcBtn.onclick = function () {
+    // the bench IS a BenTML document — show it in the paste box for direct
+    // editing; "החלף את הקנבס" writes it back
+    var ta = $('th-bench-source');
+    if (!ta) return;
+    ta.value = benchSourceCache || '';
+    ta.rows = 14;
+    ta.focus();
+    benchStatus(benchSourceCache ? 'זה המקור של הקנבס (BenTML). ערכו ולחצו ♻ החלף את הקנבס' : 'הקנבס ריק — אין עדיין מקור', true);
+  };
   function renderBench(d) {
     var list = $('th-bench-list');
     var count = $('th-bench-count');
+    if (typeof d.source === 'string') benchSourceCache = d.source;
     if (!list) return;
     var mods = d.modules || [];
     var total = 0;
@@ -247,13 +273,37 @@
           (cell.length ? cell.map(function (x, xi) { return chip(x, xi, cell.length, true); }).join('') : '<span style="font-size:0.72rem;color:#94a3b8">ריק</span>') +
           '</div>';
       }).join('');
+      var n = m.columns.length;
+      var presets = ratioPresets(n);
+      var sel = function (name, options, current, title) {
+        return '<select data-row-set="' + esc(m.id) + '" data-key="' + name + '" title="' + esc(title) + '" style="font-size:0.75rem;padding:2px 4px;border:1px solid #cbd5e1;border-radius:6px">' +
+          options.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(current) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
+      };
+      var controls =
+        sel('cells', [[1, '1 תא'], [2, '2 תאים'], [3, '3 תאים'], [4, '4 תאים'], [5, '5 תאים'], [6, '6 תאים']], n, 'מספר התאים בשורה') +
+        '<select data-row-ratio-preset="' + esc(m.id) + '" title="יחס רוחב מוכן" style="font-size:0.75rem;padding:2px 4px;border:1px solid #cbd5e1;border-radius:6px">' +
+          '<option value="">יחס…</option>' + presets.map(function (p) { return '<option value="' + p + '"' + (p === m.ratio ? ' selected' : '') + '>' + p + '</option>'; }).join('') + '</select>' +
+        '<input data-row-ratio="' + esc(m.id) + '" value="' + esc(m.ratio || '') + '" placeholder="' + Array(n + 1).join('1').split('').join(':') + '" dir="ltr" title="יחס רוחב לכל תא, למשל 2:1:1 (ריק = שווה)" style="width:' + (n * 14 + 24) + 'px;font-size:0.75rem;padding:2px 4px;border:1px solid #cbd5e1;border-radius:6px;font-family:monospace">' +
+        sel('width', [['content', 'רוחב תוכן'], ['wide', 'רחב (1400px)'], ['full', 'מסך מלא']], m.width, 'רוחב השורה') +
+        sel('gap', [['none', 'בלי רווח'], ['sm', 'רווח קטן'], ['md', 'רווח רגיל'], ['lg', 'רווח גדול']], m.gap, 'מרווח בין התאים') +
+        sel('valign', [['top', 'למעלה'], ['center', 'מרכז'], ['bottom', 'למטה'], ['stretch', 'מתיחה (גובה אחיד)']], m.valign, 'יישור אנכי') +
+        sel('collapse', [['sm', 'נערם ב-640'], ['md', 'נערם ב-768'], ['lg', 'נערם ב-1024'], ['never', 'לא נערם']], m.collapse, 'מאיזה רוחב מסך התאים נערמים');
       return '<div style="border:1.5px solid #cbd5e1;border-radius:10px;padding:8px;background:#fff">' +
-        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.8rem"><strong>▦ ' + esc(m.label) + '</strong><span style="flex:1"></span>' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.8rem;flex-wrap:wrap"><strong>▦ ' + esc(m.label) + '</strong>' + controls + '<span style="flex:1"></span>' +
         (i > 0 ? '<button type="button" data-bench-move="' + esc(m.id) + '" data-dir="up" title="שורה למעלה" style="border:none;background:none;cursor:pointer">↑</button>' : '') +
         (i < mods.length - 1 ? '<button type="button" data-bench-move="' + esc(m.id) + '" data-dir="down" title="שורה למטה" style="border:none;background:none;cursor:pointer">↓</button>' : '') +
         '<button type="button" data-bench-remove="' + esc(m.id) + '" title="הסר את השורה כולה" style="border:none;background:none;cursor:pointer;color:#b91c1c">✕</button></div>' +
         '<div style="display:flex;gap:6px">' + cells + '</div></div>';
     }).join('');
+    list.querySelectorAll('[data-row-set]').forEach(function (el) {
+      el.onchange = function () { var body = { op: 'set-row', id: el.dataset.rowSet }; body[el.dataset.key] = el.value; benchOp(body); };
+    });
+    list.querySelectorAll('[data-row-ratio-preset]').forEach(function (el) {
+      el.onchange = function () { if (el.value) benchOp({ op: 'set-row', id: el.dataset.rowRatioPreset, ratio: el.value }); };
+    });
+    list.querySelectorAll('[data-row-ratio]').forEach(function (el) {
+      el.onchange = function () { benchOp({ op: 'set-row', id: el.dataset.rowRatio, ratio: el.value.trim() }); };
+    });
     list.querySelectorAll('[data-cell-add]').forEach(function (b) {
       b.onclick = function () { benchOp({ op: 'add-module', type: val('th-bench-type'), rowId: b.dataset.cellAdd, col: Number(b.dataset.col) }); };
     });
@@ -493,7 +543,7 @@
     if (!importText()) return setStatus('th-import-status', 'אין מה לייבא — הדביקו או בחרו קובץ', false);
     api('/admin/api/theme/import', { text: importText() }).then(function (d) {
       if (d.ok) {
-        setStatus('th-import-status', 'הוחל ✓' + rebuildNote(d) + ' — טוען מחדש…', !d.rebuildError);
+        setStatus('th-import-status', 'הוחל ✓' + (d.benchCount != null ? ' · הקנבס התמלא ב-' + d.benchCount + ' מודולים' : '') + rebuildNote(d) + ' — טוען מחדש…', !d.rebuildError);
         setTimeout(function () { location.reload(); }, 700);
       } else setStatus('th-import-status', d.error || 'שגיאה', false);
     }).catch(function () { setStatus('th-import-status', 'שגיאת רשת', false); });
@@ -608,7 +658,7 @@
   var designPreview = $('th-design-preview');
   if (designPreview) designPreview.onclick = function () {
     if (!designReply()) return setStatus('th-design-status', 'הדביקו קודם את תשובת ה-AI', false);
-    canvasShow('תשובת ה-AI (לא נשמרה)', { reply: designReply(), name: designBrief().slice(0, 60) }).then(function (d) {
+    canvasShow('תשובת ה-AI (לא נשמרה)', { reply: designReply(), name: designBrief().slice(0, 60), bench: !!(($('th-design-bench') || {}).checked) }).then(function (d) {
       if (d && d.ok) {
         setStatus('th-design-status', 'הערכה "' + (d.name || '') + '" מוצגת בקנבס ↑ — אהבתם? שמרו לספרייה או החילו. לא? שנו את התיאור, צרו פרומפט חדש וחזרו.', true);
         var c = $('th-canvas-card');
@@ -620,11 +670,15 @@
   function designSave(apply) {
     if (!designReply()) return setStatus('th-design-status', 'הדביקו קודם את תשובת ה-AI', false);
     setStatus('th-design-status', apply ? 'שומר ומחיל…' : 'שומר לספרייה…');
-    api('/admin/api/theme/design/paste', { reply: designReply(), name: designBrief().slice(0, 60), apply: !!apply }).then(function (d) {
+    var takeBench = !!(($('th-design-bench') || {}).checked);
+    api('/admin/api/theme/design/paste', { reply: designReply(), name: designBrief().slice(0, 60), apply: !!apply, bench: takeBench }).then(function (d) {
       if (!d.ok) return setStatus('th-design-status', d.error || 'שגיאה', false);
       var what = 'הערכה "' + d.name + '" נשמרה לספרייה ✓ (' + (d.sections || []).join(', ') +
         (d.parts && d.parts.cssChars ? ' · עור ' + d.parts.cssChars + ' תווים' : '') +
-        (d.parts && d.parts.jsChars ? ' · אפקט ' + d.parts.jsChars + ' תווים' : '') + ')';
+        (d.parts && d.parts.jsChars ? ' · אפקט ' + d.parts.jsChars + ' תווים' : '') +
+        (d.parts && d.parts.bent ? ' · ‎.bent' : '') + ')' +
+        (d.benchCount != null ? ' · הקנבס התמלא ב-' + d.benchCount + ' מודולים' : (d.hasSpecimen ? ' · (הקנבס של ה-AI נשמר עם הערכה)' : ''));
+      if (d.benchCount != null) fetch('/admin/api/theme/canvas').then(function (r) { return r.json(); }).then(function (c) { if (c.ok) renderBench(c); }).catch(function () {});
       if (d.applied) {
         setStatus('th-design-status', what + ' — והוחלה על האתר' + (d.backedUp ? ' (העבודה הקודמת גובתה)' : '') + rebuildNote(d) + ' — טוען מחדש…', !d.rebuildError);
         setTimeout(function () { location.reload(); }, 900);

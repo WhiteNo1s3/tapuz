@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**271 routes across 37 files.**
+**273 routes across 37 files.**
 
 ## By file (what each module owns)
 
@@ -357,11 +357,13 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/team/:id/role`
 - `DELETE /admin/api/team/:id`
 
-### `src/routes/theme.js` — 21 routes
+### `src/routes/theme.js` — 23 routes
 
 - `GET /admin/api/theme`
 - `POST /admin/api/theme`
 - `GET /admin/api/theme/export`
+- `GET /admin/api/theme/export.bent`
+- `GET /admin/api/theme/library/export.bent`
 - `POST /admin/api/theme/import`
 - `GET /admin/api/theme/library`
 - `POST /admin/api/theme/library`
@@ -488,11 +490,13 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/theme/effects-prompt` | GET | `src/routes/theme.js` |
 | `/admin/api/theme/effects/paste` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/export` | GET | `src/routes/theme.js` |
+| `/admin/api/theme/export.bent` | GET | `src/routes/theme.js` |
 | `/admin/api/theme/import` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/library` | GET | `src/routes/theme.js` |
 | `/admin/api/theme/library` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/library/apply` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/library/export` | GET | `src/routes/theme.js` |
+| `/admin/api/theme/library/export.bent` | GET | `src/routes/theme.js` |
 | `/admin/api/theme/library/import` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/library/remove` | POST | `src/routes/theme.js` |
 | `/admin/api/theme/library/rename` | POST | `src/routes/theme.js` |

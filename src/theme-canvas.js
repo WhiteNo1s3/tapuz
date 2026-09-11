@@ -27,25 +27,66 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const CANVAS_PATH = path.join(require('./paths').CONFIG_DIR, 'theme-canvas.json');
+// v2.26: the bench IS a BenTML document (config/theme-canvas.bent) — the
+// source is the truth, blocks are compiled from it on every read and written
+// back through the lossless bridge after every operation. A theme-canvas.json
+// left by v2.25 is migrated on first read and removed.
+const CANVAS_PATH = path.join(require('./paths').CONFIG_DIR, 'theme-canvas.bent');
+const LEGACY_JSON_PATH = path.join(require('./paths').CONFIG_DIR, 'theme-canvas.json');
 const MAX_BLOCKS = 120;
 const CANVAS_TITLE = 'קנבס הערכה';
 
-function loadCanvas() {
+/** The bench's BenTML source ('' when there is no bench yet). */
+function loadSource() {
   try {
-    if (fs.existsSync(CANVAS_PATH)) {
-      const data = JSON.parse(fs.readFileSync(CANVAS_PATH, 'utf8'));
-      if (data && Array.isArray(data.blocks)) return { blocks: data.blocks, updatedAt: data.updatedAt || '' };
+    if (fs.existsSync(CANVAS_PATH)) return fs.readFileSync(CANVAS_PATH, 'utf8');
+    if (fs.existsSync(LEGACY_JSON_PATH)) {
+      const data = JSON.parse(fs.readFileSync(LEGACY_JSON_PATH, 'utf8'));
+      if (data && Array.isArray(data.blocks)) {
+        const src = blocksToSource(data.blocks);
+        fs.writeFileSync(CANVAS_PATH, src, 'utf8');
+        fs.unlinkSync(LEGACY_JSON_PATH);
+        return src;
+      }
     }
   } catch (e) { /* a corrupt bench reads as empty, never crashes the studio */ }
-  return { blocks: [], updatedAt: '' };
+  return '';
+}
+
+/** Blocks → a complete BenTML document (the bridge is lossless both ways). */
+function blocksToSource(blocks) {
+  const pzn = require('./pzn/index');
+  const doc = pzn.fromTapuzPage({ title: CANVAS_TITLE, slug: '__theme-canvas', blocks: (blocks || []).slice(0, MAX_BLOCKS) });
+  return pzn.serialize(doc);
+}
+
+/** Source → blocks; a source with no modules (or none at all) is an empty bench. */
+function sourceToBlocks(source) {
+  const text = String(source || '');
+  if (!/<bent-[a-z]/i.test(text)) return [];
+  const { pznSourceToBlocks } = require('./pzn-source');
+  try {
+    return (pznSourceToBlocks(text).view.blocks || []).map(withId);
+  } catch (e) {
+    return [];
+  }
+}
+
+function loadCanvas() {
+  const source = loadSource();
+  let updatedAt = '';
+  try { updatedAt = fs.existsSync(CANVAS_PATH) ? fs.statSync(CANVAS_PATH).mtime.toISOString() : ''; } catch (e) { /* no stamp */ }
+  return { blocks: sourceToBlocks(source), source, updatedAt };
 }
 
 function saveCanvas(blocks) {
   fs.mkdirSync(path.dirname(CANVAS_PATH), { recursive: true });
-  const out = { blocks: blocks.slice(0, MAX_BLOCKS), updatedAt: new Date().toISOString() };
-  fs.writeFileSync(CANVAS_PATH, JSON.stringify(out, null, 2), 'utf8');
-  return out;
+  const list = (blocks || []).slice(0, MAX_BLOCKS);
+  const source = blocksToSource(list);
+  fs.writeFileSync(CANVAS_PATH, source, 'utf8');
+  // re-read through the compiler so what the caller holds is exactly what
+  // the file says — the source is the truth, not the in-memory blocks
+  return { blocks: sourceToBlocks(source), source, updatedAt: new Date().toISOString() };
 }
 
 function withId(block) {
@@ -102,24 +143,106 @@ function summarize(blocks) {
   };
   return blocks.map((b) => {
     if (!isRow(b)) return one(b);
+    const list = cells(b);
     return {
       id: b.id, type: 'columns', row: true,
-      label: 'שורה (' + b.data.children.length + ' עמודות)', icon: '▦',
-      columns: b.data.children.map((cell) => (Array.isArray(cell) ? cell : []).map(one))
+      label: 'שורה (' + list.length + ' עמודות)', icon: '▦',
+      ratio: b.data.ratio || '', width: b.data.width || 'content', gap: b.data.gap || 'md',
+      valign: b.data.valign || 'top', collapse: b.data.collapse || 'md',
+      columns: list.map((cell) => cell.map(one))
     };
   });
 }
 
 const MAX_COLS = 6;
+const ROW_ENUMS = {
+  width: ['content', 'wide', 'full'],
+  gap: ['none', 'sm', 'md', 'lg'],
+  valign: ['top', 'center', 'bottom', 'stretch'],
+  collapse: ['sm', 'md', 'lg', 'never']
+};
 
-/** A row: a columns block whose cells hold modules. */
-function rowBlock(count) {
-  const n = Math.min(MAX_COLS, Math.max(1, Math.round(Number(count)) || 3));
-  return withId({ type: 'columns', data: { children: Array.from({ length: n }, () => []), gap: 'md', valign: 'stretch' } });
+/** "2:1:1" → [2, 1, 1] (each part 0.2–12), or null when it is no ratio. */
+function parseRatio(v) {
+  if (Array.isArray(v)) v = v.join(':');
+  const parts = String(v == null ? '' : v).trim().split(/\s*[:/ ]\s*/).filter(Boolean);
+  if (!parts.length) return null;
+  const nums = parts.map((p) => Number(p));
+  if (nums.some((n) => !Number.isFinite(n) || n < 0.2 || n > 12)) return null;
+  return nums;
+}
+
+/** A row: a columns block (the page builder's own shape — data.columns =
+ *  [{ blocks }]) whose cells hold modules. Settings are the registry's
+ *  params: ratio, width, gap, valign, collapse. */
+function rowBlock(opts) {
+  const o = opts && typeof opts === 'object' ? opts : { count: opts };
+  const ratio = parseRatio(o.ratio);
+  const n = Math.min(MAX_COLS, Math.max(1, Math.round(Number(o.count)) || (ratio ? ratio.length : 3)));
+  const data = { columns: Array.from({ length: n }, () => ({ blocks: [] })), gap: 'md', valign: 'stretch' };
+  applyRowSettings({ data }, o);
+  return withId({ type: 'columns', data });
+}
+
+/** Validate + apply ratio/width/gap/valign/collapse onto a row. */
+function applyRowSettings(row, o) {
+  const d = row.data;
+  const n = cells(row).length;
+  if (o.ratio !== undefined) {
+    const raw = String(o.ratio == null ? '' : o.ratio).trim();
+    if (!raw) delete d.ratio;
+    else {
+      const parts = parseRatio(raw);
+      if (!parts) throw new Error('יחס לא תקין — למשל 2:1:1 (מספרים בין 0.2 ל-12)');
+      if (parts.length !== n) throw new Error(`היחס צריך ${n} חלקים כמספר העמודות בשורה (קיבלתי ${parts.length})`);
+      d.ratio = parts.join(':');
+    }
+  }
+  for (const k of Object.keys(ROW_ENUMS)) {
+    if (o[k] === undefined) continue;
+    const v = String(o[k] || '');
+    if (!v) { delete d[k]; continue; }
+    if (!ROW_ENUMS[k].includes(v)) throw new Error(`ערך לא מוכר ל-${k}: ${v}`);
+    d[k] = v;
+  }
+  return row;
 }
 
 function isRow(b) {
-  return b && b.type === 'columns' && b.data && Array.isArray(b.data.children);
+  return !!(b && b.type === 'columns' && b.data && (Array.isArray(b.data.columns) || Array.isArray(b.data.children)));
+}
+
+/** The cells of a row as an array of block lists — the canonical
+ *  data.columns[i].blocks, or the legacy data.children[i]. */
+function cells(row) {
+  const d = row.data;
+  if (Array.isArray(d.columns)) {
+    d.columns.forEach((c, i) => {
+      if (!c || typeof c !== 'object') d.columns[i] = { blocks: [] };
+      else if (!Array.isArray(c.blocks)) c.blocks = [];
+    });
+    return d.columns.map((c) => c.blocks);
+  }
+  d.children.forEach((c, i) => { if (!Array.isArray(c)) d.children[i] = []; });
+  return d.children;
+}
+
+/** Change the number of cells: grows with empty cells, shrinks only past
+ *  empty trailing cells — a module is never dropped by resizing. */
+function resizeRow(row, count) {
+  const n = Math.min(MAX_COLS, Math.max(1, Math.round(Number(count)) || 1));
+  // cells() maps a fresh array each call — re-read the length every step
+  while (cells(row).length < n) {
+    if (Array.isArray(row.data.columns)) row.data.columns.push({ blocks: [] }); else row.data.children.push([]);
+  }
+  while (cells(row).length > n) {
+    const last = cells(row)[cells(row).length - 1];
+    if (last.length) throw new Error('אי אפשר לצמצם שורה שהעמודה האחרונה שלה מלאה — הסירו קודם את המודולים');
+    if (Array.isArray(row.data.columns)) row.data.columns.pop(); else row.data.children.pop();
+  }
+  const parts = parseRatio(row.data.ratio);
+  if (parts && parts.length !== n) delete row.data.ratio;
+  return row;
 }
 
 /** The list a target points at: the top level, or one cell of a row. */
@@ -128,9 +251,9 @@ function targetList(blocks, target) {
   const row = blocks.find((b) => b.id === String(target.rowId));
   if (!isRow(row)) throw new Error('השורה לא נמצאה על הקנבס');
   const col = Math.round(Number(target.col));
-  if (!(col >= 0 && col < row.data.children.length)) throw new Error('עמודה לא קיימת בשורה');
-  if (!Array.isArray(row.data.children[col])) row.data.children[col] = [];
-  return row.data.children[col];
+  const list = cells(row);
+  if (!(col >= 0 && col < list.length)) throw new Error('עמודה לא קיימת בשורה');
+  return list[col];
 }
 
 /** The list (top level or a cell) that holds the block with this id. */
@@ -138,8 +261,8 @@ function listHolding(blocks, id) {
   if (blocks.some((b) => b.id === id)) return blocks;
   for (const b of blocks) {
     if (!isRow(b)) continue;
-    for (const cell of b.data.children) {
-      if (Array.isArray(cell) && cell.some((x) => x.id === id)) return cell;
+    for (const cell of cells(b)) {
+      if (cell.some((x) => x.id === id)) return cell;
     }
   }
   return null;
@@ -170,7 +293,17 @@ function apply(op, arg) {
       break;
     }
     case 'add-row': {
-      blocks.push(rowBlock(arg && typeof arg === 'object' ? arg.count : arg)); added = 1;
+      blocks.push(rowBlock(arg)); added = 1;
+      break;
+    }
+    case 'set-row': {
+      // ratio / width / gap / valign / collapse / cells — the row's registry
+      // params, the same ones a <bent-columns> carries in BenTML
+      const o = arg && typeof arg === 'object' ? arg : {};
+      const row = blocks.find((x) => x.id === String(o.id || ''));
+      if (!isRow(row)) throw new Error('השורה לא נמצאה על הקנבס');
+      if (o.cells !== undefined) resizeRow(row, o.cells);
+      applyRowSettings(row, o);
       break;
     }
     case 'showcase': {
@@ -202,12 +335,12 @@ function apply(op, arg) {
   }
   if (blocks.length > MAX_BLOCKS) throw new Error(`הקנבס מוגבל ל-${MAX_BLOCKS} מודולים`);
   const saved = saveCanvas(blocks);
-  return { blocks: saved.blocks, modules: summarize(saved.blocks), count: countModules(saved.blocks), added, warnings };
+  return { blocks: saved.blocks, source: saved.source, modules: summarize(saved.blocks), count: countModules(saved.blocks), added, warnings };
 }
 
 /** Every module on the bench — rows count their cells' modules, not themselves. */
 function countModules(blocks) {
-  return blocks.reduce((n, b) => n + (isRow(b) ? b.data.children.reduce((m, cell) => m + (Array.isArray(cell) ? cell.length : 0), 0) : 1), 0);
+  return blocks.reduce((n, b) => n + (isRow(b) ? cells(b).reduce((m, cell) => m + cell.length, 0) : 1), 0);
 }
 
 /** The canvas as a renderable page object — a page-shaped thing that is
@@ -235,8 +368,8 @@ function moduleTypes() {
     for (const b of list || []) {
       if (b && b.type && !seen.has(b.type)) { seen.add(b.type); out.push(b.type); }
       if (b && b.data && Array.isArray(b.data.blocks)) walk(b.data.blocks);
-      // rows keep their modules in cells (data.children = [[…], …])
-      if (isRow(b)) b.data.children.forEach((cell) => walk(cell));
+      // rows keep their modules in cells
+      if (isRow(b)) cells(b).forEach((cell) => walk(cell));
     }
   };
   walk(loadCanvas().blocks);
@@ -248,8 +381,13 @@ module.exports = {
   CANVAS_TITLE,
   MAX_BLOCKS,
   MAX_COLS,
+  ROW_ENUMS,
+  parseRatio,
   loadCanvas,
+  loadSource,
   saveCanvas,
+  blocksToSource,
+  sourceToBlocks,
   apply,
   palette,
   summarize,

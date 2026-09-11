@@ -73,7 +73,9 @@ const KEYWORDS = {
       ratio: { type: 'string' },
       gap: { type: 'enum', default: 'md', values: ['none', 'sm', 'md', 'lg'] },
       collapse: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'never'] },
-      valign: { type: 'enum', default: 'top', values: ['top', 'center', 'bottom', 'stretch'] }
+      valign: { type: 'enum', default: 'top', values: ['top', 'center', 'bottom', 'stretch'] },
+      // v2.26 — the row breaks out of the content column (content|wide|full)
+      width: { type: 'enum', default: 'content', values: ['content', 'wide', 'full'] }
     }
   },
   COL: {

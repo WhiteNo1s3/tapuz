@@ -261,7 +261,19 @@ function renderBlock(block, direction = 'rtl') {
         const colContent = list.map(bb => renderBlock(bb, direction)).join('');
         return `<div class="col">${colContent || ''}</div>`;
       }).join('');
-      return `<div${colExtra} class="columns${ratios ? ' cols-ratio' : ''}" dir="${direction}">${inner}</div>`;
+      // v2.26 — gap/collapse/valign/width were registry params the renderer
+      // never emitted ("done on the data side"); now each one is a class the
+      // theme stylesheet answers (themes/default/css/main.css, .columns.*).
+      // cols-n-<N> lets the stylesheet wrap five or six cells on a tablet
+      // instead of cramming them, before they stack on a phone.
+      const d = block.data || {};
+      const cls = ['columns', `cols-n-${n}`];
+      if (ratios) cls.push('cols-ratio');
+      if (['none', 'sm', 'lg'].includes(d.gap)) cls.push(`gap-${d.gap}`);
+      if (['sm', 'lg', 'never'].includes(d.collapse)) cls.push(`collapse-${d.collapse}`);
+      if (['center', 'bottom', 'stretch'].includes(d.valign)) cls.push(`valign-${d.valign}`);
+      if (['wide', 'full'].includes(d.width)) cls.push(`cols-${d.width}`);
+      return `<div${colExtra} class="${cls.join(' ')}${extraClass}" dir="${direction}">${inner}</div>`;
     }
     case 'list': {
       const items = block.data.items || [];

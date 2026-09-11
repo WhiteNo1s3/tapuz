@@ -135,6 +135,7 @@ function buildBlock(node, warnings) {
       };
       // the cut speaks percent too: "70%:30%" and "70:30" are the same split
       if (p.ratio) data.ratio = String(p.ratio).split(':').map((s) => s.trim().replace(/%$/, '')).join(':');
+      if (p.width && p.width !== 'content') data.width = p.width;
       applyChrome(data, p);
       return createBlock('columns', data);
     }

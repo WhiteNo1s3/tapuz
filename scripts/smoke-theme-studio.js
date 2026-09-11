@@ -92,23 +92,41 @@ check('every web-font look names the font in its family stack (otherwise the loa
 check('every web-font look uses only shelf families', rich.every((l) => l.overrides.fonts.google.every((f) => f in theme.GOOGLE_FONTS)));
 check('a dark header look sets a light header text (studio)', looks.studio.overrides.chrome.headerBg === '#111111' && looks.studio.overrides.chrome.headerText === '#ffffff');
 
+// rows render their settings as classes the theme answers (v2.26)
+const { renderPage: renderRow } = require('../src/renderer');
+const rowHtml = renderRow({ title: 't', slug: 't', full_path: 't', direction: 'rtl', status: 'published', tags: [], meta: {}, blocks: [{ id: 'r', type: 'columns', data: { columns: [{ blocks: [] }, { blocks: [] }, { blocks: [] }, { blocks: [] }, { blocks: [] }], ratio: '2:1:1:1:1', gap: 'lg', valign: 'stretch', collapse: 'never', width: 'wide' } }] }, { overrides: theme.DEFAULT_OVERRIDES });
+check('a row renders cols-n-5 + cols-ratio + gap/valign/collapse/width classes and the --cols fractions',
+  /class="columns cols-n-5 cols-ratio gap-lg collapse-never valign-stretch cols-wide"/.test(rowHtml) && /--cols:2fr 1fr 1fr 1fr 1fr/.test(rowHtml));
+check('a default row emits only columns + cols-n-N (an untouched site is unchanged)', /class="columns cols-n-2"/.test(renderRow({ title: 't', slug: 't', full_path: 't', direction: 'rtl', status: 'published', tags: [], meta: {}, blocks: [{ id: 'r', type: 'columns', data: { columns: [{ blocks: [] }, { blocks: [] }] } }] }, { overrides: theme.DEFAULT_OVERRIDES })));
+const mainCssSrc = fs.readFileSync(path.join(__dirname, '..', 'themes', 'default', 'css', 'main.css'), 'utf8');
+check('the theme stylesheet answers every row class: gap, valign, wide/full breakout, tablet wrap for 5–6 cells, collapse points',
+  /\.columns\.gap-lg/.test(mainCssSrc) && /\.columns\.valign-stretch/.test(mainCssSrc) && /\.columns\.cols-wide/.test(mainCssSrc) && /\.columns\.cols-full/.test(mainCssSrc) &&
+  /\.columns\.cols-n-5:not\(\.cols-ratio\) > \.col/.test(mainCssSrc) && /\.columns\.collapse-lg \{ flex-direction: column/.test(mainCssSrc) && /\.columns\.collapse-sm \{ flex-direction: column/.test(mainCssSrc));
+const pznApi = require('../src/pzn/index');
+const bentRow = pznApi.serialize(pznApi.fromTapuzPage({ title: 'x', slug: 'x', blocks: [{ id: 'r', type: 'columns', data: { columns: [{ blocks: [] }, { blocks: [] }], width: 'full', ratio: '2:1' } }] }));
+check('the row width rides BenTML both ways (registry param → bridge → tag → block)', /width="full"/.test(bentRow) && pznApi.toTapuzPage(pznApi.parse(bentRow)).blocks[0].data.width === 'full');
+
 // ── 2. the designer prompt ───────────────────────────────────────────
 const { buildThemePrompt, moduleRoots } = require('../src/theme-roleplay');
 const pack = buildThemePrompt({ brief: 'חנות פרחים וינטג׳ פריזאית', siteTitle: 'נועה', description: 'פרחים' });
 check('the prompt\'s FIRST LINE demands a FRESH chat', pack.text.split('\n')[0].indexOf('FRESH') !== -1);
 check('the prompt casts the model as the theme designer in a roleplay', /מעצב\/ת ערכות הנושא/.test(pack.text) && /Roleplay/.test(pack.text));
-check('the prompt teaches the JSON knobs, the font shelf, the skeleton and the css variables',
-  /"background": \{ "kind": "solid\|gradient\|glow\|dots\|grid\|lines"/.test(pack.text) && pack.text.indexOf('Frank Ruhl Libre') !== -1 &&
+check('the prompt teaches the <bent-theme> document, the font shelf, the skeleton and the css variables',
+  /<bent-background kind="solid\|gradient\|glow\|dots\|grid\|lines"/.test(pack.text) && pack.text.indexOf('Frank Ruhl Libre') !== -1 &&
   pack.text.indexOf('`.site-header`') !== -1 && pack.text.indexOf('--accent-bg') !== -1 && pack.text.indexOf('.bent-card') !== -1);
+check('the prompt carries the compact module grammar (the bench vocabulary) and the row grammar',
+  /bent-columns` ⊃ bent-col/.test(pack.text) && /ratio="2:1:1" width="content\|wide\|full"/.test(pack.text));
 check('the module roots come from the real theme css', moduleRoots().length >= 30 && moduleRoots().includes('.bent-card'));
-check('the prompt contracts exactly three fences (json, css, js) and no prose', /```json/.test(pack.text) && /```css/.test(pack.text) && /```js/.test(pack.text) && /שלושה fences/.test(pack.text));
+check('the prompt contracts ONE html fence with a whole <bent-theme> document and no prose', /fence אחד, מסמך אחד/.test(pack.text) && /<bent-theme name="לילה כחול"/.test(pack.text) && !/```json/.test(pack.text));
+check('with an empty bench the prompt demands a bent-canvas; with a full bench it forbids one',
+  /bent-canvas` חובה/.test(pack.text) && /הקנבס כבר מלא/.test(buildThemePrompt({ canvasModules: ['hero'] }).text));
 check('the prompt embeds the site, RTL, contrast and no-external rules', pack.text.indexOf('**נועה**') !== -1 && /RTL/.test(pack.text) && /4\.5/.test(pack.text) && /CDN/.test(pack.text));
 check('the prompt embeds the brief and ends on "design it now"', pack.text.indexOf('חנות פרחים וינטג׳ פריזאית') !== -1 && /עצב\/י את זה עכשיו/.test(pack.text));
 const packCur = buildThemePrompt({ current: { colors: { primary: '#123456' }, skin: { css: '.x{top:0}' } } });
 check('with current=1 the prompt carries the live knobs and skin as the starting point',
   packCur.text.indexOf('"primary": "#123456"') !== -1 && packCur.text.indexOf('.x{top:0}') !== -1 && /נקודת המוצא/.test(packCur.text));
 check('without a brief the prompt asks for a one-line "ready"', /המשחק מתחיל עכשיו/.test(packCur.text));
-check('the pack fits a chat message (< 16K chars)', pack.chars < 16000);
+check('the pack fits a chat message (< 20K chars)', pack.chars < 20000);
 
 // ── 3. take only the theme ───────────────────────────────────────────
 const chatty = 'בשמחה! הנה הערכה שביקשת:\n\n```json\n{ "name": "פריז", "colors": { "primary": "#7c2d12", "secondary": "#b45309", "text": "#292524", "muted": "#6b5d52", "border": "#dccbb0", "bg": "#f6efe3", "lightBg": "#efe4d0", "surface": "#fbf7ef" }, "fonts": { "family": "\\"David Libre\\", serif", "headingFamily": "\\"Frank Ruhl Libre\\", serif", "baseSize": "17px", "google": ["Frank Ruhl Libre", "David Libre"] }, "style": { "radius": "sharp", "shadow": "flat", "accent": "solid", "buttons": "outline" }, "background": { "kind": "lines", "angle": 135 }, "chrome": { "menuHover": "underline" } }\n```\n\nוהעור:\n```css\n.site-header { border-bottom: 3px double var(--color-border); }\n.hero h1 { font-size: 3rem; }\n```\n\n```js\n(function(){ document.addEventListener("DOMContentLoaded", function(){}); })();\n```\n\nתהנו! אם תרצו שינוי, רק תגידו.';
@@ -131,6 +149,22 @@ check('a reply with nothing usable throws a plain error', (() => { try { theme.e
 check('a fallback name is used when the reply has none', theme.extractThemeReply('```css\n.a{}\n```', 'מהתיאור').name === 'מהתיאור');
 check('zero-width characters (chat copy artifacts) are stripped before parsing',
   theme.extractThemeJson('﻿```json\n{"colors":{"primary":"#abc"}}\n```').colors.primary === '#abc');
+
+// the bent dialect (v2.26) — one document, exact round trip
+const dialect = require('../src/bentml/theme-dialect');
+const bentDoc = dialect.serializeTheme({ name: 'פריז', overrides: t1.overrides, canvas: '<bent-hero id="h"><bent-heading level="1">פריז</bent-heading></bent-hero>\n<bent-columns id="r" ratio="2:1" width="wide"><bent-col><bent-card id="c" /></bent-col><bent-col><bent-form id="f" /></bent-col></bent-columns>' });
+check('serializeTheme writes every section as a tag, css/js inside style/script, the bench inside bent-canvas',
+  /<bent-colors primary="#7c2d12"/.test(bentDoc) && /<bent-fonts [^>]*google="Frank Ruhl Libre, David Libre"/.test(bentDoc) && /<bent-skin>\s*<style>/.test(bentDoc) && /<bent-effect>[\s\S]*<script>/.test(bentDoc) && /<bent-canvas>[\s\S]*<bent-columns id="r" ratio="2:1" width="wide">/.test(bentDoc));
+const tb = theme.extractThemeReply('בבקשה:\n```html\n' + bentDoc + '\n```\nתהנו');
+check('a <bent-theme> reply (fenced, with prose) → the same theme back, marked bent, with its specimen',
+  tb.parts.bent === true && tb.name === 'פריז' && JSON.stringify(tb.overrides.colors) === JSON.stringify(t1.overrides.colors) && JSON.stringify(tb.overrides.fonts) === JSON.stringify(t1.overrides.fonts) &&
+  JSON.stringify(tb.overrides.style) === JSON.stringify(t1.overrides.style) && tb.overrides.background.kind === 'lines' && tb.overrides.background.angle === 135 && tb.overrides.chrome.menuHover === 'underline' &&
+  tb.overrides.skin.css === t1.overrides.skin.css && tb.overrides.effects.js === t1.overrides.effects.js && /<bent-columns id="r"/.test(tb.specimen));
+check('serialize(parse(doc)) is byte-identical (a stable file format)', dialect.serializeTheme({ name: tb.name, overrides: tb.overrides, canvas: tb.specimen }) === bentDoc);
+check('single-quoted and camelCase attributes parse too', dialect.parseTheme("<bent-theme name='x'><bent-fonts family='\"Heebo\", sans-serif' headingFamily='Suez One' /><bent-chrome headerGlass='true' /></bent-theme>").overrides.fonts.headingFamily === 'Suez One' && dialect.parseTheme("<bent-theme><bent-chrome header-glass='yes' /></bent-theme>").overrides.chrome.headerGlass === true);
+check('a bent reply whose effect does not compile is refused', (() => { try { theme.extractThemeReply('<bent-theme><bent-effect><script>oops(</script></bent-effect></bent-theme>'); return false; } catch (e) { return /לא מתקמפל/.test(e.message); } })());
+check('an empty <bent-theme> is refused with a plain error', (() => { try { theme.extractThemeReply('<bent-theme name="x"></bent-theme>'); return false; } catch (e) { return /ריק/.test(e.message); } })());
+check('a bent document is a package for the import doors, canvas included', theme.parseThemePackage(bentDoc).format === 'tapuz-theme' && /<bent-form/.test(theme.parseThemePackage(bentDoc).canvas));
 
 // the import doors
 check('parseThemePackage: a package object passes through', theme.parseThemePackage({ format: 'tapuz-theme', version: 1, overrides: {} }).format === 'tapuz-theme');
@@ -331,7 +365,7 @@ function waitUp(tries = 40) {
     check('append-source into a cell lands the pasted module in that cell', cellPaste.json.modules.find((m) => m.id === rowMod.id).columns[4].map((x) => x.type).join('+') === 'card+form');
     const rowFrame = await req('GET', '/admin/theme/preview/' + pv.json.id + '?canvas=1', { cookie });
     check('the row renders as a columns block with five .col cells, each holding its module',
-      rowFrame.status === 200 && (rowFrame.text.match(/<div class="col">/g) || []).length >= 5 && /class="columns"[^>]*>(?:\s*<div class="col"><div class="card bent-card)/.test(rowFrame.text));
+      rowFrame.status === 200 && (rowFrame.text.match(/<div class="col">/g) || []).length >= 5 && /class="columns cols-n-5[^"]*"[^>]*>(?:\s*<div class="col"><div class="card bent-card)/.test(rowFrame.text));
     const rmInCell = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'remove', id: filled.columns[0][0].id } });
     check('remove reaches inside a cell', rmInCell.json.modules.find((m) => m.id === rowMod.id).columns[0].length === 0);
     const rowCap = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'add-row', count: 40 } });
@@ -339,11 +373,44 @@ function waitUp(tries = 40) {
     const badCell = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'add-module', type: 'card', rowId: rowMod.id, col: 9 } });
     check('a cell that does not exist → 400', badCell.status === 400);
     check('the studio page offers the row control (2–6 columns)', /th-bench-row/.test(page.text) && /th-bench-cols/.test(page.text) && /value="6"/.test(page.text));
+    // row settings (v2.26): ratio per cell, width, gap, valign, collapse, cells
+    const rowSet = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'set-row', id: rowMod.id, ratio: '2:1:1:1:1', width: 'wide', gap: 'lg', valign: 'stretch', collapse: 'never' } });
+    const rowNow = rowSet.json.modules.find((m) => m.id === rowMod.id);
+    check('set-row stores ratio/width/gap/valign/collapse on the row', rowSet.status === 200 && rowNow.ratio === '2:1:1:1:1' && rowNow.width === 'wide' && rowNow.gap === 'lg' && rowNow.valign === 'stretch' && rowNow.collapse === 'never');
+    const badRatio = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'set-row', id: rowMod.id, ratio: '2:1' } });
+    check('a ratio with the wrong number of parts → 400 naming the count', badRatio.status === 400 && /5 חלקים/.test(badRatio.json.error));
+    const rowFrame2 = await req('GET', '/admin/theme/preview/' + pv.json.id + '?canvas=1', { cookie });
+    check('the bench renders the row with its classes and fractions', /class="columns cols-n-5 cols-ratio gap-lg collapse-never valign-stretch cols-wide"/.test(rowFrame2.text) && /--cols:2fr 1fr 1fr 1fr 1fr/.test(rowFrame2.text));
+    check('the bench is a BenTML document on disk (config/theme-canvas.bent), the row as <bent-columns …>',
+      fs.existsSync(path.join(ROOT, 'config', 'theme-canvas.bent')) && /<bent-columns id="[^"]+" [^>]*ratio="2:1:1:1:1"[^>]*width="wide"/.test(fs.readFileSync(path.join(ROOT, 'config', 'theme-canvas.bent'), 'utf8')) && !fs.existsSync(path.join(ROOT, 'config', 'theme-canvas.json')));
+    check('GET canvas returns the source, the row enums and the cell cap', typeof rowSet.json.source === 'string' && /<bent-columns/.test(rowSet.json.source) && (await req('GET', '/admin/api/theme/canvas', { cookie })).json.maxCols === 6);
+    const shrink = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'set-row', id: rowMod.id, cells: 3 } });
+    check('shrinking past a full cell is refused', shrink.status === 400 && /לצמצם/.test(shrink.json.error));
     const cleared = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'clear' } });
     check('clear → a canvas of nothing again', cleared.json.count === 0);
     check('the bench never became a site page', !(await req('GET', '/admin/api/theme', { cookie })).text.includes('__theme-canvas') && !fs.existsSync(path.join(ROOT, 'public', '__theme-canvas.html')));
-    check('the bench lives beside the theme, not inside it (config/theme-canvas.json, not in overrides)',
-      fs.existsSync(path.join(ROOT, 'config', 'theme-canvas.json')) && !('canvas' in (await req('GET', '/admin/api/theme', { cookie })).json.overrides));
+    check('the bench lives beside the theme, not inside it (config/theme-canvas.bent, not in overrides)',
+      fs.existsSync(path.join(ROOT, 'config', 'theme-canvas.bent')) && !('canvas' in (await req('GET', '/admin/api/theme', { cookie })).json.overrides));
+
+    // ── 8. the .bent format end to end: a bent reply with a canvas → preview, library, bench, export ──
+    const pvBent = await req('POST', '/admin/api/theme/preview', { cookie, body: { reply: '```html\n' + bentDoc + '\n```', bench: true } });
+    check('POST preview with a bent reply carrying a canvas → the candidate brings its own bench',
+      pvBent.status === 200 && pvBent.json.ok && pvBent.json.name === 'פריז' && pvBent.json.benchModules === 3);
+    const frameBent = await req('GET', '/admin/theme/preview/' + pvBent.json.id + '?canvas=1', { cookie });
+    check('the candidate\'s own bench renders in its theme, saved nowhere', /class="columns cols-n-2 cols-ratio cols-wide"/.test(frameBent.text) && /class="bent-form/.test(frameBent.text) && (await req('GET', '/admin/api/theme/canvas', { cookie })).json.count === 0);
+    const pasteBent = await req('POST', '/admin/api/theme/design/paste', { cookie, body: { reply: bentDoc, bench: true } });
+    check('design/paste with bench:true → library entry (bent) AND the bench replaced by the AI\'s canvas',
+      pasteBent.status === 200 && pasteBent.json.parts.bent === true && pasteBent.json.hasSpecimen === true && pasteBent.json.benchCount === 3 && (await req('GET', '/admin/api/theme/canvas', { cookie })).json.count === 3);
+    const libBent = await req('GET', '/admin/api/theme/library/export.bent?id=' + pasteBent.json.id, { cookie });
+    check('GET library/export.bent → the entry as a .bent document with its canvas', libBent.status === 200 && /attachment; filename="tapuz-theme-[0-9-]+\.bent"/.test(libBent.headers['content-disposition'] || '') && /<bent-theme name="פריז"/.test(libBent.text) && /<bent-canvas>/.test(libBent.text));
+    const liveBent = await req('GET', '/admin/api/theme/export.bent', { cookie });
+    check('GET export.bent → the live theme as .bent, the studio bench inside bent-canvas', liveBent.status === 200 && /<bent-theme /.test(liveBent.text) && /<bent-canvas>[\s\S]*<bent-form/.test(liveBent.text));
+    check('export.bent?canvas=0 leaves the bench out', !/<bent-canvas>/.test((await req('GET', '/admin/api/theme/export.bent?canvas=0', { cookie })).text));
+    const impBent = await req('POST', '/admin/api/theme/import', { cookie, body: { text: 'From a friend:\n' + liveBent.text.replace('name="', 'name="מיובא ') } });
+    check('POST import with a .bent (prose around it) → applied, bench filled from its canvas', impBent.status === 200 && impBent.json.ok && impBent.json.benchCount === 3);
+    const libImpBent = await req('POST', '/admin/api/theme/library/import', { cookie, body: { text: liveBent.text } });
+    check('POST library/import with a .bent → an entry that keeps its canvas', libImpBent.status === 200 && /<bent-canvas>/.test((await req('GET', '/admin/api/theme/library/export.bent?id=' + libImpBent.json.id, { cookie })).text));
+    await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'clear' } });
   } finally {
     child.kill();
   }

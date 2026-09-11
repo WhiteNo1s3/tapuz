@@ -687,11 +687,31 @@ function pickSections(obj) {
  *   ```json  → the knobs (or a full tapuz-theme package)
  *   ```css   → the skin (every css fence, joined)
  *   ```js    → the effect (every js fence, joined)
- * Any of the three may be missing; prose around them is ignored. Returns
- * { name, overrides, parts } or throws a plain-language error.
+ *   ```html  → the specimen: BenTML for the bench (v2.26), returned apart
+ * Any of the four may be missing; prose around them is ignored. Returns
+ * { name, overrides, specimen, parts } or throws a plain-language error.
  */
 function extractThemeReply(reply, fallbackName) {
   const text = String(reply || '');
+  // v2.26: a <bent-theme> document (the BenTML theme dialect) is THE format —
+  // one fence, sections as tags, css/js as <style>/<script>, the bench as
+  // <bent-canvas>. The JSON path below stays for older replies and files.
+  const dialect = require('./bentml/theme-dialect');
+  if (dialect.isThemeBent(text)) {
+    const t = dialect.parseTheme(text);
+    const overrides = pickSections(t.overrides);
+    if (!Object.keys(overrides).length && !t.canvas) throw new Error('מסמך ה-<bent-theme> ריק — אין בו אף מקטע (colors/fonts/style/…) ולא קנבס');
+    const jsErr = checkEffectJs(overrides.effects && overrides.effects.js);
+    if (jsErr) throw new Error('ה-JS של האפקט לא מתקמפל: ' + jsErr + ' — בקשו מהצ׳אט לתקן ולהחזיר את המסמך מחדש');
+    const cssErr = checkCss(overrides.skin && overrides.skin.css);
+    if (cssErr) throw new Error(cssErr + ' — בקשו מהצ׳אט לתקן');
+    return {
+      name: t.name || String(fallbackName || '').trim().slice(0, 120) || 'ערכה מה-AI',
+      overrides,
+      specimen: t.canvas,
+      parts: { bent: true, json: false, cssChars: (overrides.skin && overrides.skin.css || '').length, jsChars: (overrides.effects && overrides.effects.js || '').length, specimenChars: t.canvas.length }
+    };
+  }
   const json = extractThemeJson(text);
   let name = '';
   let overrides = {};
@@ -706,6 +726,10 @@ function extractThemeReply(reply, fallbackName) {
   }
   const cssFences = allFences(text, ['css']);
   const jsFences = allFences(text, ['js', 'javascript']);
+  // the SPECIMEN (v2.26): an html/pzn fence of BenTML — the bench the model
+  // composed to show its theme off. Kept OUTSIDE overrides: the bench is
+  // beside the theme, never inside it (theme-canvas.js).
+  const specimen = allFences(text, ['html', 'pzn', 'bentml']).find((f) => /<bent-[a-z]/i.test(f)) || '';
   // a reply that skipped the fences and answered with bare <style>/<script>
   if (!cssFences.length && !jsFences.length && !json) {
     const parts = extractEffectParts(text);
@@ -714,7 +738,7 @@ function extractThemeReply(reply, fallbackName) {
   }
   if (cssFences.length) overrides.skin = { ...(overrides.skin || {}), css: cssFences.join('\n\n') };
   if (jsFences.length) overrides.effects = { ...(overrides.effects || {}), js: jsFences.join('\n\n') };
-  if (!Object.keys(overrides).length) {
+  if (!Object.keys(overrides).length && !specimen) {
     throw new Error('לא נמצאה ערכת נושא בתשובה — צריך fence של json (ההגדרות) ו/או css (העור). ודאו שהעתקתם את כל התשובה, ושביקשתם אותה בצ׳אט חדש (FRESH)');
   }
   const jsErr = checkEffectJs(overrides.effects && overrides.effects.js);
@@ -725,10 +749,12 @@ function extractThemeReply(reply, fallbackName) {
   return {
     name,
     overrides,
+    specimen,
     parts: {
       json: !!json,
       cssChars: (overrides.skin && overrides.skin.css || '').length,
-      jsChars: (overrides.effects && overrides.effects.js || '').length
+      jsChars: (overrides.effects && overrides.effects.js || '').length,
+      specimenChars: specimen.length
     }
   };
 }
@@ -780,6 +806,27 @@ function saveThemeSettings(payload) {
 const THEME_PACKAGE_FORMAT = 'tapuz-theme';
 const THEME_PACKAGE_VERSION = 2;
 
+/** The current theme as a `.bent` document (v2.26) — with the bench when
+ *  asked, so a shared theme carries the specimen that shows it off. */
+function exportThemeBent(name, opts = {}) {
+  const canvas = opts.withCanvas === false ? '' : (() => { try { return require('./theme-canvas').loadSource(); } catch (e) { return ''; } })();
+  return require('./bentml/theme-dialect').serializeTheme({
+    name: String(name || '').trim().slice(0, 120) || 'ערכת נושא מותאמת',
+    overrides: loadOverrides(),
+    canvas: canvas && /<bent-[a-z]/i.test(canvas) ? benchBody(canvas) : ''
+  });
+}
+
+/** The <body> of a bench document as a fragment for <bent-canvas>. */
+function benchBody(source) {
+  const m = String(source || '').match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  const inner = (m ? m[1] : String(source || '')).trim();
+  // drop the common indentation the serializer added
+  const lines = inner.split('\n');
+  const indent = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^\s*/)[0].length));
+  return lines.map((l) => l.slice(Number.isFinite(indent) ? indent : 0)).join('\n');
+}
+
 /** The current theme as a portable, versioned, self-describing package. */
 function exportThemePackage(name) {
   return {
@@ -802,6 +849,10 @@ function parseThemePackage(input) {
   if (input && typeof input === 'object') return input;
   const text = String(input == null ? '' : input);
   if (!text.trim()) throw new Error('קובץ ערכת הנושא ריק');
+  if (require('./bentml/theme-dialect').isThemeBent(text)) {
+    const t = extractThemeReply(text);
+    return { format: THEME_PACKAGE_FORMAT, version: THEME_PACKAGE_VERSION, name: t.name, exportedAt: new Date().toISOString(), overrides: t.overrides, canvas: t.specimen };
+  }
   const json = extractThemeJson(text);
   const hasFences = allFences(text, ['css', 'js', 'javascript']).length > 0;
   if (json && json.format === THEME_PACKAGE_FORMAT && !hasFences) return json;
@@ -876,6 +927,8 @@ module.exports = {
   THEME_PACKAGE_FORMAT,
   THEME_PACKAGE_VERSION,
   exportThemePackage,
+  exportThemeBent,
+  benchBody,
   parseThemePackage,
   validateThemePackage,
   importThemePackage

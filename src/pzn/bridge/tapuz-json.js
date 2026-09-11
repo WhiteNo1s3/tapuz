@@ -168,7 +168,9 @@ function blockToModule(block) {
       return createModule('embed', baseOpts(block, pickProps(data, ['url'])));
 
     case 'columns': {
-      const props = pickProps(data, ['gap', 'collapse', 'valign']);
+      // width (v2.26) is the ROW's breakout (content|wide|full); a col's own
+      // width prop below is the cell's share — two different knobs
+      const props = pickProps(data, ['gap', 'collapse', 'valign', 'width']);
       if (data.ratio !== undefined) {
         props.ratio = Array.isArray(data.ratio) ? data.ratio.join(':') : String(data.ratio);
       }
@@ -636,7 +638,7 @@ function moduleToBlock(node) {
       return finishBlock(node, 'embed', pickData(props, ['url']));
 
     case 'columns': {
-      const data = pickData(props, ['gap', 'collapse', 'valign', 'ratio']);
+      const data = pickData(props, ['gap', 'collapse', 'valign', 'ratio', 'width']);
       data.columns = (node.children || [])
         .filter((c) => c.name === 'col')
         .map((c) => {

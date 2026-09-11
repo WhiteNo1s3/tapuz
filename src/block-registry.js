@@ -541,7 +541,7 @@ const BLOCK_REGISTRY = [
     category: 'מבנה',
     bodyClass: 'blocks',
     childrenOf: null,
-    hintHe: '2–4 טורים זה לצד זה',
+    hintHe: '2–6 טורים זה לצד זה',
     childrenKey: 'columns',
     params: [
       {
@@ -561,6 +561,13 @@ const BLOCK_REGISTRY = [
         name: 'valign', labelHe: 'יישור אנכי', type: 'enum',
         enum: ['top', 'center', 'bottom', 'stretch'], default: 'top',
         hint: 'stretch = כרטיסים בגובה אחיד'
+      },
+      {
+        // v2.26 — a row can break out of the content column (Elementor's
+        // "stretch section"): wide = up to 1400px centered, full = the viewport
+        name: 'width', labelHe: 'רוחב השורה', type: 'enum',
+        enum: ['content', 'wide', 'full'], default: 'content', omitDefault: true,
+        hint: 'content = רוחב התוכן · wide = עד 1400px · full = כל רוחב המסך'
       }
     ],
     textField: null,

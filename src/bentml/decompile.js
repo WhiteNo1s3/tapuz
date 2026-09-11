@@ -164,6 +164,7 @@ function decompileBlock(block, indent) {
       if (d.gap && d.gap !== 'md') params.push(`gap: ${d.gap}`);
       if (d.collapse && d.collapse !== 'md') params.push(`collapse: ${d.collapse}`);
       if (d.valign && d.valign !== 'top') params.push(`valign: ${d.valign}`);
+      if (d.width && d.width !== 'content') params.push(`width: ${d.width}`);
       if (d.ratio) params.push(`ratio: ${q(String(d.ratio))}`);
       uni(params, d, idParams);
       let colBlocks = d.columns || [];

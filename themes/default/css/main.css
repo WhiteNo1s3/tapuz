@@ -195,12 +195,53 @@ p { margin-bottom: 1.1rem; }
 }
 .columns.cols-ratio > .col { min-width: 0; }
 
+/* ── Row settings (v2.26) — gap / valign / width are the ROW's registry
+   params (block-registry.js 'columns'), emitted as classes by the renderer.
+   width=wide/full breaks the row out of the content column, the classic
+   "stretch section": centered, never wider than the viewport. */
+.columns.gap-none { gap: 0; }
+.columns.gap-sm { gap: 0.75rem; --col-gap: 0.75rem; }
+.columns.gap-lg { gap: 2.75rem; --col-gap: 2.75rem; }
+.columns.valign-center { align-items: center; }
+.columns.valign-bottom { align-items: flex-end; }
+.columns.valign-stretch { align-items: stretch; }
+.columns.valign-stretch > .col > .card,
+.columns.valign-stretch > .col > .bent-card { height: 100%; box-sizing: border-box; }
+.columns.cols-wide {
+  width: min(1400px, calc(100vw - 2rem));
+  margin-inline: calc(50% - min(700px, 50vw - 1rem));
+}
+.columns.cols-full {
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  padding-inline: 1rem;
+  box-sizing: border-box;
+}
+
+/* ── Responsive rows (v2.26) — a row behaves like a site, not a cramped
+   strip of cards: five or six cells WRAP to a 3-up grid on a tablet, four
+   cells to 2-up, and every row stacks at its collapse point
+   (collapse=sm 640px · md 768px, the default · lg 1024px · never). */
+@media (max-width: 1024px) {
+  .columns.cols-n-5:not(.cols-ratio),
+  .columns.cols-n-6:not(.cols-ratio) { flex-wrap: wrap; }
+  .columns.cols-n-5:not(.cols-ratio) > .col,
+  .columns.cols-n-6:not(.cols-ratio) > .col { flex: 1 1 calc(33.333% - 1.75rem); }
+  .columns.cols-n-4:not(.cols-ratio) { flex-wrap: wrap; }
+  .columns.cols-n-4:not(.cols-ratio) > .col { flex: 1 1 calc(50% - 1.75rem); }
+  .columns.collapse-lg { flex-direction: column; gap: 1.25rem; }
+  .columns.collapse-lg > .col { flex: 1 1 auto; }
+  .columns.collapse-lg.cols-ratio { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .columns:not(.collapse-sm):not(.collapse-never) { flex-direction: column; gap: 1.25rem; }
+  .columns:not(.collapse-sm):not(.collapse-never) > .col { flex: 1 1 auto; }
+  .columns.cols-ratio:not(.collapse-sm):not(.collapse-never) { grid-template-columns: 1fr; }
+}
 @media (max-width: 640px) {
-  .columns {
-    flex-direction: column;
-    gap: 1.25rem;
-  }
-  .columns.cols-ratio { grid-template-columns: 1fr; }
+  .columns.collapse-sm { flex-direction: column; gap: 1.25rem; }
+  .columns.collapse-sm > .col { flex: 1 1 auto; }
+  .columns.collapse-sm.cols-ratio { grid-template-columns: 1fr; }
 }
 
 /* ===== Features ===== */

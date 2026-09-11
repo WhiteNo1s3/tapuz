@@ -82,6 +82,30 @@ router.get('/admin/api/theme/export', (req, res) => {
   }
 });
 
+// v2.26 — the `.bent` theme document is THE format: what is exported, shared
+// and asked of a chat. The JSON package above stays readable and downloadable.
+router.get('/admin/api/theme/export.bent', (req, res) => {
+  try {
+    const bent = require('../theme').exportThemeBent((loadConfig().title || '') + ' — ערכת נושא', { withCanvas: String(req.query.canvas || '1') !== '0' });
+    const filename = 'tapuz-theme-' + new Date().toISOString().slice(0, 10) + '.bent';
+    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.type('text/html; charset=utf-8').send(bent);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.get('/admin/api/theme/library/export.bent', (req, res) => {
+  try {
+    const bent = require('../theme-library').exportThemeBent(String(req.query.id || ''));
+    const filename = 'tapuz-theme-' + new Date().toISOString().slice(0, 10) + '.bent';
+    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+    res.type('text/html; charset=utf-8').send(bent);
+  } catch (e) {
+    res.status(404).json({ ok: false, error: e.message });
+  }
+});
+
 /** What an import door received: the package object, or the raw pasted
  *  text (v2.24 — the tolerant path: fences, chat prose, a bare theme JSON). */
 function packageFromBody(body) {
@@ -93,9 +117,14 @@ function packageFromBody(body) {
 
 router.post('/admin/api/theme/import', (req, res) => {
   try {
-    const overrides = require('../theme').importThemePackage(packageFromBody(req.body));
+    const pkg = packageFromBody(req.body);
+    const overrides = require('../theme').importThemePackage(pkg);
+    let benchCount = null;
+    if (pkg && pkg.canvas && (req.body || {}).bench !== false) {
+      try { benchCount = require('../theme-canvas').apply('replace-source', pkg.canvas).count; } catch (e) { benchCount = null; }
+    }
     const rebuildError = rebuildSite('theme import');
-    res.json({ ok: true, rebuildError, overrides });
+    res.json({ ok: true, rebuildError, overrides, benchCount });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -308,7 +337,15 @@ router.post('/admin/api/theme/design/paste', (req, res) => {
     const themeLib = require('../theme');
     const found = themeLib.extractThemeReply(String(b.reply || ''), String(b.name || ''));
     const lib = require('../theme-library');
-    const entry = lib.saveAiTheme(found.name, found.overrides);
+    const entry = lib.saveAiTheme(found.name, found.overrides, found.specimen);
+    // the model's bench (v2.26) — onto the studio's bench when the owner
+    // ticked "take the canvas too" (the default when the bench is empty)
+    let benchCount = null;
+    const wantBench = b.bench === true || b.bench === 'true' || b.bench === 1;
+    if (found.specimen && wantBench) {
+      try { benchCount = require('../theme-canvas').apply('replace-source', found.specimen).count; }
+      catch (e) { return res.status(400).json({ ok: false, error: 'הערכה נקראה, אבל הקנבס שבה לא מתקמפל: ' + e.message }); }
+    }
     let applied = false;
     let rebuildError = '';
     let backedUp = false;
@@ -318,8 +355,8 @@ router.post('/admin/api/theme/design/paste', (req, res) => {
       backedUp = !!result.backedUp;
       rebuildError = rebuildSite('ai theme apply');
     }
-    res.json({ ok: true, id: entry.id, name: entry.name, applied, backedUp, rebuildError, parts: found.parts,
-      sections: Object.keys(found.overrides) });
+    res.json({ ok: true, id: entry.id, name: entry.name, applied, backedUp, rebuildError, parts: found.parts, benchCount,
+      hasSpecimen: !!found.specimen, sections: Object.keys(found.overrides) });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -332,8 +369,8 @@ router.post('/admin/api/theme/design/paste', (req, res) => {
 router.get('/admin/api/theme/canvas', (req, res) => {
   try {
     const canvas = require('../theme-canvas');
-    const { blocks } = canvas.loadCanvas();
-    res.json({ ok: true, count: canvas.countModules(blocks), modules: canvas.summarize(blocks), palette: canvas.palette() });
+    const { blocks, source } = canvas.loadCanvas();
+    res.json({ ok: true, count: canvas.countModules(blocks), modules: canvas.summarize(blocks), palette: canvas.palette(), source, rowEnums: canvas.ROW_ENUMS, maxCols: canvas.MAX_COLS });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -347,11 +384,12 @@ router.post('/admin/api/theme/canvas', (req, res) => {
     const target = b.rowId ? { rowId: String(b.rowId), col: Number(b.col) } : null;
     const arg = b.op === 'move' ? { id: b.id, dir: b.dir }
       : b.op === 'remove' ? b.id
-        : b.op === 'add-row' ? { count: b.count }
+        : b.op === 'set-row' ? { id: b.id, ratio: b.ratio, width: b.width, gap: b.gap, valign: b.valign, collapse: b.collapse, cells: b.cells }
+        : b.op === 'add-row' ? { count: b.count, ratio: b.ratio, width: b.width, gap: b.gap, valign: b.valign, collapse: b.collapse }
           : b.op === 'add-module' ? (target ? { type: b.type, rowId: target.rowId, col: target.col } : b.type)
             : (target ? { source: b.source, rowId: target.rowId, col: target.col } : b.source);
     const result = canvas.apply(String(b.op || ''), arg);
-    res.json({ ok: true, count: result.count, added: result.added, modules: result.modules, warnings: result.warnings });
+    res.json({ ok: true, count: result.count, added: result.added, modules: result.modules, warnings: result.warnings, source: result.source });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -364,9 +402,9 @@ router.post('/admin/api/theme/canvas', (req, res) => {
 const PREVIEWS = new Map();
 const PREVIEW_CAP = 40;
 
-function registerPreview(overrides) {
+function registerPreview(overrides, blocks) {
   const id = 'pv_' + crypto.randomBytes(6).toString('hex');
-  PREVIEWS.set(id, { overrides, at: Date.now() });
+  PREVIEWS.set(id, { overrides, blocks: Array.isArray(blocks) ? blocks : null, at: Date.now() });
   while (PREVIEWS.size > PREVIEW_CAP) PREVIEWS.delete(PREVIEWS.keys().next().value);
   return id;
 }
@@ -377,15 +415,20 @@ router.post('/admin/api/theme/preview', (req, res) => {
     const themeLib = require('../theme');
     let overrides;
     let name = '';
+    let blocks = null;
+    const canvasMod = require('../theme-canvas');
     if (b.libraryId) {
       const entry = require('../theme-library').getTheme(String(b.libraryId));
       if (!entry) return res.status(404).json({ ok: false, error: 'ערכת נושא לא נמצאה' });
       overrides = themeLib.mergeDeep(themeLib.DEFAULT_OVERRIDES, entry.overrides);
       name = entry.name;
+      if (entry.canvas && b.bench !== false) blocks = canvasMod.sourceToBlocks(entry.canvas);
     } else if (typeof b.reply === 'string' && b.reply.trim()) {
       const found = themeLib.extractThemeReply(b.reply, b.name);
       overrides = themeLib.mergeDeep(themeLib.DEFAULT_OVERRIDES, found.overrides);
       name = found.name;
+      // the model's own bench shows in the canvas, saved nowhere
+      if (found.specimen && b.bench !== false) blocks = canvasMod.sourceToBlocks(found.specimen);
     } else if (b.overrides && typeof b.overrides === 'object') {
       // the editor form: what a save would produce — the form's sections
       // merged ONTO the live theme (effects and anything else the form
@@ -396,8 +439,8 @@ router.post('/admin/api/theme/preview', (req, res) => {
     } else {
       overrides = themeLib.loadOverrides();
     }
-    const id = registerPreview(overrides);
-    res.json({ ok: true, id, name, fonts: themeLib.googleFontFamilies(overrides), hasEffect: !!(overrides.effects && String(overrides.effects.js || '').trim()) });
+    const id = registerPreview(overrides, blocks);
+    res.json({ ok: true, id, name, fonts: themeLib.googleFontFamilies(overrides), hasEffect: !!(overrides.effects && String(overrides.effects.js || '').trim()), benchModules: blocks ? canvasMod.countModules(blocks) : null });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -414,6 +457,8 @@ router.get('/admin/theme/preview/:id', (req, res) => {
     // the theme canvas (v2.25) — the bench, not a page: rendered inside the
     // theme's chrome like any page, but it lives in config, never in the site
     let page = String(req.query.canvas || '') === '1' ? require('../theme-canvas').canvasPage() : null;
+    // a candidate that brought its own bench (an AI reply, a library entry)
+    if (page && entry && entry.blocks) page = { ...page, blocks: entry.blocks };
     if (!page && wanted) page = getPageByFullPath(wanted);
     if (!page || page.status !== 'published') {
       page = null;
@@ -471,11 +516,12 @@ router.get('/admin/theme', (req, res) => {
         <textarea id="th-design-brief" rows="3" class="input mb" placeholder="למשל: חנות פרחים וינטג׳ פריזאית — פסטל, סריפים, תחושת נייר ישן, כפתורים במסגרת, תפריט עם קו תחתון עדין, ואפקט של עלי כותרת שנופלים אחרי העכבר"></textarea>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
           <label class="check-line" style="margin:0"><input type="checkbox" id="th-design-current"> התחילו מהערכה הנוכחית (לשפר אותה, לא מאפס)</label>
+          <label class="check-line" style="margin:0" title="ה-AI מחזיר גם קנבס (bent-canvas) — מודולים בשורות שמציגים את הערכה. מסומן = הם מחליפים את הבנץ׳"><input type="checkbox" id="th-design-bench" checked> לקבל גם את הקנבס שה-AI מציע</label>
           <span style="flex:1"></span>
           <button type="button" class="btn" id="th-design-prompt">🧠 צור פרומפט והעתק</button>
         </div>
         <label class="field-label">תשובת ה-AI (מהצ׳אט החדש) — הדביקו הכול, כמו שהיא</label>
-        <textarea id="th-design-reply" rows="5" dir="ltr" placeholder="json + css + js — פטפוט מסביב לא מפריע, אנחנו לוקחים רק את הערכה" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
+        <textarea id="th-design-reply" rows="5" dir="ltr" placeholder="<bent-theme> … </bent-theme> — פטפוט מסביב לא מפריע, אנחנו לוקחים רק את הערכה (גם JSON ישן מתקבל)" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
         <div class="row end" style="margin-bottom:4px">
           <span id="th-design-status" style="font-size:0.85rem;flex:1"></span>
           <button type="button" class="btn secondary" id="th-design-preview">👁 הצג בקנבס</button>
@@ -511,9 +557,10 @@ router.get('/admin/theme', (req, res) => {
             <button type="button" class="btn secondary" id="th-bench-row" title="שורה של תאים — מודולים זה לצד זה, כמו באלמנטור">▦ הוסף שורה</button>
             <button type="button" class="btn secondary" id="th-bench-showcase" title="כל המודולים של סיור הארגז, בלחיצה אחת">🎉 מלא בכל המודולים</button>
             <button type="button" class="btn secondary" id="th-bench-clear">🧹 רוקן</button>
+            <button type="button" class="btn secondary" id="th-bench-src" title="המקור של הקנבס — מסמך BenTML (config/theme-canvas.bent) — לעריכה ישירה">📝 מקור</button>
           </div>
           <div id="th-bench-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin-bottom:10px"></div>
-          <p class="lead" style="margin:0 0 8px;font-size:0.85rem">הקנבס הוא <strong>לא דף</strong> — הוא הספסל שעליו בונים את הערכה: מודולים שרוצים לראות בערכה, מכל מקום. הדביקו BenTML / ‎.pzn מהבונה, מהרולפליי של בונה-הדפים בצ׳אט שלכם, או מכל תשובת AI — אנחנו לוקחים רק את המודולים. הקנבס נשמר לצד הערכה, ונשאר כשמחליפים ערכה.</p>
+          <p class="lead" style="margin:0 0 8px;font-size:0.85rem">הקנבס הוא <strong>לא דף</strong> — הוא הספסל שעליו בונים את הערכה: מודולים שרוצים לראות בערכה, מכל מקום. הדביקו BenTML / ‎.pzn מהבונה, מהרולפליי של בונה-הדפים בצ׳אט שלכם, או מכל תשובת AI — אנחנו לוקחים רק את המודולים. הקנבס עצמו הוא מסמך BenTML (‎.bent) לצד הערכה — נשאר כשמחליפים ערכה, ונוסע עם הייצוא.</p>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
             <input id="th-bench-brief" placeholder="מה לבנות עם הרולפליי? למשל: דף מוצר עם גלריה, מחירון וטופס" style="flex:1;min-width:220px;padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px">
             <button type="button" class="btn secondary" id="th-bench-prompt" title="הפרומפט של בונה הדפים (משחק המודולים) — להדבקה בצ׳אט שלכם; את התשובה מדביקים למטה">🧠 פרומפט בונה-דפים</button>
@@ -697,10 +744,11 @@ router.get('/admin/theme', (req, res) => {
         <h3 class="sub-head">📦 ייצוא / ייבוא ערכת נושא</h3>
         <p class="lead">קובץ ניתן להעברה — ייצוא שומר את הערכה הנוכחית לקובץ; ייבוא מקבל קובץ כזה מאתר Tapuz אחר, או תשובת AI, או JSON גולמי — גם עם פטפוט מסביב. אנחנו לוקחים רק את הערכה.</p>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-          <a class="btn secondary" href="/admin/api/theme/export" download>⬇ ייצוא ערכת נושא</a>
-          <label class="btn secondary" style="cursor:pointer">📂 בחרו קובץ .json <input type="file" id="th-import-file" accept=".json,application/json,.txt,.md" style="display:none"></label>
+          <a class="btn" href="/admin/api/theme/export.bent" download title="הערכה כמסמך BenTML — כולל הקנבס">⬇ ייצוא ‎.bent</a>
+          <a class="btn secondary" href="/admin/api/theme/export" download title="הפורמט הישן (JSON) — עדיין נתמך">JSON</a>
+          <label class="btn secondary" style="cursor:pointer">📂 בחרו קובץ ‎.bent / .json <input type="file" id="th-import-file" accept=".bent,.pzn,.html,.json,application/json,.txt,.md" style="display:none"></label>
         </div>
-        <label class="field-label">או הדביקו כאן (JSON / תשובת AI)</label>
+        <label class="field-label">או הדביקו כאן (‎.bent / JSON / תשובת AI)</label>
         <textarea id="th-import-text" rows="4" dir="ltr" placeholder='{"format":"tapuz-theme", ...}' style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
         <div class="row end">
           <span id="th-import-status" style="font-size:0.85rem"></span>
