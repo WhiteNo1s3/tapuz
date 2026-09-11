@@ -3142,6 +3142,78 @@
           "content": true
         }
       }
+    },
+    "product": {
+      "tag": "bent-product",
+      "label": {
+        "he": "מוצר",
+        "en": "Product"
+      },
+      "category": "media",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": ""
+        },
+        "price": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "image": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        },
+        "url": {
+          "type": "url",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "products": {
+      "tag": "bent-products",
+      "label": {
+        "he": "רשת מוצרים",
+        "en": "Products"
+      },
+      "category": "media",
+      "container": true,
+      "accept": [
+        "product"
+      ],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "columns": {
+          "type": "integer",
+          "default": 3,
+          "optional": true
+        }
+      }
     }
   }
 }

@@ -1039,6 +1039,41 @@ const BLOCK_REGISTRY = [
     }
   },
   {
+    type: 'products',
+    keyword: 'PRODUCTS',
+    labelHe: 'רשת מוצרים',
+    icon: '₪',
+    category: 'תוכן',
+    bodyClass: 'blocks',
+    childrenOf: null,
+    hintHe: 'קטלוג — שם, מחיר, תמונה, קישור. בלי עגלה, בלי JS',
+    params: [
+      {
+        name: 'columns', bentmlParam: 'columns', labelHe: 'עמודות', type: 'integer',
+        min: 2, max: 4, default: 3, omitDefault: true
+      },
+      {
+        name: 'items', bentmlParam: null, labelHe: 'מוצרים', type: 'list',
+        itemFields: [
+          { name: 'title', labelHe: 'שם', type: 'string', required: true },
+          { name: 'price', labelHe: 'מחיר', type: 'string' },
+          { name: 'image', labelHe: 'תמונה', type: 'media' },
+          { name: 'url', labelHe: 'קישור', type: 'url' }
+        ],
+        hint: 'ב-BenTML: צאצאי PRODUCT'
+      }
+    ],
+    textField: null,
+    seed: {
+      columns: 3,
+      items: [
+        { title: 'מוצר ראשון', price: '₪99', image: '/demo/tile-1.svg', url: '/p/1' },
+        { title: 'מוצר שני', price: '₪149', image: '/demo/tile-2.svg', url: '/p/2' },
+        { title: 'מוצר שלישי', price: '₪79', image: '/demo/tile-3.svg', url: '/p/3' }
+      ]
+    }
+  },
+  {
     type: 'cards',
     keyword: 'CARDS',
     labelHe: 'רשת כרטיסים',

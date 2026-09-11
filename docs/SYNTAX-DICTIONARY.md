@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (55)
+## Modules (56)
 
 ### תוכן
 
@@ -663,6 +663,26 @@ Shape: `FORM(params) { nested modules }`
 
 ```bentml
 FORM {
+  …
+}
+```
+
+### תוכן
+
+#### `PRODUCTS` → `products`
+
+₪ **רשת מוצרים** — קטלוג — שם, מחיר, תמונה, קישור. בלי עגלה, בלי JS
+
+Shape: `PRODUCTS(params) { nested modules }`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `columns` | `columns` | integer |  | 3 |
+| `items` | `—` | list |  |  |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+PRODUCTS {
   …
 }
 ```

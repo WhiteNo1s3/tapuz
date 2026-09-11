@@ -2,6 +2,7 @@
 
 const { escapeHtml, escapeAttr, escapeCssUrl, safeHref } = require('../language/escape');
 const { renderHandle, renderSocial } = require('../social-html');
+const { renderProduct, renderProducts } = require('../products-html');
 
 /**
  * Module registry = type system of the page.
@@ -2341,6 +2342,51 @@ register({
       title: p.title, icon: p.icon, buttonText: p.cta, buttonUrl: p.url,
       backText: node.text || p.backText || ''
     }, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'product',
+  tag: 'bent-product',
+  category: 'media',
+  label: { he: 'מוצר', en: 'Product' },
+  icon: 'card',
+  container: false,
+  props: {
+    title: { type: 'string', default: '', label: { he: 'שם', en: 'Title' } },
+    price: { type: 'string', default: '', optional: true, label: { he: 'מחיר', en: 'Price' } },
+    image: { type: 'url', default: '', optional: true, label: { he: 'תמונה', en: 'Image' } },
+    url: { type: 'url', default: '', optional: true, label: { he: 'קישור', en: 'URL' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node) {
+    return renderProduct(node.props || {});
+  }
+});
+
+register({
+  name: 'products',
+  tag: 'bent-products',
+  category: 'media',
+  label: { he: 'רשת מוצרים', en: 'Products' },
+  icon: 'grid',
+  container: true,
+  accept: ['product'],
+  props: {
+    columns: { type: 'integer', default: 3, optional: true, label: { he: 'עמודות', en: 'Columns' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx, compileChild) {
+    const { id, cls } = attrsExtra(node);
+    const inner = (node.children || []).map((c) => {
+      if (c.name !== 'product') return compileChild(c, ctx);
+      return renderProduct(c.props || {});
+    }).join('');
+    return renderProducts(node.props || {}, inner, { idAttr: id, cls, dir: dirAttr(ctx) });
   }
 });
 

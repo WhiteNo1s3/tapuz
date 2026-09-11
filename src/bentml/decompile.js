@@ -448,6 +448,21 @@ function decompileBlock(block, indent) {
         .join('\n');
       return `${pad}FORM${paramList(params)} {\n${kids}\n${pad}}`;
     }
+    case 'products': {
+      const params = [];
+      if (d.columns != null && Number(d.columns) !== 3) params.push(`columns: ${Number(d.columns)}`);
+      uni(params, d, idParams);
+      const kids = (d.items || [])
+        .map((it) => {
+          const ps = [`title: ${q(it.title || '')}`];
+          if (it.price) ps.push(`price: ${q(it.price)}`);
+          if (it.image) ps.push(`image: ${q(it.image)}`);
+          if (it.url && it.url !== '#') ps.push(`url: ${q(it.url)}`);
+          return `${pad}  PRODUCT${paramList(ps)}`;
+        })
+        .join('\n');
+      return `${pad}PRODUCTS${paramList(params)} {\n${kids}\n${pad}}`;
+    }
     case 'cards': {
       const params = [];
       uni(params, d, idParams);

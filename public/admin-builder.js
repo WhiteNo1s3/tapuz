@@ -2558,6 +2558,25 @@
       return wrap;
     }
 
+    if (block.type === 'products') {
+      var prItems = d.items || [];
+      var prReal = prItems.length > 0;
+      wrap.innerHTML =
+        '<div class="preview-products" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">' +
+        (prReal ? prItems : [{ title: 'מוצר 1', price: '₪99' }, { title: 'מוצר 2', price: '₪149' }, { title: 'מוצר 3', price: '₪79' }]).map(function (it, i) {
+          return '<div class="preview-card">' +
+            (it.image
+              ? '<div class="preview-card-media" style="background-image:url(' + esc(it.image) + ');background-size:cover;background-position:center"></div>'
+              : '<div class="preview-card-media"></div>') +
+            '<div class="preview-card-title"' + (prReal ? ' data-inline-key="items.' + i + '.title"' : '') + '>' + esc(it.title || 'מוצר') + '</div>' +
+            (it.price ? '<div style="font-weight:700;color:#ea580c"' + (prReal ? ' data-inline-key="items.' + i + '.price"' : '') + '>' + esc(it.price) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '</div>';
+      if (prReal) wireInlineEditable(wrap, block);
+      return wrap;
+    }
+
     if (block.type === 'cards') {
       var cItems = d.items || [];
       // placeholders (no real items yet) stay untagged — there is no items.N

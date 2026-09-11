@@ -472,6 +472,22 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('form', data);
     }
+    case 'PRODUCTS': {
+      const items = (node.children || [])
+        .filter((c) => c.name === 'PRODUCT')
+        .map((c) => {
+          const cp = c.params || {};
+          const item = { title: cp.title || '' };
+          if (cp.price) item.price = cp.price;
+          if (cp.image) item.image = cp.image;
+          if (cp.url) item.url = cp.url;
+          return item;
+        });
+      const data = { items };
+      if (p.columns != null && Number(p.columns) !== 3) data.columns = Number(p.columns);
+      applyChrome(data, p);
+      return createBlock('products', data);
+    }
     case 'CARDS': {
       const items = (node.children || [])
         .filter((c) => c.name === 'MEDIACARD')
@@ -871,6 +887,7 @@ function buildBlock(node, warnings) {
     case 'EVENT':
     case 'CRUMB':
     case 'HANDLE':
+    case 'PRODUCT':
       throw new BentmlError('E104', `${node.name} cannot appear at this level`);
     default:
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });

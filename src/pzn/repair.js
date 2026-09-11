@@ -78,7 +78,9 @@ const ALIASES = {
   'google-map': 'map', 'map-embed': 'map',
   'call-to-action': 'cta', 'cta-section': 'cta',
   gap: 'spacer', space: 'spacer',
-  contact: 'contact-info', 'contact-details': 'contact-info'
+  contact: 'contact-info', 'contact-details': 'contact-info',
+  catalog: 'products', 'product-grid': 'products', 'product-list': 'products',
+  woocommerce: 'products', 'shop-loop': 'products'
 };
 
 /** Common model drift on PROP VALUES (v1.97): grok's demo — and any model

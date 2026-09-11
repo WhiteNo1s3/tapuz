@@ -297,6 +297,25 @@ const KEYWORDS = {
     children: ['HANDLE'],
     params: {}
   },
+  PRODUCTS: {
+    body: 'BLOCK-BODY',
+    jsonType: 'products',
+    children: ['PRODUCT'],
+    params: {
+      columns: { type: 'integer', default: 3 }
+    }
+  },
+  PRODUCT: {
+    body: 'NO-BODY',
+    childOnly: true,
+    parent: 'PRODUCTS',
+    params: {
+      title: { type: 'string', required: true },
+      price: { type: 'string' },
+      image: { type: 'string' },
+      url: { type: 'string' }
+    }
+  },
   HANDLE: {
     body: 'TEXT-BODY',
     childOnly: true,

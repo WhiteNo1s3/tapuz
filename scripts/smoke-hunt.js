@@ -147,6 +147,22 @@ const huntSwiper = huntBlocks(
 );
 check('hunt: Swiper → carousel',
   !!firstOf(huntSwiper, 'carousel') && firstOf(huntSwiper, 'carousel').data.items.length === 2);
+const huntBugSwiper = huntBlocks(
+  '<div class="swiper"><div class="swiper-wrapper">'
+  + '<div class="swiper-slide"><img src="/a.jpg" alt=""><h3>א</h3></div>'
+  + '<div class="swiper-slide"><img src="/b.jpg" alt=""><h3>ב</h3></div>'
+  + '</div><div class="swiper-pagination"></div></div>'
+);
+check('hunt: Swiper + pagination → carousel',
+  !!firstOf(huntBugSwiper, 'carousel') && firstOf(huntBugSwiper, 'carousel').data.items.length === 2);
+const huntProducts = huntBlocks(
+  '<div class="product-grid">'
+  + '<div class="product-item"><a href="/p/1"><img src="/k1.jpg" alt=""><h3>מחשב</h3><span class="price">₪100</span></a></div>'
+  + '<div class="product-item"><a href="/p/2"><img src="/k2.jpg" alt=""><h3>מסך</h3><span class="price">₪200</span></a></div>'
+  + '</div>'
+);
+check('hunt: product-grid → products',
+  !!firstOf(huntProducts, 'products') && firstOf(huntProducts, 'products').data.items.length === 2);
 
 const huntFaq = huntBlocks(
   '<section class="faq"><h3>Q1</h3><p>A1</p><h3>Q2</h3><p>A2</p></section>'
