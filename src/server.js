@@ -96,7 +96,13 @@ app.get('/tz-pixel.js', (req, res) => {
   try {
     const fsSync = require('fs');
     const p = require('path').join(__dirname, '..', 'public', 'tz-pixel.js');
-    if (fsSync.existsSync(p)) return res.sendFile(p);
+    // dotfiles:'allow' — sendFile defaults to dotfiles:'ignore', which answers
+    // 404 whenever ANY segment of the absolute path starts with a dot. A
+    // checkout under .claude/worktrees/<name>/ hits that; a normal checkout
+    // does not. The path is fixed and repo-owned (no user input), so allowing
+    // dot segments here is safe. Headers set above are kept (send only fills
+    // Content-Type / Cache-Control when they are not already set).
+    if (fsSync.existsSync(p)) return res.sendFile(p, { dotfiles: 'allow' });
   } catch (e) { /* */ }
   res.status(404).end('/* missing */');
 });
