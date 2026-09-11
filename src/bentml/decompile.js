@@ -1,6 +1,7 @@
 'use strict';
 
 const { isGeneratedBlockId } = require('../blocks');
+const { deriveSlug } = require('./parse');
 
 /**
  * decompile(page, blocks) → canonical BenTML
@@ -24,7 +25,7 @@ function decompile(page = {}, blocks = [], opts = {}) {
   lines.push('');
   lines.push('META {');
   lines.push(`  title: ${q(page.meta?.seoTitle || page.title || 'ללא כותרת')}`);
-  if (page.slug) lines.push(`  slug: ${q(page.slug)}`);
+  if (page.slug) lines.push(`  slug: ${q(deriveSlug(String(page.slug)))}`);
   if (page.direction && page.direction !== 'rtl') lines.push(`  direction: ${page.direction}`);
   if (page.theme && page.theme !== 'default') lines.push(`  theme: ${q(page.theme)}`);
   if (page.meta?.description) lines.push(`  description: ${q(page.meta.description)}`);

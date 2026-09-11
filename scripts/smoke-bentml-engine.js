@@ -131,6 +131,7 @@ const VOCAB_DATA = {
   cta: { title: 'קריאה', text: '', buttonText: 'לפרטים', url: '/x', variant: 'primary', tone: 'brand', align: 'start' },
   stats: { columns: 3, items: [{ value: '120', label: 'לקוחות' }] },
   logos: { items: [{ src: '/uploads/logo.svg', alt: 'לוגו' }] },
+  social: { items: [{ network: 'instagram', url: 'https://instagram.com/x', label: 'Instagram' }] },
   faq: { items: [{ question: 'כמה?', answer: 'חינם.' }] },
   'contact-info': { phone: '03-1234567', email: 'a@b.co' },
   banner: { text: 'הודעה', tone: 'brand', align: 'start' },

@@ -135,6 +135,7 @@ const EMPTY_PLACEHOLDER_DOC = fullDoc({ title: 'כותרת הדף', slug: 'my-pa
     // ── decompile — raw HTML input, no create, assets skipped (no network) ──
     const decompHtml = await req('POST', '/admin/api/pzn/decompile', { cookie, body: { html: RAW_HTML, assets: false } });
     check('decompile of raw HTML → real blocks, no page created (create not set)', decompHtml.status === 200 && decompHtml.json.ok && decompHtml.json.blocks > 0 && decompHtml.json.fullPath === null);
+    check('decompile API returns keyword BenTML', /^BENTML /.test(decompHtml.json.bentml || ''));
     check('decompile assets:false skips ingestion entirely', decompHtml.json.assets === null);
 
     // ── decompile — a BenTML-looking paste routes through the forgiving pipeline, not the HTML shredder ──

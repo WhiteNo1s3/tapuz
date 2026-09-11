@@ -102,7 +102,7 @@ function recordToolGap(toolGap) {
 router.post('/admin/api/pzn/decompile', async (req, res) => {
   try {
     const { url, html, title, slug, create, assets } = req.body || {};
-    const { decompileHtml, decompileUrl } = require('../pzn/decompile');
+    const { decompileHtml, decompileUrl, keywordBentml } = require('../pzn/decompile');
     let r;
     if (url && String(url).trim()) {
       r = await decompileUrl(String(url).trim(), { title, slug });
@@ -132,6 +132,7 @@ router.post('/admin/api/pzn/decompile', async (req, res) => {
           strategy: repaired ? 'bentml-repaired' : 'bentml',
           strategies: []
         };
+        r.bentml = keywordBentml(r.meta, r.blocks);
       } else {
         r = decompileHtml(html, { title, slug });
       }
@@ -155,11 +156,13 @@ router.post('/admin/api/pzn/decompile', async (req, res) => {
             direction: r.meta.dir, tags: [], meta: {}, blocks: r.blocks
           });
           r.source = pznApi.serialize(doc);
+          r.bentml = keywordBentml(r.meta, r.blocks);
         }
       } catch (e) {
         assetsReport = { found: 0, saved: 0, failed: [{ url: '*', reason: e.message }], skipped: 0 };
       }
     }
+    if (!r.bentml) r.bentml = keywordBentml(r.meta, r.blocks);
 
     let fullPath = null;
     if (create) {
@@ -179,6 +182,7 @@ router.post('/admin/api/pzn/decompile', async (req, res) => {
       ok: true,
       fullPath,
       source: r.source,
+      bentml: r.bentml || '',
       blocks: r.blocks.length,
       mapped: r.mapped,
       leftover: r.leftover,

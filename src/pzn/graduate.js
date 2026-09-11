@@ -126,7 +126,7 @@ function pickFromSrcset(set) {
 /** The true image URL of an <img>/<source> token's attributes. */
 function imageSrcOf(attrs) {
   const a = attrs || {};
-  const direct = attrOf(a, 'src', 'data-src', 'data-lazy-src', 'data-original', 'data-bg', 'data-image', 'data-url');
+  const direct = attrOf(a, 'src', 'data-src', 'data-lazy-src', 'data-original', 'data-bg', 'data-lazy-bg', 'data-image', 'data-url');
   let src = direct && !/^data:/i.test(direct) && direct !== 'about:blank' ? direct : '';
   if (!src) src = pickFromSrcset(attrOf(a, 'srcset', 'srcSet', 'data-srcset', 'data-src-set'));
   if (!src) src = direct; // a data: URL beats nothing
@@ -166,6 +166,8 @@ function classBgMap(html) {
 function bgOfAttrs(attrs, bgMap) {
   const inline = styleImageOf(attrs);
   if (inline) return inline;
+  const lazyBg = attrOf(attrs, 'data-lazy-bg', 'data-bg', 'data-background');
+  if (lazyBg && !/^data:/i.test(lazyBg)) return lazyBg.startsWith('//') ? 'https:' + lazyBg : lazyBg;
   if (!bgMap || !bgMap.size) return '';
   for (const cls of String((attrs || {}).class || '').split(/\s+/)) {
     if (cls && bgMap.has(cls)) return bgMap.get(cls);
@@ -217,9 +219,26 @@ function extractCard(tokens, from, to, bgMap) {
     if (!card.image && (tk.name === 'img' || tk.name === 'source')) {
       // real sites lazy-load: the true URL hides in data-src/srcset
       card.image = imageSrcOf(tk.attrs);
-    } else if (!card.title && HEADING.test(tk.name)) {
+    } else if (!card.title && (HEADING.test(tk.name)
+      || /(?:^|\s)(?:title|headline|arttitle|slot-?title|item-title|card-title|teaser-title)(?:\s|$)/i.test((tk.attrs && tk.attrs.class) || ''))) {
       const e = matchClose(tokens, j);
-      card.title = unescapeHtml(textOf(tokens, j + 1, e - 1)).slice(0, 200);
+      const title = unescapeHtml(textOf(tokens, j + 1, e - 1)).replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (title) card.title = title;
+      j = e - 1;
+    } else if (!card.excerpt && (tk.name === 'time' || /slot-?sub-?title|slotSubTitle/i.test((tk.attrs && tk.attrs.class) || ''))) {
+      const e = matchClose(tokens, j);
+      if (tk.name === 'time') {
+        const when = timeText(tokens, j, e, tk);
+        if (when) card.excerpt = when;
+      } else {
+        const sub = unescapeHtml(textOf(tokens, j + 1, e - 1)).replace(/\s+/g, ' ').trim().slice(0, 300);
+        if (sub) card.excerpt = sub;
+      }
+      j = e - 1;
+    } else if (!card.tag && /authorInfo|authorField|articleAuthor|author/i.test((tk.attrs && tk.attrs.class) || '')) {
+      const e = matchClose(tokens, j);
+      const who = unescapeHtml(textOf(tokens, j + 1, e - 1)).replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (who) card.tag = who;
       j = e - 1;
     } else if (!card.href && tk.name === 'a' && tk.attrs && tk.attrs.href) {
       card.href = tk.attrs.href;
@@ -236,7 +255,9 @@ function extractCard(tokens, from, to, bgMap) {
   if (!card.image && bgImage) card.image = bgImage;
   // a real card = a headline plus a picture or a destination, teaser-sized
   if (!card.title || !(card.image || card.href)) return null;
-  if (textOf(tokens, from, to).length > CARD_TEXT_CAP) return null;
+  const cap = /slotView|slot-view|post-item|tie-standard/i.test((root.attrs && root.attrs.class) || '')
+    ? 900 : CARD_TEXT_CAP;
+  if (textOf(tokens, from, to).length > cap) return null;
   const out = { title: card.title };
   if (card.image) out.image = card.image;
   if (card.tag) out.tag = card.tag;
@@ -303,6 +324,26 @@ function anchorCard(tokens, i, end, bgMap) {
  * After a sink level is built, ≥4 CONSECUTIVE short-label button blocks
  * collapse into one nav — the shape survives no matter how it was nested.
  */
+function isChromeTextBlock(b) {
+  if (!b || b.type !== 'text') return false;
+  const c = String((b.data && b.data.content) || '').trim();
+  if (!c) return true;
+  return /window\.|googletag|YITSiteWidgets|function\s*\(|^\s*if\s*\(\s*window/.test(c);
+}
+
+function isBylineTextBlock(b) {
+  if (!b || b.type !== 'text') return false;
+  const c = String((b.data && b.data.content) || '').replace(/\s+/g, ' ').trim();
+  if (!c || c.length > 48) return false;
+  if (/^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(c)) return true;
+  if (/\|$/.test(c)) return true;
+  return /^(?:ynet|[\u0590-\u05FFA-Za-z][\u0590-\u05FFA-Za-z.\s]{0,36})$/.test(c);
+}
+
+function isTeaserGlue(b) {
+  return isChromeTextBlock(b) || isBylineTextBlock(b);
+}
+
 function coalesceButtonRuns(blocks) {
   const out = [];
   let run = [];
@@ -334,6 +375,7 @@ function coalesceButtonRuns(blocks) {
   for (const b of blocks) {
     const label = b.type === 'button' ? String((b.data || {}).text || '').trim() : '';
     if (b.type === 'button' && label) run.push(b);
+    else if (run.length && isTeaserGlue(b)) continue;
     else { flush(); out.push(b); }
   }
   flush();
@@ -408,9 +450,13 @@ function collectLinkRun(tokens, i, to) {
 
 /** <form> children → form-module fields (skips submit/hidden controls). */
 function parseFormFields(tokens, i, end) {
+  return collectFormFields(tokens, i + 1, end - 1);
+}
+
+function collectFormFields(tokens, from, to) {
   const fields = [];
   let pendingLabel = '';
-  for (let j = i + 1; j < end - 1; j++) {
+  for (let j = from; j < to; j++) {
     const tk = tokens[j];
     if (tk.kind === 'open' && tk.name === 'label') {
       const lend = matchClose(tokens, j);
@@ -454,6 +500,57 @@ function parseFormFields(tokens, i, end) {
     }
   }
   return fields;
+}
+
+/**
+ * ASP.NET and many news CMSes wrap the WHOLE page in <form>. Hidden-only
+ * or page-sized forms must descend — dumping them as leftover html is how
+ * Globes lost 140KB of headlines. A small contact/search form still maps.
+ */
+function isPageForm(tokens, i, end, fields) {
+  let headings = 0;
+  let articles = 0;
+  let imgs = 0;
+  for (let j = i + 1; j < end - 1; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    if (HEADING.test(tk.name)) headings += 1;
+    if (tk.name === 'article' || tk.name === 'section') articles += 1;
+    if (tk.name === 'img') imgs += 1;
+  }
+  if (headings >= 3 || articles >= 2 || imgs >= 4) return true;
+  return fields.length === 0;
+}
+
+/** Consecutive sibling label/input/textarea/select → one form, or null. */
+function parseFieldRun(tokens, i, parentEnd) {
+  let j = i;
+  let last = i;
+  while (j < parentEnd) {
+    const tk = tokens[j];
+    if (tk.kind === 'text' && !String(tk.value || '').trim()) { j += 1; continue; }
+    if (tk.kind === 'open' && /^(label|input|textarea|select)$/.test(tk.name)) {
+      const e = matchClose(tokens, j);
+      if (e == null) break;
+      last = e;
+      j = e;
+      continue;
+    }
+    break;
+  }
+  const fields = collectFormFields(tokens, i, last);
+  if (!fields.length) return null;
+  return { fields, next: last };
+}
+
+/** <time> body, else datetime/dateTime/data-wcmdate — never leftover chrome. */
+function timeText(tokens, i, end, t) {
+  const body = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim();
+  if (body) return body;
+  const raw = (t.attrs && (t.attrs.datetime || t.attrs.dateTime || t.attrs['data-wcmdate'] || t.attrs['data-date'])) || '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw));
+  if (m) return `${Number(m[3])}.${Number(m[2])}.${m[1]}`;
+  return String(raw).trim();
 }
 
 /** <nav> anchors → nav-module items (wrapper ul/li dropped). */
@@ -638,6 +735,10 @@ function extractProcessItem(tokens, s, e, kind) {
 
 function collectProcessItems(tokens, from, to, kind, depth = 0) {
   const kids = [];
+  // Best nested-list candidate: an <ol> beats a <ul> (a hinted container's
+  // real sequence is the numbered list, not an intro bullet list), then more
+  // items beat fewer, then the first one seen wins.
+  let bestList = null;
   let j = from;
   while (j < to) {
     const tk = tokens[j];
@@ -647,12 +748,20 @@ function collectProcessItems(tokens, from, to, kind, depth = 0) {
       kids.push([j, e]);
     } else if (tk.name === 'ol' || tk.name === 'ul') {
       const inner = collectProcessItems(tokens, j + 1, e - 1, kind, depth);
-      if (inner && inner.length) return inner;
+      if (inner && inner.length) {
+        const ordered = tk.name === 'ol';
+        if (!bestList
+          || (ordered && !bestList.ordered)
+          || (ordered === bestList.ordered && inner.length > bestList.items.length)) {
+          bestList = { ordered, items: inner };
+        }
+      }
     } else if (CONTAINERS.has(tk.name)) {
       kids.push([j, e]);
     }
     j = e;
   }
+  if (bestList) return bestList.items;
   if (kids.length === 1 && depth < 3) {
     const [s, e] = kids[0];
     const inner = collectProcessItems(tokens, s + 1, e - 1, kind, depth + 1);
@@ -668,11 +777,13 @@ function collectProcessItems(tokens, from, to, kind, depth = 0) {
 
 /**
  * How-it-works / process steps. Class hint, or a rich <ol> (heading + body
- * per item) so a plain numbered list stays a list.
+ * per item) so a plain numbered list stays a list. Timeline-hinted containers
+ * refuse here so parseTimelineData (which runs after) can claim them.
  * @returns {{ items: object[] } | null}
  */
 function parseStepsData(tokens, i, end, t) {
   const hinted = looksLikeSteps(t);
+  if (!hinted && looksLikeTimeline(t)) return null;
   const isOl = t && t.name === 'ol';
   const items = collectProcessItems(tokens, i + 1, end - 1, 'steps');
   if (!items || items.length < 2) return null;
@@ -740,7 +851,7 @@ function hintHay(t) {
 // NOT bare `elementor-price` — that also matched `elementor-price-list`, a
 // restaurant/service menu, which is the pricelist module (gap-audit wave 3)
 const PRICING_CLASS = /\b(?:pricing|price-table|price-cards?|pricing-table|bent-pricing|elementor-price-table)\b/i;
-const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|owl-carousel|splide|keen-slider|glide|bent-carousel|carousel|slider)\b/i;
+const CAROUSEL_CLASS = /\b(?:swiper|slick[-_]?slider|tie-slick-slider|owl-carousel|splide|keen-slider|glide|bent-carousel|carousel|slider)\b/i;
 const FAQ_CLASS = /\b(?:faqs?|frequently-asked|bent-faq|faq-list|dsm-faq|stattic-faq|elementor-widget-faq|elementor-accordion)\b/i;
 const FAQ_ITEM_CLASS = /\b(?:faq-item|faq-entry|dsm-faq--faq-content|elementor-accordion-item|e-faq-item)\b/i;
 const FAQ_CONTENT_CLASS = /\b(?:dsm-faq--faq-content|faq-body|faq-answer|elementor-tab-content|elementor-accordion-content)\b/i;
@@ -748,7 +859,7 @@ const FAQ_TITLE_SKIP = /\b(?:dsm-faq--title)\b/i;
 const FAQ_LOOP_ITEM = /\be-loop-item\b/i;
 const TESTIMONIAL_CLASS = /\b(?:testimonial|review-card|bent-testimonial|elementor-testimonial)\b/i;
 const SOCIAL_CLASS = /\b(?:social-icons?|social-links?|share-icons?|share-links?|share-buttons?|elementor-social-icons(?:-wrapper)?|elementor-widget-social-icons|bent-social)\b/i;
-const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|bent-tabs|\btabs\b)\b/i;
+const TABS_CLASS = /\b(?:nav-tabs|nav-pills|tab-content|tab-pane|elementor-tabs|bent-tabs|is-flex-tabs|mag-box-filter|filter-links|\btabs\b)\b/i;
 const HERO_CLASS = /\b(?:hero|jumbotron|masthead|splash|bent-hero)\b/i;
 const CRUMBS_CLASS = /\b(?:breadcrumbs?|crumbs|bent-crumbs)\b/i;
 const STATS_CLASS = /\b(?:stats|counters?|metrics|kpis?|bent-stats|stats-row|numbers-row|stat-cells?)\b/i;
@@ -762,7 +873,7 @@ const TOC_CLASS = /\b(?:toc|table-of-contents|elementor-toc|elementor-widget-tab
 const AUTHOR_CLASS = /\b(?:author-box|post-author|about-author|about-the-author|author-bio|author-card|bent-author)\b/i;
 const COMPARE_CLASS = /\b(?:twentytwenty(?:-container)?|image-compare|before-after|beforeafter|ba-slider|compare-slider|bent-compare)\b/i;
 const FLIPBOX_CLASS = /\b(?:flip-box|flipbox|elementor-flip-box|elementor-widget-flip-box|flip-card|bent-flipbox)\b/i;
-const LOGOS_CLASS = /\b(?:logos?|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos)\b/i;
+const LOGOS_CLASS = /\b(?:logos?|logo-strip|logo-wall|logo-cloud|logos-strip|bent-logos|clients|brands|partners|customer-logos|logo-list)\b/i;
 const PRICE_RE = /([$€£₪]\s*\d[\d.,]*|\d[\d.,]*\s*[$€£₪]|\b\d[\d.,]{0,8}\s*(?:\/\s*)?(?:mo|yr|month|year|wk|שנה|חודש)\b)/i;
 const STAT_VALUE_RE = /([+]?\d[\d,.]{0,12}\s*[%+kKmMbB+]?)/;
 
@@ -1018,6 +1129,24 @@ function extractSlide(tokens, s, e, bgMap) {
   return out;
 }
 
+const SLIDE_CLASS = /\b(?:swiper-slide|slick-slide|splide__slide|glide__slide|owl-item|tie-slide-\d+|slide)\b/i;
+
+function collectSlides(tokens, from, to, bgMap) {
+  const items = [];
+  for (let j = from; j < to; j++) {
+    const tk = tokens[j];
+    if (tk.kind !== 'open') continue;
+    const close = matchClose(tokens, j);
+    if (close == null) continue;
+    if (SLIDE_CLASS.test(classHay(tk))) {
+      const slide = extractSlide(tokens, j, close, bgMap);
+      if (slide) items.push(slide);
+      j = close - 1;
+    }
+  }
+  return items;
+}
+
 function parseCarouselData(tokens, i, end, t, bgMap) {
   if (!looksLikeCarousel(t)) return null;
   let from = i + 1;
@@ -1025,15 +1154,19 @@ function parseCarouselData(tokens, i, end, t, bgMap) {
   const kids = childSpans(tokens, from, to);
   if (kids.length === 1) {
     const wrap = tokens[kids[0][0]];
-    if (/wrapper|track|swiper-wrapper|slick-list|slick-track|bent-carousel-track/i.test(classHay(wrap))) {
+    if (/wrapper|track|inner|swiper-wrapper|slick-list|slick-track|bent-carousel-track|tie-slick-slider/i.test(classHay(wrap))) {
       from = kids[0][0] + 1;
       to = kids[0][1] - 1;
     }
   }
-  const items = [];
-  for (const [s, e] of childSpans(tokens, from, to)) {
-    const slide = extractSlide(tokens, s, e, bgMap);
-    if (slide) items.push(slide);
+  let items = collectSlides(tokens, from, to, bgMap);
+  if (items.length < 2) {
+    items = [];
+    for (const [s, e] of childSpans(tokens, from, to)) {
+      if (/loader|spinner|nav/i.test(classHay(tokens[s]))) continue;
+      const slide = extractSlide(tokens, s, e, bgMap);
+      if (slide) items.push(slide);
+    }
   }
   return items.length >= 2 ? { items } : null;
 }
@@ -1240,8 +1373,35 @@ function pairTabItems(labels, panes) {
  * `.tab-content` after a `ul.nav-tabs` — `next` is the index past both.
  * @returns {{ items: object[], next: number } | null}
  */
+function parseFilterTabsData(tokens, i, end, t, parentTo) {
+  const hay = hintHay(t);
+  if (!/is-flex-tabs|mag-box-filter|filter-links/i.test(hay)) return null;
+  const labels = collectTabLabels(tokens, i, end);
+  if (labels.length < 2) return null;
+  let content = '';
+  const limit = parentTo == null ? tokens.length : parentTo;
+  let j = end;
+  while (j < limit && tokens[j] && tokens[j].kind === 'text' && !tokens[j].value.trim()) j++;
+  if (j < limit && tokens[j] && tokens[j].kind === 'open') {
+    const se = matchClose(tokens, j);
+    const h = classHay(tokens[j]);
+    if (/mag-box-container|posts-items|posts-list|tab-content/i.test(h) || CONTAINERS.has(tokens[j].name)) {
+      content = unescapeHtml(textOf(tokens, j + 1, se - 1)).replace(/\s+/g, ' ').trim().slice(0, 800);
+    }
+  }
+  if (!content) content = unescapeHtml(textOf(tokens, i + 1, end - 1)).replace(/\s+/g, ' ').trim().slice(0, 200);
+  const items = labels.map((lb, idx) => ({
+    label: lb.label,
+    content: idx === 0 ? content : ''
+  }));
+  if (!items.some((it) => String(it.content || '').trim())) return null;
+  return { items, next: end };
+}
+
 function parseTabsData(tokens, i, end, t, parentTo) {
   if (!looksLikeTabs(t)) return null;
+  const filterTabs = parseFilterTabsData(tokens, i, end, t, parentTo);
+  if (filterTabs) return filterTabs;
   const hay = hintHay(t);
   const isNavTabs = /nav-tabs|nav-pills/i.test(hay);
   const isTabContent = /tab-content/i.test(hay) && !/nav-tabs/i.test(hay);
@@ -1483,8 +1643,10 @@ function extractLogo(tokens, s, e) {
       src = imageSrcOf(tk.attrs);
       alt = (tk.attrs && tk.attrs.alt) || alt;
     }
+    if (!src) src = bgOfAttrs(tk.attrs, null);
     if (!url && tk.name === 'a' && tk.attrs && tk.attrs.href) url = tk.attrs.href;
   }
+  if (!src && root) src = bgOfAttrs(root.attrs, null);
   if (!src) return null;
   const out = { src };
   if (alt) out.alt = alt;
@@ -2320,6 +2482,8 @@ function htmlToBlocks(html, opts = {}) {
       const end = matchClose(tokens, i);
 
       if (SKIP_TAGS.has(name)) { i = end; continue; }
+      // JS crumbs tokenized as tags (`<date2_end)`) are not HTML — skip, don't leftover
+      if (!/^[a-z][a-z0-9:-]*$/i.test(name)) { i += 1; continue; }
       if (INLINE.has(name)) { raw += textOf(tokens, i, end) + ' '; i = end; continue; }
 
       // pending raw becomes a block before we emit a real module: plain text →
@@ -2339,6 +2503,22 @@ function htmlToBlocks(html, opts = {}) {
       if (name === 'p') {
         sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(textOf(tokens, i + 1, end - 1)) } });
         mapped += 1; i = end; continue;
+      }
+      if (name === 'time') {
+        const when = timeText(tokens, i, end, t);
+        if (when) {
+          sink.push({ type: 'text', id: nid('t'), data: { content: when } });
+          mapped += 1;
+        }
+        i = end; continue;
+      }
+      if (name === 'input' || name === 'textarea' || name === 'select' || name === 'label') {
+        const run = parseFieldRun(tokens, i, to);
+        if (run) {
+          sink.push({ type: 'form', id: nid('form'), data: { action: '', method: 'post', submit: 'שליחה', fields: run.fields } });
+          mapped += 1; i = run.next; continue;
+        }
+        i = end; continue;
       }
       if (name === 'blockquote' || name === 'q' || name === 'cite') {
         const qt = unescapeHtml(textOf(tokens, i + 1, end - 1));
@@ -2486,22 +2666,24 @@ function htmlToBlocks(html, opts = {}) {
       // (the module renders its own submit button).
       if (name === 'form') {
         const fields = parseFormFields(tokens, i, end);
+        if (isPageForm(tokens, i, end, fields)) {
+          suggested.add('form');
+          walk(i + 1, end - 1, sink);
+          i = end; continue;
+        }
         if (fields.length) {
           const method = /get/i.test((t.attrs && t.attrs.method) || '') ? 'get' : 'post';
           sink.push({ type: 'form', id: nid('form'), data: { action: (t.attrs && t.attrs.action) || '', method, submit: 'שליחה', fields } });
           mapped += 1;
         } else {
           suggested.add('form');
-          let frag = '';
-          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
-          raw += frag;
         }
         i = end; continue;
       }
 
       // nav → the nav module (v0.60 closed this gap). Its <a> children become
       // nav links; drop wrapper <ul>/<li> (we read the anchors directly).
-      if (name === 'nav') {
+      if (name === 'nav' || name === 'menu') {
         const crumbNav = parseCrumbsData(tokens, i, end, t);
         if (crumbNav) {
           sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
@@ -2525,9 +2707,7 @@ function htmlToBlocks(html, opts = {}) {
           mapped += 1;
         } else {
           suggested.add('nav');
-          let frag = '';
-          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
-          raw += frag;
+          walk(i + 1, end - 1, sink);
         }
         i = end; continue;
       }
@@ -2683,6 +2863,9 @@ module.exports = {
   htmlToBlocks,
   // shared internals for the v2 structure hunt (src/pzn/hunt.js)
   parseFormFields,
+  isPageForm,
+  parseFieldRun,
+  timeText,
   parseNavItems,
   parseVideoData,
   parseAudioData,
@@ -2706,6 +2889,7 @@ module.exports = {
   whatsappDataOf,
   parseDetailsRun,
   mapsAddressOf,
+  looksLikeCarousel,
   detectCardCluster,
   collectLinkRun,
   coalesceButtonRuns,

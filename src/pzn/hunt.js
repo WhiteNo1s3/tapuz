@@ -25,6 +25,9 @@ const { tokenize } = require('./language/parse');
 const { unescapeHtml } = require('./language/escape');
 const {
   parseFormFields,
+  isPageForm,
+  parseFieldRun,
+  timeText,
   parseNavItems,
   parseVideoData,
   detectCardCluster,
@@ -58,7 +61,8 @@ const {
   landmarkOf,
   liftFooterCredit,
   whatsappDataOf,
-  mapsAddressOf
+  mapsAddressOf,
+  looksLikeCarousel
 } = require('./graduate');
 
 // ─── role inference (the lab's naming.js, trimmed to what Tapuz maps) ───
@@ -131,7 +135,19 @@ function colWeight(t) {
     const p = Number(w[1]);
     if (p >= 5 && p <= 95) return p / 100;
   }
+  const px = /(?:^|;)\s*width\s*:\s*(\d+(?:\.\d+)?)px/i.exec(style);
+  if (px) {
+    const n = Number(px[1]);
+    if (n >= 40) return n;
+  }
   return null;
+}
+
+function isLayoutRow(t) {
+  const cls = String((t.attrs && t.attrs.class) || '');
+  if (/layoutContainer/i.test(cls)) return true;
+  // bootstrap `.row` — not `tie-row` / `flex-row` magazine chrome
+  return /(?:^|\s)row(?:\s|$)/i.test(cls);
 }
 
 /** Weights → integer percentages that always sum to exactly 100. */
@@ -267,6 +283,11 @@ function huntBlocks(html, opts = {}) {
    * between columns is fine; any other content breaks pure-row detection.
    */
   function tryColumns(t, i, end, depth, ctx = {}) {
+    // One ROW on a walk path — nested columns inside a COL flatten so
+    // keyword BenTML stays inside E105 (depth 4) and card walls survive.
+    if ((ctx.columnNest || 0) >= 1) return null;
+    if (looksLikeCarousel(t)) return null;
+    if (detectCardCluster(tokens, i + 1, end - 1, bgMap)) return null;
     const spans = [];
     let j = i + 1;
     while (j < end - 1) {
@@ -277,21 +298,25 @@ function huntBlocks(html, opts = {}) {
         continue;
       }
       if (tk.kind !== 'open') { j++; continue; }
-      if (!CONTAINERS.has(tk.name)) return null;
       const e = matchClose(tokens, j);
+      if (SKIP_TAGS.has(tk.name) || HEADING.test(tk.name) || tk.name === 'p' || tk.name === 'button') {
+        j = e;
+        continue;
+      }
+      if (!CONTAINERS.has(tk.name)) return null;
       spans.push([j, e]);
       j = e;
     }
-    if (spans.length < 2 || spans.length > 4) return null;
+    if (spans.length < 2 || spans.length > 8) return null;
 
     const weights = spans.map(([s]) => colWeight(tokens[s]));
-    const rowHint = inferRole(t) === 'row';
+    const rowHint = isLayoutRow(t) || inferRole(t) === 'row' && /(?:^|\s)(?:row|grid|columns)(?:\s|$)/i.test(String((t.attrs && t.attrs.class) || ''));
     if (!rowHint && !weights.some((w) => w != null)) return null;
 
     const cols = [];
     const kept = [];
     spans.forEach(([s, e], idx) => {
-      const colBlocks = walk(s + 1, e - 1, depth + 1, ctx);
+      const colBlocks = walk(s + 1, e - 1, depth + 1, { ...ctx, columnNest: 1 });
       if (colBlocks.length) {
         cols.push({ blocks: colBlocks });
         kept.push(weights[idx] == null ? 1 : weights[idx]);
@@ -333,6 +358,7 @@ function huntBlocks(html, opts = {}) {
       const end = matchClose(tokens, i);
 
       if (SKIP_TAGS.has(name)) { i = end; continue; }
+      if (!/^[a-z][a-z0-9:-]*$/i.test(name)) { i += 1; continue; }
       if (INLINE.has(name)) { raw += textOf(tokens, i, end) + ' '; i = end; continue; }
 
       if (raw.trim()) { flushRaw(raw, sink); raw = ''; }
@@ -345,6 +371,22 @@ function huntBlocks(html, opts = {}) {
       if (name === 'p') {
         sink.push({ type: 'text', id: nid('t'), data: { content: unescapeHtml(textOf(tokens, i + 1, end - 1)) } });
         mapped += 1; i = end; continue;
+      }
+      if (name === 'time') {
+        const when = timeText(tokens, i, end, t);
+        if (when) {
+          sink.push({ type: 'text', id: nid('t'), data: { content: when } });
+          mapped += 1;
+        }
+        i = end; continue;
+      }
+      if (name === 'input' || name === 'textarea' || name === 'select' || name === 'label') {
+        const run = parseFieldRun(tokens, i, to);
+        if (run) {
+          sink.push({ type: 'form', id: nid('form'), data: { action: '', method: 'post', submit: 'שליחה', fields: run.fields } });
+          mapped += 1; i = run.next; continue;
+        }
+        i = end; continue;
       }
       if (name === 'blockquote' || name === 'q' || name === 'cite') {
         const qt = unescapeHtml(textOf(tokens, i + 1, end - 1));
@@ -490,19 +532,21 @@ function huntBlocks(html, opts = {}) {
       }
       if (name === 'form') {
         const fields = parseFormFields(tokens, i, end);
+        if (isPageForm(tokens, i, end, fields)) {
+          suggested.add('form');
+          walk(i + 1, end - 1, depth + 1, ctx).forEach((b) => sink.push(b));
+          i = end; continue;
+        }
         if (fields.length) {
           const method = /get/i.test((t.attrs && t.attrs.method) || '') ? 'get' : 'post';
           sink.push({ type: 'form', id: nid('form'), data: { action: (t.attrs && t.attrs.action) || '', method, submit: 'שליחה', fields } });
           mapped += 1;
         } else {
           suggested.add('form');
-          let frag = '';
-          for (let j = i; j < end; j++) frag += tokenToHtml(tokens[j]);
-          raw += frag;
         }
         i = end; continue;
       }
-      if (name === 'nav') {
+      if (name === 'nav' || name === 'menu') {
         const crumbNav = parseCrumbsData(tokens, i, end, t);
         if (crumbNav) {
           sink.push({ type: 'crumbs', id: nid('crumbs'), data: crumbNav });
@@ -522,6 +566,7 @@ function huntBlocks(html, opts = {}) {
           mapped += 1;
         } else {
           suggested.add('nav');
+          walk(i + 1, end - 1, depth + 1, ctx).forEach((b) => sink.push(b));
         }
         i = end; continue;
       }

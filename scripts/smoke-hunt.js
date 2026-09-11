@@ -188,6 +188,20 @@ const huntEmptyStats = huntBlocks('<div class="counters"><em>soon</em></div>');
 check('hunt: empty counters still reports stats toolGap',
   !firstOf(huntEmptyStats, 'stats') && huntEmptyStats.suggestedTools.includes('stats'));
 
+const huntPageForm = huntBlocks(
+  '<form id="aspnetForm">'
+  + '<input type="hidden" name="__VIEWSTATE" value="x"/>'
+  + '<h2>A</h2><p>one</p><h2>B</h2><p>two</p><h2>C</h2>'
+  + '</form>'
+);
+check('hunt: page-wrapper form descends to headlines, not leftover html',
+  huntPageForm.blocks.filter((b) => b.type === 'heading').length >= 3
+  && !huntPageForm.blocks.some((b) => b.type === 'html'));
+
+const huntTime = huntBlocks('<time datetime="2026-01-02T00:00:00Z"></time>');
+check('hunt: empty <time datetime> → text',
+  !!firstOf(huntTime, 'text') && firstOf(huntTime, 'text').data.content === '2.1.2026');
+
 console.log('');
 console.log(fail ? 'SMOKE HUNT: FAIL' : 'SMOKE HUNT: PASS');
 process.exit(fail ? 1 : 0);

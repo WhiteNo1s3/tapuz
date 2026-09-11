@@ -15,13 +15,17 @@
  * Pipeline (v0.66): HTML → extract main/body + title/dir/lang → a SET of
  * strategies reads the page (flat stream v1, structure hunt v2) → a quality
  * scorer picks the winner → fromTapuzPage → serialize → validate.
+ * Both BenTML skins leave here: canonical `.pzn` (`source`) and keyword
+ * `HERO {…}` (`bentml`) so import ends as editable source, not leftover JSON.
  * decompileUrl() adds a fetch with an SSRF guard (unlike the lab's blind
  * fetch): the admin pasting a URL must not be able to make this server read
  * localhost, LAN hosts, or cloud metadata.
  */
 
 const { htmlToBlocks } = require('./graduate');
-const { deriveSlug } = require('./intent');
+const { unescapeHtml } = require('./language/escape');
+const { deriveSlug } = require('../bentml/parse');
+const { decompile: decompileBentml } = require('../bentml/decompile');
 
 /** Pull the main content region from a full HTML page (best-effort).
  * The walla lesson (v0.67): a homepage has 111 <article> tags — the first-
@@ -60,7 +64,20 @@ function extractBaseUrl(html) {
 
 function extractTitle(html) {
   const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(String(html || ''));
-  return m ? m[1].replace(/\s+/g, ' ').trim().slice(0, 120) : 'דף מיובא';
+  return m ? unescapeHtml(m[1]).replace(/\s+/g, ' ').trim().slice(0, 120) : 'דף מיובא';
+}
+
+/**
+ * Keyword BenTML (source-dock / agent language) from a decompiled page.
+ * Slug is sanitized so compile() accepts the META the decompiler just wrote.
+ */
+function keywordBentml(meta = {}, blocks = []) {
+  return decompileBentml({
+    title: meta.title,
+    slug: meta.slug,
+    direction: meta.dir || meta.direction,
+    lang: meta.lang
+  }, blocks);
 }
 
 function extractDir(html) {
@@ -199,8 +216,8 @@ function absolutizeBlockUrls(blocks, baseUrl) {
  * @param {string} html
  * @param {{ title?: string, slug?: string, lang?: string, dir?: string,
  *           strategy?: 'auto'|'hunt'|'flat' }} [opts]
- * @returns {{ source: string, blocks: object[], mapped: number, leftover: number,
- *             toolGap: string[], issues: object[], meta: object,
+ * @returns {{ source: string, bentml: string, blocks: object[], mapped: number,
+ *             leftover: number, toolGap: string[], issues: object[], meta: object,
  *             strategy: string, strategies: object[] }}
  */
 function decompileHtml(html, opts = {}) {
@@ -211,7 +228,7 @@ function decompileHtml(html, opts = {}) {
   // class → CSS background URL, from the FULL page's <style> blocks (emotion/
   // styled-components put card pictures there, invisible in the body alone)
   const bgMap = classBgMap(html);
-  const title = (opts.title || '').trim() || extractTitle(html);
+  const title = unescapeHtml((opts.title || '').trim() || extractTitle(html));
   const dir = opts.dir || extractDir(html);
   const lang = opts.lang || extractLang(html);
   const slug = deriveSlug((opts.slug || '').trim() || title);
@@ -252,14 +269,16 @@ function decompileHtml(html, opts = {}) {
   // sightings even from the read that lost
   const toolGap = [...new Set(attempts.flatMap((a) => a.r.suggestedTools || []))];
 
+  const meta = { title, slug, lang, dir };
   return {
     source,
+    bentml: keywordBentml(meta, blocks),
     blocks,
     mapped: r.mapped,
     leftover: r.leftover,
     toolGap,
     issues,
-    meta: { title, slug, lang, dir },
+    meta,
     strategy: best.name,
     strategies: attempts.map((a) => ({
       name: a.name,
@@ -397,6 +416,7 @@ async function decompileUrl(rawUrl, opts = {}) {
 module.exports = {
   decompileHtml,
   decompileUrl,
+  keywordBentml,
   absolutizeBlockUrls,
   eachBlock,
   extractBodyHtml,

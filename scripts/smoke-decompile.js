@@ -10,6 +10,7 @@
 const { decompileHtml, extractBodyHtml, extractDir, assertPublicUrl, isPrivateIp } = require('../src/pzn/decompile');
 const { htmlToBlocks } = require('../src/pzn/graduate');
 const pzn = require('../src/pzn/index');
+const bentml = require('../src/bentml');
 
 let fail = false;
 function check(name, cond) {
@@ -49,6 +50,43 @@ async function checkRejects(name, fn) {
     !g.suggestedTools.includes('whatsapp'));
   check('form decompiles to a real form block (v0.58 closed this gap)',
     g.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 1) && !g.suggestedTools.includes('form'));
+  const timeBlock = htmlToBlocks('<time class="DateDisplay" datetime="2026-09-07T19:11:07.322Z"></time>');
+  check('<time datetime> (empty body, ynet DateDisplay) → text, not leftover html',
+    timeBlock.blocks.some((b) => b.type === 'text' && b.data.content === '7.9.2026')
+    && !timeBlock.blocks.some((b) => b.type === 'html'));
+  const pageForm = htmlToBlocks(
+    '<form id="aspnetForm" method="post">'
+    + '<input type="hidden" name="__VIEWSTATE" value="x"/>'
+    + '<h2>כותרת א</h2><p>גוף</p><h2>כותרת ב</h2><p>עוד</p><h2>כותרת ג</h2>'
+    + '</form>'
+  );
+  check('page-wrapper ASP.NET form descends — headlines live, not one leftover html blob',
+    pageForm.blocks.filter((b) => b.type === 'heading').length >= 3
+    && !pageForm.blocks.some((b) => b.type === 'html' && /VIEWSTATE/.test(b.data.content || '')));
+  const orphanFields = htmlToBlocks(
+    '<label for="mail">אימייל</label><input id="mail" type="email" name="mail"/>'
+    + '<label for="tel">טלפון</label><input id="tel" type="tel" name="tel"/>'
+  );
+  check('orphan label+input run → one form (bug.co.il leftovers)',
+    orphanFields.blocks.some((b) => b.type === 'form' && (b.data.fields || []).length >= 2)
+    && !orphanFields.blocks.some((b) => b.type === 'html'));
+  const classedTeasers = htmlToBlocks(
+    '<div class="cluster">'
+    + '<div class="item"><div class="title">כתבה א</div><a href="/a">עוד</a></div>'
+    + '<div class="item"><div class="title">כתבה ב</div><a href="/b">עוד</a></div>'
+    + '<div class="item"><div class="title">כתבה ג</div><a href="/c">עוד</a></div>'
+    + '</div>'
+  );
+  check('classed .title teasers → cards (globes/ynet cluster)',
+    classedTeasers.blocks.some((b) => b.type === 'cards' && b.data.items.length === 3
+      && b.data.items[0].title === 'כתבה א' && b.data.items[0].href === '/a'));
+  const jsCrumbs = htmlToBlocks('<div><date2_end) leftover junk</date2_end)><p>גוף</p></div>');
+  check('JS crumbs tokenized as tags are skipped, not leftover html',
+    jsCrumbs.blocks.some((b) => b.type === 'text' && /גוף/.test(b.data.content))
+    && !jsCrumbs.blocks.some((b) => b.type === 'html'));
+  const menuNav = htmlToBlocks('<menu><a href="/a">בית</a><a href="/b">כלכלה</a></menu>');
+  check('<menu> with links → nav',
+    menuNav.blocks.some((b) => b.type === 'nav' && (b.data.items || []).length === 2));
   check('nav decompiles to a nav block (v0.60 closed this gap)',
     g.blocks.some((b) => b.type === 'nav') && !g.suggestedTools.includes('nav'));
   check('video decompiles to a video block (v0.62 closed this gap)',
@@ -110,6 +148,15 @@ async function checkRejects(name, fn) {
     catch (e) { return false; }
   })());
   check('decompile reports no issues on a clean page', r.issues.length === 0);
+  check('import emits keyword BenTML', /^BENTML /.test(r.bentml || ''));
+  check('keyword BenTML compiles back to the same types', (() => {
+    try {
+      const back = bentml.compile(r.bentml);
+      const a = r.blocks.map((b) => b.type).sort().join(',');
+      const c = back.blocks.map((b) => b.type).sort().join(',');
+      return a === c && back.blocks.length === r.blocks.length;
+    } catch (e) { return false; }
+  })());
 
   // Hebrew-content page WITHOUT declared dir → rtl heuristic
   check('undeclared dir + Hebrew text → rtl', extractDir('<html><body><p>שלום</p></body></html>') === 'rtl');
@@ -200,6 +247,53 @@ async function checkRejects(name, fn) {
   })));
   check('3 consecutive headline-length links → one cards wall',
     headlines.length === 1 && headlines[0].type === 'cards' && headlines[0].data.items.length === 3);
+
+  const glued = coalesceButtonRuns([
+    { type: 'button', id: 'b0', data: { text: 'כותרת ארוכה מאוד של כתבה חדשותית מספר אחת בעמוד', url: '/article/1' } },
+    { type: 'text', id: 't0', data: { content: 'window.YITSiteWidgets.push(1)' } },
+    { type: 'button', id: 'b1', data: { text: 'כותרת ארוכה מאוד של כתבה חדשותית מספר שתיים בעמוד', url: '/article/2' } },
+    { type: 'text', id: 't1', data: { content: 'ליאור בן ארי|' } },
+    { type: 'text', id: 't2', data: { content: '7.9.2026' } },
+    { type: 'button', id: 'b2', data: { text: 'כותרת ארוכה מאוד של כתבה חדשותית מספר שלוש בעמוד', url: '/article/3' } }
+  ]);
+  check('headline buttons glued by JS/byline text still fuse into one cards wall',
+    glued.length === 1 && glued[0].type === 'cards' && glued[0].data.items.length === 3);
+
+  const layoutCols = decompileHtml(
+    '<html><body><main><div class="layoutContainer">'
+    + '<div class="layoutItem" style="width:610px"><p>ימין</p></div>'
+    + '<div class="layoutItem" style="width:300px"><p>אמצע</p></div>'
+    + '<div class="layoutItem" style="width:300px"><p>שמאל</p></div>'
+    + '</div></main></body></html>'
+  );
+  check('px-width layoutItem row → columns module (not a flatten)',
+    layoutCols.blocks.some((b) => b.type === 'columns' && (b.data.columns || []).length === 3)
+    && !layoutCols.toolGap.includes('columns'));
+
+  const flexTabs = htmlToBlocks(
+    '<div class="mag-box">'
+    + '<ul class="mag-box-filter-links is-flex-tabs">'
+    + '<li><a class="block-ajax-term active" href="#">הכל</a></li>'
+    + '<li><a class="block-ajax-term" href="#">בארץ</a></li>'
+    + '</ul>'
+    + '<div class="mag-box-container"><ul class="posts-items"><li>כתבה א</li><li>כתבה ב</li></ul></div>'
+    + '</div>'
+  );
+  check('Jannah is-flex-tabs + posts → tabs module, not a silent flatten',
+    flexTabs.blocks.some((b) => b.type === 'tabs' && b.data.items.length >= 2
+      && b.data.items[0].label === 'הכל' && /כתבה א/.test(b.data.items[0].content))
+    && !flexTabs.suggestedTools.includes('tabs'));
+
+  const slick = htmlToBlocks(
+    '<div class="tie-slick-slider-wrapper">'
+    + '<div class="tie-slick-slider">'
+    + '<div class="slide tie-slide-1" style="background-image:url(/a.jpg)"><a href="/1"><h2>שקופית א</h2></a></div>'
+    + '<div class="slide tie-slide-2" style="background-image:url(/b.jpg)"><a href="/2"><h2>שקופית ב</h2></a></div>'
+    + '</div></div>'
+  );
+  check('tie-slick slides with CSS backgrounds → carousel',
+    slick.blocks.some((b) => b.type === 'carousel' && b.data.items.length === 2
+      && b.data.items[0].title === 'שקופית א' && /a\.jpg/.test(b.data.items[0].image)));
 
   // icon links: a textless anchor never becomes a "קישור" button; its picture survives
   const icon = htmlToBlocks('<p>לפני</p><a href="/home"><img src="/logo.png" alt="לוגו"/></a><p>אחרי</p>');
