@@ -12,6 +12,15 @@
  *   - approve → contact via normal upsert
  *   - forged email on native (no site_id) collector cannot mint a contact
  *   - HTTPS-only snippets outside localhost
+ *
+ * v2.21 — foreign visitor stitching (found by the live WordPress ↔ CRM test:
+ * the person existed, the form event landed, and NOT ONE WordPress pageview
+ * reached the timeline — approval bound no browser, and the collector never
+ * looked for one):
+ *   - an anonymous vid is never stored; unlinked foreign traffic is analytics only
+ *   - identify() carries the vid on the claim; approve binds it; later beacons land
+ *   - a form POST with _tz_site/_tz_vid binds the browser (registry + origin gated)
+ *   - tokens are site-scoped and can never replay as a first-party cookie token
  */
 
 const fs = require('fs');
@@ -77,6 +86,10 @@ check('loader never puts email on page()', /page:\s*function[\s\S]{0,800}email:/
   !/page:\s*function[\s\S]*?return send\(\{[\s\S]*?email:/.test(loader));
 check('loader uses credentials omit', /credentials:\s*['"]omit['"]/.test(loader));
 check('loader prefers text/plain simple mode', /text\/plain/.test(loader));
+check('loader exposes visitorId() for form bridges', /visitorId:\s*function/.test(loader));
+check('loader rides the vid on every beacon body', /payload\.vid\s*=\s*vid/.test(loader));
+check('loader mints no vid under DNT/GPC or when disabled', /if\s*\(!cfg\.vid\s*\|\|\s*dnt\(\)\)\s*return\s*''/.test(loader));
+check('loader never sets the vid on the CRM host (first-party storage only)', !/document\.domain|domain=/i.test(loader));
 
 // claim module alone
 const c0 = claims.recordClaim({ siteId: 'x', email: 'a@b.com', path: '/p' });
@@ -269,6 +282,182 @@ function waitUp() {
     const approved = claims.approveClaim(claim.id);
     check('admin approve creates the contact',
       approved.ok && contacts.findByEmail('real-person@example.com'));
+    check('a claim without a vid approves with linked:false (nothing to bind)', approved.linked === false);
+
+    // ── v2.21: foreign visitor stitching ─────────────────────────────
+    const visitors = require('../src/crm/visitors');
+    const VID_A = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+    const VID_B = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+    const VID_C = 'deadbeefdeadbeefdeadbeefdeadbeef';
+    const evCount = () => db.prepare('SELECT COUNT(*) AS n FROM crm_events').get().n;
+    const visCount = () => db.prepare('SELECT COUNT(*) AS n FROM crm_visitors').get().n;
+    const evFor = (id) => db.prepare('SELECT * FROM crm_events WHERE contact_id = ? ORDER BY id').all(id);
+
+    check('foreignToken is site-scoped and namespaced',
+      visitors.foreignToken('Open-Claims', VID_A) === 'f:open-claims:' + VID_A);
+    check('foreignToken refuses anything that is not 32 hex',
+      visitors.foreignToken('open-claims', 'not-hex') === '' &&
+      visitors.foreignToken('open-claims', VID_A + 'ff') === '' &&
+      visitors.foreignToken('', VID_A) === '');
+    check('a first-party cookie token is never a foreign token',
+      visitors.contactIdForToken(VID_A) === null && visitors.linkToken(VID_A, 1) === '');
+
+    // anonymous vid → analytics only, never stored
+    const ev0 = evCount();
+    const vis0 = visCount();
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://foreign.test',
+      body: { path: '/anon-with-vid', type: 'pageview', site_id: 'open-claims', vid: VID_A }
+    });
+    check('anonymous foreign pageview WITH vid still lands in analytics',
+      !!db.prepare("SELECT 1 FROM pageviews WHERE path = '/anon-with-vid' AND site_id = 'open-claims'").get());
+    check('anonymous vid opens no timeline row and stores no visitor', evCount() === ev0 && visCount() === vis0);
+
+    // identify with vid → claim remembers the token, binds nothing yet
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://foreign.test',
+      body: {
+        path: '/contact/', type: 'identify', site_id: 'open-claims',
+        email: 'wp-visitor@example.com', person_name: 'WP Visitor', vid: VID_A
+      }
+    });
+    const stitchClaim = claims.listClaims({ status: 'pending', siteId: 'open-claims' })
+      .find((c) => c.email === 'wp-visitor@example.com');
+    check('identify with vid → pending claim carrying the site-scoped token',
+      !!stitchClaim && stitchClaim.visitor_token === 'f:open-claims:' + VID_A);
+    check('identify with vid still creates no contact and binds no browser',
+      contacts.findByEmail('wp-visitor@example.com') == null && visCount() === vis0);
+
+    // still anonymous until approval
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://foreign.test',
+      body: { path: '/before-approve', type: 'pageview', site_id: 'open-claims', vid: VID_A }
+    });
+    check('pageview from the claiming browser BEFORE approval stays anonymous', evCount() === ev0);
+
+    // approve → contact + bound browser
+    const stitchApproved = claims.approveClaim(stitchClaim.id);
+    const wpContact = contacts.findByEmail('wp-visitor@example.com');
+    check('approve creates the contact AND binds the claiming browser',
+      stitchApproved.ok && stitchApproved.linked === true && !!wpContact &&
+      visitors.contactIdForToken('f:open-claims:' + VID_A) === wpContact.id);
+
+    // now the same browser's beacons land on the timeline, tagged with the site
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://foreign.test',
+      body: { path: '/pricing/', type: 'pageview', site_id: 'open-claims', vid: VID_A }
+    });
+    const linkedEv = evFor(wpContact.id).filter((e) => e.type === 'pageview');
+    check('pageview from the approved browser lands on the timeline',
+      linkedEv.length === 1 && linkedEv[0].path === '/pricing/');
+    check('the timeline row is tagged with the foreign site_id',
+      linkedEv.length === 1 && JSON.parse(linkedEv[0].meta || '{}').site_id === 'open-claims');
+    check('the linked pageview still counts on the analytics spine',
+      !!db.prepare("SELECT 1 FROM pageviews WHERE path = '/pricing/' AND site_id = 'open-claims'").get());
+
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://foreign.test',
+      body: { path: '/pricing/', type: 'pixel', name: 'contact_us', site_id: 'open-claims', vid: VID_A, props: {} }
+    });
+    const trackEv = evFor(wpContact.id).filter((e) => e.type === 'track');
+    check('track() from the approved browser lands as a named timeline event',
+      trackEv.length === 1 && trackEv[0].title === 'contact_us');
+
+    // a different browser on the same site: anonymous
+    const evLinked = evCount();
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://foreign.test',
+      body: { path: '/other-browser', type: 'pageview', site_id: 'open-claims', vid: VID_C }
+    });
+    check('a different vid on the same site stays anonymous', evCount() === evLinked);
+
+    // the same vid on ANOTHER registered site: token is site-scoped → anonymous
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://shop.example.com',
+      body: { path: '/replayed-elsewhere', type: 'pageview', site_id: 'wp-local', vid: VID_A }
+    });
+    check('the same vid replayed under another site_id is NOT attributed (site-scoped)', evCount() === evLinked);
+
+    // ── form bridge path: _tz_site + _tz_vid bind the browser ────────
+    const formPost = (fields, origin) => req('POST', '/api/form', {
+      origin,
+      body: new URLSearchParams(fields).toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    // the live scenario: the person ALREADY exists (earlier form / import) …
+    const existing = contacts.upsertContact({ email: 'ben@example.com', name: 'Ben', status: 'lead', source: 'import' }).contact;
+    const evBen0 = evFor(existing.id).length;
+    // … and now writes in from the WordPress contact form via the bridge
+    const fr = await formPost(
+      { email: 'ben@example.com', name: 'Ben', message: 'שלום', _page: 'contact', _tz_site: 'wp-local', _tz_vid: VID_B },
+      'https://shop.example.com'
+    );
+    check('foreign form POST with _tz_site/_tz_vid is accepted', fr.status === 302 || fr.status === 200);
+    check('the form resolves to the EXISTING contact (no duplicate)',
+      db.prepare("SELECT COUNT(*) AS n FROM crm_contacts WHERE email = 'ben@example.com'").get().n === 1);
+    check('the form binds the WordPress browser to that contact',
+      visitors.contactIdForToken('f:wp-local:' + VID_B) === existing.id);
+    check('the form event itself is on the timeline', evFor(existing.id).length === evBen0 + 1);
+    const lastSub = db.prepare('SELECT fields FROM form_submissions ORDER BY id DESC LIMIT 1').get();
+    check('_tz_* bridge fields are stripped from the stored submission',
+      !!lastSub && !/_tz_vid|_tz_site/.test(lastSub.fields) && /ben@example\.com/.test(lastSub.fields));
+
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://shop.example.com',
+      body: { path: '/products/shoes', type: 'pageview', site_id: 'wp-local', vid: VID_B }
+    });
+    const benViews = evFor(existing.id).filter((e) => e.type === 'pageview');
+    check('the NEXT WordPress pageview is attributed to the existing contact',
+      benViews.length === 1 && benViews[0].path === '/products/shoes' &&
+      JSON.parse(benViews[0].meta || '{}').site_id === 'wp-local');
+    check('interest learned from the foreign path',
+      (contacts.getContact(existing.id).tags || '').includes('interest:shoes'));
+
+    // gates: the submission always lands, the LINK only when the registry says so.
+    // (Every form POST also mints the native tz_v row, so count FOREIGN bindings.)
+    const foreignBindings = (id) =>
+      db.prepare("SELECT COUNT(*) AS n FROM crm_visitors WHERE token LIKE 'f:%' AND contact_id = ?").get(id).n;
+    await formPost(
+      { email: 'gate1@example.com', _tz_site: 'wp-local', _tz_vid: VID_C },
+      'https://not-allowed.example'
+    );
+    const gate1 = contacts.findByEmail('gate1@example.com');
+    check('form from an origin outside the site allowlist: contact saved, browser NOT bound',
+      !!gate1 && foreignBindings(gate1.id) === 0 && visitors.contactIdForToken('f:wp-local:' + VID_C) === null);
+    await formPost(
+      { email: 'gate2@example.com', _tz_site: 'never-registered', _tz_vid: VID_C },
+      'https://shop.example.com'
+    );
+    const gate2 = contacts.findByEmail('gate2@example.com');
+    check('form naming an unregistered site: contact saved, browser NOT bound',
+      !!gate2 && foreignBindings(gate2.id) === 0);
+    await formPost(
+      { email: 'gate3@example.com', _tz_site: 'wp-local', _tz_vid: 'not-a-real-vid' },
+      'https://shop.example.com'
+    );
+    const gate3 = contacts.findByEmail('gate3@example.com');
+    check('form with a malformed vid: contact saved, browser NOT bound',
+      !!gate3 && foreignBindings(gate3.id) === 0);
+
+    // forge: a foreign beacon presenting a NATIVE cookie token as its vid
+    const nativeForm = await formPost({ email: 'native-person@example.com', name: 'Native' }, BASE);
+    const setCookie = String((nativeForm.headers['set-cookie'] || []).join(';'));
+    const nativeToken = (setCookie.match(/tz_v=([a-f0-9]{32})/) || [])[1] || '';
+    const nativeContact = contacts.findByEmail('native-person@example.com');
+    check('native form still mints the first-party tz_v cookie', !!nativeToken && !!nativeContact);
+    const evNative0 = evFor(nativeContact.id).length;
+    await req('POST', '/_tapuz/collect', {
+      origin: 'https://shop.example.com',
+      body: { path: '/stolen-token', type: 'pageview', site_id: 'wp-local', vid: nativeToken }
+    });
+    check('a foreign beacon presenting a native tz_v token as vid attributes NOTHING',
+      evFor(nativeContact.id).length === evNative0);
+
+    // erasure reaches the foreign binding (crm_visitors is a PERSONAL_TABLE)
+    require('../src/crm/subject').eraseContact(existing.id);
+    check('erasing the contact removes the foreign browser binding',
+      visitors.contactIdForToken('f:wp-local:' + VID_B) === null);
 
     // CORS preflight
     const opt = await req('OPTIONS', '/_tapuz/collect', { origin: 'https://shop.example.com' });
