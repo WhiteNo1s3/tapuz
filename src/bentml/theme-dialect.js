@@ -104,7 +104,9 @@ function parseAttrs(tagOpen) {
 /** Every `<bent-name …>…</bent-name>` (or self-closed) in source, in order. */
 function findAllSections(source, name) {
   const out = [];
-  const re = new RegExp('<bent-' + name + '\\b([^>]*)>', 'gi');
+  // the name must END here: `\b` would let a search for "menu" open on
+  // <bent-menu-layout> (v2.28 — the menu dialect has such siblings)
+  const re = new RegExp('<bent-' + name + '(?=[\\s/>])([^>]*)>', 'gi');
   let m;
   while ((m = re.exec(source))) {
     const open = m[0];

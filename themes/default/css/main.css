@@ -2192,11 +2192,17 @@ body.menu-side .main-nav a:hover {
   background: var(--color-light-bg);
   color: var(--color-primary);
 }
-/* in the rail a sub-menu is an indented list, always open (v2.28) */
-body.menu-side .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 0.9rem; background: transparent; min-width: 0; }
-body.menu-side .main-nav .sub-menu a { padding: 0.35rem 0.85rem; font-size: 0.9em; }
-body.menu-side .main-nav li.has-children > a::before { content: ''; margin: 0; }
-body.menu-side .nav-burger { display: none; }
+/* in the rail a sub-menu is an indented list, always open, and there is no
+   burger (v2.28). Scoped to the widths where the rail EXISTS: below 900px
+   side mode falls back to the top bar, and at ≤720px the drawer must win —
+   an unscoped `body.menu-side .nav-burger{display:none}` outranks the
+   drawer's `.nav-burger{display:flex}` and the phone menu vanishes. */
+@media (min-width: 901px) {
+  body.menu-side .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 0.9rem; background: transparent; min-width: 0; }
+  body.menu-side .main-nav .sub-menu a { padding: 0.35rem 0.85rem; font-size: 0.9em; }
+  body.menu-side .main-nav li.has-children > a::before { content: ''; margin: 0; }
+  body.menu-side .nav-burger { display: none; }
+}
 @media (max-width: 900px) {
   /* narrow screens: back to the familiar top bar, menu wraps horizontally */
   body.menu-side { display: block; }

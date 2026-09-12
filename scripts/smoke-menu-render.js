@@ -88,8 +88,9 @@ check('the drawer: the burger shows on narrow screens and for body.menu-drawer; 
   /body\.menu-drawer \.nav-toggle:checked ~ ul \{ display: flex; \}/.test(css) && /body\.menu-drawer \.main-nav \.sub-menu \{ position: static; display: block;/.test(css));
 check('the drawer toggle is keyboard-reachable (visually hidden checkbox, focus ring on the label), never display:none',
   /\.nav-toggle \{ position: absolute; width: 1px; height: 1px; opacity: 0;/.test(css) && /\.nav-toggle:focus-visible \+ \.nav-burger \{ outline/.test(css) && !/\.nav-toggle \{[^}]*display: none/.test(css));
-check('in the side rail a sub-menu is an indented list, always open, and the burger is hidden',
-  /body\.menu-side \.main-nav \.sub-menu \{ position: static; display: block;/.test(css) && /body\.menu-side \.nav-burger \{ display: none; \}/.test(css));
+check('in the side rail a sub-menu is an indented list, always open, and the burger is hidden — ONLY where the rail exists (≥901px), so the phone drawer still wins in side mode',
+  /@media \(min-width: 901px\) \{[\s\S]*?body\.menu-side \.main-nav \.sub-menu \{ position: static; display: block;[\s\S]*?body\.menu-side \.nav-burger \{ display: none; \}[\s\S]*?\}/.test(css) &&
+  !/\n\s*body\.menu-side \.nav-burger \{ display: none; \}/.test(css.replace(/@media \(min-width: 901px\) \{[\s\S]*?\n\}/g, '')));
 check('no physical left/right in the new menu css (RTL first)', !/(^|[^-])(left|right)\s*:/.test(css.slice(css.indexOf('Menu capacity, sub-menus, drawer'), css.indexOf('CMS-managed header chrome (S3)'))));
 check('the old ≤640px header stacking is gone (the drawer owns narrow screens)', !/\.header-inner \{ flex-direction: column; gap: 0\.6rem; \}/.test(css));
 
