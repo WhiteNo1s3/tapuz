@@ -131,14 +131,20 @@ function buildRoleplayPack(opts = {}) {
   lines.push(he ? '1. השחקן מתאר מה הוא רוצה (עברית או אנגלית).' : '1. Player describes what they want (any language).');
   lines.push(he ? '2. את/ה בוחר/ת כלים מהמלאי ומרכיב/ת מסמך `.pzn` מלא.' : '2. You pick tools from inventory and compose one complete `.pzn` document.');
   lines.push(he ? '3. מהלך מנצח = fence אחד של html עם מסמך שלם + `</html>` (+ אופציונלי `PZN_READY`).' : '3. Winning move = one html fence with a complete document + `</html>` (optional `PZN_READY`).');
-  lines.push(he ? '4. מהלכים לא חוקיים: HTML חופשי, מודולים שלא במילון, מסמך חצוי.' : '4. Illegal moves: free HTML, modules not in the dictionary, incomplete documents.');
+  // "so it won't paste build things in it" (Ben, v2.27): a chat that knows
+  // web pages reaches for <div>, <style> and <script> the moment a page gets
+  // interesting — those are BUILD output, not moves. Named as illegal here,
+  // in the fewest words the lite pack's free-plan budget allows.
+  lines.push(he
+    ? '4. מהלכים לא חוקיים: HTML חופשי, `<style>`/`<script>`/CSS, מודולים או מאפיינים שלא במילון, מסמך חצוי.'
+    : '4. Illegal moves: free HTML, `<style>`/`<script>`/CSS, modules or attributes not in the dictionary, incomplete documents.');
   lines.push(he
     ? '5. גם בתוך טקסט אין תגיות HTML: לא `<b>`, לא `<i>`, לא `<a>`, לא `<br>` — במקומן סימוני השפה: `@B{מודגש}` · `@I{נטוי}` · `@LINK(url: "/דף"){טקסט}` · `@BREAK`.'
     : '5. No HTML tags inside text either: not `<b>`, `<i>`, `<a>`, `<br>` — use the language marks instead: `@B{bold}` · `@I{italic}` · `@LINK(url: "/page"){text}` · `@BREAK`.');
   lines.push(he
     ? '6. **המהלך הוא המסמך.** שום פרוזה מסביב ל-fence: בלי "הנה הדף שבנית", בלי סיכום מה יש בו, בלי הצעות המשך. הדבקה של התשובה כמו-שהיא לתוך הבונה חייבת לקמפל.'
     : '6. **The move IS the document.** No prose around the fence: no "here is your page", no summary of what it contains, no follow-up offers. The reply pasted as-is into the builder must compile.');
-  lines.push(he ? '7. אחרי שהמסמך מוכן — השחקן מפרסם ל‑CMS; הבונה הויזואלי מציג את אותה צורה.' : '7. After the document is ready the player publishes into the CMS; the visual builder shows the same shape.');
+  lines.push(he ? '7. אחרי שהמסמך מוכן השחקן מפרסם; הבונה הויזואלי מציג את אותה צורה.' : '7. After the document is ready the player publishes; the visual builder shows the same shape.');
   lines.push('');
 
   // ONE vocabulary per pack, never two renderings of the same modules:

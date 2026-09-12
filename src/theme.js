@@ -374,8 +374,18 @@ function renderThemeFontLinks(overrides) {
     `  <link rel="stylesheet" id="tapuz-theme-fonts" href="${href}">`;
 }
 
-/** CSS custom properties injected after theme CSS. */
-function overridesToCss(overrides) {
+/**
+ * CSS custom properties injected after theme CSS.
+ *
+ * `opts.scope === 'admin'` (v2.27) — the admin shell links the theme
+ * stylesheet too (so builder previews read the palette), and until now that
+ * carried the owner's SKIN and EFFECT css into every admin screen: an AI
+ * skin that says `h1 { font-size: 3.2rem }` or `.card { … }` restyled the
+ * dashboard. The admin scope stops after the variables — palette, fonts,
+ * radii, shadows — and emits none of the page background, chrome, button
+ * styles, skin or effects. Those are the SITE's, never the admin's.
+ */
+function overridesToCss(overrides, opts = {}) {
   const o = mergeDeep(DEFAULT_OVERRIDES, overrides || {});
   const radius = RADIUS_SCALE[o.style.radius] || RADIUS_SCALE.soft;
   const shadow = SHADOW_SCALE[o.style.shadow] || SHADOW_SCALE.soft;
@@ -416,6 +426,8 @@ function overridesToCss(overrides) {
   if (cssValue(o.fonts.headingFamily)) {
     css += `h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }\n`;
   }
+  // the admin shell wants the palette, not the page (see the doc above)
+  if (opts.scope === 'admin') return css;
   // menuPlacement:side no longer emits layout CSS from here — the REAL sidebar
   // layout lives in the theme (themes/default/css/main.css, body.menu-side).
   // The renderer stamps the body class; the theme owns the geometry. The old
@@ -539,8 +551,118 @@ function renderThemeEffectsJs(overrides) {
   // </script> inside the payload would end our tag mid-snippet and leak the
   // rest as text — split the closer the standard way.
   const safe = js.replace(/<\/script/gi, '<\\/script');
-  return `<script id="tapuz-theme-effects">\ntry {\n${safe}\n} catch (e) { window.__tapuzThemeEffectError = String(e && e.message || e); console.error('[tapuz-theme-effects]', e); }\n</script>`;
+  return `<script id="tapuz-theme-effects">\n${EFFECT_GUARD_OPEN}\ntry {\n${safe}\n} catch (e) { window.__tapuzThemeEffectError = String(e && e.message || e); console.error('[tapuz-theme-effects]', e); }\n${EFFECT_GUARD_CLOSE}\n</script>`;
 }
+
+// ── The effect GUARD (v2.27) — a padded room for a stranger's script.
+//    Ben: "it built a theme using bentml and made a mouse — it freezes and
+//    looks sloppy, we cannot allow that." A chat-written mouse effect that
+//    creates a DOM node on every mousemove meets a 1000Hz mouse in Firefox
+//    and the page dies; the only thing the old wrapper caught was a throw.
+//    The effect now runs with its globals SHADOWED (window / document /
+//    addEventListener / requestAnimationFrame / setTimeout / setInterval are
+//    proxies and wrappers), which buys four guarantees with no change to the
+//    snippet itself:
+//      1. reduced motion — a visitor who asked for less motion never runs it
+//      2. a budget — elements the effect creates are counted (rate + live
+//         total); a runaway creator is stopped, its elements removed
+//      3. a pace — mousemove/pointermove/touchmove reach the page at most
+//         once per animation frame; intervals cannot tick faster than 16ms
+//      4. a watchdog — a handler or frame that keeps taking >50ms, or frames
+//         that stall, stop the effect; the reason is parked on
+//         window.__tapuzFx.killed and posted to the theme studio's canvas
+//    Stopping is total: listeners registered through the shadowed globals go
+//    silent, scheduled callbacks stop, and the guard's own capture listener
+//    swallows motion events so an unshadowed listener starves too.
+const EFFECT_GUARD_OPEN = `(function () {
+var W = window, D = document, G = W.__tapuzFx = W.__tapuzFx || {};
+var MAX_LIVE = 400, MAX_PER_SEC = 240, SLOW_MS = 50, SLOW_HITS = 3, GAP_MS = 250, GAP_HITS = 4, WINDOW_MS = 10000;
+try { if (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches) { G.skipped = 'reduced-motion'; return; } } catch (e) {}
+var alive = true, created = [], total = 0, slowHits = 0, gaps = [], lastFrame = 0, frameSeen = false;
+G.stop = kill;
+function tell() { try { if (W.parent !== W) W.parent.postMessage({ type: 'tapuz-theme-preview', killed: G.killed || '' }, location.origin); } catch (e) {} }
+function sweep() { try { var dead = D.querySelectorAll('[data-tapuz-fx]'); for (var i = 0; i < dead.length; i++) if (dead[i].parentNode) dead[i].parentNode.removeChild(dead[i]); } catch (e) {} }
+function kill(reason) {
+  if (!alive) return;
+  alive = false; G.killed = String(reason || 'stopped');
+  try { console.warn('[tapuz-theme-effects] האפקט נעצר: ' + G.killed); } catch (e) {}
+  sweep();
+  // the element whose creation tripped the budget is appended AFTER this
+  // returns — sweep again once the handler that made it has finished
+  try { W.setTimeout(sweep, 0); W.setTimeout(sweep, 500); } catch (e) {}
+  tell();
+}
+function timed(fn, label) {
+  return function () {
+    if (!alive) return;
+    var t0 = W.performance && W.performance.now ? W.performance.now() : 0;
+    try { return fn.apply(this, arguments); }
+    finally {
+      var dt = t0 ? W.performance.now() - t0 : 0;
+      if (dt > SLOW_MS && ++slowHits >= SLOW_HITS) kill(label + ' לוקח יותר מ-' + SLOW_MS + 'ms שוב ושוב (' + Math.round(dt) + 'ms) — האפקט כבד מדי לדף');
+    }
+  };
+}
+function budget() {
+  var now = W.performance && W.performance.now ? W.performance.now() : Date.now();
+  created.push(now); total++;
+  while (created.length && now - created[0] > 1000) created.shift();
+  if (created.length > MAX_PER_SEC) return kill('האפקט יוצר יותר מ-' + MAX_PER_SEC + ' אלמנטים בשנייה — אלמנט על כל תזוזת עכבר במקום מאגר קבוע');
+  if (total % 25 === 0) { var live = D.querySelectorAll('[data-tapuz-fx]').length; if (live > MAX_LIVE) kill('יותר מ-' + MAX_LIVE + ' אלמנטים של האפקט חיים בדף בו-זמנית — האפקט לא מנקה אחריו'); }
+}
+var gAdd = function (target) {
+  return function (type, fn, opt) {
+    if (typeof fn !== 'function' || !alive) return;
+    var wrapped = timed(fn, 'המאזין ל-' + type);
+    try { fn.__tapuzFxWrapped = wrapped; } catch (e) {}
+    return target.addEventListener(type, wrapped, opt);
+  };
+};
+var gRemove = function (target) {
+  return function (type, fn, opt) { return target.removeEventListener(type, (fn && fn.__tapuzFxWrapped) || fn, opt); };
+};
+function gRaf(cb) { if (!alive) return 0; return W.requestAnimationFrame(timed(cb, 'פריים של האפקט')); }
+function gTimeout(cb, ms) { if (!alive) return 0; var a = [].slice.call(arguments, 2); return W.setTimeout(typeof cb === 'function' ? timed(function () { cb.apply(this, a); }, 'setTimeout של האפקט') : function () {}, ms); }
+function gInterval(cb, ms) { if (!alive) return 0; var a = [].slice.call(arguments, 2); var id = W.setInterval(function () { if (!alive) { W.clearInterval(id); return; } if (typeof cb === 'function') timed(function () { cb.apply(this, a); }, 'setInterval של האפקט')(); }, Math.max(16, Number(ms) || 0)); return id; }
+function gCreate(tag, o) { var el = D.createElement(tag, o); try { el.setAttribute('data-tapuz-fx', ''); } catch (e) {} budget(); return el; }
+function proxy(target, extra) {
+  if (typeof Proxy !== 'function') return target;
+  return new Proxy(target, {
+    get: function (t, k) {
+      if (Object.prototype.hasOwnProperty.call(extra, k)) return extra[k];
+      var v = Reflect.get(t, k, t);
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+    set: function (t, k, v) { Reflect.set(t, k, v, t); return true; },
+    has: function (t, k) { return k in t; }
+  });
+}
+var docP = proxy(D, { addEventListener: gAdd(D), removeEventListener: gRemove(D), createElement: gCreate });
+var winExtra = { addEventListener: gAdd(W), removeEventListener: gRemove(W), requestAnimationFrame: gRaf, setTimeout: gTimeout, setInterval: gInterval, document: docP };
+var winP = proxy(W, winExtra);
+winExtra.window = winP; winExtra.self = winP; winExtra.globalThis = winP;
+// the pace: motion events reach the page once per frame, and never after a stop
+['mousemove', 'pointermove', 'touchmove'].forEach(function (type) {
+  W.addEventListener(type, function (ev) {
+    if (!alive || frameSeen) { ev.stopImmediatePropagation(); return; }
+    frameSeen = true;
+  }, true);
+});
+// the watchdog: a stalled frame (not a hidden tab) counts; four inside ten seconds is a freeze
+(function tick(t) {
+  if (!alive) return;
+  frameSeen = false;
+  if (lastFrame && !D.hidden && t - lastFrame > GAP_MS && t - lastFrame < 4000) {
+    gaps.push(t); while (gaps.length && t - gaps[0] > WINDOW_MS) gaps.shift();
+    if (gaps.length >= GAP_HITS) return kill('הדף קפא ' + gaps.length + ' פעמים בעשר שניות (פריים של יותר מ-' + GAP_MS + 'ms) — האפקט מקפיא את הדף');
+  }
+  lastFrame = t;
+  W.requestAnimationFrame(tick);
+})(0);
+(function (window, document, self, globalThis, addEventListener, removeEventListener, requestAnimationFrame, setTimeout, setInterval) {`;
+
+const EFFECT_GUARD_CLOSE = `}).call(winP, winP, docP, winP, winP, gAdd(W), gRemove(W), gRaf, gTimeout, gInterval);
+})();`;
 
 /** First fenced block matching one of the language tags, or ''. */
 function extractFence(text, langs) {
@@ -619,6 +741,163 @@ function checkCss(css) {
   return '';
 }
 
+// ── Hygiene at the door (v2.27) — what the misfire matrix taught.
+//    Every shape below came out of a real chat reply and reached the site
+//    unchanged: a curly-quoted colour, an @import of Google Fonts inside the
+//    skin, a background image fetched from a stranger's server, a font
+//    declared but never loaded, a mouse effect that makes a node per event.
+//    Each is now either read the way it was meant (fonts, quotes) or taken
+//    out and SAID (external reach) — and what remains is linted so the studio
+//    can warn before the owner learns it from a frozen tab.
+
+/**
+ * Author CSS (skin / effect) with its external reach removed. `@import` and
+ * `url(http…)` are the two ways a stylesheet leaves the site: the prompt
+ * forbids both, the door enforces it. A Google-Fonts @import is the one
+ * case with a meaning worth keeping — its families move to fonts.google.
+ * @returns {{ css: string, changes: string[], fonts: string[] }}
+ */
+function cleanAuthorCss(css) {
+  let s = String(css == null ? '' : css);
+  const changes = [];
+  const fonts = [];
+  const takeImport = (href) => {
+    const h = String(href || '').replace(/["']/g, '').trim();
+    if (/fonts\.googleapis\.com/i.test(h)) {
+      const fam = [...h.matchAll(/family=([^&:]+)/g)].map((x) => {
+        try { return decodeURIComponent(x[1]).replace(/\+/g, ' ').trim(); } catch (e) { return x[1].replace(/\+/g, ' ').trim(); }
+      }).filter(Boolean);
+      fonts.push(...fam);
+      changes.push(fam.length ? `@import של Google Fonts הוסר מה-CSS — הגופנים (${fam.join(', ')}) עברו ל-bent-fonts google` : '@import של Google Fonts הוסר מה-CSS');
+    } else {
+      changes.push('@import חיצוני הוסר מה-CSS: ' + h.slice(0, 80));
+    }
+    return '';
+  };
+  s = s.replace(/@import\s+url\(([^)]*)\)[^;]*;?/gi, (m, href) => takeImport(href));
+  s = s.replace(/@import\s+(["'])([^"']+)\1[^;]*;?/gi, (m, q, href) => takeImport(href));
+  s = s.replace(/url\(\s*(["']?)((?:https?:)?\/\/[^"')\s]+)\1\s*\)/gi, (m, q, href) => {
+    changes.push('כתובת חיצונית הוסרה מה-CSS (משאבים רק מהאתר עצמו): ' + href.slice(0, 80));
+    return 'none';
+  });
+  return { css: s.trim(), changes, fonts };
+}
+
+/** A colour the theme model accepts — hex (3/6/8), rgb()/rgba() folded to
+ *  hex, a plain colour keyword kept; anything else is not a colour. */
+function normalizeColor(v) {
+  const s = String(v == null ? '' : v).replace(/["'“”‘’]/g, '').trim();
+  if (!s) return '';
+  const h3 = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(s);
+  if (h3) return ('#' + h3[1] + h3[1] + h3[2] + h3[2] + h3[3] + h3[3]).toLowerCase();
+  if (/^#[0-9a-f]{6}$/i.test(s) || /^#[0-9a-f]{8}$/i.test(s)) return s.toLowerCase();
+  const rgb = /^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})/i.exec(s);
+  if (rgb) return '#' + [rgb[1], rgb[2], rgb[3]].map((n) => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, '0')).join('');
+  if (/^[a-z]{3,20}$/i.test(s)) return s.toLowerCase();
+  return null;
+}
+
+/** The colour section, every value a colour — or dropped, with a word. */
+function sanitizeColors(colors) {
+  const out = {};
+  const warnings = [];
+  for (const [k, v] of Object.entries(colors || {})) {
+    if (!Object.prototype.hasOwnProperty.call(DEFAULT_OVERRIDES.colors, k)) continue;
+    const c = normalizeColor(v);
+    if (c) out[k] = c;
+    else if (String(v || '').trim()) warnings.push(`הצבע "${k}" (${String(v).slice(0, 30)}) לא תקין — הושמט, נשאר צבע הערכה`);
+  }
+  return { colors: out, warnings };
+}
+
+// the shelf's display faces — the ones a designer reaches for in a heading
+const HEADING_FACES = new Set(['Suez One', 'Secular One', 'Karantina', 'Amatic SC', 'Frank Ruhl Libre', 'Bellefair', 'Bona Nova', 'Noto Serif Hebrew', 'David Libre']);
+
+/** A shelf family named inside a CSS font stack, or ''. */
+function shelfFamilyIn(stack) {
+  const s = String(stack || '');
+  for (const f of Object.keys(GOOGLE_FONTS)) {
+    if (new RegExp('(^|["\'\\s,])' + f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(["\'\\s,]|$)', 'i').test(s)) return f;
+  }
+  return '';
+}
+
+/**
+ * The fonts section made whole: a family named in the stack but missing
+ * from `google` is loaded; a `google` list with an empty stack is used.
+ * Both are what the model MEANT — the old behaviour was a request for a
+ * font that never reached the page, or a page that never asked for it.
+ */
+function deriveFonts(fonts, extraGoogle) {
+  const f = { ...(fonts || {}) };
+  const warnings = [];
+  const google = [];
+  const add = (name) => {
+    const n = String(name || '').replace(/["']/g, '').trim();
+    if (!n || google.some((g) => g.toLowerCase() === n.toLowerCase())) return;
+    // hasOwnProperty, not truthiness: a regular-only face (Suez One, Varela
+    // Round) is on the shelf with an EMPTY weight list
+    if (!Object.prototype.hasOwnProperty.call(GOOGLE_FONTS, n)) { warnings.push(`הגופן "${n}" אינו במדף הגופנים העבריים — לא ייטען`); return; }
+    google.push(n);
+  };
+  (Array.isArray(f.google) ? f.google : String(f.google || '').split(',')).forEach(add);
+  (extraGoogle || []).forEach(add);
+  const inFamily = shelfFamilyIn(f.family);
+  const inHeading = shelfFamilyIn(f.headingFamily);
+  if (inFamily && !google.some((g) => g.toLowerCase() === inFamily.toLowerCase())) { add(inFamily); warnings.push(`הגופן "${inFamily}" הוזכר ב-family בלי google — נוסף לטעינה`); }
+  if (inHeading && !google.some((g) => g.toLowerCase() === inHeading.toLowerCase())) { add(inHeading); warnings.push(`הגופן "${inHeading}" הוזכר ב-heading בלי google — נוסף לטעינה`); }
+  if (google.length && !String(f.family || '').trim()) {
+    const body = google.find((g) => !HEADING_FACES.has(g)) || google[0];
+    f.family = `"${body}", ${SYSTEM_FONT}`;
+    warnings.push(`family היה ריק — נקבע ל-"${body}" מהגופנים שביקשת לטעון`);
+  }
+  if (google.length > 1 && !String(f.headingFamily || '').trim()) {
+    const head = google.find((g) => HEADING_FACES.has(g) && !new RegExp(g, 'i').test(f.family || ''));
+    if (head) { f.headingFamily = `"${head}", ${SYSTEM_FONT}`; warnings.push(`heading היה ריק — נקבע ל-"${head}"`); }
+  }
+  f.google = google.slice(0, 4);
+  return { fonts: f, warnings };
+}
+
+/**
+ * What the effect guard will have to do to this snippet, said up front.
+ * Warnings, never refusals — the guard on the page is the safety; this is
+ * the studio telling the owner what it saw before the visitors do.
+ */
+function lintEffect(js, css) {
+  const s = String(js || '');
+  const c = String(css || '');
+  const out = [];
+  if (!s.trim()) return out;
+  if (/while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\)/.test(s)) out.push('לולאה אינסופית (while(true)) — השומר יעצור את האפקט');
+  for (const m of s.matchAll(/setInterval\s*\([^,]+,\s*(\d+)/g)) if (Number(m[1]) < 16) out.push(`setInterval כל ${m[1]}ms — מהיר מדי, יוגבל ל-16ms`);
+  if (/document\.write\s*\(/.test(s)) out.push('document.write מוחק את הדף — לא ירוץ כמצופה');
+  if (/\balert\s*\(|\bconfirm\s*\(|\bprompt\s*\(/.test(s)) out.push('alert/confirm/prompt מפריעים לגולשים — להסיר');
+  if (/\bimport\s*\(|\brequire\s*\(|https?:\/\//i.test(s)) out.push('כתובת או ספרייה חיצונית בקוד — האפקט חייב להיות עצמאי (Vanilla, בלי CDN)');
+  const perMove = /(mousemove|pointermove|touchmove)[\s\S]{0,600}?(createElement|appendChild|insertAdjacentHTML|innerHTML\s*\+?=|cloneNode)/i.test(s);
+  const capped = /(\.length\s*(>=?|<=?)\s*\d|MAX|LIMIT|POOL|cap\b|slice\(\s*-|shift\(\)|splice\()/i.test(s);
+  if (perMove && !capped) out.push('יוצר אלמנט בכל תזוזת עכבר בלי תקרה — השומר יעצור אחרי 400 אלמנטים חיים; עדיף מאגר קבוע (pool) של 20–30 נקודות שממוחזרות');
+  if (!/prefers-reduced-motion/i.test(s + c)) out.push('לא מכבד prefers-reduced-motion — השומר מכבה את האפקט לגולשים שביקשו להפחית תנועה');
+  if (/createElement|appendChild|insertAdjacentHTML/i.test(s) && !/pointer-events\s*:\s*none/i.test(s + c)) out.push('האלמנטים של האפקט בלי pointer-events:none — עלולים לחסום קליקים על הדף');
+  if (/\.style\.(top|left)\s*=/.test(s) && !/transform/i.test(s)) out.push('מזיז אלמנטים עם top/left במקום transform — כבד יותר לדפדפן');
+  return out;
+}
+
+/** The skin is cosmetics on the skeleton — a rule that hides or reflows the
+ *  skeleton is a broken site, not a theme. Warnings only. */
+function lintSkin(css) {
+  const s = String(css || '');
+  const out = [];
+  if (!s.trim()) return out;
+  if (/(\.main-nav|\.site-footer|\.site-header|\.skip-link)[^{]*\{[^}]*display\s*:\s*none/i.test(s)) out.push('העור מסתיר את התפריט/הכותרת/התחתית (display:none) — אסור לפי חוקי הערכה');
+  if (/\bbody\s*[^{]*\{[^}]*overflow\s*:\s*hidden/i.test(s)) out.push('overflow:hidden על body — הדף לא יגלול');
+  if (/\bbody\s*[^{]*\{[^}]*position\s*:\s*(fixed|absolute)/i.test(s)) out.push('position:fixed/absolute על body — שובר את הפריסה');
+  const important = (s.match(/!important/g) || []).length;
+  if (important > 12) out.push(`${important} פעמים !important — עור צריך לעצב דרך הסלקטורים, לא לכפות`);
+  if (/@keyframes[\s\S]{0,400}?(width|height|top|left|margin)\s*:/i.test(s)) out.push('אנימציה על width/height/top/left — כבדה; עדיף transform/opacity');
+  return out;
+}
+
 // ── "Take only the theme" (v2.24) — the BenTML attitude for themes. A chat
 //    answers with prose, fences of any flavour, a package echoed back, or a
 //    bare JSON object; the doors below take the theme out of all of it.
@@ -693,65 +972,115 @@ function pickSections(obj) {
  */
 function extractThemeReply(reply, fallbackName) {
   const text = String(reply || '');
+  const warnings = [];
+  const notes = [];
+  let name = '';
+  let overrides = {};
+  let specimen = '';
+  let bent = false;
+  let json = null;
+  const cssFences = allFences(text, ['css']);
+  const jsFences = allFences(text, ['js', 'javascript']);
+
   // v2.26: a <bent-theme> document (the BenTML theme dialect) is THE format —
   // one fence, sections as tags, css/js as <style>/<script>, the bench as
   // <bent-canvas>. The JSON path below stays for older replies and files.
   const dialect = require('./bentml/theme-dialect');
   if (dialect.isThemeBent(text)) {
     const t = dialect.parseTheme(text);
-    const overrides = pickSections(t.overrides);
-    if (!Object.keys(overrides).length && !t.canvas) throw new Error('מסמך ה-<bent-theme> ריק — אין בו אף מקטע (colors/fonts/style/…) ולא קנבס');
-    const jsErr = checkEffectJs(overrides.effects && overrides.effects.js);
-    if (jsErr) throw new Error('ה-JS של האפקט לא מתקמפל: ' + jsErr + ' — בקשו מהצ׳אט לתקן ולהחזיר את המסמך מחדש');
-    const cssErr = checkCss(overrides.skin && overrides.skin.css);
-    if (cssErr) throw new Error(cssErr + ' — בקשו מהצ׳אט לתקן');
-    return {
-      name: t.name || String(fallbackName || '').trim().slice(0, 120) || 'ערכה מה-AI',
-      overrides,
-      specimen: t.canvas,
-      parts: { bent: true, json: false, cssChars: (overrides.skin && overrides.skin.css || '').length, jsChars: (overrides.effects && overrides.effects.js || '').length, specimenChars: t.canvas.length }
-    };
-  }
-  const json = extractThemeJson(text);
-  let name = '';
-  let overrides = {};
-  if (json) {
-    if (json.format === THEME_PACKAGE_FORMAT && json.overrides && typeof json.overrides === 'object') {
-      name = String(json.name || '');
-      overrides = pickSections(json.overrides);
-    } else {
-      name = String(json.name || json.title || '');
-      overrides = pickSections(json);
+    bent = true;
+    name = t.name;
+    overrides = pickSections(t.overrides);
+    specimen = t.canvas;
+    notes.push(...t.notes);
+    if (t.notes.includes('SEVERAL_DOCUMENTS')) warnings.push('התשובה הכילה כמה מסמכי <bent-theme> — נלקח העשיר שבהם');
+    if (t.notes.includes('BARE_STYLE')) warnings.push('ה-CSS נכתב ישירות ב-<style> בלי <bent-skin> — נקרא כעור');
+    if (t.notes.includes('BARE_SCRIPT')) warnings.push('ה-JS נכתב ישירות ב-<script> בלי <bent-effect> — נקרא כאפקט');
+    // the skin/effect written as fences BESIDE the document (D in the matrix)
+    if (cssFences.length && !(overrides.skin && overrides.skin.css)) { overrides.skin = { ...(overrides.skin || {}), css: cssFences.join('\n\n') }; warnings.push('העור הגיע ב-fence של css מחוץ למסמך — צורף לערכה'); }
+    if (jsFences.length && !(overrides.effects && overrides.effects.js)) { overrides.effects = { ...(overrides.effects || {}), js: jsFences.join('\n\n') }; warnings.push('האפקט הגיע ב-fence של js מחוץ למסמך — צורף לערכה'); }
+    if (!Object.keys(overrides).length && !specimen) throw new Error('מסמך ה-<bent-theme> ריק — אין בו אף מקטע (colors/fonts/style/…) ולא קנבס');
+  } else {
+    json = extractThemeJson(text);
+    if (json) {
+      if (json.format === THEME_PACKAGE_FORMAT && json.overrides && typeof json.overrides === 'object') {
+        name = String(json.name || '');
+        overrides = pickSections(json.overrides);
+      } else {
+        name = String(json.name || json.title || '');
+        overrides = pickSections(json);
+      }
+    }
+    // the SPECIMEN (v2.26): an html/pzn fence of BenTML — the bench the model
+    // composed to show its theme off. Kept OUTSIDE overrides: the bench is
+    // beside the theme, never inside it (theme-canvas.js).
+    specimen = allFences(text, ['html', 'pzn', 'bentml']).find((f) => /<bent-[a-z]/i.test(f)) || '';
+    // a reply that skipped the fences and answered with bare <style>/<script>
+    if (!cssFences.length && !jsFences.length && !json) {
+      const parts = extractEffectParts(text);
+      if (parts.css) cssFences.push(parts.css);
+      if (parts.js) jsFences.push(parts.js);
+    }
+    if (cssFences.length) overrides.skin = { ...(overrides.skin || {}), css: cssFences.join('\n\n') };
+    if (jsFences.length) overrides.effects = { ...(overrides.effects || {}), js: jsFences.join('\n\n') };
+    if (!Object.keys(overrides).length) {
+      // a PAGE, not a theme (I in the matrix): the site-builder habit of a
+      // chat that was not FRESH. Naming it is the whole fix — the old door
+      // "succeeded" with an empty theme named after the brief.
+      if (specimen || /<bent-[a-z]/i.test(text)) {
+        const e = new Error('זו תשובה של בונה-הדפים — מסמך .pzn עם מודולים, לא ערכת נושא. הצ׳אט כנראה לא היה חדש (FRESH) וענה בשפת הדפים. אפשר להדביק את המודולים האלה בקנבס (למטה), ולבקש את הערכה עצמה בצ׳אט חדש עם פרומפט המעצב/ת');
+        e.code = 'PAGE_NOT_THEME';
+        throw e;
+      }
+      throw new Error('לא נמצאה ערכת נושא בתשובה — צריך מסמך <bent-theme> (או fence של json/css). ודאו שהעתקתם את כל התשובה, ושביקשתם אותה בצ׳אט חדש (FRESH)');
     }
   }
-  const cssFences = allFences(text, ['css']);
-  const jsFences = allFences(text, ['js', 'javascript']);
-  // the SPECIMEN (v2.26): an html/pzn fence of BenTML — the bench the model
-  // composed to show its theme off. Kept OUTSIDE overrides: the bench is
-  // beside the theme, never inside it (theme-canvas.js).
-  const specimen = allFences(text, ['html', 'pzn', 'bentml']).find((f) => /<bent-[a-z]/i.test(f)) || '';
-  // a reply that skipped the fences and answered with bare <style>/<script>
-  if (!cssFences.length && !jsFences.length && !json) {
-    const parts = extractEffectParts(text);
-    if (parts.css) cssFences.push(parts.css);
-    if (parts.js) jsFences.push(parts.js);
+
+  // hygiene: colours that are colours, fonts that load, css that stays home
+  if (overrides.colors) {
+    const c = sanitizeColors(overrides.colors);
+    overrides.colors = c.colors;
+    warnings.push(...c.warnings);
+    if (!Object.keys(overrides.colors).length) delete overrides.colors;
   }
-  if (cssFences.length) overrides.skin = { ...(overrides.skin || {}), css: cssFences.join('\n\n') };
-  if (jsFences.length) overrides.effects = { ...(overrides.effects || {}), js: jsFences.join('\n\n') };
-  if (!Object.keys(overrides).length && !specimen) {
-    throw new Error('לא נמצאה ערכת נושא בתשובה — צריך fence של json (ההגדרות) ו/או css (העור). ודאו שהעתקתם את כל התשובה, ושביקשתם אותה בצ׳אט חדש (FRESH)');
+  let importedFonts = [];
+  if (overrides.skin && overrides.skin.css) {
+    const cleaned = cleanAuthorCss(overrides.skin.css);
+    overrides.skin.css = cleaned.css;
+    warnings.push(...cleaned.changes);
+    importedFonts = importedFonts.concat(cleaned.fonts);
+    if (!overrides.skin.css) delete overrides.skin;
   }
+  if (overrides.effects && overrides.effects.css) {
+    const cleaned = cleanAuthorCss(overrides.effects.css);
+    overrides.effects.css = cleaned.css;
+    warnings.push(...cleaned.changes);
+    importedFonts = importedFonts.concat(cleaned.fonts);
+  }
+  if (overrides.fonts || importedFonts.length) {
+    const f = deriveFonts(overrides.fonts || {}, importedFonts);
+    overrides.fonts = f.fonts;
+    warnings.push(...f.warnings);
+  }
+  if (overrides.effects && !String(overrides.effects.js || '').trim() && !String(overrides.effects.css || '').trim()) delete overrides.effects;
+
   const jsErr = checkEffectJs(overrides.effects && overrides.effects.js);
-  if (jsErr) throw new Error('ה-JS של האפקט לא מתקמפל: ' + jsErr + ' — בקשו מהצ׳אט לתקן ולהחזיר את ה-fence מחדש');
+  if (jsErr) throw new Error('ה-JS של האפקט לא מתקמפל: ' + jsErr + (bent ? ' — בקשו מהצ׳אט לתקן ולהחזיר את המסמך מחדש' : ' — בקשו מהצ׳אט לתקן ולהחזיר את ה-fence מחדש'));
   const cssErr = checkCss(overrides.skin && overrides.skin.css);
   if (cssErr) throw new Error(cssErr + ' — בקשו מהצ׳אט לתקן');
-  name = name.trim().slice(0, 120) || String(fallbackName || '').trim().slice(0, 120) || 'ערכה מה-AI';
+  warnings.push(...lintEffect(overrides.effects && overrides.effects.js, overrides.effects && overrides.effects.css));
+  warnings.push(...lintSkin(overrides.skin && overrides.skin.css));
+
+  name = String(name || '').trim().slice(0, 120) || String(fallbackName || '').trim().slice(0, 120) || 'ערכה מה-AI';
   return {
     name,
     overrides,
     specimen,
+    warnings,
     parts: {
+      bent,
       json: !!json,
+      notes,
       cssChars: (overrides.skin && overrides.skin.css || '').length,
       jsChars: (overrides.effects && overrides.effects.js || '').length,
       specimenChars: specimen.length
@@ -851,7 +1180,7 @@ function parseThemePackage(input) {
   if (!text.trim()) throw new Error('קובץ ערכת הנושא ריק');
   if (require('./bentml/theme-dialect').isThemeBent(text)) {
     const t = extractThemeReply(text);
-    return { format: THEME_PACKAGE_FORMAT, version: THEME_PACKAGE_VERSION, name: t.name, exportedAt: new Date().toISOString(), overrides: t.overrides, canvas: t.specimen };
+    return { format: THEME_PACKAGE_FORMAT, version: THEME_PACKAGE_VERSION, name: t.name, exportedAt: new Date().toISOString(), overrides: t.overrides, canvas: t.specimen, warnings: t.warnings };
   }
   const json = extractThemeJson(text);
   const hasFences = allFences(text, ['css', 'js', 'javascript']).length > 0;
@@ -868,7 +1197,8 @@ function parseThemePackage(input) {
     version: THEME_PACKAGE_VERSION,
     name: theme.name,
     exportedAt: new Date().toISOString(),
-    overrides: theme.overrides
+    overrides: theme.overrides,
+    warnings: theme.warnings
   };
 }
 
@@ -921,6 +1251,13 @@ module.exports = {
   extractThemeReply,
   checkEffectJs,
   checkCss,
+  // hygiene at the door (v2.27)
+  cleanAuthorCss,
+  normalizeColor,
+  sanitizeColors,
+  deriveFonts,
+  lintEffect,
+  lintSkin,
   getThemeSettings,
   saveThemeSettings,
   // theme packages (v0.99)

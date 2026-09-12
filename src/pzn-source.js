@@ -69,6 +69,13 @@ function toPznSource(raw) {
   return { source: ex.source, dialect: ex.dialect, extracted: ex.changes };
 }
 
+/** A whole document around a body-only fragment; a document passes through. */
+function fragmentShell(source) {
+  const s = String(source || '');
+  if (/<html[\s>]/i.test(s)) return s;
+  return '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8" /><title></title></head>\n<body>\n' + s + '\n</body>\n</html>';
+}
+
 /**
  * The ONE forgiving pipeline for pasted BenTML (v0.69 — shared by every paste
  * door: the in-builder AI import, the advanced code tab, and /admin/new).
@@ -91,7 +98,13 @@ function pznSourceToBlocks(rawSource) {
     if (errs.length) { const e = new Error('invalid'); e.issues = errs; throw e; }
   } catch (parseErr) {
     const { repair } = require('./pzn/repair');
-    const r = repair(source);
+    // a body-only fragment (the theme bench, a pasted row of modules) parses
+    // fine when clean, but the repair engine works on a <body> — give it the
+    // shell it needs, so raw HTML around pasted modules is quarantined the
+    // way it is in a whole page instead of failing the whole paste (v2.27).
+    // Only a fragment that HAS modules gets the shell — plain prose must keep
+    // failing as "no BenTML here", not become a page of one html block.
+    const r = repair(/<bent-[a-z]/i.test(source) ? fragmentShell(source) : source);
     if (!r.ok || r.remaining.length) {
       const err = new Error(r.error || 'לא הצלחתי לקרוא את ה‑BenTML');
       err.issues = r.remaining || parseErr.issues;
@@ -113,4 +126,4 @@ function pznSourceToBlocks(rawSource) {
   return { view, doc, repaired, changes, dialect: ex.dialect, extracted: ex.changes };
 }
 
-module.exports = { looksLikePzn, pznSourceToBlocks, toPznSource, lineToPzn, extractBentml, sniffDialect };
+module.exports = { looksLikePzn, pznSourceToBlocks, toPznSource, lineToPzn, extractBentml, sniffDialect, fragmentShell };

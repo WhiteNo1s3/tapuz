@@ -122,6 +122,27 @@ documented with recommendations; §4b (plain-save-does-not-rebuild) is the only 
 footgun and is intentionally left as a product decision rather than a silent behaviour
 change.
 
+## 5b. Addendum (v2.27) — the effect now runs inside a GUARD
+
+Ben, after this advisory: _"I run it in Firefox — it built a theme using bentml and made a
+mouse; it freezes and looks sloppy, we cannot allow that."_ The advisory above proved the
+effect **executes**; it never asked whether it should be **allowed to** at any cost. A
+chat-written trail that creates a DOM node on every `mousemove` meets a 1000Hz mouse in
+Firefox (which does not coalesce mousemove to frames) and the page freezes — and the only
+thing the wrapper caught was a throw.
+
+`renderThemeEffectsJs` now runs the snippet with its globals shadowed (proxies for
+`window`/`document`, wrapped `addEventListener` / `requestAnimationFrame` / `setTimeout` /
+`setInterval`). Without touching the snippet: reduced-motion visitors never run it; the
+elements it creates are budgeted (>240/s or >400 live → stopped and removed); motion events
+reach the page once per frame and intervals never tick under 16ms; a handler or frame over
+50ms three times, or four stalled frames in ten seconds, stops it. A stop is logged under
+`[tapuz-theme-effects]`, parked on `window.__tapuzFx.killed`, and posted to the studio
+canvas. `scripts/smoke-theme-guard.js` executes the guard in a fake window against the
+runaway trail, a pooled trail, a 1ms interval and stalled frames. The designer and effects
+prompts now ask for the safe shape up front (a pool of ≤30 elements, one rAF loop,
+transform/opacity, coalesced mousemove), and the paste doors lint the snippet and warn.
+
 ## 6. Evidence (walkthrough artifacts)
 
 - `mouse_cursor_trail_effect_live_site_clean.mp4` — the orange trail following the pointer
