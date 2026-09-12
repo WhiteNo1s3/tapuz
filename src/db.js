@@ -411,6 +411,13 @@ function initializeCrm() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_claims_site ON crm_identity_claims(site_id, status)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_claims_contact ON crm_identity_claims(contact_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_crm_claims_email ON crm_identity_claims(email)');
+  // v2.21 — the foreign browser behind a claim. `visitor_hash` is the daily
+  // salted analytics hash and CANNOT stitch across days by design; approval
+  // needs a real token to bind (crm_visitors), so the claim carries the
+  // pixel's site-scoped visitor token until an admin approves or rejects it.
+  if (!hasColumn('crm_identity_claims', 'visitor_token')) {
+    db.exec(`ALTER TABLE crm_identity_claims ADD COLUMN visitor_token TEXT DEFAULT ''`);
+  }
 
   // Foreign anonymous traffic can tag analytics pageviews with a site_id
   // without polluting crm_events (privacy spine).

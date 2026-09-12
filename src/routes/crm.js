@@ -1410,6 +1410,7 @@ router.get('/admin/crm/claims', requireAdmin, requireCrm('crm-claims', 'תביע
             <div class="muted" style="font-size:.82rem">
               ${esc(c.name || '')} · site <span dir="ltr">${esc(c.site_id)}</span>
               · ×${c.claim_count} · ${esc(c.last_seen_at || '')}
+              ${c.visitor_token ? ' · 🔗 דפדפן מזוהה — אישור יקשר את הביקורים הבאים' : ''}
             </div>
             <div class="muted" style="font-size:.78rem" dir="ltr">${esc(c.path || '')}</div>
           </div>
@@ -1429,7 +1430,8 @@ router.get('/admin/crm/claims', requireAdmin, requireCrm('crm-claims', 'תביע
       <p class="lead">
         <code>identify({email})</code> מאתר זר <strong>לא</strong> יוצר איש קשר.
         הוא נוחת כאן כתביעה לא מאומתת — כמו הקופיילוט שלא פועל בלי אישור.
-        רק «אשר» מעביר דרך ה־upsert הרגיל.
+        רק «אשר» מעביר דרך ה־upsert הרגיל — ומקשר את הדפדפן שטען, כך
+        שהביקורים הבאים שלו באתר החיצוני ייכנסו לציר הזמן.
       </p>
       <p class="muted" style="font-size:.88rem">ממתינות: <strong>${pending}</strong>
         · <a href="/admin/crm/claims?status=pending">ממתינות</a>
@@ -2895,10 +2897,15 @@ router.get('/admin/crm/:id', requireAdmin, requireCrm('crm-contacts', 'איש ק
     }
   })();
 
+  // Foreign-site rows (v2.21) carry meta.site_id — shown so the owner can tell
+  // a visit on their WordPress from one on this site.
   const timeline = d.timeline.length
     ? d.timeline.map((e) => `
         <div class="rec" style="display:flex;gap:10px;align-items:baseline">
           <span class="pill">${esc(e.type)}</span>
+          ${e.meta && e.meta.site_id
+            ? `<span class="pill" dir="ltr" title="אתר חיצוני" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa">${esc(e.meta.site_id)}</span>`
+            : ''}
           <span style="flex:1">${esc(e.title || e.path || '')}</span>
           <span class="muted" style="font-size:.76rem">${esc(e.created_at)}</span>
         </div>`).join('')

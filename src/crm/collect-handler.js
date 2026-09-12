@@ -10,12 +10,25 @@
  *      (pageviews); only first-party progressive / linked browsers touch
  *      crm_events via capturePageview.
  *   4. identify-shaped payloads become identity claims, never upserts.
+ *
+ * Foreign stitching (v2.21): the loader sends a site-local pseudonymous `vid`
+ * with every beacon. It is looked up, never stored, here — a browser is bound
+ * to a person only by a form submission or an admin-approved claim
+ * (visitors.linkToken). An unlinked `vid` is anonymous traffic exactly as
+ * before; a linked one appends to that person's timeline, tagged with the
+ * site, and still counts on the analytics spine like the native path does.
  */
 
 const analytics = require('../analytics');
 const { clientIp } = require('../http-util');
 const sites = require('./sites');
 const claims = require('./identity-claims');
+const visitors = require('./visitors');
+const events = require('./events');
+const crm = require('./index');
+
+// `track()` from a linked foreign browser lands as its own timeline type.
+events.registerType('track', { label: 'אירוע' });
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -100,6 +113,12 @@ function handleCollect(req, res, { limiter } = {}) {
       const resolved = sites.resolveForCollect(siteSlug, origin);
       if (!resolved.ok) return res.status(204).end();
 
+      // The pixel's site-local visitor id, if any. '' unless it is a 32-hex
+      // string; the token is site-scoped so it can never replay across sites
+      // or masquerade as a first-party cookie token.
+      const visitorToken = visitors.foreignToken(siteSlug, typeof b.vid === 'string' ? b.vid : '');
+      const linkedId = visitorToken ? visitors.contactIdForToken(visitorToken) : null;
+
       // identify / claim — never upsertContact from this path
       const isIdentify =
         eventType === 'identify' ||
@@ -133,7 +152,10 @@ function handleCollect(req, res, { limiter } = {}) {
             phone,
             name: claimName,
             path: p,
-            visitorHash: vh
+            visitorHash: vh,
+            // remembered on the claim so approval can bind this browser;
+            // NOT linked here — that would be the forge-email hole.
+            visitorToken
           });
         }
         // Page context for identify may still count as analytics (anonymous)
@@ -143,9 +165,26 @@ function handleCollect(req, res, { limiter } = {}) {
         return res.status(204).end();
       }
 
-      // Anonymous foreign page / track → analytics only (site_id tagged)
+      // Foreign page / track → analytics spine (site_id tagged), as always.
       analytics.recordPageview({ path: p, referrer: ref, ip, userAgent: ua, siteId: siteSlug });
-      // Intentionally NO capturePageview / crm_events for anonymous foreign.
+
+      // Anonymous foreign: intentionally NO capturePageview / crm_events.
+      if (linkedId == null) return res.status(204).end();
+
+      // Linked foreign browser (form or approved claim) → that person's
+      // timeline. No req/res is passed, so this can never open a card.
+      const isTrack = eventType === 'pixel' || eventType === 'track';
+      const trackName = isTrack && typeof b.name === 'string' ? b.name.slice(0, 120) : '';
+      try {
+        crm.capturePageview({
+          contactId: linkedId,
+          visitorToken,
+          siteId: siteSlug,
+          path: p,
+          type: isTrack ? 'track' : 'pageview',
+          title: trackName
+        });
+      } catch (e) { /* never break the beacon */ }
       return res.status(204).end();
     }
 
@@ -168,7 +207,7 @@ function handleCollect(req, res, { limiter } = {}) {
 
     // Progressive cards / linked browsers only — guarded CRM seam.
     try {
-      require('./index').capturePageview({ req, res, path: p });
+      crm.capturePageview({ req, res, path: p });
     } catch (e) { /* never break the beacon */ }
   } catch (e) {
     // quiet

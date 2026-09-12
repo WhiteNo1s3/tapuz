@@ -92,6 +92,24 @@ function identityFromFields(fields = {}) {
 }
 
 /**
+ * Resolve the pixel visitor a foreign form submission arrived with (v2.21).
+ *
+ * The form bridge on a customer's WordPress sends `_tz_site` + `_tz_vid`
+ * alongside the fields. The link is honoured only when the site is
+ * registered, active, allowed for this Origin and the embed product is on —
+ * the same gate the collector applies. Returns '' otherwise, and the
+ * submission still lands (linkage is a bonus, never a condition).
+ */
+function foreignTokenForForm(foreign) {
+  if (!foreign || typeof foreign !== 'object') return '';
+  const slug = sites.normalizeSlug(foreign.siteId);
+  if (!slug || !sites.pixelEmbedEnabled()) return '';
+  const resolved = sites.resolveForCollect(slug, foreign.origin || '');
+  if (!resolved.ok) return '';
+  return visitors.foreignToken(slug, foreign.vid);
+}
+
+/**
  * HOOK — a form was submitted (call site: routes/form-capture.js).
  *
  * Resolves or creates the person, records the submission on their timeline,
@@ -99,7 +117,11 @@ function identityFromFields(fields = {}) {
  * them so their later visits have somewhere to land. Passing `req`/`res` is
  * optional: without them the person is still recorded, just not linked.
  *
- * @param {{fields:object, page?:string, submissionId?:number, country?:string, req?:object, res?:object}} input
+ * `foreign` (v2.21) is the pixel visitor on a registered foreign site
+ * ({siteId, vid, origin}); when it resolves, that browser is bound the same
+ * way the first-party cookie is — the form is the authenticated channel.
+ *
+ * @param {{fields:object, page?:string, submissionId?:number, country?:string, req?:object, res?:object, foreign?:{siteId:string, vid:string, origin?:string}}} input
  * @returns {{contact:object, created:boolean}|null}
  */
 const captureForm = safe('captureForm', (input = {}) => {
@@ -160,6 +182,8 @@ const captureForm = safe('captureForm', (input = {}) => {
     refId: input.submissionId != null ? input.submissionId : null
   });
   if (input.req && input.res) visitors.link(input.req, input.res, contact.id);
+  const foreignToken = foreignTokenForForm(input.foreign);
+  if (foreignToken) visitors.linkToken(foreignToken, contact.id);
   contacts.touchActivity(contact.id);
 
   // Server-side conversion (v1.80). Fire-and-forget on purpose: the visitor's
@@ -177,7 +201,7 @@ const captureForm = safe('captureForm', (input = {}) => {
     console.error('[crm] conversion dispatch failed:', e.message);
   }
 
-  return { contact, created, eventId };
+  return { contact, created, eventId, foreignLinked: !!foreignToken };
 });
 
 /**
@@ -188,10 +212,15 @@ const captureForm = safe('captureForm', (input = {}) => {
  * timeline. Without progressive cards (or before cookie): only browsers already
  * linked by a form get timeline rows — classic phase-2 behaviour.
  *
+ * Foreign sites (v2.21): the collector passes `contactId` + `visitorToken` +
+ * `siteId` for a browser ALREADY bound through a form or an approved claim,
+ * and no `res` — so this path can only append to an existing person, never
+ * open a provisional card for foreign traffic.
+ *
  * Anonymous analytics still live only in `pageviews` (daily hash, no cross-day
  * follow). We never write raw IP onto the card.
  *
- * @param {{req:object, res?:object, path?:string, title?:string, contactId?:number}} input
+ * @param {{req?:object, res?:object, path?:string, title?:string, contactId?:number, visitorToken?:string, siteId?:string, type?:string}} input
  */
 const capturePageview = safe('capturePageview', (input = {}) => {
   let contactId = input.contactId != null ? input.contactId : null;
@@ -201,6 +230,9 @@ const capturePageview = safe('capturePageview', (input = {}) => {
   // Progressive: first legitimate visit can open a provisional card.
   if (contactId == null && input.req && input.res) {
     contactId = cards.openOrTouch(input.req, input.res);
+  } else if (contactId != null && input.visitorToken) {
+    visitors.touch(input.visitorToken);
+    contacts.touchActivity(contactId);
   } else if (contactId != null && input.req) {
     visitors.touchFor(input.req);
     contacts.touchActivity(contactId);
@@ -208,11 +240,13 @@ const capturePageview = safe('capturePageview', (input = {}) => {
   if (contactId == null) return null;
 
   cards.noteInterest(contactId, input.path || '');
+  const siteId = sites.normalizeSlug(input.siteId);
   return events.record({
     contactId,
-    type: 'pageview',
+    type: input.type || 'pageview',
     path: input.path || '',
-    title: input.title || ''
+    title: input.title || '',
+    meta: siteId ? { site_id: siteId } : undefined
   });
 });
 
