@@ -358,6 +358,33 @@ function repairAst(doc, changes) {
     }
   });
 
+  // 3.5) unclosed LEAVES (v2.28, seen live from a local model): a leaf module
+  // written as an opener with no `/>` and no closer — `<bent-feature
+  // title="…" text="…">` — swallows every sibling after it, each nested one
+  // level deeper. A leaf (container:false) can never hold modules, so its
+  // module children ARE the siblings that were meant to follow it: re-parent
+  // them, in order, right after the leaf. Hoisting them to the page end (the
+  // old path) threw the page's order away and still left E_NOT_CONTAINER
+  // errors behind, so the whole paste was refused.
+  const unnest = (list) => {
+    for (let i = 0; i < list.length; i++) {
+      const node = list[i];
+      if (!isModule(node)) continue;
+      const def = getModule(node.name);
+      if (def && !def.container && node.children && node.children.length) {
+        const kids = node.children.filter(isModule);
+        node.children = node.children.filter((c) => !isModule(c));
+        if (kids.length) {
+          list.splice(i + 1, 0, ...kids);
+          changes.push({ code: 'UNCLOSED_LEAF', message: `<bent-${node.name}> was left open — ${kids.length} module(s) written inside it now follow it` });
+        }
+        continue; // the moved siblings are visited next
+      }
+      if (node.children && node.children.length) unnest(node.children);
+    }
+  };
+  unnest(doc.body);
+
   // 4) illegal nesting: hoist offending children to the document body
   const hoisted = [];
   const enforce = (list, parentDef) => {
@@ -465,6 +492,14 @@ function repair(source) {
   const changes = [];
   if (typeof source !== 'string' || !source.trim()) {
     return { ok: false, changes, remaining: [], error: 'empty source' };
+  }
+
+  // tag-name typos (v2.28, seen live from a local model): `<bent-text">` — a
+  // quote glued to the tag name turns a known module into an unknown one
+  const typo = source.replace(/<(\/?bent-[a-z][a-z0-9-]*)"(?=[\s>\/])/gi, '<$1');
+  if (typo !== source) {
+    source = typo;
+    changes.push({ code: 'TAG_TYPO', message: 'a stray quote after a tag name removed' });
   }
 
   const inline = normalizeInlineHtml(source);

@@ -82,6 +82,108 @@ body {
   color: var(--color-primary);
 }
 
+/* ===== Menu capacity, sub-menus, drawer (v2.28) =====
+   Ten Hebrew items broke the bar at EVERY desktop width: .header-inner was
+   capped at --max-width (the content column), the list never wrapped above
+   640px, multi-word labels split mid-label before the row overflowed, and
+   nested items had no css at all (a bulleted block inside the sticky header).
+   Now, with zero JavaScript and logical properties only (RTL first):
+     • labels never break; the row wraps by CONTENT, not by viewport
+     • the header may be wider than the content column (--header-max-width)
+     • sub-menus are dropdowns on hover AND :focus-within (keyboard), open
+       toward the inline end for the last items, and lie inline in the side
+       rail and in the drawer
+     • narrow screens get a drawer: a checkbox + label toggle (--menu-mobile)
+   Theme knobs set the custom properties (src/theme.js overridesToCss);
+   the defaults here are what an untouched site gets. */
+.header-inner {
+  max-width: max(var(--max-width), var(--header-max-width, 1140px));
+  flex-wrap: wrap;
+  gap: 0.6rem 1.5rem;
+}
+.main-nav { flex: 1 1 auto; min-width: 0; }
+.main-nav ul {
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
+  column-gap: var(--menu-gap, 1.75rem);
+  justify-content: var(--menu-align, flex-start);
+  align-items: center;
+}
+.main-nav li { position: relative; unicode-bidi: isolate; max-width: none; }
+.main-nav a { white-space: nowrap; display: inline-block; font-size: var(--menu-size, 0.95rem); }
+.main-nav li.has-children > a::before { content: '▾'; font-size: 0.7em; margin-inline-start: 0.3em; opacity: 0.7; }
+.main-nav .sub-menu {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 100%;
+  z-index: 120;
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0.45rem 0;
+  min-width: 12rem;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: var(--shadow-2, 0 10px 30px rgba(2, 8, 23, 0.12));
+}
+.main-nav li:hover > .sub-menu,
+.main-nav li:focus-within > .sub-menu { display: block; }
+.main-nav .sub-menu li { display: block; }
+.main-nav .sub-menu a { display: block; padding: 0.45rem 0.9rem; white-space: normal; }
+.main-nav .sub-menu a::after { display: none; }
+.main-nav .sub-menu a:hover { background: var(--color-light-bg); }
+/* the last items open toward the inline end so a dropdown never leaves the page */
+.main-nav > ul > li:nth-last-child(-n+2) > .sub-menu { inset-inline-start: auto; inset-inline-end: 0; }
+/* horizontal scroll strip — a theme choice (--menu-overflow: scroll) */
+.main-nav[data-overflow="scroll"] ul,
+.menu-scroll .main-nav ul {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+/* the drawer toggle: a real checkbox (keyboard: tab + space), visually hidden */
+.nav-toggle { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.nav-burger {
+  display: none;
+  cursor: pointer;
+  width: 42px;
+  height: 38px;
+  padding: 9px 10px;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-surface, #fff);
+  margin-inline-start: auto;
+}
+.nav-burger span { display: block; height: 2px; border-radius: 2px; background: currentColor; transition: transform 0.2s, opacity 0.2s; }
+.nav-toggle:focus-visible + .nav-burger { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.nav-toggle:checked + .nav-burger span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+.nav-toggle:checked + .nav-burger span:nth-child(2) { opacity: 0; }
+.nav-toggle:checked + .nav-burger span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+/* the drawer itself: below --menu-mobile-at (720px default) — or always,
+   when the theme says the menu is too long for a bar (body.menu-drawer) */
+@media (max-width: 720px) {
+  .main-nav { display: flex; flex-wrap: wrap; align-items: center; }
+  .nav-burger { display: flex; }
+  .main-nav ul { display: none; flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 0; padding: 0.5rem 0 0.25rem; }
+  .nav-toggle:checked ~ ul { display: flex; }
+  .main-nav a { display: block; padding: 0.55rem 0.4rem; white-space: normal; }
+  .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 1rem; background: transparent; min-width: 0; }
+  .main-nav li.has-children > a::before { content: ''; margin: 0; }
+}
+body.menu-drawer .main-nav { display: flex; flex-wrap: wrap; align-items: center; }
+body.menu-drawer .nav-burger { display: flex; }
+body.menu-drawer .main-nav ul { display: none; flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 0; padding: 0.5rem 0 0.25rem; }
+body.menu-drawer .nav-toggle:checked ~ ul { display: flex; }
+body.menu-drawer .main-nav a { display: block; padding: 0.55rem 0.4rem; white-space: normal; }
+body.menu-drawer .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 1rem; background: transparent; min-width: 0; }
+body.menu-drawer .main-nav li.has-children > a::before { content: ''; margin: 0; }
+
 /* ===== CMS-managed header chrome (S3) ===== */
 .header-brand {
   display: flex;
@@ -1548,8 +1650,7 @@ blockquote.testimonial { margin-inline: 0; }
 p, li { max-width: 70ch; }
 
 @media (max-width: 640px) {
-  .header-inner { flex-direction: column; gap: 0.6rem; }
-  .main-nav ul { flex-wrap: wrap; gap: 1rem; justify-content: center; }
+  /* the header no longer stacks here — the drawer (v2.28, ≤720px) owns narrow screens */
   .hero { padding: 2.25rem 1rem 1.75rem; }
   .hero h1 { font-size: 2rem; }
 }
@@ -2091,6 +2192,11 @@ body.menu-side .main-nav a:hover {
   background: var(--color-light-bg);
   color: var(--color-primary);
 }
+/* in the rail a sub-menu is an indented list, always open (v2.28) */
+body.menu-side .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 0.9rem; background: transparent; min-width: 0; }
+body.menu-side .main-nav .sub-menu a { padding: 0.35rem 0.85rem; font-size: 0.9em; }
+body.menu-side .main-nav li.has-children > a::before { content: ''; margin: 0; }
+body.menu-side .nav-burger { display: none; }
 @media (max-width: 900px) {
   /* narrow screens: back to the familiar top bar, menu wraps horizontally */
   body.menu-side { display: block; }

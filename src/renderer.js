@@ -757,13 +757,33 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-function renderMenuItems(items) {
+/**
+ * The main menu as nested lists. v2.28: a parent carries `has-children` (the
+ * theme draws the caret and the dropdown), the item that IS this page carries
+ * aria-current="page" (the theme's underline rule finally has a subject —
+ * it was styled for years and never emitted), and the theme css owns every
+ * behaviour (hover/focus dropdowns, the side rail, the drawer) — zero JS.
+ */
+function renderMenuItems(items, currentUrl) {
   return (items || []).map(item => {
     const kids = item.children && item.children.length
-      ? `<ul class="sub-menu">${renderMenuItems(item.children)}</ul>`
+      ? `<ul class="sub-menu">${renderMenuItems(item.children, currentUrl)}</ul>`
       : '';
-    return `<li><a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>${kids}</li>`;
+    const url = String(item.url || '');
+    const current = !!currentUrl && !!url && (url === currentUrl || (currentUrl === '/' && (url === '/' || url === '/index.html')));
+    return `<li${kids ? ' class="has-children"' : ''}><a href="${escapeHtml(url)}"${current ? ' aria-current="page"' : ''}>${escapeHtml(item.label)}</a>${kids}</li>`;
   }).join('\n');
+}
+
+/** The footer strip is flat; a nested footer menu contributes its children
+ *  after their parent instead of losing them (v2.28). */
+function flattenMenu(items) {
+  const out = [];
+  (items || []).forEach((item) => {
+    out.push(item);
+    (item.children || []).forEach((c) => out.push(c));
+  });
+  return out;
 }
 
 /**
@@ -1124,9 +1144,11 @@ function renderPage(page, options = {}) {
     logoHtml = escapeHtml(config.logo?.text || config.title || 'Site');
   }
 
-  // Menus
-  const menuHtml = renderMenuItems(mainMenu);
-  const footerMenuHtml = (footerMenu || []).map(item =>
+  // Menus — the item that points at THIS page is marked (aria-current);
+  // the crowned home matches '/' as well as its own file (v2.28)
+  const currentUrl = options.isHome === true ? '/' : ('/' + String(page.full_path || '') + '.html');
+  const menuHtml = renderMenuItems(mainMenu, currentUrl);
+  const footerMenuHtml = flattenMenu(footerMenu).map(item =>
     `<a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>`
   ).join(' &nbsp;|&nbsp; ');
 
@@ -1135,8 +1157,12 @@ function renderPage(page, options = {}) {
   // it on with a body class.
   const pageBg = pageBackgroundStyle(page.meta && page.meta.background);
   if (pageBg.css) head += pageBg.css;
+  const menuMode = String((overrides.chrome && overrides.chrome.menuOverflow) || 'wrap');
   const bodyClass = [
     overrides.layout?.menuPlacement === 'side' ? 'menu-side' : '',
+    // the theme's answer to a long menu (v2.28): wrap (default) · scroll (one
+    // strip) · drawer (the burger at every width) — css only, see main.css
+    menuMode === 'drawer' ? 'menu-drawer' : menuMode === 'scroll' ? 'menu-scroll' : '',
     pageBg.bodyClass
   ].filter(Boolean).join(' ');
   if (bodyClass) {
