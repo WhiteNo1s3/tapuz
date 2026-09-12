@@ -256,6 +256,11 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
         .slice(0, 8).map(([k, p]) => {
         let s = k;
         if (p.values) s += '=' + p.values.slice(0, 4).join('|') + (p.values.length > 4 ? '|…' : '');
+        // opts.ranges (the theme's bench kit): a number's range, so a model
+        // never writes overlay="true" or columns="many" (v2.28, seen live)
+        else if (opts.ranges && (p.type === 'integer' || p.type === 'number')) {
+          s += '=' + (p.min != null ? p.min : 0) + '..' + (p.max != null ? p.max : '');
+        }
         if (p.content) s += '*';
         return s;
       });

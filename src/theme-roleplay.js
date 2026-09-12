@@ -121,7 +121,7 @@ function benchKitMarkdown() {
       const sub = list.filter((m) => keep.has(m.name));
       if (sub.length) categories[cat] = sub;
     }
-    return dict.toCompactMarkdown({ ...d, categories }, { locale: 'he' })
+    return dict.toCompactMarkdown({ ...d, categories }, { locale: 'he', ranges: true })
       .replace(/^## [^\n]*\n/, '')
       .trim();
   } catch (e) {
