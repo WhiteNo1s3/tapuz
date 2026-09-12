@@ -235,7 +235,7 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
   // seen live) — the legend now says where the body goes and that every
   // tag closes.
   lines.push(he
-    ? 'שורה לכלי: `תג` · ⊃ = אילו ילדים נכנסים בתוכו · props (ערך1|ערך2 = הערכים המותרים, `*` = טקסט הגוף — נכתב **בין** תג הפתיחה לסגירה, לא כמאפיין, ↳ = חי רק בתוך מיכל). כל תג נסגר: `<bent-x …>גוף</bent-x>` או `<bent-x … />`; תג בלי ⊃ לעולם לא מכיל תגים. לכל תג יש גם `id`, `class` ו-`animate=none|fade|rise|zoom` אופציונליים — לא חוזרים עליהם בשורות.'
+    ? 'שורה לכלי: `תג` · ⊃ = הילדים המותרים · props (`א|ב` = ערכים מותרים, `*` = טקסט גוף **בין** הפתיחה לסגירה — לא מאפיין, ↳ = רק בתוך מיכל). כל תג נסגר (`…</bent-x>` או `/>`); תג בלי ⊃ לא מכיל תגים. לכל תג גם `id`, `class`, `animate=none|fade|rise|zoom` — לא חוזרים בשורות.'
     : 'One line per tool: `tag` · ⊃ = allowed children · props (a|b = allowed values, `*` = body text — written BETWEEN the opening and closing tag, never as an attribute, ↳ = lives only inside a container). Every tag closes: `<bent-x …>body</bent-x>` or `<bent-x … />`; a tag without ⊃ never contains tags. Every tag also takes optional `id`, `class` and `animate=none|fade|rise|zoom` — not repeated per line.');
   lines.push('');
 

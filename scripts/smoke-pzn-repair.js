@@ -141,7 +141,7 @@ repairClean('hoist <bent-text> out of <bent-columns>', doc('    <bent-columns id
     feats && feats.children.length === 3 && feats.children.map((c) => c.id).join(',') === 'a,b,c');
   check('  the text after the unclosed quote follows it at the top level, not inside it',
     d.body.map((n) => n.name).join(',') === 'features,quote,text');
-  check('  nothing was hoisted to the page end', !r.changes.some((c) => c.code === 'HOIST'));
+  check('  nothing was thrown to the page end — a moved module follows its container', !r.changes.some((c) => /page end/.test(c.message)));
   // a quote glued to the tag name
   const t = repairClean('a stray quote after a tag name is removed (TAG_TYPO)', doc('<bent-text" id="x">שלום</bent-text>\n<bent-text id="y">עולם</bent-text">'), 'TAG_TYPO');
   check('  both texts survive as text modules', pzn.parse(t.source).body.map((n) => n.name).join(',') === 'text,text');
