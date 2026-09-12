@@ -70,7 +70,14 @@ const DEFAULT_OVERRIDES = {
     menuOverflow: 'wrap',   // wrap | scroll | drawer
     menuAlign: 'start',     // start | center | end | between
     menuGap: 'md',          // sm | md | lg
-    menuSize: 'md'          // sm | md | lg
+    menuSize: 'md',         // sm | md | lg
+    // v2.28b — the organizer's three extra knobs: how many top-level items
+    // before an "עוד" fold (0 = off), where the bar collapses into the
+    // drawer (sm 560px · md 720px · lg 1024px · never), how the current
+    // page is marked. Every default is what the theme css already does.
+    menuFold: 0,            // 0..12
+    menuCollapse: 'md',     // sm | md | lg | never
+    menuCurrent: 'underline' // underline | pill | bold | none
   },
   // Theme SKIN (v2.24) — free-form CSS against the theme's documented
   // skeleton (see theme-roleplay.js skeletonSelectors): what makes a theme a
@@ -301,6 +308,83 @@ const MENU_GAP = { sm: '1rem', md: '1.75rem', lg: '2.5rem' };
 const MENU_SIZE = { sm: '0.85rem', md: '0.95rem', lg: '1.08rem' };
 const MENU_ALIGN = { start: 'flex-start', center: 'center', end: 'flex-end', between: 'space-between' };
 const MENU_OVERFLOW = ['wrap', 'scroll', 'drawer'];
+const MENU_COLLAPSE = ['sm', 'md', 'lg', 'never'];
+const MENU_CURRENT = ['underline', 'pill', 'bold', 'none'];
+const MENU_FOLD = { min: 0, max: 12 };
+
+/**
+ * The menu's geometry as ONE flat object (v2.28b) — what the organizer's
+ * `<bent-menu-layout>` tag, the studio card and the capacity estimate all
+ * read. Storage stays where it landed (layout.menuPlacement/headerWidth,
+ * chrome.menu*): this is a view, not a second home.
+ *   { placement, width, flow, fold, collapse, align, gap, size, current }
+ */
+function menuKnobs(overrides) {
+  const o = overrides || {};
+  const l = o.layout || {};
+  const c = o.chrome || {};
+  const d = DEFAULT_OVERRIDES;
+  const pick = (v, list, fallback) => (list.indexOf(v) >= 0 ? v : fallback);
+  const fold = Math.max(MENU_FOLD.min, Math.min(MENU_FOLD.max, parseInt(c.menuFold, 10) || 0));
+  return {
+    placement: l.menuPlacement === 'side' ? 'side' : 'top',
+    width: pick(l.headerWidth, Object.keys(HEADER_WIDTH), d.layout.headerWidth),
+    flow: pick(c.menuOverflow, MENU_OVERFLOW, d.chrome.menuOverflow),
+    fold: fold === 1 ? 0 : fold,             // a fold that hides one item is no fold
+    collapse: pick(c.menuCollapse, MENU_COLLAPSE, d.chrome.menuCollapse),
+    align: pick(c.menuAlign, Object.keys(MENU_ALIGN), d.chrome.menuAlign),
+    gap: pick(c.menuGap, Object.keys(MENU_GAP), d.chrome.menuGap),
+    size: pick(c.menuSize, Object.keys(MENU_SIZE), d.chrome.menuSize),
+    current: pick(c.menuCurrent, MENU_CURRENT, d.chrome.menuCurrent)
+  };
+}
+
+/** The inverse of menuKnobs: a (partial) knob object → the override
+ *  fragment to mergeDeep over loadOverrides(). Unknown keys are ignored,
+ *  unknown values reset to the default with a Hebrew warning. */
+function knobsToOverrides(knobs) {
+  const k = knobs || {};
+  const warnings = [];
+  const out = { layout: {}, chrome: {} };
+  const d = DEFAULT_OVERRIDES;
+  const put = (section, key, value, list, label) => {
+    if (value === undefined || value === null || value === '') return;
+    if (list.indexOf(value) >= 0) { out[section][key] = value; return; }
+    out[section][key] = d[section][key];
+    warnings.push(`ערך לא מוכר ל-${label}: "${String(value).slice(0, 20)}" — הוחזר לברירת המחדל (${d[section][key]}).`);
+  };
+  put('layout', 'menuPlacement', k.placement, ['top', 'side'], 'placement');
+  put('layout', 'headerWidth', k.width, Object.keys(HEADER_WIDTH), 'width');
+  put('chrome', 'menuOverflow', k.flow, MENU_OVERFLOW, 'flow');
+  put('chrome', 'menuCollapse', k.collapse, MENU_COLLAPSE, 'collapse');
+  put('chrome', 'menuAlign', k.align === 'spread' ? 'between' : k.align, Object.keys(MENU_ALIGN), 'align');
+  put('chrome', 'menuGap', k.gap, Object.keys(MENU_GAP), 'gap');
+  put('chrome', 'menuSize', k.size, Object.keys(MENU_SIZE), 'size');
+  put('chrome', 'menuCurrent', k.current, MENU_CURRENT, 'current');
+  if (k.fold !== undefined && k.fold !== null && k.fold !== '') {
+    const n = parseInt(k.fold, 10);
+    if (Number.isNaN(n) || n < MENU_FOLD.min || n > MENU_FOLD.max) {
+      out.chrome.menuFold = 0;
+      warnings.push(`fold חייב להיות מספר בין ${MENU_FOLD.min} ל-${MENU_FOLD.max} — "${String(k.fold).slice(0, 12)}" בוטל.`);
+    } else out.chrome.menuFold = n === 1 ? 0 : n;
+  }
+  if (!Object.keys(out.layout).length) delete out.layout;
+  if (!Object.keys(out.chrome).length) delete out.chrome;
+  return { overrides: out, warnings };
+}
+
+/** Body classes the theme css keys on (v2.28): [] for an untouched site.
+ *  Order: placement, flow, collapse, current. */
+function menuBodyClasses(overrides) {
+  const k = menuKnobs(overrides);
+  const out = [];
+  if (k.placement === 'side') out.push('menu-side');
+  if (k.flow === 'drawer') out.push('menu-drawer');
+  else if (k.flow === 'scroll') out.push('menu-scroll');
+  if (k.collapse !== 'md') out.push('nav-collapse-' + k.collapse);
+  if (k.current !== 'underline') out.push('nav-current-' + k.current);
+  return out;
+}
 
 /** Keep an override value safe to interpolate into CSS — no rule breakout
  *  ({ } ;) and no tag breakout (< >): this CSS is inlined into a <style>. */
@@ -1280,6 +1364,12 @@ module.exports = {
   MENU_SIZE,
   MENU_ALIGN,
   MENU_OVERFLOW,
+  MENU_COLLAPSE,
+  MENU_CURRENT,
+  MENU_FOLD,
+  menuKnobs,
+  knobsToOverrides,
+  menuBodyClasses,
   // hygiene at the door (v2.27)
   cleanAuthorCss,
   normalizeColor,
