@@ -1,0 +1,31 @@
+{
+  "base": "http://127.0.0.1:1234/v1",
+  "model": "tapuz-qwen",
+  "runs": 1,
+  "rows": [
+    {
+      "id": "theme-designer",
+      "runs": 1,
+      "landed": 0,
+      "landedPct": 0,
+      "clean": 0,
+      "cleanPct": 0,
+      "repairs": 0,
+      "warnings": 0,
+      "secs": 308
+    }
+  ],
+  "hist": {},
+  "results": [
+    {
+      "pack": "theme-designer",
+      "i": 1,
+      "brief": "חנות פרחים וינטג׳ פריזאית — פסטל, סריפים, תחושת נייר ישן, כפתורים במסגרת, תפריט עם קו תחתון עדין",
+      "seconds": 308,
+      "landed": false,
+      "error": "MODEL: לא הצלחתי להתחבר למודל המקומי ב-http://127.0.0.1:1234/v1/chat/completions — ודאו ש-LM Studio (או Ollama) רץ ושהשרת המקומי דולק. פרטים: fetch failed",
+      "promptChars": 17235,
+      "replyChars": 0
+    }
+  ]
+}

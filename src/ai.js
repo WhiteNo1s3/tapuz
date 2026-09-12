@@ -93,6 +93,59 @@ function dig(obj, pathArr) {
   return typeof cur === 'string' ? cur : '';
 }
 
+// A local model on a shared GPU can take minutes over a 44K-char pack; the
+// public providers answer in seconds. Node's fetch() kills any request whose
+// headers have not arrived in 300s (undici's default, not configurable
+// without the package) — an owner's first injection through LM Studio died
+// exactly there with "fetch failed" (v2.28, seen live). So the provider call
+// is a plain http(s) request with ONE explicit ceiling per provider kind.
+const LOCAL_TIMEOUT_MS = 20 * 60 * 1000;
+const PUBLIC_TIMEOUT_MS = 4 * 60 * 1000;
+// the test seam: a smoke that swaps global.fetch for a scripted provider
+// (smoke-copilot-tools) keeps driving the pipeline through it
+const NATIVE_FETCH = globalThis.fetch;
+
+/**
+ * POST a JSON body and read a JSON reply — no header timeout, one overall
+ * ceiling. Resolves { status, data } (data null when the body is not JSON);
+ * rejects on network failure or when the ceiling passes.
+ */
+async function postJson(endpoint, headers, body, timeoutMs) {
+  if (typeof globalThis.fetch === 'function' && globalThis.fetch !== NATIVE_FETCH) {
+    const res = await globalThis.fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* non-json */ }
+    return { status: res.ok ? 200 : (res.status || 500), data, text: '' };
+  }
+  return new Promise((resolve, reject) => {
+    let url;
+    try { url = new URL(endpoint); } catch (e) { return reject(new Error('כתובת ספק לא תקינה')); }
+    const mod = url.protocol === 'https:' ? require('https') : require('http');
+    const payload = Buffer.from(JSON.stringify(body), 'utf8');
+    const req = mod.request(url, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Length': payload.length, Accept: 'application/json' }
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        let data = null;
+        try { data = JSON.parse(text); } catch (e) { /* non-json */ }
+        resolve({ status: res.statusCode || 0, data, text });
+      });
+      res.on('error', reject);
+    });
+    const ceiling = Math.max(10000, Number(timeoutMs) || PUBLIC_TIMEOUT_MS);
+    req.setTimeout(ceiling, () => {
+      req.destroy(new Error('המודל לא ענה תוך ' + Math.round(ceiling / 60000) + ' דקות — ' +
+        'בדקו שהמודל טעון ושאין משהו אחר שתופס את ה-GPU (משחק, דפדפן), או קצרו את הבקשה'));
+    });
+    req.on('error', reject);
+    req.end(payload);
+  });
+}
+
 /**
  * Build headers+body for a provider descriptor. `history` is an optional
  * array of prior turns [{role: 'user'|'assistant', content}] so the chat
@@ -147,7 +200,8 @@ function buildRequest(provider, key, system, userText, model, history = []) {
  * One turn against the configured provider, with the stored key.
  * @returns {Promise<string>} the assistant's raw text
  */
-async function generate({ system = '', user = '', history = [] } = {}) {
+async function generate({ system = '', user = '', history = [], maxTokens = 0, timeoutMs = 0 } = {}) {
+  const opts = { maxTokens, timeoutMs };
   const s = load();
   const key = String(s.apiKey || '');
   const provider = getProvider(s.provider || 'claude');
@@ -182,14 +236,12 @@ async function generate({ system = '', user = '', history = [] } = {}) {
     ? (String(s.model || '').trim() || provider.defaultModel)
     : ((provider.models || []).includes(s.model) ? s.model : provider.defaultModel);
   const { headers, body } = buildRequest(provider, key, system, user, model, history);
+  // an injection runner may ask for a longer answer than the table's default
+  if (Number(opts.maxTokens) > 0) body.max_tokens = Math.min(32768, Math.round(Number(opts.maxTokens)));
 
   let res;
   try {
-    res = await fetch(endpoint, {
-      method: provider.method || 'POST',
-      headers,
-      body: JSON.stringify(body)
-    });
+    res = await postJson(endpoint, headers, body, opts.timeoutMs || (provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS));
   } catch (e) {
     if (provider.id === 'local') {
       throw new Error('לא הצלחתי להתחבר למודל המקומי ב-' + endpoint +
@@ -197,9 +249,8 @@ async function generate({ system = '', user = '', history = [] } = {}) {
     }
     throw new Error('קריאה לספק נכשלה (רשת): ' + e.message);
   }
-  let data = null;
-  try { data = await res.json(); } catch (e) { /* non-json */ }
-  if (!res.ok) {
+  const data = res.data;
+  if (res.status < 200 || res.status >= 300) {
     const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + res.status);
     throw new Error('שגיאת ספק: ' + msg);
   }
@@ -445,16 +496,15 @@ async function callProvider(provider, system, turns, toolDefs) {
 
   let res;
   try {
-    res = await fetch(endpoint, { method: provider.method || 'POST', headers, body: JSON.stringify(body) });
+    res = await postJson(endpoint, headers, body, provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS);
   } catch (e) {
     if (provider.id === 'local') {
       throw new Error('לא הצלחתי להתחבר למודל המקומי ב-' + endpoint + ' — ודאו שהשרת המקומי דולק. פרטים: ' + e.message);
     }
     throw new Error('קריאה לספק נכשלה (רשת): ' + e.message);
   }
-  let data = null;
-  try { data = await res.json(); } catch (e) { /* non-json */ }
-  if (!res.ok) {
+  const data = res.data;
+  if (res.status < 200 || res.status >= 300) {
     const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + res.status);
     throw new Error('שגיאת ספק: ' + msg);
   }
