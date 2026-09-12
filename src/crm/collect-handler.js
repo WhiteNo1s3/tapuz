@@ -25,6 +25,7 @@ const sites = require('./sites');
 const claims = require('./identity-claims');
 const visitors = require('./visitors');
 const events = require('./events');
+const crm = require('./index');
 
 // `track()` from a linked foreign browser lands as its own timeline type.
 events.registerType('track', { label: 'אירוע' });
@@ -175,7 +176,7 @@ function handleCollect(req, res, { limiter } = {}) {
       const isTrack = eventType === 'pixel' || eventType === 'track';
       const trackName = isTrack && typeof b.name === 'string' ? b.name.slice(0, 120) : '';
       try {
-        require('./index').capturePageview({
+        crm.capturePageview({
           contactId: linkedId,
           visitorToken,
           siteId: siteSlug,
@@ -206,7 +207,7 @@ function handleCollect(req, res, { limiter } = {}) {
 
     // Progressive cards / linked browsers only — guarded CRM seam.
     try {
-      require('./index').capturePageview({ req, res, path: p });
+      crm.capturePageview({ req, res, path: p });
     } catch (e) { /* never break the beacon */ }
   } catch (e) {
     // quiet
