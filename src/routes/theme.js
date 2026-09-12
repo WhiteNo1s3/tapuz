@@ -739,9 +739,15 @@ router.get('/admin/theme', (req, res) => {
           <label class="field-label" for="th-maxw">רוחב מקסימלי</label>
           <input id="th-maxw" value="${escAttr(o.layout.maxWidth)}" class="input mb">
           <label class="field-label" for="th-menu-place">מיקום תפריט</label>
-          <select id="th-menu-place" class="input">
+          <select id="th-menu-place" class="input mb">
             ${opt('top', 'עליון (אופקי)', o.layout.menuPlacement !== 'side')}
             ${opt('side', 'צד (אנכי)', o.layout.menuPlacement === 'side')}
+          </select>
+          <label class="field-label" for="th-header-width">רוחב הכותרת העליונה (תפריט ארוך צריך מקום)</label>
+          <select id="th-header-width" class="input">
+            ${opt('content', 'כרוחב התוכן', o.layout.headerWidth === 'content')}
+            ${opt('wide', 'רחב (1140px)', !o.layout.headerWidth || o.layout.headerWidth === 'wide')}
+            ${opt('full', 'מקצה לקצה', o.layout.headerWidth === 'full')}
           </select>
         </section>
         <section class="card">
@@ -769,7 +775,35 @@ router.get('/admin/theme', (req, res) => {
           <label class="field-label" for="th-ch-footerbg">רקע התחתית (ריק = ברירת מחדל)</label>
           <input id="th-ch-footerbg" value="${escAttr(ch.footerBg || '')}" placeholder="#1c1917" dir="ltr" class="input mb">
           <label class="field-label" for="th-ch-footertext">צבע טקסט התחתית (ריק = ברירת מחדל)</label>
-          <input id="th-ch-footertext" value="${escAttr(ch.footerText || '')}" placeholder="#fffbf7" dir="ltr" class="input">
+          <input id="th-ch-footertext" value="${escAttr(ch.footerText || '')}" placeholder="#fffbf7" dir="ltr" class="input mb">
+          <p class="lead" style="margin:6px 0 8px">תפריט ארוך: מה קורה כשהפריטים לא נכנסים בשורה אחת. תפריטי משנה נפתחים בריחוף ובמקלדת מעצמם; במסכים צרים יש תמיד כפתור ☰.</p>
+          <label class="field-label" for="th-ch-overflow">תפריט ארוך</label>
+          <select id="th-ch-overflow" class="input mb">
+            ${opt('wrap', 'נשבר לשורה שנייה (ברירת מחדל)', !ch.menuOverflow || ch.menuOverflow === 'wrap')}
+            ${opt('scroll', 'רצועה אחת שנגללת לרוחב', ch.menuOverflow === 'scroll')}
+            ${opt('drawer', 'כפתור ☰ בכל רוחב (מגירה)', ch.menuOverflow === 'drawer')}
+          </select>
+          <div class="studio-actions mb" style="gap:14px">
+            <span><label class="field-label" for="th-ch-align">יישור</label>
+            <select id="th-ch-align" class="input compact">
+              ${opt('start', 'התחלה', !ch.menuAlign || ch.menuAlign === 'start')}
+              ${opt('center', 'מרכז', ch.menuAlign === 'center')}
+              ${opt('end', 'סוף', ch.menuAlign === 'end')}
+              ${opt('between', 'מפוזר', ch.menuAlign === 'between')}
+            </select></span>
+            <span><label class="field-label" for="th-ch-gap">רווח</label>
+            <select id="th-ch-gap" class="input compact">
+              ${opt('sm', 'צפוף', ch.menuGap === 'sm')}
+              ${opt('md', 'רגיל', !ch.menuGap || ch.menuGap === 'md')}
+              ${opt('lg', 'אוורירי', ch.menuGap === 'lg')}
+            </select></span>
+            <span><label class="field-label" for="th-ch-size">גודל</label>
+            <select id="th-ch-size" class="input compact">
+              ${opt('sm', 'קטן', ch.menuSize === 'sm')}
+              ${opt('md', 'רגיל', !ch.menuSize || ch.menuSize === 'md')}
+              ${opt('lg', 'גדול', ch.menuSize === 'lg')}
+            </select></span>
+          </div>
         </section>
         <section class="card">
           <h3 class="sub-head">🧵 עור — CSS חופשי על השלד</h3>

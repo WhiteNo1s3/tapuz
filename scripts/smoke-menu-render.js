@@ -93,5 +93,21 @@ check('in the side rail a sub-menu is an indented list, always open, and the bur
 check('no physical left/right in the new menu css (RTL first)', !/(^|[^-])(left|right)\s*:/.test(css.slice(css.indexOf('Menu capacity, sub-menus, drawer'), css.indexOf('CMS-managed header chrome (S3)'))));
 check('the old ≤640px header stacking is gone (the drawer owns narrow screens)', !/\.header-inner \{ flex-direction: column; gap: 0\.6rem; \}/.test(css));
 
+// ── the knobs reach the css as custom properties ──────────────────────
+const vars = theme.overridesToCss({ layout: { headerWidth: 'full' }, chrome: { menuGap: 'lg', menuSize: 'sm', menuAlign: 'between' } });
+check('layout.headerWidth + chrome.menuGap/menuSize/menuAlign emit --header-max-width / --menu-gap / --menu-size / --menu-align',
+  /--header-max-width: 100%;/.test(vars) && /--menu-gap: 2\.5rem;/.test(vars) && /--menu-size: 0\.85rem;/.test(vars) && /--menu-align: space-between;/.test(vars));
+check('the defaults emit the wide header and the regular menu (an untouched site gets the fix)',
+  /--header-max-width: 1140px;/.test(theme.overridesToCss({})) && /--menu-gap: 1\.75rem;/.test(theme.overridesToCss({})));
+const dialect = require('../src/bentml/theme-dialect');
+const bent = dialect.serializeTheme({ name: 'x', overrides: { layout: { headerWidth: 'full', menuPlacement: 'side' }, chrome: { menuOverflow: 'drawer', menuAlign: 'center', menuGap: 'sm', menuSize: 'lg' } } });
+const back = dialect.parseTheme(bent);
+check('the .bent dialect carries header-width and menu-overflow/align/gap/size both ways',
+  /header-width="full"/.test(bent) && /menu-overflow="drawer"/.test(bent) && back.overrides.layout.headerWidth === 'full' && back.overrides.chrome.menuOverflow === 'drawer' && back.overrides.chrome.menuSize === 'lg');
+check('the studio form and the designer prompt know the knobs',
+  /id="th-ch-overflow"/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'theme.js'), 'utf8')) &&
+  /menuOverflow: val\('th-ch-overflow'/.test(fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-theme.js'), 'utf8')) &&
+  /menu-overflow="wrap\|scroll\|drawer"/.test(require('../src/theme-roleplay').buildThemePrompt({}).text));
+
 console.log(fail ? '\nSMOKE MENU-RENDER: FAIL' : '\nSMOKE MENU-RENDER: PASS');
 process.exit(fail ? 1 : 0);

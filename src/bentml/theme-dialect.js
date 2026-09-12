@@ -55,11 +55,13 @@ const SECTIONS = {
   colors: ['primary', 'secondary', 'text', 'muted', 'border', 'bg', ['light-bg', 'lightBg'], 'surface'],
   fonts: ['family', ['heading', 'headingFamily'], ['base-size', 'baseSize'], 'google'],
   style: ['radius', 'shadow', 'accent', 'buttons'],
-  layout: [['max-width', 'maxWidth'], ['menu', 'menuPlacement']],
+  layout: [['max-width', 'maxWidth'], ['menu', 'menuPlacement'], ['header-width', 'headerWidth']],
   background: ['kind', 'angle'],
   chrome: [['menu-hover', 'menuHover'], ['menu-hover-color', 'menuHoverColor'], ['menu-weight', 'menuWeight'],
     ['header-bg', 'headerBg'], ['header-text', 'headerText'], ['header-glass', 'headerGlass'],
-    ['footer-bg', 'footerBg'], ['footer-text', 'footerText']]
+    ['footer-bg', 'footerBg'], ['footer-text', 'footerText'],
+    // the menu's geometry (v2.28)
+    ['menu-overflow', 'menuOverflow'], ['menu-align', 'menuAlign'], ['menu-gap', 'menuGap'], ['menu-size', 'menuSize']]
 };
 
 function pairs(section) {

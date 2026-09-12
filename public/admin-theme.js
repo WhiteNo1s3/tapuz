@@ -9,7 +9,8 @@
   var formIds = ['th-title', 'th-font', 'th-font-heading', 'th-font-google', 'th-font-size', 'th-maxw', 'th-menu-place',
     'th-logo-type', 'th-logo-text', 'th-logo-image', 'th-desc', 'th-radius', 'th-shadow', 'th-accent', 'th-buttons',
     'th-bg-kind', 'th-bg-angle', 'th-ch-hover', 'th-ch-hovercolor', 'th-ch-weight', 'th-ch-glass', 'th-ch-headerbg',
-    'th-ch-headertext', 'th-ch-footerbg', 'th-ch-footertext', 'th-skin-note', 'th-skin-css'];
+    'th-ch-headertext', 'th-ch-footerbg', 'th-ch-footertext', 'th-skin-note', 'th-skin-css',
+    'th-header-width', 'th-ch-overflow', 'th-ch-align', 'th-ch-gap', 'th-ch-size'];
 
   function $(id) { return document.getElementById(id); }
   function val(id, fallback) {
@@ -108,7 +109,8 @@
         },
         layout: {
           maxWidth: val('th-maxw', '900px') || '900px',
-          menuPlacement: val('th-menu-place', 'top') || 'top'
+          menuPlacement: val('th-menu-place', 'top') || 'top',
+          headerWidth: val('th-header-width', 'wide') || 'wide'
         },
         background: {
           kind: val('th-bg-kind', 'solid') || 'solid',
@@ -123,7 +125,12 @@
           headerBg: val('th-ch-headerbg'),
           headerText: val('th-ch-headertext'),
           footerBg: val('th-ch-footerbg'),
-          footerText: val('th-ch-footertext')
+          footerText: val('th-ch-footertext'),
+          // the menu's geometry (v2.28)
+          menuOverflow: val('th-ch-overflow', 'wrap') || 'wrap',
+          menuAlign: val('th-ch-align', 'start') || 'start',
+          menuGap: val('th-ch-gap', 'md') || 'md',
+          menuSize: val('th-ch-size', 'md') || 'md'
         },
         skin: {
           css: val('th-skin-css'),
@@ -448,6 +455,11 @@
     setValue('th-ch-headertext', ch.headerText);
     setValue('th-ch-footerbg', ch.footerBg);
     setValue('th-ch-footertext', ch.footerText);
+    setValue('th-ch-overflow', ch.menuOverflow || 'wrap');
+    setValue('th-ch-align', ch.menuAlign || 'start');
+    setValue('th-ch-gap', ch.menuGap || 'md');
+    setValue('th-ch-size', ch.menuSize || 'md');
+    setValue('th-header-width', (o.layout || {}).headerWidth || 'wide');
     var skin = Object.assign({ css: '', note: '' }, o.skin || {});
     setValue('th-skin-css', skin.css);
     setValue('th-skin-note', skin.note);

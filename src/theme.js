@@ -38,7 +38,11 @@ const DEFAULT_OVERRIDES = {
   },
   layout: {
     maxWidth: '900px',
-    menuPlacement: 'top' // top | side
+    menuPlacement: 'top', // top | side
+    // the header may be wider than the content column (v2.28): a ten-item
+    // Hebrew menu needs ~1130px; 'content' = the column, 'wide' = 1140px,
+    // 'full' = edge to edge
+    headerWidth: 'wide'   // content | wide | full
   },
   // Page background (v2.24) — "few boring colors" was the complaint: a flat
   // color is one option, not the only one. Patterns are drawn from the
@@ -60,7 +64,13 @@ const DEFAULT_OVERRIDES = {
     headerText: '',         // '' = the text color (v2.24 — a dark header needs light links)
     headerGlass: false,     // translucent, blurred header over the page
     footerBg: '',           // '' = theme default
-    footerText: ''          // '' = theme default
+    footerText: '',         // '' = theme default
+    // the menu's geometry (v2.28 — "the menu breaks from the amount of
+    // content"): what a long bar does, how it sits, how dense it is
+    menuOverflow: 'wrap',   // wrap | scroll | drawer
+    menuAlign: 'start',     // start | center | end | between
+    menuGap: 'md',          // sm | md | lg
+    menuSize: 'md'          // sm | md | lg
   },
   // Theme SKIN (v2.24) — free-form CSS against the theme's documented
   // skeleton (see theme-roleplay.js skeletonSelectors): what makes a theme a
@@ -284,6 +294,14 @@ const SHADOW_SCALE = {
 // them together (the .btn-primary rule, form submits, pricing CTAs)
 const BUTTON_SELECTORS = '.btn-primary, .bent-form-submit, .bent-plan-cta, .bent-flipbox-button';
 
+// the menu's geometry (v2.28) — one knob, one custom property, the theme
+// css does the rest (themes/default/css/main.css "Menu capacity")
+const HEADER_WIDTH = { content: 'var(--max-width)', wide: '1140px', full: '100%' };
+const MENU_GAP = { sm: '1rem', md: '1.75rem', lg: '2.5rem' };
+const MENU_SIZE = { sm: '0.85rem', md: '0.95rem', lg: '1.08rem' };
+const MENU_ALIGN = { start: 'flex-start', center: 'center', end: 'flex-end', between: 'space-between' };
+const MENU_OVERFLOW = ['wrap', 'scroll', 'drawer'];
+
 /** Keep an override value safe to interpolate into CSS — no rule breakout
  *  ({ } ;) and no tag breakout (< >): this CSS is inlined into a <style>. */
 function cssValue(v) {
@@ -417,7 +435,12 @@ function overridesToCss(overrides, opts = {}) {
     `--radius-pill: ${radius.pill};`,
     `--shadow-1: ${shadow.s1};`,
     `--shadow-2: ${shadow.s2};`,
-    `--accent-bg: ${accentBg};`
+    `--accent-bg: ${accentBg};`,
+    // the menu's geometry (v2.28) — read by themes/default/css/main.css
+    `--header-max-width: ${HEADER_WIDTH[(o.layout || {}).headerWidth] || HEADER_WIDTH.wide};`,
+    `--menu-gap: ${MENU_GAP[(o.chrome || {}).menuGap] || MENU_GAP.md};`,
+    `--menu-size: ${MENU_SIZE[(o.chrome || {}).menuSize] || MENU_SIZE.md};`,
+    `--menu-align: ${MENU_ALIGN[(o.chrome || {}).menuAlign] || MENU_ALIGN.start};`
   ];
   let css = `:root {\n  ${lines.join('\n  ')}\n}\n`;
   if (o.fonts.baseSize) {
@@ -1251,6 +1274,12 @@ module.exports = {
   extractThemeReply,
   checkEffectJs,
   checkCss,
+  // the menu's geometry (v2.28)
+  HEADER_WIDTH,
+  MENU_GAP,
+  MENU_SIZE,
+  MENU_ALIGN,
+  MENU_OVERFLOW,
   // hygiene at the door (v2.27)
   cleanAuthorCss,
   normalizeColor,
