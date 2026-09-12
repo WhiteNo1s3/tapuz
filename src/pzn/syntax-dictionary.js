@@ -230,9 +230,13 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
   const lines = [];
   lines.push(he ? '## הכלים — דקדוק מקוצר (זה כל המילון)' : '## Tools — compact grammar (this IS the dictionary)');
   lines.push('');
+  // `*` used to read as "an attribute called text" to a local model, which
+  // then wrote <bent-feature title=… text=…> and never closed it (v2.28,
+  // seen live) — the legend now says where the body goes and that every
+  // tag closes.
   lines.push(he
-    ? 'שורה לכלי: `תג` · ⊃ = אילו ילדים נכנסים בתוכו · props (ערך1|ערך2 = הערכים המותרים, `*` = טקסט הגוף של התג, ↳ = חי רק בתוך מיכל). לכל תג יש גם `id`, `class` ו-`animate=none|fade|rise|zoom` אופציונליים — לא חוזרים עליהם בשורות.'
-    : 'One line per tool: `tag` · ⊃ = allowed children · props (a|b = allowed values, `*` = tag body text, ↳ = lives only inside a container). Every tag also takes optional `id`, `class` and `animate=none|fade|rise|zoom` — not repeated per line.');
+    ? 'שורה לכלי: `תג` · ⊃ = אילו ילדים נכנסים בתוכו · props (ערך1|ערך2 = הערכים המותרים, `*` = טקסט הגוף — נכתב **בין** תג הפתיחה לסגירה, לא כמאפיין, ↳ = חי רק בתוך מיכל). כל תג נסגר: `<bent-x …>גוף</bent-x>` או `<bent-x … />`; תג בלי ⊃ לעולם לא מכיל תגים. לכל תג יש גם `id`, `class` ו-`animate=none|fade|rise|zoom` אופציונליים — לא חוזרים עליהם בשורות.'
+    : 'One line per tool: `tag` · ⊃ = allowed children · props (a|b = allowed values, `*` = body text — written BETWEEN the opening and closing tag, never as an attribute, ↳ = lives only inside a container). Every tag closes: `<bent-x …>body</bent-x>` or `<bent-x … />`; a tag without ⊃ never contains tags. Every tag also takes optional `id`, `class` and `animate=none|fade|rise|zoom` — not repeated per line.');
   lines.push('');
 
   const catOrder = ['content', 'layout', 'data', 'media', 'effects', 'advanced'];

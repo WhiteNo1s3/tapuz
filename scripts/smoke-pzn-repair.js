@@ -123,6 +123,30 @@ repairClean('hoist <bent-text> out of <bent-columns>', doc('    <bent-columns id
   })());
 }
 
+// ── v2.28: what a LOCAL model (qwen3.6-35b via LM Studio) actually sent ──
+{
+  // leaves written as openers with no `/>` and no closer: every sibling
+  // nests inside the previous one, one level deeper each time
+  const r = repairClean('unclosed leaf openers become siblings, in order (UNCLOSED_LEAF)', doc(`
+    <bent-features id="f" columns="3">
+      <bent-feature id="a" title="מהיר" icon="⚡" text="טקסט א">
+      <bent-feature id="b" title="בטוח" icon="🔒" text="טקסט ב">
+      <bent-feature id="c" title="קרוב" icon="❤" text="טקסט ג">
+    </bent-features>
+    <bent-quote id="q" author="דנה" text="ציטוט">
+    <bent-text id="t">אחרי הציטוט</bent-text>`), 'UNCLOSED_LEAF');
+  const d = pzn.parse(r.source);
+  const feats = d.body.find((n) => n.name === 'features');
+  check('  the three features are siblings under <bent-features>, order kept',
+    feats && feats.children.length === 3 && feats.children.map((c) => c.id).join(',') === 'a,b,c');
+  check('  the text after the unclosed quote follows it at the top level, not inside it',
+    d.body.map((n) => n.name).join(',') === 'features,quote,text');
+  check('  nothing was hoisted to the page end', !r.changes.some((c) => c.code === 'HOIST'));
+  // a quote glued to the tag name
+  const t = repairClean('a stray quote after a tag name is removed (TAG_TYPO)', doc('<bent-text" id="x">שלום</bent-text>\n<bent-text id="y">עולם</bent-text">'), 'TAG_TYPO');
+  check('  both texts survive as text modules', pzn.parse(t.source).body.map((n) => n.name).join(',') === 'text,text');
+}
+
 console.log('');
 console.log(fail ? 'SMOKE PZN-REPAIR: FAIL' : 'SMOKE PZN-REPAIR: PASS');
 process.exit(fail ? 1 : 0);
