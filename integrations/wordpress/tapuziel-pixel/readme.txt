@@ -25,7 +25,15 @@ Setup:
 
 Identity note: calling `TapuzielPixel.identify({email})` on your pages creates
 an unverified *claim* in Tapuziel that an admin must approve — it never
-creates or merges a contact by itself.
+creates or merges a contact by itself, and never links this browser by itself.
+
+Stitching note (Tapuziel v2.21+): the loader keeps a pseudonymous visitor id
+on YOUR site (`tz_vid`, first-party, none under DNT/GPC). To have a form
+submission bind this browser to the CRM contact — so later visits show on
+that contact's timeline — a separate form bridge sends `_tz_site` (your site
+id) and `_tz_vid` (`TapuzielPixel.visitorId()`) with its POST to Tapuziel's
+`/api/form`. This plugin does not do that; see Tapuziel
+docs/PIXEL-EMBED-INTEGRATION.md §4 for the recipe.
 
 == Changelog ==
 

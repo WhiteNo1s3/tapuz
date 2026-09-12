@@ -9,13 +9,24 @@
  *     most beacons skip CORS preflight. Custom headers remain optional debug.
  *   - DNT / GPC skip client-side; server re-checks.
  *
+ * Visitor id (v2.21):
+ *   - A random 32-hex `vid` is kept first-party on the EMBEDDING site
+ *     (localStorage, cookie fallback) and sent in every beacon body. It is
+ *     the only way a foreign browser can be recognised again: our HttpOnly
+ *     cookie never travels with credentials:'omit'.
+ *   - The server stores a vid ONLY when an authenticated channel binds it to
+ *     a person — a form submission carrying `_tz_site` + `_tz_vid`, or an
+ *     admin approving the identify() claim. Anonymous vids are never stored.
+ *   - Not minted under DNT / GPC. `data-tz-pixel-vid="0"` turns it off.
+ *   - Form bridges read it with TapuzielPixel.visitorId().
+ *
  * Embed (HTTPS required outside localhost — admin snippet builder enforces):
  *   <script src="https://CRM.HOST/tz-pixel.js"
  *     data-tz-pixel-base="https://CRM.HOST"
  *     data-tz-pixel-site="my-site-id"
  *     defer></script>
  *
- * API: TapuzielPixel.init | page | track | identify | setUtm
+ * API: TapuzielPixel.init | page | track | identify | visitorId | setUtm
  */
 (function (w, d) {
   'use strict';
@@ -52,11 +63,14 @@
   // Prefer simple requests (text/plain) — no preflight. Opt into full headers
   // only when debugging enterprise fields.
   var simple = attr('data-tz-pixel-simple', '1') !== '0';
+  var useVid = attr('data-tz-pixel-vid', '1') !== '0';
 
   var q = [];
-  var cfg = { collect: collect, siteId: siteId, debug: debug, simple: simple };
+  var cfg = { collect: collect, siteId: siteId, debug: debug, simple: simple, vid: useVid };
   var identity = {};
   var lastPath = '';
+  var VID_KEY = 'tz_vid';
+  var memVid = '';
 
   function rid() {
     try {
@@ -72,6 +86,53 @@
       w.doNotTrack === '1' ||
       navigator.globalPrivacyControl === true
     );
+  }
+
+  function hex32() {
+    var s = '';
+    try {
+      var a = new Uint8Array(16);
+      crypto.getRandomValues(a);
+      for (var i = 0; i < a.length; i++) s += (a[i] < 16 ? '0' : '') + a[i].toString(16);
+      return s;
+    } catch (e) {
+      while (s.length < 32) s += Math.floor(Math.random() * 16).toString(16);
+      return s;
+    }
+  }
+
+  function readCookie(name) {
+    try {
+      var parts = String(d.cookie || '').split(';');
+      for (var i = 0; i < parts.length; i++) {
+        var kv = parts[i].trim();
+        if (kv.indexOf(name + '=') === 0) return kv.slice(name.length + 1);
+      }
+    } catch (e) { /* */ }
+    return '';
+  }
+
+  /**
+   * The site-local pseudonymous visitor id. Returns '' under DNT/GPC or when
+   * disabled, so nothing is minted for a browser that asked not to be
+   * tracked. Persisted first-party on THIS origin — never on the CRM host.
+   */
+  function visitorId() {
+    if (!cfg.vid || dnt()) return '';
+    var v = '';
+    try { v = String(w.localStorage.getItem(VID_KEY) || ''); } catch (e) { /* */ }
+    if (!/^[a-f0-9]{32}$/.test(v)) v = readCookie(VID_KEY);
+    if (!/^[a-f0-9]{32}$/.test(v)) v = memVid;
+    if (!/^[a-f0-9]{32}$/.test(v)) {
+      v = hex32();
+      memVid = v;
+      try { w.localStorage.setItem(VID_KEY, v); } catch (e) { /* */ }
+      try {
+        d.cookie = VID_KEY + '=' + v + '; Path=/; Max-Age=31536000; SameSite=Lax' +
+          (location.protocol === 'https:' ? '; Secure' : '');
+      } catch (e2) { /* */ }
+    }
+    return v;
   }
 
   function utm() {
@@ -108,6 +169,12 @@
     }
     // Never auto-attach identity onto page/track — that would re-open the
     // "email on every pageview → auto contact" hole. identify() alone claims.
+    // The pseudonymous vid is NOT identity: the server only recognises it
+    // once a form or an approved claim has bound it to a person.
+    if (!payload.vid) {
+      var vid = visitorId();
+      if (vid) payload.vid = vid;
+    }
 
     var body = JSON.stringify(payload);
     var headers;
@@ -171,6 +238,7 @@
       }
       if (opts.debug != null) cfg.debug = !!opts.debug;
       if (opts.simple != null) cfg.simple = !!opts.simple;
+      if (opts.vid != null) cfg.vid = !!opts.vid;
       flushQueue();
       return api;
     },
@@ -232,11 +300,26 @@
       }
       return identity;
     },
+    /**
+     * The site-local visitor id, for form bridges: send it as `_tz_vid`
+     * (with `_tz_site` = the site id) on the CRM form POST so the server can
+     * bind this browser to the person who just wrote in. '' under DNT.
+     */
+    visitorId: function () {
+      return visitorId();
+    },
     setUtm: function () {
       return utm();
     },
     _cfg: function () {
-      return { collect: cfg.collect, siteId: cfg.siteId, debug: cfg.debug, base: base, simple: cfg.simple };
+      return {
+        collect: cfg.collect,
+        siteId: cfg.siteId,
+        debug: cfg.debug,
+        base: base,
+        simple: cfg.simple,
+        vid: cfg.vid
+      };
     }
   };
 

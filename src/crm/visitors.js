@@ -21,6 +21,17 @@
  * So an anonymous visitor stays anonymous forever. A person who wrote to you
  * gets a timeline — which is the thing they were already expecting when they
  * typed their phone number into your contact form.
+ *
+ * FOREIGN SITES (v2.21). A browser on a customer's WordPress cannot carry our
+ * HttpOnly cookie: the pixel posts with `credentials: 'omit'` (the only safe
+ * pairing with ACAO:*), and a no-cors form POST discards Set-Cookie. So the
+ * loader mints its OWN pseudonymous id on the embedding origin and sends it
+ * in the beacon body as `vid`. Server-side that id is stored ONLY as a
+ * site-scoped token (`f:<site>:<vid>`) and ONLY at the moment an
+ * authenticated channel binds it to a person — a form submission or an admin
+ * approving an identity claim. An anonymous `vid` is never written anywhere.
+ * The `f:` namespace keeps a client-chosen id from ever colliding with (or
+ * replaying as) a server-minted first-party token.
  */
 
 const crypto = require('crypto');
@@ -28,6 +39,8 @@ const { db } = require('../db');
 
 const COOKIE = 'tz_v';
 const MAX_AGE_DAYS = 365;
+const FOREIGN_PREFIX = 'f:';
+const VID_RE = /^[a-f0-9]{32}$/;
 
 /** Local cookie read — the CRM does not reach into the auth module's internals. */
 function readToken(req) {
@@ -114,4 +127,57 @@ function countForContact(contactId) {
   return db.prepare('SELECT COUNT(*) AS n FROM crm_visitors WHERE contact_id = ?').get(Number(contactId)).n;
 }
 
-module.exports = { COOKIE, readToken, link, contactIdFor, touch, touchFor, unlink, countForContact };
+// ─── foreign-site visitor tokens (v2.21) ─────────────────────────────
+
+/**
+ * The storage form of a pixel visitor id, scoped to the registered site that
+ * reported it. '' when the id is not a 32-hex string — anything else is not
+ * ours and never reaches the database.
+ */
+function foreignToken(siteSlug, vid) {
+  const site = String(siteSlug || '').trim().toLowerCase();
+  const v = String(vid || '').trim().toLowerCase();
+  if (!site || !VID_RE.test(v)) return '';
+  return FOREIGN_PREFIX + site + ':' + v;
+}
+
+function isForeignToken(token) {
+  return typeof token === 'string' && token.startsWith(FOREIGN_PREFIX);
+}
+
+/**
+ * Bind a foreign token to a person. Only the two authenticated channels may
+ * call this: a form submission (the person typed their details) and an admin
+ * approving an identity claim. A token already bound elsewhere is rebound —
+ * past events keep their contact, only FUTURE attribution follows the newest
+ * voluntary identification, which is what the native fresh-token rule
+ * achieves for cookies.
+ */
+function linkToken(token, contactId) {
+  const id = Number(contactId);
+  if (!id || !isForeignToken(token)) return '';
+  db.prepare('INSERT OR REPLACE INTO crm_visitors (token, contact_id) VALUES (?, ?)').run(token, id);
+  return token;
+}
+
+/** Which person is this token, if any? Null for anonymous — the normal case. */
+function contactIdForToken(token) {
+  if (!isForeignToken(token)) return null;
+  const row = db.prepare('SELECT contact_id FROM crm_visitors WHERE token = ?').get(token);
+  return row ? row.contact_id : null;
+}
+
+module.exports = {
+  COOKIE,
+  readToken,
+  link,
+  contactIdFor,
+  touch,
+  touchFor,
+  unlink,
+  countForContact,
+  foreignToken,
+  isForeignToken,
+  linkToken,
+  contactIdForToken
+};

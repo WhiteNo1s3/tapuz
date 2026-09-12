@@ -67,8 +67,18 @@ router.post('/api/form', (req, res) => {
   // their browser. Same discipline as notify above — the submission is already
   // saved, so this runs after the point of no return and the guarded seam
   // swallows anything that goes wrong. A CRM fault must never cost a lead.
+  // A form bridge on a registered foreign site (v2.21) may name the pixel
+  // visitor it was submitted from: `_tz_site` + `_tz_vid`. Underscore fields
+  // are already stripped from the stored submission; here they only let the
+  // CRM bind that browser to the person, gated by the site registry.
+  const foreign = {
+    siteId: String(body._tz_site || '').slice(0, 80),
+    vid: String(body._tz_vid || '').slice(0, 64),
+    origin: typeof req.headers.origin === 'string' ? req.headers.origin : ''
+  };
   const captured = require('../crm').captureForm({
-    fields: body, page, submissionId: result.id, req, res
+    fields: body, page, submissionId: result.id, req, res,
+    foreign: foreign.siteId && foreign.vid ? foreign : undefined
   });
   if (wantsJsonReply) return res.json({ ok: true, id: result.id });
   // The thank-you page fires the BROWSER half of the conversion with the same

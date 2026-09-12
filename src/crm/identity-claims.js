@@ -12,6 +12,7 @@
 
 const { db } = require('../db');
 const contacts = require('./contacts');
+const visitors = require('./visitors');
 
 const STATUSES = ['pending', 'approved', 'rejected'];
 
@@ -27,7 +28,9 @@ function getClaim(id) {
 }
 
 /**
- * Record or refresh a pending claim. Never creates a contact.
+ * Record or refresh a pending claim. Never creates a contact, never links a
+ * browser — `visitorToken` is only REMEMBERED here so approval has something
+ * to bind (see approveClaim).
  * @returns {{ok:boolean, claim?:object, reason?:string}}
  */
 function recordClaim({
@@ -36,7 +39,8 @@ function recordClaim({
   phone = '',
   name = '',
   path = '',
-  visitorHash = ''
+  visitorHash = '',
+  visitorToken = ''
 } = {}) {
   const em = normalizeEmail(email);
   const ph = normalizePhone(phone);
@@ -46,6 +50,7 @@ function recordClaim({
   const nm = String(name || '').trim().slice(0, 200);
   const pth = String(path || '').slice(0, 300);
   const vh = String(visitorHash || '').slice(0, 32);
+  const vt = visitors.isForeignToken(visitorToken) ? String(visitorToken).slice(0, 160) : '';
 
   // Match an open pending claim for this site + identity
   let existing = null;
@@ -76,20 +81,21 @@ function recordClaim({
            name = CASE WHEN ? <> '' THEN ? ELSE name END,
            path = CASE WHEN ? <> '' THEN ? ELSE path END,
            visitor_hash = CASE WHEN ? <> '' THEN ? ELSE visitor_hash END,
+           visitor_token = CASE WHEN ? <> '' THEN ? ELSE visitor_token END,
            email = CASE WHEN email IS NULL OR email = '' THEN ? ELSE email END,
            phone = CASE WHEN phone IS NULL OR phone = '' THEN ? ELSE phone END
        WHERE id = ?`
-    ).run(nm, nm, pth, pth, vh, vh, em || null, ph || null, existing.id);
+    ).run(nm, nm, pth, pth, vh, vh, vt, vt, em || null, ph || null, existing.id);
     return { ok: true, claim: getClaim(existing.id), refreshed: true };
   }
 
   const info = db
     .prepare(
       `INSERT INTO crm_identity_claims
-         (site_id, email, phone, name, visitor_hash, path, claim_count, status)
-       VALUES (?, ?, ?, ?, ?, ?, 1, 'pending')`
+         (site_id, email, phone, name, visitor_hash, visitor_token, path, claim_count, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'pending')`
     )
-    .run(site, em || null, ph || null, nm, vh, pth);
+    .run(site, em || null, ph || null, nm, vh, vt, pth);
   return { ok: true, claim: getClaim(info.lastInsertRowid), created: true };
 }
 
@@ -123,8 +129,12 @@ function countPending() {
 }
 
 /**
- * Admin approval → real contact through the normal upsert path (not public).
- * @returns {{ok:boolean, contact?:object, reason?:string}}
+ * Admin approval → real contact through the normal upsert path (not public),
+ * AND the claiming browser is bound to that contact (v2.21) so its later
+ * beacons from the same site land on the timeline. Before this, approval
+ * created the person but attached nothing — the claim's only browser field
+ * was the daily-salted analytics hash, which cannot stitch by design.
+ * @returns {{ok:boolean, contact?:object, reason?:string, linked?:boolean}}
  */
 function approveClaim(id) {
   const claim = getClaim(id);
@@ -149,7 +159,9 @@ function approveClaim(id) {
      WHERE id = ?`
   ).run(up.contact.id, claim.id);
 
-  return { ok: true, contact: up.contact, created: up.created };
+  const linked = !!visitors.linkToken(claim.visitor_token || '', up.contact.id);
+
+  return { ok: true, contact: up.contact, created: up.created, linked };
 }
 
 function rejectClaim(id) {

@@ -2,7 +2,8 @@
 
 **Status:** **complete** — core shipped v1.99 (all four findings fixed — never
 the lab path); P4 wrappers shipped v2.01 (`integrations/`, inject-only enforced
-by `smoke-wrappers`).
+by `smoke-wrappers`); P5 stitching shipped v2.21 (§4 — found by the live
+WordPress ↔ CRM test).
 **Prerequisite:** the CRM (v1.77+). This is the *write-portability* direction
 docs/CRM-PORTABILITY.md measured and recommended: our collector already accepts
 foreign beacons; the lab turned that into a product surface.
@@ -121,9 +122,155 @@ the loader actually reads.
 
 ---
 
+### ~~Phase P5 — stitching~~ · **shipped v2.21**
+The gap the live WordPress test exposed (§4): a foreign browser had no way to
+be recognised again, so approval created the person and attached nothing.
+The loader now carries a site-local pseudonymous `vid`; a form submission or
+an approved claim binds it (`crm_visitors`, `f:<site>:<vid>`); linked beacons
+append to the timeline tagged with the site. `smoke-pixel-embed` covers it.
+
+---
+
 ## 3. What we do not take
 
 - The `identify → upsertContact` path (finding 1) — replaced by claims.
 - Unregistered `site_id` acceptance (finding 2).
 - Foreign anonymous traffic in `crm_events` (finding 3).
 - http bases in public snippets (finding 4).
+- `identify({email})` auto-**linking** a browser to an existing contact whose
+  email matches (v2.21). It looks harmless — "the person already exists" —
+  but it is finding 1's worse half verbatim: anyone who knows your customer's
+  address attaches their own browsing to that customer's record. A link needs
+  an authenticated channel: the form the person typed into, or an admin.
+
+---
+
+## 4. The stitching path (v2.21) — foreign site → CRM timeline
+
+### 4.1 What the live test found
+
+Setup: WordPress with `tapuziel-pixel` (inject-only) + a companion form
+bridge that on Contact submit called `identify({email,name})`,
+`track('contact_us')`, then `fetch(CRM + '/api/form', {mode:'no-cors'})`.
+
+Observed: the contact existed with a `form` event; the site's analytics
+showed the WordPress pageviews; the claims inbox was empty; **no WordPress
+pageview ever reached the contact's timeline.** Reproduced locally against
+`main` with the same beacons — two independent causes:
+
+1. **The claim was dropped, by design.** The site was registered with
+   claims *off* (`claims_enabled = 0`); `collect-handler` records a claim
+   only when `resolved.site.claimsEnabled`. Correct behaviour, surprising
+   outcome — turn the toggle on in לקוחות → אתרים if you want the inbox.
+
+2. **Even with claims on and approved, nothing could stitch.** Three
+   reasons, all structural:
+   - `approveClaim` upserted the contact and stopped. The only browser field
+     on a claim was `visitor_hash` — the analytics hash, re-salted daily and
+     *designed* not to follow anyone across days. There was nothing to bind.
+   - The first-party link (`tz_v`, set by `captureForm` on `/api/form`) never
+     reaches a foreign page: a `no-cors` POST discards `Set-Cookie`, and the
+     loader posts with `credentials: 'omit'` — the only safe pairing with
+     `ACAO: *`. So even a cookie that *was* set would never ride a beacon.
+   - The collector's foreign branch never called `capturePageview` at all
+     ("anonymous foreign → analytics only"). With no way to tell a linked
+     browser from an anonymous one, every foreign browser was anonymous.
+
+   Provisional cards / the interest board only populate from
+   `capturePageview`, which is why they stayed at zero for the foreign site.
+
+### 4.2 How it works now
+
+```
+WordPress page                      Tapuziel
+─────────────                       ────────
+tz-pixel.js mints vid (32 hex,      /_tapuz/collect
+  localStorage tz_vid, first-party    site registry → origin allowlist
+  on the WP origin; none under DNT)   token = f:<site>:<vid>   (looked up, never stored)
+every beacon body carries vid  ───►  linked?  no → pageviews(site_id) only     [as before]
+                                              yes → pageviews + crm_events{meta.site_id}
+                                                    + touch + interest tag
+
+identify({email})              ───►  claims_enabled? → pending claim REMEMBERS the token
+                                     admin «אשר» → upsert (existing or new) + linkToken
+
+form bridge POST /api/form      ───►  saveSubmission (underscore fields stripped)
+  fields + _page                      captureForm → upsert / resolve existing person
+  + _tz_site + _tz_vid                  → registry + origin gate → linkToken
+```
+
+Two channels bind a browser, both already trusted to name a person:
+
+| Channel | Who authenticates | What it binds |
+|---|---|---|
+| Form submission with `_tz_site` + `_tz_vid` | the person typing into the owner's form (same trust as the native `tz_v` cookie set on `/api/form`) | `f:<site>:<vid>` → resolved contact, immediately |
+| Identity claim approved in לקוחות → תביעות זהות | the admin | `f:<site>:<vid>` remembered on the claim → approved contact |
+
+Rules that hold (all pinned by `smoke-pixel-embed`):
+
+- An **anonymous vid is never written** anywhere. Only `linkToken` stores it.
+- Tokens are **site-scoped**: the same vid under another `site_id` is anonymous.
+- The `f:` namespace means a client-chosen id can never equal, or replay as,
+  a server-minted first-party `tz_v` token (`readToken` only accepts bare hex).
+- Form linkage is gated exactly like the collector: `pixelEmbed.enabled`,
+  site registered + active, Origin in the allowlist when one is set. When the
+  gate fails the submission still lands — linkage is a bonus, never a condition.
+- Linked foreign rows carry `meta.site_id`; the contact page shows it as a pill.
+- Erasure reaches the binding (`crm_visitors` is a `PERSONAL_TABLE`).
+- `identify()` still never creates, merges, **or links** anything by itself.
+
+### 4.3 What a WordPress form bridge must do (recipe)
+
+The pixel plugin stays inject-only. A *separate* bridge plugin (or theme
+snippet) is the right place for this, and it needs exactly three things on
+submit — nothing else changes from the setup that already works:
+
+```js
+// after a successful Contact submit (Elementor: `submit_success` jQuery
+// event; CF7: `wpcf7mailsent`; plain forms: the submit handler)
+var BASE = 'https://<live-site>';
+var SITE = 'wp-whiteno1se';                       // the registered slug
+var px   = window.TapuzielPixel;
+
+if (px) {
+  px.identify({ email: email, name: name });      // claim (needs claims ON to land)
+  px.track('contact_us');
+}
+
+var body = new URLSearchParams({
+  email: email, name: name, message: message,
+  _page: location.pathname,
+  _tz_site: SITE,                                  // 1. which registered site
+  _tz_vid: (px && px.visitorId()) || ''            // 2. this browser's pixel id
+});
+fetch(BASE + '/api/form', {                        // 3. same no-cors POST as today
+  method: 'POST', mode: 'no-cors', keepalive: true,
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  body: body.toString()
+});
+```
+
+Notes for the bridge author:
+
+- `visitorId()` returns `''` under DNT/GPC — send the form anyway; the person
+  is still recorded, just not stitched. Never invent a vid on the bridge side.
+- Keep the pixel loaded **before** the bridge runs (the plugin's `defer` tag
+  is fine; guard with `if (window.TapuzielPixel)` as above).
+- `_tz_*` and `_page` are internal fields: they are stripped from the stored
+  submission, so they never appear in the inbox or the lead e-mail.
+- On the Tapuziel side the site must be **registered and active**; if you set
+  an origin allowlist, it must contain the WordPress origin. Turning claims on
+  is optional — the form channel links without any admin step.
+- Elementor's own AJAX submit and this POST are independent; ordering does
+  not matter as long as the pixel has minted the vid (it does on page load).
+
+### 4.4 Ops checklist for `wp-whiteno1se`
+
+1. Deploy this Tapuziel version to the CRM host (the loader is served from
+   there — the WordPress plugin picks the new `tz-pixel.js` up automatically).
+2. לקוחות → אתרים: site `wp-whiteno1se` active; add the WordPress origin to the
+   allowlist if you want the tighter gate; optionally enable claims.
+3. Update the bridge per §4.3 (`_tz_site`, `_tz_vid`).
+4. Submit Contact on WordPress, then open two more pages. The contact's
+   timeline shows the `form` event, then `pageview` rows with the
+   `wp-whiteno1se` pill, and the interest card learns the paths.
