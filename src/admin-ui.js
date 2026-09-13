@@ -256,7 +256,7 @@ function layout(content, title = 'Tapuziel', accent = '#f97316', opts = {}) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title} • Tapuziel</title>
-  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/admin-theme.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>:root { --admin-accent: ${accent}; }</style>
 </head>

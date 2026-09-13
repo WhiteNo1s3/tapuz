@@ -30,6 +30,21 @@
  * and the serializer is deterministic, so a document round-trips exactly.
  * The JSON package stays readable for old files; this is the format that is
  * written, exported, and asked of a chat from here on.
+ *
+ * v2.27 — the misfire matrix (Ben: "many misfires … trying to use bentml to
+ * make a module but didn't make it right, why so"). Running the shapes chats
+ * actually produce through this parser showed four silent losses, each of
+ * which left the owner with a theme that "looks sloppy" and no error:
+ *   • curly quotes (“#7c2d12”) reached the CSS as-is — every colour broken
+ *   • family=""Heebo", serif" (a double quote inside a double-quoted value)
+ *     parsed as an EMPTY family — the font loaded and was never used
+ *   • a <style> written straight under <bent-theme> (no <bent-skin>) was
+ *     ignored — the whole skin gone
+ *   • two documents in one reply (the empty template echoed back, then the
+ *     real theme) — the FIRST won and was refused as empty
+ * Each is now read the way it was meant. `parseTheme` reports what it
+ * tolerated in `notes`, so a door can say so instead of pretending the
+ * reply was clean.
  */
 
 const FORMAT = 'tapuz-theme';
@@ -58,29 +73,57 @@ function unescAttr(v) {
   return String(v == null ? '' : v).replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
-/** `<bent-x a="1" b='2' c>` → { a: '1', b: '2', c: '' }, kebab kept as written. */
+/** Typographic quotes a chat UI or a word processor swaps in for straight
+ *  ones — inside a TAG they can only ever mean the straight quote. */
+function straightenQuotes(s) {
+  return String(s == null ? '' : s)
+    .replace(/[“”„‟″«»]/g, '"')
+    .replace(/[‘’‚‛′]/g, "'");
+}
+
+/**
+ * `<bent-x a="1" b='2' c>` → { a: '1', b: '2', c: '' }, kebab kept as written.
+ * A quoted value may carry its own delimiter inside — family=""Heebo", serif"
+ * is what a model writes when told to quote font names — so a quote ends the
+ * value only when the next attribute (or the end of the tag) follows it.
+ */
 function parseAttrs(tagOpen) {
   const out = {};
-  const re = /([A-Za-z][\w-]*)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>\/]+)))?/g;
-  const body = tagOpen.replace(/^<[A-Za-z][\w-]*/, '').replace(/\/?>$/, '');
+  const body = straightenQuotes(tagOpen).replace(/^<[A-Za-z][\w-]*/, '').replace(/\/?>$/, '').replace(/\/\s*$/, '');
+  const re = /([A-Za-z][\w-]*)\s*(?:=\s*(?:"((?:[^"]|"(?!\s*(?:[A-Za-z][\w-]*\s*=|$)))*)"|'((?:[^']|'(?!\s*(?:[A-Za-z][\w-]*\s*=|$)))*)'|([^\s"'>\/]+)))?/g;
   let m;
   while ((m = re.exec(body))) {
+    if (!m[1]) { re.lastIndex++; continue; }
     out[m[1].toLowerCase()] = unescAttr(m[2] != null ? m[2] : m[3] != null ? m[3] : m[4] != null ? m[4] : '');
   }
   return out;
 }
 
-/** The whole tag `<bent-x …>…</bent-x>` or `<bent-x … />` → { attrs, inner }. */
+/** Every `<bent-name …>…</bent-name>` (or self-closed) in source, in order. */
+function findAllSections(source, name) {
+  const out = [];
+  const re = new RegExp('<bent-' + name + '\\b([^>]*)>', 'gi');
+  let m;
+  while ((m = re.exec(source))) {
+    const open = m[0];
+    const attrs = parseAttrs(open);
+    if (/\/\s*>$/.test(open)) { out.push({ attrs, inner: '', start: m.index, end: m.index + open.length }); continue; }
+    const start = m.index + open.length;
+    const closeRe = new RegExp('</bent-' + name + '\\s*>', 'i');
+    const rest = source.slice(start);
+    const close = rest.search(closeRe);
+    const inner = close === -1 ? rest : rest.slice(0, close);
+    const closeLen = close === -1 ? 0 : (rest.match(closeRe) || [''])[0].length;
+    out.push({ attrs, inner, start: m.index, end: close === -1 ? source.length : start + close + closeLen });
+    if (close === -1) break;
+    re.lastIndex = start + close + closeLen;
+  }
+  return out;
+}
+
+/** The first `<bent-x …>…</bent-x>` or `<bent-x … />` → { attrs, inner }. */
 function findSection(source, name) {
-  const re = new RegExp('<bent-' + name + '\\b([^>]*)>', 'i');
-  const m = source.match(re);
-  if (!m) return null;
-  const open = m[0];
-  const attrs = parseAttrs(open);
-  if (/\/\s*>$/.test(open)) return { attrs, inner: '' };
-  const start = m.index + open.length;
-  const close = source.slice(start).search(new RegExp('</bent-' + name + '\\s*>', 'i'));
-  return { attrs, inner: close === -1 ? source.slice(start) : source.slice(start, start + close) };
+  return findAllSections(source, name)[0] || null;
 }
 
 function innerTag(html, tag) {
@@ -103,14 +146,9 @@ function isThemeBent(text) {
   return /<bent-theme\b/i.test(String(text || ''));
 }
 
-/**
- * Parse a `.bent` theme out of anything that contains one.
- * @returns {{ name: string, version: number, overrides: object, canvas: string }}
- */
-function parseTheme(text) {
-  const src = String(text || '').replace(/[​⁠﻿]/g, '');
-  const root = findSection(src, 'theme');
-  if (!root) throw new Error('לא נמצא מסמך <bent-theme> בטקסט');
+/** One `<bent-theme>` root → the theme it describes. */
+function parseRoot(root) {
+  const notes = [];
   const overrides = {};
   for (const section of Object.keys(SECTIONS)) {
     const sec = findSection(root.inner, section);
@@ -141,12 +179,60 @@ function parseTheme(text) {
     };
   }
   const canvas = findSection(root.inner, 'canvas');
+
+  // a <style> / <script> written straight under <bent-theme>, outside every
+  // section — the model dropped the <bent-skin>/<bent-effect> wrapper but the
+  // meaning is unambiguous: css on the theme is the skin, js is the effect
+  let loose = root.inner;
+  for (const name of ['skin', 'effect', 'effects', 'canvas']) {
+    for (const s of findAllSections(loose, name)) loose = loose.slice(0, s.start) + ' '.repeat(s.end - s.start) + loose.slice(s.end);
+  }
+  const looseCss = [...loose.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)].map((m) => dedent(m[1])).filter(Boolean);
+  if (looseCss.length && !(overrides.skin && overrides.skin.css)) {
+    overrides.skin = { css: looseCss.join('\n\n'), note: (overrides.skin && overrides.skin.note) || '' };
+    notes.push('BARE_STYLE');
+  }
+  const looseJs = [...loose.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
+    .filter((m) => !/\ssrc\s*=/i.test(m[1])).map((m) => dedent(m[2])).filter(Boolean);
+  if (looseJs.length && !(overrides.effects && overrides.effects.js)) {
+    overrides.effects = { css: (overrides.effects && overrides.effects.css) || '', js: looseJs.join('\n\n'), note: (overrides.effects && overrides.effects.note) || '' };
+    notes.push('BARE_SCRIPT');
+  }
+
   return {
     name: String(root.attrs.name || '').trim().slice(0, 120),
     version: Number(root.attrs.version) || VERSION,
     overrides,
-    canvas: canvas ? dedent(canvas.inner) : ''
+    canvas: canvas ? dedent(canvas.inner) : '',
+    notes
   };
+}
+
+/** How much theme a candidate carries — the template echoed back scores 0. */
+function richness(t) {
+  let n = 0;
+  for (const k of Object.keys(SECTIONS)) if (t.overrides[k]) n += 10 + Object.keys(t.overrides[k]).length;
+  if (t.overrides.skin && t.overrides.skin.css) n += 8;
+  if (t.overrides.effects && (t.overrides.effects.js || t.overrides.effects.css)) n += 8;
+  if (t.canvas) n += Math.min(8, Math.ceil(t.canvas.length / 200));
+  return n;
+}
+
+/**
+ * Parse a `.bent` theme out of anything that contains one. When the text
+ * holds several `<bent-theme>` documents, the richest wins — never merely
+ * the first (a chat that echoes the empty template before answering).
+ * @returns {{ name: string, version: number, overrides: object, canvas: string, notes: string[] }}
+ */
+function parseTheme(text) {
+  const src = String(text || '').replace(/[​⁠﻿]/g, '');
+  const roots = findAllSections(src, 'theme');
+  if (!roots.length) throw new Error('לא נמצא מסמך <bent-theme> בטקסט');
+  const cands = roots.map(parseRoot);
+  let best = cands[0];
+  for (const c of cands) if (richness(c) > richness(best)) best = c;
+  if (cands.length > 1) best.notes.push('SEVERAL_DOCUMENTS');
+  return best;
 }
 
 /**
@@ -194,4 +280,4 @@ function serializeTheme({ name, overrides, canvas } = {}) {
   return lines.join('\n') + '\n';
 }
 
-module.exports = { FORMAT, VERSION, SECTIONS, isThemeBent, parseTheme, serializeTheme, parseAttrs, dedent };
+module.exports = { FORMAT, VERSION, SECTIONS, isThemeBent, parseTheme, serializeTheme, parseAttrs, straightenQuotes, dedent };

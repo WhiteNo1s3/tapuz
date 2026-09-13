@@ -65,10 +65,51 @@
 - `collapse=sm|md|lg|never` — מאיזה רוחב מסך התאים נערמים (640 · 768 · 1024 · אף פעם)
 - 1–6 תאים (`bent-col`); חמישה-שישה תאים נעטפים לרשת של 3 בטאבלט לפני שהם נערמים
 
+## מה הדלת סולחת (v2.27)
+
+צ׳אטים לא מחזירים מסמכים נקיים. הדלתות (`extractThemeReply`) קוראות את
+הצורות האלה כמו שהתכוונו, ומחזירות `warnings` שאומרות מה נעשה:
+
+| מה הגיע | מה קורה |
+|---|---|
+| מירכאות מסולסלות (`“#7c2d12”`) | נקראות כישרות — הצבע נשאר צבע |
+| `family=""Heebo", serif"` (מירכאה בתוך מירכאות) | נקרא כמשפחה מלאה |
+| `<style>` ישירות ב-`bent-theme` בלי `bent-skin`, או fence של `css` ליד המסמך | העור |
+| `<script>` חופשי או fence של `js` ליד המסמך | האפקט |
+| כמה מסמכי `<bent-theme>` (התבנית הריקה ואז הערכה) | העשיר שבהם |
+| `@import` של Google Fonts בתוך העור | מוסר; הגופנים עוברים ל-`bent-fonts google` |
+| `url(https://…)` בעור או באפקט | מוסר (`none`) — האתר לא מושך משאבים מזרים |
+| גופן שמופיע ב-`family` בלי `google` | נטען; `google` בלי `family` — המשפחה נקבעת |
+| `rgb(…)` / צבע לא תקין | מקופל ל-hex / מושמט עם הערה |
+| **דף** (`<!DOCTYPE html>` עם מודולים) במקום ערכה | נדחה בשם — `PAGE_NOT_THEME` — והסטודיו מציע לשלוח אותו לקנבס |
+| בנץ׳ שלא מתקמפל | הערכה נשמרת; הבנץ׳ מדווח (`benchError`) |
+
+## השומר של האפקט (v2.27)
+
+באתר החי האפקט (`bent-effect`) רץ בתוך שומר (`theme.js` › `renderThemeEffectsJs`):
+ה-`window`/`document` שהוא רואה הם פרוקסי, ו-`addEventListener` /
+`requestAnimationFrame` / `setTimeout` / `setInterval` עטופים. בלי לגעת בקוד
+של הצ׳אט זה נותן:
+
+- **הפחתת תנועה** — גולש שביקש פחות תנועה לא מריץ את האפקט בכלל.
+- **תקציב** — אלמנטים שהאפקט יוצר נספרים; יותר מ-240 בשנייה או יותר מ-400 חיים
+  בו-זמנית = עצירה, והאלמנטים נמחקים.
+- **קצב** — `mousemove`/`pointermove`/`touchmove` מגיעים לדף פעם בפריים;
+  `setInterval` לא מתחת ל-16ms.
+- **כלב שמירה** — מאזין או פריים שלוקח יותר מ-50ms שלוש פעמים, או ארבעה
+  פריימים תקועים (‎>250ms) בעשר שניות = עצירה.
+
+עצירה היא מוחלטת: המאזינים מושתקים, התזמונים נפסקים, הסיבה נרשמת ב-`console`,
+ב-`window.__tapuzFx.killed`, ונשלחת לקנבס של הסטודיו שמציג אותה באדום. הפרומפט
+של המעצב/ת ושל האפקטים מבקשים מראש את הצורה שלא נעצרת: מאגר קבוע של עד 30
+אלמנטים, לולאת `requestAnimationFrame` אחת, `transform`/`opacity` בלבד.
+שער: `npm run test:theme-guard` (מריץ את השומר בחלון מדומה).
+
 ## איפה זה חי
 
 - `config/theme-overrides.json` — הערכה החיה (המודל הפנימי; ה-`.bent` הוא המעטפת החיצונית שלו)
 - `config/theme-canvas.bent` — הבנץ׳ של הסטודיו, מסמך BenTML מלא
 - `config/theme-library.json` — הספרייה; ערכה שהגיעה עם `bent-canvas` שומרת אותו לצדה
 - קוד: [`src/bentml/theme-dialect.js`](../src/bentml/theme-dialect.js) (parse/serialize), [`src/theme.js`](../src/theme.js) (הדלתות), [`src/theme-canvas.js`](../src/theme-canvas.js) (הבנץ׳), [`src/theme-roleplay.js`](../src/theme-roleplay.js) (הפרומפט)
-- שער: `npm run test:theme-studio`
+- `public/css/admin-theme.css` — העותק של האדמין: משתני הפלטה והגופנים בלבד, בלי עור/רקע/אפקטים (העור של האתר לא מדליף לאדמין)
+- שער: `npm run test:theme-studio` · `npm run test:theme-guard`

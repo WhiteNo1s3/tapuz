@@ -128,6 +128,47 @@ check('with current=1 the prompt carries the live knobs and skin as the starting
 check('without a brief the prompt asks for a one-line "ready"', /המשחק מתחיל עכשיו/.test(packCur.text));
 check('the pack fits a chat message (< 20K chars)', pack.chars < 20000);
 
+// ── 2b. v2.27 — the prompt teaches a curated bench KIT and the guard's contract ──
+check('the prompt hands the bench a curated kit (not the whole page vocabulary), with worked examples of the containers models break',
+  /ערכת המודולים של הבנץ׳/.test(pack.text) && /`bent-pricing` ⊃ bent-plan/.test(pack.text) && /<bent-pricing id="p1"><bent-plan/.test(pack.text) &&
+  /<bent-features id="f1" columns="3"><bent-feature/.test(pack.text) && !/`bent-whatsapp`/.test(pack.text) && !/`bent-consent`/.test(pack.text) && !/`bent-pager`/.test(pack.text));
+check('the prompt names what a theme is NOT (a page) and forbids <div>/free <style>/curly quotes',
+  /## מה זה \*\*לא\*\*/.test(pack.text) && /<!DOCTYPE html>/.test(pack.text) && /מסולסלות/.test(pack.text) && /קוסמטיקה על השלד/.test(pack.text));
+check('the effect rules are the guard\'s own: a pool, one rAF loop, transform/opacity, coalesced mousemove, no interval under 16ms, pointer-events none',
+  /מאגר קבוע/.test(pack.text) && /requestAnimationFrame/.test(pack.text) && /`transform`/.test(pack.text) && /16ms/.test(pack.text) && /pointer-events:none/.test(pack.text));
+check('the example move shows the safe effect shape (a pool, one loop, reduced-motion respected)',
+  /var N = 12, dots = \[\]/.test(pack.text) && /prefers-reduced-motion: reduce/.test(pack.text) && /requestAnimationFrame\(loop\)/.test(pack.text));
+
+// ── 2c. v2.27 — the misfire matrix: what chats actually send, read the way it was meant ──
+const KNOBS = '<bent-colors primary="#7c2d12" secondary="#b45309" text="#292524" muted="#6b5d52" border="#dccbb0" bg="#f6efe3" light-bg="#efe4d0" surface="#fbf7ef" />';
+const mf = (body) => theme.extractThemeReply('```html\n<bent-theme name="פריז" version="2">\n' + KNOBS + '\n' + body + '\n</bent-theme>\n```');
+check('misfire C: a bare <style> straight under <bent-theme> is the skin (and the door says so)',
+  (() => { const t = mf('<style>.hero h1 { font-size: 3rem; }</style>'); return /font-size: 3rem/.test(t.overrides.skin.css) && t.warnings.some((w) => /bent-skin/.test(w)); })());
+check('misfire D: a css fence BESIDE the document is the skin',
+  /font-size: 3rem/.test(theme.extractThemeReply('```html\n<bent-theme name="פריז">\n' + KNOBS + '\n</bent-theme>\n```\n\n```css\n.hero h1 { font-size: 3rem; }\n```').overrides.skin.css));
+check('misfire E: an @import of Google Fonts inside the skin is removed and its family moves to fonts.google',
+  (() => { const t = mf('<bent-skin><style>@import url("https://fonts.googleapis.com/css2?family=Heebo:wght@400;700&display=swap");\n.hero h1 { font-family: "Heebo"; }</style></bent-skin>'); return !/@import/.test(t.overrides.skin.css) && t.overrides.fonts.google.includes('Heebo') && t.warnings.some((w) => /@import/.test(w)); })());
+check('misfire F: an external url( in the skin is removed — the site fetches nothing from strangers',
+  (() => { const t = mf('<bent-skin><style>.hero { background: url("https://images.example.com/a.jpg") center/cover; }</style></bent-skin>'); return !/images\.example/.test(t.overrides.skin.css) && /background: none/.test(t.overrides.skin.css) && t.warnings.some((w) => /חיצונית/.test(w)); })());
+check('misfire G: family=""Heebo", sans-serif" (a quote inside the quotes) parses as the family, and both fonts load',
+  (() => { const t = theme.extractThemeReply('<bent-theme name="פריז"><bent-fonts family=""Heebo", system-ui, sans-serif" heading=""Suez One", serif" google="Heebo, Suez One" /></bent-theme>'); return /"Heebo", system-ui/.test(t.overrides.fonts.family) && /Suez One/.test(t.overrides.fonts.headingFamily) && t.overrides.fonts.google.includes('Suez One'); })());
+check('misfire H: curly quotes around attribute values are read as straight ones — colours stay colours',
+  (() => { const t = theme.extractThemeReply('<bent-theme name=“פריז”><bent-colors primary=“#7c2d12” bg=“#f6efe3” /></bent-theme>'); return t.name === 'פריז' && t.overrides.colors.primary === '#7c2d12'; })());
+check('misfire I: a PAGE pasted as a theme is named as one (code PAGE_NOT_THEME) — never saved as an empty theme',
+  (() => { try { theme.extractThemeReply('```html\n<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1"><head><title>x</title></head><body><bent-hero id="h1"><bent-heading level="1">x</bent-heading></bent-hero></body></html>\n```\nPZN_READY'); return false; } catch (e) { return e.code === 'PAGE_NOT_THEME' && /FRESH/.test(e.message); } })());
+check('misfire O: two documents (the template echoed back, then the theme) → the richest wins',
+  theme.extractThemeReply('```html\n<bent-theme name="…" version="2">\n  <bent-colors … />\n</bent-theme>\n```\nועכשיו:\n```html\n<bent-theme name="פריז">\n' + KNOBS + '\n</bent-theme>\n```').name === 'פריז');
+check('misfire P: rgb() folds to hex, an invalid colour is dropped with a word',
+  (() => { const t = theme.extractThemeReply('<bent-theme name="x"><bent-colors primary="rgb(245, 158, 11)" bg="#f6efe3" text="not-a-color!" /></bent-theme>'); return t.overrides.colors.primary === '#f59e0b' && !('text' in t.overrides.colors) && t.warnings.some((w) => /"text"/.test(w)); })());
+check('a font named in family but missing from google is loaded (the request that never reached the page)',
+  theme.extractThemeReply('<bent-theme name="x"><bent-fonts family=\'"Rubik", sans-serif\' /></bent-theme>').overrides.fonts.google.includes('Rubik'));
+check('misfire K: a bench fragment with raw HTML around modules is repaired, not refused',
+  (() => { const c = require('../src/theme-canvas'); const r = c.blocksFromSource('<bent-hero id="h1"><bent-heading level="1">x</bent-heading><bent-text>a <b>b</b><br>c</bent-text></bent-hero>\n<div class="row"><bent-card id="c1"><bent-text>y</bent-text></bent-card></div>'); return r.blocks.length >= 2 && r.warnings.length >= 1; })());
+check('the admin scope of the theme css carries the variables and NOT the skin / background / chrome / effects',
+  (() => { const css = theme.overridesToCss({ skin: { css: '.card { border: 9px solid red; }' }, effects: { css: '.fx{top:0}' }, background: { kind: 'dots' }, chrome: { headerBg: '#000' } }, { scope: 'admin' }); return /--color-primary/.test(css) && !/9px solid red/.test(css) && !/\.fx\{top:0\}/.test(css) && !/radial-gradient/.test(css) && !/\.site-header/.test(css); })());
+check('lintSkin names a skin that hides the menu or freezes body scroll',
+  theme.lintSkin('.main-nav { display: none }').some((w) => /display:none/.test(w)) && theme.lintSkin('body { overflow: hidden }').some((w) => /overflow/.test(w)) && theme.lintSkin('.hero h1 { font-size: 3rem }').length === 0);
+
 // ── 3. take only the theme ───────────────────────────────────────────
 const chatty = 'בשמחה! הנה הערכה שביקשת:\n\n```json\n{ "name": "פריז", "colors": { "primary": "#7c2d12", "secondary": "#b45309", "text": "#292524", "muted": "#6b5d52", "border": "#dccbb0", "bg": "#f6efe3", "lightBg": "#efe4d0", "surface": "#fbf7ef" }, "fonts": { "family": "\\"David Libre\\", serif", "headingFamily": "\\"Frank Ruhl Libre\\", serif", "baseSize": "17px", "google": ["Frank Ruhl Libre", "David Libre"] }, "style": { "radius": "sharp", "shadow": "flat", "accent": "solid", "buttons": "outline" }, "background": { "kind": "lines", "angle": 135 }, "chrome": { "menuHover": "underline" } }\n```\n\nוהעור:\n```css\n.site-header { border-bottom: 3px double var(--color-border); }\n.hero h1 { font-size: 3rem; }\n```\n\n```js\n(function(){ document.addEventListener("DOMContentLoaded", function(){}); })();\n```\n\nתהנו! אם תרצו שינוי, רק תגידו.';
 const t1 = theme.extractThemeReply(chatty);
@@ -280,6 +321,23 @@ function waitUp(tries = 40) {
     check('a reply whose effect does not compile → 400 with the reason', badPaste.status === 400 && /לא מתקמפל/.test(badPaste.json.error));
     const nothing = await req('POST', '/admin/api/theme/design/paste', { cookie, body: { reply: 'sorry, no' } });
     check('a reply with no theme → 400 with FRESH guidance', nothing.status === 400 && /FRESH/.test(nothing.json.error));
+    // v2.27 — the doors talk back
+    const pageReply = '```html\n<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1"><head><title>x</title></head><body><bent-hero id="h1"><bent-heading level="1">x</bent-heading></bent-hero></body></html>\n```';
+    const pageAsTheme = await req('POST', '/admin/api/theme/design/paste', { cookie, body: { reply: pageReply } });
+    check('a PAGE pasted as a theme → 400 with code PAGE_NOT_THEME (the studio offers the bench instead)',
+      pageAsTheme.status === 400 && pageAsTheme.json.code === 'PAGE_NOT_THEME' && /FRESH/.test(pageAsTheme.json.error));
+    const libCountBefore = (await req('GET', '/admin/api/theme/library', { cookie })).json.themes.length;
+    const messyBench = await req('POST', '/admin/api/theme/design/paste', { cookie, body: { reply: '```html\n<bent-theme name="בנץ׳ מבולגן">\n<bent-colors primary="#123456" />\n<bent-canvas>\n<bent-nonsense-module id="q1"><bent-nonsense-child /></bent-nonsense-module>\n<div class="x"><bent-hero id="h1"><bent-heading level="1">x</bent-heading></bent-hero></div>\n</bent-canvas>\n</bent-theme>\n```', bench: true } });
+    check('a theme whose bench needs repair is SAVED and the bench lands repaired — the theme is never lost to its bench',
+      messyBench.status === 200 && messyBench.json.ok && messyBench.json.benchCount >= 1 && messyBench.json.benchError === '' &&
+      (await req('GET', '/admin/api/theme/library', { cookie })).json.themes.length === libCountBefore + 1);
+    await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'clear' } }); // the bench checks below start from nothing
+    const warned = await req('POST', '/admin/api/theme/design/paste', { cookie, body: { reply: '```html\n<bent-theme name="עם הערות">\n<bent-colors primary="#123456" />\n<bent-skin><style>@import url("https://fonts.googleapis.com/css2?family=Rubik");\n.hero{color:red}</style></bent-skin>\n<bent-effect><script>document.addEventListener("mousemove", function(){ document.body.appendChild(document.createElement("div")); });</script></bent-effect>\n</bent-theme>\n```' } });
+    check('design/paste answers with the door\'s warnings (an @import moved to fonts, a node-per-mousemove effect named)',
+      warned.status === 200 && warned.json.warnings.some((w) => /@import/.test(w)) && warned.json.warnings.some((w) => /תזוזת עכבר/.test(w)) && warned.json.sections.includes('fonts'));
+    const fxWarned = await req('POST', '/admin/api/theme/effects/paste', { cookie, body: { reply: '```css\n.d{top:0; background:url(https://x.example/a.png)}\n```\n```js\nsetInterval(function(){}, 1);\n```', note: 'w' } });
+    check('effects/paste answers with warnings too (external url removed, 1ms interval named) and keeps the effect',
+      fxWarned.status === 200 && fxWarned.json.warnings.some((w) => /חיצונית/.test(w)) && fxWarned.json.warnings.some((w) => /16ms/.test(w)));
 
     // the canvas — a candidate renders the real pages without saving
     const pv = await req('POST', '/admin/api/theme/preview', { cookie, body: { reply: chatty } });
@@ -317,6 +375,16 @@ function waitUp(tries = 40) {
     const live = await req('GET', '/', { cookie });
     check('the served site widens its CSP by exactly Google Fonts while a web font is in use',
       /style-src 'self' 'unsafe-inline' https:\/\/fonts\.googleapis\.com/.test(live.headers['content-security-policy']) && /font-src 'self' data: https:\/\/fonts\.gstatic\.com/.test(live.headers['content-security-policy']));
+    // v2.27 — nothing leaks: the admin shell reads the palette, never the owner's skin
+    const adminCss = await req('GET', '/css/admin-theme.css', { cookie });
+    const adminPage = await req('GET', '/admin/theme', { cookie });
+    check('the admin links its own theme stylesheet — variables yes, the skin NO (no leak into the admin screens)',
+      adminCss.status === 200 && /--color-primary: #7c2d12/.test(adminCss.text) && !/border-bottom: 3px double/.test(adminCss.text) && !/theme skin/.test(adminCss.text) &&
+      /<link rel="stylesheet" href="\/css\/admin-theme\.css">/.test(adminPage.text) && !/<link rel="stylesheet" href="\/css\/main\.css">/.test(adminPage.text));
+    check('the exported page carries the effect GUARD (shadowed globals), not a bare try/catch', /\(function \(window, document, self, globalThis, addEventListener/.test(index));
+    check('the studio page is one styled flow — no inline-style forest, the flow strip, the warnings lists, the bench button',
+      /class="studio-flow"/.test(adminPage.text) && /id="th-design-warn"/.test(adminPage.text) && /id="th-design-to-bench"/.test(adminPage.text) && /class="studio-savebar"/.test(adminPage.text) &&
+      (adminPage.text.match(/style="/g) || []).length < 40);
 
     // the effect door compiles too
     const fxBad = await req('POST', '/admin/api/theme/effects/paste', { cookie, body: { reply: '```js\nfunction ( { broken\n```' } });

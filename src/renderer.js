@@ -1028,8 +1028,10 @@ function renderThemePreviewShim(previewId) {
   function report() {
     try {
       if (window.__tapuzThemeEffectError) errors.push(String(window.__tapuzThemeEffectError));
+      var fx = window.__tapuzFx || {};
       window.parent.postMessage({ type: 'tapuz-theme-preview', id: '${id}', path: location.pathname + location.search,
-        effect: !!document.getElementById('tapuz-theme-effects'), errors: errors.slice(0, 5) }, location.origin);
+        effect: !!document.getElementById('tapuz-theme-effects'), errors: errors.slice(0, 5),
+        killed: fx.killed || '', skipped: fx.skipped || '' }, location.origin);
     } catch (e) { /* not framed */ }
   }
   window.addEventListener('error', function (ev) {

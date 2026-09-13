@@ -19,6 +19,15 @@
  *     without saving it, and reports whether the effect ran (preview)
  *   • every paste/import door takes only the theme out of whatever the
  *     chat wrote, and COMPILES the effect JS before saying "נקלט"
+ *
+ * v2.27 — the doors SAY what they did (Ben: "misfires … it freezes and
+ * looks sloppy, we cannot allow that"). Every paste answers with
+ * `warnings` — what was tolerated, what was taken out, what the effect
+ * guard will have to do — a page pasted as a theme is refused by name
+ * (code PAGE_NOT_THEME) instead of landing as an empty theme, and a bench
+ * that will not compile no longer loses the theme it came with. The page
+ * itself is one studio with a clear flow (imagine → canvas → tune →
+ * library), styled by admin.css instead of a hundred inline styles.
  */
 
 const express = require('express');
@@ -59,11 +68,24 @@ function rebuildSite(why) {
 router.post('/admin/api/theme', (req, res) => {
   try {
     const b = req.body || {};
-    const jsErr = require('../theme').checkEffectJs(b.overrides && b.overrides.effects && b.overrides.effects.js);
+    const themeLib = require('../theme');
+    const jsErr = themeLib.checkEffectJs(b.overrides && b.overrides.effects && b.overrides.effects.js);
     if (jsErr) return res.status(400).json({ ok: false, error: 'ה-JS של האפקט לא מתקמפל: ' + jsErr });
+    // the form's skin goes through the same hygiene as a pasted one
+    const warnings = [];
+    if (b.overrides && b.overrides.skin && typeof b.overrides.skin.css === 'string') {
+      const cleaned = themeLib.cleanAuthorCss(b.overrides.skin.css);
+      b.overrides.skin.css = cleaned.css;
+      warnings.push(...cleaned.changes, ...themeLib.lintSkin(cleaned.css));
+      if (cleaned.fonts.length && b.overrides.fonts) {
+        const f = themeLib.deriveFonts(b.overrides.fonts, cleaned.fonts);
+        b.overrides.fonts = f.fonts;
+        warnings.push(...f.warnings);
+      }
+    }
     const settings = saveThemeSettings(b);
     const rebuildError = rebuildSite('theme save');
-    res.json({ ok: true, rebuildError, ...settings });
+    res.json({ ok: true, rebuildError, warnings, ...settings });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -115,18 +137,24 @@ function packageFromBody(body) {
   return b.package;
 }
 
+/** The status + code an extraction error deserves (a page is not a 500). */
+function refuse(res, e) {
+  return res.status(400).json({ ok: false, error: e.message, code: e.code || '' });
+}
+
 router.post('/admin/api/theme/import', (req, res) => {
   try {
     const pkg = packageFromBody(req.body);
     const overrides = require('../theme').importThemePackage(pkg);
     let benchCount = null;
+    let benchError = '';
     if (pkg && pkg.canvas && (req.body || {}).bench !== false) {
-      try { benchCount = require('../theme-canvas').apply('replace-source', pkg.canvas).count; } catch (e) { benchCount = null; }
+      try { benchCount = require('../theme-canvas').apply('replace-source', pkg.canvas).count; } catch (e) { benchError = e.message; }
     }
     const rebuildError = rebuildSite('theme import');
-    res.json({ ok: true, rebuildError, overrides, benchCount });
+    res.json({ ok: true, rebuildError, overrides, benchCount, benchError, warnings: (pkg && pkg.warnings) || [] });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    refuse(res, e);
   }
 });
 
@@ -164,10 +192,11 @@ router.post('/admin/api/theme/library/apply', (req, res) => {
 
 router.post('/admin/api/theme/library/import', (req, res) => {
   try {
-    const entry = require('../theme-library').importPackageToLibrary(packageFromBody(req.body));
-    res.json({ ok: true, id: entry.id, name: entry.name });
+    const pkg = packageFromBody(req.body);
+    const entry = require('../theme-library').importPackageToLibrary(pkg);
+    res.json({ ok: true, id: entry.id, name: entry.name, warnings: (pkg && pkg.warnings) || [] });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    refuse(res, e);
   }
 });
 
@@ -209,7 +238,9 @@ router.post('/admin/api/theme/effects/paste', (req, res) => {
   try {
     const reply = String((req.body || {}).reply || '');
     const themeLib = require('../theme');
-    const { css, js } = themeLib.extractEffectParts(reply);
+    const parts = themeLib.extractEffectParts(reply);
+    let css = parts.css;
+    const js = parts.js;
     if (!css && !js) {
       return res.status(400).json({
         ok: false,
@@ -222,6 +253,10 @@ router.post('/admin/api/theme/effects/paste', (req, res) => {
     if (jsErr) return res.status(400).json({ ok: false, error: 'ה-JS של האפקט לא מתקמפל: ' + jsErr + ' — בקשו מהצ׳אט לתקן ולהחזיר את ה-fence מחדש' });
     const cssErr = themeLib.checkCss(css);
     if (cssErr) return res.status(400).json({ ok: false, error: cssErr + ' — בקשו מהצ׳אט לתקן' });
+    // v2.27: external reach out, and the guard's verdict said up front
+    const cleaned = themeLib.cleanAuthorCss(css);
+    css = cleaned.css;
+    const warnings = cleaned.changes.concat(themeLib.lintEffect(js, css));
     const cur = themeLib.loadOverrides();
     cur.effects = {
       css: css || cur.effects.css,
@@ -232,7 +267,7 @@ router.post('/admin/api/theme/effects/paste', (req, res) => {
     // the static export serves '/' before the dynamic path — an effect that
     // only lives in overrides is invisible until a rebuild (crm.js pattern)
     const rebuildError = rebuildSite('effect paste');
-    res.json({ ok: true, rebuildError, cssChars: (css || '').length, jsChars: (js || '').length });
+    res.json({ ok: true, rebuildError, cssChars: (css || '').length, jsChars: (js || '').length, warnings });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -245,20 +280,26 @@ router.post('/admin/api/theme/effects', (req, res) => {
     const jsErr = themeLib.checkEffectJs(b.js);
     if (jsErr) return res.status(400).json({ ok: false, error: 'ה-JS של האפקט לא מתקמפל: ' + jsErr });
     const cur = themeLib.loadOverrides();
+    const cleaned = themeLib.cleanAuthorCss(b.css == null ? cur.effects.css : b.css);
     cur.effects = {
-      css: String(b.css == null ? cur.effects.css : b.css),
+      css: cleaned.css,
       js: String(b.js == null ? cur.effects.js : b.js),
       note: String(b.note == null ? cur.effects.note : b.note).slice(0, 300)
     };
     const saved = themeLib.saveOverrides(cur);
     const rebuildError = rebuildSite('effect save');
-    res.json({ ok: true, rebuildError, effects: saved.effects });
+    res.json({ ok: true, rebuildError, effects: saved.effects, warnings: cleaned.changes.concat(themeLib.lintEffect(saved.effects.js, saved.effects.css)) });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
 });
 
-/** The effect prompt — deliberately NOT the site-builder pack. */
+/**
+ * The effect prompt — deliberately NOT the site-builder pack. v2.27: the
+ * performance contract IS the prompt now. The guard on the page enforces
+ * a pool, a pace and a watchdog; the prompt asks for exactly that shape, so
+ * the first reply is the one that never trips it.
+ */
 function buildEffectsPrompt(brief) {
   return [
     '# ⚠️ צ׳אט חדש בלבד (FRESH CHAT)',
@@ -269,27 +310,41 @@ function buildEffectsPrompt(brief) {
     '',
     '## התפקיד',
     '',
-    'את/ה מומחה/ית אפקטים ל-front-end. כתבו אפקט אתר עצמאי לפי התיאור למטה.',
+    'את/ה מומחה/ית אפקטים ל-front-end. כתבו אפקט אתר עצמאי, **קל כמו נוצה**, לפי התיאור למטה.',
+    'האתר מריץ את האפקט בתוך שומר: אפקט שיוצר אלמנט בכל תזוזת עכבר, שמקפיא פריימים או',
+    'שרץ ב-setInterval מהיר — נעצר אוטומטית ונמחק מהדף. כתבו כך שהשומר לעולם לא יתערב.',
     '',
     '## חוקים קשיחים',
     '',
-    '1. **Vanilla בלבד** — בלי ספריות, בלי CDN, בלי `import`, בלי כתובות חיצוניות.',
+    '1. **Vanilla בלבד** — בלי ספריות, בלי CDN, בלי `import`, בלי כתובות חיצוניות, בלי `url(http…)` ב-CSS.',
     '2. ה-JS הוא **IIFE עצמאי** שמחכה בעצמו ל-`DOMContentLoaded`, לא מניח שום דבר על הדף.',
-    '3. עדינות: האפקט לא שובר פריסה, לא חוסם קליקים, ומכבד `prefers-reduced-motion`.',
-    '4. האתר הוא **RTL עברית** — כיווניות נלקחת בחשבון.',
-    '5. בלי `</script>` בתוך מחרוזות.',
-    '6. הקוד חייב להתקמפל כמו שהוא — בלי placeholders, בלי `...`, בלי הערות "השלימו כאן".',
+    '3. **מאגר קבוע (pool)**: עד 30 אלמנטים שנוצרים **פעם אחת** בטעינה וממוחזרים. לעולם לא `createElement` בתוך מאזין `mousemove`.',
+    '4. `mousemove`/`pointermove` רק **שומרים את המיקום האחרון** למשתנה. הציור קורה ב-**לולאת `requestAnimationFrame` אחת**.',
+    '5. תנועה רק עם `transform` ו-`opacity` (`will-change: transform`) — לא `top`/`left`, לא `width`/`height`. בלי `setInterval` מתחת ל-16ms, בלי לולאות אינסופיות.',
+    '6. עדינות: `pointer-events: none` על כל אלמנט של האפקט; לא שובר פריסה, לא חוסם קליקים; מכבד `prefers-reduced-motion` (יוצא מיד).',
+    '7. האתר הוא **RTL עברית** — כיווניות נלקחת בחשבון (`inset-inline-start`, לא `left`).',
+    '8. בלי `</script>` בתוך מחרוזות. הקוד חייב להתקמפל כמו שהוא — בלי placeholders, בלי `...`, בלי הערות "השלימו כאן". עד 60 שורות.',
     '',
     '## פורמט התשובה — בדיוק כך, בלי מילה מסביב',
     '',
     'fence אחד של `css` (גם אם ריק) ו-fence אחד של `js`. שום טקסט לפני, בין או אחרי:',
     '',
     '```css',
-    '/* סגנונות האפקט */',
+    '.tz-fx { position: fixed; inset-inline-start: 0; top: 0; pointer-events: none; will-change: transform, opacity; }',
+    '@media (prefers-reduced-motion: reduce) { .tz-fx { display: none; } }',
     '```',
     '',
     '```js',
-    '(function () { /* האפקט */ })();',
+    '(function () {',
+    '  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;',
+    '  var pool = [], N = 20, x = 0, y = 0;',
+    '  document.addEventListener("DOMContentLoaded", function () {',
+    '    for (var i = 0; i < N; i++) { var el = document.createElement("span"); el.className = "tz-fx"; document.body.appendChild(el); pool.push(el); }',
+    '    document.addEventListener("mousemove", function (e) { x = e.clientX; y = e.clientY; });',
+    '    requestAnimationFrame(loop);',
+    '  });',
+    '  function loop() { /* draw the pool from x, y with transform/opacity */ requestAnimationFrame(loop); }',
+    '})();',
     '```',
     '',
     '---',
@@ -335,16 +390,19 @@ router.post('/admin/api/theme/design/paste', (req, res) => {
   try {
     const b = req.body || {};
     const themeLib = require('../theme');
-    const found = themeLib.extractThemeReply(String(b.reply || ''), String(b.name || ''));
+    let found;
+    try { found = themeLib.extractThemeReply(String(b.reply || ''), String(b.name || '')); } catch (e) { return refuse(res, e); }
     const lib = require('../theme-library');
     const entry = lib.saveAiTheme(found.name, found.overrides, found.specimen);
     // the model's bench (v2.26) — onto the studio's bench when the owner
-    // ticked "take the canvas too" (the default when the bench is empty)
+    // ticked "take the canvas too" (the default when the bench is empty).
+    // v2.27: a bench that will not compile is REPORTED, never a reason to
+    // lose the theme that came with it (it was already saved above).
     let benchCount = null;
+    let benchError = '';
     const wantBench = b.bench === true || b.bench === 'true' || b.bench === 1;
     if (found.specimen && wantBench) {
-      try { benchCount = require('../theme-canvas').apply('replace-source', found.specimen).count; }
-      catch (e) { return res.status(400).json({ ok: false, error: 'הערכה נקראה, אבל הקנבס שבה לא מתקמפל: ' + e.message }); }
+      try { benchCount = require('../theme-canvas').apply('replace-source', found.specimen).count; } catch (e) { benchError = e.message; }
     }
     let applied = false;
     let rebuildError = '';
@@ -355,10 +413,10 @@ router.post('/admin/api/theme/design/paste', (req, res) => {
       backedUp = !!result.backedUp;
       rebuildError = rebuildSite('ai theme apply');
     }
-    res.json({ ok: true, id: entry.id, name: entry.name, applied, backedUp, rebuildError, parts: found.parts, benchCount,
-      hasSpecimen: !!found.specimen, sections: Object.keys(found.overrides) });
+    res.json({ ok: true, id: entry.id, name: entry.name, applied, backedUp, rebuildError, parts: found.parts, benchCount, benchError,
+      warnings: found.warnings, hasSpecimen: !!found.specimen, sections: Object.keys(found.overrides) });
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    refuse(res, e);
   }
 });
 
@@ -416,6 +474,8 @@ router.post('/admin/api/theme/preview', (req, res) => {
     let overrides;
     let name = '';
     let blocks = null;
+    let warnings = [];
+    let benchError = '';
     const canvasMod = require('../theme-canvas');
     if (b.libraryId) {
       const entry = require('../theme-library').getTheme(String(b.libraryId));
@@ -424,11 +484,15 @@ router.post('/admin/api/theme/preview', (req, res) => {
       name = entry.name;
       if (entry.canvas && b.bench !== false) blocks = canvasMod.sourceToBlocks(entry.canvas);
     } else if (typeof b.reply === 'string' && b.reply.trim()) {
-      const found = themeLib.extractThemeReply(b.reply, b.name);
+      let found;
+      try { found = themeLib.extractThemeReply(b.reply, b.name); } catch (e) { return refuse(res, e); }
       overrides = themeLib.mergeDeep(themeLib.DEFAULT_OVERRIDES, found.overrides);
       name = found.name;
+      warnings = found.warnings;
       // the model's own bench shows in the canvas, saved nowhere
-      if (found.specimen && b.bench !== false) blocks = canvasMod.sourceToBlocks(found.specimen);
+      if (found.specimen && b.bench !== false) {
+        try { blocks = canvasMod.blocksFromSource(found.specimen).blocks; } catch (e) { benchError = e.message; blocks = null; }
+      }
     } else if (b.overrides && typeof b.overrides === 'object') {
       // the editor form: what a save would produce — the form's sections
       // merged ONTO the live theme (effects and anything else the form
@@ -436,11 +500,13 @@ router.post('/admin/api/theme/preview', (req, res) => {
       const jsErr = themeLib.checkEffectJs(b.overrides.effects && b.overrides.effects.js);
       if (jsErr) return res.status(400).json({ ok: false, error: 'ה-JS של האפקט לא מתקמפל: ' + jsErr });
       overrides = themeLib.mergeDeep(themeLib.loadOverrides(), b.overrides);
+      warnings = themeLib.lintSkin(overrides.skin && overrides.skin.css);
     } else {
       overrides = themeLib.loadOverrides();
     }
     const id = registerPreview(overrides, blocks);
-    res.json({ ok: true, id, name, fonts: themeLib.googleFontFamilies(overrides), hasEffect: !!(overrides.effects && String(overrides.effects.js || '').trim()), benchModules: blocks ? canvasMod.countModules(blocks) : null });
+    res.json({ ok: true, id, name, fonts: themeLib.googleFontFamilies(overrides), hasEffect: !!(overrides.effects && String(overrides.effects.js || '').trim()),
+      benchModules: blocks ? canvasMod.countModules(blocks) : null, benchError, warnings });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -487,10 +553,9 @@ router.get('/admin/theme', (req, res) => {
   const logo = settings.logo || {};
   const escAttr = (s) => escapeAdmin(s);
   const colorRow = (k, label, val) => `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">
-      <label style="font-weight:600">${label}</label>
-      <input type="color" id="th-color-${k}" value="${escAttr(val)}" style="width:52px;height:36px;border:none;background:none;cursor:pointer">
-      <input type="text" id="th-color-${k}-hex" value="${escAttr(val)}" style="width:100px;padding:8px;border:1.5px solid #cbd5e1;border-radius:8px;font-family:monospace">
+    <div class="color-row">
+      <label for="th-color-${k}">${label}</label>
+      <span class="color-row-inputs"><input type="color" id="th-color-${k}" value="${escAttr(val)}"><input type="text" id="th-color-${k}-hex" value="${escAttr(val)}" dir="ltr" aria-label="${label} hex"></span>
     </div>`;
   const opt = (value, label, selected) => `<option value="${escAttr(value)}" ${selected ? 'selected' : ''}>${label}</option>`;
   const ch = o.chrome || {};
@@ -506,51 +571,60 @@ router.get('/admin/theme', (req, res) => {
 
   const html = `
     ${adminNav('theme', 'ערכת נושא')}
-    <div class="container page-body" style="max-width:1100px">
-      <p class="lead">סטודיו ערכות הנושא: תארו את האתר שבדמיונכם ל-AI, או כוונו ביד — הקנבס מראה את <strong>האתר האמיתי</strong> בערכה לפני שהיא נשמרת. נשמר כ-overrides.</p>
+    <div class="container page-body studio" style="max-width:1180px">
+      <p class="lead">סטודיו ערכות הנושא: תארו את האתר שבדמיונכם ל-AI, או כוונו ביד — הקנבס מראה את <strong>האתר האמיתי</strong> בערכה לפני שהיא נשמרת.</p>
+      <nav class="studio-flow" aria-label="שלבי הסטודיו">
+        <a href="#th-design-card"><b>1</b> דמיינו עם AI</a>
+        <a href="#th-canvas-card"><b>2</b> הקנבס</a>
+        <a href="#th-looks-card"><b>3</b> מראות וכיוון עדין</a>
+        <a href="#th-library-card"><b>4</b> הספרייה</a>
+        <a href="#th-effects-card"><b>5</b> אפקטים</a>
+      </nav>
 
-      <section class="card" id="th-design-card" style="border:1.5px solid #c7d2fe;background:linear-gradient(180deg,#f5f3ff,#fff)">
+      <section class="card studio-card-ai" id="th-design-card">
         <h3 class="sub-head">🎨 מעצב/ת ערכות הנושא — מהדמיון שלכם (AI, בלי מפתח)</h3>
         <p class="lead">משחק תפקידים לצ׳אט ה-AI שלכם: מתארים את האתר שבדמיונכם — אווירה, מותג, השראה — מעתיקים פרומפט, מדביקים <strong>בצ׳אט חדש (FRESH)</strong>, ומדביקים כאן את התשובה. הערכה נכנסת לספרייה, הקנבס מראה אותה על האתר האמיתי, ולחיצה אחת מחילה. לא אהבתם? שנו את התיאור וחזרו — ככה מאטרים.</p>
-        <label class="field-label">מה האתר שבדמיונכם?</label>
+        <label class="field-label" for="th-design-brief">מה האתר שבדמיונכם?</label>
         <textarea id="th-design-brief" rows="3" class="input mb" placeholder="למשל: חנות פרחים וינטג׳ פריזאית — פסטל, סריפים, תחושת נייר ישן, כפתורים במסגרת, תפריט עם קו תחתון עדין, ואפקט של עלי כותרת שנופלים אחרי העכבר"></textarea>
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-          <label class="check-line" style="margin:0"><input type="checkbox" id="th-design-current"> התחילו מהערכה הנוכחית (לשפר אותה, לא מאפס)</label>
-          <label class="check-line" style="margin:0" title="ה-AI מחזיר גם קנבס (bent-canvas) — מודולים בשורות שמציגים את הערכה. מסומן = הם מחליפים את הבנץ׳"><input type="checkbox" id="th-design-bench" checked> לקבל גם את הקנבס שה-AI מציע</label>
-          <span style="flex:1"></span>
+        <div class="studio-actions mb">
+          <label class="studio-check"><input type="checkbox" id="th-design-current"> התחילו מהערכה הנוכחית (לשפר אותה, לא מאפס)</label>
+          <label class="studio-check" title="ה-AI מחזיר גם קנבס (bent-canvas) — מודולים בשורות שמציגים את הערכה. מסומן = הם מחליפים את הבנץ׳"><input type="checkbox" id="th-design-bench" checked> לקבל גם את הקנבס שה-AI מציע</label>
+          <span class="grow"></span>
           <button type="button" class="btn" id="th-design-prompt">🧠 צור פרומפט והעתק</button>
         </div>
-        <label class="field-label">תשובת ה-AI (מהצ׳אט החדש) — הדביקו הכול, כמו שהיא</label>
-        <textarea id="th-design-reply" rows="5" dir="ltr" placeholder="<bent-theme> … </bent-theme> — פטפוט מסביב לא מפריע, אנחנו לוקחים רק את הערכה (גם JSON ישן מתקבל)" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
-        <div class="row end" style="margin-bottom:4px">
-          <span id="th-design-status" style="font-size:0.85rem;flex:1"></span>
+        <label class="field-label" for="th-design-reply">תשובת ה-AI (מהצ׳אט החדש) — הדביקו הכול, כמו שהיא</label>
+        <textarea id="th-design-reply" rows="5" class="studio-code mb" placeholder="<bent-theme> … </bent-theme> — פטפוט מסביב לא מפריע, אנחנו לוקחים רק את הערכה (גם JSON ישן מתקבל)"></textarea>
+        <div class="studio-actions">
+          <span id="th-design-status" class="studio-status grow"></span>
+          <button type="button" class="btn secondary" id="th-design-to-bench" hidden title="זה מסמך של מודולים — שולחים אותו לקנבס במקום לספריית הערכות">🧩 שלח לקנבס במקום</button>
           <button type="button" class="btn secondary" id="th-design-preview">👁 הצג בקנבס</button>
           <button type="button" class="btn secondary" id="th-design-save">🗂 שמור לספרייה</button>
-          <button type="button" class="btn" id="th-design-apply" style="background:#166534">✅ שמור והחל על האתר</button>
+          <button type="button" class="btn ok" id="th-design-apply">✅ שמור והחל על האתר</button>
         </div>
+        <ul id="th-design-warn" class="studio-warn"></ul>
       </section>
 
       <section class="card" id="th-canvas-card">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="canvas-toolbar">
           <h3 class="sub-head" style="margin:0">🖼 הקנבס — האתר שלכם, חי</h3>
-          <span id="th-canvas-label" style="font-size:0.85rem;color:#64748b">מציג: הערכה החיה</span>
-          <span style="flex:1"></span>
+          <span id="th-canvas-label" class="faint">מציג: הערכה החיה</span>
+          <span class="grow"></span>
           <select id="th-canvas-page" class="input compact" title="מה להציג בקנבס: הבנץ׳ של הערכה או דף אמיתי מהאתר"><option value="__canvas">🧩 קנבס הערכה (לא דף)</option><option value="">🌐 דף הבית</option>${pages}</select>
-          <button type="button" class="btn secondary" id="th-canvas-full" title="מסך מלא">⛶</button>
-          <button type="button" class="btn secondary" id="th-canvas-desktop" title="מסך רחב">🖥</button>
-          <button type="button" class="btn secondary" id="th-canvas-mobile" title="נייד">📱</button>
-          <button type="button" class="btn secondary" id="th-canvas-refresh" title="רענון">↻</button>
-          <a class="btn secondary" id="th-canvas-open" href="/admin/theme/preview/live?canvas=1" target="_blank" title="פתיחה בחלון נפרד">⧉</a>
+          <button type="button" class="btn secondary icon" id="th-canvas-full" title="מסך מלא">⛶</button>
+          <button type="button" class="btn secondary icon" id="th-canvas-desktop" title="מסך רחב">🖥</button>
+          <button type="button" class="btn secondary icon" id="th-canvas-mobile" title="נייד">📱</button>
+          <button type="button" class="btn secondary icon" id="th-canvas-refresh" title="רענון">↻</button>
+          <a class="btn secondary icon" id="th-canvas-open" href="/admin/theme/preview/live?canvas=1" target="_blank" title="פתיחה בחלון נפרד">⧉</a>
         </div>
-        <div id="th-canvas-wrap" style="background:#e2e8f0;border:1px solid #cbd5e1;border-radius:12px;padding:10px;display:flex;justify-content:center">
-          <iframe id="th-canvas" title="תצוגה מקדימה של הערכה" src="/admin/theme/preview/live?canvas=1" style="width:100%;max-width:100%;height:640px;border:none;border-radius:8px;background:#fff;transition:width .2s"></iframe>
+        <div id="th-canvas-wrap" class="canvas-wrap">
+          <iframe id="th-canvas" title="תצוגה מקדימה של הערכה" src="/admin/theme/preview/live?canvas=1"></iframe>
         </div>
-        <div id="th-canvas-status" style="font-size:0.85rem;color:#64748b;margin-top:8px;min-height:1.2em">הקנבס מציג את הערכה החיה. כל שינוי בטופס, לחיצה על מראה, או תשובת AI — מתעדכן כאן לפני השמירה.</div>
-        <div id="th-bench" style="margin-top:14px;border-top:1px dashed #cbd5e1;padding-top:12px">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <div id="th-canvas-status" class="studio-status muted" style="margin-top:8px">הקנבס מציג את הערכה החיה. כל שינוי בטופס, לחיצה על מראה, או תשובת AI — מתעדכן כאן לפני השמירה.</div>
+        <div id="th-bench" class="bench">
+          <div class="bench-toolbar">
             <strong>🧩 המודולים על הקנבס</strong>
-            <span id="th-bench-count" style="font-size:0.85rem;color:#64748b">ריק</span>
-            <span style="flex:1"></span>
+            <span id="th-bench-count" class="faint">ריק</span>
+            <span class="grow"></span>
             <select id="th-bench-type" class="input compact" title="מודול מהארגז — עם תוכן לדוגמה"></select>
             <button type="button" class="btn secondary" id="th-bench-add">➕ הוסף מודול</button>
             <select id="th-bench-cols" class="input compact" title="כמה מודולים זה לצד זה בשורה"><option value="2">2 עמודות</option><option value="3" selected>3 עמודות</option><option value="4">4 עמודות</option><option value="5">5 עמודות</option><option value="6">6 עמודות</option></select>
@@ -559,44 +633,46 @@ router.get('/admin/theme', (req, res) => {
             <button type="button" class="btn secondary" id="th-bench-clear">🧹 רוקן</button>
             <button type="button" class="btn secondary" id="th-bench-src" title="המקור של הקנבס — מסמך BenTML (config/theme-canvas.bent) — לעריכה ישירה">📝 מקור</button>
           </div>
-          <div id="th-bench-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;margin-bottom:10px"></div>
+          <div id="th-bench-list" class="bench-list"></div>
           <p class="lead" style="margin:0 0 8px;font-size:0.85rem">הקנבס הוא <strong>לא דף</strong> — הוא הספסל שעליו בונים את הערכה: מודולים שרוצים לראות בערכה, מכל מקום. הדביקו BenTML / ‎.pzn מהבונה, מהרולפליי של בונה-הדפים בצ׳אט שלכם, או מכל תשובת AI — אנחנו לוקחים רק את המודולים. הקנבס עצמו הוא מסמך BenTML (‎.bent) לצד הערכה — נשאר כשמחליפים ערכה, ונוסע עם הייצוא.</p>
-          <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-            <input id="th-bench-brief" placeholder="מה לבנות עם הרולפליי? למשל: דף מוצר עם גלריה, מחירון וטופס" style="flex:1;min-width:220px;padding:8px 12px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <div class="studio-actions mb">
+            <input id="th-bench-brief" class="input" style="flex:1;min-width:220px" placeholder="מה לבנות עם הרולפליי? למשל: דף מוצר עם גלריה, מחירון וטופס">
             <button type="button" class="btn secondary" id="th-bench-prompt" title="הפרומפט של בונה הדפים (משחק המודולים) — להדבקה בצ׳אט שלכם; את התשובה מדביקים למטה">🧠 פרומפט בונה-דפים</button>
           </div>
-          <textarea id="th-bench-source" rows="3" dir="ltr" placeholder="<bent-hero>…</bent-hero> — או כל תשובת צ׳אט שמכילה מודולים" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:monospace;font-size:0.82rem;margin-bottom:8px"></textarea>
-          <div class="row end">
-            <span id="th-bench-status" style="font-size:0.85rem;flex:1"></span>
+          <textarea id="th-bench-source" rows="3" class="studio-code mb" placeholder="<bent-hero>…</bent-hero> — או כל תשובת צ׳אט שמכילה מודולים"></textarea>
+          <div class="studio-actions">
+            <span id="th-bench-status" class="studio-status grow"></span>
             <button type="button" class="btn secondary" id="th-bench-replace">♻ החלף את הקנבס</button>
             <button type="button" class="btn" id="th-bench-append">➕ הוסף לקנבס</button>
           </div>
         </div>
-        <div id="th-deploy-status" dir="ltr" style="margin-top:6px;font-size:0.75rem;color:#94a3b8;text-align:left;font-family:monospace;word-break:break-all" title="מה רץ כאן ואיפה האתר נשמר — להשוואה מול view-source של האתר החי (meta generator + main.css?v=)">${escAttr(require('../build-info').summaryLine())}</div>
+        <div id="th-deploy-status" class="deploy-line" title="מה רץ כאן ואיפה האתר נשמר — להשוואה מול view-source של האתר החי (meta generator + main.css?v=)">${escAttr(require('../build-info').summaryLine())}</div>
       </section>
 
-      <section class="card">
+      <section class="card" id="th-looks-card">
         <h3 class="sub-head">מראות מוכנים</h3>
-        <p style="color:#64748b;margin:0 0 14px;font-size:.9rem">לחיצה אחת מחליפה את כל האישיות של האתר — צבעים, גופנים, רקע, כפתורים, שלד ועור — ומראה אותה בקנבס. אחרי הבחירה הכול נשאר ניתן לכיוון עדין למטה.</p>
-        <div id="th-looks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px"></div>
+        <p class="lead">לחיצה אחת מחליפה את כל האישיות של האתר — צבעים, גופנים, רקע, כפתורים, שלד ועור — ומראה אותה בקנבס. אחרי הבחירה הכול נשאר ניתן לכיוון עדין למטה.</p>
+        <div id="th-looks" class="looks-grid"></div>
       </section>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+      <div class="studio-tune">
+      <div class="studio-grid">
         <section class="card">
           <h3 class="sub-head">אתר</h3>
-          <label class="field-label">כותרת האתר</label>
+          <label class="field-label" for="th-title">כותרת האתר</label>
           <input id="th-title" value="${escAttr(settings.siteTitle)}" class="input mb">
-          <label class="field-label">תיאור</label>
+          <label class="field-label" for="th-desc">תיאור</label>
           <textarea id="th-desc" rows="2" class="input mb">${escAttr(settings.description)}</textarea>
-          <label class="field-label">סוג לוגו</label>
+          <label class="field-label" for="th-logo-type">סוג לוגו</label>
           <select id="th-logo-type" class="input mb">
             ${opt('text', 'טקסט', logo.type !== 'image')}
             ${opt('image', 'תמונה', logo.type === 'image')}
           </select>
-          <label class="field-label">טקסט לוגו</label>
+          <label class="field-label" for="th-logo-text">טקסט לוגו</label>
           <input id="th-logo-text" value="${escAttr(logo.text)}" class="input mb">
-          <label class="field-label">תמונת לוגו</label>
-          <div style="display:flex;gap:8px;margin-bottom:12px">
-            <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="בחרו מהספרייה ←" style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px">
+          <label class="field-label" for="th-logo-image">תמונת לוגו</label>
+          <div class="studio-actions">
+            <input id="th-logo-image" value="${escAttr(logo.image)}" placeholder="בחרו מהספרייה ←" class="input" style="flex:1">
             <button type="button" class="btn secondary" data-media-pick="th-logo-image" style="white-space:nowrap">🖼 בחר / העלה</button>
           </div>
         </section>
@@ -613,31 +689,31 @@ router.get('/admin/theme', (req, res) => {
         </section>
         <section class="card">
           <h3 class="sub-head">אופי העיצוב</h3>
-          <label class="field-label">פינות</label>
+          <label class="field-label" for="th-radius">פינות</label>
           <select id="th-radius" class="input mb">
             ${opt('sharp', 'חדות (עיתונאי)', o.style.radius === 'sharp')}
             ${opt('soft', 'רכות', o.style.radius === 'soft' || !o.style.radius)}
             ${opt('round', 'עגולות', o.style.radius === 'round')}
           </select>
-          <label class="field-label">צללים</label>
+          <label class="field-label" for="th-shadow">צללים</label>
           <select id="th-shadow" class="input mb">
             ${opt('flat', 'שטוח', o.style.shadow === 'flat')}
             ${opt('soft', 'עדין', o.style.shadow === 'soft' || !o.style.shadow)}
             ${opt('deep', 'עמוק', o.style.shadow === 'deep')}
           </select>
-          <label class="field-label">צבע הדגשה</label>
+          <label class="field-label" for="th-accent">צבע הדגשה</label>
           <select id="th-accent" class="input mb">
             ${opt('solid', 'אחיד', o.style.accent !== 'gradient')}
             ${opt('gradient', 'גרדיאנט (ראשי ← משלים)', o.style.accent === 'gradient')}
           </select>
-          <label class="field-label">סגנון כפתורים</label>
+          <label class="field-label" for="th-buttons">סגנון כפתורים</label>
           <select id="th-buttons" class="input mb">
             ${opt('filled', 'מלא', buttons === 'filled')}
             ${opt('outline', 'מסגרת (שקוף בפנים)', buttons === 'outline')}
             ${opt('soft', 'רך (רקע מוחלש)', buttons === 'soft')}
             ${opt('glow', 'הילה (צל צבעוני)', buttons === 'glow')}
           </select>
-          <label class="field-label">רקע הדף</label>
+          <label class="field-label" for="th-bg-kind">רקע הדף</label>
           <select id="th-bg-kind" class="input mb">
             ${opt('solid', 'אחיד', bgk === 'solid')}
             ${opt('gradient', 'מעבר צבע (רקע ← רקע בהיר)', bgk === 'gradient')}
@@ -646,23 +722,23 @@ router.get('/admin/theme', (req, res) => {
             ${opt('grid', 'רשת', bgk === 'grid')}
             ${opt('lines', 'קווים אלכסוניים', bgk === 'lines')}
           </select>
-          <label class="field-label">זווית (למעבר צבע / קווים)</label>
+          <label class="field-label" for="th-bg-angle">זווית (למעבר צבע / קווים)</label>
           <input id="th-bg-angle" type="number" min="0" max="360" step="5" value="${escAttr((o.background && o.background.angle) || 160)}" class="input">
         </section>
         <section class="card">
           <h3 class="sub-head">טיפוגרפיה ופריסה</h3>
-          <label class="field-label">גופני Google לטעינה (עברית) — מופרדים בפסיק</label>
+          <label class="field-label" for="th-font-google">גופני Google לטעינה (עברית) — מופרדים בפסיק</label>
           <input id="th-font-google" value="${escAttr(googleFonts)}" placeholder="Heebo, Suez One" dir="ltr" class="input mb" list="th-font-shelf">
           <datalist id="th-font-shelf">${Object.keys(require('../theme').GOOGLE_FONTS).map((f) => `<option value="${escAttr(f)}">`).join('')}</datalist>
-          <label class="field-label">גופן</label>
+          <label class="field-label" for="th-font">גופן</label>
           <input id="th-font" value="${escAttr(o.fonts.family)}" dir="ltr" class="input mb">
-          <label class="field-label">גופן כותרות</label>
+          <label class="field-label" for="th-font-heading">גופן כותרות</label>
           <input id="th-font-heading" value="${escAttr(o.fonts.headingFamily)}" dir="ltr" placeholder="ריק = כמו גופן הטקסט" class="input mb">
-          <label class="field-label">גודל בסיס</label>
+          <label class="field-label" for="th-font-size">גודל בסיס</label>
           <input id="th-font-size" value="${escAttr(o.fonts.baseSize)}" class="input mb">
-          <label class="field-label">רוחב מקסימלי</label>
+          <label class="field-label" for="th-maxw">רוחב מקסימלי</label>
           <input id="th-maxw" value="${escAttr(o.layout.maxWidth)}" class="input mb">
-          <label class="field-label">מיקום תפריט</label>
+          <label class="field-label" for="th-menu-place">מיקום תפריט</label>
           <select id="th-menu-place" class="input">
             ${opt('top', 'עליון (אופקי)', o.layout.menuPlacement !== 'side')}
             ${opt('side', 'צד (אנכי)', o.layout.menuPlacement === 'side')}
@@ -671,91 +747,94 @@ router.get('/admin/theme', (req, res) => {
         <section class="card">
           <h3 class="sub-head">🧱 מאסטר — תפריט, כותרת ותחתית</h3>
           <p class="lead" style="margin-top:0">השלד של האתר: איך התפריט מגיב, איך הכותרת העליונה נראית, ומה צבעי התחתית. הכול חלק מערכת הנושא — נוסע עם הספרייה והייצוא.</p>
-          <label class="field-label">אפקט ריחוף בתפריט</label>
+          <label class="field-label" for="th-ch-hover">אפקט ריחוף בתפריט</label>
           <select id="th-ch-hover" class="input mb">
             ${opt('color', 'צבע בלבד', !ch.menuHover || ch.menuHover === 'color')}
             ${opt('underline', 'קו תחתון', ch.menuHover === 'underline')}
             ${opt('pill', 'גלולה (רקע מעוגל)', ch.menuHover === 'pill')}
             ${opt('glow', 'זוהר', ch.menuHover === 'glow')}
           </select>
-          <label class="field-label">צבע הריחוף (ריק = הצבע הראשי)</label>
+          <label class="field-label" for="th-ch-hovercolor">צבע הריחוף (ריק = הצבע הראשי)</label>
           <input id="th-ch-hovercolor" value="${escAttr(ch.menuHoverColor || '')}" placeholder="#ea580c" dir="ltr" class="input mb">
-          <label class="field-label">משקל טקסט התפריט</label>
+          <label class="field-label" for="th-ch-weight">משקל טקסט התפריט</label>
           <select id="th-ch-weight" class="input mb">
             ${opt('normal', 'רגיל', ch.menuWeight !== 'bold')}
             ${opt('bold', 'מודגש', ch.menuWeight === 'bold')}
           </select>
-          <label class="check-line mb"><input type="checkbox" id="th-ch-glass" ${ch.headerGlass ? 'checked' : ''}> כותרת "זכוכית" — שקופה ומטושטשת מעל הדף</label>
-          <label class="field-label">רקע הכותרת העליונה (ריק = צבע המשטח)</label>
+          <label class="studio-check mb" style="display:flex"><input type="checkbox" id="th-ch-glass" ${ch.headerGlass ? 'checked' : ''}> כותרת "זכוכית" — שקופה ומטושטשת מעל הדף</label>
+          <label class="field-label" for="th-ch-headerbg">רקע הכותרת העליונה (ריק = צבע המשטח)</label>
           <input id="th-ch-headerbg" value="${escAttr(ch.headerBg || '')}" placeholder="#ffffff" dir="ltr" class="input mb">
-          <label class="field-label">צבע טקסט הכותרת העליונה (ריק = צבע הטקסט)</label>
+          <label class="field-label" for="th-ch-headertext">צבע טקסט הכותרת העליונה (ריק = צבע הטקסט)</label>
           <input id="th-ch-headertext" value="${escAttr(ch.headerText || '')}" placeholder="#ffffff" dir="ltr" class="input mb">
-          <label class="field-label">רקע התחתית (ריק = ברירת מחדל)</label>
+          <label class="field-label" for="th-ch-footerbg">רקע התחתית (ריק = ברירת מחדל)</label>
           <input id="th-ch-footerbg" value="${escAttr(ch.footerBg || '')}" placeholder="#1c1917" dir="ltr" class="input mb">
-          <label class="field-label">צבע טקסט התחתית (ריק = ברירת מחדל)</label>
+          <label class="field-label" for="th-ch-footertext">צבע טקסט התחתית (ריק = ברירת מחדל)</label>
           <input id="th-ch-footertext" value="${escAttr(ch.footerText || '')}" placeholder="#fffbf7" dir="ltr" class="input">
         </section>
         <section class="card">
           <h3 class="sub-head">🧵 עור — CSS חופשי על השלד</h3>
-          <p class="lead" style="margin-top:0">מה שהופך פלטה לערכה. ה-AI כותב את זה מהתיאור שלכם; אפשר גם ביד. הסלקטורים: <code>.site-header</code> <code>.main-nav a</code> <code>.hero</code> <code>.btn-primary</code> <code>.card</code> <code>.bent-card</code> <code>.site-footer</code> ומשתני <code>--color-*</code>. נכנס אחרי כל הכפתורים למעלה, לפני האפקט.</p>
-          <label class="field-label">הערה (מה העור עושה)</label>
+          <p class="lead" style="margin-top:0">מה שהופך פלטה לערכה. ה-AI כותב את זה מהתיאור שלכם; אפשר גם ביד. הסלקטורים: <code>.site-header</code> <code>.main-nav a</code> <code>.hero</code> <code>.btn-primary</code> <code>.card</code> <code>.bent-card</code> <code>.site-footer</code> ומשתני <code>--color-*</code>. קוסמטיקה בלבד — לא פריסה. נכנס אחרי כל הכפתורים למעלה, לפני האפקט; <code>@import</code> וכתובות חיצוניות מוסרים אוטומטית.</p>
+          <label class="field-label" for="th-skin-note">הערה (מה העור עושה)</label>
           <input id="th-skin-note" value="${escAttr((o.skin && o.skin.note) || '')}" class="input mb" placeholder="למשל: קווים כפולים, כותרות ענק">
-          <label class="field-label">CSS</label>
-          <textarea id="th-skin-css" rows="10" dir="ltr" placeholder=".hero h1 { font-size: 3.4rem; }" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font-family:monospace;font-size:0.82rem">${escAttr((o.skin && o.skin.css) || '')}</textarea>
+          <label class="field-label" for="th-skin-css">CSS</label>
+          <textarea id="th-skin-css" rows="10" class="studio-code" placeholder=".hero h1 { font-size: 3.4rem; }">${escAttr((o.skin && o.skin.css) || '')}</textarea>
         </section>
       </div>
-      <div style="margin:24px 0 60px;display:flex;gap:10px;justify-content:flex-end;align-items:center">
-        <span id="th-save-status" style="font-size:0.85rem;flex:1"></span>
+      <div class="studio-savebar">
+        <span id="th-save-status" class="studio-status grow"></span>
         <button type="button" class="btn secondary" id="th-reset">אפס לברירת מחדל</button>
         <button type="button" class="btn" id="th-save">שמור ערכת נושא</button>
-        <button type="button" class="btn" id="th-save-build" style="background:#166534">שמור + בנה אתר</button>
+        <button type="button" class="btn ok" id="th-save-build">שמור + בנה אתר</button>
+      </div>
       </div>
 
-      <section class="card" style="margin-bottom:24px" id="th-library-card">
+      <section class="card" id="th-library-card">
         <h3 class="sub-head">🗂 ספריית ערכות הנושא</h3>
         <p class="lead">כמו וורדפרס: הערכה שבניתם — ביד או עם ה-AI — נשמרת <strong>כאחת מהערכות הזמינות</strong>, לא במקום הקודמת. 👁 מציג בקנבס בלי לשנות כלום; "החל" מחליף — ומגבה אוטומטית עבודה שלא נשמרה.</p>
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-          <input id="th-lib-name" placeholder="שם לערכה הנוכחית (למשל: כתום חגיגי)" style="flex:1;min-width:200px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px">
+        <div class="studio-actions mb">
+          <input id="th-lib-name" class="input" style="flex:1;min-width:200px" placeholder="שם לערכה הנוכחית (למשל: כתום חגיגי)">
           <button type="button" class="btn" id="th-lib-save">💾 שמור את הערכה הנוכחית</button>
         </div>
-        <div id="th-lib-list" class="lead" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">טוען…</div>
-        <div id="th-lib-status" style="font-size:0.85rem;margin-top:10px"></div>
+        <div id="th-lib-list" class="lib-grid">טוען…</div>
+        <div id="th-lib-status" class="studio-status" style="margin-top:10px"></div>
       </section>
 
-      <section class="card" style="margin-bottom:24px" id="th-effects-card">
+      <section class="card" id="th-effects-card">
         <h3 class="sub-head">✨ אפקטים לאתר (חלק מערכת הנושא)</h3>
-        <p class="lead">אפקט עכבר, נצנוץ, רקע חי — מתארים, מעתיקים פרומפט, מדביקים <strong>בצ׳אט חדש (FRESH)</strong>, ומדביקים חזרה את התשובה. הקוד מקומפל לפני שהוא נקלט, והקנבס למעלה מריץ אותו ומדווח אם נפל. האפקט נשמר בערכת הנושא — נוסע עם ייצוא ועם הספרייה.</p>
-        <div id="th-fx-motion" style="display:none;background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.85rem">🐢 מערכת ההפעלה שלכם מבקשת "להפחית תנועה" — אפקט שמכבד את זה (כמו שהפרומפט דורש) <strong>מוסתר אצלכם</strong>, אבל רץ אצל הגולשים. כדי לראות אותו כאן, כבו זמנית את Reduce Motion בהגדרות הנגישות.</div>
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-          <input id="th-fx-brief" placeholder="מה האפקט? למשל: עקבת עכבר כתומה שנעלמת" style="flex:1;min-width:220px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px">
+        <p class="lead">אפקט עכבר, נצנוץ, רקע חי — מתארים, מעתיקים פרומפט, מדביקים <strong>בצ׳אט חדש (FRESH)</strong>, ומדביקים חזרה את התשובה. הקוד מקומפל לפני שהוא נקלט, והקנבס למעלה מריץ אותו ומדווח אם נפל. באתר החי האפקט רץ בתוך <strong>שומר</strong>: מאגר של עד 400 אלמנטים, תזוזת עכבר אחת לפריים, ועצירה אוטומטית אם הוא מקפיא את הדף — כך שאפקט כבד לעולם לא תוקע גולש. האפקט נשמר בערכת הנושא — נוסע עם ייצוא ועם הספרייה.</p>
+        <div id="th-fx-motion" class="fx-motion" style="display:none">🐢 מערכת ההפעלה שלכם מבקשת "להפחית תנועה" — אפקט שמכבד את זה (כמו שהפרומפט דורש) <strong>מוסתר אצלכם</strong>, אבל רץ אצל הגולשים. כדי לראות אותו כאן, כבו זמנית את Reduce Motion בהגדרות הנגישות.</div>
+        <div class="studio-actions mb">
+          <input id="th-fx-brief" class="input" style="flex:1;min-width:220px" placeholder="מה האפקט? למשל: עקבת עכבר כתומה שנעלמת">
           <button type="button" class="btn" id="th-fx-prompt">🧠 צור פרומפט והעתק</button>
         </div>
-        <label class="field-label">תשובת ה-AI (מהצ׳אט החדש) — הדביקו הכול</label>
-        <textarea id="th-fx-reply" rows="4" dir="ltr" placeholder="fence של css + fence של js, כמו שהפרומפט ביקש" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
-        <div class="row end" style="margin-bottom:14px">
-          <span id="th-fx-status" style="font-size:0.85rem"></span>
+        <label class="field-label" for="th-fx-reply">תשובת ה-AI (מהצ׳אט החדש) — הדביקו הכול</label>
+        <textarea id="th-fx-reply" rows="4" class="studio-code mb" placeholder="fence של css + fence של js, כמו שהפרומפט ביקש"></textarea>
+        <div class="studio-actions">
+          <span id="th-fx-status" class="studio-status grow"></span>
           <button type="button" class="btn secondary" id="th-fx-clear">🗑 נקה אפקט</button>
           <button type="button" class="btn" id="th-fx-apply">קלוט את האפקט</button>
         </div>
-        <div id="th-fx-current" style="font-size:0.85rem;color:#64748b"></div>
+        <ul id="th-fx-warn" class="studio-warn"></ul>
+        <div id="th-fx-current" class="faint" style="margin-top:10px"></div>
       </section>
 
-      <section class="card" style="margin-bottom:60px">
+      <section class="card" style="margin-bottom:60px" id="th-import-card">
         <h3 class="sub-head">📦 ייצוא / ייבוא ערכת נושא</h3>
         <p class="lead">קובץ ניתן להעברה — ייצוא שומר את הערכה הנוכחית לקובץ; ייבוא מקבל קובץ כזה מאתר Tapuz אחר, או תשובת AI, או JSON גולמי — גם עם פטפוט מסביב. אנחנו לוקחים רק את הערכה.</p>
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+        <div class="studio-actions mb">
           <a class="btn" href="/admin/api/theme/export.bent" download title="הערכה כמסמך BenTML — כולל הקנבס">⬇ ייצוא ‎.bent</a>
           <a class="btn secondary" href="/admin/api/theme/export" download title="הפורמט הישן (JSON) — עדיין נתמך">JSON</a>
           <label class="btn secondary" style="cursor:pointer">📂 בחרו קובץ ‎.bent / .json <input type="file" id="th-import-file" accept=".bent,.pzn,.html,.json,application/json,.txt,.md" style="display:none"></label>
         </div>
-        <label class="field-label">או הדביקו כאן (‎.bent / JSON / תשובת AI)</label>
-        <textarea id="th-import-text" rows="4" dir="ltr" placeholder='{"format":"tapuz-theme", ...}' style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
-        <div class="row end">
-          <span id="th-import-status" style="font-size:0.85rem"></span>
+        <label class="field-label" for="th-import-text">או הדביקו כאן (‎.bent / JSON / תשובת AI)</label>
+        <textarea id="th-import-text" rows="4" class="studio-code mb" placeholder='<bent-theme name="…"> … </bent-theme>'></textarea>
+        <div class="studio-actions">
+          <span id="th-import-status" class="studio-status grow"></span>
           <button type="button" class="btn secondary" id="th-import-preview">👁 הצג בקנבס</button>
           <button type="button" class="btn secondary" id="th-import-library">🗂 שמור לספרייה</button>
           <button type="button" class="btn secondary" id="th-import-apply">החל ערכת נושא מיובאת</button>
         </div>
+        <ul id="th-import-warn" class="studio-warn"></ul>
       </section>
     </div>
     <script>window.TAPUZ_LOOKS = ${JSON.stringify(LOOKS)};</script>
