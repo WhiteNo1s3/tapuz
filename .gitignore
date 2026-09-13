@@ -69,5 +69,6 @@ config/auth.json*
 # Menu organizer backups + injection run log (v2.28) — per-install state, never the repo
 config/menu-backups/
 config/inject-log.jsonl
+config/inject-jobs.json
 # Live-model eval output (scripts/eval-injections.js) — the committed report is docs/INJECTION-EVAL.md
 eval/

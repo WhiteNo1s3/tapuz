@@ -65,7 +65,7 @@ function copyThemeAssets(themeSlug = 'default') {
     themeCssVersion = require('crypto').createHash('sha1').update(out).digest('hex').slice(0, 10);
     fs.writeFileSync(destFile, out, 'utf8');
     // v2.27 wrote an admin copy here (the base + the palette and fonts). The
-    // admin links nothing of the theme any more (v2.30, admin-ui.js layout),
+    // admin links nothing of the theme any more (v2.31, admin-ui.js layout),
     // so a copy left by an earlier build is removed rather than kept around.
     try { fs.rmSync(path.join(destDir, 'admin-theme.css'), { force: true }); } catch (e) { /* not there */ }
   }

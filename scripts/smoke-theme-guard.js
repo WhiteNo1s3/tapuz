@@ -14,7 +14,7 @@
  *   • a pooled trail, one rAF loop                                → left alone
  *   • prefers-reduced-motion                                      → skipped
  *   • a throw, a slow handler, stalled frames, a 1ms interval     → caught
- *   • framed by the admin, written against parent/top (v2.30)     → kept
+ *   • framed by the admin, written against parent/top (v2.31)     → kept
  *     on its own page, the management system untouched
  */
 
@@ -76,7 +76,7 @@ function makeWindow(opts = {}) {
   };
   win.window = win; win.self = win; win.globalThis = win;
   // framed = inside an admin preview frame: the parent is the management
-  // system, with a body of its own an effect must never reach (v2.30)
+  // system, with a body of its own an effect must never reach (v2.31)
   const adminBody = el('body');
   win.parent = opts.framed ? { postMessage(msg) { posted.push(msg); }, document: { body: adminBody } } : win;
   if (opts.framed) { win.top = win.parent; win.frameElement = el('iframe'); win.opener = win.parent; document.defaultView = win; }
@@ -218,7 +218,7 @@ check('no effect → no script at all', theme.renderThemeEffectsJs({}) === '');
   check('setInterval(fn, 1) is paced to 16ms (≈10 ticks in 160ms, not 160)', w.win.__ticks >= 8 && w.win.__ticks <= 12);
 }
 
-// ── 8. its own page — framed by the admin (v2.30) ────────────────────
+// ── 8. its own page — framed by the admin (v2.31) ────────────────────
 // Ben: "make the effects … not interfere with the management system". The
 // studio canvas, the builder's device preview and the menu preview frame the
 // site inside the admin; an overlay written against parent/top landed there.

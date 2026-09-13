@@ -307,4 +307,106 @@ router.post('/agent/v1/build', requireAgent('write'), (req, res) => {
   }
 });
 
+// ── injection jobs (v2.30) — the worker that needs no browser ───────────
+//
+// A hosted Tapuziel cannot reach the owner's LM Studio, and a browser tab is
+// a fragile courier (both browsers evict an idle background script after ~30
+// seconds; Chrome caps a single request at five minutes). So the owner can
+// instead run `node scripts/tapuz-worker.js` on the machine that HAS the
+// model: it claims queued jobs here, runs them, and posts the reply back.
+//
+// The worker composes nothing. The server holds the prompt, decides whether
+// the one repair turn is needed and what it asks for, and judges every reply
+// with the pack's own door — exactly as the run route does. The worker is a
+// courier with a GPU, authenticated with the owner's own agent token.
+//
+// And a job NEVER applies: it ends as a reply plus a preview, waiting for the
+// owner's second click. See src/inject-jobs.js.
+
+/** The job as the worker sees it — the prompt it must run, nothing else.
+ *  `system` is carried explicitly (and is '') because src/ai.js ALWAYS sends
+ *  a system turn: a pack whose chat template notices the difference would
+ *  otherwise answer differently through a worker than through /run, for no
+ *  reason the owner could ever see. The worker composes nothing, not even
+ *  an empty message. */
+function workerView(job) {
+  return {
+    id: job.id,
+    packId: job.packId,
+    round: job.round,
+    system: '',
+    prompt: job.prompt,
+    history: job.history || [],
+    maxTokens: job.maxTokens,
+    model: job.model || '',
+    promptChars: job.promptChars
+  };
+}
+
+router.get('/agent/v1/inject/ping', requireAgent('read'), (req, res) => {
+  const jobs = require('../inject-jobs');
+  jobs.noteWorkerSeen(req.agent && req.agent.id);
+  let site = '';
+  try { site = require('../config').loadConfig().title || ''; } catch (e) { /* a fresh site */ }
+  res.json({
+    ok: true,
+    site,
+    version: require('../../package.json').version || '',
+    pending: jobs.countPending()
+  });
+});
+
+// 'write', not 'read': this route CLAIMS — it marks the job running and
+// stamps who took it. A read-only token must not be able to change state,
+// however convenient it would be to let one poll.
+router.get('/agent/v1/inject/next', requireAgent('write'), (req, res) => {
+  const jobs = require('../inject-jobs');
+  const job = jobs.claimNext(req.agent && req.agent.id);
+  res.json({ ok: true, job: job ? workerView(job) : null });
+});
+
+/** Give a claimed job back — a dry run, or a worker shutting down mid-job.
+ *  Without this a job the worker only looked at would sit 'running' until it
+ *  went stale. */
+router.post('/agent/v1/inject/:jobId/release', requireAgent('write'), (req, res) => {
+  const jobs = require('../inject-jobs');
+  jobs.noteWorkerSeen(req.agent && req.agent.id);
+  const job = jobs.getJob(req.params.jobId);
+  if (!job) return res.status(404).json({ ok: false, error: 'unknown job', code: 'NO_JOB' });
+  if (job.status !== 'running') return res.json({ ok: true, status: job.status });
+  jobs.updateJob(job.id, { status: 'pending', claimedBy: '', claimedAt: 0, round: 1, history: [], firstReply: '' });
+  res.json({ ok: true, status: 'pending' });
+});
+
+router.post('/agent/v1/inject/:jobId', requireAgent('write'), (req, res) => {
+  const jobs = require('../inject-jobs');
+  const { judgeJobReply } = require('./inject');
+  jobs.noteWorkerSeen(req.agent && req.agent.id);
+  const job = jobs.getJob(req.params.jobId);
+  if (!job) return res.status(404).json({ ok: false, error: 'unknown job', code: 'NO_JOB' });
+  // the owner cancelled it while the GPU was busy. That is their decision,
+  // not an error: the work is dropped and the worker moves on quietly.
+  if (job.status === 'cancelled') {
+    return res.json({ ok: true, done: true, status: 'cancelled' });
+  }
+  if (job.status !== 'running') {
+    return res.status(409).json({ ok: false, error: `job is ${job.status}, not running`, code: 'NOT_RUNNING' });
+  }
+  const b = req.body || {};
+  // the worker reporting its own failure: end the job with a reason the
+  // owner can read, rather than leaving it stuck 'running'
+  if (b.error) {
+    const e = { code: String(b.error.code || 'WORKER_ERROR').slice(0, 40), message: String(b.error.message || '').slice(0, 500) };
+    jobs.finishJob(job.id, { status: 'failed', reply: '', error: e });
+    return res.json({ ok: true, done: true, status: 'failed' });
+  }
+  try {
+    const out = judgeJobReply(job, String(b.reply || ''), b.usage || null);
+    return res.json(out);
+  } catch (e) {
+    jobs.finishJob(job.id, { status: 'failed', error: { code: e.code || 'DOOR_FAILED', message: e.message } });
+    return res.status(500).json({ ok: false, error: e.message, code: e.code || 'DOOR_FAILED' });
+  }
+});
+
 module.exports = router;

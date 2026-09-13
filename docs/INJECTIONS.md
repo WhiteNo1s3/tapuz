@@ -41,6 +41,10 @@ The packs share one contract so a new pack is a descriptor, a grammar and a smok
 | `POST /admin/api/inject/:id/run` · admin | `{brief, size, variant?}` | `{ok, reply, rounds, repaired, preview, warnings, warningTexts, hard, timing:{ms}, usage, provider}` — never applies |
 | `POST /admin/api/inject/:id/run` · admin | `{step:{id, result}}` | the browser relay's continuation — the same answer, or the next `{ok, relay:true, modelCall:{id, body}, stage, timeoutMs}` |
 | `POST /admin/api/inject/:id/undo` · admin | — | `{ok, restored}` |
+| `POST /admin/api/inject/:id/job` · admin | `{brief, size, variant?}` | `{ok, job, worker}` — queue it for the owner's worker |
+| `GET /admin/api/inject/jobs` · admin | `?packId=&limit=` | `{ok, jobs:[…], worker:{online, seenAt}}` |
+| `GET /admin/api/inject/jobs/:jobId` · admin | — | `{ok, job}` (with `reply` + `result` once done) |
+| `POST /admin/api/inject/jobs/:jobId/cancel` · admin | — | `{ok, job}` |
 
 Refusals are `{ok:false, error, code}`: 400 for a door code, `NO_PROVIDER`, `BROWSER_RELAY` (the browser relay serves the copilot chat only — copy the prompt instead), `PACK_TOO_BIG` (+ `suggestSize:'lite'`); 502 `PROVIDER_ERROR` / `EMPTY_REPLY`; 504 `TIMEOUT`.
 
@@ -66,7 +70,28 @@ The composed `body` is byte-for-byte what a server-side run would have sent (`ai
 
 Trusting the returned text is the same decision the paste tier already makes: the sender is the authenticated owner behind the admin session and the Origin gate, and **apply is still a separate POST that re-parses**. `public/admin-bridge.js` drives the loop (`TapuzBridge.drive`), shared with the copilot, which speaks the identical two shapes.
 
-Known limits: no streaming, and Chrome may terminate an MV3 service worker during a multi-minute generation — a 31B model answering a lite pack in 10–40 s is comfortably inside that, a 44K-char site-builder pack may not be. Full owner's guide: [LOCAL-LLM.md](LOCAL-LLM.md).
+Full owner's guide: [LOCAL-LLM.md](LOCAL-LLM.md).
+
+### The run with no browser at all — jobs and the worker (v2.30)
+
+The relay still needs a tab, and a tab is a fragile courier: both browsers evict an idle background script after ~30 seconds, and Chrome caps any single request at five minutes. So there is a third courier, and it is a process:
+
+```
+owner (admin)          the site (hosted)                 the owner's machine
+  queue a job  ───────► POST …/:id/job   composes the pack, stores it pending
+                        GET  /agent/v1/inject/next  ◄───  tapuz-worker claims it
+                        POST /agent/v1/inject/:jobId ◄──  the reply (→ {repair} once, at most)
+  come back     ◄────── GET  …/jobs/:jobId           the reply + the door's preview
+  ✅ apply
+```
+
+`src/inject-jobs.js` holds the queue (a gitignored JSON file under `CONFIG_DIR`, newest 30, with a worker heartbeat). The worker is authenticated with an ordinary **agent token** (`/admin/agent`) and needs `read` to claim and `write` to post. It **composes nothing**: the server holds the prompt, decides whether the one repair turn is needed and what it asks for, and judges every reply with the pack's own door — `judgeJobReply()` shares `doorFor()` with the run route, so a job, a relay and a server-side run are the same request with three different couriers.
+
+Two details worth knowing. The site state is rebuilt **fresh** when a reply arrives, so a job queued last night is judged against the site as it is now. And a claim goes stale after 30 minutes and returns to the queue, so a machine that slept mid-pack strands nothing.
+
+The worker API is four routes: `ping` (read) stamps the heartbeat, `next` (**write** — it claims, so it mutates), `POST :jobId` (write) delivers the reply or the worker own failure, and `POST :jobId/release` (write) hands a claimed job back, which is how a dry run leaves the queue as it found it. Every one of them stamps the heartbeat, so a long job does not make the worker look offline. Posting into a job the owner cancelled meanwhile is answered calmly with `{status:'cancelled'}` rather than as an error. The claim carries an explicit empty `system` turn because `src/ai.js` always sends one — a pack must not answer differently through a worker than through the run button.
+
+A job **never applies** — it ends as a reply plus a preview, and apply is still the owner's second click. `PACK_TOO_BIG` is enforced at queue time against the local window, before anything is stored.
 
 ## The card (`public/admin-inject-card.js`)
 

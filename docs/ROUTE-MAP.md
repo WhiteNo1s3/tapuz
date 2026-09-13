@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**285 routes across 38 files.**
+**293 routes across 38 files.**
 
 ## By file (what each module owns)
 
@@ -23,7 +23,7 @@ shows where, so editing is navigation, not a grep hunt.
 
 - `GET /admin`
 
-### `src/routes/agent-bridge.js` — 15 routes
+### `src/routes/agent-bridge.js` — 19 routes
 
 - `GET /agent/v1/ping`
 - `GET /agent/v1/providers`
@@ -40,6 +40,10 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /agent/v1/ops`
 - `POST /agent/v1/create-from-source`
 - `POST /agent/v1/build`
+- `GET /agent/v1/inject/ping`
+- `GET /agent/v1/inject/next`
+- `POST /agent/v1/inject/:jobId/release`
+- `POST /agent/v1/inject/:jobId`
 
 ### `src/routes/agent-tokens.js` — 3 routes
 
@@ -227,7 +231,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/inbox/value`
 - `POST /admin/inbox/follow-up`
 
-### `src/routes/inject.js` — 6 routes
+### `src/routes/inject.js` — 10 routes
 
 - `GET /admin/api/inject`
 - `GET /admin/api/inject/:id/prompt`
@@ -235,6 +239,10 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/inject/:id/apply`
 - `POST /admin/api/inject/:id/undo`
 - `POST /admin/api/inject/:id/run`
+- `GET /admin/api/inject/jobs`
+- `GET /admin/api/inject/jobs/:jobId`
+- `POST /admin/api/inject/jobs/:jobId/cancel`
+- `POST /admin/api/inject/:id/job`
 
 ### `src/routes/integrations.js` — 7 routes
 
@@ -450,10 +458,14 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/inject` | GET | `src/routes/inject.js` |
 | `/admin/api/inject-pack` | GET | `src/routes/copilot.js` |
 | `/admin/api/inject/:id/apply` | POST | `src/routes/inject.js` |
+| `/admin/api/inject/:id/job` | POST | `src/routes/inject.js` |
 | `/admin/api/inject/:id/paste` | POST | `src/routes/inject.js` |
 | `/admin/api/inject/:id/prompt` | GET | `src/routes/inject.js` |
 | `/admin/api/inject/:id/run` | POST | `src/routes/inject.js` |
 | `/admin/api/inject/:id/undo` | POST | `src/routes/inject.js` |
+| `/admin/api/inject/jobs` | GET | `src/routes/inject.js` |
+| `/admin/api/inject/jobs/:jobId` | GET | `src/routes/inject.js` |
+| `/admin/api/inject/jobs/:jobId/cancel` | POST | `src/routes/inject.js` |
 | `/admin/api/integrations` | GET | `src/routes/integrations.js` |
 | `/admin/api/integrations` | POST | `src/routes/integrations.js` |
 | `/admin/api/menus` | GET | `src/routes/menus.js` |
@@ -670,6 +682,10 @@ shows where, so editing is navigation, not a grep hunt.
 | `/agent/v1/build` | POST | `src/routes/agent-bridge.js` |
 | `/agent/v1/create-from-source` | POST | `src/routes/agent-bridge.js` |
 | `/agent/v1/dictionary` | GET | `src/routes/agent-bridge.js` |
+| `/agent/v1/inject/:jobId` | POST | `src/routes/agent-bridge.js` |
+| `/agent/v1/inject/:jobId/release` | POST | `src/routes/agent-bridge.js` |
+| `/agent/v1/inject/next` | GET | `src/routes/agent-bridge.js` |
+| `/agent/v1/inject/ping` | GET | `src/routes/agent-bridge.js` |
 | `/agent/v1/media` | GET | `src/routes/agent-bridge.js` |
 | `/agent/v1/mission` | GET | `src/routes/agent-bridge.js` |
 | `/agent/v1/mission/:id/step` | POST | `src/routes/agent-bridge.js` |

@@ -254,12 +254,16 @@
     btnCopy.type = 'button';
     var btnRun = h('button', 'btn secondary inject-hidden', '▶ הרץ עם ה-AI המחובר');
     btnRun.type = 'button';
+    var btnJob = h('button', 'btn secondary inject-hidden', '🛠 שלחו לעובד שלכם');
+    btnJob.type = 'button';
+    btnJob.title = 'מריץ על המחשב שלכם ברקע — אפשר לסגור את הדף ולחזור אחר כך';
     var btnCancel = h('button', 'btn secondary sm inject-hidden', '✖ בטל');
     btnCancel.type = 'button';
     var status = h('span', 'muted inject-status', '');
     var timer = h('span', 'inject-timer', '');
     row1.appendChild(btnCopy);
     row1.appendChild(btnRun);
+    row1.appendChild(btnJob);
     row1.appendChild(btnCancel);
     row1.appendChild(status);
     row1.appendChild(timer);
@@ -317,7 +321,7 @@
     function hush() { notice.className = 'notice inject-hidden'; clear(notice); }
     function size() { return lite.checked ? 'lite' : 'full'; }
     function busy(on) {
-      [btnCopy, btnRun, btnPreview, btnUndo, brief, reply, lite].forEach(function (b) { b.disabled = !!on; });
+      [btnCopy, btnRun, btnJob, btnPreview, btnUndo, brief, reply, lite].forEach(function (b) { b.disabled = !!on; });
       if (on) btnApply.disabled = true; else syncApply();
     }
     function syncApply() {
@@ -522,8 +526,100 @@
           busy(false);
         });
     }
+    // ── the worker (v2.30): a courier that needs no tab ────────────────
+    //
+    // The browser relay dies with the tab and is bounded by the browser's own
+    // service-worker limits. A job is not: the owner's `tapuz-worker` process
+    // claims it, runs it on their GPU and posts the reply back, so the pack
+    // can take as long as it takes and this page may be closed the whole
+    // time. What lands here is the same reply, judged by the same door — and
+    // apply is still the owner's second click on text they can read.
+    function jobsUrl(tail) { return '/admin/api/inject/jobs' + (tail || ''); }
+
+    function pollJob(jobId) {
+      if (state.destroyed) return Promise.resolve();
+      return fetch(jobsUrl('/' + encodeURIComponent(jobId)), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (state.destroyed) return;
+          var j = d && d.job;
+          if (!d.ok || !j) { setStatus(''); say('warn', (d && d.error) || 'העבודה לא נמצאה'); busy(false); return; }
+          if (j.status === 'pending' || j.status === 'running') {
+            setStatus(j.status === 'pending' ? '⏳ ממתין לעובד שלכם…' : '🛠 העובד שלכם מריץ… (אפשר לסגור את הדף)');
+            state.jobTimer = global.setTimeout(function () { pollJob(jobId); }, 3000);
+            return;
+          }
+          stopTimer();
+          state.jobId = null;
+          // the text must be in the box BEFORE busy(false): that is what
+          // re-enables apply, and only when the box holds the previewed text
+          if (j.reply) { reply.value = j.reply; state.lastPreviewed = j.status === 'done' ? j.reply : null; }
+          busy(false);
+          if (j.status === 'done' && j.result) {
+            showPreviewResult(j.result);
+            var toks = j.usage ? ((j.usage.prompt_tokens || 0) + (j.usage.completion_tokens || 0)) : 0;
+            var secs = j.finishedAt && j.claimedAt ? Math.round((j.finishedAt - j.claimedAt) / 1000) : 0;
+            setStatus('✓ העובד סיים' + (secs ? ' ב-' + secs + ' שניות' : '') +
+              (j.result.rounds > 1 ? ' · ' + (j.result.repaired ? 'תוקן בסבב שני' : 'הסבב הראשון נשמר') : '') +
+              (toks ? ' · ' + toks.toLocaleString() + ' טוקנים' : ''), 'ok-text');
+          } else if (j.status === 'cancelled') {
+            setStatus('');
+            say('info', 'העבודה בוטלה.');
+          } else {
+            setStatus('');
+            say('danger', 'העבודה נכשלה: ' + ((j.error && j.error.message) || 'שגיאה לא ידועה') +
+              (j.reply ? ' — התשובה נשמרה למטה, אפשר לתקן ולהריץ תצוגה מקדימה.' : ''));
+          }
+        })
+        .catch(function () {
+          // a blip on the way to the site is not a failed job — keep watching
+          if (!state.destroyed) state.jobTimer = global.setTimeout(function () { pollJob(jobId); }, 5000);
+        });
+    }
+
+    function doJob() {
+      hush();
+      setStatus('שולח לעובד…');
+      busy(true);
+      startTimer();
+      postJson('/admin/api/inject/' + encodeURIComponent(id) + '/job', { brief: brief.value.trim(), size: size() })
+        .then(function (r) {
+          var d = r.json;
+          if (!d.ok) {
+            busy(false);
+            stopTimer();
+            setStatus('');
+            if (d.code === 'PACK_TOO_BIG') {
+              lite.checked = true;
+              say('warn', (d.error || 'החבילה גדולה מדי למודל.') + ' עברנו לחבילה לייט — נסו שוב.');
+              return;
+            }
+            say('danger', d.error || ('שגיאה ' + r.status));
+            return;
+          }
+          state.jobId = d.job.id;
+          if (d.worker && !d.worker.online) {
+            say('info', 'העבודה בתור. העובד לא פעיל כרגע — הפעילו אותו על המחשב עם המודל, והיא תירוץ מיד.');
+          }
+          pollJob(d.job.id);
+        })
+        .catch(function (e) { busy(false); stopTimer(); setStatus(''); say('danger', 'השליחה נכשלה: ' + e.message); });
+    }
+    btnJob.addEventListener('click', doJob);
+
     btnRun.addEventListener('click', doRun);
-    btnCancel.addEventListener('click', function () { if (state.ctrl) state.ctrl.abort(); });
+    btnCancel.addEventListener('click', function () {
+      if (state.ctrl) state.ctrl.abort();
+      if (state.jobTimer) { global.clearTimeout(state.jobTimer); state.jobTimer = null; }
+      if (state.jobId) {
+        var jid = state.jobId;
+        state.jobId = null;
+        postJson(jobsUrl('/' + encodeURIComponent(jid) + '/cancel'), {}).catch(function () { /* it may have finished */ });
+        stopTimer();
+        busy(false);
+        setStatus('');
+      }
+    });
 
     // ── apply (/apply — the only door that writes) ──
     function doApply(force) {
@@ -597,6 +693,28 @@
         [btnCopy, btnRun, btnPreview, btnApply].forEach(function (b) { b.disabled = true; });
         return;
       }
+      // the worker is independent of the AI provider: it brings its own model
+      fetch(jobsUrl('?packId=' + encodeURIComponent(id) + '&limit=5'), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (state.destroyed || !d || !d.ok) return;
+          var live = (d.jobs || []).filter(function (j) { return j.status === 'pending' || j.status === 'running'; })[0];
+          if (d.worker && d.worker.online) {
+            btnJob.classList.remove('inject-hidden');
+          } else if (live) {
+            btnJob.classList.remove('inject-hidden'); // a job is waiting for a worker that will come back
+          }
+          if (live) { state.jobId = live.id; busy(true); startTimer(); pollJob(live.id); return; }
+          // The point of a job is that the tab may be closed while it runs.
+          // So a finished one that nobody has seen yet is loaded on arrival —
+          // the reply in the box, the preview under it, apply one click away.
+          var fresh = (d.jobs || []).filter(function (j) {
+            return j.status === 'done' && j.finishedAt && (Date.now() - j.finishedAt) < 24 * 3600 * 1000;
+          })[0];
+          if (fresh && !reply.value) pollJob(fresh.id);
+        })
+        .catch(function () { /* no worker, no button — nothing is broken */ });
+
       if (canRun(state.settings, pack)) {
         showRun(true, '');
       } else if (state.settings && state.settings.ok && state.settings.provider === 'browser') {
@@ -614,6 +732,7 @@
     return {
       destroy: function () {
         state.destroyed = true;
+        if (state.jobTimer) { global.clearTimeout(state.jobTimer); state.jobTimer = null; }
         stopTimer();
         if (state.ctrl) { try { state.ctrl.abort(); } catch (e) { /* */ } }
         if (root.parentNode) root.parentNode.removeChild(root);
