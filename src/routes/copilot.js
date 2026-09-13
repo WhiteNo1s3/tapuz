@@ -116,6 +116,33 @@ router.get('/admin/ai', (req, res) => {
 // All handlers below inherit the global /admin session + Origin-CSRF gate.
 // =========================================================================
 router.get('/admin/inject', (req, res) => {
+  // The packs grid (v2.28) — every runnable injection in src/injections
+  // (the menu organizer, the theme designer, …) gets the generic card here,
+  // beside the site-builder pack this page has always handed out. Hidden
+  // stubs stay off the grid; a registry that fails to load leaves the page
+  // itself standing.
+  let packs = [];
+  try { packs = require('../injections').list().filter((p) => !p.ui.hidden); } catch (e) { packs = []; }
+  const packsGrid = packs.length ? `
+    <div class="inj-packs">
+      <div class="inj-card">
+        <h3>🧩 חבילות — הזרקות מוכנות לאתר הזה</h3>
+        <p class="muted">כל חבילה = משחק תפקידים שה-AI משחק על המצב האמיתי של האתר: מעתיקים פרומפט ומדביקים בצ׳אט (או מריצים עם ה-AI המחובר), מדביקים את התשובה, רואים תצוגה מקדימה — ורק אז מחילים.</p>
+      </div>
+      <div class="inj-packs-grid">
+        ${packs.map((p) => `<section class="card" data-inject="${escapeAdmin(p.id)}"></section>`).join('')}
+      </div>
+    </div>
+    <script src="/admin-bridge.js"></script>
+    <script src="/admin-inject-card.js"></script>
+    <script>
+      (function () {
+        var els = document.querySelectorAll('.inj-packs-grid [data-inject]');
+        for (var i = 0; i < els.length; i++) {
+          TapuzInjectCard.mount(els[i], els[i].getAttribute('data-inject'), {});
+        }
+      })();
+    </script>` : '';
   // Repair telemetry (v1.85) — the number that answers "is BenTML a problem
   // for models?". Rendered server-side; the card is honest when empty.
   const stats = require('../pzn-repair-stats').summary();
@@ -154,6 +181,9 @@ router.get('/admin/inject', (req, res) => {
         max-height:280px; overflow:auto; white-space:pre-wrap; direction:ltr; text-align:left; }
       .ok-msg { color:#166534; } .err-msg { color:#b91c1c; }
       .inj-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+      .inj-packs { max-width:1100px; margin:0 auto; padding:0 18px 18px; }
+      .inj-packs-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:14px; }
+      @media(max-width:860px){ .inj-packs-grid{ grid-template-columns:1fr; } }
     </style>
     <div class="inj-grid">
       <div>
@@ -204,6 +234,7 @@ router.get('/admin/inject', (req, res) => {
         </div>
       </div>
     </div>
+    ${packsGrid}
     <script src="/admin-inject.js"></script>
   `;
   res.send(layout(html, 'מילון · משחק', accentFor('chat')));
@@ -410,7 +441,23 @@ router.get('/admin/ai-setup', requireAdmin, (req, res) => {
         </section>
       </div>
 
-      <section class="card" style="margin-top:18px">
+      <section class="card" id="ai-bridge-card" style="margin-top:18px">
+        <h3 class="sub-head">🌉 האתר בענן, המודל אצלכם — Bridge V2</h3>
+        <p class="lead">
+          כשהאתר מאוחסן אצל ספק אירוח, <strong>השרת לא יכול להגיע</strong> ל-LM Studio שרץ על המחשב שלכם —
+          אבל <strong>הדפדפן שלכם כן</strong>. התוסף Bridge V2 מעביר כל קריאה: החבילות (מסדר התפריטים,
+          מעצב הערכה) רצות על ה-GPU שלכם, בלי מפתחות, בלי מונה, והמודל לא נחשף לאינטרנט לרגע.
+        </p>
+        <div id="ai-bridge-state" class="notice">מחפש את הגשר…</div>
+        <label class="field-label" style="margin-top:10px">מודל</label>
+        <select id="ai-bridge-model" class="input"></select>
+        <div class="row" style="margin-top:12px">
+          <button type="button" id="ai-save-bridge" class="btn">חבר דרך הדפדפן</button>
+          <a class="btn secondary" href="#ai-ext-card">⬇ להתקנת התוסף</a>
+        </div>
+      </section>
+
+      <section class="card" id="ai-ext-card" style="margin-top:18px">
         <h3 class="sub-head">🧩 התוסף לדפדפן — Chrome וגם Firefox</h3>
         <p class="lead">
           שתי תוספות, לפי הצורך: <strong>מלווה ההעתקה</strong> — כפתור אחד מעתיק חבילת BenTML מוכנה יחד עם
@@ -462,6 +509,7 @@ router.get('/admin/ai-setup', requireAdmin, (req, res) => {
         padding:1px 8px; border-radius:999px;
       }
     </style>
+    <script src="/admin-bridge.js"></script>
     <script src="/admin-ai-setup.js"></script>
   `;
   res.send(layout(html, 'חיבור AI', accentFor('ai-setup')));

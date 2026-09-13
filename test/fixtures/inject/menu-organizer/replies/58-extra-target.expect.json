@@ -1,0 +1,24 @@
+{
+  "itemCount": 7,
+  "items": [
+    { "label": "הבית", "type": "page", "target": "home" },
+    { "label": "הבונה", "type": "page", "target": "הבונה" },
+    { "label": "השפה", "type": "page", "target": "השפה" },
+    { "label": "כלים", "type": "custom", "url": "#" },
+    { "label": "היסודות", "type": "page", "target": "היסודות" },
+    { "label": "דוגמאות", "type": "custom", "url": "#" },
+    { "label": "צרו קשר", "type": "page", "target": "צרו-קשר" }
+  ],
+  "warningCodes": [
+    "EXTRA_TARGET_IGNORED"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "UNSAFE_URL",
+    "BAD_TEL"
+  ],
+  "notes": [
+    "EXTRA_TARGET_IGNORED"
+  ],
+  "hard": false
+}

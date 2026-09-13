@@ -1,0 +1,17 @@
+{
+  "itemCount": 6,
+  "warningCodes": [
+    "UNCLOSED_LINK"
+  ],
+  "absentCodes": [
+    "OVERFLOW_LIKELY",
+    "NO_CHANGE",
+    "PAGES_MISSING",
+    "UNKNOWN_PAGE",
+    "LAYOUT_UNASKED"
+  ],
+  "notes": [
+    "UNCLOSED_LINK"
+  ],
+  "hard": false
+}

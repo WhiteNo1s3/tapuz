@@ -1,0 +1,12 @@
+{
+  "fixture": "nested-existing",
+  "itemCount": 6,
+  "warningCodes": [
+    "NO_CHANGE"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING"
+  ],
+  "hard": false
+}

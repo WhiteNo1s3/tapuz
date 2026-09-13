@@ -1,0 +1,12 @@
+{
+  "fixture": "drafts-mixed",
+  "itemCount": 7,
+  "warningCodes": [
+    "DRAFT_LINKED"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING"
+  ],
+  "hard": false
+}

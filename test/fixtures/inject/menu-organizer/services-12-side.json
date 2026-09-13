@@ -1,0 +1,209 @@
+{
+  "config": {
+    "title": "נקי ומסודר",
+    "description": "שירותי ניקיון ואחזקה",
+    "logo": {
+      "type": "text",
+      "text": "נקי ומסודר"
+    },
+    "header": {
+      "ctaLabel": "הצעת מחיר",
+      "tagline": ""
+    },
+    "homepage": "home"
+  },
+  "overrides": {
+    "layout": {
+      "maxWidth": "900px"
+    },
+    "fonts": {
+      "baseSize": "17px"
+    }
+  },
+  "pages": [
+    {
+      "full_path": "home",
+      "title": "דף הבית",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s1",
+      "title": "ניקיון משרדים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s2",
+      "title": "ניקיון בתים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s3",
+      "title": "ניקיון לאחר שיפוץ",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s4",
+      "title": "פוליש רצפות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s5",
+      "title": "ניקוי ספות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s6",
+      "title": "ניקוי שטיחים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s7",
+      "title": "ניקוי חלונות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s8",
+      "title": "חיטוי וטיהור",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s9",
+      "title": "הדברה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s10",
+      "title": "גינון",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s11",
+      "title": "אחזקת מבנים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/s12",
+      "title": "שירותי שליחויות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "contact",
+      "title": "צור קשר",
+      "status": "published",
+      "tags": []
+    }
+  ],
+  "menus": {
+    "main": [
+      {
+        "label": "דף הבית",
+        "type": "custom",
+        "url": "/"
+      },
+      {
+        "label": "ניקיון משרדים",
+        "type": "page",
+        "target": "services/s1"
+      },
+      {
+        "label": "ניקיון בתים",
+        "type": "page",
+        "target": "services/s2"
+      },
+      {
+        "label": "ניקיון לאחר שיפוץ",
+        "type": "page",
+        "target": "services/s3"
+      },
+      {
+        "label": "פוליש רצפות",
+        "type": "page",
+        "target": "services/s4"
+      },
+      {
+        "label": "ניקוי ספות",
+        "type": "page",
+        "target": "services/s5"
+      },
+      {
+        "label": "ניקוי שטיחים",
+        "type": "page",
+        "target": "services/s6"
+      },
+      {
+        "label": "ניקוי חלונות",
+        "type": "page",
+        "target": "services/s7"
+      },
+      {
+        "label": "חיטוי וטיהור",
+        "type": "page",
+        "target": "services/s8"
+      },
+      {
+        "label": "הדברה",
+        "type": "page",
+        "target": "services/s9"
+      },
+      {
+        "label": "גינון",
+        "type": "page",
+        "target": "services/s10"
+      },
+      {
+        "label": "אחזקת מבנים",
+        "type": "page",
+        "target": "services/s11"
+      },
+      {
+        "label": "שירותי שליחויות",
+        "type": "page",
+        "target": "services/s12"
+      },
+      {
+        "label": "צור קשר",
+        "type": "page",
+        "target": "contact"
+      }
+    ],
+    "footer": []
+  },
+  "locations": {
+    "main": "main",
+    "footer": "footer"
+  },
+  "brief": "יש לנו שנים-עשר שירותים ורוצים את כולם גלויים — שימו את התפריט במסילת צד",
+  "expect": {
+    "placement": "side",
+    "mustPlace": [
+      "home",
+      "services/s1",
+      "services/s2",
+      "services/s3",
+      "services/s4",
+      "services/s5",
+      "services/s6",
+      "services/s7",
+      "services/s8",
+      "services/s9",
+      "services/s10",
+      "services/s11",
+      "services/s12",
+      "contact"
+    ],
+    "mustNotPlace": []
+  }
+}

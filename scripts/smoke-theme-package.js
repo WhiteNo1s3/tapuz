@@ -45,6 +45,26 @@ check(restored.colors.primary === '#123456', 'importThemePackage returns the res
 check(theme.loadOverrides().colors.primary === '#123456', 'import persists — a fresh loadOverrides() sees the restored value');
 check(theme.loadOverrides().style.radius === 'sharp', 'every overridden field round-trips, not just colors');
 
+// ── the menu knobs go through the one validator on import too (v2.28b) ──
+// a package carrying menuCollapse:'huge' must not store 'huge' verbatim (the
+// studio select would show 'sm' while 'md' is live, and the next plain save
+// would write 'sm'): the default is stored and the package's own `warnings`
+// (the list the import route forwards) names the value in Hebrew
+const knobPkg = { format: 'tapuz-theme', version: theme.THEME_PACKAGE_VERSION, name: 'knobs', overrides: { chrome: { menuCollapse: 'huge', menuGap: 'lg' } } };
+const knobRestored = theme.importThemePackage(knobPkg);
+check(knobRestored.chrome.menuCollapse === 'md' && theme.loadOverrides().chrome.menuCollapse === 'md',
+  'an unknown menu knob in a package is stored as its default (menuCollapse "huge" → "md"), never verbatim');
+check(knobRestored.chrome.menuGap === 'lg' && theme.loadOverrides().chrome.menuGap === 'lg', 'a known knob value in the same package is kept (menuGap "lg")');
+check(Array.isArray(knobPkg.warnings) && knobPkg.warnings.length === 1 && /huge/.test(knobPkg.warnings[0]) && /[֐-׿]/.test(knobPkg.warnings[0]) && /md/.test(knobPkg.warnings[0]),
+  'the import surfaces ONE Hebrew warning on the package naming "huge" and the default it fell back to');
+const cleanKnobPkg = { format: 'tapuz-theme', version: theme.THEME_PACKAGE_VERSION, name: 'knobs-ok', overrides: { chrome: { menuCollapse: 'lg' } } };
+theme.importThemePackage(cleanKnobPkg);
+check(theme.loadOverrides().chrome.menuCollapse === 'lg' && cleanKnobPkg.warnings === undefined, 'a package with only valid knobs imports without touching its warnings');
+const withOwnWarnings = { format: 'tapuz-theme', version: theme.THEME_PACKAGE_VERSION, name: 'knobs-merge', overrides: { chrome: { menuCollapse: 'huge' } }, warnings: ['אזהרה קיימת'] };
+theme.importThemePackage(withOwnWarnings);
+check(withOwnWarnings.warnings.length === 2 && withOwnWarnings.warnings[0] === 'אזהרה קיימת' && /huge/.test(withOwnWarnings.warnings[1]),
+  'knob warnings are appended after the warnings the package already carried (a parsed <bent-theme> reply)');
+
 // ── validation: a malformed/foreign package throws a clear error, never applies ──
 const before = theme.loadOverrides().colors.primary;
 function rejects(label, badPkg) {

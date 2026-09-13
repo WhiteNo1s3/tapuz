@@ -230,9 +230,13 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
   const lines = [];
   lines.push(he ? '## הכלים — דקדוק מקוצר (זה כל המילון)' : '## Tools — compact grammar (this IS the dictionary)');
   lines.push('');
+  // `*` used to read as "an attribute called text" to a local model, which
+  // then wrote <bent-feature title=… text=…> and never closed it (v2.28,
+  // seen live) — the legend now says where the body goes and that every
+  // tag closes.
   lines.push(he
-    ? 'שורה לכלי: `תג` · ⊃ = אילו ילדים נכנסים בתוכו · props (ערך1|ערך2 = הערכים המותרים, `*` = טקסט הגוף של התג, ↳ = חי רק בתוך מיכל). לכל תג יש גם `id`, `class` ו-`animate=none|fade|rise|zoom` אופציונליים — לא חוזרים עליהם בשורות.'
-    : 'One line per tool: `tag` · ⊃ = allowed children · props (a|b = allowed values, `*` = tag body text, ↳ = lives only inside a container). Every tag also takes optional `id`, `class` and `animate=none|fade|rise|zoom` — not repeated per line.');
+    ? 'שורה לכלי: `תג` · ⊃ = הילדים המותרים · props (`א|ב` = ערכים מותרים, `*` = טקסט גוף **בין** הפתיחה לסגירה — לא מאפיין, ↳ = רק בתוך מיכל). כל תג נסגר (`…</bent-x>` או `/>`); תג בלי ⊃ לא מכיל תגים. לכל תג גם `id`, `class`, `animate=none|fade|rise|zoom` — לא חוזרים בשורות.'
+    : 'One line per tool: `tag` · ⊃ = allowed children · props (a|b = allowed values, `*` = body text — written BETWEEN the opening and closing tag, never as an attribute, ↳ = lives only inside a container). Every tag closes: `<bent-x …>body</bent-x>` or `<bent-x … />`; a tag without ⊃ never contains tags. Every tag also takes optional `id`, `class` and `animate=none|fade|rise|zoom` — not repeated per line.');
   lines.push('');
 
   const catOrder = ['content', 'layout', 'data', 'media', 'effects', 'advanced'];
@@ -252,6 +256,11 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
         .slice(0, 8).map(([k, p]) => {
         let s = k;
         if (p.values) s += '=' + p.values.slice(0, 4).join('|') + (p.values.length > 4 ? '|…' : '');
+        // opts.ranges (the theme's bench kit): a number's range, so a model
+        // never writes overlay="true" or columns="many" (v2.28, seen live)
+        else if (opts.ranges && (p.type === 'integer' || p.type === 'number')) {
+          s += '=' + (p.min != null ? p.min : 0) + '..' + (p.max != null ? p.max : '');
+        }
         if (p.content) s += '*';
         return s;
       });

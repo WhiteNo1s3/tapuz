@@ -1,0 +1,55 @@
+{
+  "_note": "אתר שבו הכותרת מציגה תפריט בשם primary (לא main) — locations.main !== 'main'; התצוגה המקדימה חייבת להיות לפי מיקום.",
+  "config": {
+    "title": "סטודיו קטן",
+    "description": "אתר בדיקה עם תפריט כותרת בשם אחר",
+    "logo": {
+      "type": "text",
+      "text": "סטודיו קטן"
+    },
+    "header": {
+      "ctaLabel": "",
+      "tagline": ""
+    },
+    "homepage": "home"
+  },
+  "overrides": {
+    "layout": {
+      "maxWidth": "920px"
+    },
+    "fonts": {
+      "baseSize": "17px"
+    }
+  },
+  "pages": [
+    { "full_path": "home", "title": "דף הבית", "status": "published", "tags": [] },
+    { "full_path": "about", "title": "אודות", "status": "published", "tags": [] },
+    { "full_path": "services", "title": "שירותים", "status": "published", "tags": [] },
+    { "full_path": "contact", "title": "צור קשר", "status": "published", "tags": [] }
+  ],
+  "menus": {
+    "main": [
+      { "label": "ישן — הבית", "type": "page", "target": "home" },
+      { "label": "ישן — אודות", "type": "page", "target": "about" },
+      { "label": "ישן — שירותים", "type": "page", "target": "services" },
+      { "label": "ישן — צור קשר", "type": "page", "target": "contact" }
+    ],
+    "primary": [
+      { "label": "הבית", "type": "page", "target": "home" },
+      { "label": "אודות", "type": "page", "target": "about" },
+      { "label": "שירותים", "type": "page", "target": "services" },
+      { "label": "צור קשר", "type": "page", "target": "contact" }
+    ],
+    "footer": []
+  },
+  "locations": {
+    "main": "primary",
+    "footer": "footer"
+  },
+  "brief": "",
+  "expect": {
+    "placement": "top",
+    "mustPlace": ["home", "about", "services", "contact"],
+    "mustNotPlace": []
+  }
+}

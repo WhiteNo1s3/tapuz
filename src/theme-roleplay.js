@@ -44,6 +44,10 @@ const SKELETON = [
   ['.site-logo', 'הלוגו (טקסט או תמונה)'],
   ['.site-tagline', 'משפט המותג ליד הלוגו'],
   ['.main-nav a', 'קישורי התפריט הראשי (ו-:hover)'],
+  ['.main-nav .sub-menu', 'תפריט משנה — נפתח מתחת לפריט-הורה בריחוף/מקלדת'],
+  ['.nav-more-sum', 'כפתור "עוד" של הקיפול (summary) — מתלבש כמו קישור בתפריט'],
+  ['.nav-burger', 'כפתור ☰ של המגירה במסכים צרים'],
+  ['body.menu-side', 'האתר במצב מסילה צדית (menu="side") — התפריט אנכי'],
   ['.header-cta .btn', 'כפתור הקריאה-לפעולה בכותרת'],
   ['.main-content', 'עמוד התוכן (max-width מהמשתנה --max-width)'],
   ['h1, h2, h3', 'כותרות — גופן מ---font-heading'],
@@ -81,7 +85,9 @@ const CSS_VARS = [
   ['--font-family / --font-heading', 'גופן טקסט / גופן כותרות'],
   ['--radius-sm / --radius-md / --radius-lg / --radius-pill', 'סולם פינות'],
   ['--shadow-1 / --shadow-2', 'סולם צללים'],
-  ['--max-width', 'רוחב עמוד התוכן']
+  ['--max-width', 'רוחב עמוד התוכן'],
+  ['--menu-gap / --menu-size / --menu-align', 'רווח, גודל ויישור פריטי התפריט (מ-menu-gap/menu-size/menu-align)'],
+  ['--header-max-width', 'רוחב הכותרת העליונה (מ-header-width)']
 ];
 
 /** The bench KIT — the modules a theme is judged on. Grammar lines are
@@ -121,7 +127,7 @@ function benchKitMarkdown() {
       const sub = list.filter((m) => keep.has(m.name));
       if (sub.length) categories[cat] = sub;
     }
-    return dict.toCompactMarkdown({ ...d, categories }, { locale: 'he' })
+    return dict.toCompactMarkdown({ ...d, categories }, { locale: 'he', ranges: true })
       .replace(/^## [^\n]*\n/, '')
       .trim();
   } catch (e) {
@@ -137,9 +143,9 @@ function knobsDoc() {
     '  <bent-colors primary="#hex" secondary="#hex" text="#hex" muted="#hex" border="#hex" bg="#hex" light-bg="#hex" surface="#hex" />',
     '  <bent-fonts family=\'"Heebo", system-ui, sans-serif\' heading=\'"Suez One", serif\' base-size="17px" google="Heebo, Suez One" />',
     '  <bent-style radius="sharp|soft|round" shadow="flat|soft|deep" accent="solid|gradient" buttons="filled|outline|soft|glow" />',
-    '  <bent-layout max-width="900px|1100px|1200px" menu="top|side" />',
+    '  <bent-layout max-width="900px|1100px|1200px" menu="top|side" header-width="content|wide|full" />',
     '  <bent-background kind="solid|gradient|glow|dots|grid|lines" angle="160" />',
-    '  <bent-chrome menu-hover="color|underline|pill|glow" menu-hover-color="" menu-weight="normal|bold" header-bg="" header-text="" header-glass="true|false" footer-bg="" footer-text="" />',
+    '  <bent-chrome menu-hover="color|underline|pill|glow" menu-hover-color="" menu-weight="normal|bold" menu-overflow="wrap|scroll|drawer" menu-align="start|center|end|between" menu-gap="sm|md|lg" menu-size="sm|md|lg" menu-fold="0" menu-collapse="sm|md|lg|never" menu-current="underline|pill|bold|none" header-bg="" header-text="" header-glass="true|false" footer-bg="" footer-text="" />',
     '  <bent-skin note="מה העור עושה"><style>/* CSS על השלד */</style></bent-skin>',
     '  <bent-effect note="מה האפקט"><style>/* css */</style><script>/* IIFE */</script></bent-effect>',
     '  <bent-canvas>',
@@ -151,7 +157,7 @@ function knobsDoc() {
     '- `bent-colors`: שמונה צבעי hex (רק `#rrggbb` — לא שמות, לא rgb). `text` על `bg` וגם על `surface` חייבים ניגודיות ≥ 4.5 (AA). `secondary` הוא בן-הזוג של `primary` בגרדיאנט.',
     '- `bent-fonts google`: רק משמות המדף למטה, מופרדים בפסיק. כל גופן שמופיע ב-`family`/`heading` חייב להופיע גם ב-`google` (אחרת לא ייטען). בלי `google` = גופני מערכת. ערכי משפחה עם מירכאות כפולות עוטפים במירכאות **בודדות** — `family=\'"Heebo", sans-serif\'`.',
     '- `bent-background kind`: `solid` אחיד · `gradient` מעבר bg→light-bg · `glow` הילות ראשי/משלים · `dots`/`grid`/`lines` תבניות בצבע המסגרת.',
-    '- `bent-chrome`: ערך ריק (`""`) = ברירת המחדל של הערכה. `header-bg` כהה מחייב `header-text` בהיר.',
+    '- `bent-chrome`: ערך ריק (`""`) = ברירת המחדל של הערכה. `header-bg` כהה מחייב `header-text` בהיר. **התפריט**: `menu="side"` ב-`bent-layout` = מסילה אנכית (מתאימה ל-8+ פריטים); `header-width` = כמה רחבה הכותרת (`wide` = 1140px, `full` = מקצה לקצה); `menu-overflow` = מה קורה לתפריט ארוך: `wrap` נשבר לשורה שנייה · `scroll` רצועה אחת שנגללת · `drawer` כפתור ☰ בכל רוחב; `menu-align` יישור; `menu-gap`/`menu-size` צפיפות וגודל; `menu-fold` = כמה פריטים עליונים לפני קיפול "עוד" (0 = בלי; מתאים ל-8+ פריטים); `menu-collapse` = מאיזה רוחב מסך התפריט הופך למגירה ☰ (`sm` 560px · `md` 720px · `lg` 1024px · `never`); `menu-current` = איך הדף הנוכחי מסומן (קו תחתון · גלולה · מודגש · בלי). תפריטי משנה נפתחים בריחוף/מקלדת מעצמם.',
     '- `bent-style buttons`: `filled` מלא · `outline` מסגרת · `soft` רקע מוחלש · `glow` הילה.',
     '- `bent-skin`: ה-CSS חי בתוך `<style>` **בתוך `bent-skin`** — לא `<style>` חופשי, לא fence נפרד. `bent-effect`: css ב-`<style>`, JS ב-`<script>` (IIFE). בלי `</style>`/`</script>` בתוך מחרוזות.',
     '- `bent-canvas`: הבנץ׳ — מודולים מהערכה למטה (ורק ממנה). שורה = `<bent-columns ratio="2:1:1" width="content|wide|full" gap="none|sm|md|lg" valign="top|center|bottom|stretch" collapse="sm|md|lg|never">` עם `<bent-col>` לכל תא (2–6). `width="wide"` חורג מעמוד התוכן עד 1400px, `full` = כל המסך. חמישה מודולים בשורה = 5 תאים.',
@@ -290,7 +296,7 @@ function buildThemePrompt(opts = {}) {
   lines.push('## חוקים קשיחים');
   lines.push('');
   lines.push('1. **הערכה היא כל התשובה.** fence אחד של `html` עם מסמך `<bent-theme>` שלם — ושום מילה לפניו או אחריו. הדבקה של התשובה כמו-שהיא חייבת להתקבל. לא להחזיר את התבנית הריקה — רק את הערכה.');
-  lines.push('2. רק התגיות והמאפיינים מהשפה למעלה. מאפיין שלא רלוונטי — משמיטים (לא ממציאים). מירכאות ישרות בלבד (`"`), לא מסולסלות.');
+  lines.push('2. רק התגיות והמאפיינים מהשפה למעלה. מאפיין שלא רלוונטי — משמיטים (לא ממציאים). מירכאות ישרות בלבד (`"`), לא מסולסלות. ערך שכתוב בשפה כ-`a|b|c` הוא רשימת אפשרויות — כותבים אחת בלבד, לא את הרשימה.');
   lines.push('3. ה-CSS ב-`bent-skin` הוא **עור — קוסמטיקה על השלד**: צבעים, מסגרות, צללים, פינות, גופנים, ריווח, טיפוגרפיה. לא `display`/`position`/`float`/`width` על השלד, לא `display:none` על תפריט/כותרת/תחתית, לא `overflow:hidden` על body. בלי `@import`, בלי `url(` חיצוני, בלי כתובות. 20–80 שורות — מספיק כדי שהערכה תיראה שונה, לא כדי לבנות מחדש את הדף.');
   lines.push('4. `bent-effect` רק אם השחקן ביקש אפקט — ואז **קל כמו נוצה**: IIFE עצמאי, Vanilla, מחכה ל-`DOMContentLoaded`, מכבד `prefers-reduced-motion`, לא חוסם קליקים (`pointer-events:none` על האלמנטים שלו). **מאגר קבוע** של עד 30 אלמנטים שנוצרים פעם אחת וממוחזרים — לעולם לא אלמנט חדש בכל `mousemove`. `mousemove` רק שומר את המיקום האחרון; הציור קורה ב-**לולאת `requestAnimationFrame` אחת**, עם `transform`/`opacity` בלבד (לא top/left, לא width/height). בלי `setInterval` מתחת ל-16ms, בלי לולאות אינסופיות, בלי ספריות, בלי CDN. עד 60 שורות. לא ביקשו — משמיטים את התגית.');
   lines.push('5. ניגודיות: `text` על `bg` ועל `surface` ≥ 4.5. כותרת כהה ⇒ `header-text` בהיר. הכפתור (לבן על `primary`) חייב להיקרא.');

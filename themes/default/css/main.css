@@ -82,6 +82,201 @@ body {
   color: var(--color-primary);
 }
 
+/* ===== Menu capacity, sub-menus, drawer (v2.28) =====
+   Ten Hebrew items broke the bar at EVERY desktop width: .header-inner was
+   capped at --max-width (the content column), the list never wrapped above
+   640px, multi-word labels split mid-label before the row overflowed, and
+   nested items had no css at all (a bulleted block inside the sticky header).
+   Now, with zero JavaScript and logical properties only (RTL first):
+     • labels never break; the row wraps by CONTENT, not by viewport
+     • the header may be wider than the content column (--header-max-width)
+     • sub-menus are dropdowns on hover AND :focus-within (keyboard), open
+       toward the inline end for the last items, and lie inline in the side
+       rail and in the drawer
+     • narrow screens get a drawer: a checkbox + label toggle (--menu-mobile)
+   Theme knobs set the custom properties (src/theme.js overridesToCss);
+   the defaults here are what an untouched site gets. */
+.header-inner {
+  max-width: max(var(--max-width), var(--header-max-width, 1140px));
+  flex-wrap: wrap;
+  gap: 0.6rem 1.5rem;
+}
+.main-nav { flex: 1 1 auto; min-width: 0; }
+.main-nav ul {
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
+  column-gap: var(--menu-gap, 1.75rem);
+  justify-content: var(--menu-align, flex-start);
+  align-items: center;
+}
+.main-nav li { position: relative; unicode-bidi: isolate; max-width: none; }
+.main-nav a { white-space: nowrap; display: inline-block; font-size: var(--menu-size, 0.95rem); }
+.main-nav li.has-children > a::before { content: '▾'; font-size: 0.7em; margin-inline-end: 0.3em; opacity: 0.7; }
+.main-nav .sub-menu {
+  position: absolute;
+  inset-inline-start: 0;
+  top: calc(100% + var(--menu-drop-gap, 0px));
+  z-index: 120;
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0.45rem 0;
+  min-width: 12rem;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: var(--shadow-2, 0 10px 30px rgba(2, 8, 23, 0.12));
+}
+.main-nav li:hover > .sub-menu,
+.main-nav li:focus-within > .sub-menu { display: block; }
+.main-nav .sub-menu li { display: block; }
+.main-nav .sub-menu a { display: block; padding: 0.45rem 0.9rem; white-space: normal; }
+.main-nav .sub-menu a::after { display: none; }
+.main-nav .sub-menu a:hover { background: var(--color-light-bg); }
+/* the last items open toward the inline end so a dropdown never leaves the page */
+.main-nav > ul > li:nth-last-child(-n+2) > .sub-menu { inset-inline-start: auto; inset-inline-end: 0; }
+/* hover bridge: a skin that floats the dropdown away from the bar sets
+   --menu-drop-gap; this invisible strip fills EXACTLY that gap so the pointer
+   can travel down without the dropdown closing. Zero-height by default, so it
+   never covers the parent link — a click on a hub page's link must navigate. */
+.main-nav > ul > li > .sub-menu::before { content: ''; position: absolute; inset-inline: 0; top: calc(-1 * var(--menu-drop-gap, 0px)); height: var(--menu-drop-gap, 0px); }
+/* the fold (chrome.menuFold): the items past the fold live in
+   <li class="nav-more"><details><summary class="nav-more-sum">עוד</summary><ul class="sub-menu">…
+   a native disclosure — click/tap/Enter/Space, zero JS — that stays open until
+   toggled again. The summary is dressed as a menu link; li.nav-more is NOT
+   has-children, so its caret comes from its own ::before here — the same
+   side as a parent's ▾ (no double caret, no side flip in RTL). */
+.main-nav li.nav-more > details { position: relative; }
+.main-nav .nav-more-sum { list-style: none; cursor: pointer; display: inline-block; font-size: var(--menu-size, 0.95rem); font-weight: 500; color: var(--color-text); padding: 4px 0; white-space: nowrap; transition: color 0.15s; }
+.main-nav .nav-more-sum::-webkit-details-marker { display: none; }
+.main-nav .nav-more-sum::before { content: '▾'; font-size: 0.7em; margin-inline-end: 0.3em; opacity: 0.7; }
+.main-nav .nav-more-sum:hover,
+.main-nav li.nav-more.has-current > details > .nav-more-sum { color: var(--color-primary); }
+.main-nav li.nav-more > details[open] > .sub-menu { display: block; }
+/* the fold is always the last item, so its list opens toward the inline end
+   like the last two plain items; a folded parent's own children fly out
+   sideways (.sub-menu .sub-menu) — inside the fold toward the inline START,
+   back over the bar, where there is room; elsewhere toward the inline end */
+.main-nav li.nav-more > details > .sub-menu { inset-inline-start: auto; inset-inline-end: 0; }
+.main-nav .sub-menu .sub-menu { inset-inline-start: 100%; inset-inline-end: auto; top: 0; }
+.main-nav li.nav-more .sub-menu .sub-menu { inset-inline-start: auto; inset-inline-end: 100%; }
+/* the current page (chrome.menuCurrent): the underline above is the default;
+   pill / bold / none arrive as body classes (theme.menuBodyClasses), and the
+   parent of the current page (li.has-current) echoes the mark */
+body.nav-current-pill .main-nav a[aria-current="page"] { background: var(--color-light-bg); background: color-mix(in srgb, var(--color-primary) 14%, transparent); border-radius: 999px; padding-inline: 0.7em; }
+body.nav-current-pill .main-nav a[aria-current="page"]::after { display: none; }
+body.nav-current-bold .main-nav a[aria-current="page"] { font-weight: 700; color: var(--color-primary); }
+body.nav-current-bold .main-nav a[aria-current="page"]::after { display: none; }
+body.nav-current-none .main-nav a[aria-current="page"]::after { width: 0; }
+body:not(.nav-current-pill):not(.nav-current-bold):not(.nav-current-none) .main-nav > ul > li.has-current > a::after { width: 100%; }
+body.nav-current-pill .main-nav li.has-current > a,
+body.nav-current-bold .main-nav li.has-current > a { color: var(--color-primary); }
+/* horizontal scroll strip — a theme choice (--menu-overflow: scroll) */
+.main-nav[data-overflow="scroll"] ul,
+.menu-scroll .main-nav ul {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 0.25rem;
+  -webkit-overflow-scrolling: touch;
+  /* the strip fades at BOTH inline edges — symmetric, so direction-neutral */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 calc(100% - 1.5rem), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 calc(100% - 1.5rem), transparent);
+}
+/* an absolute dropdown inside an overflow container is clipped, so a strip
+   has no sub-menus (the organizer warns SUBMENU_HIDDEN_IN_SCROLL). The two
+   :where() wrappers keep this at (0,2,2): just above the plain hover rule
+   (0,2,1) and BELOW the drawer's and the rail's static lists (≥ (0,3,1)),
+   which still show every child — a bare `> .sub-menu` here would be (0,3,2)
+   and hide the rail's children on hover/focus (menu-side + menu-scroll is a
+   legal knob pair). The strip's overflow and edge fade are reset in both
+   body.menu-side blocks, further down. */
+.menu-scroll .main-nav > ul > li:where(:hover, :focus-within) > :where(.sub-menu) { display: none; }
+/* the drawer toggle: a real checkbox (keyboard: tab + space), visually hidden */
+.nav-toggle { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.nav-burger {
+  display: none;
+  cursor: pointer;
+  width: 42px;
+  height: 38px;
+  padding: 9px 10px;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-surface, #fff);
+  margin-inline-start: auto;
+}
+.nav-burger span { display: block; height: 2px; border-radius: 2px; background: currentColor; transition: transform 0.2s, opacity 0.2s; }
+.nav-toggle:focus-visible + .nav-burger { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.nav-toggle:checked + .nav-burger span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+.nav-toggle:checked + .nav-burger span:nth-child(2) { opacity: 0; }
+.nav-toggle:checked + .nav-burger span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+/* the drawer itself: below the collapse breakpoint (chrome.menuCollapse —
+   md = 720px default, sm = 560px, lg = 1024px, never = no drawer at all) — or
+   always, when the theme says the menu is too long for a bar (body.menu-drawer).
+   The three breakpoint blocks are literal copies: the md one applies when the
+   body carries NONE of the collapse classes (an untouched site), sm/lg when
+   it carries theirs. Every static list here — the drawer's sub-menus AND a
+   fold's list under details[open] — comes from the descendant `.sub-menu`
+   rule. The scroll strip's edge fade is switched off: a column list has no
+   edges to fade. */
+@media (max-width: 720px) {
+  body:not(.nav-collapse-sm):not(.nav-collapse-lg):not(.nav-collapse-never) .main-nav { display: flex; flex-wrap: wrap; align-items: center; }
+  body:not(.nav-collapse-sm):not(.nav-collapse-lg):not(.nav-collapse-never) .nav-burger { display: flex; }
+  body:not(.nav-collapse-sm):not(.nav-collapse-lg):not(.nav-collapse-never) .main-nav ul { display: none; flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 0; padding: 0.5rem 0 0.25rem; -webkit-mask-image: none; mask-image: none; }
+  body:not(.nav-collapse-sm):not(.nav-collapse-lg):not(.nav-collapse-never) .nav-toggle:checked ~ ul { display: flex; }
+  body:not(.nav-collapse-sm):not(.nav-collapse-lg):not(.nav-collapse-never) .main-nav a { display: block; padding: 0.55rem 0.4rem; white-space: normal; }
+  body:not(.nav-collapse-sm):not(.nav-collapse-lg):not(.nav-collapse-never) .main-nav .nav-more-sum { display: block; padding: 0.55rem 0.4rem; }
+  body:not(.nav-collapse-sm):not(.nav-collapse-lg):not(.nav-collapse-never) .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 1rem; background: transparent; min-width: 0; }
+  body:not(.nav-collapse-sm):not(.nav-collapse-lg):not(.nav-collapse-never) .main-nav li.has-children > a::before { content: ''; margin: 0; }
+}
+@media (max-width: 560px) {
+  body.nav-collapse-sm:not(.menu-drawer) .main-nav { display: flex; flex-wrap: wrap; align-items: center; }
+  body.nav-collapse-sm:not(.menu-drawer) .nav-burger { display: flex; }
+  body.nav-collapse-sm:not(.menu-drawer) .main-nav ul { display: none; flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 0; padding: 0.5rem 0 0.25rem; -webkit-mask-image: none; mask-image: none; }
+  body.nav-collapse-sm:not(.menu-drawer) .nav-toggle:checked ~ ul { display: flex; }
+  body.nav-collapse-sm:not(.menu-drawer) .main-nav a { display: block; padding: 0.55rem 0.4rem; white-space: normal; }
+  body.nav-collapse-sm:not(.menu-drawer) .main-nav .nav-more-sum { display: block; padding: 0.55rem 0.4rem; }
+  body.nav-collapse-sm:not(.menu-drawer) .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 1rem; background: transparent; min-width: 0; }
+  body.nav-collapse-sm:not(.menu-drawer) .main-nav li.has-children > a::before { content: ''; margin: 0; }
+}
+@media (max-width: 1024px) {
+  body.nav-collapse-lg:not(.menu-drawer) .main-nav { display: flex; flex-wrap: wrap; align-items: center; }
+  body.nav-collapse-lg:not(.menu-drawer) .nav-burger { display: flex; }
+  body.nav-collapse-lg:not(.menu-drawer) .main-nav ul { display: none; flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 0; padding: 0.5rem 0 0.25rem; -webkit-mask-image: none; mask-image: none; }
+  body.nav-collapse-lg:not(.menu-drawer) .nav-toggle:checked ~ ul { display: flex; }
+  body.nav-collapse-lg:not(.menu-drawer) .main-nav a { display: block; padding: 0.55rem 0.4rem; white-space: normal; }
+  body.nav-collapse-lg:not(.menu-drawer) .main-nav .nav-more-sum { display: block; padding: 0.55rem 0.4rem; }
+  body.nav-collapse-lg:not(.menu-drawer) .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 1rem; background: transparent; min-width: 0; }
+  body.nav-collapse-lg:not(.menu-drawer) .main-nav li.has-children > a::before { content: ''; margin: 0; }
+}
+/* the desktop dead tab-stop: above the breakpoint the burger is gone, so the
+   visually hidden checkbox would be a tab-stop that does nothing — hide it
+   THERE and only there (the bare .nav-toggle rule above stays reachable, the
+   drawer's keyboard path depends on it). `never` has no burger at any width,
+   so both go together. */
+@media (min-width: 721px) {
+  body:not(.menu-drawer):not(.nav-collapse-lg) .nav-toggle { display: none; }
+}
+@media (min-width: 561px) {
+  body.nav-collapse-sm:not(.menu-drawer) .nav-toggle { display: none; }
+}
+@media (min-width: 1025px) {
+  body.nav-collapse-lg:not(.menu-drawer) .nav-toggle { display: none; }
+}
+body.nav-collapse-never:not(.menu-drawer) .nav-toggle,
+body.nav-collapse-never:not(.menu-drawer) .nav-burger { display: none; }
+body.menu-drawer .main-nav { display: flex; flex-wrap: wrap; align-items: center; }
+body.menu-drawer .nav-burger { display: flex; }
+body.menu-drawer .main-nav ul { display: none; flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 0; padding: 0.5rem 0 0.25rem; }
+body.menu-drawer .nav-toggle:checked ~ ul { display: flex; }
+body.menu-drawer .main-nav a { display: block; padding: 0.55rem 0.4rem; white-space: normal; }
+body.menu-drawer .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 1rem; background: transparent; min-width: 0; }
+body.menu-drawer .main-nav li.has-children > a::before { content: ''; margin: 0; }
+body.menu-drawer .main-nav .nav-more-sum { display: block; padding: 0.55rem 0.4rem; }
+
 /* ===== CMS-managed header chrome (S3) ===== */
 .header-brand {
   display: flex;
@@ -405,7 +600,9 @@ figcaption {
 }
 
 .footer-inner {
-  max-width: var(--max-width);
+  /* the footer band shares the header's cap (v2.28): a wide header over a
+     narrower footer reads as a mistake */
+  max-width: max(var(--max-width), var(--header-max-width, 1140px));
   margin: 0 auto;
   padding: 0 1.25rem;
   display: flex;
@@ -415,6 +612,8 @@ figcaption {
   gap: 1rem;
 }
 
+/* the reading-width cap on `li` (70ch) is for prose, not for a nav list */
+.footer-nav li { max-width: none; }
 .footer-nav a {
   color: var(--color-muted);
   text-decoration: none;
@@ -1548,8 +1747,7 @@ blockquote.testimonial { margin-inline: 0; }
 p, li { max-width: 70ch; }
 
 @media (max-width: 640px) {
-  .header-inner { flex-direction: column; gap: 0.6rem; }
-  .main-nav ul { flex-wrap: wrap; gap: 1rem; justify-content: center; }
+  /* the header no longer stacks here — the drawer (v2.28, ≤720px) owns narrow screens */
   .hero { padding: 2.25rem 1rem 1.75rem; }
   .hero h1 { font-size: 2rem; }
 }
@@ -2091,6 +2289,32 @@ body.menu-side .main-nav a:hover {
   background: var(--color-light-bg);
   color: var(--color-primary);
 }
+/* in the rail a sub-menu is an indented list, always open, and there is no
+   burger (v2.28). Scoped to the widths where the rail EXISTS: below 900px
+   side mode falls back to the top bar, and at ≤720px the drawer must win —
+   an unscoped `body.menu-side .nav-burger{display:none}` outranks the
+   drawer's `.nav-burger{display:flex}` and the phone menu vanishes. */
+@media (min-width: 901px) {
+  /* a side site never gets a scroll strip: menu-side + menu-scroll is a legal
+     knob pair, and the strip's nowrap / overflow-x / edge fade would fade
+     every rail row at both ends. (0,2,2) beats the strip's (0,2,1). */
+  body.menu-side .main-nav ul { overflow-x: visible; flex-wrap: wrap; -webkit-mask-image: none; mask-image: none; }
+  body.menu-side .main-nav .sub-menu { position: static; display: block; box-shadow: none; border: none; border-radius: 0; padding: 0 0 0.2rem; padding-inline-start: 0.9rem; background: transparent; min-width: 0; }
+  body.menu-side .main-nav .sub-menu a { padding: 0.35rem 0.85rem; font-size: 0.9em; }
+  body.menu-side .main-nav li.has-children > a::before { content: ''; margin: 0; }
+  body.menu-side .nav-burger { display: none; }
+  /* the rail marks the current page with a tint, not an underline (a 2px
+     line under a padded block link looks broken); a fold's summary is a rail
+     row like any link */
+  body.menu-side .main-nav a[aria-current="page"] { background: var(--color-light-bg); color: var(--color-primary); }
+  body.menu-side .main-nav a[aria-current="page"]::after { display: none; }
+  /* the parent of the current page echoes the mark as colour only: its
+     underline echo (li.has-current > a::after, width: 100%) is cancelled
+     like the current link's own */
+  body.menu-side .main-nav li.has-current > a::after { display: none; }
+  body.menu-side .main-nav li.has-current > a { color: var(--color-primary); }
+  body.menu-side .main-nav .nav-more-sum { display: block; padding: 0.55rem 0.85rem; border-radius: var(--radius-md, 10px); }
+}
 @media (max-width: 900px) {
   /* narrow screens: back to the familiar top bar, menu wraps horizontally */
   body.menu-side { display: block; }
@@ -2119,6 +2343,10 @@ body.menu-side .main-nav a:hover {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem 1rem;
+    /* no scroll strip in side mode at any width (see the rail block) */
+    overflow-x: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
   body.menu-side .main-nav a { padding: 0.25rem 0.4rem; }
 }

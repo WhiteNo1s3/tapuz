@@ -84,6 +84,10 @@ router.post('/admin/api/theme', (req, res) => {
       }
     }
     const settings = saveThemeSettings(b);
+    // the menu knobs' door warnings (v2.28b) join the skin's — one list,
+    // same key, same place in the response
+    warnings.push(...(settings.warnings || []));
+    delete settings.warnings;
     const rebuildError = rebuildSite('theme save');
     res.json({ ok: true, rebuildError, warnings, ...settings });
   } catch (e) {
@@ -127,6 +131,20 @@ router.get('/admin/api/theme/library/export.bent', (req, res) => {
     res.status(404).json({ ok: false, error: e.message });
   }
 });
+
+/**
+ * The studio's capacity hint (v2.28b) — what menus.estimateMenuFit says
+ * about the main menu under the live knobs, as one Hebrew line. The same
+ * words the editor script writes after a save (admin-theme.js navFitLine),
+ * so the hint reads the same before and after. Without an estimate (the
+ * organizer's module not present) the line explains where the menu lives.
+ */
+function navFitLine(fit) {
+  if (!fit || !Array.isArray(fit.itemsPx)) return 'התפריט הראשי נערך בעמוד התפריטים; הידיות כאן קובעות איך הוא נשבר, מתקפל ומסומן.';
+  const n = fit.itemsPx.length;
+  const rows = fit.rowsNow === 1 ? 'היום שורה אחת ✓' : `היום ${fit.rowsNow} שורות`;
+  return `בתפריט הראשי ${n} פריטים · בשורה אחת נכנסים ~${fit.capacity} · ${rows}`;
+}
 
 /** What an import door received: the package object, or the raw pasted
  *  text (v2.24 — the tolerant path: fences, chat prose, a bare theme JSON). */
@@ -739,9 +757,15 @@ router.get('/admin/theme', (req, res) => {
           <label class="field-label" for="th-maxw">רוחב מקסימלי</label>
           <input id="th-maxw" value="${escAttr(o.layout.maxWidth)}" class="input mb">
           <label class="field-label" for="th-menu-place">מיקום תפריט</label>
-          <select id="th-menu-place" class="input">
+          <select id="th-menu-place" class="input mb">
             ${opt('top', 'עליון (אופקי)', o.layout.menuPlacement !== 'side')}
             ${opt('side', 'צד (אנכי)', o.layout.menuPlacement === 'side')}
+          </select>
+          <label class="field-label" for="th-header-width">רוחב הכותרת העליונה (תפריט ארוך צריך מקום)</label>
+          <select id="th-header-width" class="input">
+            ${opt('content', 'כרוחב התוכן', o.layout.headerWidth === 'content')}
+            ${opt('wide', 'רחב (1140px)', !o.layout.headerWidth || o.layout.headerWidth === 'wide')}
+            ${opt('full', 'מקצה לקצה', o.layout.headerWidth === 'full')}
           </select>
         </section>
         <section class="card">
@@ -769,7 +793,53 @@ router.get('/admin/theme', (req, res) => {
           <label class="field-label" for="th-ch-footerbg">רקע התחתית (ריק = ברירת מחדל)</label>
           <input id="th-ch-footerbg" value="${escAttr(ch.footerBg || '')}" placeholder="#1c1917" dir="ltr" class="input mb">
           <label class="field-label" for="th-ch-footertext">צבע טקסט התחתית (ריק = ברירת מחדל)</label>
-          <input id="th-ch-footertext" value="${escAttr(ch.footerText || '')}" placeholder="#fffbf7" dir="ltr" class="input">
+          <input id="th-ch-footertext" value="${escAttr(ch.footerText || '')}" placeholder="#fffbf7" dir="ltr" class="input mb">
+          <p class="lead" style="margin:6px 0 8px">תפריט ארוך: מה קורה כשהפריטים לא נכנסים בשורה אחת. תפריטי משנה נפתחים בריחוף ובמקלדת מעצמם; במסכים צרים יש תמיד כפתור ☰.</p>
+          <label class="field-label" for="th-ch-overflow">תפריט ארוך</label>
+          <select id="th-ch-overflow" class="input mb">
+            ${opt('wrap', 'נשבר לשורה שנייה (ברירת מחדל)', !ch.menuOverflow || ch.menuOverflow === 'wrap')}
+            ${opt('scroll', 'רצועה אחת שנגללת לרוחב', ch.menuOverflow === 'scroll')}
+            ${opt('drawer', 'כפתור ☰ בכל רוחב (מגירה)', ch.menuOverflow === 'drawer')}
+          </select>
+          <div class="studio-actions mb" style="gap:14px">
+            <span><label class="field-label" for="th-ch-align">יישור</label>
+            <select id="th-ch-align" class="input compact">
+              ${opt('start', 'התחלה', !ch.menuAlign || ch.menuAlign === 'start')}
+              ${opt('center', 'מרכז', ch.menuAlign === 'center')}
+              ${opt('end', 'סוף', ch.menuAlign === 'end')}
+              ${opt('between', 'מפוזר', ch.menuAlign === 'between')}
+            </select></span>
+            <span><label class="field-label" for="th-ch-gap">רווח</label>
+            <select id="th-ch-gap" class="input compact">
+              ${opt('sm', 'צפוף', ch.menuGap === 'sm')}
+              ${opt('md', 'רגיל', !ch.menuGap || ch.menuGap === 'md')}
+              ${opt('lg', 'אוורירי', ch.menuGap === 'lg')}
+            </select></span>
+            <span><label class="field-label" for="th-ch-size">גודל</label>
+            <select id="th-ch-size" class="input compact">
+              ${opt('sm', 'קטן', ch.menuSize === 'sm')}
+              ${opt('md', 'רגיל', !ch.menuSize || ch.menuSize === 'md')}
+              ${opt('lg', 'גדול', ch.menuSize === 'lg')}
+            </select></span>
+          </div>
+          <label class="field-label" for="th-ch-fold">קיפול: כמה פריטים לפני "עוד" (0 = בלי)</label>
+          <input type="number" id="th-ch-fold" min="0" max="12" step="1" value="${escAttr(String(Number.isFinite(Number(ch.menuFold)) ? Number(ch.menuFold) : 0))}" class="input mb" title="מעבר למספר הזה הפריטים מתקפלים תחת &quot;עוד&quot; — בלי JavaScript, נפתח בלחיצה">
+          <label class="field-label" for="th-ch-collapse">מתי התפריט הופך למגירה ☰</label>
+          <select id="th-ch-collapse" class="input mb">
+            ${opt('sm', 'רק בטלפון (עד 560px)', ch.menuCollapse === 'sm')}
+            ${opt('md', 'טלפון וטאבלט צר (עד 720px) — ברירת מחדל', !ch.menuCollapse || ch.menuCollapse === 'md')}
+            ${opt('lg', 'גם בטאבלט (עד 1024px)', ch.menuCollapse === 'lg')}
+            ${opt('never', 'אף פעם — תמיד שורה', ch.menuCollapse === 'never')}
+          </select>
+          <label class="field-label" for="th-ch-current">סימון הדף הנוכחי</label>
+          <select id="th-ch-current" class="input mb">
+            ${opt('underline', 'קו תחתון (ברירת מחדל)', !ch.menuCurrent || ch.menuCurrent === 'underline')}
+            ${opt('pill', 'גלולה (רקע מעוגל)', ch.menuCurrent === 'pill')}
+            ${opt('bold', 'מודגש בצבע הראשי', ch.menuCurrent === 'bold')}
+            ${opt('none', 'בלי סימון', ch.menuCurrent === 'none')}
+          </select>
+          <p id="th-nav-fit" class="hint">${escAttr(navFitLine(settings.menuFit))}</p>
+          <a href="/admin/menus#organizer">🧭 סדרו את התפריט עם ה-AI</a>
         </section>
         <section class="card">
           <h3 class="sub-head">🧵 עור — CSS חופשי על השלד</h3>

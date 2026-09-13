@@ -1,0 +1,5 @@
+<bent-theme name="חם" version="2">
+  <bent-colors primary="#ea580c" bg="#fffbf7" />
+  <bent-layout max-width="920px" menu="top" />
+  <bent-menu-layout fold="6" width="wide" />
+</bent-theme>

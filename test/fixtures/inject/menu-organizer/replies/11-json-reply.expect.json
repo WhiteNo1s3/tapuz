@@ -1,0 +1,32 @@
+{
+  "itemCount": 7,
+  "items": [
+    {
+      "label": "הבית",
+      "type": "page",
+      "target": "home"
+    },
+    {
+      "label": "הבונה"
+    },
+    {
+      "label": "השפה"
+    },
+    {
+      "label": "כלים",
+      "type": "custom",
+      "url": "#"
+    }
+  ],
+  "warningCodes": [
+    "JSON_FALLBACK"
+  ],
+  "notes": [
+    "JSON_FALLBACK"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING"
+  ],
+  "hard": false
+}

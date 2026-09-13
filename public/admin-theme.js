@@ -9,7 +9,9 @@
   var formIds = ['th-title', 'th-font', 'th-font-heading', 'th-font-google', 'th-font-size', 'th-maxw', 'th-menu-place',
     'th-logo-type', 'th-logo-text', 'th-logo-image', 'th-desc', 'th-radius', 'th-shadow', 'th-accent', 'th-buttons',
     'th-bg-kind', 'th-bg-angle', 'th-ch-hover', 'th-ch-hovercolor', 'th-ch-weight', 'th-ch-glass', 'th-ch-headerbg',
-    'th-ch-headertext', 'th-ch-footerbg', 'th-ch-footertext', 'th-skin-note', 'th-skin-css'];
+    'th-ch-headertext', 'th-ch-footerbg', 'th-ch-footertext', 'th-skin-note', 'th-skin-css',
+    'th-header-width', 'th-ch-overflow', 'th-ch-align', 'th-ch-gap', 'th-ch-size',
+    'th-ch-fold', 'th-ch-collapse', 'th-ch-current'];
 
   function $(id) { return document.getElementById(id); }
   function val(id, fallback) {
@@ -81,6 +83,13 @@
     return val('th-font-google').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
   }
 
+  /** The fold knob as the number the model stores: 0–12, 0 when blank. */
+  function foldValue() {
+    var n = parseInt(val('th-ch-fold', '0'), 10);
+    if (isNaN(n)) n = 0;
+    return Math.max(0, Math.min(12, n));
+  }
+
   function payload() {
     return {
       siteTitle: val('th-title'),
@@ -108,7 +117,8 @@
         },
         layout: {
           maxWidth: val('th-maxw', '900px') || '900px',
-          menuPlacement: val('th-menu-place', 'top') || 'top'
+          menuPlacement: val('th-menu-place', 'top') || 'top',
+          headerWidth: val('th-header-width', 'wide') || 'wide'
         },
         background: {
           kind: val('th-bg-kind', 'solid') || 'solid',
@@ -123,7 +133,16 @@
           headerBg: val('th-ch-headerbg'),
           headerText: val('th-ch-headertext'),
           footerBg: val('th-ch-footerbg'),
-          footerText: val('th-ch-footertext')
+          footerText: val('th-ch-footertext'),
+          // the menu's geometry (v2.28)
+          menuOverflow: val('th-ch-overflow', 'wrap') || 'wrap',
+          menuAlign: val('th-ch-align', 'start') || 'start',
+          menuGap: val('th-ch-gap', 'md') || 'md',
+          menuSize: val('th-ch-size', 'md') || 'md',
+          // v2.28b — the fold ("עוד"), the drawer point, the current-page mark
+          menuFold: foldValue(),
+          menuCollapse: val('th-ch-collapse', 'md') || 'md',
+          menuCurrent: val('th-ch-current', 'underline') || 'underline'
         },
         skin: {
           css: val('th-skin-css'),
@@ -448,6 +467,14 @@
     setValue('th-ch-headertext', ch.headerText);
     setValue('th-ch-footerbg', ch.footerBg);
     setValue('th-ch-footertext', ch.footerText);
+    setValue('th-ch-overflow', ch.menuOverflow || 'wrap');
+    setValue('th-ch-align', ch.menuAlign || 'start');
+    setValue('th-ch-gap', ch.menuGap || 'md');
+    setValue('th-ch-size', ch.menuSize || 'md');
+    setValue('th-ch-fold', ch.menuFold != null ? ch.menuFold : 0);
+    setValue('th-ch-collapse', ch.menuCollapse || 'md');
+    setValue('th-ch-current', ch.menuCurrent || 'underline');
+    setValue('th-header-width', (o.layout || {}).headerWidth || 'wide');
     var skin = Object.assign({ css: '', note: '' }, o.skin || {});
     setValue('th-skin-css', skin.css);
     setValue('th-skin-note', skin.note);
@@ -507,6 +534,14 @@
       // the form shows what was actually saved
       if (d.overrides && d.overrides.skin && $('th-skin-css') && $('th-skin-css').value !== d.overrides.skin.css) $('th-skin-css').value = d.overrides.skin.css;
       if (d.overrides && d.overrides.fonts && $('th-font-google')) $('th-font-google').value = (d.overrides.fonts.google || []).join(', ');
+      // the door may have reset a menu knob — the form shows what was saved,
+      // and the capacity hint speaks for the knobs that are now live
+      if (d.overrides && d.overrides.chrome) {
+        setValue('th-ch-fold', d.overrides.chrome.menuFold != null ? d.overrides.chrome.menuFold : 0);
+        setValue('th-ch-collapse', d.overrides.chrome.menuCollapse || 'md');
+        setValue('th-ch-current', d.overrides.chrome.menuCurrent || 'underline');
+      }
+      showNavFit(d.menuFit);
       var w = d.warnings && d.warnings.length ? ' · ' + d.warnings.join(' · ') : '';
       // every save rebuilds the site on the server (the live pages are the
       // static export, served before the renderer — a save that did not
@@ -539,11 +574,35 @@
     overrides.fonts.family = DEFAULT_FONT;
     overrides.fonts.baseSize = '17px';
     overrides.fonts.google = [];
-    overrides.layout = { maxWidth: '900px', menuPlacement: 'top' };
+    overrides.layout = { maxWidth: '900px', menuPlacement: 'top', headerWidth: 'wide' };
     overrides.background = { kind: 'solid', angle: 160 };
     overrides.skin = { css: '', note: '' };
+    // the menu's geometry (v2.28) back to what the theme css does untouched
+    overrides.chrome = Object.assign({}, overrides.chrome || {}, {
+      menuOverflow: 'wrap', menuAlign: 'start', menuGap: 'md', menuSize: 'md',
+      menuFold: 0, menuCollapse: 'md', menuCurrent: 'underline'
+    });
     api('/admin/api/theme', { overrides: overrides }).then(function () { location.reload(); });
   };
+
+  // ── the capacity hint (v2.28b) — how the main menu fits under the knobs ──
+  // Same words as the server renders into #th-nav-fit (routes/theme.js
+  // navFitLine); refreshed from GET /admin/api/theme at load and from the
+  // save response, which carries the estimate for the knobs just saved.
+  function navFitLine(fit) {
+    if (!fit || !fit.itemsPx) return '';
+    var rows = fit.rowsNow === 1 ? 'היום שורה אחת ✓' : 'היום ' + fit.rowsNow + ' שורות';
+    return 'בתפריט הראשי ' + fit.itemsPx.length + ' פריטים · בשורה אחת נכנסים ~' + fit.capacity + ' · ' + rows;
+  }
+  function showNavFit(fit) {
+    var el = $('th-nav-fit');
+    var line = navFitLine(fit);
+    if (el && line) el.textContent = line;
+  }
+  function refreshNavFit() {
+    if (!$('th-nav-fit')) return;
+    fetch('/admin/api/theme').then(function (r) { return r.json(); }).then(function (d) { showNavFit(d.menuFit); }).catch(function () {});
+  }
 
   // ── Theme package import (v0.99 → v2.24 tolerant + file picker) ──
   var importFile = $('th-import-file');
@@ -810,6 +869,7 @@
   };
 
   fxCurrent();
+  refreshNavFit();
   renderLooks();
   // the canvas opens on the live theme (what the form holds right now)
   canvasShow('הערכה החיה', {});

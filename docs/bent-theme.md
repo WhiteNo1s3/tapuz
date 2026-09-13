@@ -16,7 +16,9 @@
   <bent-background kind="lines" angle="135" />
   <bent-chrome menu-hover="underline" menu-hover-color="" menu-weight="normal"
                header-bg="" header-text="" header-glass="false"
-               footer-bg="#292524" footer-text="#dccbb0" />
+               footer-bg="#292524" footer-text="#dccbb0"
+               menu-overflow="wrap" menu-align="start" menu-gap="md" menu-size="md"
+               menu-fold="0" menu-collapse="md" menu-current="underline" />
   <bent-skin note="קווים כפולים">
     <style>
 .site-header { border-bottom: 3px double var(--color-border); }
@@ -44,16 +46,38 @@
 | `bent-colors` | `primary secondary text muted border bg light-bg surface` | hex. `text` על `bg` ועל `surface` — ניגודיות ≥ 4.5 |
 | `bent-fonts` | `family heading base-size google` | `google` = משפחות Google Fonts (עברית) מופרדות בפסיק; כל גופן שב-`family`/`heading` חייב להופיע בו |
 | `bent-style` | `radius=sharp\|soft\|round` `shadow=flat\|soft\|deep` `accent=solid\|gradient` `buttons=filled\|outline\|soft\|glow` | |
-| `bent-layout` | `max-width` `menu=top\|side` | |
+| `bent-layout` | `max-width` `menu=top\|side` `header-width=content\|wide\|full` | `header-width`: כרוחב התוכן · 1140px (ברירת מחדל) · מקצה לקצה |
 | `bent-background` | `kind=solid\|gradient\|glow\|dots\|grid\|lines` `angle` | תבניות נצבעות מהפלטה |
-| `bent-chrome` | `menu-hover=color\|underline\|pill\|glow` `menu-hover-color` `menu-weight=normal\|bold` `header-bg` `header-text` `header-glass=true\|false` `footer-bg` `footer-text` | ריק = ברירת המחדל |
-| `bent-skin` | `note` + `<style>` | CSS חופשי על השלד (`.site-header`, `.main-nav a`, `.hero`, `.btn-primary`, `.card`, `.bent-*`, `.site-footer`) |
+| `bent-chrome` | `menu-hover=color\|underline\|pill\|glow` `menu-hover-color` `menu-weight=normal\|bold` `header-bg` `header-text` `header-glass=true\|false` `footer-bg` `footer-text` `menu-overflow=wrap\|scroll\|drawer` `menu-align=start\|center\|end\|between` `menu-gap=sm\|md\|lg` `menu-size=sm\|md\|lg` `menu-fold=0..12` `menu-collapse=sm\|md\|lg\|never` `menu-current=underline\|pill\|bold\|none` | ריק = ברירת המחדל; התפריט — ראו למטה |
+| `bent-skin` | `note` + `<style>` | CSS חופשי על השלד (`.site-header`, `.main-nav a`, `.main-nav .sub-menu`, `.nav-more-sum`, `.nav-burger`, `body.menu-side`, `.hero`, `.btn-primary`, `.card`, `.bent-*`, `.site-footer`) |
 | `bent-effect` | `note` + `<style>` + `<script>` | ה-JS מקומפל לפני שהוא נקלט; רץ מוגן על האתר |
 | `bent-canvas` | — | הבנץ׳: מודולי `bent-*` (הדקדוק המלא ב-[SYNTAX-DICTIONARY.md](SYNTAX-DICTIONARY.md)); נשמר לצד הערכה, לא בתוכה |
 
 כל מקטע אופציונלי; מקטע חסר משאיר את ברירת המחדל. הפרסר סלחני
 (מירכאות בודדות/כפולות, שמות kebab או camel, כל סדר, פרוזה או fence מסביב),
 והסריאליזציה דטרמיניסטית — `serialize(parse(doc)) === doc`.
+
+## התפריט — הידיות על `bent-chrome` (v2.28)
+
+התפריט נשאר CSS בלבד (בלי JavaScript בדפים): המגירה היא checkbox, תפריטי
+המשנה נפתחים ב-`:hover`/`:focus-within`, והקיפול הוא `<details>`.
+
+| מאפיין | ערכים | מה זה |
+|---|---|---|
+| `menu-fold` | `0..12` | כמה פריטים עליונים לפני קיפול "עוד" (`<details>`); `0` = בלי, `1` = בלי (קיפול מסתיר שניים ומעלה) |
+| `menu-collapse` | `sm\|md\|lg\|never` | מאיזה רוחב מסך התפריט הופך למגירה ☰ — 560px · 720px (ברירת מחדל) · 1024px · אף פעם |
+| `menu-current` | `underline\|pill\|bold\|none` | איך הדף הנוכחי מסומן (`aria-current="page"`) |
+
+ערך לא מוכר מוחזר לברירת המחדל עם הערה בעברית (`warnings`) — אותו
+מאמת (`theme.knobsToOverrides`) משרת גם את מסדר/ת התפריטים
+(`<bent-menu-layout>`, [bent-menus.md](bent-menus.md)). בסטודיו: השורה
+"בתפריט הראשי N פריטים · בשורה אחת נכנסים ~C" ליד הידיות באה מ-`estimateMenuFit`.
+
+השלד שהעור יכול להלביש בתפריט: `.main-nav a` (הקישורים; כל כלל ריחוף/משקל/צבע
+של הכותרת חל גם על `.nav-more-sum`), `.main-nav .sub-menu` (תפריט משנה),
+`.nav-more-sum` (כפתור "עוד" — ה-`summary` של הקיפול), `.nav-burger` (☰ במסכים
+צרים), `body.menu-side` (מצב מסילה צדית). משתני CSS: `--menu-gap`, `--menu-size`,
+`--menu-align`, `--header-max-width`.
 
 ## שורות (`bent-columns`)
 

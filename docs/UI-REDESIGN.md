@@ -16,7 +16,7 @@ rebuilt into our code, never copied.
 | D | **Visible cancel** — undo/redo labeled in the topbar; destructive ops raise a toast with an inline ↩ בטל button; Escape closes drawers, then clears selection. | `admin-builder.js` |
 | E | **Toolbox folds** — categories are `<details>` folds closed by default (first open), tool-count pills, family accent colors aligned with the admin nav, search that cuts across; selecting a block unfolds its family. | `server.js` toolbox gen, `admin.css`, `admin-builder.js` |
 | F | **Container-as-tool** — SECTION graduated from RESERVED. The מיכל block: a container that is legitimate empty, publishes as sized blank space (sm–xl), gets filled in a future release. **Delete = soft erase**: the tool goes, the shape stays (an empty מיכל holds the spot); deleting the empty מיכל removes it. | 8 layers: pzn registry, keywords, bridge, renderer, block-registry, blocks, builder, theme CSS |
-| G | **Menu manager v2** — menus are named entities (create/rename/delete); main/footer are *locations* that get a menu assigned (`menu_locations`, `getMenuForLocation`); nesting UI (indent/outdent/sub-item) feeding the `<ul class="sub-menu">` rendering the site already had. | `src/menus.js`, `admin-menus.js`, routes |
+| G | **Menu manager v2** — menus are named entities (create/rename/delete); main/footer are *locations* that get a menu assigned (`menu_locations`, `getMenuForLocation`); nesting UI (indent/outdent/sub-item) feeding the `<ul class="sub-menu">` rendering — which since v2.28 the theme actually styles (hover/focus dropdowns, inline in the rail and the drawer; see docs/bent-menus.md). | `src/menus.js`, `admin-menus.js`, routes |
 
 ## Design tokens (the short version)
 

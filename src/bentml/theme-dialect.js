@@ -55,11 +55,15 @@ const SECTIONS = {
   colors: ['primary', 'secondary', 'text', 'muted', 'border', 'bg', ['light-bg', 'lightBg'], 'surface'],
   fonts: ['family', ['heading', 'headingFamily'], ['base-size', 'baseSize'], 'google'],
   style: ['radius', 'shadow', 'accent', 'buttons'],
-  layout: [['max-width', 'maxWidth'], ['menu', 'menuPlacement']],
+  layout: [['max-width', 'maxWidth'], ['menu', 'menuPlacement'], ['header-width', 'headerWidth']],
   background: ['kind', 'angle'],
   chrome: [['menu-hover', 'menuHover'], ['menu-hover-color', 'menuHoverColor'], ['menu-weight', 'menuWeight'],
     ['header-bg', 'headerBg'], ['header-text', 'headerText'], ['header-glass', 'headerGlass'],
-    ['footer-bg', 'footerBg'], ['footer-text', 'footerText']]
+    ['footer-bg', 'footerBg'], ['footer-text', 'footerText'],
+    // the menu's geometry (v2.28)
+    ['menu-overflow', 'menuOverflow'], ['menu-align', 'menuAlign'], ['menu-gap', 'menuGap'], ['menu-size', 'menuSize'],
+    // v2.28b — the fold ("עוד"), the drawer breakpoint, the current-page mark
+    ['menu-fold', 'menuFold'], ['menu-collapse', 'menuCollapse'], ['menu-current', 'menuCurrent']]
 };
 
 function pairs(section) {
@@ -102,7 +106,9 @@ function parseAttrs(tagOpen) {
 /** Every `<bent-name …>…</bent-name>` (or self-closed) in source, in order. */
 function findAllSections(source, name) {
   const out = [];
-  const re = new RegExp('<bent-' + name + '\\b([^>]*)>', 'gi');
+  // the name must END here: `\b` would let a search for "menu" open on
+  // <bent-menu-layout> (v2.28 — the menu dialect has such siblings)
+  const re = new RegExp('<bent-' + name + '(?=[\\s/>])([^>]*)>', 'gi');
   let m;
   while ((m = re.exec(source))) {
     const open = m[0];
@@ -161,6 +167,10 @@ function parseRoot(root) {
       if (key === 'google') out.google = String(v).split(',').map((s) => s.trim()).filter(Boolean);
       else if (key === 'headerGlass') out.headerGlass = /^(true|1|yes|on)$/i.test(v);
       else if (key === 'angle') out.angle = Number(v) || 160;
+      // menu-fold is a count: a numeric value becomes the Number the model
+      // stores; anything else is kept as written so the door can NAME it
+      // in its warning ("all" reads better than "NaN") before resetting it
+      else if (key === 'menuFold') out.menuFold = /^\s*-?\d+\s*$/.test(v) ? Number(v) : String(v);
       else out[key] = String(v);
     }
     if (Object.keys(out).length) overrides[section] = out;

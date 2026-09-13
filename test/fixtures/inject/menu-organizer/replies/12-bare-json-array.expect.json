@@ -1,0 +1,14 @@
+{
+  "itemCount": 10,
+  "warningCodes": [
+    "JSON_FALLBACK"
+  ],
+  "notes": [
+    "JSON_FALLBACK"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING"
+  ],
+  "hard": false
+}

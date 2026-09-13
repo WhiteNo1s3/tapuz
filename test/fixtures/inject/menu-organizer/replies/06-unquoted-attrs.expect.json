@@ -1,0 +1,38 @@
+{
+  "itemCount": 7,
+  "items": [
+    {
+      "label": "הבית",
+      "type": "page",
+      "target": "home"
+    },
+    {
+      "label": "הבונה"
+    },
+    {
+      "label": "השפה"
+    },
+    {
+      "label": "כלים",
+      "type": "custom",
+      "url": "#",
+      "children": [
+        {
+          "label": "בינה",
+          "target": "הבינה"
+        },
+        {
+          "label": "לקוחות",
+          "target": "הלקוחות"
+        }
+      ]
+    }
+  ],
+  "warningCodes": [],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "OVERFLOW_LIKELY"
+  ],
+  "notes": [],
+  "hard": false
+}

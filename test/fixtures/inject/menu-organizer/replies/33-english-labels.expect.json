@@ -1,0 +1,13 @@
+{
+  "fixture": "english-ltr",
+  "itemCount": 7,
+  "warningCodes": [],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING",
+    "OVERFLOW_LIKELY",
+    "NO_CHANGE"
+  ],
+  "notes": [],
+  "hard": false
+}

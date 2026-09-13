@@ -1,0 +1,19 @@
+<bent-menus version="1" note="קיבצנו את הכלים והדוגמאות כדי להיכנס בשורה">
+  <bent-menu name="main" location="main">
+    <bent-link title="הבית" slug="home" />
+    <bent-link title="הבונה" slug="הבונה" />
+    <bent-link title="השפה" slug="השפה" />
+    <bent-link title="כלים">
+      <bent-link title="AI בלי מונה" slug="הבינה" />
+      <bent-link title="ה-CRM" slug="הלקוחות" />
+    </bent-link>
+    <bent-link title="היסודות" slug="היסודות" />
+    <bent-link title="דוגמאות">
+      <bent-link title="השוואות" slug="השוואות" />
+      <bent-link title="חלון ראווה" slug="חלון-ראווה" />
+      <bent-link title="כל המודולים" slug="showcase-modules" />
+    </bent-link>
+    <bent-link title="צרו קשר" slug="צרו-קשר" />
+    <bent-link title="גוגל" href="https://google.com" />
+  </bent-menu>
+</bent-menus>

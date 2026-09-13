@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Tapuziel Bridge V2 (alpha)",
-  "version": "0.2.0",
-  "description": "מגשר בין תפוזיאל ל-LM Studio שרץ על המחשב שלך. המודל נשאר מקומי — שום דבר לא נחשף לאינטרנט, ואין פה מפתחות API בכלל.",
+  "version": "0.4.0",
+  "description": "מגשר בין תפוזיאל — גם כשהוא מאוחסן בענן — ל-LM Studio שרץ על המחשב שלך. המודל נשאר מקומי, ואין פה מפתחות API בכלל.",
   "permissions": [
     "storage",
-    "scripting"
+    "scripting",
+    "activeTab"
   ],
   "host_permissions": [
     "http://localhost/*",

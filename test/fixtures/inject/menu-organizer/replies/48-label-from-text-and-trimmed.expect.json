@@ -1,0 +1,17 @@
+{
+  "itemCount": 7,
+  "warningCodes": [
+    "LABEL_FROM_TEXT",
+    "LABEL_TRIMMED"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "NO_CHANGE",
+    "PAGES_MISSING"
+  ],
+  "notes": [
+    "LABEL_FROM_TEXT",
+    "LABEL_TRIMMED"
+  ],
+  "hard": false
+}

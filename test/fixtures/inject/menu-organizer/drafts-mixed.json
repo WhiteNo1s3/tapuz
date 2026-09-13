@@ -1,0 +1,137 @@
+{
+  "config": {
+    "title": "חוות הזית",
+    "description": "שמן זית כתית מהגליל",
+    "logo": {
+      "type": "text",
+      "text": "חוות הזית"
+    },
+    "header": {
+      "ctaLabel": "",
+      "tagline": ""
+    },
+    "homepage": "home"
+  },
+  "overrides": {
+    "layout": {
+      "maxWidth": "900px"
+    },
+    "fonts": {
+      "baseSize": "17px"
+    }
+  },
+  "pages": [
+    {
+      "full_path": "home",
+      "title": "דף הבית",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "about",
+      "title": "הסיפור שלנו",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "shop",
+      "title": "החנות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "visit",
+      "title": "ביקור בחווה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "recipes",
+      "title": "מתכונים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "contact",
+      "title": "צור קשר",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "wholesale",
+      "title": "סיטונאות",
+      "status": "draft",
+      "tags": []
+    },
+    {
+      "full_path": "events",
+      "title": "אירועים",
+      "status": "draft",
+      "tags": []
+    },
+    {
+      "full_path": "press",
+      "title": "כתבו עלינו",
+      "status": "draft",
+      "tags": []
+    },
+    {
+      "full_path": "privacy",
+      "title": "פרטיות",
+      "status": "draft",
+      "tags": []
+    }
+  ],
+  "menus": {
+    "main": [
+      {
+        "label": "דף הבית",
+        "type": "custom",
+        "url": "/"
+      },
+      {
+        "label": "הסיפור שלנו",
+        "type": "page",
+        "target": "about"
+      },
+      {
+        "label": "החנות",
+        "type": "page",
+        "target": "shop"
+      },
+      {
+        "label": "אירועים",
+        "type": "page",
+        "target": "events"
+      },
+      {
+        "label": "צור קשר",
+        "type": "page",
+        "target": "contact"
+      }
+    ],
+    "footer": []
+  },
+  "locations": {
+    "main": "main",
+    "footer": "footer"
+  },
+  "brief": "",
+  "expect": {
+    "placement": "top",
+    "mustPlace": [
+      "home",
+      "about",
+      "shop",
+      "visit",
+      "recipes",
+      "contact"
+    ],
+    "mustNotPlace": [
+      "wholesale",
+      "events",
+      "press",
+      "privacy"
+    ]
+  }
+}

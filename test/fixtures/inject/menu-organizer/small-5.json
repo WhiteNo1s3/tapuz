@@ -1,0 +1,92 @@
+{
+  "config": {
+    "title": "סטודיו נועה",
+    "description": "עיצוב פנים בתל אביב",
+    "logo": {
+      "type": "text",
+      "text": "סטודיו נועה"
+    },
+    "header": {
+      "ctaLabel": "",
+      "tagline": ""
+    },
+    "homepage": "home"
+  },
+  "overrides": {
+    "layout": {
+      "maxWidth": "900px"
+    },
+    "fonts": {
+      "baseSize": "17px"
+    }
+  },
+  "pages": [
+    {
+      "full_path": "home",
+      "title": "דף הבית",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "about",
+      "title": "אודות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services",
+      "title": "שירותים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "gallery",
+      "title": "גלריה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "contact",
+      "title": "צור קשר",
+      "status": "published",
+      "tags": []
+    }
+  ],
+  "menus": {
+    "main": [
+      {
+        "label": "דף הבית",
+        "type": "custom",
+        "url": "/"
+      },
+      {
+        "label": "אודות",
+        "type": "page",
+        "target": "about"
+      },
+      {
+        "label": "שירותים",
+        "type": "page",
+        "target": "services"
+      }
+    ],
+    "footer": []
+  },
+  "locations": {
+    "main": "main",
+    "footer": "footer"
+  },
+  "brief": "",
+  "expect": {
+    "placement": "top",
+    "maxTop": 5,
+    "mustPlace": [
+      "home",
+      "about",
+      "services",
+      "gallery",
+      "contact"
+    ],
+    "mustNotPlace": []
+  }
+}

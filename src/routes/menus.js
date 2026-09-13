@@ -12,9 +12,15 @@
 const express = require('express');
 const menusLib = require('../menus');
 const { loadMenus, saveMenus, saveMenu } = menusLib;
-const { layout, adminNav, accentFor, jsonForScript } = require('../admin-ui');
+const { layout, adminNav, accentFor, jsonForScript, escapeAdmin } = require('../admin-ui');
+const { requireAdmin } = require('../admin-guard');
 
 const router = express.Router();
+
+/** The status + code a door refusal deserves (a bad reply is not a 500). */
+function refuse(res, e) {
+  return res.status(400).json({ ok: false, error: e.message, code: e.code || '' });
+}
 
 router.get('/admin/api/menus', (req, res) => {
   try {
@@ -32,6 +38,94 @@ router.post('/admin/api/menus', (req, res) => {
     res.json({ ok: true, menus, locations });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// ── the organizer's layer (v2.28) — capacity, export, backups, preview ──
+// Registered BEFORE the `:name` writers so `restore`/`preview` are never
+// mistaken for a menu called "restore".
+
+router.get('/admin/api/menus/fit', (req, res) => {
+  try {
+    const theme = require('../theme');
+    const { loadConfig } = require('../config');
+    const fit = menusLib.estimateMenuFit(menusLib.getMenuForLocation('main'), theme.loadOverrides(), loadConfig());
+    res.json({ ok: true, fit });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.get('/admin/api/menus/export.bent', (req, res) => {
+  try {
+    const theme = require('../theme');
+    const { serializeMenus } = require('../bentml/menu-dialect');
+    const text = serializeMenus({ knobs: theme.menuKnobs(theme.loadOverrides()), menus: loadMenus(), locations: menusLib.getMenuLocations() });
+    res.type('text/plain; charset=utf-8').send(text);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.get('/admin/api/menus/backups', (req, res) => {
+  try {
+    res.json({ ok: true, backups: menusLib.listMenuBackups() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/menus/restore', requireAdmin, (req, res) => {
+  try {
+    const id = String((req.body || {}).backupId || '').trim();
+    if (!id) return res.status(400).json({ ok: false, error: 'חסר backupId' });
+    const out = menusLib.restoreMenuBackup(id);
+    const rebuildError = require('../rebuild').rebuildSite('menu restore');
+    res.json({ ok: true, menus: out.menus, locations: out.locations, rebuildError });
+  } catch (e) {
+    res.status(e.code === 'NO_BACKUP' ? 404 : 400).json({ ok: false, error: e.message, code: e.code || '' });
+  }
+});
+
+// a candidate document → its preview (tree, diff, fit, an iframe url); never writes
+router.post('/admin/api/menus/preview', (req, res) => {
+  try {
+    const org = require('../menu-organizer');
+    const b = req.body || {};
+    const reply = typeof b.reply === 'string' ? b.reply : '';
+    if (!reply.trim()) return res.status(400).json({ ok: false, error: 'חסר מסמך תפריטים (reply)' });
+    let r;
+    try { r = org.parseMenuReply(reply, org.siteStateForMenus(), { brief: String(b.brief || '') }); } catch (e) { return refuse(res, e); }
+    res.json({ ok: true, preview: r.preview, warnings: r.warnings, warningTexts: r.warningTexts, notes: r.notes, hard: r.hard });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// the real header with a CANDIDATE menu set (registered by the organizer's
+// preview), framed by /admin/menus — same headers as /admin/theme/preview/:id.
+// An unknown id shows the live menus, so the frame is never blank.
+router.get('/admin/menus/preview/:id', (req, res) => {
+  try {
+    const org = require('../menu-organizer');
+    const themeLib = require('../theme');
+    const { loadConfig } = require('../config');
+    const { listPages, getPageByFullPath } = require('../pages');
+    const entry = org.getMenuPreview(req.params.id);
+    const overrides = (entry && entry.overrides) || themeLib.loadOverrides();
+    const config = loadConfig();
+    const published = listPages().filter((p) => p.status === 'published');
+    const homePath = require('../seo').resolveHomePath(published.map((p) => getPageByFullPath(p.full_path) || p), config.homepage);
+    const page = (homePath && getPageByFullPath(homePath)) || (published[0] && getPageByFullPath(published[0].full_path)) || null;
+    if (!page) {
+      return res.status(200).type('html').send('<!DOCTYPE html><html lang="he" dir="rtl"><body style="font-family:system-ui;padding:2rem;color:#475569">אין עדיין דף מפורסם להציג — פרסמו דף אחד והתצוגה תתמלא.</body></html>');
+    }
+    const html = require('../renderer').renderPage(page, { overrides, menus: entry ? entry.menus : undefined, siteTitle: config.title, isHome: true });
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'self'");
+    res.type('html').send(html);
+  } catch (e) {
+    res.status(500).type('html').send('<!DOCTYPE html><html lang="he" dir="rtl"><body style="font-family:system-ui;padding:2rem;color:#b91c1c">שגיאה בתצוגה המקדימה: ' + escapeAdmin(e.message) + '</body></html>');
   }
 });
 
@@ -81,10 +175,16 @@ router.get('/admin/menus', (req, res) => {
       .menu-row.child-row { margin-inline-start:26px; background:var(--ws-well); }
       .editor-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
       .editor-head h3 { margin:0; flex:1; }
+      .editor-head #menu-fit { flex-basis:100%; margin:0; font-size:.85rem; color:var(--ws-muted); }
       .mini-btn { padding:5px 10px; font-size:.8rem; }
+      #organizer { margin-bottom:20px; }
+      #menu-restore { padding:8px 10px; border:1.5px solid var(--ws-border-strong); border-radius:7px; font:inherit;
+        background:var(--ws-panel); color:var(--ws-text); max-width:320px; }
     </style>
     <div class="container page-body" style="max-width:1020px">
       <p class="lead">תפריטים הם ישויות עם שם — צרו כמה שתרצו, קננו תתי־פריטים, ושייכו תפריט לכל מיקום באתר. כמו בוורדפרס, רק בלי הכאב.</p>
+      <!-- the Menu Organizer injection card (v2.28) — mounted by /admin-inject-card.js -->
+      <section class="card" id="organizer" data-inject="menu-organizer"></section>
       <div class="menus-wrap">
         <aside class="menus-side card">
           <div class="side-title">התפריטים שלי</div>
@@ -99,12 +199,14 @@ router.get('/admin/menus', (req, res) => {
             <h3 id="editor-title">תפריט</h3>
             <button type="button" class="btn secondary mini-btn" id="menu-rename">שנה שם</button>
             <button type="button" class="btn secondary mini-btn" id="menu-delete">מחק תפריט</button>
+            <p id="menu-fit" class="hint"></p>
           </div>
           <div id="menu-items" class="menu-editor"></div>
           <button type="button" class="btn secondary" style="margin-top:10px" id="menu-add-item">+ פריט</button>
         </section>
       </div>
-      <div style="margin:24px 0 0;display:flex;gap:10px;justify-content:flex-end">
+      <div style="margin:24px 0 0;display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
+        <select id="menu-restore" title="שחזור תפריטים מגיבוי" aria-label="שחזור מגיבוי"><option value="">↩ שחזור</option></select>
         <button type="button" class="btn" id="menu-save">שמור תפריטים</button>
         <button type="button" class="btn publish" id="menu-save-build">שמור + בנה</button>
       </div>
@@ -114,6 +216,24 @@ router.get('/admin/menus', (req, res) => {
       window.__TAPUZ_MENU_LOCATIONS__ = ${jsonForScript(locations)};
     </script>
     <script src="/admin-menus.js"></script>
+    <!-- the owner's own model, reached through their browser (Bridge V2) —
+         a hosted CMS cannot call LM Studio on their PC, but the page can -->
+    <script src="/admin-bridge.js"></script>
+    <script src="/admin-inject-card.js"></script>
+    <script>
+      // the card is optional at runtime: without its script the editor still works
+      (function () {
+        var el = document.getElementById('organizer');
+        if (!el) return;
+        if (window.TapuzInjectCard && typeof window.TapuzInjectCard.mount === 'function') {
+          window.TapuzInjectCard.mount(el, 'menu-organizer', {
+            onApplied: function (r) { if (window.tapuzMenusReload) window.tapuzMenusReload(r); }
+          });
+        } else {
+          el.hidden = true;
+        }
+      })();
+    </script>
   `;
   res.send(layout(html, 'תפריטים', accentFor('menus')));
 });

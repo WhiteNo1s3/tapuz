@@ -35,14 +35,23 @@ const cssOf = (chrome) => theme.overridesToCss({ chrome });
 
 check('default chrome emits NO chrome rules (a fresh site is unchanged)',
   cssOf({}).indexOf('.main-nav a:hover') === -1 && cssOf({}).indexOf('.site-footer {') === -1);
-check('underline hover → inset box-shadow in the hover color',
-  /\.main-nav a:hover \{ color: #123456; box-shadow: inset 0 -2px 0 #123456/.test(cssOf({ menuHover: 'underline', menuHoverColor: '#123456' })));
+// v2.28b: the fold's <summary class="nav-more-sum"> ("עוד") is not an <a>
+// but sits in the same row — every menu-link rule dresses it too
+check('underline hover → inset box-shadow in the hover color (links AND the fold summary)',
+  /\.main-nav a:hover, \.main-nav \.nav-more-sum:hover \{ color: #123456; box-shadow: inset 0 -2px 0 #123456/.test(cssOf({ menuHover: 'underline', menuHoverColor: '#123456' })));
 check('pill hover → rounded padding + color-mix background',
   /border-radius: 999px/.test(cssOf({ menuHover: 'pill' })) && /color-mix\(in srgb, #ea580c 14%/.test(cssOf({ menuHover: 'pill' })));
 check('glow hover → text-shadow', /text-shadow: 0 0 12px/.test(cssOf({ menuHover: 'glow' })));
 check('hover color falls back to the PRIMARY color when unset',
   cssOf({ menuHover: 'glow' }).indexOf('#ea580c') !== -1);
-check('bold menu weight emits', /\.main-nav a \{ font-weight: 700/.test(cssOf({ menuWeight: 'bold' })));
+check('bold menu weight emits (links AND the fold summary)', /\.main-nav a, \.main-nav \.nav-more-sum \{ font-weight: 700/.test(cssOf({ menuWeight: 'bold' })));
+check('pill / glow / colour hover and the header text colour reach the fold summary too',
+  /\.main-nav a, \.main-nav \.nav-more-sum \{ padding: 5px 12px; border-radius: 999px/.test(cssOf({ menuHover: 'pill' })) &&
+  /\.main-nav a:hover, \.main-nav \.nav-more-sum:hover \{ color: #ea580c; text-shadow/.test(cssOf({ menuHover: 'glow' })) &&
+  /\.main-nav a:hover, \.main-nav \.nav-more-sum:hover \{ color: #123456; \}/.test(cssOf({ menuHover: 'color', menuHoverColor: '#123456' })) &&
+  /\.site-header \.main-nav a, \.site-header \.main-nav \.nav-more-sum, \.site-header \.site-tagline \{ color: #ffffff/.test(cssOf({ headerText: '#ffffff' })));
+check('the fold / collapse / current knobs emit NO css of their own (fold is markup, the rest are body classes)',
+  cssOf({ menuFold: 4, menuCollapse: 'lg', menuCurrent: 'pill' }) === cssOf({}));
 check('header bg + glass emit (glass blurs over the chosen bg)',
   /\.site-header \{ background: #222222/.test(cssOf({ headerBg: '#222222' })) &&
   /backdrop-filter: blur/.test(cssOf({ headerGlass: true })) &&
@@ -87,6 +96,14 @@ check('editor save updates what it sends (colors, chrome)',
   after.colors.primary === '#166534' && after.chrome.menuHover === 'underline');
 check('editor save PRESERVES the effect it does not send (the v2.22 wipe bug)',
   after.effects.js === '(function(){})();' && after.effects.css === '.fx{}');
+
+// ── v2.28b: the menu knobs go through ONE validator at the save door ──
+const knobSave = theme.saveThemeSettings({ overrides: { chrome: { menuCurrent: 'rainbow', menuFold: '99', menuCollapse: 'lg' } } });
+check('saveThemeSettings resets an unknown menu knob to its default, keeps the good one, and returns Hebrew warnings',
+  knobSave.overrides.chrome.menuCurrent === 'underline' && knobSave.overrides.chrome.menuFold === 0 && knobSave.overrides.chrome.menuCollapse === 'lg' &&
+  knobSave.warnings.length === 2 && knobSave.warnings.every((w) => /[֐-׿]/.test(w)) && knobSave.warnings.some((w) => /current/.test(w)) && knobSave.warnings.some((w) => /fold/.test(w)));
+check('a clean save carries no knob warnings, and the settings answer with a menuFit slot (null until the estimate lands)',
+  theme.saveThemeSettings({ overrides: { chrome: { menuFold: 3 } } }).warnings.length === 0 && theme.loadOverrides().chrome.menuFold === 3 && 'menuFit' in theme.getThemeSettings());
 
 // ── the served page carries the chrome css ───────────────────────────
 const { renderPage } = require('../src/renderer');

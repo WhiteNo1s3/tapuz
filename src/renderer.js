@@ -3,8 +3,8 @@ const path = require('path');
 
 const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
-const { getMenuForLocation } = require('./menus');
-const { loadOverrides, overridesToCss } = require('./theme');
+const { getMenuForLocation, normalizeItems } = require('./menus');
+const { loadOverrides, overridesToCss, menuKnobs, menuBodyClasses } = require('./theme');
 const { renderSocialFromData } = require('./pzn/social-html');
 const { renderProductsFromData } = require('./pzn/products-html');
 const { renderCodeFromData, renderTagsFromData } = require('./pzn/blog-html');
@@ -757,13 +757,71 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-function renderMenuItems(items) {
+/** The item that IS this page; the crowned home matches '/' as well as its own file. */
+function isCurrentUrl(url, currentUrl) {
+  return !!currentUrl && !!url && (url === currentUrl || (currentUrl === '/' && (url === '/' || url === '/index.html')));
+}
+
+/**
+ * The main menu as nested lists. v2.28: a parent carries `has-children` (the
+ * theme draws the caret and the dropdown), the item that IS this page carries
+ * aria-current="page" (the theme's underline rule finally has a subject —
+ * it was styled for years and never emitted) plus `is-current` on its li, the
+ * li ABOVE the current one carries `has-current` (the theme echoes the mark
+ * on the parent), and the theme css owns every behaviour (hover/focus
+ * dropdowns, the side rail, the drawer, the fold) — zero JS.
+ * `depth` is the list nesting: 0 = the bar, 1 = a dropdown, 2 = a flyout (a
+ * folded parent's children). Deeper lists are not rendered: the theme has no
+ * css for them and the organizer never produces them.
+ */
+function renderMenuItems(items, currentUrl, depth = 0) {
   return (items || []).map(item => {
-    const kids = item.children && item.children.length
-      ? `<ul class="sub-menu">${renderMenuItems(item.children)}</ul>`
+    const kids = depth < 2 && item.children && item.children.length
+      ? `<ul class="sub-menu">${renderMenuItems(item.children, currentUrl, depth + 1)}</ul>`
       : '';
-    return `<li><a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>${kids}</li>`;
+    const url = String(item.url || '');
+    const current = isCurrentUrl(url, currentUrl);
+    // the rendered children are the cheapest exact answer to "is the current
+    // page below me?" — a label can never fake the marker (it is escaped)
+    const cls = [
+      kids ? 'has-children' : '',
+      current ? 'is-current' : '',
+      kids.indexOf(' aria-current="page"') >= 0 ? 'has-current' : ''
+    ].filter(Boolean).join(' ');
+    return `<li${cls ? ` class="${cls}"` : ''}><a href="${escapeHtml(url)}"${current ? ' aria-current="page"' : ''}>${escapeHtml(item.label)}</a>${kids}</li>`;
   }).join('\n');
+}
+
+/**
+ * The bar itself (v2.28): the first `knobs.fold` items as they are, the rest
+ * under one "עוד" — a native <details> disclosure (click/tap/Enter/Space,
+ * zero JS). No fold when the knob is off (menuKnobs already maps 1 → 0), when
+ * nothing is past it, on a scroll strip — a strip clips any dropdown
+ * (overflow) and scrolls to every item anyway, so a fold there would only
+ * hide items — or in the side rail, where every item is a row and the rail
+ * itself scrolls (the organizer's FOLD_WITH_SIDE warning tells the owner the
+ * fold is ignored there; this is where it is). `knobs` is
+ * theme.menuKnobs(overrides).
+ */
+function renderMainMenu(items, currentUrl, knobs, lang) {
+  const list = items || [];
+  const fold = knobs && Number(knobs.fold) >= 2 ? Number(knobs.fold) : 0;
+  if (!fold || list.length <= fold || (knobs && (knobs.flow === 'scroll' || knobs.placement === 'side'))) return renderMenuItems(list, currentUrl);
+  const rest = renderMenuItems(list.slice(fold), currentUrl, 1);
+  const cls = rest.indexOf(' aria-current="page"') >= 0 ? 'nav-more has-current' : 'nav-more';
+  return renderMenuItems(list.slice(0, fold), currentUrl) + '\n' +
+    `<li class="${cls}"><details><summary class="nav-more-sum">${lang === 'en' ? 'More' : 'עוד'}</summary><ul class="sub-menu">${rest}</ul></details></li>`;
+}
+
+/** The footer strip is flat; a nested footer menu contributes its children
+ *  after their parent instead of losing them (v2.28). */
+function flattenMenu(items) {
+  const out = [];
+  (items || []).forEach((item) => {
+    out.push(item);
+    (item.children || []).forEach((c) => out.push(c));
+  });
+  return out;
 }
 
 /**
@@ -1106,8 +1164,14 @@ function renderPage(page, options = {}) {
   head += renderGa4Snippet(config);
   const currentYear = new Date().getFullYear();
 
-  const mainMenu = getMenuForLocation('main');
-  const footerMenu = getMenuForLocation('footer');
+  // options.menus (v2.28) — the organizer's preview route renders a CANDIDATE
+  // menu set with the real pages, without saving it; an array (even an empty
+  // one) replaces that location, anything else keeps the site's own menu
+  const menuFor = (loc) => (options.menus && Array.isArray(options.menus[loc]))
+    ? normalizeItems(options.menus[loc])
+    : getMenuForLocation(loc);
+  const mainMenu = menuFor('main');
+  const footerMenu = menuFor('footer');
 
   // CMS-managed static chrome (S3): header tagline/CTA + footer columns/social/credit
   const chrome = renderSiteChrome(config, direction);
@@ -1124,9 +1188,11 @@ function renderPage(page, options = {}) {
     logoHtml = escapeHtml(config.logo?.text || config.title || 'Site');
   }
 
-  // Menus
-  const menuHtml = renderMenuItems(mainMenu);
-  const footerMenuHtml = (footerMenu || []).map(item =>
+  // Menus — the item that points at THIS page is marked (aria-current);
+  // the crowned home matches '/' as well as its own file (v2.28)
+  const currentUrl = options.isHome === true ? '/' : ('/' + String(page.full_path || '') + '.html');
+  const menuHtml = renderMainMenu(mainMenu, currentUrl, menuKnobs(overrides), lang);
+  const footerMenuHtml = flattenMenu(footerMenu).map(item =>
     `<a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>`
   ).join(' &nbsp;|&nbsp; ');
 
@@ -1135,10 +1201,11 @@ function renderPage(page, options = {}) {
   // it on with a body class.
   const pageBg = pageBackgroundStyle(page.meta && page.meta.background);
   if (pageBg.css) head += pageBg.css;
-  const bodyClass = [
-    overrides.layout?.menuPlacement === 'side' ? 'menu-side' : '',
-    pageBg.bodyClass
-  ].filter(Boolean).join(' ');
+  // the theme's menu knobs as body classes (v2.28, theme.menuBodyClasses —
+  // css only, see main.css): nothing for an untouched top site, exactly
+  // "menu-side" for a side site, then flow / collapse / current-page marks
+  // when they differ from the defaults; the page background comes last
+  const bodyClass = menuBodyClasses(overrides).concat(pageBg.bodyClass).filter(Boolean).join(' ');
   if (bodyClass) {
     layout = layout.replace(/<body([^>]*)>/, `<body$1 class="${bodyClass}">`);
     if (!/<body[^>]*class=/.test(layout)) {
@@ -1276,4 +1343,4 @@ function renderPageToFile(page, outputPath) {
   return outputPath;
 }
 
-module.exports = { renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderSearchWidget, renderLangSwitcher, renderGa4Snippet, renderAnalyticsBeacon, pageBackgroundStyle };
+module.exports = { renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderSearchWidget, renderLangSwitcher, renderGa4Snippet, renderAnalyticsBeacon, pageBackgroundStyle, renderMenuItems, renderMainMenu };

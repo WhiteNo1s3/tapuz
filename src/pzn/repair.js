@@ -202,7 +202,7 @@ function htmlWrapper(raw) {
  * inside a bent element bare text is legit content (keep it).
  * @returns {{ out: string, i: number, wraps: number }}
  */
-function rebuild(tokens, i, stopName, bodyLevel) {
+function rebuild(tokens, i, stopName, bodyLevel, openStack = []) {
   let out = '';
   let raw = '';
   let wraps = 0;
@@ -225,7 +225,7 @@ function rebuild(tokens, i, stopName, bodyLevel) {
       i++;
       const attrs = formatTokenAttrs(open);
       if (open.selfClosing) { out += `<${open.name}${attrs} />`; continue; }
-      const inner = rebuild(tokens, i, open.name, false);
+      const inner = rebuild(tokens, i, open.name, false, openStack.concat(open.name));
       wraps += inner.wraps;
       out += `<${open.name}${attrs}>${inner.out}</${open.name}>`;
       i = inner.i;
@@ -233,7 +233,19 @@ function rebuild(tokens, i, stopName, bodyLevel) {
       continue;
     }
     if (t.kind === 'open') { const cap = captureRawSubtree(tokens, i); raw += cap.html; i = cap.i; continue; }
-    if (t.kind === 'close') { raw += `</${t.name}>`; i++; continue; }
+    if (t.kind === 'close') {
+      if (t.name.startsWith('bent-')) {
+        // a bent-* closer that is not ours (v2.28): an ANCESTOR's — an inner
+        // tag was left open, so end here and leave the closer for its owner;
+        // or nobody's — the twin of an unclosed leaf, structure noise, dropped
+        // (it used to be quarantined as a provisional html block reading
+        // "</bent-features>")
+        if (openStack.includes(t.name)) break;
+        i++;
+        continue;
+      }
+      raw += `</${t.name}>`; i++; continue;
+    }
     if (t.kind === 'doctype') { i++; continue; }
     i++;
   }
@@ -253,9 +265,14 @@ function wrapRawHtmlSource(source) {
   const inner = source.slice(bodyStart, closeM.index);
   const tokens = tokenize(inner);
   const built = rebuild(tokens, 0, null, true);
-  if (!built.wraps) return { source, wraps: 0 };
+  // v2.28: the rebuild also CLOSES what a model left open and drops stray
+  // closers — a changed body is worth re-parsing even when nothing was
+  // quarantined (before, only a wrap counted, so an unclosed leaf whose
+  // closer was dropped came back as the very error that sent us here)
+  const changed = built.wraps > 0 || built.out.replace(/\s+/g, '') !== inner.replace(/\s+/g, '');
+  if (!changed) return { source, wraps: 0, changed: false };
   const newSource = source.slice(0, bodyStart) + '\n' + built.out + '\n' + source.slice(closeM.index);
-  return { source: newSource, wraps: built.wraps };
+  return { source: newSource, wraps: built.wraps, changed: true };
 }
 
 // ── AST-level module reconstruction (quarantine) ────────────────────
@@ -358,36 +375,65 @@ function repairAst(doc, changes) {
     }
   });
 
-  // 4) illegal nesting: hoist offending children to the document body
-  const hoisted = [];
-  const enforce = (list, parentDef) => {
-    for (let idx = list.length - 1; idx >= 0; idx--) {
-      const node = list[idx];
+  // 3.5) unclosed LEAVES (v2.28, seen live from a local model): a leaf module
+  // written as an opener with no `/>` and no closer — `<bent-feature
+  // title="…" text="…">` — swallows every sibling after it, each nested one
+  // level deeper. A leaf (container:false) can never hold modules, so its
+  // module children ARE the siblings that were meant to follow it: re-parent
+  // them, in order, right after the leaf. Hoisting them to the page end (the
+  // old path) threw the page's order away and still left E_NOT_CONTAINER
+  // errors behind, so the whole paste was refused.
+  const unnest = (list) => {
+    for (let i = 0; i < list.length; i++) {
+      const node = list[i];
       if (!isModule(node)) continue;
       const def = getModule(node.name);
+      if (def && !def.container && node.children && node.children.length) {
+        const kids = node.children.filter(isModule);
+        node.children = node.children.filter((c) => !isModule(c));
+        if (kids.length) {
+          list.splice(i + 1, 0, ...kids);
+          changes.push({ code: 'UNCLOSED_LEAF', message: `<bent-${node.name}> was left open — ${kids.length} module(s) written inside it now follow it` });
+        }
+        continue; // the moved siblings are visited next
+      }
+      if (node.children && node.children.length) unnest(node.children);
+    }
+  };
+  unnest(doc.body);
+
+  // 4) illegal nesting — a refused child FOLLOWS its container, in place
+  //    (v2.28: "moved to page end" threw the page's order away; after step
+  //    3.5 the common case is a sibling that only looked nested because a
+  //    leaf before it was left open, and it belongs right there). A node
+  //    evicted one level up is judged again by that list's own parent, so a
+  //    module climbs until it lands somewhere legal — the body takes all.
+  const enforce = (list, parentDef) => {
+    const evicted = [];
+    for (let idx = 0; idx < list.length; idx++) {
+      const node = list[idx];
+      if (!isModule(node)) continue;
       if (parentDef) {
         const badChild = (parentDef.accept && parentDef.accept.length && !parentDef.accept.includes(node.name))
           || !parentDef.container;
         if (badChild) {
           list.splice(idx, 1);
-          hoisted.push(node);
-          changes.push({ code: 'HOIST', message: `<bent-${node.name}> not allowed here → moved to page end` });
+          idx--;
+          evicted.push(node);
+          changes.push({ code: 'HOIST', message: `<bent-${node.name}> not allowed here → moved after its container` });
           continue;
         }
       }
-      if (def && node.children && node.children.length) enforce(node.children, def);
+      const def = getModule(node.name);
+      if (def && node.children && node.children.length) {
+        const out = enforce(node.children, def);
+        // they follow the container; the loop visits them next, against THIS parent
+        if (out.length) list.splice(idx + 1, 0, ...out);
+      }
     }
+    return evicted;
   };
-  enforce(doc.body, null);
-  if (hoisted.length) {
-    // hoisted children were collected in reverse; restore order
-    hoisted.reverse();
-    for (const n of hoisted) {
-      const def = getModule(n.name);
-      if (def && def.children && n.children) enforce(n.children, def);
-    }
-    doc.body.push(...hoisted);
-  }
+  doc.body.push(...enforce(doc.body, null)); // the body refuses nothing — belt and braces
 
   // 5) duplicate / missing ids
   const seen = new Set();
@@ -467,6 +513,14 @@ function repair(source) {
     return { ok: false, changes, remaining: [], error: 'empty source' };
   }
 
+  // tag-name typos (v2.28, seen live from a local model): `<bent-text">` — a
+  // quote glued to the tag name turns a known module into an unknown one
+  const typo = source.replace(/<(\/?bent-[a-z][a-z0-9-]*)"(?=[\s>\/])/gi, '<$1');
+  if (typo !== source) {
+    source = typo;
+    changes.push({ code: 'TAG_TYPO', message: 'a stray quote after a tag name removed' });
+  }
+
   const inline = normalizeInlineHtml(source);
   if (inline.changed) {
     source = inline.source;
@@ -482,8 +536,9 @@ function repair(source) {
   } catch (e) {
     // parse-level failure — try wrapping raw HTML, then re-parse
     const wrapped = wrapRawHtmlSource(source);
-    if (wrapped.wraps) {
-      changes.push({ code: 'WRAP_HTML', message: `wrapped ${wrapped.wraps} raw HTML block(s) into provisional bent-html` });
+    if (wrapped.changed) {
+      if (wrapped.wraps) changes.push({ code: 'WRAP_HTML', message: `wrapped ${wrapped.wraps} raw HTML block(s) into provisional bent-html` });
+      else changes.push({ code: 'REBUILT', message: 'unclosed tags closed and stray closers dropped' });
       try { doc = parse(wrapped.source); } catch (e2) {
         return { ok: false, changes, remaining: [], error: e2.message };
       }

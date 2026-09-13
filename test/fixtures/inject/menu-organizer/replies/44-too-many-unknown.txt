@@ -1,0 +1,9 @@
+<bent-menus version="1" note="קיבצנו את הכלים והדוגמאות כדי להיכנס בשורה">
+  <bent-menu name="main" location="main">
+    <bent-link label="הבית" page="home" />
+    <bent-link label="א" page="nope-1" />
+    <bent-link label="ב" page="nope-2" />
+    <bent-link label="ג" page="nope-3" />
+    <bent-link label="הבונה" page="הבונה" />
+  </bent-menu>
+</bent-menus>

@@ -1,0 +1,16 @@
+<bent-menus version="1">
+  <bent-menu name="main" location="main">
+    <bent-link label="דף הבית" url="/" />
+    <bent-link label="אודות" page="about" />
+    <bent-link label="טיפולים" page="treatments">
+      <bent-link label="הלבנה" page="treatments/whitening" />
+      <bent-link label="שתלים" page="treatments/implants" />
+      <bent-link label="ילדים" page="treatments/kids" />
+    </bent-link>
+    <bent-link label="הצוות" page="team" />
+    <bent-link label="שאלות נפוצות" page="faq" />
+    <bent-link label="צור קשר" page="contact" />
+  </bent-menu>
+  <bent-menu name="footer" location="footer">
+  </bent-menu>
+</bent-menus>

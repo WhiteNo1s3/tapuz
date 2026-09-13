@@ -7,7 +7,19 @@
  * The Firefox class of bug this pins down: `browser.*` is promise-only, so a
  * single callback-style call (storage.local.get(keys, cb)) works in Chrome
  * and silently breaks in Firefox. And Firefox MV3 host permissions are
- * user-approvable — the code must request them, not assume them.
+ * user-approvable — the code must request them, not assume them; the request
+ * is also bound to the tick of the click, so an await before it loses it.
+ *
+ * The hosted-site class of bug (v0.3.0): the site is remote and only the
+ * model is local. A match pattern may not carry a port, btoa dies on a
+ * unicode host, and the tab the owner is looking at needs the script NOW,
+ * not on its next load.
+ *
+ * The streaming class of bug (v0.4.0): an MV3 worker dies in silence, so the
+ * relay streams internally — but the page must not be able to tell. The pins
+ * below hold that line: the flags are the worker's, the SSE parse survives a
+ * frame cut in half, and what comes back is byte-for-byte the shape the CMS
+ * already parsed before streaming existed.
  */
 
 const fs = require('fs');
@@ -21,10 +33,21 @@ function check(name, cond) {
   if (!cond) fail = true;
 }
 
+function cmpSemver(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  }
+  return 0;
+}
+
 const manifest = JSON.parse(fs.readFileSync(path.join(DIR, 'manifest.json'), 'utf8'));
 const bg = fs.readFileSync(path.join(DIR, 'background.js'), 'utf8');
 const content = fs.readFileSync(path.join(DIR, 'content-bridge.js'), 'utf8');
 const popup = fs.readFileSync(path.join(DIR, 'popup.js'), 'utf8');
+const popupHtml = fs.readFileSync(path.join(DIR, 'popup.html'), 'utf8');
+const readme = fs.readFileSync(path.join(DIR, 'README.md'), 'utf8');
 const all = bg + content + popup;
 
 // every script parses
@@ -44,6 +67,17 @@ check('gecko id + strict_min_version 128 (optional_host_permissions era)',
 check('host permissions are loopback-only; sites are OPTIONAL (opt-in per origin)',
   (manifest.host_permissions || []).every((p) => /localhost|127\.0\.0\.1/.test(p)) &&
   (manifest.optional_host_permissions || []).length > 0);
+// Without activeTab the popup cannot even READ the active tab's url — the
+// tab of a not-yet-connected site matches no host permission, so tabs.query
+// answers with url undefined and "connect this site" can never fire.
+check('activeTab permission (reads the active tab url, injects into it)',
+  (manifest.permissions || []).includes('activeTab'));
+
+// ── one version, two files ──
+const contentVersion = (content.match(/const VERSION = '([^']+)'/) || [])[1];
+check('manifest version and content-bridge VERSION agree (' + manifest.version + ')',
+  !!contentVersion && contentVersion === manifest.version);
+check('version >= 0.4.0 (hosted-site flow + streaming relay)', cmpSemver(manifest.version, '0.4.0') >= 0);
 
 // ── the founding rule: no keys, ever ──
 // Prose may TELL the story ("V1 grew a BYOK popup and amputated it"); code
@@ -75,10 +109,107 @@ check('content bridge answers same-window, same-origin only',
 check('onMessage keeps sendResponse+true (the shape BOTH browsers accept)',
   /sendResponse/.test(bg) && /return true/.test(bg));
 
+// ── attaching a HOSTED site ──
+// A match pattern's host may not carry a port, and `new URL(x).origin` keeps
+// one: https://site.example:8443 would be rejected outright as a pattern.
+check('site pattern is protocol+hostname, never origin (patterns carry no port)',
+  /u\.protocol \+ '\/\/' \+ u\.hostname \+ '\/\*'/.test(popup) && !/\.origin \+ '\/\*'/.test(popup));
+// btoa throws on anything outside Latin1 — a single unicode host killed connect.
+check('script id is hashed, not btoa (no btoa anywhere in the extension)',
+  !/btoa\s*\(/.test(all) && /function scriptIdFor/.test(popup) &&
+  /charCodeAt/.test(popup) && /Math\.imul/.test(popup));
+// Registration only fires on the NEXT load; the tab in front of the owner
+// needs the script now.
+check('connect injects the bridge into the open tab immediately',
+  /executeScript\(\{ target: \{ tabId \}, files: \['content-bridge\.js'\] \}\)/.test(popup));
+check('a refused injection degrades to "reload the tab", not to an error',
+  /async function injectNow/.test(popup) && /return false/.test(popup) && /רעננו את הטאב/.test(popup));
+check('a repeat injection re-announces instead of doubling the relay listener',
+  /__tzBridgeV2/.test(content));
+
+const ensureFn = (popup.match(/async function ensureRegistered[\s\S]*?\n\}/) || [''])[0];
+check('a second connect on a live site succeeds (duplicate id re-probed, not thrown)',
+  /registerContentScripts\(/.test(ensureFn) &&
+  (ensureFn.match(/getRegisteredContentScripts/g) || []).length >= 2 &&
+  (ensureFn.match(/catch\(\(\) => \[\]\)/g) || []).length >= 2);
+
+// Firefox binds permissions.request to the tick of the click; an await before
+// it drops the gesture and the call throws.
+const connectFn = (popup.match(/\$\('connect'\)\.addEventListener\('click'[\s\S]*?\n\}\);/) || [''])[0];
+check('permissions.request for the site is the FIRST await in the click handler',
+  /await B\.permissions\.request/.test(connectFn) &&
+  !/await/.test(connectFn.split('await B.permissions.request')[0]));
+check('the loopback grant is prefetched at popup open, so its request is gesture-safe too',
+  /localGranted/.test(popup) && !/await B\.permissions\.contains/.test(popup));
+
+// ── connected sites: see them, drop them ──
+check('popup lists the registered bridge scripts (unfiltered query, defensive catch)',
+  /getRegisteredContentScripts\(\)/.test(popup) && /function listBridgeScripts/.test(popup));
+check('disconnect unregisters the script AND hands the host permission back',
+  /unregisterContentScripts\(\{ ids: \[id\] \}\)/.test(popup) &&
+  /permissions\.remove\(\{ origins \}\)/.test(popup));
+// A Tapuziel served from localhost yields the pattern the RELAY runs on:
+// handing that back on disconnect would cut the model off with the site.
+check('disconnect never hands loopback back',
+  /matches\.filter\(\(m\) => !LOCAL_ORIGINS\.includes\(m\)\)/.test(popup));
+check('the list renders on popup open', /^renderSites\(\);/m.test(popup) &&
+  /id="sites"/.test(popupHtml) && /\$\('sites'\)/.test(popup));
+
+// ── the popup still reads as a popup: narrow, RTL, three steps ──
+check('popup stays 300px RTL Hebrew', /dir="rtl"/.test(popupHtml) && /width: 300px/.test(popupHtml));
+check('the three-step hosted flow is spelled out in the popup',
+  /LM Studio/.test(popupHtml) && /חבר את האתר הפתוח/.test(popupHtml) && /חיבור AI/.test(popupHtml));
+
+// ── the README tells the hosted story, not a localhost one ──
+check('README names the site-side option, the disconnect, and WHY the relay exists',
+  /דרך הדפדפן \(Bridge V2\)/.test(readme) && /נתק/.test(readme) && /CORS/.test(readme));
+
+// ── streaming (0.4.0) — the worker streams, nothing above it notices ──
+// Measured: non-streaming, the worker sees ONE silent gap the length of the
+// whole generation (9-13s for the organizer pack, 130s+ for a 44K-char one).
+// Streaming, the longest mid-stream silence is 45-47ms.
+check('the WORKER sets the streaming flags — never the page',
+  /Object\.assign\(\{\}, body, \{\s*stream: true,\s*stream_options: \{ include_usage: true \}\s*\}\)/.test(bg) &&
+  !/stream_options/.test(content) && !/stream_options/.test(popup) &&
+  !/stream: true/.test(content) && !/stream: true/.test(popup));
+// A frame WILL arrive cut in half, and Hebrew arrives 2-3 bytes at a time.
+check('SSE frames are buffered across chunk boundaries (and UTF-8 is rejoined)',
+  /buf \+= decoder\.decode\(step\.value, \{ stream: true \}\)/.test(bg) &&
+  /buf\.indexOf\('\\n'\)/.test(bg) && /buf = buf\.slice\(nl \+ 1\)/.test(bg));
+check('[DONE] terminates the stream', /'\[DONE\]'/.test(bg) && /DONE_FRAME/.test(bg));
+check('the assembled reply is EXACTLY the non-streaming shape',
+  /choices: \[\{ index: 0, message: \{ role, content \}, finish_reason: finishReason \}\]/.test(bg));
+check('usage survives streaming (include_usage puts it in the last frame)',
+  /frame\.usage/.test(bg) && /data\.usage = usage/.test(bg));
+check('a server that ignores `stream` falls back to one JSON body, never a failure',
+  /text\/event-stream/.test(bg) && /return await readWholeBody\(res\)/.test(bg));
+// Not every OpenAI-compatible server knows stream_options; some 400 on an
+// unknown param rather than ignoring it. Losing usage beats losing the call.
+check('a 400 on stream_options is retried once without it',
+  /text\.indexOf\('stream_options'\) !== -1/.test(bg) &&
+  /shoot\(Object\.assign\(\{\}, body, \{ stream: true \}\)\)/.test(bg));
+check('progress is throttled (~4/sec) and heartbeats through silence',
+  /PROGRESS_MS = 250/.test(bg) && /HEARTBEAT_MS = 10000/.test(bg) &&
+  /now - lastPost < PROGRESS_MS/.test(bg) &&
+  /setInterval\(\(\) => post\(true\), HEARTBEAT_MS\)/.test(bg));
+check('a stream caps SILENCE, not duration', /STREAM_IDLE_MS/.test(bg) && /bump\(\)/.test(bg));
+check('the port aborts the in-flight fetch when the page goes away',
+  /onDisconnect\.addListener\(\(\) => \{[\s\S]{0,160}ac\.abort\(\);/.test(bg));
+check('posting to a closed port cannot throw', /try \{ port\.postMessage\(m\); \} catch/.test(bg));
+check('port name agrees on both ends',
+  /PORT_NAME = 'tz-llm'/.test(bg) && /PORT_NAME = 'tz-llm'/.test(content));
+check('chat takes the port; /v1/models stays on sendMessage',
+  /function relayViaPort/.test(content) && /runtime\.connect\(\{ name: PORT_NAME \}\)/.test(content) &&
+  /function relayViaMessage/.test(content) && /runtime\.sendMessage\(\{ type: 'tz-local-llm'/.test(content));
+check('the page-facing result message shape is unchanged',
+  /Object\.assign\(\{ type: 'tz-local-llm-result', id \}, res\)/.test(content));
+check('a dead worker answers the page instead of hanging it',
+  /port\.onDisconnect\.addListener\(\(\) => finish\(/.test(content));
+
 // ── the CMS side speaks the same protocol ──
 const cmsBridge = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-bridge.js'), 'utf8');
 check('page glue and extension agree on message names',
-  ['tz-bridge-hello', 'tz-bridge-ping', 'tz-local-llm', 'tz-local-llm-result']
+  ['tz-bridge-hello', 'tz-bridge-ping', 'tz-local-llm', 'tz-local-llm-result', 'tz-local-llm-progress']
     .every((t) => cmsBridge.includes(t) && content.includes(t)));
 
 console.log('');
