@@ -28,6 +28,8 @@ const status = (html, cls) => { $('status').innerHTML = html; $('status').classN
 const LOCAL_ORIGINS = ['http://localhost/*', 'http://127.0.0.1/*'];
 const SCRIPT_PREFIX = 'tz-bridge-';
 const SITE_LABEL = 'חיבור AI → "מקומי — דרך הדפדפן (Bridge V2)"';
+const PORT_NAME = 'tz-llm';
+const CHAT_PATH = '/v1/chat/completions';
 
 /* ── loopback grant ───────────────────────────────────────────────────────
  * Firefox: manifest host_permissions may be un-granted until the user says
@@ -49,6 +51,37 @@ function ensureLocalPermission() {
 
 function sendBg(msg) {
   return Promise.resolve(B.runtime.sendMessage(msg));
+}
+
+/** The popup's own test takes the same streaming port the site uses, so what
+ *  it proves is what the site will actually do — including that a long
+ *  generation keeps reporting instead of falling silent. */
+function chatViaPort(body, onProgress) {
+  return new Promise((resolve) => {
+    let port;
+    try {
+      port = B.runtime.connect({ name: PORT_NAME });
+    } catch (e) {
+      return resolve({ ok: false, error: 'extension unavailable' });
+    }
+    let settled = false;
+    const finish = (res) => {
+      if (settled) return;
+      settled = true;
+      resolve(res);
+      try { port.disconnect(); } catch (e) { /* already gone */ }
+    };
+    port.onMessage.addListener((m) => {
+      if (!m) return;
+      if (m.type === 'progress') return onProgress && onProgress(m);
+      if (m.type === 'done') {
+        finish(m.ok ? { ok: true, status: m.status, data: m.data }
+          : { ok: false, status: m.status, error: m.error });
+      }
+    });
+    port.onDisconnect.addListener(() => finish({ ok: false, error: 'extension unavailable' }));
+    port.postMessage({ type: 'start', path: CHAT_PATH, body });
+  });
 }
 
 /* ── site identity ────────────────────────────────────────────────────────
@@ -117,11 +150,12 @@ $('ask').addEventListener('click', async () => {
     const res = await sendBg({ type: 'tz-local-llm', path: '/v1/models' });
     const model = res && res.ok && res.data && res.data.data && res.data.data[0] && res.data.data[0].id;
     if (!model) return status('אין מודל טעון — טענו מודל ב-LM Studio והפעילו את ה-Server.', 'bad');
-    const r = await sendBg({
-      type: 'tz-local-llm',
-      path: '/v1/chat/completions',
-      body: { model, messages: [{ role: 'user', content: q }], stream: false }
-    });
+    // No streaming flags here on purpose: the worker owns that decision and
+    // hands back the ordinary non-streaming shape either way.
+    const r = await chatViaPort(
+      { model, messages: [{ role: 'user', content: q }] },
+      (p) => status('המודל כותב… ' + p.chars + ' תווים')
+    );
     if (!r) return status('אין תשובה מה-worker', 'bad');
     if (!r.ok) return status('שגיאה מהמודל: ' + (r.error || r.status), 'bad');
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
