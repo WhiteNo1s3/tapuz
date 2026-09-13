@@ -9,7 +9,7 @@
  *
  *   npm run qa
  *   node scripts/qa-checklist.js
- *   node scripts/qa-checklist.js --quick   # pzn + route-map + CRM/WA only
+ *   node scripts/qa-checklist.js --quick   # pzn + route-map + version rule + CRM/WA only
  */
 
 const { spawnSync } = require('child_process');
@@ -216,6 +216,13 @@ function main() {
     row('route-map', r.ok, results[results.length - 1].detail);
   }
   {
+    // the version rule (ROADMAP "How versions work"): +0.01 per shipped
+    // session, still alpha, and a bump carries its Version Log row
+    const r = runNode('scripts/smoke-version.js');
+    results.push({ gate: 'version rule', ok: r.ok, detail: r.ok ? 'one +0.01 step, row present' : 'BROKEN — see scripts/smoke-version.js' });
+    row('version rule', r.ok, results[results.length - 1].detail);
+  }
+  {
     const r = sh('npm', ['audit', '--omit=dev', '--audit-level=high']);
     // npm audit exits 1 when vulns found at/above level — or when registry is down.
     const networkFail = /EAI_AGAIN|ENOTFOUND|ECONNRESET|audit endpoint returned an error|fetch failed|getaddrinfo/i.test(
@@ -243,7 +250,7 @@ function main() {
   // Summary table
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   const hard = results.filter((x) =>
-    ['test:pzn', 'test:smoke', 'smoke-registry', 'smoke-wizard', 'crm-wa-spot', 'route-map', 'npm audit (prod high+)'].includes(x.gate)
+    ['test:pzn', 'test:smoke', 'smoke-registry', 'smoke-wizard', 'crm-wa-spot', 'route-map', 'version rule', 'npm audit (prod high+)'].includes(x.gate)
   );
   // In quick mode, skipped smoke steps count as soft
   const critical = results.filter((x) => {
@@ -255,6 +262,7 @@ function main() {
       'smoke-wizard',
       'crm-wa-spot',
       'route-map',
+      'version rule',
       'npm audit (prod high+)'
     ].includes(x.gate);
   });
