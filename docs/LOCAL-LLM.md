@@ -57,6 +57,30 @@ LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma node scripts
 
 That is the whole hosted flow in one script: it starts a server with **no way to call a model at all**, plays the extension's part itself, and checks that the organizer pack still runs, that the door judged it, and that nothing was applied.
 
+## 2ב. No browser at all — the worker (v2.30)
+
+Bridge V2 still needs an admin tab open, and the browser sets the ceiling: Chrome caps any single request at five minutes. The worker has no such ceiling and no tab. It is one process on the machine that has the model:
+
+```bash
+TAPUZ_SITE=https://<live-site> \
+TAPUZ_TOKEN=<agent token with read+write> \
+LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 \
+LOCAL_LLM_MODEL=tapuz-gemma \
+node scripts/tapuz-worker.js
+```
+
+Mint the token at **ניהול → גשר סוכן** (`/admin/agent`) with both scopes. Then, in the admin, every pack card grows a **🛠 שלחו לעובד שלכם** button beside ▶: it queues the pack and you may close the tab. The worker claims it within a poll, runs it on your GPU, and posts the reply back; when you return, the card shows the reply, the preview and the warnings, and **✅ החל** is the same second click it always was.
+
+What the worker does and does not do:
+
+- It **composes nothing**. The site hands it a finished prompt and, if the door asks for the one repair turn, the finished repair prompt too. Every decision stays on the server.
+- It streams from the local runtime, so nothing times out and you can watch the token count in the terminal.
+- A model failure is **reported** (`{error:{code,message}}`), so a job ends `failed` with a reason you can read rather than hanging as `running`.
+- It talks to loopback only for the model, and refuses a public model address outright.
+- The token lives in the environment, never in a flag and never in a log line.
+
+A job that no worker ever claims simply waits; start the worker later and it runs. A claim abandoned for 30 minutes goes back in the queue. The agent API allows 120 requests per minute per address, so leave `TAPUZ_POLL_MS` at a second or more — the 5-second default asks twelve times a minute.
+
 ## 3. The live smoke — one real run, end to end
 
 ```bash

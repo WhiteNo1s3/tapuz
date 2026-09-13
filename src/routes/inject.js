@@ -558,4 +558,177 @@ async function resumeRelayRun(req, res, pack, step) {
   });
 }
 
+// ── injection jobs (v2.30): queue a pack for the owner's own worker ─────
+//
+// Same builder and the same context gate as /run — a job and a run are the
+// same request with a different courier. The model on the other end is always
+// the owner's LOCAL one, so the pack is held to the local window whatever the
+// site's provider happens to be set to.
+
+/** The one place a pack is composed for either courier. Throws with .code. */
+function composePack(pack, { brief, size, variant, locale }) {
+  const ctx = siteState();
+  const built = pack.buildPrompt({ brief, size, locale, variant, ctx });
+  return { ctx, built };
+}
+
+/**
+ * The door for a JOB reply — the counterpart of resumeRelayRun, for a courier
+ * that may answer hours later. The site state is rebuilt FRESH here on
+ * purpose: a job queued last night must be judged against the site as it is
+ * now, not as it was when the prompt was composed.
+ * @returns {{ok, repair?:{prompt,history,maxTokens}, done?:true, status?, warnings?, hard?}}
+ */
+function judgeJobReply(job, replyText, usage) {
+  const jobs = require('../inject-jobs');
+  const pack = registry.get(job.packId);
+  if (!pack || !registry.isReady(pack)) {
+    const e = new Error('החבילה "' + job.packId + '" אינה זמינה בשרת הזה');
+    e.code = 'NOT_READY';
+    throw e;
+  }
+  const ctx = siteState();
+  const door = doorFor(pack, ctx, job.brief);
+  const a = door.attempt(replyText);
+
+  // round 1: good enough, or ask the worker for the one repair turn
+  if (job.round === 1 && door.needsRepair(a)) {
+    const repairPrompt = door.repairTurn(a);
+    const history = [
+      { role: 'user', content: String(job.prompt).slice(0, REPAIR_TURN_CAP) },
+      { role: 'assistant', content: String(replyText).slice(0, REPAIR_TURN_CAP) }
+    ];
+    jobs.updateJob(job.id, { firstReply: replyText, usage: usage || job.usage || null });
+    jobs.askRepair(job.id, { history, prompt: repairPrompt });
+    return { ok: true, repair: { prompt: repairPrompt, history, maxTokens: job.maxTokens } };
+  }
+
+  // round 2: the reply with fewer hard warnings wins (tie → the repaired one).
+  // The first reply is re-judged against today's ctx so the comparison is fair.
+  let chosen = a;
+  let repaired = false;
+  let rounds = job.round;
+  if (job.round === 2 && job.firstReply) {
+    const a1 = door.attempt(job.firstReply);
+    if (door.hardCount(a) <= door.hardCount(a1)) { chosen = a; repaired = true; }
+    else chosen = a1;
+  }
+
+  const sumUsage = (x, y) => {
+    if (!x && !y) return null;
+    const out = { prompt_tokens: 0, completion_tokens: 0 };
+    for (const u of [x, y]) {
+      if (!u) continue;
+      out.prompt_tokens += Number(u.prompt_tokens) || 0;
+      out.completion_tokens += Number(u.completion_tokens) || 0;
+      if (u.reasoning_tokens != null) out.reasoning_tokens = (out.reasoning_tokens || 0) + (Number(u.reasoning_tokens) || 0);
+    }
+    return out;
+  };
+  const totalUsage = sumUsage(job.usage, usage);
+
+  if (chosen.refusal) {
+    // the reply is kept: the owner can still read it, fix it and paste it
+    jobs.finishJob(job.id, {
+      status: 'failed', reply: chosen.text, usage: totalUsage,
+      error: { code: chosen.refusal.code || 'BAD_REPLY', message: chosen.refusal.message }
+    });
+    logRun({
+      id: job.packId, action: 'job', provider: 'worker', model: job.model || '',
+      ok: false, code: chosen.refusal.code || 'BAD_REPLY', rounds, repaired: false,
+      promptChars: job.promptChars, replyChars: chosen.text.length, usage: totalUsage, ms: Date.now() - job.createdAt
+    });
+    return { ok: true, done: true, status: 'failed', code: chosen.refusal.code || 'BAD_REPLY', error: chosen.refusal.message };
+  }
+
+  const p = chosen.parsed;
+  jobs.finishJob(job.id, {
+    status: 'done', reply: chosen.text, usage: totalUsage,
+    result: {
+      rounds, repaired,
+      preview: p.preview || null,
+      warnings: p.warnings || [],
+      warningTexts: textsOf(p),
+      notes: p.notes || [],
+      hard: !!p.hard
+    }
+  });
+  logRun({
+    id: job.packId, action: 'job', provider: 'worker', model: job.model || '',
+    ok: true, rounds, repaired, promptChars: job.promptChars, replyChars: chosen.text.length,
+    usage: totalUsage, warningCodes: codesOf(p.warnings), ms: Date.now() - job.createdAt
+  });
+  return { ok: true, done: true, status: 'done', warnings: codesOf(p.warnings), hard: !!p.hard };
+}
+
+router.get('/admin/api/inject/jobs', requireAdmin, (req, res) => {
+  const jobs = require('../inject-jobs');
+  res.json({
+    ok: true,
+    jobs: jobs.listJobs({ packId: String(req.query.packId || ''), limit: Number(req.query.limit) || 20 }).map(jobs.publicView),
+    worker: jobs.workerStatus()
+  });
+});
+
+router.get('/admin/api/inject/jobs/:jobId', requireAdmin, (req, res) => {
+  const jobs = require('../inject-jobs');
+  const job = jobs.getJob(req.params.jobId);
+  if (!job) return res.status(404).json({ ok: false, error: 'עבודה לא נמצאה', code: 'NO_JOB' });
+  // the finished text rides along — it is what the card puts in the textarea
+  res.json({ ok: true, job: Object.assign(jobs.publicView(job), { reply: job.reply || '' }) });
+});
+
+router.post('/admin/api/inject/jobs/:jobId/cancel', requireAdmin, (req, res) => {
+  const jobs = require('../inject-jobs');
+  const job = jobs.cancelJob(req.params.jobId);
+  if (!job) return res.status(404).json({ ok: false, error: 'עבודה לא נמצאה', code: 'NO_JOB' });
+  res.json({ ok: true, job: jobs.publicView(job) });
+});
+
+router.post('/admin/api/inject/:id/job', requireAdmin, (req, res) => {
+  const pack = packOr404(req, res);
+  if (!pack) return;
+  const jobs = require('../inject-jobs');
+  const b = req.body || {};
+  const brief = briefFor(b.brief);
+  const size = sizeFor(pack, b.size);
+  const variant = variantFor(b.variant);
+  const locale = localeFor(b.locale);
+  if (!pack.run.enabled) {
+    const e = new Error('החבילה "' + pack.title + '" אינה ניתנת להרצה');
+    e.code = 'RUN_DISABLED';
+    return refuse(res, e);
+  }
+  if (pack.buildPrompt === null || !registry.isReady(pack)) return refuse(res, notReady(pack));
+  let built;
+  try {
+    ({ built } = composePack(pack, { brief, size, variant, locale }));
+  } catch (e) {
+    return refuse(res, e);
+  }
+  // the worker always runs a LOCAL model, whatever the site's provider says
+  const tokensEst = ai.estimateTokens(built.chars);
+  const budget = ai.contextBudget('local');
+  if (tokensEst + pack.run.maxTokens > budget) {
+    return res.status(400).json({
+      ok: false, code: 'PACK_TOO_BIG',
+      error: 'החבילה (~' + tokensEst.toLocaleString('en-US') + ' טוקנים + ' + pack.run.maxTokens.toLocaleString('en-US') +
+        ' לתשובה) גדולה מחלון ההקשר של המודל (' + budget.toLocaleString('en-US') + ') — נסו חבילה לייט',
+      suggestSize: 'lite', tokensEst, budget
+    });
+  }
+  const settings = ai.getSettings();
+  const model = (settings.provider === 'local' || settings.provider === 'browser') ? (settings.model || '') : '';
+  const job = jobs.createJob({
+    packId: pack.id, brief, size, variant, locale,
+    prompt: built.text, promptChars: built.chars, maxTokens: pack.run.maxTokens, model
+  });
+  logRun({
+    id: pack.id, action: 'job', provider: 'worker', model, ok: true, code: 'QUEUED',
+    promptChars: built.chars, ms: 0
+  });
+  res.json({ ok: true, job: jobs.publicView(job), worker: jobs.workerStatus() });
+});
+
 module.exports = router;
+module.exports.judgeJobReply = judgeJobReply;
