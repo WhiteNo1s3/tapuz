@@ -8,6 +8,13 @@
  * Ollama — anything OpenAI-compatible on loopback), so the local model never
  * has to be exposed to the internet.
  *
+ * WHY THE RELAY HAS TO BE HERE, not in the page: the site is served over
+ * https from a real host, and LM Studio answers loopback with NO CORS headers
+ * at all (its preflight comes back 400 with no Access-Control-*). A page
+ * fetch is therefore dead on arrival, and Chrome's Private Network Access
+ * would block it anyway. A background fetch backed by a host permission is
+ * subject to neither. The PAGE never fetches the model. The worker always does.
+ *
  * Cross-browser: Chrome runs this as a service worker, Firefox as an event
  * page (both keys sit in the manifest). Everything is PROMISE-style — in
  * Firefox the `browser` namespace is promise-only, callbacks break — except
@@ -28,6 +35,11 @@ const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 
 // The page picks from this menu — it can never name an arbitrary URL.
 const ALLOWED_PATHS = ['/v1/chat/completions', '/v1/models'];
+
+// A server that accepted the socket and then stopped talking must not leave
+// the popup spinning forever. The probe is impatient; a generation is not.
+const TIMEOUT_MS = { '/v1/models': 15000 };
+const DEFAULT_TIMEOUT_MS = 300000;
 
 async function getBase() {
   const r = await B.storage.local.get(['llm_base']);
@@ -71,19 +83,27 @@ async function relay(msg) {
   if (!(await hasLocalPermission(base))) {
     return { ok: false, error: 'אין הרשאת גישה ל-localhost — פתחו את הפופאפ של התוסף ואשרו אותה' };
   }
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TIMEOUT_MS[path] || DEFAULT_TIMEOUT_MS);
   try {
     const res = await fetch(base + path, {
       method: msg.body ? 'POST' : 'GET',
       headers: msg.body ? { 'Content-Type': 'application/json' } : undefined,
-      body: msg.body ? JSON.stringify(msg.body) : undefined
+      body: msg.body ? JSON.stringify(msg.body) : undefined,
+      signal: ac.signal
     });
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
     return { ok: res.ok, status: res.status, data };
   } catch (e) {
+    if (e && e.name === 'AbortError') {
+      return { ok: false, error: 'המודל המקומי לא ענה בזמן — בדקו את LM Studio' };
+    }
     // The classic here is "LM Studio isn't running" / server not started.
     return { ok: false, error: 'local model unreachable: ' + (e && e.message) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

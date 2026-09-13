@@ -5,21 +5,36 @@
 <style>
   body { font-family: system-ui, "Segoe UI", Arial, sans-serif; width: 300px; margin: 0; padding: 14px; background: #fff7ed; color: #1f2937; }
   h1 { font-size: 1rem; margin: 0 0 2px; color: #c2410c; }
-  .sub { font-size: .78rem; color: #64748b; margin: 0 0 12px; }
+  h2 { font-size: .8rem; margin: 14px 0 5px; color: #9a3412; }
+  .sub { font-size: .78rem; color: #64748b; margin: 0 0 10px; }
   .row { margin-bottom: 10px; }
   label { display: block; font-size: .8rem; margin-bottom: 3px; }
   input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #fdba74; border-radius: 6px; direction: ltr; }
   button { width: 100%; padding: 7px; border: 0; border-radius: 6px; background: #f97316; color: #fff; font-weight: 600; cursor: pointer; }
   button.ghost { background: #ffedd5; color: #9a3412; }
+  button:disabled { opacity: .55; cursor: default; }
   #status { font-size: .82rem; margin-top: 10px; line-height: 1.5; }
   .ok { color: #166534; }
   .bad { color: #b91c1c; }
   .models { direction: ltr; text-align: left; font-size: .75rem; color: #4b5563; max-height: 80px; overflow-y: auto; margin-top: 4px; }
+  ol.steps { margin: 0 0 12px; padding: 0 18px 0 0; font-size: .78rem; color: #475569; line-height: 1.6; }
+  ol.steps b { color: #9a3412; }
+  .site { display: flex; align-items: center; gap: 6px; padding: 5px 7px; margin-bottom: 5px; background: #ffedd5; border-radius: 6px; }
+  .site span { flex: 1; direction: ltr; text-align: left; font-size: .72rem; color: #7c2d12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .site button { width: auto; padding: 3px 9px; font-size: .72rem; font-weight: 600; background: #fff; color: #b91c1c; border: 1px solid #fecaca; }
+  .empty { font-size: .75rem; color: #94a3b8; margin: 0 0 4px; }
+  .hint { font-size: .72rem; color: #94a3b8; margin: 4px 0 0; }
 </style>
 </head>
 <body>
 <h1>🍊 Tapuziel Bridge V2</h1>
-<p class="sub">גשר למודל מקומי (LM Studio) — בלי מפתחות, בלי ענן. אלפא.</p>
+<p class="sub">האתר שלכם — גם כשהוא מאוחסן בענן — מדבר עם המודל שרץ כאן, על המחשב הזה. בלי מפתחות, בלי ענן.</p>
+
+<ol class="steps">
+  <li>ב-<b>LM Studio</b>: טענו מודל ו-Developer → Start Server.</li>
+  <li>פתחו את <b>האדמין של האתר שלכם</b> ולחצו כאן "חבר את האתר הפתוח".</li>
+  <li>באתר: <b>חיבור AI</b> → "מקומי — דרך הדפדפן (Bridge V2)".</li>
+</ol>
 
 <div class="row">
   <label for="base">כתובת השרת המקומי (loopback בלבד)</label>
@@ -27,10 +42,16 @@
 </div>
 
 <div class="row"><button id="check">בדוק חיבור למודל</button></div>
-<div class="row"><button id="connect" class="ghost">חבר את האתר הפתוח</button></div>
-
 <div class="row">
-  <label for="prompt">בדיקת מודל — שלחו שאלה ל-GPU</label>
+  <button id="connect" class="ghost">חבר את האתר הפתוח</button>
+  <p class="hint" id="connect-hint"></p>
+</div>
+
+<h2>אתרים מחוברים</h2>
+<div id="sites"><p class="empty">טוען…</p></div>
+
+<h2>בדיקת מודל</h2>
+<div class="row">
   <textarea id="prompt" rows="2" placeholder="שלום! מי אתה?" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #fdba74;border-radius:6px;font-family:inherit"></textarea>
 </div>
 <div class="row"><button id="ask">שלח למודל המקומי</button></div>

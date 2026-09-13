@@ -39,6 +39,7 @@ The packs share one contract so a new pack is a descriptor, a grammar and a smok
 | `POST /admin/api/inject/:id/paste` | `{reply, brief?}` | `{ok, preview, warnings, warningTexts, notes, hard, chars}` — never writes |
 | `POST /admin/api/inject/:id/apply` · admin | `{reply, force?, brief?}` | `{ok, applied, landed, backupId, changed, rebuildError, warnings}` · 409 `HARD_WARNINGS` |
 | `POST /admin/api/inject/:id/run` · admin | `{brief, size, variant?}` | `{ok, reply, rounds, repaired, preview, warnings, warningTexts, hard, timing:{ms}, usage, provider}` — never applies |
+| `POST /admin/api/inject/:id/run` · admin | `{step:{id, result}}` | the browser relay's continuation — the same answer, or the next `{ok, relay:true, modelCall:{id, body}, stage, timeoutMs}` |
 | `POST /admin/api/inject/:id/undo` · admin | — | `{ok, restored}` |
 
 Refusals are `{ok:false, error, code}`: 400 for a door code, `NO_PROVIDER`, `BROWSER_RELAY` (the browser relay serves the copilot chat only — copy the prompt instead), `PACK_TOO_BIG` (+ `suggestSize:'lite'`); 502 `PROVIDER_ERROR` / `EMPTY_REPLY`; 504 `TIMEOUT`.
@@ -49,6 +50,23 @@ Refusals are `{ok:false, error, code}`: 400 for a door code, `NO_PROVIDER`, `BRO
 2. `ai.generateDetailed({system:'', user: pack, maxTokens, timeoutMs})` — one hop, no history, no tools (`generate()` never attaches tools; only the copilot's `converse()` does). Local models get `reasoning_effort:'none'` and up to 4 minutes; cloud keys 90 seconds.
 3. The door parses. If it refuses, or raises a warning in `run.repairable`, exactly **one** repair turn is sent with the first exchange as history and "תיקונים נדרשים: …". The reply with fewer hard warnings wins (tie → the repaired one).
 4. The response carries the reply, the preview and the warnings; the card puts the reply into the same textarea the paste flow uses, so **apply is always the owner's second click on text they can read**.
+
+### The run on a HOSTED site — the browser relay (v2.29)
+
+A Tapuziel on a real host cannot reach the owner's LM Studio, and the page cannot call it either: LM Studio answers loopback with **no CORS headers at all**. The one context that may is the Bridge V2 extension's background worker — so with provider `browser` the run is not one request but a short conversation with the page:
+
+```
+POST …/run {brief,size}          → {ok, relay:true, stage:'first',  modelCall:{id, body}, timeoutMs}
+   page → bridge → LM Studio → raw provider JSON
+POST …/run {step:{id, result}}   → {ok, relay:true, stage:'repair', modelCall:{id, body}}   ← only when the door asks
+POST …/run {step:{id, result}}   → {ok, reply, rounds, repaired, preview, warnings, …}
+```
+
+The composed `body` is byte-for-byte what a server-side run would have sent (`ai.relayRequest`), the reply is read back through `ai.readRelayReply`, and the door, the one repair round and the final shape are the **same code** either way — `doorFor()` and `finishRun()` in `src/routes/inject.js` are shared by both paths. The run's state (the pack text, the site state it was built from, the first reply) stays on the server behind an opaque single-use `run_…` id; the browser carries that id and the model's own words, nothing else. `PACK_TOO_BIG` still applies — the relayed model is a local model, so it is held to the same 20,000-token window. Refusal `RELAY_EXPIRED` (400) means the id was replayed, forged, or older than 15 minutes.
+
+Trusting the returned text is the same decision the paste tier already makes: the sender is the authenticated owner behind the admin session and the Origin gate, and **apply is still a separate POST that re-parses**. `public/admin-bridge.js` drives the loop (`TapuzBridge.drive`), shared with the copilot, which speaks the identical two shapes.
+
+Known limits: no streaming, and Chrome may terminate an MV3 service worker during a multi-minute generation — a 31B model answering a lite pack in 10–40 s is comfortably inside that, a 44K-char site-builder pack may not be. Full owner's guide: [LOCAL-LLM.md](LOCAL-LLM.md).
 
 ## The card (`public/admin-inject-card.js`)
 

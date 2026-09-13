@@ -16,8 +16,13 @@
  *   • run: max_tokens === 2048, NO tools key, the repair round carries the
  *     assistant turn + "תיקונים נדרשים", rounds/repaired, never applies
  *   • the gates: PACK_TOO_BIG 400, REPLY_TOO_LONG 400 (> 60K chars on
- *     paste/apply/run, before any pack's door), BROWSER_RELAY 400,
- *     NO_PROVIDER 400, TIMEOUT 504, EMPTY_REPLY 502, PROVIDER_ERROR 502
+ *     paste/apply/run, before any pack's door), NO_PROVIDER 400,
+ *     TIMEOUT 504, EMPTY_REPLY 502, PROVIDER_ERROR 502
+ *   • the BROWSER RELAY (v2.29): the 'browser' provider does not refuse any
+ *     more — the run becomes a conversation with the PAGE ({modelCall} →
+ *     {step} → {modelCall} → {step} → the answer), the server never calls
+ *     out, the run's state stays server-side behind an opaque id, and the
+ *     final shape is the one a server-side run returns
  *   • theme-designer: apply lands in the library; undo reads the persisted
  *     last-applied id (config/inject-theme-last.json), so a re-required
  *     descriptor still undoes it — and never a hand-pasted 'ai' entry
@@ -338,12 +343,72 @@ const logLines = () => (fs.existsSync(LOG_PATH) ? fs.readFileSync(LOG_PATH, 'utf
       ai.contextBudget('local') === 20000 && ai.contextBudget('claude') === Infinity &&
       ai.estimateTokens(3651) === Math.ceil(3651 / 2.3) && ai.estimateTokens(3651) === 1588 && ai.estimateTokens(0) === 0);
 
-    // ── BROWSER_RELAY ──
-    ai.saveSettings({ provider: 'browser' });
+    // ── THE BROWSER RELAY (v2.29): a hosted site driving the owner's own
+    //    model. The server composes, the PAGE carries, the server judges.
+    ai.saveSettings({ provider: 'browser', model: 'tapuz-gemma' });
     calls.length = 0;
+    // the raw provider JSON the bridge hands back, exactly as LM Studio
+    // shapes it (openai-chat) — the page never rewrites it
+    const relayed = (text) => ({
+      choices: [{ index: 0, message: { role: 'assistant', content: text } }],
+      usage: { prompt_tokens: 1200, completion_tokens: 300 }
+    });
+    const runStep = (step) => req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { step } });
+
     const relay = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
-    check('the browser-relay provider → 400 BROWSER_RELAY (no server-side call possible)',
-      relay.status === 400 && relay.json.code === 'BROWSER_RELAY' && calls.length === 0);
+    const mc = relay.json.modelCall || {};
+    check('the browser provider answers with a modelCall instead of calling out',
+      relay.status === 200 && relay.json.ok === true && relay.json.relay === true &&
+      relay.json.stage === 'first' && typeof mc.id === 'string' && /^run_/.test(mc.id) && calls.length === 0);
+    check('the relayed body is the request the server would have sent (model, max_tokens, no tools, reasoning off)',
+      mc.body && mc.body.model === 'tapuz-gemma' && mc.body.max_tokens === 2048 && !('tools' in mc.body) &&
+      mc.body.reasoning_effort === 'none' && Array.isArray(mc.body.messages) && mc.body.messages.length === 2 &&
+      mc.body.messages[0].role === 'system' && mc.body.messages[1].role === 'user' &&
+      /FRESH/.test(mc.body.messages[1].content) && /^PROMPT lite/m.test(mc.body.messages[1].content));
+    check('the page is told which provider and how long one turn may take',
+      relay.json.provider && relay.json.provider.id === 'browser' && relay.json.timeoutMs > 0 && relay.json.packId === 'fake-pack');
+
+    const relayDone = await runStep({ id: mc.id, result: relayed('DOC CLEAN') });
+    check('the step finishes the run with the same shape a server-side run returns',
+      relayDone.status === 200 && relayDone.json.ok === true && relayDone.json.reply === 'DOC CLEAN' &&
+      relayDone.json.rounds === 1 && relayDone.json.repaired === false && !!relayDone.json.preview &&
+      relayDone.json.provider.id === 'browser' && relayDone.json.usage.prompt_tokens === 1200 && calls.length === 0);
+    check('a step id is single-use — replaying it is refused (400 RELAY_EXPIRED)',
+      await runStep({ id: mc.id, result: relayed('DOC CLEAN') }).then((r) => r.status === 400 && r.json.code === 'RELAY_EXPIRED'));
+    check('an unknown / forged step id is refused the same way',
+      await runStep({ id: 'run_deadbeef', result: relayed('DOC CLEAN') }).then((r) => r.status === 400 && r.json.code === 'RELAY_EXPIRED'));
+
+    // the repair round rides the SAME protocol: a second modelCall, carrying
+    // the first exchange as history plus the door's fixes
+    const relay2 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
+    const repair = await runStep({ id: relay2.json.modelCall.id, result: relayed('DOC FIXME') });
+    const rc = repair.json.modelCall || {};
+    const msgs = (rc.body && rc.body.messages) || [];
+    check('a repairable warning asks the page for a SECOND turn (stage repair)',
+      repair.status === 200 && repair.json.ok === true && repair.json.relay === true &&
+      repair.json.stage === 'repair' && repair.json.rounds === 2 && typeof rc.id === 'string' && rc.id !== relay2.json.modelCall.id);
+    check('the repair turn carries the first exchange as history + "תיקונים נדרשים" with the door\'s message',
+      msgs.length === 4 && msgs[1].role === 'user' && msgs[2].role === 'assistant' && msgs[2].content === 'DOC FIXME' &&
+      msgs[3].role === 'user' && /תיקונים נדרשים/.test(msgs[3].content) && /nope/.test(msgs[3].content));
+    const repaired = await runStep({ id: rc.id, result: relayed('DOC CLEAN') });
+    check('the repaired reply wins: rounds 2, repaired true, no warning left',
+      repaired.status === 200 && repaired.json.ok === true && repaired.json.reply === 'DOC CLEAN' &&
+      repaired.json.rounds === 2 && repaired.json.repaired === true && (repaired.json.warnings || []).length === 0);
+    check('usage is summed across BOTH relayed turns',
+      repaired.json.usage.prompt_tokens === 2400 && repaired.json.usage.completion_tokens === 600);
+
+    // the model's own failures arrive in the body the page carries
+    const relay3 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
+    const errStep = await runStep({ id: relay3.json.modelCall.id, result: { error: { message: 'model not loaded' } } });
+    check('an error body from the local runtime → 502 PROVIDER_ERROR (not a pretend reply)',
+      errStep.status === 502 && errStep.json.code === 'PROVIDER_ERROR' && /model not loaded/.test(errStep.json.error));
+    const relay4 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
+    const emptyStep = await runStep({ id: relay4.json.modelCall.id, result: relayed('') });
+    check('an empty relayed reply → 502 EMPTY_REPLY', emptyStep.status === 502 && emptyStep.json.code === 'EMPTY_REPLY');
+    const relay5 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
+    const noSessionStep = await req('POST', '/admin/api/inject/fake-pack/run', { body: { step: { id: relay5.json.modelCall.id, result: relayed('DOC CLEAN') } } });
+    check('a relay step is admin-gated like every other run (401 without a session)', noSessionStep.status === 401);
+    check('the relay never called the server-side provider even once', calls.length === 0);
 
     // ── NO_PROVIDER ──
     ai.saveSettings({ provider: 'claude', apiKey: '' });
@@ -440,12 +505,13 @@ const logLines = () => (fs.existsSync(LOG_PATH) ? fs.readFileSync(LOG_PATH, 'utf
     // undo() bypasses the route, so no line) — the 401/403 attempts never
     // reach a handler, so no line
     check('the ledger has one line per action (' + runs.length + ' run, ' + pastes.length + ' paste, ' + applies.length + ' apply, ' + undos.length + ' undo)',
-      runs.length === 15 && pastes.length === 6 && applies.length === 6 && undos.length === 4);
+      runs.length === 24 && pastes.length === 6 && applies.length === 6 && undos.length === 4);
     check('every line carries ts/id/action/ok, runs carry provider/model/rounds/usage/promptChars',
       entries.every((e) => e.ts && e.id && e.action && typeof e.ok === 'boolean') &&
-      runs.filter((e) => e.ok).every((e) => e.provider === '__fake' && e.model === 'fake-model' && e.rounds >= 1 && e.usage && e.promptChars > 0));
-    check('the ledger records the outcome codes (PACK_TOO_BIG, BROWSER_RELAY, TIMEOUT, HARD_WARNINGS…)',
-      ['PACK_TOO_BIG', 'REPLY_TOO_LONG', 'BROWSER_RELAY', 'NO_PROVIDER', 'TIMEOUT', 'EMPTY_REPLY', 'PROVIDER_ERROR', 'NETWORK', 'HARD_WARNINGS', 'NO_MENU'].every((c) => entries.some((e) => e.code === c)));
+      runs.filter((e) => e.ok && e.provider !== 'browser').every((e) => e.provider === '__fake' && e.model === 'fake-model' && e.rounds >= 1 && e.usage && e.promptChars > 0) &&
+      runs.filter((e) => e.provider === 'browser').every((e) => e.model === 'tapuz-gemma' && e.rounds >= 1 && e.usage && e.promptChars > 0));
+    check('the ledger records the outcome codes (PACK_TOO_BIG, RELAY_CALL, TIMEOUT, HARD_WARNINGS…)',
+      ['PACK_TOO_BIG', 'REPLY_TOO_LONG', 'RELAY_CALL', 'RELAY_REPAIR', 'NO_PROVIDER', 'TIMEOUT', 'EMPTY_REPLY', 'PROVIDER_ERROR', 'NETWORK', 'HARD_WARNINGS', 'NO_MENU'].every((c) => entries.some((e) => e.code === c)));
     check('the ledger NEVER holds the reply text or the prompt', !lines.some((l) => /DOC CLEAN|DOC FIXME|REFUSE|PROMPT lite/.test(l)));
     check('the ledger lives under TAPUZ_ROOT/config', LOG_PATH.startsWith(ROOT) && /config[\\/]inject-log\.jsonl$/.test(LOG_PATH));
     const repairedLine = runs.find((e) => e.ok && e.rounds === 2 && e.repaired === true);

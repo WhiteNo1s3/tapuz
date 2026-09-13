@@ -17,6 +17,51 @@
     });
   }
 
+  /* ── the bridge (v2.29) ────────────────────────────────────────────────
+   * The third way to connect, and the only one a HOSTED site has for a local
+   * model: admin-bridge.js announces the extension's content script, and the
+   * list of loaded models arrives right behind it. Both are events, so this
+   * card renders three times in a good case (unknown → present → models).   */
+  function bridgeModels() {
+    return (window.TapuzBridge && window.TapuzBridge.models) || [];
+  }
+  function bridgePresent() {
+    return !!(window.TapuzBridge && window.TapuzBridge.present);
+  }
+
+  function renderBridge() {
+    var st = $('ai-bridge-state');
+    var sel = $('ai-bridge-model');
+    if (!st || !sel) return;
+    var models = bridgeModels();
+    var chosen = sel.value || (settings && settings.provider === 'browser' ? settings.model || '' : '');
+    var opts = [{ v: '', t: 'מה שטעון אצלכם באותו רגע' }];
+    models.forEach(function (m) { opts.push({ v: m, t: m }); });
+    if (chosen && models.indexOf(chosen) === -1) opts.push({ v: chosen, t: chosen + ' (לא טעון כרגע)' });
+    sel.innerHTML = opts.map(function (o) {
+      return '<option value="' + esc(o.v) + '">' + esc(o.t) + '</option>';
+    }).join('');
+    sel.value = chosen;
+
+    var active = settings && settings.provider === 'browser';
+    if (!bridgePresent()) {
+      st.className = 'notice';
+      st.innerHTML = '💤 הגשר לא מחובר לאתר הזה. התקינו את <strong>Bridge V2</strong> (למטה), פתחו את התוסף, ' +
+        'לחצו <strong>״חבר את האתר הפתוח״</strong> — ורעננו את הדף.' +
+        (active ? '<br>הספק כבר מוגדר ״דרך הדפדפן״, אז ברגע שהגשר יתחבר הכול יעבוד.' : '');
+      return;
+    }
+    if (!models.length) {
+      st.className = 'notice warn';
+      st.innerHTML = '🌉 הגשר מחובר — אבל לא נמצא מודל טעון. ב-LM Studio: טענו מודל, ו-Developer → <strong>Start Server</strong>.';
+      return;
+    }
+    st.className = 'notice ok';
+    st.innerHTML = '🌉 הגשר מחובר ✓ ' + models.length + ' מודלים טעונים אצלכם: <code dir="ltr">' +
+      esc(models.join(', ')) + '</code>' +
+      (active ? '' : '<br>בחרו מודל ולחצו ״חבר דרך הדפדפן״.');
+  }
+
   function keyedProviders() {
     // the key section lists only providers a key can be created FOR
     return providers.filter(function (p) { return p.keyUrl; });
@@ -30,7 +75,7 @@
       var how = settings.provider === 'local'
         ? 'מודל מקומי (' + (settings.baseUrl || 'http://127.0.0.1:1234/v1') + ')'
         : settings.provider === 'browser'
-          ? 'דרך הדפדפן (Bridge V2)'
+          ? 'דרך הדפדפן (Bridge V2) — ' + (settings.model || 'המודל הטעון אצלכם')
           : 'מפתח ' + settings.provider + ' (מסתיים ב-' + settings.keyTail + ')';
       b.className = 'notice ok';
       b.innerHTML = '✅ מחובר: ' + esc(how) + ' — הקופיילוט מופיע בבונה.';
@@ -91,6 +136,7 @@
         if (d.provider === 'local' && d.model) $('ai-local-model').value = d.model;
         renderStatus();
         renderProviders();
+        renderBridge();
       })
       .catch(function (e) {
         var b = $('ai-status-banner');
@@ -110,6 +156,7 @@
         settings = Object.assign({}, settings, d);
         renderStatus();
         renderKeyBits();
+        renderBridge();
         if (onDone) onDone(null, d);
       })
       .catch(function (e) { if (onDone) onDone(e); else alert(e.message); });
@@ -180,6 +227,23 @@
       if (!confirm('למחוק את המפתח השמור?')) return;
       saveSettings({ apiKey: '' });
     });
+
+    // the bridge card: the provider carries no key and no address — the
+    // extension owns the loopback endpoint, so the only choice here is which
+    // of the owner's loaded models answers.
+    $('ai-save-bridge').addEventListener('click', function () {
+      saveSettings({ provider: 'browser', model: $('ai-bridge-model').value }, function (err) {
+        if (err) return alert(err.message);
+        var st = $('ai-bridge-state');
+        if (st && !bridgePresent()) return;
+        if (st) {
+          st.className = 'notice ok';
+          st.innerHTML = '🌉 מחובר ✓ החבילות ב-<a href="/admin/inject">הזרקות</a> וב-<a href="/admin/menus">תפריטים</a> ירוצו עכשיו על המודל שלכם.';
+        }
+      });
+    });
+    document.addEventListener('tapuz-bridge-hello', renderBridge);
+    document.addEventListener('tapuz-bridge-models', renderBridge);
   }
 
   // browser detection (v2.18.1): the matching download button wears a chip —

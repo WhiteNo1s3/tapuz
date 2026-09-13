@@ -16,6 +16,31 @@ Gemma 4 31B is dense: at `--gpu max` with nothing else on the card it runs ~40�
 
 `/admin/ai` → provider **מודל מקומי**, endpoint `http://127.0.0.1:1234/v1`, model `tapuz-gemma` (or leave the model empty for whatever is loaded). The connection test lists the loaded models. From then on every **▶ הרץ עם ה-AI המחובר** button in the admin (the menu organizer on `/admin/menus`, the packs on `/admin/inject`) runs through this endpoint, with the same doors as the paste flow.
 
+## 2א. The site is on a HOST, the model is here — Bridge V2 (v2.29)
+
+Everything above assumes the CMS and the model share a machine. The live site does not: `<live-site>` runs on Hostinger, the 5090 sits at home. The server cannot reach LM Studio, and **the page cannot either** — LM Studio answers loopback with no CORS headers at all (its preflight comes back 400 with no `Access-Control-*`), and Chrome's Private Network Access would block a public page reaching a private address anyway. The one context that may do it is a browser extension's background worker with a host permission.
+
+That is Bridge V2 (`extension-v2a`), and it is the only moving part:
+
+```
+hosted admin page  ──postMessage──►  content script ──►  background worker ──fetch──►  LM Studio
+   (the site)                          (the bridge, per-origin opt-in)                 (127.0.0.1:1234)
+```
+
+1. **Install** — `/admin/ai-setup` → the Bridge V2 download for your browser. Chrome/Edge: `chrome://extensions`, Developer mode, drag the ZIP in. Firefox: `about:debugging#/runtime/this-firefox` → Load Temporary Add-on (a permanent install needs Mozilla's signature).
+2. **Connect the site** — open your admin, then the extension's popup → **״חבר את האתר הפתוח״**. That asks for a host permission for that one origin and registers the content script there; it is injected into the open tab immediately, so nothing needs a reload. The popup lists every connected site and disconnects any of them.
+3. **Choose it in the CMS** — `/admin/ai-setup` → the **🌉 האתר בענן, המודל אצלכם** card names every model your LM Studio has loaded; pick one (or "whatever is loaded") and press **חבר דרך הדפדפן**.
+
+From then on **▶ הרץ עם ה-AI המחובר** on `/admin/menus` and `/admin/inject` runs the pack on your own GPU: the server composes the request, the page carries it to the model, the page brings the reply back, and the same door judges it. No key exists anywhere on this path, the model is never exposed to the internet, and the run still applies nothing — apply is the owner's second click on text they can read.
+
+The extension holds **no credentials, ever**, and the page never names a host: it picks a path from a closed list (`/v1/chat/completions`, `/v1/models`) and the worker supplies the loopback endpoint. Limits today: no streaming, and Chrome can terminate an MV3 worker during a very long generation (a lite pack at 10–40 s is fine; a 44K-char site-builder pack may not be).
+
+```bash
+LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma node scripts/smoke-bridge-run.js
+```
+
+That is the whole hosted flow in one script: it starts a server with **no way to call a model at all**, plays the extension's part itself, and checks that the organizer pack still runs, that the door judged it, and that nothing was applied.
+
 ## 3. The live smoke — one real run, end to end
 
 ```bash

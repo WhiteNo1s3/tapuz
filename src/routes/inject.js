@@ -234,11 +234,127 @@ router.post('/admin/api/inject/:id/undo', requireAdmin, (req, res) => {
   }
 });
 
+// ── the door, as the closures BOTH run paths share ──────────────────────
+// The server-side run and the browser-relay run judge a reply identically;
+// only the courier differs. Everything that decides "is this reply good
+// enough, and what does the repair round ask for" lives here once.
+function doorFor(pack, ctx, brief) {
+  const repairable = Array.isArray(pack.run.repairable) ? pack.run.repairable : [];
+  const hardCodes = Array.isArray(pack.hardCodes) ? pack.hardCodes : [];
+
+  // the same size gate as paste/apply, before the pack's door: a runaway
+  // reply counts as a refusal, so the one repair round may ask for the
+  // document alone (the history turn is capped, the model is not re-fed 60K)
+  const attempt = (text) => {
+    const tooLong = replyTooLong(text);
+    if (tooLong) return { text, parsed: null, refusal: tooLong };
+    try { return { text, parsed: pack.parse(text, ctx, { brief }), refusal: null }; }
+    catch (e) { return { text, parsed: null, refusal: e }; }
+  };
+  // a refusal is worse than any warning; a hard reply counts its hard codes
+  // (or 1 when the pack does not name them); a soft reply is 0
+  const hardCount = (a) => {
+    if (a.refusal) return Infinity;
+    if (!a.parsed.hard) return 0;
+    const n = (a.parsed.warnings || []).filter((w) => hardCodes.includes(w && w.code)).length;
+    return n || 1;
+  };
+  const needsRepair = (a) => !!a.refusal || (a.parsed.warnings || []).some((w) => repairable.includes(w && w.code));
+  /** What the second turn asks for, in the pack's own Hebrew. */
+  const repairTurn = (a) => {
+    const fixes = a.refusal
+      ? [a.refusal.message]
+      : (a.parsed.warnings || []).filter((w) => repairable.includes(w && w.code)).map((w) => String(w.message || w.code));
+    return 'תיקונים נדרשים:\n' + fixes.map((f) => '- ' + String(f).replace(/\s+/g, ' ').trim()).join('\n') +
+      '\nהחזירו את המסמך המלא, מתוקן.';
+  };
+  return { attempt, hardCount, needsRepair, repairTurn };
+}
+
+/** The one answer shape every run path ends in — or the door's refusal WITH
+ *  the text, so the owner can fix it by hand. */
+function finishRun(res, { chosen, rounds, repaired, started, usage, provider, log }) {
+  if (chosen.refusal) {
+    const code = chosen.refusal.code || 'BAD_REPLY';
+    log({ ok: false, code, rounds, repaired: false, replyChars: chosen.text.length });
+    return res.status(STATUS_BY_CODE[code] || 400).json({
+      ok: false, error: chosen.refusal.message, code,
+      reply: chosen.text, rounds, repaired: false,
+      timing: { ms: Date.now() - started }, usage, provider
+    });
+  }
+  const p = chosen.parsed;
+  log({ ok: true, rounds, repaired, replyChars: chosen.text.length, warningCodes: codesOf(p.warnings) });
+  return res.json({
+    ok: true,
+    reply: chosen.text,
+    rounds,
+    repaired,
+    preview: p.preview || null,
+    warnings: p.warnings || [],
+    warningTexts: textsOf(p),
+    notes: p.notes || [],
+    hard: !!p.hard,
+    timing: { ms: Date.now() - started },
+    usage,
+    provider
+  });
+}
+
+// ── the browser-relay runs (v2.29) ──────────────────────────────────────
+//
+// On a HOSTED CMS the server cannot reach the owner's LM Studio — but their
+// BROWSER can, through the Bridge V2 extension (LM Studio answers with no
+// CORS headers at all, so the page itself cannot call it either: the
+// extension's background worker is the one context that may). So for the
+// 'browser' provider a run is not one request. The server composes the call,
+// the page relays it, and the page brings the raw model reply back to the
+// SAME route as { step: { id, result } }.
+//
+// The run's whole state — the pack text, the site state it was built from,
+// the first reply — stays on the SERVER keyed by an opaque id. The browser
+// only ever carries that id and the model's own output, exactly like the
+// copilot's relay (src/ai.js) and the approval pendings. Trusting the
+// returned text is the decision the paste tier already makes: apply is still
+// a separate POST, and it re-parses the text the owner can read.
+const RUN_TTL_MS = 15 * 60 * 1000;
+const relayRuns = new Map();
+
+function putRelayRun(state) {
+  const id = 'run_' + require('crypto').randomBytes(12).toString('hex');
+  relayRuns.set(id, { ...state, at: Date.now() });
+  for (const [k, v] of relayRuns) if (Date.now() - v.at > RUN_TTL_MS) relayRuns.delete(k);
+  return id;
+}
+function takeRelayRun(id) {
+  const st = relayRuns.get(String(id || ''));
+  if (!st) return null;
+  relayRuns.delete(id);
+  if (Date.now() - st.at > RUN_TTL_MS) return null;
+  return st;
+}
+
+/** The page's half of the contract: what to send, and how long to wait. */
+function relayAnswer(res, { pack, id, body, provider, timeoutMs, stage, rounds }) {
+  return res.json({
+    ok: true, relay: true, stage, rounds,
+    modelCall: { id, body },
+    timeoutMs,
+    provider,
+    packId: pack.id
+  });
+}
+
 // ── POST /admin/api/inject/:id/run — prompt → model → door (→ one repair) ─
+// With a server-side provider that is one request. With the browser relay it
+// is a short conversation with the PAGE: {modelCall} → {step} → {modelCall}
+// → {step} → the answer. Same door, same repair rule, same final shape.
 router.post('/admin/api/inject/:id/run', requireAdmin, async (req, res) => {
   const pack = packOr404(req, res);
   if (!pack) return;
   const b = req.body || {};
+  // a relay continuation carries no brief: it resumes state the server holds
+  if (b.step && b.step.id) return resumeRelayRun(req, res, pack, b.step);
   const brief = briefFor(b.brief);
   const size = sizeFor(pack, b.size);
   const variant = variantFor(b.variant);
@@ -285,6 +401,7 @@ router.post('/admin/api/inject/:id/run', requireAdmin, async (req, res) => {
 
   // 2. does it fit the model's window? (a pack that overflows comes back
   //    truncated, not refused — so refuse it here, and point at lite)
+  //    The relayed model IS a local model: same window, same gate.
   const tokensEst = ai.estimateTokens(built.chars);
   const budget = ai.contextBudget(providerId);
   if (tokensEst + pack.run.maxTokens > budget) {
@@ -297,33 +414,33 @@ router.post('/admin/api/inject/:id/run', requireAdmin, async (req, res) => {
     });
   }
 
-  const timeoutMs = providerId === 'local' ? pack.run.timeoutMs.local : pack.run.timeoutMs.cloud;
+  const timeoutMs = (providerId === 'local' || providerId === 'browser')
+    ? pack.run.timeoutMs.local : pack.run.timeoutMs.cloud;
+
+  // 2b. the relay: hand the first call to the page and stop here. Nothing is
+  //     spent, nothing is written, and the socket is free again immediately —
+  //     the minutes of waiting happen in the browser, not on a held
+  //     connection through the host's proxy.
+  if (ai.isRelayProvider()) {
+    let call;
+    try {
+      call = ai.relayRequest({ system: '', user: built.text, maxTokens: pack.run.maxTokens });
+    } catch (e) {
+      log({ ok: false, code: e.code || 'NO_PROVIDER' });
+      return refuse(res, e);
+    }
+    provider = call.provider || provider;
+    const id = putRelayRun({ packId: pack.id, ctx, brief, packText: built.text, promptChars, started, usage, timeoutMs });
+    log({ ok: true, code: 'RELAY_CALL', rounds: 1, repaired: false });
+    return relayAnswer(res, { pack, id, body: call.body, provider, timeoutMs, stage: 'first', rounds: 1 });
+  }
+
   // server.js caps idle sockets at 30 s (slow-loris, S4) — and a local model
   // legitimately says nothing for minutes. Lift the cap for THIS socket to
   // the provider ceiling (two rounds + margin) and put it back when the
   // response is out; headersTimeout/requestTimeout still guard the intake.
   liftSocketTimeout(req, res, 2 * timeoutMs + 30000);
-  const repairable = Array.isArray(pack.run.repairable) ? pack.run.repairable : [];
-  const hardCodes = Array.isArray(pack.hardCodes) ? pack.hardCodes : [];
-
-  // the same size gate as paste/apply, before the pack's door: a runaway
-  // reply counts as a refusal, so the one repair round may ask for the
-  // document alone (the history turn is capped, the model is not re-fed 60K)
-  const attempt = (text) => {
-    const tooLong = replyTooLong(text);
-    if (tooLong) return { text, parsed: null, refusal: tooLong };
-    try { return { text, parsed: pack.parse(text, ctx, { brief }), refusal: null }; }
-    catch (e) { return { text, parsed: null, refusal: e }; }
-  };
-  // a refusal is worse than any warning; a hard reply counts its hard codes
-  // (or 1 when the pack does not name them); a soft reply is 0
-  const hardCount = (a) => {
-    if (a.refusal) return Infinity;
-    if (!a.parsed.hard) return 0;
-    const n = (a.parsed.warnings || []).filter((w) => hardCodes.includes(w && w.code)).length;
-    return n || 1;
-  };
-  const needsRepair = (a) => !!a.refusal || (a.parsed.warnings || []).some((w) => repairable.includes(w && w.code));
+  const door = doorFor(pack, ctx, brief);
 
   // 3. the call
   let r1;
@@ -335,24 +452,19 @@ router.post('/admin/api/inject/:id/run', requireAdmin, async (req, res) => {
   }
   addUsage(r1.usage);
   provider = r1.provider || provider;
-  const a1 = attempt(r1.text);
+  const a1 = door.attempt(r1.text);
   let chosen = a1;
   let rounds = 1;
   let repaired = false;
 
   // 4. at most ONE repair round
-  if (needsRepair(a1)) {
-    const fixes = a1.refusal
-      ? [a1.refusal.message]
-      : (a1.parsed.warnings || []).filter((w) => repairable.includes(w && w.code)).map((w) => String(w.message || w.code));
-    const followUp = 'תיקונים נדרשים:\n' + fixes.map((f) => '- ' + String(f).replace(/\s+/g, ' ').trim()).join('\n') +
-      '\nהחזירו את המסמך המלא, מתוקן.';
+  if (door.needsRepair(a1)) {
     rounds = 2;
     let r2 = null;
     try {
       r2 = await ai.generateDetailed({
         system: '',
-        user: followUp,
+        user: door.repairTurn(a1),
         history: [{ role: 'user', content: built.text }, { role: 'assistant', content: r1.text }],
         maxTokens: pack.run.maxTokens,
         timeoutMs,
@@ -368,37 +480,82 @@ router.post('/admin/api/inject/:id/run', requireAdmin, async (req, res) => {
     }
     if (r2) {
       addUsage(r2.usage);
-      const a2 = attempt(r2.text);
-      if (hardCount(a2) <= hardCount(a1)) { chosen = a2; repaired = true; }
+      const a2 = door.attempt(r2.text);
+      if (door.hardCount(a2) <= door.hardCount(a1)) { chosen = a2; repaired = true; }
     }
   }
 
-  // 5. the answer — or the door's refusal WITH the text, so it can be edited
-  if (chosen.refusal) {
-    const code = chosen.refusal.code || 'BAD_REPLY';
-    log({ ok: false, code, rounds, repaired: false, replyChars: chosen.text.length });
-    return res.status(STATUS_BY_CODE[code] || 400).json({
-      ok: false, error: chosen.refusal.message, code,
-      reply: chosen.text, rounds, repaired: false,
-      timing: { ms: Date.now() - started }, usage, provider
+  // 5. the answer
+  return finishRun(res, { chosen, rounds, repaired, started, usage, provider, log });
+});
+
+/**
+ * The relay continuation: the page brings back what the local model said for
+ * one modelCall. Round 1 either finishes or asks for the repair round (a
+ * second modelCall); round 2 always finishes.
+ */
+async function resumeRelayRun(req, res, pack, step) {
+  const st = takeRelayRun(step.id);
+  if (!st || st.packId !== pack.id) {
+    return res.status(400).json({
+      ok: false, code: 'RELAY_EXPIRED',
+      error: 'ההרצה פגה (או שייכת לחבילה אחרת) — לחצו "הרץ" שוב'
     });
   }
-  const p = chosen.parsed;
-  log({ ok: true, rounds, repaired, replyChars: chosen.text.length, warningCodes: codesOf(p.warnings) });
-  res.json({
-    ok: true,
-    reply: chosen.text,
-    rounds,
-    repaired,
-    preview: p.preview || null,
-    warnings: p.warnings || [],
-    warningTexts: textsOf(p),
-    notes: p.notes || [],
-    hard: !!p.hard,
-    timing: { ms: Date.now() - started },
-    usage,
-    provider
+  const { ctx, brief, packText, promptChars, started, usage, timeoutMs } = st;
+  const addUsage = (u) => {
+    if (!u) return;
+    usage.prompt_tokens += Number(u.prompt_tokens) || 0;
+    usage.completion_tokens += Number(u.completion_tokens) || 0;
+    if (u.reasoning_tokens != null) usage.reasoning_tokens = (usage.reasoning_tokens || 0) + (Number(u.reasoning_tokens) || 0);
+  };
+  let provider = { id: 'browser', model: (ai.getSettings() || {}).model || '' };
+  const log = (fields) => logRun(Object.assign({
+    id: pack.id, action: 'run', provider: provider.id, model: provider.model,
+    ms: Date.now() - started, promptChars, usage
+  }, fields));
+
+  let r;
+  try {
+    r = ai.readRelayReply(step.result, { ms: Date.now() - started, model: provider.model });
+  } catch (e) {
+    log({ ok: false, code: e.code || 'PROVIDER_ERROR', rounds: st.first ? 2 : 1, repaired: false });
+    return refuse(res, e);
+  }
+  addUsage(r.usage);
+  provider = r.provider || provider;
+  const door = doorFor(pack, ctx, brief);
+  const a = door.attempt(r.text);
+
+  // round 1: good enough, or ask for the repair round through the page again
+  if (!st.first) {
+    if (!door.needsRepair(a)) {
+      return finishRun(res, { chosen: a, rounds: 1, repaired: false, started, usage, provider, log });
+    }
+    let call;
+    try {
+      call = ai.relayRequest({
+        system: '',
+        user: door.repairTurn(a),
+        history: [{ role: 'user', content: packText }, { role: 'assistant', content: r.text }],
+        maxTokens: pack.run.maxTokens,
+        turnCap: REPAIR_TURN_CAP
+      });
+    } catch (e) {
+      // no second turn to be had — the first reply still stands on its own
+      return finishRun(res, { chosen: a, rounds: 1, repaired: false, started, usage, provider, log });
+    }
+    const id = putRelayRun({ packId: pack.id, ctx, brief, packText, promptChars, started, usage, timeoutMs, first: a });
+    log({ ok: true, code: 'RELAY_REPAIR', rounds: 2, repaired: false });
+    return relayAnswer(res, { pack, id, body: call.body, provider, timeoutMs, stage: 'repair', rounds: 2 });
+  }
+
+  // round 2: the reply with fewer hard warnings wins (tie → the repaired one)
+  const a1 = st.first;
+  const better = door.hardCount(a) <= door.hardCount(a1);
+  return finishRun(res, {
+    chosen: better ? a : a1, rounds: 2, repaired: better, started, usage, provider, log
   });
-});
+}
 
 module.exports = router;
