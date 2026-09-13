@@ -33,19 +33,27 @@
       });
     },
 
-    /** Drive a copilot turn to completion: while the server answers with a
+    /** Drive a server turn to completion: while the server answers with a
      *  modelCall continuation, relay it and hand the output back through
-     *  `post` (a fn that POSTs a payload to /admin/api/ai/chat and resolves
-     *  the parsed JSON). Providers with a server-side endpoint never emit
-     *  modelCall, so this is a pass-through for them. */
-    drive: function (d, post) {
+     *  `post` (a fn that POSTs a payload to the route that issued the call
+     *  and resolves the parsed JSON). Providers with a server-side endpoint
+     *  never emit modelCall, so this is a pass-through for them.
+     *
+     *  Every route that speaks this protocol uses the SAME two shapes —
+     *  server → page { modelCall: { id, body } }, page → server
+     *  { step: { id, result } } — so the copilot (/admin/api/ai/chat) and
+     *  the injection runner (/admin/api/inject/:id/run) share this driver.
+     *  `timeoutMs` is the route's own ceiling for one model turn; a pack on
+     *  a 31B model can legitimately think for minutes. */
+    drive: function (d, post, timeoutMs) {
       if (!d || !d.modelCall) return Promise.resolve(d);
       var body = d.modelCall.body || {};
+      // '' = the server left the choice to us: whatever the runtime loaded
       if (!body.model) body.model = B.models[0] || 'local-model';
-      return B.call('/v1/chat/completions', body).then(function (result) {
+      return B.call('/v1/chat/completions', body, timeoutMs || d.timeoutMs).then(function (result) {
         return post({ step: { id: d.modelCall.id, result: result } });
       }).then(function (next) {
-        return B.drive(next, post);
+        return B.drive(next, post, timeoutMs);
       });
     }
   };

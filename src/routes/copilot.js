@@ -133,6 +133,7 @@ router.get('/admin/inject', (req, res) => {
         ${packs.map((p) => `<section class="card" data-inject="${escapeAdmin(p.id)}"></section>`).join('')}
       </div>
     </div>
+    <script src="/admin-bridge.js"></script>
     <script src="/admin-inject-card.js"></script>
     <script>
       (function () {
@@ -440,7 +441,23 @@ router.get('/admin/ai-setup', requireAdmin, (req, res) => {
         </section>
       </div>
 
-      <section class="card" style="margin-top:18px">
+      <section class="card" id="ai-bridge-card" style="margin-top:18px">
+        <h3 class="sub-head">🌉 האתר בענן, המודל אצלכם — Bridge V2</h3>
+        <p class="lead">
+          כשהאתר מאוחסן אצל ספק אירוח, <strong>השרת לא יכול להגיע</strong> ל-LM Studio שרץ על המחשב שלכם —
+          אבל <strong>הדפדפן שלכם כן</strong>. התוסף Bridge V2 מעביר כל קריאה: החבילות (מסדר התפריטים,
+          מעצב הערכה) רצות על ה-GPU שלכם, בלי מפתחות, בלי מונה, והמודל לא נחשף לאינטרנט לרגע.
+        </p>
+        <div id="ai-bridge-state" class="notice">מחפש את הגשר…</div>
+        <label class="field-label" style="margin-top:10px">מודל</label>
+        <select id="ai-bridge-model" class="input"></select>
+        <div class="row" style="margin-top:12px">
+          <button type="button" id="ai-save-bridge" class="btn">חבר דרך הדפדפן</button>
+          <a class="btn secondary" href="#ai-ext-card">⬇ להתקנת התוסף</a>
+        </div>
+      </section>
+
+      <section class="card" id="ai-ext-card" style="margin-top:18px">
         <h3 class="sub-head">🧩 התוסף לדפדפן — Chrome וגם Firefox</h3>
         <p class="lead">
           שתי תוספות, לפי הצורך: <strong>מלווה ההעתקה</strong> — כפתור אחד מעתיק חבילת BenTML מוכנה יחד עם
@@ -492,6 +509,7 @@ router.get('/admin/ai-setup', requireAdmin, (req, res) => {
         padding:1px 8px; border-radius:999px;
       }
     </style>
+    <script src="/admin-bridge.js"></script>
     <script src="/admin-ai-setup.js"></script>
   `;
   res.send(layout(html, 'חיבור AI', accentFor('ai-setup')));

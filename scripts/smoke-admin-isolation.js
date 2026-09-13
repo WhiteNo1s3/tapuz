@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * v2.29 QA — the theme stays on the site; the management system stays itself.
+ * v2.30 QA — the theme stays on the site; the management system stays itself.
  *
  * Ben: "make the effects and fonts not interfere with the management system
  * … the theme leaked into the admin". On the live site the admin shell linked

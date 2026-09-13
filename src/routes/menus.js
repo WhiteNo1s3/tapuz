@@ -216,6 +216,9 @@ router.get('/admin/menus', (req, res) => {
       window.__TAPUZ_MENU_LOCATIONS__ = ${jsonForScript(locations)};
     </script>
     <script src="/admin-menus.js"></script>
+    <!-- the owner's own model, reached through their browser (Bridge V2) —
+         a hosted CMS cannot call LM Studio on their PC, but the page can -->
+    <script src="/admin-bridge.js"></script>
     <script src="/admin-inject-card.js"></script>
     <script>
       // the card is optional at runtime: without its script the editor still works

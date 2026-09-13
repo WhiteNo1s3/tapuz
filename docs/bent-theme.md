@@ -122,7 +122,7 @@
   `setInterval` לא מתחת ל-16ms.
 - **כלב שמירה** — מאזין או פריים שלוקח יותר מ-50ms שלוש פעמים, או ארבעה
   פריימים תקועים (‎>250ms) בעשר שניות = עצירה.
-- **הדף של עצמו** (v2.29) — בתוך מסגרות התצוגה של האדמין (הקנבס של הסטודיו,
+- **הדף של עצמו** (v2.30) — בתוך מסגרות התצוגה של האדמין (הקנבס של הסטודיו,
   תצוגת המכשירים של הבונה, תצוגת התפריט) `parent` ו-`top` היו מערכת הניהול
   עצמה. אצל האפקט הם הדף שלו, ו-`opener`/`frameElement` הם `null` — אפקט
   שנכתב מול `top.document` נוחת בדף שהוא מקשט, לא על האדמין. זה מגן מטעות,
@@ -142,7 +142,7 @@
 - קוד: [`src/bentml/theme-dialect.js`](../src/bentml/theme-dialect.js) (parse/serialize), [`src/theme.js`](../src/theme.js) (הדלתות), [`src/theme-canvas.js`](../src/theme-canvas.js) (הבנץ׳), [`src/theme-roleplay.js`](../src/theme-roleplay.js) (הפרומפט)
 - `public/css/main.css` — האתר: הבסיס + הערכה (פלטה, גופנים, רקע, כרום, עור, אפקטים)
 
-## הערכה היא של האתר, לא של מערכת הניהול (v2.29)
+## הערכה היא של האתר, לא של מערכת הניהול (v2.30)
 
 Ben: *"make the effects and fonts not interfere with the management system"*.
 מסכי האדמין מקשרים **רק** את `/css/admin.css` (`src/admin-ui.js` › `layout`) —

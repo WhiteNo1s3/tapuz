@@ -518,7 +518,7 @@ function renderThemeFontLinks(overrides) {
 /**
  * CSS custom properties injected after theme CSS.
  *
- * The SITE's css only. The admin shell links none of it (v2.29 — v2.27's
+ * The SITE's css only. The admin shell links none of it (v2.30 — v2.27's
  * palette-and-fonts "admin scope" still re-scaled and re-fonted the
  * dashboard); admin.css carries its own baseline (src/admin-ui.js layout).
  */
@@ -715,7 +715,7 @@ function renderThemeEffectsJs(overrides) {
 //    Stopping is total: listeners registered through the shadowed globals go
 //    silent, scheduled callbacks stop, and the guard's own capture listener
 //    swallows motion events so an unshadowed listener starves too.
-//      5. its own page (v2.29) — the admin shows the site in the owner's
+//      5. its own page (v2.30) — the admin shows the site in the owner's
 //         theme inside preview frames (the studio canvas, the builder's
 //         device preview, the menu preview). There `parent` / `top` /
 //         `document.defaultView.parent` would be the MANAGEMENT SYSTEM, and a

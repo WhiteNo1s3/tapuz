@@ -406,7 +406,7 @@ function waitUp(tries = 40) {
     const live = await req('GET', '/', { cookie });
     check('the served site widens its CSP by exactly Google Fonts while a web font is in use',
       /style-src 'self' 'unsafe-inline' https:\/\/fonts\.googleapis\.com/.test(live.headers['content-security-policy']) && /font-src 'self' data: https:\/\/fonts\.gstatic\.com/.test(live.headers['content-security-policy']));
-    // v2.29 — nothing leaks: the admin shell links admin.css and nothing of the theme
+    // v2.30 — nothing leaks: the admin shell links admin.css and nothing of the theme
     // (the full sweep over every admin screen is scripts/smoke-admin-isolation.js)
     const adminPage = await req('GET', '/admin/theme', { cookie });
     check('the studio page links the admin stylesheet only — no main.css, no admin-theme.css, no web fonts (no leak into the admin screens)',

@@ -14,7 +14,14 @@
 (function (global) {
   'use strict';
 
-  var RUNNABLE = { claude: true, openai: true, local: true };
+  var RUNNABLE = { claude: true, openai: true, local: true, browser: true };
+
+  /** The browser relay can only run where the bridge actually answered: the
+   *  Bridge V2 extension must be installed AND this site connected in it.
+   *  admin-bridge.js flips `present` when the content script says hello. */
+  function bridgeReady() {
+    return !!(global.TapuzBridge && global.TapuzBridge.present);
+  }
   var packsPromise = null;
   var settingsPromise = null;
 
@@ -40,8 +47,10 @@
   }
 
   function canRun(settings, pack) {
-    return !!(settings && settings.ok && RUNNABLE[settings.provider] &&
-      (settings.hasKey || settings.provider === 'local') && pack && pack.run && pack.run.enabled);
+    if (!(settings && settings.ok && RUNNABLE[settings.provider] && pack && pack.run && pack.run.enabled)) return false;
+    // a hosted site + the owner's own model = the bridge, and only when it is there
+    if (settings.provider === 'browser') return bridgeReady();
+    return !!(settings.hasKey || settings.provider === 'local');
   }
 
   function h(tag, cls, text) {
@@ -425,17 +434,37 @@
     reply.addEventListener('input', syncApply);
 
     // ── the run (/run — never applies) ──
+    /** The relay conversation: while the server hands back a modelCall, the
+     *  bridge runs it on the owner's machine and the result goes back to the
+     *  same route. The server holds the run's state; we carry an opaque id
+     *  and the model's own words. A pass-through for every other provider. */
+    function driveRelay(d) {
+      if (!d || !d.modelCall) return Promise.resolve(d);
+      if (!bridgeReady()) {
+        return Promise.reject(new Error('הגשר לא מחובר לאתר הזה — פתחו את התוסף Bridge V2 ולחצו "חבר את האתר הפתוח"'));
+      }
+      setStatus(d.stage === 'repair' ? 'הדפדפן מריץ סבב תיקון על המודל שלכם…' : 'הדפדפן מריץ את החבילה על המודל שלכם…');
+      return global.TapuzBridge.drive(d, function (payload) {
+        return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/run', payload,
+          state.ctrl ? state.ctrl.signal : undefined).then(function (r) { return r.json; });
+      }, d.timeoutMs);
+    }
+
     function doRun() {
       hush();
-      var local = state.settings && state.settings.provider === 'local';
+      var prov = state.settings ? state.settings.provider : '';
+      var onOwnMachine = prov === 'local' || prov === 'browser';
       var model = state.settings ? (state.settings.model || state.settings.provider) : '';
-      setStatus((local ? 'מודל מקומי' : 'ספק ענן') + (model ? ' · ' + model : '') + (local ? ' — עד ~4 דקות' : ' — ~20 שניות'));
+      if (prov === 'browser' && !model) model = 'המודל הטעון אצלכם';
+      setStatus((prov === 'browser' ? 'המודל שלכם — דרך הדפדפן' : onOwnMachine ? 'מודל מקומי' : 'ספק ענן') +
+        (model ? ' · ' + model : '') + (onOwnMachine ? ' — עד ~4 דקות' : ' — ~20 שניות'));
       busy(true);
       btnCancel.classList.remove('inject-hidden');
       startTimer();
       state.ctrl = typeof AbortController === 'function' ? new AbortController() : null;
       return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/run',
         { brief: brief.value.trim(), size: size() }, state.ctrl ? state.ctrl.signal : undefined)
+        .then(function (r) { return driveRelay(r.json).then(function (d) { return { status: r.status, json: d }; }); })
         .then(function (r) {
           var d = r.json;
           if (d.ok) {
@@ -459,6 +488,9 @@
             case 'BROWSER_RELAY':
               showRun(false, 'הספק "דרך הדפדפן" לא יכול לרוץ מהשרת — העתיקו את הפרומפט והדביקו בצ׳אט.');
               say('info', d.error || '');
+              break;
+            case 'RELAY_EXPIRED':
+              say('warn', d.error || 'ההרצה פגה — לחצו "הרץ" שוב.');
               break;
             case 'PACK_TOO_BIG':
               lite.checked = true;
@@ -564,7 +596,12 @@
       if (canRun(state.settings, pack)) {
         showRun(true, '');
       } else if (state.settings && state.settings.ok && state.settings.provider === 'browser') {
-        showRun(false, 'הספק "דרך הדפדפן" לא רץ מהשרת — העתיקו את הפרומפט והדביקו בצ׳אט, או חברו מודל מקומי / מפתח.');
+        // the provider is right, the bridge simply has not said hello (yet):
+        // the extension is missing, or this site was never connected in it
+        showRun(false, 'הגשר לא מחובר לאתר הזה — פתחו את התוסף Bridge V2, לחצו "חבר את האתר הפתוח", ורעננו.');
+        document.addEventListener('tapuz-bridge-hello', function () {
+          if (!state.destroyed && canRun(state.settings, state.pack)) showRun(true, '');
+        });
       } else if (pack.run && pack.run.enabled && state.settings && state.settings.ok) {
         showRun(false, 'להרצה ישירה חברו מודל מקומי או מפתח API במסך "חיבור AI".');
       }

@@ -250,7 +250,7 @@ function layout(content, title = 'Tapuziel', accent = '#f97316', opts = {}) {
   const hasMain = content.includes('data-admin-main');
   const closeMain = hasMain ? '</main>' : '';
   const nav = hasMain ? '\n  <script src="/admin-nav.js" defer></script>' : '';
-  // ONE stylesheet, the admin's own (v2.29). Nothing of the site's theme —
+  // ONE stylesheet, the admin's own (v2.30). Nothing of the site's theme —
   // not its palette, fonts, base size, skin or effects — is linked into the
   // management system; admin.css carries the baseline it used to borrow.
   // The site in the owner's theme is only ever shown inside a preview frame.

@@ -139,7 +139,9 @@ const CONTEXT_HEADROOM_TOKENS = 4000;
  *  24000 − 4000 = 20000. The public providers are effectively unbounded
  *  next to a 14K-char pack. */
 function contextBudget(providerId) {
-  if (providerId !== 'local') return Infinity;
+  // 'browser' is the SAME local runtime, reached through the owner's browser
+  // instead of the server's socket — so it gets the same window, not Infinity.
+  if (providerId !== 'local' && providerId !== 'browser') return Infinity;
   const p = getProvider('local');
   return ((p && Number(p.contextTokens)) || 24000) - CONTEXT_HEADROOM_TOKENS;
 }
@@ -346,6 +348,74 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
  */
 async function generate(opts = {}) {
   return (await generateDetailed(opts)).text;
+}
+
+// ── one-shot generation over the browser relay (v2.29) ──────────────────
+//
+// generateDetailed() FETCHES. On a hosted CMS with the 'browser' provider
+// there is nothing to fetch: the model runs on the owner's own machine and
+// only their browser can reach it (LM Studio serves no CORS headers at all,
+// so the page cannot call it either — the extension's background worker is
+// the one context that may). The same turn therefore splits in two halves,
+// and the caller drives the page between them:
+//
+//   relayRequest(...)      → the body the page hands to the bridge, verbatim
+//   readRelayReply(result) → exactly what generateDetailed would have resolved
+//
+// The bytes are the ones buildRequest() always produced, so a pack that runs
+// through a server-side local model and the same pack relayed through the
+// browser are the same request — only the courier differs.
+
+/** Is the configured provider the browser relay? */
+function isRelayProvider() {
+  const p = getProvider(load().provider || 'claude');
+  return !!(p && p.browserRelay);
+}
+
+/**
+ * The request the page relays verbatim. No key is attached — none exists on
+ * this path. An empty model name means "whatever the bridge reports loaded".
+ * @returns {{ body: object, provider: {id: string, model: string} }}
+ */
+function relayRequest({ system = '', user = '', history = [], maxTokens = 0, turnCap = 0 } = {}) {
+  const s = load();
+  const provider = getProvider(s.provider || 'claude');
+  if (!provider || !provider.browserRelay) {
+    throw coded('הספק הנוכחי אינו "דרך הדפדפן" — אין מה להעביר', 'NO_PROVIDER');
+  }
+  const model = String(s.model || '').trim();
+  const { body } = buildRequest(provider, '', system, user, model, history, turnCap > 0 ? turnCap : undefined);
+  if (Number(maxTokens) > 0) body.max_tokens = Math.min(32768, Math.round(Number(maxTokens)));
+  return { body, provider: { id: provider.id, model } };
+}
+
+/**
+ * The raw provider JSON the page brought back → the generateDetailed shape.
+ * Trusting it is a DECISION, not an oversight: the sender is the authenticated
+ * owner (admin session + Origin gate), the fabricated-reply risk is identical
+ * to pasting a reply by hand at /admin/ai, and every write still stops at the
+ * door's approval gate regardless of what the "model" said.
+ * @param {object} result raw body from the local runtime
+ * @param {{ms?: number, model?: string}} meta
+ */
+function readRelayReply(result, meta = {}) {
+  const provider = getProvider('browser');
+  const style = (provider.body && provider.body.style) || 'openai-chat';
+  const data = result && typeof result === 'object' ? result : null;
+  if (!data) throw coded('הדפדפן לא החזיר תשובה מהמודל', 'EMPTY_REPLY');
+  // a local runtime reports its own failures in the body it hands back
+  if (data.error) {
+    const msg = (data.error && (data.error.message || data.error)) || 'שגיאה לא ידועה';
+    throw coded('שגיאת המודל המקומי: ' + String(msg), 'PROVIDER_ERROR', { providerMessage: String(msg) });
+  }
+  const text = dig(data, provider.responsePath || ['choices', 0, 'message', 'content']);
+  if (!text) throw coded('המודל המקומי החזיר תשובה ריקה', 'EMPTY_REPLY');
+  return {
+    text,
+    usage: readUsage(style, data),
+    ms: Number(meta.ms) || 0,
+    provider: { id: 'browser', model: String(meta.model || load().model || '') }
+  };
 }
 
 // ── the tool loop ───────────────────────────────────────────────────────
@@ -606,6 +676,10 @@ module.exports = {
   generate,
   generateDetailed,
   converse,
+  // the browser-relay seam for one-shot generation (v2.29)
+  isRelayProvider,
+  relayRequest,
+  readRelayReply,
   buildRequest,
   endpointAllowed,
   ALLOWED_API_HOSTS,

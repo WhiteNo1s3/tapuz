@@ -7,7 +7,7 @@
    RTL-first. Section accent arrives as --admin-accent (from ADMIN_NAV_GROUPS).
    ========================================================================== */
 
-/* ── The admin's own baseline (v2.29) ────────────────────────────────────────
+/* ── The admin's own baseline (v2.30) ────────────────────────────────────────
    Ben: "make the effects and fonts not interfere with the management system".
    The admin shell used to link the SITE's stylesheet (main.css; since v2.27
    admin-theme.css — the same base plus the theme's palette and fonts) and
