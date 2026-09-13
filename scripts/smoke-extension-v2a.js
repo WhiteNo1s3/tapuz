@@ -14,6 +14,12 @@
  * model is local. A match pattern may not carry a port, btoa dies on a
  * unicode host, and the tab the owner is looking at needs the script NOW,
  * not on its next load.
+ *
+ * The streaming class of bug (v0.4.0): an MV3 worker dies in silence, so the
+ * relay streams internally — but the page must not be able to tell. The pins
+ * below hold that line: the flags are the worker's, the SSE parse survives a
+ * frame cut in half, and what comes back is byte-for-byte the shape the CMS
+ * already parsed before streaming existed.
  */
 
 const fs = require('fs');
@@ -158,10 +164,47 @@ check('the three-step hosted flow is spelled out in the popup',
 check('README names the site-side option, the disconnect, and WHY the relay exists',
   /דרך הדפדפן \(Bridge V2\)/.test(readme) && /נתק/.test(readme) && /CORS/.test(readme));
 
+// ── streaming (0.4.0) — the worker streams, nothing above it notices ──
+// Measured: non-streaming, the worker sees ONE silent gap the length of the
+// whole generation (9-13s for the organizer pack, 130s+ for a 44K-char one).
+// Streaming, the longest mid-stream silence is 45-47ms.
+check('the WORKER sets the streaming flags — never the page',
+  /Object\.assign\(\{\}, body, \{\s*stream: true,\s*stream_options: \{ include_usage: true \}\s*\}\)/.test(bg) &&
+  !/stream_options/.test(content) && !/stream_options/.test(popup) &&
+  !/stream: true/.test(content) && !/stream: true/.test(popup));
+// A frame WILL arrive cut in half, and Hebrew arrives 2-3 bytes at a time.
+check('SSE frames are buffered across chunk boundaries (and UTF-8 is rejoined)',
+  /buf \+= decoder\.decode\(step\.value, \{ stream: true \}\)/.test(bg) &&
+  /buf\.indexOf\('\\n'\)/.test(bg) && /buf = buf\.slice\(nl \+ 1\)/.test(bg));
+check('[DONE] terminates the stream', /'\[DONE\]'/.test(bg) && /DONE_FRAME/.test(bg));
+check('the assembled reply is EXACTLY the non-streaming shape',
+  /choices: \[\{ index: 0, message: \{ role, content \}, finish_reason: finishReason \}\]/.test(bg));
+check('usage survives streaming (include_usage puts it in the last frame)',
+  /frame\.usage/.test(bg) && /data\.usage = usage/.test(bg));
+check('a server that ignores `stream` falls back to one JSON body, never a failure',
+  /text\/event-stream/.test(bg) && /return await readWholeBody\(res\)/.test(bg));
+check('progress is throttled (~4/sec) and heartbeats through silence',
+  /PROGRESS_MS = 250/.test(bg) && /HEARTBEAT_MS = 10000/.test(bg) &&
+  /now - lastPost < PROGRESS_MS/.test(bg) &&
+  /setInterval\(\(\) => post\(true\), HEARTBEAT_MS\)/.test(bg));
+check('a stream caps SILENCE, not duration', /STREAM_IDLE_MS/.test(bg) && /bump\(\)/.test(bg));
+check('the port aborts the in-flight fetch when the page goes away',
+  /onDisconnect\.addListener\(\(\) => \{[\s\S]{0,160}ac\.abort\(\);/.test(bg));
+check('posting to a closed port cannot throw', /try \{ port\.postMessage\(m\); \} catch/.test(bg));
+check('port name agrees on both ends',
+  /PORT_NAME = 'tz-llm'/.test(bg) && /PORT_NAME = 'tz-llm'/.test(content));
+check('chat takes the port; /v1/models stays on sendMessage',
+  /function relayViaPort/.test(content) && /runtime\.connect\(\{ name: PORT_NAME \}\)/.test(content) &&
+  /function relayViaMessage/.test(content) && /runtime\.sendMessage\(\{ type: 'tz-local-llm'/.test(content));
+check('the page-facing result message shape is unchanged',
+  /Object\.assign\(\{ type: 'tz-local-llm-result', id \}, res\)/.test(content));
+check('a dead worker answers the page instead of hanging it',
+  /port\.onDisconnect\.addListener\(\(\) => finish\(/.test(content));
+
 // ── the CMS side speaks the same protocol ──
 const cmsBridge = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-bridge.js'), 'utf8');
 check('page glue and extension agree on message names',
-  ['tz-bridge-hello', 'tz-bridge-ping', 'tz-local-llm', 'tz-local-llm-result']
+  ['tz-bridge-hello', 'tz-bridge-ping', 'tz-local-llm', 'tz-local-llm-result', 'tz-local-llm-progress']
     .every((t) => cmsBridge.includes(t) && content.includes(t)));
 
 console.log('');

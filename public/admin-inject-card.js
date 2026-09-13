@@ -443,11 +443,15 @@
       if (!bridgeReady()) {
         return Promise.reject(new Error('הגשר לא מחובר לאתר הזה — פתחו את התוסף Bridge V2 ולחצו "חבר את האתר הפתוח"'));
       }
-      setStatus(d.stage === 'repair' ? 'הדפדפן מריץ סבב תיקון על המודל שלכם…' : 'הדפדפן מריץ את החבילה על המודל שלכם…');
+      var phase = d.stage === 'repair' ? 'סבב תיקון' : 'החבילה';
+      setStatus('הדפדפן מריץ את ' + phase + ' על המודל שלכם…');
       return global.TapuzBridge.drive(d, function (payload) {
         return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/run', payload,
           state.ctrl ? state.ctrl.signal : undefined).then(function (r) { return r.json; });
-      }, d.timeoutMs);
+      }, d.timeoutMs, function (p) {
+        // the model is visibly writing — say so, instead of a dead spinner
+        if (!state.destroyed) setStatus('✍ המודל שלכם כותב… ' + (p.tokens || 0).toLocaleString() + ' טוקנים');
+      });
     }
 
     function doRun() {

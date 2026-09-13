@@ -33,7 +33,23 @@ hosted admin page  ──postMessage──►  content script ──►  backgro
 
 From then on **▶ הרץ עם ה-AI המחובר** on `/admin/menus` and `/admin/inject` runs the pack on your own GPU: the server composes the request, the page carries it to the model, the page brings the reply back, and the same door judges it. No key exists anywhere on this path, the model is never exposed to the internet, and the run still applies nothing — apply is the owner's second click on text they can read.
 
-The extension holds **no credentials, ever**, and the page never names a host: it picks a path from a closed list (`/v1/chat/completions`, `/v1/models`) and the worker supplies the loopback endpoint. Limits today: no streaming, and Chrome can terminate an MV3 worker during a very long generation (a lite pack at 10–40 s is fine; a 44K-char site-builder pack may not be).
+The extension holds **no credentials, ever**, and the page never names a host: it picks a path from a closed list (`/v1/chat/completions`, `/v1/models`) and the worker supplies the loopback endpoint.
+
+### Why the bridge streams (and why it had to)
+
+Both browsers evict an idle background script after ~30 seconds, and Chrome is explicit about the case that matters here: a service worker is terminated **"when a `fetch()` response takes more than 30 seconds to arrive"**, with a hard five-minute ceiling on any single request ([Chrome: service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)). A non-streaming relay is exactly that shape — one fetch, silent for the whole generation — so it would have died on anything slower than a quick pack. Firefox is no escape: its MV3 event page idles out the same way ([bug 1851373](https://bugzilla.mozilla.org/show_bug.cgi?id=1851373)); what keeps it alive is an open message port, which is the same lever Chrome gives.
+
+Measured here (gemma-4-31b on a 5090, the real organizer pack at 6,918 chars):
+
+| | non-streaming | streaming |
+|---|---|---|
+| first token | — | 0.4 s warm, 4.2 s cold |
+| longest silence the worker sees | the whole generation (9–13 s here, 131 s for a site-builder pack) | **47 ms** |
+| token accounting | full | full (`stream_options.include_usage`) |
+
+So Bridge V2 (0.4.0+) streams every chat call over a `runtime.Port`: chunks arrive every few tens of milliseconds, each one is an event that resets the idle timer, the port itself keeps a Firefox event page loaded, and the worker sends a progress message at least every 10 seconds even while the model is still reading the prompt. The page reassembles the stream into the ordinary non-streaming reply, so the CMS composes and parses exactly what it always did — and the card shows the token count climbing instead of a dead spinner. The run's ceiling now measures **silence**, not duration: a model that is visibly writing is never cut off.
+
+What is still out of reach in a browser: a single generation over **five minutes** (Chrome's per-request cap). Nothing the CMS ships comes close on a 31B model — the slowest measured pack is 131 s — but a very large pack on a very slow machine would want a worker process instead of a tab.
 
 ```bash
 LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma node scripts/smoke-bridge-run.js

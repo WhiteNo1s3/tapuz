@@ -19,16 +19,29 @@
     present: false,
     models: [],
 
-    /** One relayed call. Rejects when the bridge is absent, errors, or times out. */
-    call: function (path, body, timeoutMs) {
+    /** One relayed call. Rejects when the bridge is absent, errors, or falls
+     *  silent. `onProgress({chars, tokens})` fires while the model writes —
+     *  the bridge streams (0.4.0+), so a live generation reports every few
+     *  hundred milliseconds.
+     *
+     *  The ceiling measures SILENCE, not duration: every progress message
+     *  restarts it. A model that is visibly writing is never cut off, and a
+     *  model that stopped talking is still caught. */
+    call: function (path, body, timeoutMs, onProgress) {
       return new Promise(function (resolve, reject) {
         if (!B.present) return reject(new Error('תוסף Bridge V2 לא מחובר לאתר הזה'));
         var id = 'llm-' + (++seq) + '-' + Date.now();
-        var timer = setTimeout(function () {
-          waiting.delete(id);
-          reject(new Error('המודל המקומי לא ענה בזמן'));
-        }, timeoutMs || 180000);
-        waiting.set(id, { resolve: resolve, reject: reject, timer: timer });
+        var ms = timeoutMs || 180000;
+        var w = { resolve: resolve, reject: reject, onProgress: onProgress, timer: null };
+        w.arm = function () {
+          clearTimeout(w.timer);
+          w.timer = setTimeout(function () {
+            waiting.delete(id);
+            reject(new Error('המודל המקומי לא ענה בזמן'));
+          }, ms);
+        };
+        w.arm();
+        waiting.set(id, w);
         window.postMessage({ source: 'tapuziel-cms', type: 'tz-local-llm', id: id, path: path, body: body }, window.location.origin);
       });
     },
@@ -45,15 +58,15 @@
      *  the injection runner (/admin/api/inject/:id/run) share this driver.
      *  `timeoutMs` is the route's own ceiling for one model turn; a pack on
      *  a 31B model can legitimately think for minutes. */
-    drive: function (d, post, timeoutMs) {
+    drive: function (d, post, timeoutMs, onProgress) {
       if (!d || !d.modelCall) return Promise.resolve(d);
       var body = d.modelCall.body || {};
       // '' = the server left the choice to us: whatever the runtime loaded
       if (!body.model) body.model = B.models[0] || 'local-model';
-      return B.call('/v1/chat/completions', body, timeoutMs || d.timeoutMs).then(function (result) {
+      return B.call('/v1/chat/completions', body, timeoutMs || d.timeoutMs, onProgress).then(function (result) {
         return post({ step: { id: d.modelCall.id, result: result } });
       }).then(function (next) {
-        return B.drive(next, post, timeoutMs);
+        return B.drive(next, post, timeoutMs, onProgress);
       });
     }
   };
@@ -71,6 +84,17 @@
         B.models = ((d && d.data) || []).map(function (x) { return x.id; });
         document.dispatchEvent(new CustomEvent('tapuz-bridge-models'));
       }).catch(function () { /* bridge yes, LM Studio no — send() reports it */ });
+      return;
+    }
+    // streaming progress (bridge 0.4.0+): keeps the UI honest AND restarts
+    // the silence ceiling. An older bridge simply never sends it.
+    if (m.type === 'tz-local-llm-progress' && waiting.has(m.id)) {
+      var p = waiting.get(m.id);
+      p.arm();
+      if (typeof p.onProgress === 'function') {
+        try { p.onProgress({ chars: Number(m.chars) || 0, tokens: Number(m.tokens) || 0 }); }
+        catch (e) { /* a UI that throws must not kill the generation */ }
+      }
       return;
     }
     if (m.type === 'tz-local-llm-result' && waiting.has(m.id)) {
