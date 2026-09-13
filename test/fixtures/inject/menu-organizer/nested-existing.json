@@ -1,0 +1,152 @@
+{
+  "config": {
+    "title": "קליניקת שן",
+    "description": "רפואת שיניים למשפחה",
+    "logo": {
+      "type": "text",
+      "text": "קליניקת שן"
+    },
+    "header": {
+      "ctaLabel": "קבעו תור",
+      "tagline": ""
+    },
+    "homepage": "home"
+  },
+  "overrides": {
+    "layout": {
+      "maxWidth": "900px"
+    },
+    "fonts": {
+      "baseSize": "17px"
+    }
+  },
+  "pages": [
+    {
+      "full_path": "home",
+      "title": "דף הבית",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "about",
+      "title": "אודות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "treatments",
+      "title": "טיפולים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "treatments/whitening",
+      "title": "הלבנת שיניים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "treatments/implants",
+      "title": "שתלים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "treatments/kids",
+      "title": "רפואת שיניים לילדים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "team",
+      "title": "הצוות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "faq",
+      "title": "שאלות נפוצות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "contact",
+      "title": "צור קשר",
+      "status": "published",
+      "tags": []
+    }
+  ],
+  "menus": {
+    "main": [
+      {
+        "label": "דף הבית",
+        "type": "custom",
+        "url": "/"
+      },
+      {
+        "label": "אודות",
+        "type": "page",
+        "target": "about"
+      },
+      {
+        "label": "טיפולים",
+        "type": "page",
+        "target": "treatments",
+        "children": [
+          {
+            "label": "הלבנה",
+            "type": "page",
+            "target": "treatments/whitening"
+          },
+          {
+            "label": "שתלים",
+            "type": "page",
+            "target": "treatments/implants"
+          },
+          {
+            "label": "ילדים",
+            "type": "page",
+            "target": "treatments/kids"
+          }
+        ]
+      },
+      {
+        "label": "הצוות",
+        "type": "page",
+        "target": "team"
+      },
+      {
+        "label": "שאלות נפוצות",
+        "type": "page",
+        "target": "faq"
+      },
+      {
+        "label": "צור קשר",
+        "type": "page",
+        "target": "contact"
+      }
+    ],
+    "footer": []
+  },
+  "locations": {
+    "main": "main",
+    "footer": "footer"
+  },
+  "brief": "רק סדר",
+  "expect": {
+    "placement": "top",
+    "maxTop": 6,
+    "mustPlace": [
+      "home",
+      "about",
+      "treatments",
+      "treatments/whitening",
+      "treatments/implants",
+      "treatments/kids",
+      "team",
+      "faq",
+      "contact"
+    ],
+    "mustNotPlace": []
+  }
+}

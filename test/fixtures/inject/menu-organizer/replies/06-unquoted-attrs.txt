@@ -1,0 +1,18 @@
+<bent-menus version="1" note="קיבצנו את הכלים והדוגמאות כדי להיכנס בשורה">
+  <bent-menu name="main" location="main">
+    <bent-link label=הבית page=home />
+    <bent-link label=הבונה page=הבונה />
+    <bent-link label=השפה page=השפה />
+    <bent-link label=כלים>
+      <bent-link label=בינה page=הבינה />
+      <bent-link label=לקוחות page=הלקוחות />
+    </bent-link>
+    <bent-link label=היסודות page=היסודות />
+    <bent-link label=דוגמאות>
+      <bent-link label=השוואות page=השוואות />
+      <bent-link label=ראווה page=חלון-ראווה />
+      <bent-link label=מודולים page=showcase-modules />
+    </bent-link>
+    <bent-link label=קשר page=צרו-קשר />
+  </bent-menu>
+</bent-menus>

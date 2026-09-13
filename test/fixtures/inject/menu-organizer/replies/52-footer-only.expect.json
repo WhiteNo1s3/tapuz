@@ -1,0 +1,26 @@
+{
+  "itemCount": 2,
+  "items": [
+    {
+      "label": "הבית",
+      "type": "page",
+      "target": "home"
+    },
+    {
+      "label": "צרו קשר",
+      "type": "page",
+      "target": "צרו-קשר"
+    }
+  ],
+  "warningCodes": [],
+  "absentCodes": [
+    "OVERFLOW_LIKELY",
+    "NO_CHANGE",
+    "PAGES_MISSING",
+    "UNKNOWN_PAGE",
+    "LAYOUT_UNASKED"
+  ],
+  "notes": [],
+  "hard": false,
+  "menu": "footer"
+}

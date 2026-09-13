@@ -1,0 +1,29 @@
+{
+  "fixture": "relocated-main",
+  "menu": "primary",
+  "itemCount": 2,
+  "items": [
+    { "label": "ראשי", "type": "page", "target": "home" },
+    {
+      "label": "שירותים",
+      "type": "page",
+      "target": "services",
+      "children": [
+        { "label": "אודות", "type": "page", "target": "about" },
+        { "label": "צור קשר", "type": "page", "target": "contact" }
+      ]
+    }
+  ],
+  "warningCodes": [],
+  "absentCodes": [
+    "NEW_MENU",
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING",
+    "NO_CHANGE",
+    "OVERFLOW_LIKELY"
+  ],
+  "menuLocations": {
+    "primary": "main"
+  },
+  "hard": false
+}

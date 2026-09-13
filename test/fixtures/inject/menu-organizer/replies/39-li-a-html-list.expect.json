@@ -1,0 +1,29 @@
+{
+  "itemCount": 10,
+  "items": [
+    {
+      "label": "הבית",
+      "type": "page",
+      "target": "home"
+    },
+    {
+      "label": "הבונה",
+      "type": "page",
+      "target": "הבונה"
+    }
+  ],
+  "warningCodes": [
+    "TAG_ALIAS",
+    "LABEL_FROM_TEXT",
+    "URL_TO_PAGE"
+  ],
+  "notes": [
+    "TAG_ALIAS",
+    "LABEL_FROM_TEXT"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING"
+  ],
+  "hard": false
+}

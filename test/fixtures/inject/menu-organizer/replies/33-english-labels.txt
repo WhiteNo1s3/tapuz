@@ -1,0 +1,14 @@
+<bent-menus version="1" note="Grouped the two service pages under Services">
+  <bent-menu name="main" location="main">
+    <bent-link label="Home" page="home" />
+    <bent-link label="About" page="about" />
+    <bent-link label="Work" page="work" />
+    <bent-link label="Services" page="services">
+      <bent-link label="Branding" page="services/branding" />
+      <bent-link label="Product" page="services/product" />
+    </bent-link>
+    <bent-link label="Journal" page="blog" />
+    <bent-link label="Careers" page="careers" />
+    <bent-link label="Contact" page="contact" />
+  </bent-menu>
+</bent-menus>

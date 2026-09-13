@@ -1,0 +1,3 @@
+```json
+[{"label":"הבית","page":"home"},{"label":"הבונה","page":"הבונה"},{"label":"השפה","page":"השפה"},{"label":"AI","page":"הבינה"},{"label":"CRM","page":"הלקוחות"},{"label":"היסודות","page":"היסודות"},{"label":"השוואות","page":"השוואות"},{"label":"ראווה","page":"חלון-ראווה"},{"label":"מודולים","page":"showcase-modules"},{"label":"קשר","page":"צרו-קשר"}]
+```

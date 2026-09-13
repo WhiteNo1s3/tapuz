@@ -84,6 +84,10 @@ router.post('/admin/api/theme', (req, res) => {
       }
     }
     const settings = saveThemeSettings(b);
+    // the menu knobs' door warnings (v2.28b) join the skin's — one list,
+    // same key, same place in the response
+    warnings.push(...(settings.warnings || []));
+    delete settings.warnings;
     const rebuildError = rebuildSite('theme save');
     res.json({ ok: true, rebuildError, warnings, ...settings });
   } catch (e) {
@@ -127,6 +131,20 @@ router.get('/admin/api/theme/library/export.bent', (req, res) => {
     res.status(404).json({ ok: false, error: e.message });
   }
 });
+
+/**
+ * The studio's capacity hint (v2.28b) — what menus.estimateMenuFit says
+ * about the main menu under the live knobs, as one Hebrew line. The same
+ * words the editor script writes after a save (admin-theme.js navFitLine),
+ * so the hint reads the same before and after. Without an estimate (the
+ * organizer's module not present) the line explains where the menu lives.
+ */
+function navFitLine(fit) {
+  if (!fit || !Array.isArray(fit.itemsPx)) return 'התפריט הראשי נערך בעמוד התפריטים; הידיות כאן קובעות איך הוא נשבר, מתקפל ומסומן.';
+  const n = fit.itemsPx.length;
+  const rows = fit.rowsNow === 1 ? 'היום שורה אחת ✓' : `היום ${fit.rowsNow} שורות`;
+  return `בתפריט הראשי ${n} פריטים · בשורה אחת נכנסים ~${fit.capacity} · ${rows}`;
+}
 
 /** What an import door received: the package object, or the raw pasted
  *  text (v2.24 — the tolerant path: fences, chat prose, a bare theme JSON). */
@@ -804,6 +822,24 @@ router.get('/admin/theme', (req, res) => {
               ${opt('lg', 'גדול', ch.menuSize === 'lg')}
             </select></span>
           </div>
+          <label class="field-label" for="th-ch-fold">קיפול: כמה פריטים לפני "עוד" (0 = בלי)</label>
+          <input type="number" id="th-ch-fold" min="0" max="12" step="1" value="${escAttr(String(Number.isFinite(Number(ch.menuFold)) ? Number(ch.menuFold) : 0))}" class="input mb" title="מעבר למספר הזה הפריטים מתקפלים תחת &quot;עוד&quot; — בלי JavaScript, נפתח בלחיצה">
+          <label class="field-label" for="th-ch-collapse">מתי התפריט הופך למגירה ☰</label>
+          <select id="th-ch-collapse" class="input mb">
+            ${opt('sm', 'רק בטלפון (עד 560px)', ch.menuCollapse === 'sm')}
+            ${opt('md', 'טלפון וטאבלט צר (עד 720px) — ברירת מחדל', !ch.menuCollapse || ch.menuCollapse === 'md')}
+            ${opt('lg', 'גם בטאבלט (עד 1024px)', ch.menuCollapse === 'lg')}
+            ${opt('never', 'אף פעם — תמיד שורה', ch.menuCollapse === 'never')}
+          </select>
+          <label class="field-label" for="th-ch-current">סימון הדף הנוכחי</label>
+          <select id="th-ch-current" class="input mb">
+            ${opt('underline', 'קו תחתון (ברירת מחדל)', !ch.menuCurrent || ch.menuCurrent === 'underline')}
+            ${opt('pill', 'גלולה (רקע מעוגל)', ch.menuCurrent === 'pill')}
+            ${opt('bold', 'מודגש בצבע הראשי', ch.menuCurrent === 'bold')}
+            ${opt('none', 'בלי סימון', ch.menuCurrent === 'none')}
+          </select>
+          <p id="th-nav-fit" class="hint">${escAttr(navFitLine(settings.menuFit))}</p>
+          <a href="/admin/menus#organizer">🧭 סדרו את התפריט עם ה-AI</a>
         </section>
         <section class="card">
           <h3 class="sub-head">🧵 עור — CSS חופשי על השלד</h3>

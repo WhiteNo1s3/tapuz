@@ -301,6 +301,12 @@ const SHADOW_SCALE = {
 // them together (the .btn-primary rule, form submits, pricing CTAs)
 const BUTTON_SELECTORS = '.btn-primary, .bent-form-submit, .bent-plan-cta, .bent-flipbox-button';
 
+// every "menu link" surface the chrome dresses (v2.28b): the links AND the
+// fold's <summary class="nav-more-sum"> ("עוד"), which is not an <a> but
+// sits in the same row and must take the same colour/weight/hover
+const MENU_LINKS = '.main-nav a, .main-nav .nav-more-sum';
+const MENU_LINKS_HOVER = '.main-nav a:hover, .main-nav .nav-more-sum:hover';
+
 // the menu's geometry (v2.28) — one knob, one custom property, the theme
 // css does the rest (themes/default/css/main.css "Menu capacity")
 const HEADER_WIDTH = { content: 'var(--max-width)', wide: '1140px', full: '100%' };
@@ -384,6 +390,39 @@ function menuBodyClasses(overrides) {
   if (k.collapse !== 'md') out.push('nav-collapse-' + k.collapse);
   if (k.current !== 'underline') out.push('nav-current-' + k.current);
   return out;
+}
+
+// the storage key ↔ knob name map, so the door and the organizer speak
+// through ONE validator (knobsToOverrides) — never a second list of enums
+const MENU_KNOB_KEYS = {
+  layout: { menuPlacement: 'placement', headerWidth: 'width' },
+  chrome: { menuOverflow: 'flow', menuFold: 'fold', menuCollapse: 'collapse', menuAlign: 'align', menuGap: 'gap', menuSize: 'size', menuCurrent: 'current' }
+};
+
+/**
+ * The menu knobs inside an override fragment (a pasted theme, the studio
+ * form, a package) made safe IN PLACE: an unknown value is reset to its
+ * default and said in Hebrew, `fold` becomes a clamped number. Only the keys
+ * the fragment carries are touched — an absent knob stays absent, so a
+ * partial save still merges onto the live theme. Returns the warnings.
+ */
+function sanitizeMenuKnobs(overrides) {
+  const o = overrides || {};
+  const knobs = {};
+  for (const section of Object.keys(MENU_KNOB_KEYS)) {
+    const data = o[section];
+    if (!data || typeof data !== 'object') continue;
+    for (const [key, knob] of Object.entries(MENU_KNOB_KEYS[section])) {
+      if (data[key] !== undefined && data[key] !== null && data[key] !== '') knobs[knob] = data[key];
+    }
+  }
+  if (!Object.keys(knobs).length) return [];
+  const { overrides: safe, warnings } = knobsToOverrides(knobs);
+  for (const section of Object.keys(MENU_KNOB_KEYS)) {
+    if (!safe[section]) continue;
+    for (const [key, value] of Object.entries(safe[section])) o[section][key] = value;
+  }
+  return warnings;
 }
 
 /** Keep an override value safe to interpolate into CSS — no rule breakout
@@ -582,22 +621,25 @@ function overridesToCss(overrides, opts = {}) {
   if (ch.headerGlass === true || ch.headerGlass === 'true') {
     css += `.site-header { background: color-mix(in srgb, ${headerBg || 'var(--color-surface, #fff)'} 78%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }\n`;
   }
+  // v2.28b: the fold's "עוד" is a <summary class="nav-more-sum">, not an <a>
+  // — every rule that dresses a menu link dresses it too, or the last item
+  // of a folded bar looks like a stranger (MENU_LINKS = link + summary).
   const headerText = cssValue(ch.headerText);
   if (headerText) {
-    css += `.site-header, .site-header .site-logo, .site-header .main-nav a, .site-header .site-tagline { color: ${headerText}; }\n`;
+    css += `.site-header, .site-header .site-logo, .site-header .main-nav a, .site-header .main-nav .nav-more-sum, .site-header .site-tagline { color: ${headerText}; }\n`;
   }
-  if (ch.menuWeight === 'bold') css += `.main-nav a { font-weight: 700; }\n`;
+  if (ch.menuWeight === 'bold') css += `${MENU_LINKS} { font-weight: 700; }\n`;
   const hover = ['color', 'underline', 'pill', 'glow'].includes(ch.menuHover) ? ch.menuHover : 'color';
   if (hover === 'underline') {
-    css += `.main-nav a { transition: color 0.15s, box-shadow 0.15s; }\n` +
-      `.main-nav a:hover { color: ${hoverColor}; box-shadow: inset 0 -2px 0 ${hoverColor}; }\n`;
+    css += `${MENU_LINKS} { transition: color 0.15s, box-shadow 0.15s; }\n` +
+      `${MENU_LINKS_HOVER} { color: ${hoverColor}; box-shadow: inset 0 -2px 0 ${hoverColor}; }\n`;
   } else if (hover === 'pill') {
-    css += `.main-nav a { padding: 5px 12px; border-radius: 999px; transition: color 0.15s, background 0.15s; }\n` +
-      `.main-nav a:hover { color: ${hoverColor}; background: color-mix(in srgb, ${hoverColor} 14%, transparent); }\n`;
+    css += `${MENU_LINKS} { padding: 5px 12px; border-radius: 999px; transition: color 0.15s, background 0.15s; }\n` +
+      `${MENU_LINKS_HOVER} { color: ${hoverColor}; background: color-mix(in srgb, ${hoverColor} 14%, transparent); }\n`;
   } else if (hover === 'glow') {
-    css += `.main-nav a:hover { color: ${hoverColor}; text-shadow: 0 0 12px ${hoverColor}; }\n`;
+    css += `${MENU_LINKS_HOVER} { color: ${hoverColor}; text-shadow: 0 0 12px ${hoverColor}; }\n`;
   } else if (cssValue(ch.menuHoverColor)) {
-    css += `.main-nav a:hover { color: ${hoverColor}; }\n`;
+    css += `${MENU_LINKS_HOVER} { color: ${hoverColor}; }\n`;
   }
   const footerBg = cssValue(ch.footerBg);
   const footerText = cssValue(ch.footerText);
@@ -1170,6 +1212,9 @@ function extractThemeReply(reply, fallbackName) {
     warnings.push(...f.warnings);
   }
   if (overrides.effects && !String(overrides.effects.js || '').trim() && !String(overrides.effects.css || '').trim()) delete overrides.effects;
+  // the menu knobs (v2.28b): a value the theme css has no rule for would
+  // land as a body class nothing answers — reset it and say so
+  warnings.push(...sanitizeMenuKnobs(overrides));
 
   const jsErr = checkEffectJs(overrides.effects && overrides.effects.js);
   if (jsErr) throw new Error('ה-JS של האפקט לא מתקמפל: ' + jsErr + (bent ? ' — בקשו מהצ׳אט לתקן ולהחזיר את המסמך מחדש' : ' — בקשו מהצ׳אט לתקן ולהחזיר את ה-fence מחדש'));
@@ -1197,13 +1242,32 @@ function extractThemeReply(reply, fallbackName) {
 
 function getThemeSettings() {
   const config = loadConfig();
+  const overrides = loadOverrides();
   return {
-    overrides: loadOverrides(),
+    overrides,
     logo: config.logo || { type: 'text', text: config.title || 'Site', image: '', width: 180, height: 50 },
     siteTitle: config.title || 'Tapuz',
     description: config.description || '',
-    defaultTheme: config.defaultTheme || 'default'
+    defaultTheme: config.defaultTheme || 'default',
+    menuFit: menuFitFor(overrides, config)
   };
+}
+
+/**
+ * How the main menu fits its row under these knobs (v2.28b) — the studio's
+ * capacity hint. The estimate lives in menus.js (the organizer's home);
+ * required lazily because menus.js opens the database at load and may
+ * itself require this module. Null when the estimate is unavailable — the
+ * studio simply shows no hint, it never fails.
+ */
+function menuFitFor(overrides, config) {
+  try {
+    const menus = require('./menus');
+    if (typeof menus.estimateMenuFit !== 'function') return null;
+    return menus.estimateMenuFit(menus.getMenuForLocation('main'), overrides, config) || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function saveThemeSettings(payload) {
@@ -1225,8 +1289,12 @@ function saveThemeSettings(payload) {
   // onto the defaults. Before v2.22 the editor form covered every section so
   // the distinction was invisible; now effects (and chrome) live OUTSIDE the
   // form, and a plain "שמור ערכת נושא" must not silently wipe them.
-  const overrides = saveOverrides(mergeDeep(loadOverrides(), payload.overrides || payload));
-  return getThemeSettings();
+  const incoming = payload.overrides || payload;
+  // the menu knobs go through the one validator (v2.28b): an unknown value
+  // is stored as its default and reported in `warnings` for the door to show
+  const warnings = sanitizeMenuKnobs(incoming);
+  saveOverrides(mergeDeep(loadOverrides(), incoming));
+  return { ...getThemeSettings(), warnings };
 }
 
 // ── Theme packages (v0.99) — the ".pzn is our RPM" North Star pillar,
@@ -1337,6 +1405,12 @@ function validateThemePackage(pkg) {
  */
 function importThemePackage(pkg) {
   const valid = validateThemePackage(typeof pkg === 'string' ? parseThemePackage(pkg) : pkg);
+  // the menu knobs walk through the one validator here too (v2.28b) — an
+  // unknown value (menuCollapse:'huge') is stored as its default, never
+  // verbatim, and said in Hebrew on the package's own `warnings`: that list
+  // is what the import route already forwards to the studio
+  const knobWarnings = sanitizeMenuKnobs(valid.overrides);
+  if (knobWarnings.length) valid.warnings = (Array.isArray(valid.warnings) ? valid.warnings : []).concat(knobWarnings);
   return saveOverrides(valid.overrides);
 }
 
@@ -1370,6 +1444,8 @@ module.exports = {
   menuKnobs,
   knobsToOverrides,
   menuBodyClasses,
+  sanitizeMenuKnobs,
+  menuFitFor,
   // hygiene at the door (v2.27)
   cleanAuthorCss,
   normalizeColor,

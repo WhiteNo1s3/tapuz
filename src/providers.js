@@ -110,6 +110,13 @@ const PROVIDERS = {
     openModel: true,
     keyOptional: true,
     maxTokens: 4096,
+    // ADVISORY (v2.28): the context window the owner's runtime is assumed to
+    // be loaded with (LM Studio's default for qwen3.6-35b-a3b). Nothing is
+    // sent with it — ai.contextBudget() derives the runner's PACK_TOO_BIG
+    // gate from it (this number minus ai.js's 4K headroom for the chat
+    // template = 20K), because a pack that overflows the window comes back
+    // truncated, not refused.
+    contextTokens: 24000,
     responsePath: ['choices', 0, 'message', 'content'],
     keyHint: 'לרוב לא נדרש — השאירו ריק',
     keyUrl: '',

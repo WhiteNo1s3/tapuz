@@ -1,0 +1,10 @@
+{
+  "itemCount": 7,
+  "warningCodes": [
+    "LAYOUT_UNASKED"
+  ],
+  "knobs": {
+    "placement": "side"
+  },
+  "hard": false
+}

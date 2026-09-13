@@ -1,0 +1,4 @@
+<bent-menus version="1" note="ריק">
+  <bent-menu name="main" location="main">
+  </bent-menu>
+</bent-menus>

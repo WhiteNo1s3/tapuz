@@ -1,0 +1,11 @@
+{
+  "itemCount": 7,
+  "warningCodes": [
+    "SUBMENU_HIDDEN_IN_SCROLL",
+    "LAYOUT_UNASKED"
+  ],
+  "knobs": {
+    "flow": "scroll"
+  },
+  "hard": false
+}

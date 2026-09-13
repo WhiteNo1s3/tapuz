@@ -1,0 +1,9 @@
+<bent-menus version="1" note="הכותרת מציגה את primary — שני קישורים בלבד">
+  <bent-menu name="primary" location="main">
+    <bent-link label="ראשי" page="home" />
+    <bent-link label="שירותים" page="services">
+      <bent-link label="אודות" page="about" />
+      <bent-link label="צור קשר" page="contact" />
+    </bent-link>
+  </bent-menu>
+</bent-menus>

@@ -1,0 +1,11 @@
+<bent-menus version="1" note="קיבצנו את הכלים והדוגמאות כדי להיכנס בשורה">
+  <bent-menu name="main" location="main">
+    <bent-link label="דף הבית" page="home" />
+    <bent-link label="הסיפור" page="about" />
+    <bent-link label="החנות" page="shop" />
+    <bent-link label="ביקור" page="visit" />
+    <bent-link label="מתכונים" page="recipes" />
+    <bent-link label="אירועים" page="events" />
+    <bent-link label="צור קשר" page="contact" />
+  </bent-menu>
+</bent-menus>

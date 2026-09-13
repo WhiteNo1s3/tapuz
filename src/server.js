@@ -468,6 +468,9 @@ app.use(require('./routes/content-api'));
 // theme settings API (GET/POST /admin/api/theme, export/import) — extracted
 // to src/routes/theme.js in v1.15, together with the /admin/theme page.
 app.use(require('./routes/theme'));
+// Injection runner (v2.28) — the generic prompt/paste/apply/run/undo routes
+// for every pack in src/injections (menu organizer, theme designer, …).
+app.use(require('./routes/inject'));
 
 // ---- Menus API ----
 // Menus — extracted to src/routes/menus.js in v1.07 (sixth route-group

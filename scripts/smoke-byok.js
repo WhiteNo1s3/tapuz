@@ -73,11 +73,103 @@ let badProvider = false;
 try { ai.saveSettings({ provider: 'evilcorp' }); } catch (e) { badProvider = true; }
 check('unknown provider rejected', badProvider);
 
-// generate without a key fails fast in Hebrew (no network call happens)
-ai.generate({ system: 's', user: 'u' }).then(
-  () => { check('generate without key rejects', false); done(); },
-  (e) => { check('generate without key rejects with guidance', /מפתח/.test(e.message)); done(); }
-);
+// ── v2.28: generateDetailed — the accounted call the injection runner uses ──
+check('estimateTokens = ceil(chars / 2.3) (Hebrew tokenizes ~2.3 chars/token)',
+  ai.estimateTokens(3651) === Math.ceil(3651 / 2.3) && ai.estimateTokens(3651) === 1588 && ai.estimateTokens(0) === 0);
+check('contextBudget: local = 20000 (24K window minus headroom), public = unbounded',
+  ai.contextBudget('local') === 20000 && ai.contextBudget('claude') === Infinity && ai.contextBudget('openai') === Infinity);
+check('the local provider declares its advisory context window',
+  getProvider('local').contextTokens === 24000);
+check('the error vocabulary is exported',
+  JSON.stringify(ai.ERROR_CODES) === JSON.stringify(['NO_PROVIDER', 'BROWSER_RELAY', 'NETWORK', 'TIMEOUT', 'PROVIDER_ERROR', 'EMPTY_REPLY']));
+
+// a scripted provider through the global.fetch seam (the copilot-tools pattern)
+const providers = require('../src/providers');
+
+// the budget is DERIVED from the local provider's advisory window, never a
+// second literal: contextTokens − 4K headroom (24000 → 20000); a runtime
+// loaded with a wider window widens the PACK_TOO_BIG gate with it
+{
+  const local = providers.PROVIDERS.local;
+  const savedWindow = local.contextTokens;
+  local.contextTokens = 32000;
+  check('contextBudget(local) derives from contextTokens minus the 4K headroom (a stubbed 32000 window → 28000)',
+    ai.contextBudget('local') === 28000);
+  local.contextTokens = savedWindow;
+  check('…and reads 20000 again once the window is back to 24000', ai.contextBudget('local') === 20000);
+}
+providers.PROVIDERS.__fake = {
+  id: '__fake', label: 'test', endpoint: 'http://127.0.0.1:1/v1/chat/completions',
+  method: 'POST', authScheme: 'bearer', authHeader: 'Authorization', extraHeaders: {},
+  defaultModel: 'fake-model', models: [], openModel: true, keyOptional: true, maxTokens: 100,
+  responsePath: ['choices', 0, 'message', 'content'],
+  body: { style: 'openai-chat' }, baseUrlDefault: 'http://127.0.0.1:1/v1'
+};
+providers.PROVIDERS.__fakeAnthropic = {
+  ...getProvider('claude'), id: '__fakeAnthropic', endpoint: 'http://127.0.0.1:1/v1/messages', keyOptional: true
+};
+let next = null;
+let seen = null;
+global.fetch = async (url, init) => {
+  seen = JSON.parse(init.body);
+  if (typeof next === 'function') return next();
+  return { ok: true, status: 200, json: async () => next };
+};
+
+(async () => {
+  // generate without a key fails fast in Hebrew (no network call happens)
+  ai.saveSettings({ provider: 'claude', apiKey: '' });
+  try { await ai.generate({ system: 's', user: 'u' }); check('generate without key rejects', false); }
+  catch (e) { check('generate without key rejects with guidance + code NO_PROVIDER', /מפתח/.test(e.message) && e.code === 'NO_PROVIDER'); }
+
+  ai.saveSettings({ provider: '__fake', baseUrl: 'http://127.0.0.1:1/v1', model: 'fake-model' });
+  next = { choices: [{ message: { content: 'שלום' } }], usage: { prompt_tokens: 12, completion_tokens: 3, completion_tokens_details: { reasoning_tokens: 1 } } };
+  const d = await ai.generateDetailed({ system: 'S', user: 'U', maxTokens: 2048, timeoutMs: 5000 });
+  check('generateDetailed → {text, usage, ms, provider}', d.text === 'שלום' && typeof d.ms === 'number' && d.provider.id === '__fake' && d.provider.model === 'fake-model');
+  check('openai-chat usage is read (prompt/completion + reasoning_tokens)',
+    d.usage.prompt_tokens === 12 && d.usage.completion_tokens === 3 && d.usage.reasoning_tokens === 1);
+  check('maxTokens rides the body; the request shape is the same generate() always sent',
+    seen.max_tokens === 2048 && seen.messages[0].role === 'system' && seen.messages[0].content === 'S' && seen.messages[1].content === 'U' && !('tools' in seen));
+  check('generate() is now a wrapper returning the same text', (await ai.generate({ system: 'S', user: 'U' })) === 'שלום');
+
+  next = { choices: [{ message: { content: '' } }] };
+  try { await ai.generateDetailed({ user: 'U' }); check('empty content rejects', false); }
+  catch (e) { check('an empty content field → code EMPTY_REPLY', e.code === 'EMPTY_REPLY'); }
+
+  next = () => ({ ok: false, status: 429, json: async () => ({ error: { message: 'slow down' } }) });
+  try { await ai.generateDetailed({ user: 'U' }); check('non-2xx rejects', false); }
+  catch (e) { check('a non-2xx → code PROVIDER_ERROR with .status + .providerMessage', e.code === 'PROVIDER_ERROR' && e.status === 429 && e.providerMessage === 'slow down'); }
+
+  next = () => { const t = new Error('המודל לא ענה'); t.code = 'TIMEOUT'; throw t; };
+  try { await ai.generateDetailed({ user: 'U' }); check('timeout rejects', false); }
+  catch (e) { check('the ceiling passing → code TIMEOUT', e.code === 'TIMEOUT'); }
+
+  next = () => { throw new Error('ECONNREFUSED'); };
+  try { await ai.generateDetailed({ user: 'U' }); check('wire failure rejects', false); }
+  catch (e) { check('a wire failure → code NETWORK', e.code === 'NETWORK' && /רשת/.test(e.message)); }
+
+  ai.saveSettings({ provider: 'browser' });
+  try { await ai.generateDetailed({ user: 'U' }); check('browser relay rejects', false); }
+  catch (e) { check('the browser-relay provider → code BROWSER_RELAY (the honest message kept)', e.code === 'BROWSER_RELAY' && /דרך הדפדפן/.test(e.message)); }
+
+  // anthropic usage keys map to the same shape
+  ai.saveSettings({ provider: '__fakeAnthropic', apiKey: '' });
+  next = { content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: 40, output_tokens: 5 } };
+  const a2 = await ai.generateDetailed({ user: 'U' });
+  check('anthropic usage (input/output_tokens) maps to prompt/completion_tokens',
+    a2.text === 'hi' && a2.usage.prompt_tokens === 40 && a2.usage.completion_tokens === 5 && a2.usage.reasoning_tokens === undefined);
+  check('anthropic request shape unchanged (system top-level, no tools)', seen.system === '' && Array.isArray(seen.messages) && !('tools' in seen));
+
+  // the repair round's history cap: the chat's 12K per turn stays the
+  // default; a runner may raise it so a whole pack rides along
+  const long = 'x'.repeat(20000);
+  const capped = ai.buildRequest(getProvider('openai'), 'k', 'S', 'now', 'gpt-4o', [{ role: 'user', content: long }]);
+  const raised = ai.buildRequest(getProvider('openai'), 'k', 'S', 'now', 'gpt-4o', [{ role: 'user', content: long }], 40000);
+  check('history turns stay capped at 12000 chars by default; turnCap raises it',
+    capped.body.messages[1].content.length === 12000 && raised.body.messages[1].content.length === 20000);
+
+  done();
+})().catch((e) => { console.error(e); fail = true; done(); });
 
 function done() {
   try { fs.rmSync(process.env.TAPUZ_ROOT, { recursive: true, force: true }); } catch (e) {}

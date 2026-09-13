@@ -1,0 +1,11 @@
+{
+  "fixture": "services-12-side",
+  "itemCount": 14,
+  "warningCodes": [
+    "FOLD_WITH_SIDE"
+  ],
+  "absentCodes": [
+    "LAYOUT_UNASKED"
+  ],
+  "hard": false
+}

@@ -1,0 +1,11 @@
+{
+  "itemCount": 15,
+  "warningCodes": [
+    "OVERFLOW_LIKELY"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "NO_CHANGE"
+  ],
+  "hard": false
+}

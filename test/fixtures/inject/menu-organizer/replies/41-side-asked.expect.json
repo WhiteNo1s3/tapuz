@@ -1,0 +1,15 @@
+{
+  "fixture": "services-12-side",
+  "itemCount": 14,
+  "warningCodes": [],
+  "absentCodes": [
+    "LAYOUT_UNASKED",
+    "OVERFLOW_LIKELY",
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING"
+  ],
+  "knobs": {
+    "placement": "side"
+  },
+  "hard": false
+}

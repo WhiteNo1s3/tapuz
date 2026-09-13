@@ -240,6 +240,81 @@
     renderEditor();
   }
 
+  // ── the organizer's layer (v2.28): the capacity hint, backups, a reload hook ──
+  // "In one row fit ~N items / ~C chars · today R rows" — the same estimate
+  // the organizer prompt states, so the owner sees the number before asking.
+  function loadFit() {
+    var el = document.getElementById('menu-fit');
+    if (!el) return;
+    fetch('/admin/api/menus/fit')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok || !d.fit) return;
+        var f = d.fit;
+        var prefix = f.mode === 'side' ? 'מסילת צד · ' : f.mode === 'scroll' ? 'רצועת גלילה · ' : f.mode === 'drawer' ? 'מגירה · ' : '';
+        el.textContent = prefix + 'בשורה אחת נכנסים ~' + f.capacity + ' פריטים / ~' + f.charBudget + ' תווים · היום ' + f.rowsNow + ' שורות';
+      })
+      .catch(function () {});
+  }
+
+  function loadBackups() {
+    var sel = document.getElementById('menu-restore');
+    if (!sel) return;
+    fetch('/admin/api/menus/backups')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var list = (d && d.backups) || [];
+        sel.innerHTML = '<option value="">↩ שחזור' + (list.length ? ' (' + list.length + ')' : '') + '</option>' +
+          list.map(function (b) {
+            var when = b.at ? new Date(b.at).toLocaleString('he-IL') : b.id;
+            var counts = Object.keys(b.counts || {}).map(function (k) { return k + ' ' + b.counts[k]; }).join(', ');
+            return '<option value="' + esc(b.id) + '">' + esc(when + ' · ' + (b.reason || '') + (counts ? ' · ' + counts : '')) + '</option>';
+          }).join('');
+        sel.disabled = !list.length;
+      })
+      .catch(function () {});
+  }
+
+  var restoreSel = document.getElementById('menu-restore');
+  if (restoreSel) restoreSel.onchange = function () {
+    var id = restoreSel.value;
+    if (!id) return;
+    if (!confirm('לשחזר את התפריטים מהגיבוי הזה? המצב הנוכחי יישמר כגיבוי.')) { restoreSel.value = ''; return; }
+    fetch('/admin/api/menus/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backupId: id })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) return alert(d.error || 'שגיאה');
+      state.menus = d.menus;
+      if (d.locations) state.locations = d.locations;
+      pendingDeletes = [];
+      if (!state.menus[state.active]) state.active = 'main';
+      renderAll();
+      loadFit();
+      loadBackups();
+      alert(d.rebuildError ? 'התפריטים שוחזרו, אבל האתר לא נבנה מחדש: ' + d.rebuildError : 'התפריטים שוחזרו ✓');
+    }).catch(function () { alert('שגיאה'); });
+  };
+
+  // the organizer card calls this after an apply — refetch and redraw
+  function reloadFromServer() {
+    return fetch('/admin/api/menus')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) return;
+        state.menus = d.menus;
+        if (d.locations) state.locations = d.locations;
+        pendingDeletes = [];
+        if (!state.menus[state.active]) state.active = 'main';
+        renderAll();
+        loadFit();
+        loadBackups();
+      })
+      .catch(function () {});
+  }
+  window.tapuzMenusReload = reloadFromServer;
+
   // ---- menu entity actions ----
   var createBtn = document.getElementById('menu-create');
   if (createBtn) createBtn.onclick = function () {
@@ -318,6 +393,7 @@
       pendingDeletes = [];
       if (!state.menus[state.active]) state.active = 'main';
       renderAll();
+      loadFit();
       if (build) {
         return fetch('/admin/build', { method: 'POST' }).then(function (r) { return r.json(); }).then(function () {
           alert('נשמר ונבנה ✓');
@@ -334,4 +410,6 @@
   if (saveBuildBtn) saveBuildBtn.onclick = function () { save(true); };
 
   loadPages(renderAll);
+  loadFit();
+  loadBackups();
 })();

@@ -1,0 +1,19 @@
+<bent-menus version="1" note="מסילת צד כפי שביקשתם — כל שנים-עשר השירותים גלויים">
+  <bent-menu-layout placement="side" />
+  <bent-menu name="main" location="main">
+    <bent-link label="דף הבית" page="home" />
+    <bent-link label="ניקיון משרדים" page="services/s1" />
+    <bent-link label="ניקיון בתים" page="services/s2" />
+    <bent-link label="ניקיון לאחר שיפוץ" page="services/s3" />
+    <bent-link label="פוליש רצפות" page="services/s4" />
+    <bent-link label="ניקוי ספות" page="services/s5" />
+    <bent-link label="ניקוי שטיחים" page="services/s6" />
+    <bent-link label="ניקוי חלונות" page="services/s7" />
+    <bent-link label="חיטוי וטיהור" page="services/s8" />
+    <bent-link label="הדברה" page="services/s9" />
+    <bent-link label="גינון" page="services/s10" />
+    <bent-link label="אחזקת מבנים" page="services/s11" />
+    <bent-link label="שירותי שליחויות" page="services/s12" />
+    <bent-link label="צור קשר" page="contact" />
+  </bent-menu>
+</bent-menus>

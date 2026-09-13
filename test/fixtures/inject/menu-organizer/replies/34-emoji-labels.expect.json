@@ -1,0 +1,13 @@
+{
+  "itemCount": 7,
+  "warningCodes": [],
+  "absentCodes": [
+    "OVERFLOW_LIKELY",
+    "NO_CHANGE",
+    "PAGES_MISSING",
+    "UNKNOWN_PAGE",
+    "LAYOUT_UNASKED"
+  ],
+  "notes": [],
+  "hard": false
+}

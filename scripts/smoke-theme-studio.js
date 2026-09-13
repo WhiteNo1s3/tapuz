@@ -62,8 +62,8 @@ check('buttons: outline/soft/glow restyle every button surface together',
   /\.btn-primary, \.bent-form-submit, \.bent-plan-cta, \.bent-flipbox-button \{ background: transparent; color: #ea580c; border: 2px solid #ea580c/.test(theme.overridesToCss({ style: { buttons: 'outline' } })) &&
   /color-mix\(in srgb, #ea580c 14%, transparent\); color: #ea580c/.test(theme.overridesToCss({ style: { buttons: 'soft' } })) &&
   /box-shadow: 0 8px 24px color-mix/.test(theme.overridesToCss({ style: { buttons: 'glow' } })));
-check('chrome.headerText colors the header, logo and menu links',
-  /\.site-header, \.site-header \.site-logo, \.site-header \.main-nav a, \.site-header \.site-tagline \{ color: #ffffff; \}/.test(theme.overridesToCss({ chrome: { headerText: '#ffffff' } })));
+check('chrome.headerText colors the header, logo, menu links and the fold summary (v2.28b)',
+  /\.site-header, \.site-header \.site-logo, \.site-header \.main-nav a, \.site-header \.main-nav \.nav-more-sum, \.site-header \.site-tagline \{ color: #ffffff; \}/.test(theme.overridesToCss({ chrome: { headerText: '#ffffff' } })));
 const skinned = theme.overridesToCss({ skin: { css: '.hero h1 { font-size: 3rem; }' }, effects: { css: '.fx { top: 0 }' } });
 check('skin css is emitted after the knobs and BEFORE the effect css',
   skinned.indexOf('theme skin') !== -1 && skinned.indexOf('.hero h1 { font-size: 3rem; }') < skinned.indexOf('.fx { top: 0 }'));
@@ -168,6 +168,31 @@ check('the admin scope of the theme css carries the variables and NOT the skin /
   (() => { const css = theme.overridesToCss({ skin: { css: '.card { border: 9px solid red; }' }, effects: { css: '.fx{top:0}' }, background: { kind: 'dots' }, chrome: { headerBg: '#000' } }, { scope: 'admin' }); return /--color-primary/.test(css) && !/9px solid red/.test(css) && !/\.fx\{top:0\}/.test(css) && !/radial-gradient/.test(css) && !/\.site-header/.test(css); })());
 check('lintSkin names a skin that hides the menu or freezes body scroll',
   theme.lintSkin('.main-nav { display: none }').some((w) => /display:none/.test(w)) && theme.lintSkin('body { overflow: hidden }').some((w) => /overflow/.test(w)) && theme.lintSkin('.hero h1 { font-size: 3rem }').length === 0);
+
+// ── 2d. v2.28b — the menu knobs: fold ("עוד"), collapse point, current-page mark ──
+const knobDialect = require('../src/bentml/theme-dialect');
+const knobDoc = knobDialect.serializeTheme({ name: 'ידיות', overrides: { chrome: { menuFold: 3, menuCollapse: 'lg', menuCurrent: 'pill' } } });
+const knobBack = knobDialect.parseTheme(knobDoc);
+check('the .bent dialect round-trips menu-fold (as a Number) / menu-collapse / menu-current on bent-chrome',
+  /<bent-chrome menu-fold="3" menu-collapse="lg" menu-current="pill" \/>/.test(knobDoc) && knobBack.overrides.chrome.menuFold === 3 && typeof knobBack.overrides.chrome.menuFold === 'number' &&
+  knobBack.overrides.chrome.menuCollapse === 'lg' && knobBack.overrides.chrome.menuCurrent === 'pill' && knobDialect.serializeTheme({ name: knobBack.name, overrides: knobBack.overrides }) === knobDoc);
+check('a kebab/camel/quoted mix parses the knobs too, and a section named like a sibling (<bent-menu-layout>) never opens the chrome/layout sections',
+  knobDialect.parseTheme("<bent-theme><bent-chrome menuFold='5' menu-current=\"bold\" /><bent-menu-layout placement=\"side\" fold=\"2\" /></bent-theme>").overrides.chrome.menuFold === 5 &&
+  knobDialect.parseTheme("<bent-theme><bent-chrome menuFold='5' /><bent-menu-layout placement=\"side\" fold=\"2\" /></bent-theme>").overrides.layout === undefined);
+check('the fold knob emits no :root variable (a fold is markup, not css) and no body class of its own',
+  theme.overridesToCss({ chrome: { menuFold: 3 } }) === theme.overridesToCss({}) && !/fold/i.test(theme.overridesToCss({ chrome: { menuFold: 3 } })) &&
+  JSON.stringify(theme.menuBodyClasses({ chrome: { menuFold: 3 } })) === '[]' && theme.menuKnobs({ chrome: { menuFold: '5' } }).fold === 5);
+check('the contract helpers: an untouched site has no body classes, spread is an alias of between, unknown values reset with Hebrew warnings',
+  JSON.stringify(theme.menuBodyClasses(theme.DEFAULT_OVERRIDES)) === '[]' && theme.knobsToOverrides({ align: 'spread' }).overrides.chrome.menuAlign === 'between' &&
+  (() => { const r = theme.knobsToOverrides({ fold: 'all', flow: 'wat' }); return r.overrides.chrome.menuFold === 0 && r.overrides.chrome.menuOverflow === 'wrap' && r.warnings.length === 2 && r.warnings.every((w) => /[֐-׿]/.test(w)); })());
+const knobReply = theme.extractThemeReply('```html\n<bent-theme name="ידיות">\n' + KNOBS + '\n<bent-chrome menu-current="rainbow" menu-fold="all" menu-collapse="lg" />\n</bent-theme>\n```');
+check('a pasted theme with an unknown menu-current / menu-fold → reset to the defaults, the good knob kept, one Hebrew warning each naming the value',
+  knobReply.overrides.chrome.menuCurrent === 'underline' && knobReply.overrides.chrome.menuFold === 0 && knobReply.overrides.chrome.menuCollapse === 'lg' &&
+  knobReply.warnings.some((w) => /current/.test(w) && /rainbow/.test(w)) && knobReply.warnings.some((w) => /fold/.test(w) && /"all"/.test(w)));
+check('the designer prompt teaches the three knobs on bent-chrome, the new skeleton selectors and the menu css variables',
+  /menu-fold="0" menu-collapse="sm\|md\|lg\|never" menu-current="underline\|pill\|bold\|none"/.test(pack.text) && /`menu-fold` = /.test(pack.text) &&
+  pack.text.indexOf('`.main-nav .sub-menu`') !== -1 && pack.text.indexOf('`.nav-more-sum`') !== -1 && pack.text.indexOf('`.nav-burger`') !== -1 && pack.text.indexOf('`body.menu-side`') !== -1 &&
+  /--menu-gap/.test(pack.text) && /--menu-size/.test(pack.text) && /--menu-align/.test(pack.text) && /--header-max-width/.test(pack.text));
 
 // ── 3. take only the theme ───────────────────────────────────────────
 const chatty = 'בשמחה! הנה הערכה שביקשת:\n\n```json\n{ "name": "פריז", "colors": { "primary": "#7c2d12", "secondary": "#b45309", "text": "#292524", "muted": "#6b5d52", "border": "#dccbb0", "bg": "#f6efe3", "lightBg": "#efe4d0", "surface": "#fbf7ef" }, "fonts": { "family": "\\"David Libre\\", serif", "headingFamily": "\\"Frank Ruhl Libre\\", serif", "baseSize": "17px", "google": ["Frank Ruhl Libre", "David Libre"] }, "style": { "radius": "sharp", "shadow": "flat", "accent": "solid", "buttons": "outline" }, "background": { "kind": "lines", "angle": 135 }, "chrome": { "menuHover": "underline" } }\n```\n\nוהעור:\n```css\n.site-header { border-bottom: 3px double var(--color-border); }\n.hero h1 { font-size: 3rem; }\n```\n\n```js\n(function(){ document.addEventListener("DOMContentLoaded", function(){}); })();\n```\n\nתהנו! אם תרצו שינוי, רק תגידו.';
@@ -302,6 +327,14 @@ function waitUp(tries = 40) {
     check('GET /admin/theme → the studio: designer card, canvas iframe, looks, skin, file import',
       page.status === 200 && /th-design-card/.test(page.text) && /<iframe id="th-canvas"/.test(page.text) && /th-looks/.test(page.text) &&
       /th-skin-css/.test(page.text) && /th-import-file/.test(page.text) && /th-font-google/.test(page.text) && /th-bg-kind/.test(page.text));
+    // v2.28b — the menu knobs in the studio form, the capacity hint, the way to the organizer
+    check('the studio carries the fold / collapse / current controls, the capacity hint and a link to the menu organizer',
+      /<input type="number" id="th-ch-fold" min="0" max="12"/.test(page.text) && /id="th-ch-collapse"/.test(page.text) && /id="th-ch-current"/.test(page.text) &&
+      /<p id="th-nav-fit" class="hint">/.test(page.text) && /href="\/admin\/menus#organizer">🧭 סדרו את התפריט עם ה-AI</.test(page.text));
+    const knobSave = await req('POST', '/admin/api/theme', { cookie, body: { overrides: { chrome: { menuCollapse: 'huge', menuFold: '3', menuCurrent: 'pill' } } } });
+    check('POST /admin/api/theme resets an unknown menu knob, keeps the good ones, reports in warnings, and answers with menuFit (GET too)',
+      knobSave.status === 200 && knobSave.json.ok && knobSave.json.warnings.some((w) => /collapse/.test(w) && /huge/.test(w)) && knobSave.json.overrides.chrome.menuCollapse === 'md' &&
+      knobSave.json.overrides.chrome.menuFold === 3 && knobSave.json.overrides.chrome.menuCurrent === 'pill' && 'menuFit' in knobSave.json && 'menuFit' in (await req('GET', '/admin/api/theme', { cookie })).json);
 
     // the designer prompt
     const prompt = await req('GET', '/admin/api/theme/design-prompt?brief=' + encodeURIComponent('חנות פרחים') + '&current=1', { cookie });

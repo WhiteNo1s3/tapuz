@@ -1,0 +1,151 @@
+{
+  "locale": "en",
+  "config": {
+    "title": "Acme Studio",
+    "description": "Brand and product design",
+    "language": "en",
+    "logo": {
+      "type": "text",
+      "text": "Acme Studio"
+    },
+    "header": {
+      "ctaLabel": "Get a quote",
+      "tagline": ""
+    },
+    "homepage": "home"
+  },
+  "overrides": {
+    "layout": {
+      "maxWidth": "960px"
+    },
+    "fonts": {
+      "baseSize": "17px"
+    }
+  },
+  "pages": [
+    {
+      "full_path": "home",
+      "title": "Home",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "about",
+      "title": "About us",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "work",
+      "title": "Our work",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services",
+      "title": "Services",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/branding",
+      "title": "Branding",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "services/product",
+      "title": "Product design",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "blog",
+      "title": "Journal",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "careers",
+      "title": "Careers",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "contact",
+      "title": "Contact",
+      "status": "published",
+      "tags": []
+    }
+  ],
+  "menus": {
+    "main": [
+      {
+        "label": "Home",
+        "type": "custom",
+        "url": "/"
+      },
+      {
+        "label": "About us",
+        "type": "page",
+        "target": "about"
+      },
+      {
+        "label": "Our work",
+        "type": "page",
+        "target": "work"
+      },
+      {
+        "label": "Services",
+        "type": "page",
+        "target": "services"
+      },
+      {
+        "label": "Branding",
+        "type": "page",
+        "target": "services/branding"
+      },
+      {
+        "label": "Product design",
+        "type": "page",
+        "target": "services/product"
+      },
+      {
+        "label": "Journal",
+        "type": "page",
+        "target": "blog"
+      },
+      {
+        "label": "Careers",
+        "type": "page",
+        "target": "careers"
+      },
+      {
+        "label": "Contact",
+        "type": "page",
+        "target": "contact"
+      }
+    ],
+    "footer": []
+  },
+  "locations": {
+    "main": "main",
+    "footer": "footer"
+  },
+  "brief": "",
+  "expect": {
+    "placement": "top",
+    "mustPlace": [
+      "home",
+      "about",
+      "work",
+      "services",
+      "services/branding",
+      "services/product",
+      "blog",
+      "careers",
+      "contact"
+    ],
+    "mustNotPlace": []
+  }
+}

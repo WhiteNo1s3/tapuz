@@ -1,0 +1,167 @@
+{
+  "_note": "הפריטים והנתיבים הם של האתר החי; ה-CTA \"התחילו\" הוא תחליף כיול לשורה שנמדדה (~796px).",
+  "config": {
+    "title": "EXPLOIT · 80",
+    "description": "תפוזיאל — מערכת ניהול תוכן בעברית, בלי מונה",
+    "logo": {
+      "type": "text",
+      "text": "EXPLOIT · 80",
+      "width": 160
+    },
+    "header": {
+      "ctaLabel": "התחילו",
+      "tagline": ""
+    },
+    "homepage": "home"
+  },
+  "overrides": {
+    "layout": {
+      "maxWidth": "920px",
+      "menuPlacement": "top"
+    },
+    "chrome": {
+      "menuWeight": "bold"
+    },
+    "fonts": {
+      "baseSize": "18px"
+    }
+  },
+  "pages": [
+    {
+      "full_path": "home",
+      "title": "עמוד הבית",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "הבונה",
+      "title": "הבונה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "השפה",
+      "title": "השפה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "הבינה",
+      "title": "AI בלי מונה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "הלקוחות",
+      "title": "ה-CRM",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "היסודות",
+      "title": "היסודות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "השוואות",
+      "title": "השוואות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "חלון-ראווה",
+      "title": "חלון ראווה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "showcase-modules",
+      "title": "כל המודולים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "צרו-קשר",
+      "title": "צרו קשר",
+      "status": "published",
+      "tags": []
+    }
+  ],
+  "menus": {
+    "main": [
+      {
+        "label": "🍊 הבית",
+        "type": "page",
+        "target": "home"
+      },
+      {
+        "label": "הבונה",
+        "type": "page",
+        "target": "הבונה"
+      },
+      {
+        "label": "השפה",
+        "type": "page",
+        "target": "השפה"
+      },
+      {
+        "label": "AI בלי מונה",
+        "type": "page",
+        "target": "הבינה"
+      },
+      {
+        "label": "ה-CRM",
+        "type": "page",
+        "target": "הלקוחות"
+      },
+      {
+        "label": "היסודות",
+        "type": "page",
+        "target": "היסודות"
+      },
+      {
+        "label": "השוואות",
+        "type": "page",
+        "target": "השוואות"
+      },
+      {
+        "label": "חלון ראווה",
+        "type": "page",
+        "target": "חלון-ראווה"
+      },
+      {
+        "label": "כל המודולים",
+        "type": "page",
+        "target": "showcase-modules"
+      },
+      {
+        "label": "📬 צרו קשר",
+        "type": "page",
+        "target": "צרו-קשר"
+      }
+    ],
+    "footer": []
+  },
+  "locations": {
+    "main": "main",
+    "footer": "footer"
+  },
+  "brief": "",
+  "expect": {
+    "placement": "top",
+    "mustPlace": [
+      "home",
+      "הבונה",
+      "השפה",
+      "הבינה",
+      "הלקוחות",
+      "היסודות",
+      "השוואות",
+      "חלון-ראווה",
+      "showcase-modules",
+      "צרו-קשר"
+    ],
+    "mustNotPlace": []
+  }
+}

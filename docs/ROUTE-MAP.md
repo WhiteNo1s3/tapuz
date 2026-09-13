@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**273 routes across 37 files.**
+**285 routes across 38 files.**
 
 ## By file (what each module owns)
 
@@ -227,6 +227,15 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/inbox/value`
 - `POST /admin/inbox/follow-up`
 
+### `src/routes/inject.js` — 6 routes
+
+- `GET /admin/api/inject`
+- `GET /admin/api/inject/:id/prompt`
+- `POST /admin/api/inject/:id/paste`
+- `POST /admin/api/inject/:id/apply`
+- `POST /admin/api/inject/:id/undo`
+- `POST /admin/api/inject/:id/run`
+
 ### `src/routes/integrations.js` — 7 routes
 
 - `GET /admin/integrations`
@@ -248,10 +257,16 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/upload`
 - `GET /admin/media-library`
 
-### `src/routes/menus.js` — 5 routes
+### `src/routes/menus.js` — 11 routes
 
 - `GET /admin/api/menus`
 - `POST /admin/api/menus`
+- `GET /admin/api/menus/fit`
+- `GET /admin/api/menus/export.bent`
+- `GET /admin/api/menus/backups`
+- `POST /admin/api/menus/restore`
+- `POST /admin/api/menus/preview`
+- `GET /admin/menus/preview/:id`
 - `POST /admin/api/menus/:name/delete`
 - `POST /admin/api/menus/:name`
 - `GET /admin/menus`
@@ -432,13 +447,24 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/categories` | POST | `src/routes/categories.js` |
 | `/admin/api/homepage` | POST | `src/routes/homepage.js` |
 | `/admin/api/import` | POST | `src/routes/import.js` |
+| `/admin/api/inject` | GET | `src/routes/inject.js` |
 | `/admin/api/inject-pack` | GET | `src/routes/copilot.js` |
+| `/admin/api/inject/:id/apply` | POST | `src/routes/inject.js` |
+| `/admin/api/inject/:id/paste` | POST | `src/routes/inject.js` |
+| `/admin/api/inject/:id/prompt` | GET | `src/routes/inject.js` |
+| `/admin/api/inject/:id/run` | POST | `src/routes/inject.js` |
+| `/admin/api/inject/:id/undo` | POST | `src/routes/inject.js` |
 | `/admin/api/integrations` | GET | `src/routes/integrations.js` |
 | `/admin/api/integrations` | POST | `src/routes/integrations.js` |
 | `/admin/api/menus` | GET | `src/routes/menus.js` |
 | `/admin/api/menus` | POST | `src/routes/menus.js` |
 | `/admin/api/menus/:name` | POST | `src/routes/menus.js` |
 | `/admin/api/menus/:name/delete` | POST | `src/routes/menus.js` |
+| `/admin/api/menus/backups` | GET | `src/routes/menus.js` |
+| `/admin/api/menus/export.bent` | GET | `src/routes/menus.js` |
+| `/admin/api/menus/fit` | GET | `src/routes/menus.js` |
+| `/admin/api/menus/preview` | POST | `src/routes/menus.js` |
+| `/admin/api/menus/restore` | POST | `src/routes/menus.js` |
 | `/admin/api/mission/activate/:id` | POST | `src/routes/mission.js` |
 | `/admin/api/mission/create` | POST | `src/routes/mission.js` |
 | `/admin/api/mission/providers` | GET | `src/routes/mission.js` |
@@ -624,6 +650,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/media/folder` | POST | `src/routes/media.js` |
 | `/admin/media/move` | POST | `src/routes/media.js` |
 | `/admin/menus` | GET | `src/routes/menus.js` |
+| `/admin/menus/preview/:id` | GET | `src/routes/menus.js` |
 | `/admin/new` | GET | `src/routes/pages-builder.js` |
 | `/admin/preview/:fullPath` | GET | `src/routes/pages-builder.js` |
 | `/admin/publish` | POST | `src/routes/pages-builder.js` |

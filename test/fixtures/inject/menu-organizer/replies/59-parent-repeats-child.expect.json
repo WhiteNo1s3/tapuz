@@ -1,0 +1,39 @@
+{
+  "itemCount": 5,
+  "items": [
+    { "label": "הבית", "type": "page", "target": "home" },
+    {
+      "label": "פלטפורמה",
+      "type": "custom",
+      "url": "#",
+      "children": [
+        { "label": "הבונה", "type": "page", "target": "הבונה" },
+        { "label": "השפה", "type": "page", "target": "השפה" },
+        { "label": "AI בלי מונה", "type": "page", "target": "הבינה" },
+        { "label": "ה-CRM", "type": "page", "target": "הלקוחות" }
+      ]
+    },
+    { "label": "היסודות", "type": "page", "target": "היסודות" },
+    {
+      "label": "דוגמאות",
+      "type": "custom",
+      "url": "#",
+      "children": [
+        { "label": "השוואות", "type": "page", "target": "השוואות" },
+        { "label": "חלון ראווה", "type": "page", "target": "חלון-ראווה" },
+        { "label": "כל המודולים", "type": "page", "target": "showcase-modules" }
+      ]
+    },
+    { "label": "צרו קשר", "type": "page", "target": "צרו-קשר" }
+  ],
+  "warningCodes": [
+    "PARENT_TO_GROUP",
+    "DUPLICATE_DROPPED"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "PAGES_MISSING",
+    "EMPTY_GROUP"
+  ],
+  "hard": false
+}

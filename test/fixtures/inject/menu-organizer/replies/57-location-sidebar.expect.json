@@ -1,0 +1,13 @@
+{
+  "itemCount": 7,
+  "warningCodes": [
+    "LOCATION_IGNORED"
+  ],
+  "absentCodes": [
+    "UNKNOWN_PAGE",
+    "NEW_MENU",
+    "LAYOUT_UNASKED"
+  ],
+  "knobs": {},
+  "hard": false
+}

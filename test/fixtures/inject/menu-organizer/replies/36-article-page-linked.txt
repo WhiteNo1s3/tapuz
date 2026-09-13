@@ -1,0 +1,22 @@
+<bent-menus version="1" note="קיבצנו את הכלים והדוגמאות כדי להיכנס בשורה">
+  <bent-menu name="main" location="main">
+    <bent-link label="דף הבית" page="home" />
+    <bent-link label="אודות" page="about" />
+    <bent-link label="שירותים" page="services" />
+    <bent-link label="המאמרים" page="blog">
+      <bent-link label="מאמר 1" page="blog/post-1" />
+    </bent-link>
+    <bent-link label="מחירון" page="pricing" />
+    <bent-link label="עוד">
+      <bent-link label="שאלות" page="faq" />
+      <bent-link label="הצוות" page="team" />
+      <bent-link label="תיק עבודות" page="portfolio" />
+      <bent-link label="קריירה" page="careers" />
+    </bent-link>
+    <bent-link label="צור קשר" page="contact" />
+  </bent-menu>
+  <bent-menu name="footer" location="footer">
+    <bent-link label="פרטיות" page="privacy" />
+    <bent-link label="תנאים" page="terms" />
+  </bent-menu>
+</bent-menus>

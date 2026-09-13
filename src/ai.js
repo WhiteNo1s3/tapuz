@@ -105,6 +105,61 @@ const PUBLIC_TIMEOUT_MS = 4 * 60 * 1000;
 // (smoke-copilot-tools) keeps driving the pipeline through it
 const NATIVE_FETCH = globalThis.fetch;
 
+// ── error codes + budget helpers (v2.28, the injection runner) ──────────
+// A runner has to tell a missing key from a slow model from a provider
+// outage — each opens a different door in the card (link to the setup
+// screen / hide the run button / fall back to copy-the-prompt) — so every
+// failure out of generateDetailed carries a machine code beside its Hebrew
+// message. The message stays what the copilot always said; only the code is
+// new.
+const ERROR_CODES = ['NO_PROVIDER', 'BROWSER_RELAY', 'NETWORK', 'TIMEOUT', 'PROVIDER_ERROR', 'EMPTY_REPLY'];
+
+function coded(message, code, extra) {
+  const e = new Error(message);
+  e.code = code;
+  if (extra) Object.assign(e, extra);
+  return e;
+}
+
+/** Chars → tokens for a Hebrew-heavy pack. Measured on the live probe:
+ *  3,651 chars of organizer prompt → 1,580 prompt tokens, i.e. ~2.3 chars
+ *  per token — Hebrew tokenizes far denser than the 4-chars-per-token
+ *  English rule of thumb, which would under-count by half. */
+function estimateTokens(chars) {
+  return Math.ceil(Math.max(0, Number(chars) || 0) / 2.3);
+}
+
+// what the chat template + the runtime's own framing take out of the local
+// window before the pack and the answer get their share
+const CONTEXT_HEADROOM_TOKENS = 4000;
+
+/** How many tokens one whole call (pack + answer) may occupy. Derived from
+ *  the local provider's advisory `contextTokens` (providers.js — 24K, LM
+ *  Studio's default) minus the headroom, so the two can never disagree:
+ *  24000 − 4000 = 20000. The public providers are effectively unbounded
+ *  next to a 14K-char pack. */
+function contextBudget(providerId) {
+  if (providerId !== 'local') return Infinity;
+  const p = getProvider('local');
+  return ((p && Number(p.contextTokens)) || 24000) - CONTEXT_HEADROOM_TOKENS;
+}
+
+/** The provider's own token accounting, mapped to one shape. openai-chat
+ *  already speaks it (LM Studio adds completion_tokens_details.reasoning_tokens
+ *  for hybrid-thinking models); anthropic says input/output. */
+function readUsage(style, data) {
+  const u = (data && typeof data === 'object' && data.usage && typeof data.usage === 'object') ? data.usage : null;
+  if (!u) return { prompt_tokens: 0, completion_tokens: 0 };
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  if (style === 'openai-chat') {
+    const out = { prompt_tokens: num(u.prompt_tokens), completion_tokens: num(u.completion_tokens) };
+    const details = u.completion_tokens_details;
+    if (details && details.reasoning_tokens != null) out.reasoning_tokens = num(details.reasoning_tokens);
+    return out;
+  }
+  return { prompt_tokens: num(u.input_tokens), completion_tokens: num(u.output_tokens) };
+}
+
 /**
  * POST a JSON body and read a JSON reply — no header timeout, one overall
  * ceiling. Resolves { status, data } (data null when the body is not JSON);
@@ -138,8 +193,9 @@ async function postJson(endpoint, headers, body, timeoutMs) {
     });
     const ceiling = Math.max(10000, Number(timeoutMs) || PUBLIC_TIMEOUT_MS);
     req.setTimeout(ceiling, () => {
-      req.destroy(new Error('המודל לא ענה תוך ' + Math.round(ceiling / 60000) + ' דקות — ' +
-        'בדקו שהמודל טעון ושאין משהו אחר שתופס את ה-GPU (משחק, דפדפן), או קצרו את הבקשה'));
+      // the code rides the rejection so the runner can answer 504, not 502
+      req.destroy(coded('המודל לא ענה תוך ' + Math.round(ceiling / 60000) + ' דקות — ' +
+        'בדקו שהמודל טעון ושאין משהו אחר שתופס את ה-GPU (משחק, דפדפן), או קצרו את הבקשה', 'TIMEOUT'));
     });
     req.on('error', reject);
     req.end(payload);
@@ -151,7 +207,7 @@ async function postJson(endpoint, headers, body, timeoutMs) {
  * array of prior turns [{role: 'user'|'assistant', content}] so the chat
  * remembers itself; the system prompt always rides separately.
  */
-function buildRequest(provider, key, system, userText, model, history = []) {
+function buildRequest(provider, key, system, userText, model, history = [], turnCap = 12000) {
   const headers = { 'Content-Type': 'application/json' };
   // A local runtime usually wants no credential at all — sending an empty
   // "Bearer " trips some of them, so omit the header entirely when there is
@@ -167,10 +223,14 @@ function buildRequest(provider, key, system, userText, model, history = []) {
 
   const mdl = model || provider.defaultModel;
   const maxTokens = provider.maxTokens || 4096;
+  // 12000 chars per remembered turn is the chat's cap; the injection runner's
+  // repair round raises it (turnCap) so the whole pack and the whole first
+  // reply ride along — a truncated pack would repair against half the rules
+  const cap = Math.max(1, Number(turnCap) || 12000);
   const turns = (Array.isArray(history) ? history : [])
     .filter((t) => t && (t.role === 'user' || t.role === 'assistant') && t.content)
     .slice(-12)
-    .map((t) => ({ role: t.role, content: String(t.content).slice(0, 12000) }));
+    .map((t) => ({ role: t.role, content: String(t.content).slice(0, cap) }));
 
   let body;
   const style = (provider.body && provider.body.style) || 'anthropic-messages';
@@ -197,37 +257,49 @@ function buildRequest(provider, key, system, userText, model, history = []) {
 }
 
 /**
- * One turn against the configured provider, with the stored key.
- * @returns {Promise<string>} the assistant's raw text
+ * One turn against the configured provider, with the stored key — the full
+ * account of it (v2.28): the text, the provider's own token usage, the wall
+ * time and which model answered. The injection runner logs these per call;
+ * everything else in the CMS still wants just the string (generate, below).
+ *
+ * Every rejection carries `.code` from ERROR_CODES (NO_PROVIDER, BROWSER_RELAY,
+ * NETWORK, TIMEOUT, PROVIDER_ERROR with .status/.providerMessage, EMPTY_REPLY).
+ * The request body is byte-identical to what generate() always sent — the
+ * shape is pinned by smoke-byok / smoke-local-llm / smoke-copilot-tools.
+ * @returns {Promise<{text: string, usage: {prompt_tokens: number, completion_tokens: number, reasoning_tokens?: number}, ms: number, provider: {id: string, model: string}}>}
  */
-async function generate({ system = '', user = '', history = [], maxTokens = 0, timeoutMs = 0 } = {}) {
+async function generateDetailed({ system = '', user = '', history = [], maxTokens = 0, timeoutMs = 0, turnCap = 0 } = {}) {
   const opts = { maxTokens, timeoutMs };
+  const started = Date.now();
   const s = load();
   const key = String(s.apiKey || '');
   const provider = getProvider(s.provider || 'claude');
   // The browser-relay provider exists only where a browser does: the owner's
   // copilot (converse via /admin/api/ai/chat). Server-initiated generation —
-  // the visitor CS chat, agents — has no bridge to relay through.
+  // the visitor CS chat, agents, the injection runner — has no bridge to
+  // relay through.
   if (provider && provider.browserRelay) {
-    throw new Error('הספק "דרך הדפדפן" משרת רק את קופיילוט הבעלים — לצ׳אט האתר נדרש ספק עם מפתח (או מודל מקומי של השרת עצמו)');
+    throw coded('הספק "דרך הדפדפן" משרת רק את קופיילוט הבעלים — לצ׳אט האתר נדרש ספק עם מפתח (או מודל מקומי של השרת עצמו)', 'BROWSER_RELAY');
   }
-  if (!provider || !provider.endpoint) throw new Error('ספק לא מוגדר');
+  if (!provider || !provider.endpoint) throw coded('ספק לא מוגדר', 'NO_PROVIDER');
   // A local runtime serves without credentials; a public one never does.
   if (!key && !provider.keyOptional) {
-    throw new Error('לא הוגדר מפתח API — הגדירו אותו בצ׳אט (ההגדרות בצד)');
+    throw coded('לא הוגדר מפתח API — הגדירו אותו בצ׳אט (ההגדרות בצד)', 'NO_PROVIDER');
   }
 
   // For the local provider the address is the user's own — resolved (and
-  // re-checked for loopback) per call, never frozen in the table.
+  // re-checked for loopback) per call, never frozen in the table. A refused
+  // address is a configuration gap, so it opens the same door as a missing
+  // key: the setup screen.
   let endpoint = provider.endpoint;
   if (provider.id === 'local') {
     endpoint = resolveLocalEndpoint(s.baseUrl);
     if (!endpoint) {
-      throw new Error('כתובת המודל המקומי חייבת להיות מקומית (127.0.0.1 / localhost) — נדחתה');
+      throw coded('כתובת המודל המקומי חייבת להיות מקומית (127.0.0.1 / localhost) — נדחתה', 'NO_PROVIDER');
     }
   }
   if (!endpointAllowed(endpoint)) {
-    throw new Error('כתובת הספק אינה ברשימת ההיתר של השרת — מסרב לשלוח את המפתח');
+    throw coded('כתובת הספק אינה ברשימת ההיתר של השרת — מסרב לשלוח את המפתח', 'NO_PROVIDER');
   }
 
   // A local runtime serves whatever model it has loaded, so any name is valid;
@@ -235,7 +307,7 @@ async function generate({ system = '', user = '', history = [], maxTokens = 0, t
   const model = provider.openModel
     ? (String(s.model || '').trim() || provider.defaultModel)
     : ((provider.models || []).includes(s.model) ? s.model : provider.defaultModel);
-  const { headers, body } = buildRequest(provider, key, system, user, model, history);
+  const { headers, body } = buildRequest(provider, key, system, user, model, history, turnCap > 0 ? turnCap : undefined);
   // an injection runner may ask for a longer answer than the table's default
   if (Number(opts.maxTokens) > 0) body.max_tokens = Math.min(32768, Math.round(Number(opts.maxTokens)));
 
@@ -243,20 +315,37 @@ async function generate({ system = '', user = '', history = [], maxTokens = 0, t
   try {
     res = await postJson(endpoint, headers, body, opts.timeoutMs || (provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS));
   } catch (e) {
+    // the ceiling passing is its own failure (504 in the runner); anything
+    // else is the wire
+    if (e && e.code === 'TIMEOUT') throw e;
     if (provider.id === 'local') {
-      throw new Error('לא הצלחתי להתחבר למודל המקומי ב-' + endpoint +
-        ' — ודאו ש-LM Studio (או Ollama) רץ ושהשרת המקומי דולק. פרטים: ' + e.message);
+      throw coded('לא הצלחתי להתחבר למודל המקומי ב-' + endpoint +
+        ' — ודאו ש-LM Studio (או Ollama) רץ ושהשרת המקומי דולק. פרטים: ' + e.message, 'NETWORK');
     }
-    throw new Error('קריאה לספק נכשלה (רשת): ' + e.message);
+    throw coded('קריאה לספק נכשלה (רשת): ' + e.message, 'NETWORK');
   }
   const data = res.data;
   if (res.status < 200 || res.status >= 300) {
     const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + res.status);
-    throw new Error('שגיאת ספק: ' + msg);
+    throw coded('שגיאת ספק: ' + msg, 'PROVIDER_ERROR', { status: res.status, providerMessage: String(msg) });
   }
+  const style = (provider.body && provider.body.style) || 'anthropic-messages';
   const text = dig(data, provider.responsePath || ['content', 0, 'text']);
-  if (!text) throw new Error('הספק החזיר תשובה ריקה');
-  return text;
+  if (!text) throw coded('הספק החזיר תשובה ריקה', 'EMPTY_REPLY');
+  return {
+    text,
+    usage: readUsage(style, data),
+    ms: Date.now() - started,
+    provider: { id: provider.id, model }
+  };
+}
+
+/**
+ * One turn against the configured provider, with the stored key.
+ * @returns {Promise<string>} the assistant's raw text
+ */
+async function generate(opts = {}) {
+  return (await generateDetailed(opts)).text;
 }
 
 // ── the tool loop ───────────────────────────────────────────────────────
@@ -515,10 +604,17 @@ module.exports = {
   getSettings,
   saveSettings,
   generate,
+  generateDetailed,
   converse,
   buildRequest,
   endpointAllowed,
   ALLOWED_API_HOSTS,
   listProviders,
-  STORE_PATH
+  STORE_PATH,
+  // the injection runner's arithmetic + vocabulary (v2.28)
+  estimateTokens,
+  contextBudget,
+  ERROR_CODES,
+  LOCAL_TIMEOUT_MS,
+  PUBLIC_TIMEOUT_MS
 };

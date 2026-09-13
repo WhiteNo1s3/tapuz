@@ -1,0 +1,138 @@
+{
+  "config": {
+    "title": "משרד עורכי הדין כהן ושות׳",
+    "description": "ייעוץ משפטי לעסקים",
+    "logo": {
+      "type": "text",
+      "text": "כהן ושות׳"
+    },
+    "header": {
+      "ctaLabel": "לפגישת ייעוץ",
+      "tagline": ""
+    },
+    "homepage": "home"
+  },
+  "overrides": {
+    "layout": {
+      "maxWidth": "900px"
+    },
+    "fonts": {
+      "baseSize": "17px"
+    }
+  },
+  "pages": [
+    {
+      "full_path": "home",
+      "title": "דף הבית",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "about",
+      "title": "אודות המשרד ועורכי הדין שלנו",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "commercial",
+      "title": "משפט מסחרי וחוזים לעסקים קטנים ובינוניים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "real-estate",
+      "title": "נדל״ן, מקרקעין ותכנון ובנייה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "labor",
+      "title": "דיני עבודה למעסיקים ולעובדים",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "family",
+      "title": "דיני משפחה, ירושה וצוואות",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "articles",
+      "title": "מאמרים ועדכוני חקיקה",
+      "status": "published",
+      "tags": []
+    },
+    {
+      "full_path": "contact",
+      "title": "יצירת קשר וקביעת פגישה",
+      "status": "published",
+      "tags": []
+    }
+  ],
+  "menus": {
+    "main": [
+      {
+        "label": "דף הבית",
+        "type": "custom",
+        "url": "/"
+      },
+      {
+        "label": "אודות המשרד ועורכי הדין שלנו",
+        "type": "page",
+        "target": "about"
+      },
+      {
+        "label": "משפט מסחרי וחוזים לעסקים קטנים ובינוניים",
+        "type": "page",
+        "target": "commercial"
+      },
+      {
+        "label": "נדל״ן, מקרקעין ותכנון ובנייה",
+        "type": "page",
+        "target": "real-estate"
+      },
+      {
+        "label": "דיני עבודה למעסיקים ולעובדים",
+        "type": "page",
+        "target": "labor"
+      },
+      {
+        "label": "דיני משפחה, ירושה וצוואות",
+        "type": "page",
+        "target": "family"
+      },
+      {
+        "label": "מאמרים ועדכוני חקיקה",
+        "type": "page",
+        "target": "articles"
+      },
+      {
+        "label": "יצירת קשר וקביעת פגישה",
+        "type": "page",
+        "target": "contact"
+      }
+    ],
+    "footer": []
+  },
+  "locations": {
+    "main": "main",
+    "footer": "footer"
+  },
+  "brief": "",
+  "expect": {
+    "placement": "top",
+    "maxTop": 8,
+    "mustPlace": [
+      "home",
+      "about",
+      "commercial",
+      "real-estate",
+      "labor",
+      "family",
+      "articles",
+      "contact"
+    ],
+    "mustNotPlace": []
+  }
+}

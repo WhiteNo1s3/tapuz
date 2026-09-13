@@ -1,0 +1,4 @@
+<bent-hero title="ברוכים הבאים" subtitle="האתר שלנו" />
+<bent-section>
+  <bent-text>קצת עלינו</bent-text>
+</bent-section>
