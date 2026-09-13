@@ -64,11 +64,10 @@ function copyThemeAssets(themeSlug = 'default') {
     const out = base + '\n\n/* Tapuz theme overrides */\n' + overrides;
     themeCssVersion = require('crypto').createHash('sha1').update(out).digest('hex').slice(0, 10);
     fs.writeFileSync(destFile, out, 'utf8');
-    // the admin's copy (v2.27): the palette and fonts the builder previews
-    // read, and NOT the owner's skin/effect/background/chrome css — those
-    // belong to the site; in the admin they were a leak (theme.js).
-    fs.writeFileSync(path.join(destDir, 'admin-theme.css'),
-      base + '\n\n/* Tapuz theme variables (admin scope — no skin, no effects) */\n' + overridesToCss(live, { scope: 'admin' }), 'utf8');
+    // v2.27 wrote an admin copy here (the base + the palette and fonts). The
+    // admin links nothing of the theme any more (v2.29, admin-ui.js layout),
+    // so a copy left by an earlier build is removed rather than kept around.
+    try { fs.rmSync(path.join(destDir, 'admin-theme.css'), { force: true }); } catch (e) { /* not there */ }
   }
 }
 

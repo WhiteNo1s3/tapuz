@@ -14,6 +14,8 @@
  *   • a pooled trail, one rAF loop                                → left alone
  *   • prefers-reduced-motion                                      → skipped
  *   • a throw, a slow handler, stalled frames, a 1ms interval     → caught
+ *   • framed by the admin, written against parent/top (v2.29)     → kept
+ *     on its own page, the management system untouched
  */
 
 const vm = require('vm');
@@ -73,7 +75,11 @@ function makeWindow(opts = {}) {
     __burn(ms) { now += ms; }
   };
   win.window = win; win.self = win; win.globalThis = win;
-  win.parent = opts.framed ? { postMessage(msg) { posted.push(msg); } } : win;
+  // framed = inside an admin preview frame: the parent is the management
+  // system, with a body of its own an effect must never reach (v2.29)
+  const adminBody = el('body');
+  win.parent = opts.framed ? { postMessage(msg) { posted.push(msg); }, document: { body: adminBody } } : win;
+  if (opts.framed) { win.top = win.parent; win.frameElement = el('iframe'); win.opener = win.parent; document.defaultView = win; }
   function dispatch(type, extra) {
     const ev = { type, timeStamp: now, stopped: false, clientX: 1, clientY: 1, ...(extra || {}),
       stopImmediatePropagation() { this.stopped = true; }, stopPropagation() { this.stopped = true; }, preventDefault() {} };
@@ -105,7 +111,7 @@ function makeWindow(opts = {}) {
     requestAnimationFrame: win.requestAnimationFrame, setTimeout: win.setTimeout, setInterval: win.setInterval,
     clearTimeout: win.clearTimeout, clearInterval: win.clearInterval
   };
-  return { win, document, dispatch, frame, logs, posted, sandbox, live: () => document.querySelectorAll('[data-tapuz-fx]').length,
+  return { win, document, dispatch, frame, logs, posted, sandbox, adminBody, live: () => document.querySelectorAll('[data-tapuz-fx]').length,
     docListeners: () => listeners.document.length };
 }
 
@@ -147,7 +153,7 @@ const tag = theme.renderThemeEffectsJs({ effects: { js: 'throw new Error("boom")
 check('the effect script is one identified tag, guarded (try/catch, error parked, findable log tag)',
   /^<script id="tapuz-theme-effects">/.test(tag) && /try \{/.test(tag) && /__tapuzThemeEffectError/.test(tag) && /\[tapuz-theme-effects\]/.test(tag));
 check('the guard shadows the globals the effect reaches for (window, document, rAF, timers, listeners)',
-  /\(function \(window, document, self, globalThis, addEventListener, removeEventListener, requestAnimationFrame, setTimeout, setInterval\)/.test(tag));
+  /\(function \(window, document, self, globalThis, addEventListener, removeEventListener, requestAnimationFrame, setTimeout, setInterval, parent, top, opener, frameElement\)/.test(tag));
 check('no effect → no script at all', theme.renderThemeEffectsJs({}) === '');
 
 // ── 1. the runaway creator (the Firefox freeze) ──────────────────────
@@ -210,6 +216,30 @@ check('no effect → no script at all', theme.renderThemeEffectsJs({}) === '');
   const w = run(TICKER);
   for (let i = 0; i < 10; i++) w.frame(16);
   check('setInterval(fn, 1) is paced to 16ms (≈10 ticks in 160ms, not 160)', w.win.__ticks >= 8 && w.win.__ticks <= 12);
+}
+
+// ── 8. its own page — framed by the admin (v2.29) ────────────────────
+// Ben: "make the effects … not interfere with the management system". The
+// studio canvas, the builder's device preview and the menu preview frame the
+// site inside the admin; an overlay written against parent/top landed there.
+{
+  const ESCAPE = `(function () {
+    var host = (window.parent && window.parent.document) || document;
+    host.body.appendChild(document.createElement('div'));
+    top.document.body.appendChild(document.createElement('i'));
+    parent.document.body.appendChild(document.createElement('u'));
+    document.defaultView.parent.document.body.appendChild(document.createElement('b'));
+    window.__fx = { frameElement: window.frameElement, opener: window.opener, selfTop: window.top === window };
+  })();`;
+  const w = run(ESCAPE, { framed: true });
+  check('framed: an effect that writes to parent / top / document.defaultView.parent stays on its own page — the admin gets nothing',
+    w.adminBody.children.length === 0 && w.document.body.children.length === 4);
+  check('framed: opener and frameElement read null, and top is the page itself',
+    w.win.__fx && w.win.__fx.frameElement === null && w.win.__fx.opener === null && w.win.__fx.selfTop === true);
+  const s = run(SLOW, { framed: true });
+  for (let i = 0; i < 6; i++) { s.frame(16); s.dispatch('mousemove'); }
+  check('framed: the guard itself still tells the studio when it stops an effect (its own line to the real parent)',
+    s.posted.some((m) => m && m.type === 'tapuz-theme-preview' && m.killed) && s.adminBody.children.length === 0);
 }
 
 // ── the lint says up front what the guard will do ────────────────────

@@ -518,15 +518,11 @@ function renderThemeFontLinks(overrides) {
 /**
  * CSS custom properties injected after theme CSS.
  *
- * `opts.scope === 'admin'` (v2.27) — the admin shell links the theme
- * stylesheet too (so builder previews read the palette), and until now that
- * carried the owner's SKIN and EFFECT css into every admin screen: an AI
- * skin that says `h1 { font-size: 3.2rem }` or `.card { … }` restyled the
- * dashboard. The admin scope stops after the variables — palette, fonts,
- * radii, shadows — and emits none of the page background, chrome, button
- * styles, skin or effects. Those are the SITE's, never the admin's.
+ * The SITE's css only. The admin shell links none of it (v2.29 — v2.27's
+ * palette-and-fonts "admin scope" still re-scaled and re-fonted the
+ * dashboard); admin.css carries its own baseline (src/admin-ui.js layout).
  */
-function overridesToCss(overrides, opts = {}) {
+function overridesToCss(overrides) {
   const o = mergeDeep(DEFAULT_OVERRIDES, overrides || {});
   const radius = RADIUS_SCALE[o.style.radius] || RADIUS_SCALE.soft;
   const shadow = SHADOW_SCALE[o.style.shadow] || SHADOW_SCALE.soft;
@@ -572,8 +568,6 @@ function overridesToCss(overrides, opts = {}) {
   if (cssValue(o.fonts.headingFamily)) {
     css += `h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }\n`;
   }
-  // the admin shell wants the palette, not the page (see the doc above)
-  if (opts.scope === 'admin') return css;
   // menuPlacement:side no longer emits layout CSS from here — the REAL sidebar
   // layout lives in the theme (themes/default/css/main.css, body.menu-side).
   // The renderer stamps the body class; the theme owns the geometry. The old
@@ -584,10 +578,8 @@ function overridesToCss(overrides, opts = {}) {
   // Page background (v2.24) — patterns are drawn from the palette so they
   // re-tint with every look. Painted on <body> (later than the theme's own
   // body rule, so it wins; it propagates to the canvas, and html's min-height
-  // keeps it covering the viewport). On body rather than html on purpose:
-  // the admin shell links the exported main.css too, and its own body rule
-  // (admin.css, loaded after) must keep winning there. 'solid' emits
-  // nothing: a site that never touched this is byte-for-byte unchanged.
+  // keeps it covering the viewport). 'solid' emits nothing: a site that
+  // never touched this is byte-for-byte unchanged.
   const bgKind = String((o.background && o.background.kind) || 'solid');
   const angle = Math.round(Number(o.background && o.background.angle)) || 160;
   const bg = cssValue(o.colors.bg);
@@ -723,6 +715,15 @@ function renderThemeEffectsJs(overrides) {
 //    Stopping is total: listeners registered through the shadowed globals go
 //    silent, scheduled callbacks stop, and the guard's own capture listener
 //    swallows motion events so an unshadowed listener starves too.
+//      5. its own page (v2.29) — the admin shows the site in the owner's
+//         theme inside preview frames (the studio canvas, the builder's
+//         device preview, the menu preview). There `parent` / `top` /
+//         `document.defaultView.parent` would be the MANAGEMENT SYSTEM, and a
+//         cursor or overlay effect written against them lands on the admin.
+//         The shadowed window answers parent/top with itself and
+//         opener/frameElement with null, so the effect only ever sees the
+//         page it decorates. A shield against accident, not a sandbox: the
+//         effect is still trusted-author code (see DEFAULT_OVERRIDES.effects).
 const EFFECT_GUARD_OPEN = `(function () {
 var W = window, D = document, G = W.__tapuzFx = W.__tapuzFx || {};
 var MAX_LIVE = 400, MAX_PER_SEC = 240, SLOW_MS = 50, SLOW_HITS = 3, GAP_MS = 250, GAP_HITS = 4, WINDOW_MS = 10000;
@@ -786,10 +787,13 @@ function proxy(target, extra) {
     has: function (t, k) { return k in t; }
   });
 }
-var docP = proxy(D, { addEventListener: gAdd(D), removeEventListener: gRemove(D), createElement: gCreate });
-var winExtra = { addEventListener: gAdd(W), removeEventListener: gRemove(W), requestAnimationFrame: gRaf, setTimeout: gTimeout, setInterval: gInterval, document: docP };
+var docExtra = { addEventListener: gAdd(D), removeEventListener: gRemove(D), createElement: gCreate };
+var docP = proxy(D, docExtra);
+var winExtra = { addEventListener: gAdd(W), removeEventListener: gRemove(W), requestAnimationFrame: gRaf, setTimeout: gTimeout, setInterval: gInterval, document: docP, opener: null, frameElement: null };
 var winP = proxy(W, winExtra);
 winExtra.window = winP; winExtra.self = winP; winExtra.globalThis = winP;
+// its own page: framed by the admin, parent/top would be the management system
+winExtra.parent = winP; winExtra.top = winP; docExtra.defaultView = winP;
 // the pace: motion events reach the page once per frame, and never after a stop
 ['mousemove', 'pointermove', 'touchmove'].forEach(function (type) {
   W.addEventListener(type, function (ev) {
@@ -808,9 +812,9 @@ winExtra.window = winP; winExtra.self = winP; winExtra.globalThis = winP;
   lastFrame = t;
   W.requestAnimationFrame(tick);
 })(0);
-(function (window, document, self, globalThis, addEventListener, removeEventListener, requestAnimationFrame, setTimeout, setInterval) {`;
+(function (window, document, self, globalThis, addEventListener, removeEventListener, requestAnimationFrame, setTimeout, setInterval, parent, top, opener, frameElement) {`;
 
-const EFFECT_GUARD_CLOSE = `}).call(winP, winP, docP, winP, winP, gAdd(W), gRemove(W), gRaf, gTimeout, gInterval);
+const EFFECT_GUARD_CLOSE = `}).call(winP, winP, docP, winP, winP, gAdd(W), gRemove(W), gRaf, gTimeout, gInterval, winP, winP, null, null);
 })();`;
 
 /** First fenced block matching one of the language tags, or ''. */

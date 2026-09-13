@@ -7,6 +7,41 @@
    RTL-first. Section accent arrives as --admin-accent (from ADMIN_NAV_GROUPS).
    ========================================================================== */
 
+/* ── The admin's own baseline (v2.29) ────────────────────────────────────────
+   Ben: "make the effects and fonts not interfere with the management system".
+   The admin shell used to link the SITE's stylesheet (main.css; since v2.27
+   admin-theme.css — the same base plus the theme's palette and fonts) and
+   silently took its root size, line height, headings, paragraphs, focus
+   rings and the base .btn/.card from there. So the owner's theme reached the
+   dashboard: its base size re-scaled every rem in here, its heading font
+   dressed the builder, and on the live site an effect's `html { cursor: none }`,
+   black body and film-grain overlay sat on every admin screen.
+   These are exactly the site rules the admin screens matched (measured rule
+   by rule against every screen's DOM), frozen at the untouched default
+   theme's values and placed first, so the cascade the admin was designed
+   against is unchanged. Nothing here reads a theme variable. The admin links
+   admin.css and nothing else (src/admin-ui.js layout) — pinned by
+   scripts/smoke-admin-isolation.js. */
+html { font-size: 17px; line-height: 1.7; scroll-behavior: smooth; }
+body { margin: 0; padding: 0; }
+[dir="rtl"] { direction: rtl; text-align: right; }
+[dir="ltr"] { direction: ltr; text-align: left; }
+h1 { font-size: 2.35rem; line-height: 1.25; margin-top: 0.1rem; margin-bottom: 0.6rem; }
+h2 { font-size: 1.75rem; margin-top: 2rem; }
+h3 { font-size: 1.35rem; }
+p { margin-bottom: 1.1rem; }
+p, li { max-width: 70ch; }
+img { max-width: 100%; height: auto; border-radius: 8px; display: block; }
+hr { border: none; border-top: 1px solid #ece5df; margin: 2.25rem 0; }
+::selection { background-color: #ea580c; color: #fff; -webkit-text-fill-color: #fff; }
+a:focus-visible, button:focus-visible, .btn:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; border-radius: 4px; }
+.btn { display: inline-block; padding: 0.65rem 1.5rem; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 0.95rem; margin: 0.25rem 0.25rem 0.25rem 0; transition: all 0.15s ease; border: 2px solid transparent; }
+.card { border: 1px solid #ece5df; border-radius: 12px; padding: 1rem 1.15rem; margin: 1.5rem 0; background: #ffffff; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.stat-label { color: #78716c; font-size: 0.95rem; margin-top: 0.35rem; }
+@media (max-width: 768px) { h1 { font-size: 2rem; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .card { transition: none; } }
+
 :root {
   /* workspace (light) */
   --ws-bg: #f6f7fb;

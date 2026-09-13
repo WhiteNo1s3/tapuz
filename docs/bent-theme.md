@@ -122,6 +122,11 @@
   `setInterval` לא מתחת ל-16ms.
 - **כלב שמירה** — מאזין או פריים שלוקח יותר מ-50ms שלוש פעמים, או ארבעה
   פריימים תקועים (‎>250ms) בעשר שניות = עצירה.
+- **הדף של עצמו** (v2.29) — בתוך מסגרות התצוגה של האדמין (הקנבס של הסטודיו,
+  תצוגת המכשירים של הבונה, תצוגת התפריט) `parent` ו-`top` היו מערכת הניהול
+  עצמה. אצל האפקט הם הדף שלו, ו-`opener`/`frameElement` הם `null` — אפקט
+  שנכתב מול `top.document` נוחת בדף שהוא מקשט, לא על האדמין. זה מגן מטעות,
+  לא ארגז חול: האפקט עדיין קוד של בעל/ת האתר.
 
 עצירה היא מוחלטת: המאזינים מושתקים, התזמונים נפסקים, הסיבה נרשמת ב-`console`,
 ב-`window.__tapuzFx.killed`, ונשלחת לקנבס של הסטודיו שמציג אותה באדום. הפרומפט
@@ -135,5 +140,20 @@
 - `config/theme-canvas.bent` — הבנץ׳ של הסטודיו, מסמך BenTML מלא
 - `config/theme-library.json` — הספרייה; ערכה שהגיעה עם `bent-canvas` שומרת אותו לצדה
 - קוד: [`src/bentml/theme-dialect.js`](../src/bentml/theme-dialect.js) (parse/serialize), [`src/theme.js`](../src/theme.js) (הדלתות), [`src/theme-canvas.js`](../src/theme-canvas.js) (הבנץ׳), [`src/theme-roleplay.js`](../src/theme-roleplay.js) (הפרומפט)
-- `public/css/admin-theme.css` — העותק של האדמין: משתני הפלטה והגופנים בלבד, בלי עור/רקע/אפקטים (העור של האתר לא מדליף לאדמין)
-- שער: `npm run test:theme-studio` · `npm run test:theme-guard`
+- `public/css/main.css` — האתר: הבסיס + הערכה (פלטה, גופנים, רקע, כרום, עור, אפקטים)
+
+## הערכה היא של האתר, לא של מערכת הניהול (v2.29)
+
+Ben: *"make the effects and fonts not interfere with the management system"*.
+מסכי האדמין מקשרים **רק** את `/css/admin.css` (`src/admin-ui.js` › `layout`) —
+בלי `main.css`, בלי גופני Google, בלי העור, בלי האפקט, ובלי אף משתנה של הערכה
+(`--color-*`, `--font-*`, `--radius-*`). קודם האדמין קישר את `main.css` של
+האתר, ובאתר החי האפקט (`html { cursor: none }`, רקע שחור `!important`, שכבת
+גרעין קבועה) ישב על כל מסך ניהול; ב-v2.27 `admin-theme.css` עדיין הביא את
+גודל הבסיס, גופן הכותרות והפלטה. הבסיס שהאדמין שאל מהאתר (שורש 17px / 1.7,
+כותרות, פסקאות, טבעות פוקוס, `.btn`/`.card`) כתוב עכשיו בראש `admin.css`
+בערכים קבועים. הערכה מוצגת באדמין רק **בתוך מסגרת תצוגה** — שם היא האתר,
+והאפקט רץ בשומר (ראו "הדף של עצמו" למעלה). אם מוסיפים מסך אדמין: `layout()`
+ושום `<link>` נוסף; מסך שבאמת צריך להראות את האתר — מסגרת.
+
+- שער: `npm run test:theme-studio` · `npm run test:theme-guard` · `node scripts/smoke-admin-isolation.js` (ערכה רועשת, כל מסכי האדמין)
