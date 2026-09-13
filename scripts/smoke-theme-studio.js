@@ -164,8 +164,6 @@ check('a font named in family but missing from google is loaded (the request tha
   theme.extractThemeReply('<bent-theme name="x"><bent-fonts family=\'"Rubik", sans-serif\' /></bent-theme>').overrides.fonts.google.includes('Rubik'));
 check('misfire K: a bench fragment with raw HTML around modules is repaired, not refused',
   (() => { const c = require('../src/theme-canvas'); const r = c.blocksFromSource('<bent-hero id="h1"><bent-heading level="1">x</bent-heading><bent-text>a <b>b</b><br>c</bent-text></bent-hero>\n<div class="row"><bent-card id="c1"><bent-text>y</bent-text></bent-card></div>'); return r.blocks.length >= 2 && r.warnings.length >= 1; })());
-check('the admin scope of the theme css carries the variables and NOT the skin / background / chrome / effects',
-  (() => { const css = theme.overridesToCss({ skin: { css: '.card { border: 9px solid red; }' }, effects: { css: '.fx{top:0}' }, background: { kind: 'dots' }, chrome: { headerBg: '#000' } }, { scope: 'admin' }); return /--color-primary/.test(css) && !/9px solid red/.test(css) && !/\.fx\{top:0\}/.test(css) && !/radial-gradient/.test(css) && !/\.site-header/.test(css); })());
 check('lintSkin names a skin that hides the menu or freezes body scroll',
   theme.lintSkin('.main-nav { display: none }').some((w) => /display:none/.test(w)) && theme.lintSkin('body { overflow: hidden }').some((w) => /overflow/.test(w)) && theme.lintSkin('.hero h1 { font-size: 3rem }').length === 0);
 
@@ -408,12 +406,12 @@ function waitUp(tries = 40) {
     const live = await req('GET', '/', { cookie });
     check('the served site widens its CSP by exactly Google Fonts while a web font is in use',
       /style-src 'self' 'unsafe-inline' https:\/\/fonts\.googleapis\.com/.test(live.headers['content-security-policy']) && /font-src 'self' data: https:\/\/fonts\.gstatic\.com/.test(live.headers['content-security-policy']));
-    // v2.27 — nothing leaks: the admin shell reads the palette, never the owner's skin
-    const adminCss = await req('GET', '/css/admin-theme.css', { cookie });
+    // v2.31 — nothing leaks: the admin shell links admin.css and nothing of the theme
+    // (the full sweep over every admin screen is scripts/smoke-admin-isolation.js)
     const adminPage = await req('GET', '/admin/theme', { cookie });
-    check('the admin links its own theme stylesheet — variables yes, the skin NO (no leak into the admin screens)',
-      adminCss.status === 200 && /--color-primary: #7c2d12/.test(adminCss.text) && !/border-bottom: 3px double/.test(adminCss.text) && !/theme skin/.test(adminCss.text) &&
-      /<link rel="stylesheet" href="\/css\/admin-theme\.css">/.test(adminPage.text) && !/<link rel="stylesheet" href="\/css\/main\.css">/.test(adminPage.text));
+    check('the studio page links the admin stylesheet only — no main.css, no admin-theme.css, no web fonts (no leak into the admin screens)',
+      /<link rel="stylesheet" href="\/css\/admin\.css">/.test(adminPage.text) && !/main\.css">|admin-theme\.css|fonts\.googleapis\.com\/css2/.test(adminPage.text) &&
+      !fs.existsSync(path.join(ROOT, 'public', 'css', 'admin-theme.css')));
     check('the exported page carries the effect GUARD (shadowed globals), not a bare try/catch', /\(function \(window, document, self, globalThis, addEventListener/.test(index));
     check('the studio page is one styled flow — no inline-style forest, the flow strip, the warnings lists, the bench button',
       /class="studio-flow"/.test(adminPage.text) && /id="th-design-warn"/.test(adminPage.text) && /id="th-design-to-bench"/.test(adminPage.text) && /class="studio-savebar"/.test(adminPage.text) &&

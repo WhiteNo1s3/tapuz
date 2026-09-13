@@ -250,13 +250,16 @@ function layout(content, title = 'Tapuziel', accent = '#f97316', opts = {}) {
   const hasMain = content.includes('data-admin-main');
   const closeMain = hasMain ? '</main>' : '';
   const nav = hasMain ? '\n  <script src="/admin-nav.js" defer></script>' : '';
+  // ONE stylesheet, the admin's own (v2.31). Nothing of the site's theme —
+  // not its palette, fonts, base size, skin or effects — is linked into the
+  // management system; admin.css carries the baseline it used to borrow.
+  // The site in the owner's theme is only ever shown inside a preview frame.
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title} • Tapuziel</title>
-  <link rel="stylesheet" href="/css/admin-theme.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>:root { --admin-accent: ${accent}; }</style>
 </head>
