@@ -6,20 +6,20 @@ Ben's rule: *"we have our own friendly AI pipeline with API key when the user is
 
 ```bash
 "$USERPROFILE/.lmstudio/bin/lms.exe" server start --port 1234
-"$USERPROFILE/.lmstudio/bin/lms.exe" load qwen3.6-35b-a3b --gpu 0.6 --context-length 24576 --identifier tapuz-qwen -y
+"$USERPROFILE/.lmstudio/bin/lms.exe" load google/gemma-4-31b --gpu max --context-length 24576 --identifier tapuz-gemma -y
 "$USERPROFILE/.lmstudio/bin/lms.exe" ps
 ```
 
-`--gpu 0.6` leaves VRAM for whatever else is running (with `--gpu max` and a game open the model crawled at ~1 token/s; with partial offload it runs ~20 tokens/s). 24K context takes the full site-builder dictionary (44K chars ≈ 14K tokens) with room for the reply. `reasoning_effort: 'none'` is sent by the CMS and honoured (0 reasoning tokens).
+Gemma 4 31B is dense: at `--gpu max` with nothing else on the card it runs ~40–50 tokens/s (18.5 GiB + the KV cache); at `--gpu 0.8` it crawled to ~6 tokens/s, so close the game first. The 3B-active MoEs (qwen3.6-35b-a3b, nemotron) tolerate partial offload — `--gpu 0.6` keeps them at ~20 tokens/s beside a game — but score lower (see §5). 24K context takes the full site-builder dictionary (44K chars ≈ 14K tokens) with room for the reply. `reasoning_effort: 'none'` is sent by the CMS and honoured (0 reasoning tokens).
 
 ## 2. Point the CMS at it
 
-`/admin/ai` → provider **מודל מקומי**, endpoint `http://127.0.0.1:1234/v1`, model `tapuz-qwen` (or leave the model empty for whatever is loaded). The connection test lists the loaded models. From then on every **▶ הרץ עם ה-AI המחובר** button in the admin (the menu organizer on `/admin/menus`, the packs on `/admin/inject`) runs through this endpoint, with the same doors as the paste flow.
+`/admin/ai` → provider **מודל מקומי**, endpoint `http://127.0.0.1:1234/v1`, model `tapuz-gemma` (or leave the model empty for whatever is loaded). The connection test lists the loaded models. From then on every **▶ הרץ עם ה-AI המחובר** button in the admin (the menu organizer on `/admin/menus`, the packs on `/admin/inject`) runs through this endpoint, with the same doors as the paste flow.
 
 ## 3. The live smoke — one real run, end to end
 
 ```bash
-LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-qwen node scripts/smoke-local-live.js
+LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma node scripts/smoke-local-live.js
 ```
 
 Spawns a server on a temp root seeded with the ten-item live menu, logs in as admin, calls `POST /admin/api/inject/menu-organizer/run`, and checks: the reply is a `<bent-menus>` document the door parsed, at most one repair round, no hard warning, under 240 s, usage reported, the paste of the same reply gives the same warnings, and **nothing was applied**. Skips with exit 0 when `LOCAL_LLM_BASE` is not set, so `test:smoke` never needs a model.
@@ -27,11 +27,11 @@ Spawns a server on a temp root seeded with the ten-item live menu, logs in as ad
 ## 4. The eval — the 99.9% instrument
 
 ```bash
-EVAL_MODEL=tapuz-qwen node scripts/eval-injections.js                                  # every pack, 3 runs each
-EVAL_MODEL=tapuz-qwen node scripts/eval-injections.js menu-organizer 20 --fixtures=all --repair
-EVAL_MODEL=tapuz-qwen node scripts/eval-injections.js menu-organizer 5 --fixtures=live-10 --size=full --variant=B
-EVAL_MODEL=tapuz-qwen node scripts/eval-injections.js theme-designer 5
-EVAL_MODEL=tapuz-qwen node scripts/eval-injections.js site-builder-lite 5
+EVAL_MODEL=tapuz-gemma node scripts/eval-injections.js                                  # every pack, 3 runs each
+EVAL_MODEL=tapuz-gemma node scripts/eval-injections.js menu-organizer 20 --fixtures=all --repair
+EVAL_MODEL=tapuz-gemma node scripts/eval-injections.js menu-organizer 5 --fixtures=live-10 --size=full --variant=B
+EVAL_MODEL=tapuz-gemma node scripts/eval-injections.js theme-designer 5
+EVAL_MODEL=tapuz-gemma node scripts/eval-injections.js site-builder-lite 5
 ```
 
 Every run goes through `src/ai.js` (the same code path the admin buttons use) and is judged by the real door. Read `docs/INJECTION-EVAL.md` afterwards:
@@ -57,5 +57,7 @@ Organizer, final prompt: 27 runs → 25 PASS (92.6%), 24 strict, avg 23 s, p95 5
 |---|---|---|---|---|---|---|
 | qwen3.6-35b-a3b Q4_K_M | 27 landed · **25 PASS** | 24 | 2 | 23 | 10/10 PASS, avg 137 s | PASS, 1 round, 29 s |
 | nemotron-3-nano-omni-30b-a3b Q4_K_M | 22 landed · 15 PASS | 5 | 22 | 24 | 10/15 PASS (5 refused: effect JS does not compile), avg 73 s | PASS, 2 rounds, 45 s |
+| gemma-4-31b Q4_K_M (dense, full offload, 39 tok/s) | 27 landed · **27 PASS** | 27 | 0 | 7 | 10/10 PASS, 5 clean (a quoting quirk on `secondary=`, dropped by the door), avg 37 s | PASS, 1 round, 12 s |
+| qwen3.8-27b Q4_K_M (dense) | 27 landed · **27 PASS** | 24 | 3 | 3 | 10/10 PASS, 8 clean, avg 20 s | PASS, 1 round, 4 s |
 
-Nemotron's misses are one habit: it invents `page=` slugs that are not in the table (5 replies refused as `TOO_MANY_UNKNOWN`, 4 more landed with `UNKNOWN_PAGE` drops) and it links drafts; it also copied the collapse knob's option list literally as a value, which is why both prompts now state that an `a|b|c` value is a list of options and exactly one is written (the door had already reset the literal to the default). Qwen stays the recommended local model. Gemma 4 31B lives on the Mac's LM Studio (`/Users/<user>/.lmstudio/hub/models/google/gemma-4-31b`) — serve it on the local network and run the eval with `EVAL_BASE=http://<mac-ip>:1234/v1 EVAL_MODEL=google/gemma-4-31b … --provider=direct` (the CMS's local provider is loopback-only by design; direct mode keeps the prompt, the door and the scoring). Earlier probes: theme-designer pack (17K chars ≈ 7K tokens) → a valid `<bent-theme>` in 71 s with zero warnings; site-builder full (44K chars) → a clean page in 131 s with zero repairs; site-builder lite → landed after the repair engine closed unclosed leaves; a 3.6K-char organizer draft → 3/3 valid `<bent-menus>` documents in 20–27 s, ~1,580 prompt tokens, and no reply used a code fence (which is why every door treats the fence as optional).
+Nemotron's misses are one habit: it invents `page=` slugs that are not in the table (5 replies refused as `TOO_MANY_UNKNOWN`, 4 more landed with `UNKNOWN_PAGE` drops) and it links drafts; it also copied the collapse knob's option list literally as a value, which is why both prompts now state that an `a|b|c` value is a list of options and exactly one is written (the door had already reset the literal to the default). **Gemma 4 31B is now the recommended local model**: a perfect organizer run (27/27, all first-try, 7 s per turn at full offload) and a perfect theme run; Qwen 3.8 27B is a close second and the fastest (3 s per organizer turn, 24/27 first-try); the two 3B-active MoEs are behind on quality. Gemma 4 31B also lives on the Mac's LM Studio as an MLX build with more bits (`/Users/<user>/.lmstudio/hub/models/google/gemma-4-31b`) — serve it on the local network and run the eval with `EVAL_BASE=http://<mac-ip>:1234/v1 EVAL_MODEL=google/gemma-4-31b … --provider=direct` (the CMS's local provider is loopback-only by design; direct mode keeps the prompt, the door and the scoring). Earlier probes: theme-designer pack (17K chars ≈ 7K tokens) → a valid `<bent-theme>` in 71 s with zero warnings; site-builder full (44K chars) → a clean page in 131 s with zero repairs; site-builder lite → landed after the repair engine closed unclosed leaves; a 3.6K-char organizer draft → 3/3 valid `<bent-menus>` documents in 20–27 s, ~1,580 prompt tokens, and no reply used a code fence (which is why every door treats the fence as optional).
