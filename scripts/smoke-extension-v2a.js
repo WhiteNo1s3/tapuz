@@ -77,7 +77,7 @@ check('activeTab permission (reads the active tab url, injects into it)',
 const contentVersion = (content.match(/const VERSION = '([^']+)'/) || [])[1];
 check('manifest version and content-bridge VERSION agree (' + manifest.version + ')',
   !!contentVersion && contentVersion === manifest.version);
-check('version >= 0.3.0 (the hosted-site flow)', cmpSemver(manifest.version, '0.3.0') >= 0);
+check('version >= 0.4.0 (hosted-site flow + streaming relay)', cmpSemver(manifest.version, '0.4.0') >= 0);
 
 // ── the founding rule: no keys, ever ──
 // Prose may TELL the story ("V1 grew a BYOK popup and amputated it"); code
@@ -183,6 +183,11 @@ check('usage survives streaming (include_usage puts it in the last frame)',
   /frame\.usage/.test(bg) && /data\.usage = usage/.test(bg));
 check('a server that ignores `stream` falls back to one JSON body, never a failure',
   /text\/event-stream/.test(bg) && /return await readWholeBody\(res\)/.test(bg));
+// Not every OpenAI-compatible server knows stream_options; some 400 on an
+// unknown param rather than ignoring it. Losing usage beats losing the call.
+check('a 400 on stream_options is retried once without it',
+  /text\.indexOf\('stream_options'\) !== -1/.test(bg) &&
+  /shoot\(Object\.assign\(\{\}, body, \{ stream: true \}\)\)/.test(bg));
 check('progress is throttled (~4/sec) and heartbeats through silence',
   /PROGRESS_MS = 250/.test(bg) && /HEARTBEAT_MS = 10000/.test(bg) &&
   /now - lastPost < PROGRESS_MS/.test(bg) &&

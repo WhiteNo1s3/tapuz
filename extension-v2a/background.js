@@ -169,12 +169,27 @@ async function streamChat(base, body, ac, onProgress) {
     stream_options: { include_usage: true }
   });
 
-  const res = await fetch(base + CHAT_PATH, {
+  const shoot = (payload) => fetch(base + CHAT_PATH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(outgoing),
+    body: JSON.stringify(payload),
     signal: ac.signal
   });
+
+  let res = await shoot(outgoing);
+  if (!res.ok) {
+    const text = await res.text();
+    // Some OpenAI-compatible servers VALIDATE unknown params instead of
+    // ignoring them, and stream_options is newer than some of them. Retry
+    // once without it: the only thing lost is the usage object.
+    if (res.status === 400 && text.indexOf('stream_options') !== -1) {
+      res = await shoot(Object.assign({}, body, { stream: true }));
+    } else {
+      let data;
+      try { data = JSON.parse(text); } catch (e) { data = { raw: text }; }
+      return { ok: false, status: res.status, data };
+    }
+  }
 
   const ctype = (res.headers.get('content-type') || '').toLowerCase();
   // A server that ignored `stream`, or an error body (LM Studio answers those
