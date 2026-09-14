@@ -242,10 +242,25 @@ function buildRoleplayPack(opts = {}) {
  * diverge), opposite framing: not a game, a post. The model is told who it
  * works for, where it is standing, what becomes of its output, and what it can
  * actually see.
+ *
+ * Two tiers (v2.32 — the window). `tier: 'full'` (or omitted) is today's
+ * text, byte for byte: the whole Syntax Dictionary at the end, ~45K chars.
+ * `tier: 'compact'` is the same briefing with the compact grammar (one line
+ * per tool — still the WHOLE vocabulary, the way the lite roleplay pack
+ * does it), the media manifest capped like the lite pack, and one extra
+ * working rule: the window is small, build short. ai.js picks the tier from
+ * what the runtime actually loaded — a Gemma at 8,192 tokens got the full
+ * text, LM Studio silently threw the middle of it away, and the copilot
+ * answered from a briefing with no dictionary in it (map.md, addendum 1).
+ * `canvas` ('blank'|'page') is echoed back for the caller; the situation
+ * block that describes the canvas is the route's, appended after this text.
+ * @param {{ locale?: 'he'|'en', media?: Array, siteTitle?: string, ownerName?: string, tier?: 'full'|'compact', canvas?: 'blank'|'page' }} [opts]
  */
 function buildCopilotBriefing(opts = {}) {
   const locale = opts.locale === 'en' ? 'en' : 'he';
   const he = locale === 'he';
+  const tier = opts.tier === 'compact' ? 'compact' : 'full';
+  const compact = tier === 'compact';
   const dict = buildDictionary();
   const tools = toAgentTools(dict);
   const siteTitle = String(opts.siteTitle || '').trim();
@@ -305,6 +320,10 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('- **טקסט אמיתי, לא "לורם איפסום".** כתב/י תוכן שאפשר לפרסם כמו שהוא.');
     lines.push('- **אל תמציא/י נתיבי תמונה.** יש רשימת מדיה אמיתית למטה; אם אין מתאימה — אמור/י זאת.');
     lines.push('- לשאלות שאינן בניית דף (איך משנים צבע, איפה התפריטים) — פשוט ענה/י בעברית, בלי fence.');
+    // the compact tier's one extra rule: a small window cannot take a long
+    // page back for editing, and a model that guesses at the part it never
+    // saw deletes it — say so instead
+    if (compact) lines.push('- **החלון של המודל הזה קטן** — בנה/י דפים קצרים וממוקדים; דף קיים ארוך עלול לא להיכנס לעריכה, ואז אמור/י זאת לבעל/ת האתר במקום לנחש.');
     lines.push('');
   } else {
     lines.push('# Who you are');
@@ -336,6 +355,7 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('- **Real copy, never lorem ipsum.** Write text that could ship as-is.');
     lines.push('- **Never invent image paths.** A real media list follows; if nothing fits, say so.');
     lines.push('- For non-building questions (how to change a colour, where menus live) just answer plainly, no fence.');
+    if (compact) lines.push('- **This model\'s window is small** — build short, focused pages; a long existing page may not fit for editing, and then say so to the owner instead of guessing.');
     lines.push('');
   }
 
@@ -352,12 +372,20 @@ function buildCopilotBriefing(opts = {}) {
   // Same dedupe as the roleplay pack: the Syntax Dictionary at the end IS the
   // inventory (enums, defaults, HOW snippets); listing every module a second
   // time here doubled the vocabulary and diluted the actual instructions.
-  lines.push(he
-    ? '## הכלים שלך = המילון המלא שבסוף ההודעה. אין תגית מחוץ לו.'
-    : '## Your tools = the full dictionary at the end of this message. No tag exists outside it.');
+  if (compact) {
+    lines.push(he
+      ? '## הכלים שלך = הדקדוק המקוצר שבסוף ההודעה — שורה לכלי, וזה כל המילון. אין תגית מחוץ לו.'
+      : '## Your tools = the compact grammar at the end of this message — one line per tool, and that is the whole dictionary. No tag exists outside it.');
+  } else {
+    lines.push(he
+      ? '## הכלים שלך = המילון המלא שבסוף ההודעה. אין תגית מחוץ לו.'
+      : '## Your tools = the full dictionary at the end of this message. No tag exists outside it.');
+  }
   lines.push('');
 
-  const mediaMd = mediaInventoryMarkdown(opts.media, he, 0, he ? 'מבעל/ת האתר' : 'the owner');
+  // compact: the lite pack's media cap and 60-char alts — every line of a
+  // small window is a line the page itself cannot have
+  const mediaMd = mediaInventoryMarkdown(opts.media, he, compact ? LITE_MEDIA_CAP : 0, he ? 'מבעל/ת האתר' : 'the owner');
   if (mediaMd) lines.push(mediaMd);
 
   lines.push(he ? '## דוגמה למסמך שלם' : '## A complete document');
@@ -380,10 +408,18 @@ function buildCopilotBriefing(opts = {}) {
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push(toMarkdown(dict));
+  lines.push(compact ? toCompactMarkdown(dict, { locale }) : toMarkdown(dict));
 
   const text = lines.join('\n');
-  return { text, tools, moduleCount: dict.count, locale, chars: text.length };
+  return {
+    text,
+    tools,
+    moduleCount: dict.count,
+    locale,
+    chars: text.length,
+    tier,
+    canvas: opts.canvas === 'blank' ? 'blank' : (opts.canvas === 'page' ? 'page' : '')
+  };
 }
 
 /**

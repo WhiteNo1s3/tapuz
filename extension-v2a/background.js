@@ -28,6 +28,31 @@
  * the assembled `choices[0].message.content` shape everything already parses.
  * Nothing above this file had to learn a new format.
  *
+ * WHAT 0.4.0 LOST, AND 0.5.0 GIVES BACK: a streamed TOOL CALL does not travel
+ * in `delta.content` — it arrives as `delta.tool_calls[]` fragments keyed by
+ * `index` (measured against LM Studio: frame 1 carries id/type/name with
+ * `arguments:''`, the following frames carry only `function.arguments` string
+ * pieces to concatenate, then `finish_reason:'tool_calls'`, then the usage
+ * frame with `choices:[]`, then [DONE]). 0.4.0 accumulated `content` alone,
+ * so every list_pages / read_page / create_page / edit_page the model asked
+ * for was reassembled as an EMPTY reply — the copilot's "two turns to get an
+ * unrelated answer". The accumulator below keeps one slot per `index` and
+ * emits `message.tool_calls` exactly as a non-streaming reply would.
+ *
+ * ERROR BODIES ARE RESULTS, not failures. LM Studio's 400 for a prompt that
+ * outgrows the loaded window is a JSON body with machine-readable numbers
+ * (`exceed_context_size_error`, n_prompt_tokens, n_ctx); the CMS reads them
+ * to shrink its briefing and retry. The worker has always returned that body
+ * as `data` on a non-2xx — since 0.5.0 the content bridge forwards it to the
+ * page instead of collapsing it into the string 'no response'.
+ *
+ * WHY /api/v0/models is on the menu: LM Studio's native REST reports, per
+ * model, `state` and `loaded_context_length` — the ONLY way to learn the
+ * window BEFORE sending. That matters more than it sounds: with a prompt
+ * between 1× and 2× the window LM Studio answers HTTP 200 and silently drops
+ * the middle of the prompt (the 400 only comes at ≥ 2×), so the page must
+ * know the window up front rather than wait for an error that may never come.
+ *
  * Cross-browser: Chrome runs this as a service worker, Firefox as an event
  * page (both keys sit in the manifest). Everything is PROMISE-style — in
  * Firefox the `browser` namespace is promise-only, callbacks break — except
@@ -47,7 +72,9 @@ const DEFAULT_BASE = 'http://127.0.0.1:1234'; // LM Studio's default port
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 
 // The page picks from this menu — it can never name an arbitrary URL.
-const ALLOWED_PATHS = ['/v1/chat/completions', '/v1/models'];
+// /api/v0/models (0.5.0) is LM Studio's native list: the one that says what
+// context length each model was actually LOADED with.
+const ALLOWED_PATHS = ['/v1/chat/completions', '/v1/models', '/api/v0/models'];
 
 const CHAT_PATH = '/v1/chat/completions';
 
@@ -55,8 +82,8 @@ const CHAT_PATH = '/v1/chat/completions';
 const PORT_NAME = 'tz-llm';
 
 // A server that accepted the socket and then stopped talking must not leave
-// the popup spinning forever. The probe is impatient; a generation is not.
-const TIMEOUT_MS = { '/v1/models': 15000 };
+// the popup spinning forever. The probes are impatient; a generation is not.
+const TIMEOUT_MS = { '/v1/models': 15000, '/api/v0/models': 15000 };
 const DEFAULT_TIMEOUT_MS = 300000;
 
 // For a STREAM the meaningful limit is silence, not duration: a model that is
@@ -126,8 +153,9 @@ async function readWholeBody(res) {
   return { ok: res.ok, status: res.status, data };
 }
 
-/** Non-streaming call — /v1/models, and the fallback for a server that
- *  ignores `stream`. */
+/** Non-streaming call — the two model lists (/v1/models, /api/v0/models),
+ *  and the fallback for a server that ignores `stream`. A GET when there is
+ *  no body: the lists are GETs, and LM Studio 404s a POST to them. */
 async function plainFetch(base, path, body, ac) {
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS[path] || DEFAULT_TIMEOUT_MS);
   try {
@@ -208,6 +236,16 @@ async function streamChat(base, body, ac, onProgress) {
   let meta = null;
   let deltas = 0;
   let ended = false;
+  // Tool calls, one slot per `index`. A sparse array on purpose: the model
+  // may open call 1 before call 0's arguments are complete, and the index in
+  // the delta is the only thing that says which call a fragment belongs to.
+  const toolCalls = [];
+  let argChars = 0;        // streamed argument text — progress counts it too
+  // A server can fail AFTER the 200 and the event-stream header — the model
+  // was unloaded mid-generation, the engine died — and then the last frame
+  // is `data: {"error": …}` with no `choices`. Dropping it would hand the
+  // page an empty reply with no reason; keep it and report it as a body.
+  let streamError = null;
 
   let lastPost = 0;
   const post = (force) => {
@@ -215,17 +253,40 @@ async function streamChat(base, body, ac, onProgress) {
     const now = Date.now();
     if (!force && now - lastPost < PROGRESS_MS) return;
     lastPost = now;
-    onProgress({ chars: content.length, tokens: deltas });
+    // A model writing a document INTO a tool call (create_page/edit_page)
+    // produces no `content` at all; without argChars the page would show a
+    // dead counter through the whole generation.
+    onProgress({ chars: content.length + argChars, tokens: deltas });
+  };
+
+  const applyToolCall = (tc) => {
+    if (!tc || typeof tc !== 'object') return;
+    const i = Number.isInteger(tc.index) ? tc.index : 0;
+    if (!toolCalls[i]) toolCalls[i] = { id: '', type: 'function', function: { name: '', arguments: '' } };
+    const slot = toolCalls[i];
+    if (tc.id) slot.id = tc.id;
+    if (tc.type) slot.type = tc.type;
+    const fn = tc.function || {};
+    if (fn.name) slot.function.name = fn.name;
+    if (typeof fn.arguments === 'string' && fn.arguments) {
+      slot.function.arguments += fn.arguments;
+      argChars += fn.arguments.length;
+      deltas++;
+    }
   };
 
   const apply = (frame) => {
     if (!meta && frame.id) meta = { id: frame.id, model: frame.model, created: frame.created };
     if (frame.usage) usage = frame.usage; // include_usage: the final frame
     const ch = frame.choices && frame.choices[0];
-    if (!ch) return;
+    if (!ch) {
+      if (frame.error) streamError = frame.error;
+      return;
+    }
     const d = ch.delta || {};
     if (d.role) role = d.role;
     if (typeof d.content === 'string' && d.content) { content += d.content; deltas++; }
+    if (Array.isArray(d.tool_calls)) d.tool_calls.forEach(applyToolCall);
     if (ch.finish_reason) finishReason = ch.finish_reason;
   };
 
@@ -269,14 +330,25 @@ async function streamChat(base, body, ac, onProgress) {
 
   post(true);
 
+  // An error frame and nothing else: the same shape a non-2xx body takes, so
+  // the page resolves it as a result and the CMS says why in Hebrew (a string
+  // error is wrapped as { message } — the shape readRelayReply reads).
+  if (streamError && !content && !toolCalls.length) {
+    const error = streamError && typeof streamError === 'object' ? streamError : { message: String(streamError) };
+    return { ok: false, status: res.status, data: { error } };
+  }
+
   // EXACTLY what a non-streaming call returns. Nothing downstream — the CMS,
-  // the popup, src/ai.js — can tell that a stream happened.
+  // the popup, src/ai.js — can tell that a stream happened. `tool_calls` is
+  // present only when the model made one: a plain text reply keeps the
+  // 0.4.0 shape byte for byte (the CMS treats an absent key and `[]` alike).
+  const message = { role, content, ...(toolCalls.length ? { tool_calls: toolCalls.filter(Boolean) } : {}) };
   const data = {
     id: meta && meta.id,
     object: 'chat.completion',
     created: (meta && meta.created) || Math.floor(Date.now() / 1000),
     model: meta && meta.model,
-    choices: [{ index: 0, message: { role, content }, finish_reason: finishReason }]
+    choices: [{ index: 0, message, finish_reason: finishReason }]
   };
   if (usage) data.usage = usage;
   return { ok: res.ok, status: res.status, data };

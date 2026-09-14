@@ -11,6 +11,14 @@
  * points intact and are unreachable unauthenticated; the packs they hand out
  * (inject-pack, syntax-dictionary[.md]) answer with the RIGHT dictionary; and
  * the BYOK key surface (/admin/api/ai/settings) never leaks the stored key.
+ *
+ * v2.32 adds the window and the canvas: the chat POST tiers its briefing to
+ * the window the page reports (8K → compact, 32K → full, unknown → compact),
+ * an exceed body relayed back becomes a shrink-and-retry with a notice, a
+ * provider error is Hebrew with a code, the relay tool loop carries its
+ * role:'tool' answers, an approved edit lands as a DRAFT and the published
+ * page is untouched, and /admin/chat carries the builder in a frame with a
+ * page dropdown, a proposal frame and a window chip.
  */
 
 const fs = require('fs');
@@ -69,7 +77,83 @@ function check(name, cond) {
     /renderApproval/.test(panel) && /approve: \{ id: p\.id, ok: ok \}/.test(panel) && /location\.reload\(\)/.test(panel));
   check('drawer talks only to our own chat endpoint',
     !/https?:\/\//.test(panel) && /\/admin\/api\/ai\/chat/.test(panel));
+
+  // ── v2.32: the copilot page carries the builder (Ben: "put pagebuilder
+  //    also in the page… dropdown menu any of the current pages… update in
+  //    realtime when we use the robot, it cannot be separated") ──
+  try { new Function(chatJs); check('admin-chat.js parses', true); }
+  catch (e) { check('admin-chat.js parses (' + e.message + ')', false); }
+  const chatRoute = copilotSrc.slice(copilotSrc.indexOf("router.get('/admin/chat'"));
+  const PAGE_IDS = ['cp-page-select', 'cp-window', 'btn-stage-preview', 'cp-open-full', 'cp-new-chat',
+    'cp-canvas-empty', 'cp-canvas-frame', 'cp-proposal', 'cp-tabs', 'chat-settings',
+    'ai-provider-radios', 'ai-model', 'ai-model-free', 'ai-local-row', 'ai-base', 'ai-key', 'ai-key-state',
+    'ai-save', 'ai-settings-status', 'chat-log', 'chat-input', 'btn-send', 'chat-status'];
+  check('/admin/chat markup carries every v2.32 id (canvas, proposal, chip, tabs) and every settings id it always had',
+    PAGE_IDS.every((id) => new RegExp('id="' + id + '"').test(chatRoute)));
+  check('the dropdown starts blank and groups drafts from published',
+    /— קנבס ריק —/.test(chatRoute) && /label="טיוטות"/.test(chatJs) && /label="פורסמו"/.test(chatJs));
+  check('the empty state tells the owner what the canvas is for',
+    /הקנבס ריק\. בחרו דף מהרשימה למעלה — או תארו לקופיילוט דף חדש, והוא יופיע כאן לפני האישור ואחריו\./.test(chatRoute));
+  check('the layout is chat (right) + canvas (left): the contract grid',
+    /grid-template-columns:minmax\(340px,420px\) minmax\(0,1fr\)/.test(chatRoute) && /height:calc\(100vh - 110px\)/.test(chatRoute));
+  check('the canvas is the REAL builder, embedded (?embed=copilot), never a look-alike',
+    /\?embed=copilot/.test(chatJs) && /\/admin\/edit\/' \+ encodeURIComponent\(loadedPath\)/.test(chatJs));
+  check('the proposal is rendered by the CMS compiler into a sandboxed frame — never painted into the builder',
+    /\/admin\/api\/pzn\/preview/.test(chatJs) && /sandbox="allow-same-origin"/.test(chatRoute) && /srcdoc/.test(chatJs));
+  check('a document that fails the check is refused with the fix line',
+    /הקופיילוט הציע מסמך שלא עובר את הבדיקה — דחו ובקשו תיקון/.test(chatJs));
+  check('👁 תצוגה חיה reuses the builder\'s own responsive preview', /openResponsivePreview/.test(chatJs));
+  check('the canvas is autosaved BEFORE every send and every approve', /savePage\(\{ silent: true \}\)/.test(chatJs));
+  check('the page NEVER saves or publishes on its own (writes stay behind the gate)',
+    !/\/admin\/save/.test(chatJs) && !/\/admin\/api\/pzn\/source/.test(chatJs) && !/\/admin\/publish/.test(chatJs));
+  check('history never gets an empty assistant turn (memo stands in; no `d.reply || \'\'` push)',
+    /d\.reply \|\| d\.memo/.test(chatJs) && !/content: d\.reply \|\| ''/.test(chatJs));
+  check('an unanswered proposal is told to the model, history is capped, a reset button exists',
+    /\(הצעה קודמת לא נענתה\)/.test(chatJs) && /HISTORY_CAP = 40/.test(chatJs) && /cp-new-chat/.test(chatJs));
+  check('the page sends canvas + surface context and the bridge\'s window hint',
+    /surface: 'copilot'/.test(chatJs) && /canvas: loadedPath \? 'page' : 'blank'/.test(chatJs) && /bridge\.window/.test(chatJs));
+  check('the window chip reads GET /admin/api/ai/window and follows d.window after every turn',
+    /\/admin\/api\/ai\/window/.test(chatJs) && /הפנייה האחרונה/.test(chatJs) && /d\.window/.test(chatJs));
+  check('errors print the fix line; an old bridge gets the 0.5.0 nudge',
+    /e\.fix/.test(chatJs) && /צריך ' \+ BRIDGE_MIN/.test(chatJs) && /BRIDGE_MIN = '0\.5\.0'/.test(chatJs));
+  check('one in-flight turn per page + beforeunload while driving or proposing',
+    /inflight/.test(chatJs) && /beforeunload/.test(chatJs) && /הקופיילוט עובד על הדף/.test(chatRoute));
+  check('the route composes systemFor(tier) — the door picks the tier from the window',
+    /systemFor/.test(copilotSrc) && /tier/.test(copilotSrc) && /window: readWindowHint\(b\.window\)/.test(copilotSrc));
+  check('the route knows a blank canvas and the copilot surface',
+    /הקנבס ריק/.test(copilotSrc) && /רואה את הדף בקנבס לידך/.test(copilotSrc) && /surface === 'copilot'/.test(copilotSrc));
+  check('GET /admin/api/ai/window exists behind the gate',
+    /router\.get\('\/admin\/api\/ai\/window', requireAdmin/.test(copilotSrc));
+  // one planner: the chip must read the SAME cache the turn plans against
+  // (same key, same probe TTL, same hint-forgetting) — the route's own
+  // planner serves only the setup screen's ?provider= override
+  check('the saved provider\'s window is planned by the door itself (ai.planWindow), the override by the route',
+    /override \? await planWindowAs\(hint, override\) : await require\('\.\.\/ai'\)\.planWindow\(\{ hint \}\)/.test(copilotSrc));
+  check('the page treats a bridge probe that settled before it ran as settled (no 3 s stall, no empty chip)',
+    /bridge\.window \|\| bridge\.windowSettled/.test(chatJs));
+  check('an empty canvas follows the first page the robot read — even when the same turn proposes',
+    /if \(!loadedPath && Array\.isArray\(d\.reads\) && d\.reads\[0\]\) \{/.test(chatJs));
 }
+
+// the EXACT body LM Studio answers with when the prompt is ≥ 2× the window
+// (map.md) — n_prompt_tokens / n_ctx are what the door learns from
+const EXCEED = {
+  error: {
+    code: 400,
+    message: 'request (17246 tokens) exceeds the available context size (8192 tokens), try increasing it',
+    type: 'exceed_context_size_error', n_prompt_tokens: 17246, n_ctx: 8192
+  }
+};
+const PROPOSED = '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/>' +
+  '<title>אתר בדיקה</title><meta name="bent-slug" content="home"/></head>\n<body>\n' +
+  '  <bent-heading id="h1" level="1">שלום מהקופיילוט</bent-heading>\n</body></html>';
+const toolCall = (id, name, args) => ({
+  choices: [{
+    finish_reason: 'tool_calls',
+    message: { role: 'assistant', content: '', tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] }
+  }]
+});
+const parse = (r) => { try { return JSON.parse(r.text); } catch (e) { return null; } };
 
 function req(method, urlPath, { form, json, cookie } = {}) {
   return new Promise((resolve, reject) => {
@@ -229,6 +313,100 @@ function waitUp(tries = 40) {
     try { await require('../src/ai').generate({ system: 'x', user: 'y' }); }
     catch (e) { genErr = e.message; }
     check('generate() refuses the browser provider with the honest error', /דרך הדפדפן/.test(genErr));
+
+    // ── v2.32: the window. Ben's request died on `request (17246 tokens)
+    //    exceeds the available context size (8192 tokens)` — the briefing
+    //    alone is ~15K tokens and nothing asked the runtime what it loaded.
+    //    Now the page's hint (the bridge probed LM Studio) picks the tier. ──
+    const small = parse(await req('POST', '/admin/api/ai/chat', {
+      cookie, json: { message: 'שלום', history: [], context: { canvas: 'blank', surface: 'copilot' }, window: { tokens: 8192, source: 'bridge' } }
+    }));
+    const smallCall = small && small.modelCall;
+    check('an 8K window hint → the COMPACT briefing (< 12,000 chars) and a 2,048-token reply reserve',
+      !!(smallCall && smallCall.body.messages[0].content.length < 12000 && smallCall.body.max_tokens === 2048));
+    check('…and the response says so (window.tier compact)', !!(small && small.window && small.window.tier === 'compact'));
+    check('the blank-canvas situation rides the compact briefing too',
+      !!(smallCall && /הקנבס ריק/.test(smallCall.body.messages[0].content) && /רואה את הדף בקנבס לידך/.test(smallCall.body.messages[0].content)));
+
+    const big = parse(await req('POST', '/admin/api/ai/chat', {
+      cookie, json: { message: 'שלום', history: [], window: { tokens: 32768, source: 'bridge' } }
+    }));
+    const bigCall = big && big.modelCall;
+    check('a 32K window hint → the FULL dictionary (> 40,000 chars) and a 4,096-token reserve',
+      !!(bigCall && bigCall.body.messages[0].content.length > 40000 && bigCall.body.max_tokens === 4096));
+    check('…window.tier full', !!(big && big.window && big.window.tier === 'full'));
+
+    const none = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'שלום', history: [] } }));
+    check('no hint → compact (an unknown window NEVER promotes to the full dictionary)',
+      !!(none && none.modelCall && none.modelCall.body.messages[0].content.length < 12000 && none.window && none.window.tier === 'compact'));
+
+    // the exceed error, relayed back as the step result → the door learns
+    // 8,192, tiers down and hands the page a NEW call with a notice
+    const shrunk = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: bigCall ? bigCall.id : 'x', result: EXCEED } } }));
+    check('the exact exceed body as a step → 200 with a NEW modelCall (shrink-and-retry, not an error)',
+      !!(shrunk && shrunk.ok && shrunk.modelCall && shrunk.modelCall.id !== bigCall.id &&
+         shrunk.modelCall.body.messages[0].content.length < 12000));
+    check('…with the Hebrew notice ("מקצר… ומנסה שוב")', !!(shrunk && /מקצר/.test(shrunk.notice || '')));
+
+    // any other provider error body → PROVIDER_ERROR in Hebrew, never a silent ''
+    const boom = await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: shrunk && shrunk.modelCall ? shrunk.modelCall.id : 'x', result: { error: { message: 'boom' } } } } });
+    const boomD = parse(boom);
+    check('a provider error body → 400 "שגיאת המודל המקומי: boom" with code PROVIDER_ERROR',
+      boom.status === 400 && !!boomD && /שגיאת המודל המקומי: boom/.test(boomD.error || '') && boomD.code === 'PROVIDER_ERROR');
+
+    // the tool loop over the relay: list_pages → the next call carries the
+    // assistant tool_calls turn AND our role:'tool' answer
+    const t1 = parse(await req('POST', '/admin/api/ai/chat', {
+      cookie, json: { message: 'ערוך את דף הבית', history: [], context: { page: 'home', canvas: 'page', surface: 'copilot' }, window: { tokens: 8192, source: 'bridge' } }
+    }));
+    const t2 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: t1 && t1.modelCall ? t1.modelCall.id : 'x', result: toolCall('c1', 'list_pages', {}) } } }));
+    const t2msgs = (t2 && t2.modelCall && t2.modelCall.body.messages) || [];
+    check('a list_pages tool call → the next modelCall carries a role:"tool" answer',
+      t2msgs.some((m) => m.role === 'tool') && t2msgs.some((m) => m.role === 'assistant' && Array.isArray(m.tool_calls)));
+
+    // an edit_page call → a pending with the FULL proposed document (the
+    // page renders it before the gate) and a memo the history can keep
+    const publishedBefore = parse(await req('GET', '/admin/api/pzn/source?fullPath=home&kind=published', { cookie }));
+    const t3 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: t2 && t2.modelCall ? t2.modelCall.id : 'x', result: toolCall('c2', 'edit_page', { slug: 'home', source: PROPOSED }) } } }));
+    check('an edit_page call → pending with input.source (previewable) and the memo "הצעתי…"',
+      !!(t3 && t3.pending && t3.pending.tool === 'edit_page' && t3.pending.input && t3.pending.input.source === PROPOSED && /הצעתי/.test(t3.memo || '')));
+
+    // approval → the draft is written (applied.edited), the live page untouched
+    const ok1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { approve: { id: t3 && t3.pending ? t3.pending.id : 'x', ok: true } } }));
+    check('approve → applied.edited on the page "home"',
+      !!(ok1 && ok1.ok && ok1.applied && ok1.applied.edited === true && ok1.applied.slug === 'home'));
+    if (ok1 && ok1.modelCall) {
+      // the model gets to comment after its write — finish that hop
+      await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: ok1.modelCall.id, result: { choices: [{ message: { content: 'עודכן.' } }] } } } });
+    }
+    const draftAfter = parse(await req('GET', '/admin/api/pzn/source?fullPath=home', { cookie }));
+    const publishedAfter = parse(await req('GET', '/admin/api/pzn/source?fullPath=home&kind=published', { cookie }));
+    // the draft is read back through the same serializer that wrote it, so
+    // the comparison is whitespace-normalized — but the heading the copilot
+    // wrote must be there verbatim, and must NOT be on the live page
+    const norm = (s) => String(s || '').replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim();
+    check('the draft source is now the proposed document (with the copilot\'s heading)',
+      !!(draftAfter && draftAfter.ok && norm(draftAfter.source) === norm(PROPOSED) && /שלום מהקופיילוט/.test(draftAfter.source)));
+    check('the PUBLISHED blocks did not change (a copilot write is a draft, never a publish)',
+      !!(publishedBefore && publishedBefore.ok && typeof publishedBefore.source === 'string' &&
+         publishedAfter && publishedAfter.ok && publishedBefore.source === publishedAfter.source &&
+         !/שלום מהקופיילוט/.test(publishedAfter.source)));
+
+    // the window endpoint the chip and the setup screen read
+    const win = await req('GET', '/admin/api/ai/window?tokens=8192&source=bridge', { cookie });
+    const winD = parse(win);
+    check('GET /admin/api/ai/window?tokens=8192&source=bridge → compact, with the LM Studio click path',
+      win.status === 200 && !!winD && winD.ok && winD.tier === 'compact' && winD.tierHe === 'מקוצר' &&
+      /Context Length/.test(winD.message || '') && winD.recommended === 32768 && winD.window && winD.window.tokens === 8192);
+    const winNoAuth = await req('GET', '/admin/api/ai/window?tokens=8192&source=bridge', {});
+    check('/admin/api/ai/window is not reachable unauthenticated', winNoAuth.status !== 200);
+
+    // the screen itself carries the canvas
+    const chat2 = await req('GET', '/admin/chat', { cookie });
+    check('GET /admin/chat carries the canvas, the dropdown, the proposal frame and the window chip',
+      chat2.status === 200 && ['cp-page-select', 'cp-window', 'btn-stage-preview', 'cp-open-full', 'cp-new-chat',
+        'cp-canvas-empty', 'cp-canvas-frame', 'cp-proposal', 'cp-tabs', 'chat-settings', 'ai-key', 'btn-send']
+        .every((id) => new RegExp('id="' + id + '"').test(chat2.text)));
   } finally {
     child.kill();
   }

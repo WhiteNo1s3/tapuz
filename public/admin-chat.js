@@ -1,50 +1,149 @@
-/* /admin/chat — the tier-1 copilot (v0.85, the tier realignment):
-   the user's LLM key lives in the CMS; the chat calls the provider's OFFICIAL
-   API from the server, speaks BenTML (the same roleplay pack every on-ramp
-   gets), and a reply that carries a page becomes a draft in one click.
-   No key? The sidebar routes to the keyless tier (inject / paste / extension). */
+/* /admin/chat — the copilot beside the builder (v0.85 → v2.32).
+   The user's LLM key lives in the CMS (or the model lives on their machine,
+   reached directly or through the Bridge V2 extension); the chat calls the
+   provider from the server, speaks BenTML, and every write stops at an
+   approval card and lands as a DRAFT.
+
+   v2.32 (Ben: "put pagebuilder also in the page… choose with dropdown menu
+   any of the current pages… update in realtime when we use the robot, it
+   cannot be separated"): the page carries a CANVAS — the real builder in an
+   iframe (`/admin/edit/:path?embed=copilot`). Blank canvas = no iframe. A
+   proposal is rendered through /admin/api/pzn/preview into a sandboxed frame
+   OVER the canvas, never into it: until the owner approves, it is not a
+   draft and must not look like one. This file never saves, never publishes —
+   the builder inside the frame saves its own draft, the door writes the
+   approved one (a smoke pins the absence of those routes here).
+
+   Also v2.32 — the window. The model's context is measured before a send
+   (GET /admin/api/ai/window) and after every turn (d.window), the chip says
+   which tier the copilot runs in, and an error carries a `fix` line with the
+   LM Studio click path. Reply hygiene: an empty reply is never pushed into
+   history (that was the "2 turns to get an unrelated answer"); the server's
+   `memo` stands in for it. */
 (function () {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
   const log = $('chat-log');
   const input = $('chat-input');
-  const history = []; // [{role, content}] — sent with each turn, capped server-side
+  const HISTORY_CAP = 40; // turns kept client-side; the server fits them to the window
+  const history = []; // [{role, content}] — sent with each turn
+  let usedShown = 0;  // how many entries of the turn's `used` ledger were already shown
+  const REPLY_CUT = 'התשובה נחתכה באמצע — המודל הגיע לסוף החלון. הגדילו את Context Length ב-LM Studio, או בקשו דף קצר יותר.';
+  const BRIDGE_MIN = '0.5.0'; // tools (read/create/edit) need the bridge that forwards tool calls
 
   let providers = [];
   let settings = { provider: 'claude', model: '', hasKey: false, keyTail: '' };
+  let pages = []; // the dropdown's source of truth (GET /admin/api/pages)
+  let loadedPath = ''; // the page in the canvas ('' = blank)
+  let inflight = false; // ONE turn per page — composer, send and approvals lock
+  let openProposal = null; // { pending, card } while an approval card waits
+  let unloadArmed = false;
 
   // Bridge V2 (extension-v2a) — shared glue lives in /admin-bridge.js;
-  // this page only reacts to its presence/model events.
-  const bridge = window.TapuzBridge || { present: false, models: [], call: () => Promise.reject(new Error('אין גשר')), drive: (d) => Promise.resolve(d) };
+  // this page only reacts to its presence/model/window events.
+  const bridge = window.TapuzBridge || {
+    present: false, models: [], version: '', window: null,
+    call: () => Promise.reject(new Error('אין גשר')), drive: (d) => Promise.resolve(d)
+  };
+  // the bridge glue may have finished probing BEFORE this script ran (a fast
+  // local box: hello → /v1/models → /api/v0/models all land while the
+  // settings fetch is still in flight) — its `windowSettled` flag says so,
+  // and a null window that has settled (an old extension) counts as settled
+  let bridgeWindowSettled = !!(bridge.window || bridge.windowSettled);
   document.addEventListener('tapuz-bridge-hello', () => { if (providers.length) renderSettings(); });
   document.addEventListener('tapuz-bridge-models', () => { if (currentProvider().browserRelay) syncProviderUI(); });
+  document.addEventListener('tapuz-bridge-window', () => {
+    bridgeWindowSettled = true;
+    if (savedProvider().browserRelay) refreshWindow();
+  });
 
   async function api(path, opts = {}) {
     const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
     const ct = res.headers.get('content-type') || '';
     const data = ct.includes('json') ? await res.json() : await res.text();
-    if (!res.ok) throw new Error((data && data.error) || res.statusText);
+    if (!res.ok || (data && data.ok === false)) {
+      // the door's error carries a code and a fix line — keep both on the Error
+      const err = new Error((data && data.error) || res.statusText);
+      err.code = (data && data.code) || '';
+      err.fix = (data && data.fix) || '';
+      err.issues = (data && data.issues) || null;
+      throw err;
+    }
     return data;
   }
 
   function esc(s) {
     return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function bubble(role, html) {
+  function fmt(n) {
+    return Number(n || 0).toLocaleString('en-US');
+  }
+
+  function bubble(role, html, extraClass) {
     const div = document.createElement('div');
-    div.className = 'bubble ' + role;
+    div.className = 'bubble ' + role + (extraClass ? ' ' + extraClass : '');
     div.innerHTML = html;
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
     return div;
   }
 
+  /** An error as the door reported it: the message, then the fix (the click
+   *  path in LM Studio) as a second line when there is one. */
+  function errorBubble(e) {
+    const fix = e && e.fix ? '<span class="fix">' + esc(e.fix) + '</span>' : '';
+    return bubble('system', 'שגיאה: ' + esc(e && e.message ? e.message : e) + fix, 'danger');
+  }
+
   function setStatus(msg) {
     const el = $('chat-status');
     if (el) el.textContent = msg || '';
+  }
+
+  /** Lock the page while a turn is in flight: the composer, the send button,
+   *  every approval button, and the canvas toolbar's pulsing line. */
+  function setInflight(v, note) {
+    inflight = v;
+    input.disabled = v;
+    $('btn-send').disabled = v;
+    $('cp-new-chat').disabled = v;
+    $('cp-page-select').disabled = v;
+    const working = $('cp-working');
+    if (working) working.hidden = !v;
+    // only the OPEN proposal's buttons follow the lock — answered cards stay
+    // disabled for good
+    const gates = openProposal ? Array.from(openProposal.card.querySelectorAll('[data-ok]')) : [];
+    gates.concat(Array.from(proposal.querySelectorAll('[data-ok]'))).forEach((b) => { b.disabled = v || !openProposal; });
+    setStatus(v ? (note || 'חושב…') : '');
+    armUnload();
+  }
+
+  /** A turn in flight or a proposal waiting = something the owner would lose
+   *  by closing the tab. */
+  function armUnload() {
+    const want = inflight || !!openProposal;
+    if (want === unloadArmed) return;
+    unloadArmed = want;
+    if (want) window.addEventListener('beforeunload', onUnload);
+    else window.removeEventListener('beforeunload', onUnload);
+  }
+  function onUnload(e) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+
+  /* ── history hygiene (§0.7) ── */
+
+  /** Push a turn only when it says something. An empty assistant turn in the
+   *  history is what made the model answer the wrong question. */
+  function remember(role, content) {
+    const text = String(content == null ? '' : content).trim();
+    if (!text) return;
+    history.push({ role, content: text });
+    while (history.length > HISTORY_CAP) history.shift();
   }
 
   /* ── settings card ── */
@@ -142,37 +241,276 @@
       renderSettings();
       $('ai-settings-status').textContent = 'נשמר ✓';
       // a local runtime needs no key, so the chat is ready the moment it is picked
-      if (d.hasKey || currentProvider().keyOptional) welcome(true);
+      if (d.hasKey || currentProvider().keyOptional) { welcome(true); refreshWindow(); }
     } catch (e) {
       $('ai-settings-status').textContent = 'שגיאה: ' + e.message;
     }
   }
 
-  /* ── the conversation ── */
+  /* ── the window chip ── */
 
   function savedProvider() {
     return providers.find((x) => x.id === settings.provider) || {};
   }
 
+  /** The bridge's own reading of LM Studio's loaded window (bridge 0.5.0
+   *  probes /api/v0/models on hello). Only the browser courier has one — the
+   *  server probes for the local provider itself. */
+  function windowHint() {
+    if (!savedProvider().browserRelay) return null;
+    const w = bridge.window;
+    return w && w.tokens ? {
+      tokens: w.tokens, maxTokens: w.maxTokens || null, model: w.model || '',
+      source: 'bridge', bridgeVersion: w.bridgeVersion || bridge.version || ''
+    } : null;
+  }
+
+  /** The first turn waits (up to `ms`) for the bridge to finish probing, so
+   *  the send carries the hint instead of racing it. */
+  function awaitBridgeWindow(ms) {
+    if (!savedProvider().browserRelay || bridgeWindowSettled || !bridge.present) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => { clearTimeout(t); document.removeEventListener('tapuz-bridge-window', done); resolve(); };
+      const t = setTimeout(done, ms);
+      document.addEventListener('tapuz-bridge-window', done);
+    });
+  }
+
+  function versionLt(a, b) {
+    const pa = String(a || '0').split('.').map((x) => parseInt(x, 10) || 0);
+    const pb = String(b || '0').split('.').map((x) => parseInt(x, 10) || 0);
+    for (let i = 0; i < 3; i++) {
+      if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
+    }
+    return false;
+  }
+
+  function setChip(w, extra) {
+    const chip = $('cp-window');
+    if (!chip) return;
+    chip.classList.remove('is-full', 'is-compact', 'is-bad');
+    if (!w) { chip.textContent = 'חלון —'; chip.title = 'עוד לא נמדד'; return; }
+    const tierHe = w.tier === 'full' ? 'מלא' : w.tier === 'compact' ? 'מקוצר' : 'קטן מדי';
+    // a cloud key has no window (∞); a local model whose window could not be
+    // read is a question mark, never a promise
+    const tokens = w.tokens ? fmt(w.tokens) : (w.tier === 'full' ? '∞' : '?');
+    let text = 'חלון ' + tokens + ' · ' + tierHe;
+    if (w.promptTokens) text += ' · הפנייה האחרונה ' + fmt(w.promptTokens) + ' טוקנים';
+    chip.textContent = text;
+    chip.title = (extra || w.message || '') + (w.model ? '\n' + w.model : '');
+    chip.classList.add(w.tier === 'full' ? 'is-full' : w.tier === 'compact' ? 'is-compact' : 'is-bad');
+  }
+
+  let lastWindowMessage = '';
+
+  /** GET /admin/api/ai/window → the welcome sentence + the chip. The browser
+   *  courier passes its hint in the query; the server probes for local. */
+  async function refreshWindow() {
+    const p = savedProvider();
+    if (!(settings.hasKey || p.keyOptional)) { setChip(null); return; }
+    if (p.browserRelay && !bridge.present) { setChip(null); return; }
+    const hint = windowHint();
+    const q = hint ? '?' + new URLSearchParams({
+      tokens: hint.tokens, maxTokens: hint.maxTokens || '', model: hint.model, source: 'bridge', bridgeVersion: hint.bridgeVersion
+    }).toString() : '';
+    try {
+      const d = await api('/admin/api/ai/window' + q);
+      setChip({ tokens: d.window && d.window.tokens, tier: d.tier, model: d.model, message: d.message });
+      if (d.message && d.message !== lastWindowMessage) {
+        lastWindowMessage = d.message;
+        bubble('system', esc(d.message), d.tier === 'full' ? '' : d.tier === 'compact' ? 'warn' : 'danger');
+      }
+    } catch (e) {
+      setChip(null);
+    }
+  }
+
+  /* ── welcome ── */
+
+  let bridgeWarned = false;
   function welcome(fresh) {
-    if (fresh) log.innerHTML = '';
+    if (fresh) { log.innerHTML = ''; lastWindowMessage = ''; bridgeWarned = false; }
     const p = savedProvider();
     if (p.browserRelay) {
       bubble('system', bridge.present
         ? 'הקופיילוט מחובר למודל המקומי דרך הדפדפן ✓ שום דבר לא עוזב את המחשב שלכם.'
         : 'הספק הנבחר עובד דרך תוסף Bridge V2 — פתחו את התוסף ולחצו "חבר את האתר הפתוח".');
+      warnOldBridge();
     } else if (settings.hasKey || p.keyOptional) {
       bubble('system', 'הקופיילוט מחובר ✓ תארו דף — והוא ייבנה כטיוטה בלחיצה. המפתח שלכם נשאר בשרת.');
     } else {
-      bubble('system', 'עוד אין מפתח API. הגדירו אותו בצד (נשמר בשרת בלבד) — או השתמשו במסלולים ללא מפתח.');
+      bubble('system', 'עוד אין מפתח API. הגדירו אותו למטה (נשמר בשרת בלבד) — או השתמשו במסלולים ללא מפתח.');
     }
   }
 
-  /* One assistant turn: what it said, what it looked at, and — if it wants to
-     WRITE — the approval gate. The server has already stopped short of doing
-     anything; this is the only thing that lets it through. */
+  /** A bridge older than 0.5.0 drops the model's tool calls on the way (the
+   *  0.4.0 signature) — plain chat works, reading/editing pages does not. */
+  function warnOldBridge() {
+    if (bridgeWarned || !bridge.present) return;
+    if (!versionLt(bridge.version || '0', BRIDGE_MIN)) return;
+    bridgeWarned = true;
+    bubble('system',
+      'התוסף Bridge V2 ' + esc(bridge.version || '(גרסה לא ידועה)') +
+      ' — לכלים (קריאת דפים, יצירה, עריכה) צריך ' + BRIDGE_MIN + ': הורידו מ<a href="/admin/ai-setup">חיבור AI</a> וטענו מחדש.',
+      'warn');
+  }
+
+  /* ── the canvas: the real builder, in a frame ── */
+
+  const frame = $('cp-canvas-frame');
+  const select = $('cp-page-select');
+
+  function builder() {
+    try { return loadedPath && frame.contentWindow && frame.contentWindow.TapuzBuilder || null; }
+    catch (e) { return null; }
+  }
+
+  /** The dropdown: every page, drafts and published apart, each line saying
+   *  what it is and whether it carries unpublished changes. */
+  async function loadPages(keep) {
+    try {
+      const d = await api('/admin/api/pages');
+      pages = d.pages || [];
+    } catch (e) { pages = []; }
+    const line = (p) => esc(p.title || p.full_path) + ' · /' + esc(p.full_path) + ' · ' +
+      (p.status === 'published' ? 'פורסם' : 'טיוטה') + (p.has_unpublished ? ' • שינויים' : '');
+    const opt = (p) => '<option value="' + esc(p.full_path) + '">' + line(p) + '</option>';
+    const drafts = pages.filter((p) => p.status !== 'published');
+    const published = pages.filter((p) => p.status === 'published');
+    select.innerHTML = '<option value="">— קנבס ריק —</option>' +
+      (drafts.length ? '<optgroup label="טיוטות">' + drafts.map(opt).join('') + '</optgroup>' : '') +
+      (published.length ? '<optgroup label="פורסמו">' + published.map(opt).join('') + '</optgroup>' : '');
+    const want = keep != null ? keep : loadedPath;
+    select.value = want;
+    if (select.value !== want) select.value = ''; // the page is gone — the canvas says so
+  }
+
+  /** Put a page in the canvas (or clear it). The URL follows, so a reload or
+   *  a shared link lands on the same page. */
+  function selectPage(fullPath, opts = {}) {
+    loadedPath = String(fullPath || '');
+    const empty = $('cp-canvas-empty');
+    const open = $('cp-open-full');
+    const prev = $('btn-stage-preview');
+    if (!loadedPath) {
+      frame.hidden = true;
+      frame.removeAttribute('src');
+      empty.hidden = false;
+      open.hidden = true;
+      prev.disabled = true;
+    } else {
+      frame.src = '/admin/edit/' + encodeURIComponent(loadedPath) + '?embed=copilot';
+      frame.hidden = false;
+      empty.hidden = true;
+      open.href = '/admin/edit/' + encodeURIComponent(loadedPath);
+      open.hidden = false;
+      prev.disabled = false;
+    }
+    if (select.value !== loadedPath) select.value = loadedPath;
+    if (!opts.keepUrl) {
+      const u = new URL(location.href);
+      if (loadedPath) u.searchParams.set('page', loadedPath); else u.searchParams.delete('page');
+      replaceUrl(u);
+    }
+  }
+  function replaceUrl(u) {
+    try { window.history.replaceState(null, '', u.pathname + u.search); } catch (e) { /* sandboxed preview */ }
+  }
+
+  /** The builder autosaves on its own clock; before the copilot reads or
+   *  edits, the draft on disk must be what the owner sees — so save first. */
+  async function saveCanvas() {
+    const b = builder();
+    if (!b || typeof b.savePage !== 'function') return;
+    try { await b.savePage({ silent: true }); } catch (e) { /* view-only or mid-load */ }
+  }
+
+  /** The draft changed on disk — the embedded builder reloads to show it. */
+  function reloadCanvas() {
+    if (!loadedPath) return;
+    try { frame.contentWindow.location.reload(); }
+    catch (e) { frame.src = frame.getAttribute('src'); }
+  }
+
+  function selectedInfo() {
+    try {
+      const b = builder();
+      const blk = b && b._getSelected && b._getSelected();
+      if (!blk) return null;
+      const d = blk.data || {};
+      const text = String(d.text || d.title || d.heading || d.content || '').replace(/<[^>]+>/g, '').slice(0, 280);
+      return { id: blk.id || '', type: blk.type || '', text };
+    } catch (e) { return null; }
+  }
+
+  /** What the copilot is told about where the owner stands. */
+  function pageContext() {
+    const ctx = { canvas: loadedPath ? 'page' : 'blank', surface: 'copilot' };
+    if (loadedPath) {
+      ctx.page = loadedPath;
+      const sel = selectedInfo();
+      if (sel) ctx.selected = sel;
+    }
+    return ctx;
+  }
+
+  /* ── the proposal frame: the copilot's document, rendered, before the gate ── */
+
+  const proposal = $('cp-proposal');
+  const proposalFrame = $('cp-proposal-frame');
+
+  /** Show a document over the canvas. `what` names it; `answerable` keeps
+   *  the approve/refuse pair (a pending) or swaps it for a close button (a
+   *  document the reply merely carried — the 🪄 button in the bubble creates
+   *  it). Rendering is the CMS's own compiler (/admin/api/pzn/preview): what
+   *  the owner sees is what approval would save. */
+  async function showProposal(source, what, answerable) {
+    proposal.hidden = false;
+    $('cp-proposal-what').textContent = what || '';
+    $('cp-proposal-error').hidden = true;
+    proposal.querySelectorAll('[data-ok]').forEach((b) => { b.hidden = !answerable; b.disabled = inflight; });
+    proposal.querySelector('[data-close]').hidden = !!answerable;
+    proposalFrame.removeAttribute('srcdoc');
+    armUnload();
+    try {
+      const d = await api('/admin/api/pzn/preview', { method: 'POST', body: JSON.stringify({ source }) });
+      proposalFrame.srcdoc = d.html || '';
+    } catch (e) {
+      const box = $('cp-proposal-error');
+      const issues = (e.issues || []).map((i) => '• ' + (i.code ? i.code + ': ' : '') + (i.message || '')).join('\n');
+      box.textContent = 'הקופיילוט הציע מסמך שלא עובר את הבדיקה — דחו ובקשו תיקון\n' + e.message + (issues ? '\n' + issues : '');
+      box.hidden = false;
+    }
+  }
+
+  function hideProposal() {
+    proposal.hidden = true;
+    proposalFrame.removeAttribute('srcdoc');
+    armUnload();
+  }
+
+  function proposalTitle(p) {
+    const inp = p.input || {};
+    if (p.tool === 'create_page') {
+      const m = /<title>([^<]*)<\/title>/i.exec(String(inp.source || ''));
+      return 'דף חדש: "' + ((inp.title || (m && m[1]) || '').trim() || 'ללא כותרת') + '"';
+    }
+    if (p.tool === 'edit_page') return 'עריכת "' + (inp.slug || loadedPath || '') + '"';
+    return p.summary || '';
+  }
+
+  /* ── one assistant turn on the screen ── */
+
+  /** What it said, what it looked at, and — if it wants to WRITE — the
+   *  approval gate. The server has already stopped short of doing anything;
+   *  this is the only thing that lets it through. */
   function renderTurn(d) {
-    const looked = (d.used || []).filter((t) => t === 'list_pages' || t === 'read_page');
+    // `used` is the whole turn's ledger (the door keeps it across relay steps
+    // and the approval), so an approval's response repeats the reads that
+    // came before the proposal — show only what is new since the last render
+    const fresh = (d.used || []).slice(usedShown);
+    usedShown = (d.used || []).length;
+    const looked = fresh.filter((t) => t === 'list_pages' || t === 'read_page');
     if (looked.length) {
       bubble('system', '🔎 הקופיילוט קרא מהאתר: ' + esc(looked.join(', ')));
     }
@@ -181,49 +519,104 @@
         '<div style="white-space:pre-wrap;word-break:break-word;direction:rtl">' + esc(d.reply) + '</div>' +
         replyActions(d.reply));
       wireActions(b, d.reply);
+      // a document in the reply with no tool call: still show it rendered —
+      // the 🪄 button above creates it, the frame lets the owner see it first
+      if (!d.pending && carriesDocument(d.reply)) {
+        showProposal(d.reply, 'מסמך מהתשובה — לחצו 🪄 בצ׳אט כדי ליצור', false);
+      }
+    } else if (d.memo && !d.pending && !d.applied) {
+      bubble('system', esc(d.memo));
     }
+    if (d.truncated) bubble('system', esc(REPLY_CUT), 'warn');
     if (d.pending) renderApproval(d.pending);
+    // the canvas follows what the robot reads: an empty canvas opens the
+    // first page it looked at — also when the same turn already proposes an
+    // edit to it, so the owner compares the proposal against the page under
+    // it (approval then reloads that same canvas)
+    if (!loadedPath && Array.isArray(d.reads) && d.reads[0]) {
+      selectPage(d.reads[0]);
+    }
+  }
+
+  /** Every turn ends here: the chip learns the last window, a notice from the
+   *  door (a shrink-and-retry) becomes a system bubble. */
+  function noteTurn(d) {
+    if (!d) return;
+    if (d.notice) bubble('system', esc(d.notice), 'warn');
+    if (d.window) {
+      setChip({
+        tokens: d.window.tokens, tier: d.window.tier, model: d.window.model,
+        promptTokens: d.window.promptTokens, message: lastWindowMessage
+      });
+    }
   }
 
   function renderApproval(p) {
     const b = bubble('system',
       '<div style="font-weight:700;margin-bottom:6px">✋ הקופיילוט מבקש רשות</div>' +
       '<div style="margin-bottom:4px">' + esc(p.summary) + '</div>' +
-      '<div class="faint" style="font-size:.78rem;margin-bottom:8px">שום דבר לא נשמר עדיין. אישור יוצר/יעדכן <b>טיוטה</b> בלבד — הדף החי לא משתנה.</div>' +
+      '<div class="faint" style="font-size:.78rem;margin-bottom:8px">שום דבר לא נשמר עדיין. אישור יוצר/יעדכן <b>טיוטה</b> בלבד — הדף החי לא משתנה.' +
+      (p.input && p.input.source ? ' ההצעה מוצגת בקנבס.' : '') + '</div>' +
       '<div class="actions">' +
       '<button type="button" class="act primary" data-ok="1">✓ אשר</button>' +
       '<button type="button" class="act" data-ok="0">✕ לא עכשיו</button>' +
       '</div>');
+    openProposal = { pending: p, card: b };
     b.querySelectorAll('[data-ok]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const ok = btn.dataset.ok === '1';
-        b.querySelectorAll('[data-ok]').forEach((x) => { x.disabled = true; });
-        btn.textContent = ok ? 'מבצע…' : 'נדחה';
-        setStatus(ok ? 'מבצע…' : '');
-        try {
-          // approvals ride the same driver — an approved write hands control
-          // back to the model, which may need more bridge round-trips
-          const d = await chatTurn({ approve: { id: p.id, ok } });
-          if (ok) {
-            const slug = (p.input && p.input.slug) || '';
-            bubble('system', 'בוצע ✓ ' + (slug
-              ? '<a href="/admin/edit/' + encodeURIComponent(slug) + '">פתחו בבונה</a>'
-              : 'הטיוטה נשמרה'));
-          }
-          if (d.reply) history.push({ role: 'assistant', content: d.reply });
-          renderTurn(d);
-        } catch (e) {
-          bubble('system', 'שגיאה: ' + esc(e.message));
-        }
-        setStatus('');
-      });
+      btn.addEventListener('click', () => answer(btn.dataset.ok === '1'));
     });
+    if (p.input && p.input.source) showProposal(p.input.source, proposalTitle(p), true);
+    armUnload();
+  }
+
+  /** The gate — the chat card and the proposal bar both land here. */
+  async function answer(ok) {
+    if (inflight || !openProposal) return;
+    const { pending: p, card } = openProposal;
+    openProposal = null;
+    card.querySelectorAll('[data-ok]').forEach((x) => { x.disabled = true; });
+    const pressed = card.querySelector('[data-ok="' + (ok ? '1' : '0') + '"]');
+    if (pressed) pressed.textContent = ok ? 'מבצע…' : 'נדחה';
+    proposal.querySelectorAll('[data-ok]').forEach((x) => { x.disabled = true; });
+    if (!ok) hideProposal();
+    // the builder may hold unsaved edits the copilot's write would clobber
+    await saveCanvas();
+    setInflight(true, ok ? 'מבצע…' : 'מודיע לקופיילוט…');
+    try {
+      // approvals ride the same driver — an approved write hands control
+      // back to the model, which may need more bridge round-trips
+      const d = await chatTurn({ approve: { id: p.id, ok } });
+      remember('assistant', d.reply || d.memo);
+      hideProposal();
+      const a = d.applied;
+      if (ok && a && a.edited) {
+        bubble('system', 'בוצע ✓ הטיוטה בקנבס' +
+          (a.warnings && a.warnings.length ? ' · ' + a.warnings.length + ' אזהרות' : ''));
+        if (loadedPath === a.slug) reloadCanvas();
+        else selectPage(a.slug);
+        loadPages();
+      } else if (ok && a && a.created) {
+        await loadPages(a.slug);
+        selectPage(a.slug);
+        bubble('system', 'נוצרה טיוטה ✓ הדף פתוח בקנבס · <a href="/admin/edit/' + encodeURIComponent(a.slug) + '">בונה מלא</a>' +
+          (a.warnings && a.warnings.length ? ' · ' + a.warnings.length + ' אזהרות' : ''));
+      }
+      renderTurn(d);
+    } catch (e) {
+      errorBubble(e);
+    } finally {
+      setInflight(false);
+    }
+  }
+
+  function carriesDocument(reply) {
+    // a reply that carries a page — in either dialect: a <bent-*> tag
+    // document or a "BENTML 0.2" keyword document
+    return /<bent-|<!DOCTYPE html|^\s*BENTML\s+v?\d+\.\d+/im.test(reply);
   }
 
   function replyActions(reply) {
-    // a reply that carries a page offers one-click creation — in either
-    // dialect: a <bent-*> tag document or a "BENTML 0.2" keyword document
-    if (!/<bent-|<!DOCTYPE html|^\s*BENTML\s+v?\d+\.\d+/im.test(reply)) return '';
+    if (!carriesDocument(reply)) return '';
     return '<div class="actions">' +
       '<button type="button" class="act primary" data-act="create">🪄 צור דף מהתשובה (טיוטה)</button>' +
       '<button type="button" class="act" data-act="copy">העתק</button>' +
@@ -233,41 +626,60 @@
   /* Drive one copilot turn to completion. With the browser provider the
      server answers with modelCall continuations — relay each through the
      bridge and hand the local model's output back until a real reply (or an
-     approval request) arrives. Key providers finish in a single round. */
+     approval request) arrives. Key providers finish in a single round.
+     Every hop's window rides back on the response; the chip follows. */
   async function chatTurn(payload) {
-    const post = (p) => api('/admin/api/ai/chat', { method: 'POST', body: JSON.stringify(p) });
+    const post = (p) => api('/admin/api/ai/chat', { method: 'POST', body: JSON.stringify(p) }).then((d) => {
+      noteTurn(d);
+      return d;
+    });
+    const onProgress = (p) => setStatus('✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים');
     const d = await post(payload);
     if (d.modelCall) setStatus('המודל המקומי חושב… (דרך התוסף)');
-    return bridge.drive(d, post);
+    return bridge.drive(d, post, undefined, onProgress);
   }
 
   async function send() {
+    if (inflight) return;
     const message = input.value.trim();
     if (!message) return;
+    usedShown = 0; // a new turn, a new ledger
     const p = savedProvider();
     // a keyless provider (local / browser-relay) is ready without any key
     if (!settings.hasKey && !p.keyOptional) {
-      bubble('system', 'קודם מגדירים מפתח בצד — או עוברים ל<a href="/admin/ai">הדבקה ידנית</a>.');
+      bubble('system', 'קודם מגדירים מפתח למטה — או עוברים ל<a href="/admin/ai">הדבקה ידנית</a>.');
       return;
     }
     if (p.browserRelay && !bridge.present) {
       bubble('system', 'הספק הנבחר עובד דרך תוסף Bridge V2 — פתחו את התוסף ולחצו "חבר את האתר הפתוח", ואז רעננו.');
       return;
     }
+    // a proposal left unanswered is not forgotten — the model is told
+    if (openProposal) {
+      openProposal.card.querySelectorAll('[data-ok]').forEach((x) => { x.disabled = true; });
+      openProposal = null;
+      hideProposal();
+      remember('assistant', '(הצעה קודמת לא נענתה)');
+    }
     input.value = '';
     bubble('user', esc(message));
-    setStatus('חושב…');
-    $('btn-send').disabled = true;
+    setInflight(true, 'חושב…');
     try {
-      const d = await chatTurn({ message, history });
-      history.push({ role: 'user', content: message }, { role: 'assistant', content: d.reply || '' });
+      await saveCanvas();
+      await awaitBridgeWindow(3000);
+      const payload = { message, history: history.slice(), context: pageContext() };
+      const hint = windowHint();
+      if (hint) payload.window = hint;
+      const d = await chatTurn(payload);
+      remember('user', message);
+      remember('assistant', d.reply || d.memo);
       renderTurn(d);
-      setStatus('');
     } catch (e) {
-      bubble('system', 'שגיאה: ' + esc(e.message));
-      setStatus('');
+      remember('user', message);
+      errorBubble(e);
+      if (e.code === 'BRIDGE_TOO_OLD' || e.code === 'BRIDGE_DROPPED_TOOLS') { bridgeWarned = false; warnOldBridge(); }
     } finally {
-      $('btn-send').disabled = false;
+      setInflight(false);
       input.focus();
     }
   }
@@ -276,7 +688,7 @@
     container.querySelectorAll('[data-act]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (btn.dataset.act === 'copy') {
-          try { await navigator.clipboard.writeText(reply); btn.textContent = 'הועתק ✓'; } catch (e) {}
+          try { await navigator.clipboard.writeText(reply); btn.textContent = 'הועתק ✓'; } catch (e) { /* no clipboard */ }
           return;
         }
         // create: the forgiving pipeline — extract → repair → DRAFT page
@@ -287,13 +699,16 @@
             method: 'POST',
             body: JSON.stringify({ source: reply })
           });
+          hideProposal();
+          await loadPages(d.fullPath);
+          selectPage(d.fullPath);
           bubble('system',
-            'נוצרה טיוטה ✓ ' +
-            '<a href="/admin/edit/' + encodeURIComponent(d.fullPath) + '">פתחו בבונה</a>' +
+            'נוצרה טיוטה ✓ הדף פתוח בקנבס · ' +
+            '<a href="/admin/edit/' + encodeURIComponent(d.fullPath) + '">בונה מלא</a>' +
             (d.warnings && d.warnings.length ? ' · ' + d.warnings.length + ' אזהרות' : ''));
           btn.textContent = 'נוצר ✓';
         } catch (e) {
-          bubble('system', 'הבנייה נכשלה: ' + esc(e.message));
+          bubble('system', 'הבנייה נכשלה: ' + esc(e.message), 'danger');
           btn.disabled = false;
           btn.textContent = '🪄 צור דף מהתשובה (טיוטה)';
         }
@@ -310,9 +725,60 @@
       settings = d;
       renderSettings();
     } catch (e) {
-      bubble('system', 'שגיאה בטעינת ההגדרות: ' + esc(e.message));
+      bubble('system', 'שגיאה בטעינת ההגדרות: ' + esc(e.message), 'danger');
     }
     welcome(false);
+
+    // the canvas: the dropdown, the preselected page, the buttons
+    await loadPages();
+    const want = new URL(location.href).searchParams.get('page') || '';
+    if (want && pages.some((p) => p.full_path === want)) selectPage(want, { keepUrl: true });
+    else selectPage('', { keepUrl: true });
+
+    select.addEventListener('change', () => {
+      if (inflight) { select.value = loadedPath; return; }
+      selectPage(select.value);
+    });
+    $('btn-stage-preview').addEventListener('click', () => {
+      const b = builder();
+      if (b && typeof b.openResponsivePreview === 'function') b.openResponsivePreview();
+    });
+    $('cp-new-chat').addEventListener('click', () => {
+      if (inflight) return;
+      history.length = 0;
+      if (openProposal) { openProposal = null; hideProposal(); }
+      welcome(true);
+      refreshWindow();
+      input.focus();
+    });
+    proposal.querySelectorAll('[data-ok]').forEach((btn) => {
+      btn.addEventListener('click', () => answer(btn.dataset.ok === '1'));
+    });
+    proposal.querySelector('[data-close]').addEventListener('click', hideProposal);
+    proposal.querySelectorAll('[data-rsp]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        proposal.querySelectorAll('[data-rsp]').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        const w = btn.dataset.rsp;
+        proposal.querySelector('.rsp-frame').style.width = w === 'full' ? '100%' : w + 'px';
+      });
+    });
+    // the embedded builder announces its own saves — the dropdown's "• שינויים"
+    // marker follows without a reload
+    window.addEventListener('message', (ev) => {
+      if (ev.origin !== location.origin || !ev.data || ev.data.source !== 'tapuziel-builder') return;
+      if (ev.data.type === 'tz-builder-saved') loadPages();
+    });
+    // a phone shows one pane at a time
+    const wrap = $('chat-wrap');
+    document.querySelectorAll('#cp-tabs button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#cp-tabs button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        wrap.classList.toggle('tab-chat', btn.dataset.tab === 'chat');
+        wrap.classList.toggle('tab-canvas', btn.dataset.tab === 'canvas');
+      });
+    });
 
     $('ai-provider-radios').addEventListener('change', syncProviderUI);
     $('ai-save').addEventListener('click', saveSettings);
@@ -320,5 +786,9 @@
     input.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }
     });
+
+    // the window: measured now for local/cloud; the browser courier's chip
+    // fills in when the bridge finishes probing (tapuz-bridge-window)
+    if (!savedProvider().browserRelay || bridgeWindowSettled) refreshWindow();
   })();
 })();

@@ -5298,6 +5298,15 @@
           updatePublishBadge();
           if (opts.silent) flashCanvasHint('נשמר אוטומטית ✓');
           else showToast('נשמר ✓', 'ok');
+          // Framed inside the copilot screen (v2.32): tell the parent the
+          // draft on disk moved, so its page list can refresh the "• שינויים"
+          // mark. Same origin only — the parent is /admin/chat, never a
+          // third party; it mostly drives us through contentWindow anyway.
+          if (window.__TAPUZ_EMBED__ && window.parent !== window) {
+            try {
+              window.parent.postMessage({ source: 'tapuziel-builder', type: 'tz-builder-saved', fullPath: currentPageFullPath }, location.origin);
+            } catch (e) { /* a parent on another origin gets nothing */ }
+          }
         } else {
           showToast('שגיאה בשמירה' + (data && data.error ? ': ' + data.error : ''), 'err');
         }
@@ -6123,6 +6132,11 @@
     _getTags: function () { return pageTags; },
     _getMeta: function () { return pageMeta; },
     _markDirty: markDirty,
+    // The copilot screen (v2.32) frames this builder and drives it from
+    // outside: 👁 תצוגה חיה on ITS toolbar opens OUR device preview, and it
+    // asks whether the canvas holds unsaved edits before it lets a turn go.
+    openResponsivePreview: openResponsivePreview,
+    _isDirty: function () { return isDirty; },
     get _fullPath() { return currentPageFullPath; },
     get _direction() { return pageDirection; }
   };

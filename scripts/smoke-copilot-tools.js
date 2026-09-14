@@ -192,6 +192,38 @@ const wantsWrite = {
   check('an invented tool name is refused as a tool error, never executed',
     !unknown.pending && typeof unknown.reply === 'string');
 
+  // ── v2.32: a write AMONG reads — every call id answered, the gate held ──
+  // A model may read a page and propose its edit in the same batch. The read
+  // runs (free), the write waits; when the owner answers, the stored turn
+  // must answer BOTH ids or the next request is rejected by the provider —
+  // and the loop must say what it did in words when the model says nothing.
+  let lastBody = null;
+  const seenFetch = global.fetch;
+  global.fetch = async (url, init) => { lastBody = JSON.parse(init.body); return seenFetch(url, init); };
+  scripted = [{
+    choices: [{
+      message: {
+        content: '', tool_calls: [
+          { id: 'rd', type: 'function', function: { name: 'read_page', arguments: '{"slug":"existing"}' } },
+          { id: 'wr', type: 'function', function: { name: 'edit_page', arguments: JSON.stringify({ slug: 'existing', source: PZN('דף קיים', 'בו זמנית', 'existing') }) } }
+        ]
+      }
+    }]
+  }];
+  const mixed = await ai.converse({ system: 's', user: 'קרא וערוך' });
+  check('a write among reads: the read ran, the write is only PROPOSED (memo says so)',
+    mixed.used.includes('read_page') && mixed.reads.includes('existing') && mixed.pending && mixed.pending.tool === 'edit_page' && /הצעתי/.test(mixed.memo) &&
+    !/בו זמנית/.test(require('../src/pages').getPageSource('existing', 'draft')));
+  scripted = [{ choices: [{ message: { content: '', tool_calls: null } }] }];
+  const mixedDone = await ai.converse({ approve: { id: mixed.pending.id, ok: true } });
+  const answered = (lastBody.messages || []).filter((m) => m.role === 'tool').map((m) => m.tool_call_id);
+  check('on approval EVERY call id of the batch is answered (rd + wr)', answered.includes('rd') && answered.includes('wr'));
+  check('an approved edit reports applied.edited and a memo even when the model answers nothing',
+    mixedDone.applied && mixedDone.applied.edited === true && /בוצע/.test(mixedDone.memo) && mixedDone.reply === '' &&
+    /בו זמנית/.test(require('../src/pages').getPageSource('existing', 'draft')));
+  check('every converse result carries the window envelope (tier, source) and reads[]',
+    mixedDone.window && typeof mixedDone.window.tier === 'string' && Array.isArray(mixedDone.reads));
+
   console.log('');
   console.log(fail ? 'SMOKE COPILOT-TOOLS: FAIL' : 'SMOKE COPILOT-TOOLS: PASS');
   process.exit(fail ? 1 : 0);

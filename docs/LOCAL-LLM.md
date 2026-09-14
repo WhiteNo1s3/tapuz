@@ -6,11 +6,55 @@ Ben's rule: *"we have our own friendly AI pipeline with API key when the user is
 
 ```bash
 "$USERPROFILE/.lmstudio/bin/lms.exe" server start --port 1234
-"$USERPROFILE/.lmstudio/bin/lms.exe" load google/gemma-4-31b --gpu max --context-length 24576 --identifier tapuz-gemma -y
+"$USERPROFILE/.lmstudio/bin/lms.exe" load google/gemma-4-31b --gpu max --context-length 32768 --identifier tapuz-gemma -y
 "$USERPROFILE/.lmstudio/bin/lms.exe" ps
 ```
 
-Gemma 4 31B is dense: at `--gpu max` with nothing else on the card it runs ~40–50 tokens/s (18.5 GiB + the KV cache); at `--gpu 0.8` it crawled to ~6 tokens/s, so close the game first. The 3B-active MoEs (qwen3.6-35b-a3b, nemotron) tolerate partial offload — `--gpu 0.6` keeps them at ~20 tokens/s beside a game — but score lower (see §5). 24K context takes the full site-builder dictionary (44K chars ≈ 14K tokens) with room for the reply. `reasoning_effort: 'none'` is sent by the CMS and honoured (0 reasoning tokens).
+Gemma 4 31B is dense: at `--gpu max` with nothing else on the card it runs ~40–50 tokens/s (18.5 GiB + the KV cache); at `--gpu 0.8` it crawled to ~6 tokens/s, so close the game first. The 3B-active MoEs (qwen3.6-35b-a3b, nemotron) tolerate partial offload — `--gpu 0.6` keeps them at ~20 tokens/s beside a game — but score lower (see §5). **32K is the context the copilot wants** — the full site-builder dictionary (45K chars ≈ 15K tokens on Gemma), a page read back, the reply and the conversation all fit; the packs on `/admin/inject` are happy with 24K. Why 32K, what happens below it and what each window costs in VRAM is §1א. `reasoning_effort: 'none'` is sent by the CMS and honoured (0 reasoning tokens).
+
+## 1א. חלון ההקשר — the window (v2.32)
+
+Ben, when the copilot answered nonsense and then refused: *"`[google/gemma-4-31b] Engine protocol predict request returned 400: {"error":{"code":400,"message":"request (17246 tokens) exceeds the available context size (8192 tokens), try increasing it","type":"exceed_context_size_error","n_prompt_tokens":17246,"n_ctx":8192}}` … I needed 2 turns to get a respond that not related to the conversation"* — and later: *"I think context should be way above 32 — it wouldn't release a right page, and there ain't no pagebuilder to see it on … people are limited to 16GB sometimes."* The window is the whole story of that day, so here it is in one place.
+
+**Where 8,192 comes from.** LM Studio's GUI loads a model with its *default* context length, and the default is 8,192. Its server also has `justInTimeModelLoading: true` (`~/.lmstudio/.internal/http-server-config.json`): a request that names a model which is not loaded makes LM Studio load it — at that same default. So the CMS itself can cause the 8K load just by naming the model first. `lms load` with `--context-length` is the explicit way; the GUI's per-model default (My Models → ⚙ next to the model → Context Length) is what a JIT load uses.
+
+**The rule: 32K is the floor for page building.** The copilot's briefing is the site's whole module dictionary (96 modules, ≈ 15K tokens on Gemma), plus a page it reads back (3–10K), plus the reply (2–4K), plus the tools and the conversation. That is a 32,768 window with room to breathe, and it is the only window in which the copilot sends the **full** dictionary (`FULL_MIN_WINDOW_TOKENS`). Anything smaller runs the **compact** briefing — one line per tool, the whole vocabulary in ≈ 9.5K chars (measured: 9,425 against 45,322 for the full briefing) — which builds short pages fine but cannot take a long existing page into an edit; the copilot says so in its welcome line instead of guessing. A window the compact briefing does not fit either is refused with the click path (`WINDOW_TOO_SMALL`). The full dictionary is sent only for a window the CMS has **measured** (probed, hinted by the bridge, or learned from an error) or for a cloud key; an advisory or unknown window never promotes to full.
+
+**Silent halving — the enemy that returns HTTP 200.** Measured on this box with Gemma at 8,192: the 45K-char briefing (15,179 prompt tokens) came back **200** with a coherent-sounding reply, because the llama.cpp engine discards the *middle* of an over-long prompt — the dictionary, the example, the contract, the older turns — and keeps the head. The 400 above only fires when the prompt is at least **twice** the window:
+
+| prompt vs window | LM Studio answers |
+|---|---|
+| `n_prompt < n_ctx` | normally |
+| `n_ctx ≤ n_prompt < 2 · n_ctx` | **200**, middle of the prompt discarded — a hollow or unrelated reply |
+| `n_prompt ≥ 2 · n_ctx` | **400** `exceed_context_size_error` with `n_prompt_tokens` and `n_ctx` |
+
+Ben's 17,246-token request errored only because half of it was still over 8,192; a smaller briefing would have been quietly truncated instead. So the error is the lucky case, and the copilot never relies on it:
+
+1. **Before sending** it reads the window. Server-side (`מודל מקומי`): `GET http://127.0.0.1:1234/api/v0/models` — LM Studio's native REST, no auth — reports per model `state`, `loaded_context_length` and `max_context_length`; a model that is `not-loaded` is flagged as a JIT load about to happen at the default. Hosted (Bridge V2): the page asks the extension to make the same call (allowed since bridge **0.5.0**) and sends the number with every turn. The exact `exceed_context_size_error` body is the third source — `n_ctx` is learned from it, the briefing drops a tier and the turn is retried once, with a Hebrew notice in the chat.
+2. **After every reply** it compares `usage.prompt_tokens` with the window it knows (`usage` rides `stream_options.include_usage`, so it reaches the page through a streaming bridge too). `prompt_tokens > window` proves the model answered from a halved prompt: that reply is discarded — never shown, never stored — and the turn is retried one tier down; a second miss ends with the click path.
+3. The copilot tells you which mode it is in: `חלון 8,192 · מקוצר` / `חלון 32,768 · מלא` on the chat screen and in the builder's drawer, and the connection test on `/admin/ai-setup` prints the window sentence under the ✅ line.
+
+**How to set it.** In LM Studio: **My Models → ⚙ next to the model → Context Length → 32768 → Reload** (this also fixes the JIT default for that model). Or in a terminal:
+
+```bash
+"$USERPROFILE/.lmstudio/bin/lms.exe" load google/gemma-4-31b --gpu max --context-length 32768 --identifier tapuz-gemma -y
+```
+
+**What a window costs (`lms load --estimate-only -c <n> --gpu max`, this box, Q4_K_M unless noted):**
+
+| model | 8K | 16K | 32K | 64K |
+|---|---|---|---|---|
+| google/gemma-4-31b (dense, 19.9 GB file) | 21.3 GiB | 23.6 GiB | **28.1 GiB** | 37.1 GiB (over a 32 GB card → partial offload → slow) |
+| qwen/qwen3.6-35b-a3b (MoE, 3B active, 22.1 GB) | 21.4 GiB | – | **22.2 GiB** (the KV cache is cheap on this MoE) | – |
+| qwen/qwen3.8-27b (dense Q6_K, 23.4 GB) | 25.3 GiB | – | 28.9 GiB | – |
+
+Guidance by card:
+
+- **16 GB** — none of the models above fit at full offload at any window. Load a smaller model at 32K (≈ 12B dense, or a 3B-active MoE at Q4 with ~9–10 GB of weights), or accept CPU offload and the speed that comes with it. The copilot's compact mode is the fallback, not the plan.
+- **24–32 GB** (a 4090 / 5090) — Gemma 4 31B at **32K** fits with nothing else on the card (28.1 GiB); close the game first. Qwen 3.6 35B-A3B at 32K is the cheap alternative (22.2 GiB).
+- **A cluster / a workstation card** — 64K–128K; the full dictionary plus several long pages in one conversation.
+
+**Bridge V2 0.5.0.** The hosted flow needs the extension to (a) stream tool calls — 0.4.0 dropped `delta.tool_calls`, so every `list_pages` / `read_page` / `edit_page` came back as an empty reply, which was the other half of Ben's "unrelated" turn — (b) forward the model's error body, so the 8K explanation reaches the page instead of "no response", and (c) call `/api/v0/models` for the window. The ZIP is built from the CMS, so an update ships with it: download Bridge V2 again from `/admin/ai-setup`, reload it at `chrome://extensions` (or `about:debugging` in Firefox) and refresh the admin tab. An older bridge still works for plain chat, and the page says which version it sees and what it cannot do with it.
 
 ## 2. Point the CMS at it
 

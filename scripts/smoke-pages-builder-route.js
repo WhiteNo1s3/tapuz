@@ -193,6 +193,67 @@ function waitUp(tries = 40) {
     // restore the simple draft for the publish assertions below
     await req('POST', '/admin/save', { cookie, body: { full_path: slug, title: 'עמוד חדש', blocks } });
 
+    // ── the builder framed inside the copilot screen (v2.32, Ben: "put
+    //    pagebuilder also in the page of the builder … it cannot be
+    //    separated"). `?embed=copilot` is a flag on the REAL builder: the
+    //    page may be framed by its own origin, the parent owns the copilot
+    //    (one relay per tab — no bridge, no drawer, no tour, no 🤖), and the
+    //    unflagged screen is exactly what it was. ──
+    await req('POST', '/admin/api/ai/settings', { cookie, body: { provider: 'browser' } });
+    const plain = await req('GET', '/admin/edit/' + encodeURIComponent(slug), { cookie });
+    const framed = await req('GET', '/admin/edit/' + encodeURIComponent(slug) + '?embed=copilot', { cookie });
+    check('GET /admin/edit/:fullPath?embed=copilot → 200, still the builder (admin-builder.js + #canvas)',
+      framed.status === 200 && /<script src="\/admin-builder\.js">/.test(framed.text) && /id="canvas"/.test(framed.text));
+    check('embed allows same-origin framing (X-Frame-Options SAMEORIGIN — the gate\'s DENY lifted like /admin/preview)',
+      /^sameorigin$/i.test(framed.headers['x-frame-options'] || ''));
+    check('embed marks the body (builder-embed) and the window (__TAPUZ_EMBED__) BEFORE admin-builder.js',
+      /class="builder-screen builder-embed"/.test(framed.text) &&
+      framed.text.indexOf("window.__TAPUZ_EMBED__ = 'copilot'") !== -1 &&
+      framed.text.indexOf('__TAPUZ_EMBED__') < framed.text.indexOf('<script src="/admin-builder.js">'));
+    check('embed loads NO tour, NO bridge, NO drawer — the parent owns the conversation',
+      !/admin-builder-tour\.js/.test(framed.text) && !/admin-bridge\.js/.test(framed.text) && !/admin-copilot-panel\.js/.test(framed.text));
+    check('embed renders no 🤖 button even though the browser provider is saved', !/id="btn-copilot"/.test(framed.text));
+    check('unflagged: the gate\'s DENY stands', !/sameorigin/i.test(plain.headers['x-frame-options'] || ''));
+    check('unflagged: no embed marks at all', !/builder-embed/.test(plain.text) && !/__TAPUZ_EMBED__/.test(plain.text));
+    check('unflagged: tour + bridge + drawer scripts load, in that order after the builder',
+      plain.text.indexOf('<script src="/admin-builder-tour.js">') > plain.text.indexOf('<script src="/admin-builder.js">') &&
+      plain.text.indexOf('<script src="/admin-bridge.js">') > plain.text.indexOf('<script src="/admin-builder-tour.js">') &&
+      plain.text.indexOf('<script src="/admin-copilot-panel.js">') > plain.text.indexOf('<script src="/admin-bridge.js">'));
+    check('unflagged with the browser provider saved: the 🤖 button renders', /id="btn-copilot"/.test(plain.text));
+    check('the builder exposes openResponsivePreview + _isDirty to the parent (contentWindow.TapuzBuilder)',
+      /openResponsivePreview: openResponsivePreview/.test(builderJs) && /_isDirty: function/.test(builderJs));
+    check('an embedded save tells the parent (tz-builder-saved, same origin)',
+      /tz-builder-saved/.test(builderJs) && /window\.__TAPUZ_EMBED__ && window\.parent !== window/.test(builderJs));
+    const tourJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-builder-tour.js'), 'utf8');
+    const panelJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-copilot-panel.js'), 'utf8');
+    check('tour and drawer both step aside when framed (boot returns on __TAPUZ_EMBED__)',
+      /if \(window\.__TAPUZ_EMBED__\) return;/.test(tourJs) && /if \(window\.__TAPUZ_EMBED__\) return;/.test(panelJs));
+    // the drawer keeps its thread: no empty assistant turn, the memo counts,
+    // the window hint rides, and an error's fix line is shown
+    check('drawer never stores an empty reply — history takes d.reply || d.memo, non-empty only',
+      /d\.reply \|\| d\.memo/.test(panelJs) && !/content: d\.reply \|\| ''/.test(panelJs) &&
+      /if \(!content \|\| !String\(content\)\.trim\(\)\) return;/.test(panelJs));
+    check('drawer sends the bridge window + surface:builder, shows notice / truncated / fix',
+      /payload\.window = w/.test(panelJs) && /surface: 'builder'/.test(panelJs) &&
+      /d\.notice/.test(panelJs) && /d\.truncated/.test(panelJs) && /e\.fix/.test(panelJs) && /d\.applied/.test(panelJs));
+    // the bridge fires 'tapuz-bridge-window' on DOCUMENT (non-bubbling) once
+    // the probe settles — a listener on window never hears it and the drawer
+    // would always sit out the 3 s cap; and a probe that already settled
+    // (B.windowSettled, even to null on an old bridge) is not waited for
+    check('drawer hears the bridge window where the bridge fires it (document), and honours windowSettled',
+      /document\.addEventListener\('tapuz-bridge-window'/.test(panelJs) &&
+      !/window\.addEventListener\('tapuz-bridge-window'/.test(panelJs) &&
+      /B\.windowSettled/.test(panelJs));
+    const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'admin.css'), 'utf8');
+    check('admin.css folds the parent-owned chrome under body.builder-embed (brand, pages nav, theme, view-site, AI import, prompt, utility links)',
+      /body\.builder-embed \.brand-logo/.test(css) && /body\.builder-embed #btn-pages-nav/.test(css) &&
+      /body\.builder-embed \.btn-import-ai/.test(css) && /body\.builder-embed #btn-prompt-builder/.test(css) &&
+      /body\.builder-embed a\[href="\/admin\/theme"\]/.test(css) && /body\.builder-embed a\[href="\/"\]\[target="_blank"\]/.test(css) &&
+      /body\.builder-embed a\.tool-utility/.test(css));
+    check('admin.css keeps 👁 תצוגה, היסטוריה, שמור/פרסם, tabs, toolbox and properties visible in the embed',
+      !/body\.builder-embed[^{]*#btn-responsive/.test(css) && !/body\.builder-embed[^{]*\.topbar-actions\s*\{/.test(css) &&
+      !/body\.builder-embed[^{]*\.toolbox\s*[,{]/.test(css) && !/body\.builder-embed[^{]*\.properties\s*[,{]/.test(css));
+
     // ── server-side preview renders the DRAFT with SAMEORIGIN framing ──
     const preview = await req('GET', '/admin/preview/' + encodeURIComponent(slug), { cookie });
     check('GET /admin/preview/:fullPath renders the draft content', preview.status === 200 && /כותרת הבדיקה/.test(preview.text));

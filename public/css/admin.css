@@ -1361,6 +1361,25 @@ body.builder-screen .save-bar {
   border-top-color: var(--bc-border);
 }
 
+/* ── The builder framed inside the copilot screen (v2.32) ──────────────────
+   Ben: "put pagebuilder also in the page of the builder … it cannot be
+   separated". /admin/edit/:path?embed=copilot is the SAME builder inside an
+   iframe on /admin/chat; the parent already carries the brand, the page
+   list (its dropdown), the theme link, "view site", the AI import and the
+   copilot itself — so those fold away here and the canvas gets the width.
+   What stays is what an owner edits with: title, badge, היסטוריה, שמור
+   טיוטה, פרסם, the mode tabs and ⚙ מתקדם, toolbox, canvas, properties and
+   👁 תצוגה חיה (the parent's own button calls it through contentWindow). */
+body.builder-embed .brand-logo,
+body.builder-embed #btn-pages-nav,
+body.builder-embed .btn-import-ai,
+body.builder-embed #btn-prompt-builder,
+body.builder-embed a[href="/admin/theme"],
+body.builder-embed a[href="/"][target="_blank"],
+body.builder-embed a.tool-utility { display: none !important; }
+/* a fixed desk gradient inside an iframe repaints on every scroll — scroll with it */
+body.builder-embed { background-attachment: scroll; }
+
 /* mode tabs — dark pills */
 .builder-mode-tabs {
   display: flex;
@@ -3353,9 +3372,17 @@ body.is-spacer-resizing * { cursor: ns-resize !important; }
   border-bottom: 1px solid var(--bc-border);
 }
 #copilot-drawer .cp-sub { font-size: .68rem; color: #94a3b8; flex: 1; }
-#copilot-drawer #cp-close {
+/* the window chip (v2.32): `חלון 8,192 · מקוצר` — the tooltip carries the
+   whole sentence with the LM Studio click path */
+#copilot-drawer .cp-window {
+  font-size: .66rem; color: #fbbf24; background: var(--bc-well); border: 1px solid var(--bc-border);
+  border-radius: 999px; padding: 2px 8px; white-space: nowrap; cursor: help;
+}
+#copilot-drawer #cp-close, #copilot-drawer #cp-reset {
   border: none; background: none; color: #94a3b8; cursor: pointer; font-size: .9rem;
 }
+/* the second line of an error — the click path that fixes it */
+#copilot-drawer .cp-fix { margin-top: 6px; font-size: .74rem; color: #fde68a; }
 #copilot-drawer #cp-log {
   flex: 1;
   overflow: auto;
