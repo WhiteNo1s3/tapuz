@@ -213,7 +213,11 @@ router.get('/admin/edit/:fullPath', (req, res) => {
   const statusLabel = page.status === 'published' ? 'פורסם' : 'טיוטה';
   const badgeBg = page.status === 'published' ? '#dcfce7' : '#fef3c7';
   const badgeFg = page.status === 'published' ? '#166534' : '#92400e';
-  const badgeExtra = hasUnpublished ? ' • טיוטה שונה' : '';
+  // "the draft differs from what is live" only means something for a page
+  // that IS live; a never-published draft used to read "טיוטה • טיוטה שונה"
+  // and wrap into a tall oval in a crowded topbar (Ben, v2.33: "this oval is
+  // a bug"). The suffix belongs to published pages, and the badge never wraps.
+  const badgeExtra = page.status === 'published' && hasUnpublished ? ' • טיוטה שונה' : '';
 
   // The copilot rides ONLY where AI is actually connected (Ben, v2.15): a key,
   // a local model, or the browser bridge. Unconfigured = the button never
@@ -254,7 +258,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
           <a href="/admin" class="brand-logo" style="font-size:1.35rem">🍊 Tapuziel</a>
           <button type="button" id="btn-pages-nav" class="btn secondary sm" title="ניווט דפים">☰ דפים</button>
           <input id="page-title" class="page-title" value="${safeTitle}" placeholder="כותרת הדף">
-          <span id="publish-badge" style="font-size:0.8rem;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeFg}">${statusLabel}${badgeExtra}</span>
+          <span id="publish-badge" style="font-size:0.8rem;padding:3px 10px;border-radius:999px;white-space:nowrap;flex:none;background:${badgeBg};color:${badgeFg}">${statusLabel}${badgeExtra}</span>
           <select id="page-status" style="display:none">
             <option value="draft" ${page.status === 'draft' ? 'selected' : ''}>טיוטה</option>
             <option value="published" ${page.status === 'published' ? 'selected' : ''}>פורסם</option>
