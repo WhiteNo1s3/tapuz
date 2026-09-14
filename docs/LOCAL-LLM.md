@@ -79,6 +79,25 @@ From then on **▶ הרץ עם ה-AI המחובר** on `/admin/menus` and `/admi
 
 The extension holds **no credentials, ever**, and the page never names a host: it picks a path from a closed list (`/v1/chat/completions`, `/v1/models`) and the worker supplies the loopback endpoint.
 
+### Cursor Cloud Agent (site on the Linux VM, model on Windows)
+
+Same topology as a Hostinger deploy: the Cloud Agent VM's `127.0.0.1` is **not** your Windows box. `host.docker.internal`, a LAN IP, or typing your Windows address into the CMS **local** provider will not work — `local` is loopback-only by design (`src/providers.js`).
+
+**Dummy / local-dev stand-up on the agent VM:**
+
+```bash
+nvm use 24
+npm run seed:admin          # admin / admin  (dev only; gitignored config/auth.json)
+# wire Bridge V2 as the provider (gitignored config/ai.json):
+node -e "require('./src/ai').saveSettings({ provider:'browser', model:'tapuz-gemma', baseUrl:'http://127.0.0.1:1234/v1' })"
+PORT=3000 node src/server.js
+# → http://localhost:3000/admin
+```
+
+Then on Windows: start LM Studio on `127.0.0.1:1234`, open the forwarded admin in your browser, install Bridge V2 from `/admin/ai-setup`, connect the open origin, pick the model. Optional no-browser path: run `scripts/tapuz-worker.js` on Windows with `TAPUZ_SITE` pointing at the agent URL (or a tunnel) and `LOCAL_LLM_BASE=http://127.0.0.1:1234/v1`.
+
+A reverse tunnel that lands LM Studio on the VM's own `127.0.0.1:1234` would unlock the server-side `local` provider; without that tunnel, keep provider `browser` (or the worker).
+
 ### Why the bridge streams (and why it had to)
 
 Both browsers evict an idle background script after ~30 seconds, and Chrome is explicit about the case that matters here: a service worker is terminated **"when a `fetch()` response takes more than 30 seconds to arrive"**, with a hard five-minute ceiling on any single request ([Chrome: service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)). A non-streaming relay is exactly that shape — one fetch, silent for the whole generation — so it would have died on anything slower than a quick pack. Firefox is no escape: its MV3 event page idles out the same way ([bug 1851373](https://bugzilla.mozilla.org/show_bug.cgi?id=1851373)); what keeps it alive is an open message port, which is the same lever Chrome gives.
