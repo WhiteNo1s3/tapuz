@@ -89,6 +89,29 @@ check('the screen shows the tutorial images',
   /ai-tut-lmstudio\.jpg/.test(copilotRoute) && /ai-tut-connect\.jpg/.test(copilotRoute) &&
   /ai-tut-key\.jpg/.test(copilotRoute));
 
+// ── v2.32: the window on the setup screen. Ben's copilot died on `request
+//    (17246 tokens) exceeds the available context size (8192 tokens)` — the
+//    GUI default. The ✅ line now says what window is loaded, and the bridge
+//    card says what the extension probed (and nudges an old extension). ──
+check('the connection test probes the LOADED context length (probeLocalWindow) and returns window + windowMessage',
+  /probeLocalWindow\(raw, model\)/.test(copilotRoute) &&
+  /res\.json\(\{ ok: true, endpoint, models, window, windowMessage \}\)/.test(copilotRoute));
+check('the window probe can never fail the connection test (bonus line, try/catch)',
+  /the window is a bonus on this line, never a failure/.test(copilotRoute));
+check('GET /admin/api/ai/window serves the sentence to every screen (admin-gated, ?provider=browser for the bridge card)',
+  /router\.get\('\/admin\/api\/ai\/window', requireAdmin/.test(copilotRoute) &&
+  /q\.provider === 'browser' \|\| q\.provider === 'local'/.test(copilotRoute));
+check('the ✅ line prints the window sentence from the server (never re-typed here)',
+  /d\.windowMessage/.test(client) && /'\\n🪟 ' \+ d\.windowMessage/.test(client) && !/Context Length/.test(client));
+check('the test sends the model name so the probe matches the configured model',
+  /model: \$\('ai-local-model'\)\.value\.trim\(\)/.test(client));
+check('the bridge card prints TapuzBridge.window after tapuz-bridge-window, planned as the browser courier',
+  /tapuz-bridge-window/.test(client) && /TapuzBridge\.window/.test(client) &&
+  /\/admin\/api\/ai\/window\?/.test(client) && /provider: 'browser'/.test(client));
+check('an old extension gets the update nudge with the exact wording',
+  /'גרסת התוסף: ' \+ esc\(v\) \+ ' — מומלץ לעדכן ל-' \+ BRIDGE_MIN/.test(client) && /BRIDGE_MIN = '0\.5\.0'/.test(client) &&
+  /TapuzBridge\.version/.test(client));
+
 // ---- 3. the tutorial images ship ------------------------------------------
 
 for (const img of ['ai-tut-lmstudio.jpg', 'ai-tut-connect.jpg', 'ai-tut-key.jpg']) {

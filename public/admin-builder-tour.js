@@ -165,6 +165,11 @@
   }
 
   function boot() {
+    // Framed inside the copilot screen (v2.32) the builder is a canvas beside
+    // a chat, not a first visit — no launcher, no walkthrough popping over
+    // the owner's conversation. (The route does not even emit this script
+    // there; this is the belt to that suspender.)
+    if (window.__TAPUZ_EMBED__) return;
     addLauncher();
     var seen = false;
     try { seen = localStorage.getItem(DONE_KEY) === '1'; } catch (e) { /* private mode */ }

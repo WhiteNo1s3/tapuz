@@ -29,22 +29,40 @@
 
 const MAX_SOURCE = 60000;
 
-/** A page list small enough to think with — titles, slugs, status. */
-function listPages() {
+// The allowance a READ may take (v2.32 — the window). The tool loop passes
+// `opts.maxSourceChars` = 70% of what is left in the model's window after
+// the briefing, the tools and the history. A page that does not fit is
+// REFUSED with a hint, never truncated: a model that edits half a page it
+// never saw replaces the other half with nothing (edit_page takes the whole
+// document), and LM Studio would silently discard the middle of an
+// oversized prompt anyway (map.md, addendum 1). Infinity / absent = no cap.
+function allowance(opts) {
+  const n = opts && Number(opts.maxSourceChars);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : Infinity;
+}
+
+// ~120 chars per listed page once JSON-encoded (slug, title, status, flag)
+const LIST_ROW_CHARS = 120;
+
+/** A page list small enough to think with — titles, slugs, status. Over the
+ *  allowance → the first K rows + { truncated:true, count } so the model
+ *  knows there are more and can ask for a narrower list. */
+function listPages(args, opts) {
   const pages = require('./pages').listPages();
-  return {
-    count: pages.length,
-    pages: pages.map((p) => ({
-      slug: p.full_path,
-      title: p.title,
-      status: p.status,
-      hasUnpublishedChanges: !!p.has_unpublished
-    }))
-  };
+  const limit = allowance(opts);
+  const rows = pages.map((p) => ({
+    slug: p.full_path,
+    title: p.title,
+    status: p.status,
+    hasUnpublishedChanges: !!p.has_unpublished
+  }));
+  const k = limit === Infinity ? rows.length : Math.max(1, Math.floor(limit / LIST_ROW_CHARS));
+  if (rows.length <= k) return { count: pages.length, pages: rows };
+  return { count: pages.length, pages: rows.slice(0, k), truncated: true, shown: k };
 }
 
 /** One page as its real `.pzn` source — what the model needs to edit it. */
-function readPage(args) {
+function readPage(args, opts) {
   const slug = String((args && args.slug) || '').trim();
   if (!slug) throw new Error('slug required');
   const { getPageByFullPath, getPageSource } = require('./pages');
@@ -52,11 +70,25 @@ function readPage(args) {
   if (!page) throw new Error('אין דף בשם "' + slug + '" — השתמש/י ב-list_pages כדי לראות מה קיים');
   // 'draft' is what the builder edits and what a follow-up edit_page replaces —
   // reading 'published' would hand the model a stale document.
+  const source = getPageSource(slug, 'draft') || '';
+  const limit = allowance(opts);
+  if (source.length > limit) {
+    return {
+      slug,
+      title: page.title,
+      status: page.status,
+      source: '',
+      tooLong: true,
+      chars: source.length,
+      limitChars: limit,
+      hint: require('./ai-window').HE.readTooLong(source.length, limit)
+    };
+  }
   return {
     slug,
     title: page.title,
     status: page.status,
-    source: getPageSource(slug, 'draft') || ''
+    source
   };
 }
 

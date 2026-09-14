@@ -190,6 +190,19 @@ router.get('/admin/edit/:fullPath', (req, res) => {
   const page = getPageByFullPath(fullPath);
   if (!page) return res.status(404).send('דף לא נמצא');
 
+  // The copilot screen (v2.32, Ben: "put pagebuilder also in the page of the
+  // builder … we can choose with dropdown menu any of the current pages and
+  // see them with the chat opened … it cannot be separated") frames THIS
+  // route inside /admin/chat: `?embed=copilot` is a flag on the real builder,
+  // not a second builder. Two things change and nothing else: the page may be
+  // framed by its own origin (the gate says DENY to every admin response;
+  // /admin/preview lifts it the same way), and the parent owns the copilot —
+  // one relay per tab, so the embedded builder loads no bridge, no drawer, no
+  // tour, and renders no 🤖 button. Without the flag the output is byte-for-
+  // byte what it was.
+  const embed = req.query.embed === 'copilot';
+  if (embed) res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+
   // Builder always edits draft_blocks
   const draft = page.draft_blocks != null ? page.draft_blocks : (page.blocks || []);
   const initialBlocks = jsonForScript(draft);
@@ -211,6 +224,9 @@ router.get('/admin/edit/:fullPath', (req, res) => {
     aiConfigured = aiSettings.hasKey ||
       aiSettings.provider === 'local' || aiSettings.provider === 'browser';
   } catch (e) { /* stays hidden */ }
+  // Framed inside the copilot screen the parent IS the copilot — a second
+  // drawer would open a second relay to the same model from the same tab.
+  if (embed) aiConfigured = false;
 
   // Toolbox is GENERATED from the block registry (src/block-registry.js),
   // grouped by category — a new block type appears here automatically.
@@ -397,13 +413,13 @@ router.get('/admin/edit/:fullPath', (req, res) => {
         universalParams: blockRegistry.UNIVERSAL_PARAMS
       })};
     </script>
-    <script src="/admin-builder.js"></script>
+    ${embed ? '<script>window.__TAPUZ_EMBED__ = \'copilot\';</script>' : ''}<script src="/admin-builder.js"></script>
     <script src="/admin/bentml-engine.js"></script>
     <script src="/admin-bentml-ui.js"></script>
-    <script src="/admin-builder-tour.js"></script>
+    ${embed ? '' : '<script src="/admin-builder-tour.js"></script>'}
     <script src="/admin-prompt-builder.js"></script>
-    <script src="/admin-bridge.js"></script>
-    <script src="/admin-copilot-panel.js"></script>
+    ${embed ? '' : '<script src="/admin-bridge.js"></script>'}
+    ${embed ? '' : '<script src="/admin-copilot-panel.js"></script>'}
     <script>
       TapuzBuilder.init({
         fullPath: ${jsonForScript(page.full_path)},
@@ -441,7 +457,11 @@ router.get('/admin/edit/:fullPath', (req, res) => {
       })();
     </script>
   `;
-  res.send(layout(html, 'עריכה • ' + page.title, accentFor('pages'), { bodyClass: 'builder-screen' }));
+  res.send(layout(html, 'עריכה • ' + page.title, accentFor('pages'), {
+    // `builder-embed` is the CSS hook that folds the chrome the parent already
+    // owns (brand, page nav, theme, "view site", the AI import) — admin.css
+    bodyClass: 'builder-screen' + (embed ? ' builder-embed' : '')
+  }));
 });
 
 router.post('/admin/save', (req, res) => {

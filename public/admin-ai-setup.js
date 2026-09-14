@@ -29,6 +29,65 @@
     return !!(window.TapuzBridge && window.TapuzBridge.present);
   }
 
+  /* ── the window (v2.32) ────────────────────────────────────────────────
+   * Ben's copilot hit `request (17246 tokens) exceeds the available context
+   * size (8192 tokens)`: LM Studio's GUI loads a model at 8K by default and
+   * nothing on this screen ever said so. Now the ✅ line carries the loaded
+   * window (the server probes /api/v0/models), and the bridge card carries
+   * what the extension probed (bridge 0.5.0 — an older one cannot ask, and
+   * also drops the model's tool calls, so it gets a nudge to update).
+   * The sentences come from the server (src/ai-window.js) — one wording. */
+  var BRIDGE_MIN = '0.5.0';
+
+  function versionLt(a, b) {
+    var pa = String(a || '0').split('.').map(function (x) { return parseInt(x, 10) || 0; });
+    var pb = String(b || '0').split('.').map(function (x) { return parseInt(x, 10) || 0; });
+    for (var i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
+    return false;
+  }
+
+  function bridgeWindow() {
+    return (window.TapuzBridge && window.TapuzBridge.window) || null;
+  }
+  function bridgeVersion() {
+    return (window.TapuzBridge && window.TapuzBridge.version) || '';
+  }
+
+  /** The bridge's window, as a sentence: the server plans it AS the browser
+   *  courier (?provider=browser) whatever provider is saved right now. */
+  function renderBridgeWindow() {
+    var box = $('ai-bridge-window');
+    if (!box) return;
+    var w = bridgeWindow();
+    var lines = [];
+    var v = bridgeVersion();
+    if (v && versionLt(v, BRIDGE_MIN)) {
+      lines.push('גרסת התוסף: ' + esc(v) + ' — מומלץ לעדכן ל-' + BRIDGE_MIN + ' (קוראת את חלון המודל ומעבירה את כלי הקופיילוט; ההורדה למטה).');
+    }
+    if (!w || !w.tokens) {
+      box.innerHTML = lines.join('<br>');
+      return;
+    }
+    var q = new URLSearchParams({
+      provider: 'browser', source: 'bridge', tokens: w.tokens, maxTokens: w.maxTokens || '',
+      model: w.model || '', bridgeVersion: w.bridgeVersion || v
+    });
+    fetch('/admin/api/ai/window?' + q.toString())
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok && d.message) {
+          lines.unshift('🪟 ' + esc(d.message) + ' (מומלץ: ' + Number(d.recommended || 32768).toLocaleString('en-US') + ')');
+        } else {
+          lines.unshift('🪟 חלון המודל דרך התוסף: ' + Number(w.tokens).toLocaleString('en-US') + ' טוקנים.');
+        }
+        box.innerHTML = lines.join('<br>');
+      })
+      .catch(function () {
+        lines.unshift('🪟 חלון המודל דרך התוסף: ' + Number(w.tokens).toLocaleString('en-US') + ' טוקנים.');
+        box.innerHTML = lines.join('<br>');
+      });
+  }
+
   function renderBridge() {
     var st = $('ai-bridge-state');
     var sel = $('ai-bridge-model');
@@ -43,23 +102,37 @@
     }).join('');
     sel.value = chosen;
 
+    // the window line lives in its own box under the state, so the state
+    // (present / models) and the window (probed later) render independently
+    var wbox = $('ai-bridge-window');
+    if (!wbox) {
+      wbox = document.createElement('div');
+      wbox.id = 'ai-bridge-window';
+      wbox.className = 'muted';
+      wbox.style.marginTop = '8px';
+      st.parentNode.insertBefore(wbox, st.nextSibling);
+    }
+
     var active = settings && settings.provider === 'browser';
     if (!bridgePresent()) {
       st.className = 'notice';
       st.innerHTML = '💤 הגשר לא מחובר לאתר הזה. התקינו את <strong>Bridge V2</strong> (למטה), פתחו את התוסף, ' +
         'לחצו <strong>״חבר את האתר הפתוח״</strong> — ורעננו את הדף.' +
         (active ? '<br>הספק כבר מוגדר ״דרך הדפדפן״, אז ברגע שהגשר יתחבר הכול יעבוד.' : '');
+      wbox.innerHTML = '';
       return;
     }
     if (!models.length) {
       st.className = 'notice warn';
       st.innerHTML = '🌉 הגשר מחובר — אבל לא נמצא מודל טעון. ב-LM Studio: טענו מודל, ו-Developer → <strong>Start Server</strong>.';
+      renderBridgeWindow();
       return;
     }
     st.className = 'notice ok';
     st.innerHTML = '🌉 הגשר מחובר ✓ ' + models.length + ' מודלים טעונים אצלכם: <code dir="ltr">' +
       esc(models.join(', ')) + '</code>' +
       (active ? '' : '<br>בחרו מודל ולחצו ״חבר דרך הדפדפן״.');
+    renderBridgeWindow();
   }
 
   function keyedProviders() {
@@ -187,7 +260,7 @@
       fetch('/admin/api/ai/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ baseUrl: $('ai-base-url').value.trim() })
+        body: JSON.stringify({ baseUrl: $('ai-base-url').value.trim(), model: $('ai-local-model').value.trim() })
       })
         .then(function (r) { return r.json(); })
         .then(function (d) {
@@ -196,6 +269,14 @@
             out.textContent = '✅ מחובר! ' + (d.models.length
               ? 'מודלים טעונים: ' + d.models.join(', ')
               : 'השרת עונה (אין רשימת מודלים — טענו מודל ב-LM Studio)');
+            // the window sentence (the server probed LM Studio's loaded
+            // context length; a JIT-loaded model gets the "loaded on request
+            // at the default" prefix from the server) — the line that would
+            // have explained the 8K error before it happened
+            if (d.windowMessage) {
+              out.textContent += '\n🪟 ' + d.windowMessage;
+              if (d.window && d.window.tokens && d.window.tokens < 32768) out.className = 'notice warn';
+            }
           } else {
             out.className = 'notice danger';
             out.textContent = '❌ ' + (d.error || 'החיבור נכשל');
@@ -244,6 +325,9 @@
     });
     document.addEventListener('tapuz-bridge-hello', renderBridge);
     document.addEventListener('tapuz-bridge-models', renderBridge);
+    // bridge 0.5.0 probes the window after the model list — the card's
+    // window line follows it (an older bridge never fires this)
+    document.addEventListener('tapuz-bridge-window', renderBridgeWindow);
   }
 
   // browser detection (v2.18.1): the matching download button wears a chip —
