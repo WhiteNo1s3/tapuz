@@ -60,6 +60,56 @@ check('launcher button relaunches any time', /tz-tour-launch/.test(tour) && /�
 check('a missing target skips the step, not the tour', /while \(idx < STEPS\.length && !targetFor/.test(tour));
 check('QA hook exposed (TapuzBuilderTour.start)', /window\.TapuzBuilderTour = \{ start: start/.test(tour));
 
+// ── v2.33 — once, still, modal (Ben: "the tutorial can't hit me every time
+//    I enter the editor … the delay is when scrolling it follows you …
+//    scrolling shouldn't be allowed, its the tutorial") ──────────────────
+// ONCE: the first visit is remembered the moment the tour shows — leaving
+// the editor mid-tour used to mean "not seen", so it came back every visit.
+const bootFn = (tour.match(/function boot\(\) \{[\s\S]*?\n  \}/) || [''])[0];
+check('the first visit is marked seen BEFORE the tour starts (boot: markSeen() then start)',
+  /markSeen\(\);[\s\S]{0,200}setTimeout\(start, 700\)/.test(bootFn));
+check('a returning editor is left alone (boot returns when seen)', /if \(seen\) return;/.test(bootFn));
+// STILL: placed once per step, never chasing the page
+check('NO scroll listener — the spotlight does not follow the page', !/addEventListener\(\s*['"]scroll['"]|\.onscroll\b/.test(tour));
+check('NO position transition on the spotlight (nothing lags behind)', !/transition\s*[:=]/.test(tour));
+check('the target is scrolled into view BEFORE the page is locked', /scrollIntoView\(/.test(tour) && /targetFor\(STEPS\[idx\], true\)/.test(tour));
+// admin.css gives html `scroll-behavior: smooth` — an ANIMATED scrollIntoView
+// would let the page glide under a spotlight measured too early (the very
+// delay Ben reported). The tour's own scroll must be instant.
+check('the tour scrolls INSTANTLY (scroll-behavior forced to auto around scrollIntoView, then restored)',
+  /html\.style\.scrollBehavior = 'auto';[\s\S]{0,200}scrollIntoView\([\s\S]{0,200}finally \{ html\.style\.scrollBehavior = prev; \}/.test(tour));
+check('the spotlight and the card stack ABOVE the blocker',
+  /position:fixed;inset:0;z-index:' \+ Z \+/.test(tour) && /z-index:' \+ \(Z \+ 1\)/.test(tour) && /z-index:' \+ \(Z \+ 2\)/.test(tour));
+// the keyboard is the tour's: nothing leaks to the builder's shortcuts, Tab
+// stays inside the card, the card's own buttons activate natively
+check('keys never reach the builder shortcuts while the tour is up (stopPropagation first)',
+  /keyBound = function \(e\) \{\s*e\.stopPropagation\(\);/.test(tour));
+check('Tab cycles between הבא and דלגו (never out of the card)',
+  /e\.key === 'Tab'/.test(tour) && /\(document\.activeElement === n \? s : n\)\.focus\(\)/.test(tour));
+check('Enter/Space on a card button activates THAT button (Enter on דלגו skips, not advances)',
+  /if \(inCard && \(e\.key === 'Enter' \|\| e\.key === ' '/.test(tour));
+check('the page behind the dim is inert while the tour is up, and released after',
+  /n\.inert = true;/.test(tour) && /n\.inert = false;/.test(tour) && /setInert\(false\);/.test(tour) && /'inert' in document\.documentElement/.test(tour));
+// MODAL: the page stands still and takes no clicks while the tour is up
+check('document overflow is locked while the tour is up (and restored after)',
+  /html\.style\.overflow = 'hidden'/.test(tour) && /document\.body\.style\.overflow = 'hidden'/.test(tour) &&
+  /document\.documentElement\.style\.overflow = savedOverflow\[0\]/.test(tour));
+check('wheel + touchmove are swallowed (passive:false, capture)',
+  /addEventListener\('wheel', lockBound, \{ passive: false, capture: true \}\)/.test(tour) &&
+  /addEventListener\('touchmove', lockBound, \{ passive: false, capture: true \}\)/.test(tour));
+check('keyboard scrolling is swallowed; Escape skips, Enter advances',
+  /PageDown/.test(tour) && /ArrowDown/.test(tour) && /e\.key === 'Escape'/.test(tour) && /e\.key === 'Enter'/.test(tour));
+check('a full-viewport blocker sits under the spotlight (clicks on the dimmed page go nowhere)',
+  /tz-tour-dim/.test(tour) && /position:fixed;inset:0;z-index:' \+ Z/.test(tour));
+check('teardown unlocks the page and removes the blocker', /unlockPage\(\);/.test(tour) && /dim\.remove\(\)/.test(tour));
+check('every lock has its unlock (listeners removed)',
+  /removeEventListener\('wheel', lockBound/.test(tour) && /removeEventListener\('touchmove', lockBound/.test(tour) && /removeEventListener\('keydown', keyBound/.test(tour));
+// the badge that wrapped into "the oval": a never-published draft is just
+// "טיוטה", and the badge never wraps
+check('the "טיוטה שונה" suffix belongs to PUBLISHED pages only',
+  /page\.status === 'published' && hasUnpublished \? ' • טיוטה שונה' : ''/.test(builderRoute));
+check('the publish badge never wraps', /id="publish-badge" style="[^"]*white-space:nowrap/.test(builderRoute));
+
 // ── RTL + self-contained ─────────────────────────────────────────────
 check('card is RTL', /setAttribute\('dir', 'rtl'\)/.test(tour));
 check('no network calls (pure DOM walkthrough)', !/\bfetch\s*\(|XMLHttpRequest/.test(tour));
