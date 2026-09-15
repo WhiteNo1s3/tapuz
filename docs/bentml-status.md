@@ -80,7 +80,7 @@ canvas blocks ◀──(_setBlocks keepSelection)── BentmlEngine.compile ─
 ## How to test
 
 ```bash
-cd D:\Dev\Tapuz
+cd <repo>
 node scripts/smoke-bentml-engine.js   # the v0.77 gate
 node scripts/smoke-bentml.js
 node scripts/smoke-decompile.js

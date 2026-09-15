@@ -414,7 +414,10 @@ const ADVICE = {
     '',
     ...(results.filter((r) => !r.landed).map((r) => `- ${r.pack} ${r.fixture} #${r.i}: ${String(r.error).slice(0, 200)}`).concat(results.some((r) => !r.landed) ? [] : ['- none'])),
     '',
-    `Raw replies: \`${path.join(ROOT, 'replies')}\` · run log: \`eval/runs/${STAMP}-<pack>-${VARIANT}.jsonl\` · non-passing replies: \`eval/failures/<pack>/\``,
+    // the report is committed and the repo is public — never print this
+    // machine's temp path (it carries the OS username); the folder is
+    // os.tmpdir()/tapuz-eval/replies on whichever box ran the eval
+    `Raw replies: \`<tmp>/tapuz-eval/replies\` · run log: \`eval/runs/${STAMP}-<pack>-${VARIANT}.jsonl\` · non-passing replies: \`eval/failures/<pack>/\``,
     ''
   ].join('\n');
   const docs = path.join(__dirname, '..', 'docs');

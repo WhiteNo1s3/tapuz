@@ -6,6 +6,21 @@ title = "Tapuziel gitleaks"
 [extend]
 useDefault = true
 
+# The repo is PUBLIC (2026-09-15). Ben: "my hostinger and account are secrets,
+# not public knowledge". These rules make CI refuse the identifiers that once
+# sat in the docs — a hosting account id (the hPanel/SSH/FTP login and the
+# MySQL user prefix), a *.hostingersite.com temporary hostname (it pins a site
+# to that account), and a personal mailbox.
+[[rules]]
+id = "hostinger-account-id"
+description = "Hostinger account id (u + 9 digits, optionally a MySQL suffix) — the hosting login name"
+regex = '''\bu[0-9]{9}(_[A-Za-z0-9]+)?\b'''
+
+[[rules]]
+id = "hostinger-temp-hostname"
+description = "A *.hostingersite.com temporary hostname — ties a site to the hosting account"
+regex = '''\b[a-z]+-[a-z]+-[0-9]{6}\.hostingersite\.com\b'''
+
 [allowlist]
 description = "Test fixtures, hashes, and generated files that look secret-ish but aren't."
 paths = [

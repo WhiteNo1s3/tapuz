@@ -19,9 +19,9 @@ beginner-startup owner; speak plain Hebrew in UI copy, plain English here.
 
 | Where | What | State |
 |---|---|---|
-| `<repo>` (+ worktree `.claude\worktrees\startup-website-from-pdf-4f41b1`) | git repo, `main` = truth | develop here, merge --ff-only to main, push |
-| `C:\DevPerm\grokTapuz\tapuz-sandbox` → http://localhost:3030 | Ben's KEEPER dev home, a NON-git file copy with its own data (his login, the Grok show-and-tell) | sync code by narrow enumerated node-copy (see §6), NEVER touch its `pages/config/db/content` |
-| <live-site> | live Hostinger instance, data pinned to `~/tapuz-data` on the host via `.tapuz-root` | deploy = archive via `hosting_deployJsApplication` (docs/DEPLOY.md §3ב), builds in ~10-60s |
+| the git checkout (+ its `.claude\worktrees\<name>` worktrees) | git repo, `main` = truth | develop here, merge --ff-only to main, push |
+| the sandbox copy → http://localhost:3030 | Ben's KEEPER dev home, a NON-git file copy with its own data (his login, the Grok show-and-tell) | sync code by narrow enumerated node-copy (see §6), NEVER touch its `pages/config/db/content` |
+| the live site | live Hostinger instance, data pinned to `~/tapuz-data` on the host via `.tapuz-root` | deploy = archive via `hosting_deployJsApplication` (docs/DEPLOY.md §3ב), builds in ~10-60s |
 
 The old Hostinger **git integration is a trap** — a GitHub App fired a broken
 `next` pipeline on every push. It is SUSPENDED (github.com/settings/installations,
