@@ -29,7 +29,6 @@ public/assets/*
 # docs/bentml-cheatsheet.md and docs/agent-free-tier-pack.md at runtime, so
 # dropping it would 500 those routes. themes/ stays too — paths.js falls back
 # to the packaged themes whenever the site root has none of its own.
-tapuziel-skeleton.zip
 test/
 examples/
 extension/

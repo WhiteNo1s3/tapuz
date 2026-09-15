@@ -140,7 +140,7 @@ TAPUZ_TRUST_PROXY=1
 
 ### 3ב. Hostinger — פריסת ארכיון (API / MCP), בלי git
 
-**הוכח חי ב-2026-07-31** (<live-site>). לצד
+**הוכח חי ב-2026-07-31** (the live Hostinger instance). לצד
 זרימת ה-git של hPanel יש ל-Hostinger מסלול פריסה מארכיון —
 `POST .../nodejs/builds/archive` (או כלי ה-MCP `hosting_deployJsApplication`)
 — שמזהה נכון מ-`package.json`: ‏`app_type: express`,‏ entry ‏`src/server.js`.
@@ -233,7 +233,7 @@ MySQL עתידי (סקייל CRM). מנוע האחסון היום הוא SQLite;
 ### ⚠️ המלכודת הקטלנית: אינטגרציית git ישנה עם auto-deploy
 
 > **נוטרלה ב-2026-08-08.** ל-hPanel אין שום ממשק לניתוק (נבדק מסך-מסך);
-> הטריגר האמיתי היה אפליקציית GitHub של Hostinger על חשבון WhiteNo1s3.
+> הטריגר האמיתי היה אפליקציית GitHub של Hostinger על חשבון האחסון.
 > ההתקנה **הושעתה** (GitHub → Settings → Applications → Hostinger →
 > Suspend) — אירועי push כבר לא מגיעים ל-Hostinger בכלל. אם אי-פעם
 > תרצו שוב פריסות git: Unsuspend באותו מסך — אבל אז המלכודת חוזרת,

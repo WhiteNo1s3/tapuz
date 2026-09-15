@@ -228,7 +228,7 @@ submit — nothing else changes from the setup that already works:
 ```js
 // after a successful Contact submit (Elementor: `submit_success` jQuery
 // event; CF7: `wpcf7mailsent`; plain forms: the submit handler)
-var BASE = 'https://<live-site>';
+var BASE = 'https://<your-tapuziel-site>';
 var SITE = 'wp-whiteno1se';                       // the registered slug
 var px   = window.TapuzielPixel;
 

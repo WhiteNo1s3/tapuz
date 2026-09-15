@@ -18,30 +18,6 @@
       ],
       "port": 3000,
       "autoPort": true
-    },
-    {
-      "name": "tapuz-sim",
-      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
-      "runtimeArgs": [
-        "C:\\Users\\<user>\\AppData\\Local\\Temp\\claude\\C--Dev-Massua-Tapuz--claude-worktrees-startup-website-from-pdf-4f41b1\\3259b006-76b1-4c46-a125-a731ab3b1183\\scratchpad\\launch-sim.js"
-      ],
-      "port": 3219
-    },
-    {
-      "name": "tapuz-fresh",
-      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
-      "runtimeArgs": [
-        "C:\\Users\\<user>\\AppData\\Local\\Temp\\claude\\D--Dev-Tapuz\\67e8dca8-3cc1-4941-9845-a6b040df59eb\\scratchpad\\serve-fresh.js"
-      ],
-      "port": 3219
-    },
-    {
-      "name": "tapuz-sim2",
-      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
-      "runtimeArgs": [
-        "C:\\Users\\<user>\\AppData\\Local\\Temp\\claude\\C--Dev-Massua-Tapuz--claude-worktrees-startup-website-from-pdf-4f41b1\\3729066d-3fec-4bec-93a4-9ae889021b24\\scratchpad\\launch-sim2.js"
-      ],
-      "port": 3219
     }
   ]
 }

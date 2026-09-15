@@ -10,17 +10,17 @@
 
 | Path | Branch | Role |
 |------|--------|------|
-| `/home/<user>/projects/tapuz` | `main` | **Main gig — Tapuziel CMS** (`WhiteNo1s3/tapuz`) |
-| `/home/<user>/.grok/worktrees/tapuz/handoff` | `session/handoff` | Crash-recovery worktree (same tip as main when created) |
-| `/home/<user>/projects/tapuziel-crm-lab` | `main` | CRM lab prototype (`WhiteNo1s3/tapuziel-crm-lab`) |
-| `/home/<user>/.grok/worktrees/tapuziel-crm-lab/continue` | `lab/continue` | Older lab worktree (may lag main) |
+| `<repo>` | `main` | **Main gig — Tapuziel CMS** (`WhiteNo1s3/tapuz`) |
+| `<handoff-worktree>` | `session/handoff` | Crash-recovery worktree (same tip as main when created) |
+| `<crm-lab-repo>` | `main` | CRM lab prototype (`WhiteNo1s3/tapuziel-crm-lab`) |
+| `<crm-lab-worktree>` | `lab/continue` | Older lab worktree (may lag main) |
 
 ```bash
 # Resume Tapuz main
-cd /home/<user>/projects/tapuz && git pull && npm run qa:quick
+cd <repo> && git pull && npm run qa:quick
 
 # Resume from this handoff worktree
-cd /home/<user>/.grok/worktrees/tapuz/handoff && git fetch && git merge origin/main
+cd <handoff-worktree> && git fetch && git merge origin/main
 ```
 
 **Product rule:** Tapuz main is the source of truth. Lab ideas return *rebuilt*, not raw-merged.
@@ -43,7 +43,7 @@ Hostinger WP sandbox (portfolio):
 - Site title **WhiteNo1se**, Elementor + Pro, **Coming Soon** when logged out.  
 - Themes: WhiteNo1se Child (active), Grokskin, Paz Sketch, PazView, …  
 - **Tapuziel Pixel plugin was NOT installed there** when last checked.  
-- Password was shared in chat once → **user if not already**.
+- Its admin password is not in this repo and must never be.
 
 **Brand:** citrus orange `#f97316` / `#ea580c`, fruit icon (`public/tapuziel-icon.png` on lab; extension icons on main), credit **Shaltiel Industries · made by WhiteNo1se**.
 
@@ -106,7 +106,7 @@ WhatsApp phases W0–W3 (config/ledger/webhook/send), CRM phases on main, CS wid
 ## 4. QA — one command (do this first after crash)
 
 ```bash
-cd /home/<user>/projects/tapuz
+cd <repo>
 npm install          # if node_modules missing; allow better-sqlite3 native build
 npm run qa           # full report (~50s) — mirrors CI + CRM/WA spots
 npm run qa:quick     # faster path
@@ -117,7 +117,7 @@ Report gates: `test:pzn`, `test:smoke`, registry, wizard, CRM/WA spot (7), route
 
 ```bash
 # Lab only if needed
-cd /home/<user>/projects/tapuziel-crm-lab
+cd <crm-lab-repo>
 npm run test:pixel-embed
 npm run test:pixel-live
 npm run test:crm

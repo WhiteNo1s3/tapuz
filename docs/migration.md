@@ -1,7 +1,7 @@
 # WordPress → Tapuz Migration (Easy Mode)
 
 You are already logged into your WordPress:  
-**https://<wp-sandbox>/wp-admin/**
+**https://<your-wp-site>/wp-admin/**
 
 ## Step 1: Export your content (do this now)
 

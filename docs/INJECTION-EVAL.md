@@ -33,4 +33,4 @@ The 99.9% headline is earned only after ≥ 3,000 scored runs with ≤ 3 non-pas
 
 - none
 
-Raw replies: `C:\Users\<user>\AppData\Local\Temp\tapuz-eval\replies` · run log: `eval/runs/2026-09-12-<pack>-A.jsonl` · non-passing replies: `eval/failures/<pack>/`
+Raw replies: `<tmp>\tapuz-eval\replies` · run log: `eval/runs/2026-09-12-<pack>-A.jsonl` · non-passing replies: `eval/failures/<pack>/`
