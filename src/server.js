@@ -211,6 +211,16 @@ app.use((req, res, next) => {
 // download on direct navigation; still usable as <img src>, which never scripts).
 function staticSecurityHeaders(res, filePath) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  // The admin's own scripts and stylesheet revalidate on EVERY load (v2.33.1,
+  // Ben: "cyan isn't updated to latest version make it reload itself" —
+  // minutes after a deploy that HAD landed). With only Last-Modified on
+  // these files a browser keeps its copy on a heuristic that can last days,
+  // so a fresh server served an old builder. no-cache = ask each time; a
+  // 304 when nothing changed costs nothing, and a deploy shows up on the
+  // next click. The site's public assets keep their caching.
+  if (/[\\/]admin-[^\\/]*\.js$|[\\/]admin\.css$/i.test(filePath)) {
+    res.setHeader('Cache-Control', 'no-cache');
+  }
   if (/\.svg$/i.test(filePath)) {
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     res.setHeader('Content-Disposition', 'attachment');
@@ -405,6 +415,8 @@ const { buildBentmlEngine } = require('./bentml/browser-bundle');
 
 app.get('/admin/bentml-engine.js', (req, res) => {
   try {
+    // built per request from the live module registry — never cached (v2.33.1)
+    res.setHeader('Cache-Control', 'no-cache');
     res.type('application/javascript').send(buildBentmlEngine());
   } catch (e) {
     res.status(500).type('application/javascript')

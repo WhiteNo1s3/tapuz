@@ -108,6 +108,16 @@ function waitUp(tries = 40) {
     check('X-Frame-Options: DENY on an admin response', apiUnauth.headers['x-frame-options'] === 'DENY');
     check('Cache-Control: no-store on an admin response', apiUnauth.headers['cache-control'] === 'no-store');
 
+    // ── the admin's own assets revalidate on every load (v2.33.1, Ben: "make
+    //    it reload itself") — a deploy must show up on the next click, while
+    //    the site's public assets keep their caching ──
+    const adminScript = await req('GET', '/admin-bridge.js');
+    check('an admin script answers Cache-Control: no-cache', adminScript.status === 200 && adminScript.headers['cache-control'] === 'no-cache');
+    const adminCss = await req('GET', '/css/admin.css');
+    check('the admin stylesheet answers Cache-Control: no-cache', adminCss.status === 200 && adminCss.headers['cache-control'] === 'no-cache');
+    const publicAsset = await req('GET', '/tz-pixel.js');
+    check('a public asset keeps its caching (the pixel loader: public, max-age=300)', publicAsset.status === 200 && publicAsset.headers['cache-control'] === 'public, max-age=300');
+
     // ── CSRF: a state-changing request with a mismatched Origin is rejected ──
     const csrfBadOrigin = await req('POST', '/admin/login', { form: { username: 'owner', password: 'owner-pass-1' }, origin: 'https://evil.example.com' });
     check('POST with a cross-origin Origin header → 403 (CSRF rejected)', csrfBadOrigin.status === 403);
