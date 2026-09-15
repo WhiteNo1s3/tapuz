@@ -99,13 +99,13 @@ try {
   probe('public_html/.tapuz-root', path.join(publicHtml, '.tapuz-root'));
   probe('public_html/config/site.json', path.join(publicHtml, 'config', 'site.json'));
   probe('public_html/db', path.join(publicHtml, 'db'));
-  probe('~/tapuz-data', path.join(process.env.HOME || '/home/<hostinger-user>', 'tapuz-data'));
+  probe('~/tapuz-data', path.join(process.env.HOME || require('os').homedir(), 'tapuz-data'));
   try {
     const cfg = JSON.parse(fs.readFileSync(path.join(publicHtml, 'config', 'site.json'), 'utf8'));
     console.log('[diag] tree config: setupDone=' + cfg.setupDone + ' title=' + JSON.stringify(cfg.title || ''));
   } catch (e) { /* no tree config */ }
   try {
-    const dataCfg = JSON.parse(fs.readFileSync(path.join(process.env.HOME || '/home/<hostinger-user>', 'tapuz-data', 'config', 'site.json'), 'utf8'));
+    const dataCfg = JSON.parse(fs.readFileSync(path.join(process.env.HOME || require('os').homedir(), 'tapuz-data', 'config', 'site.json'), 'utf8'));
     console.log('[diag] tapuz-data config: setupDone=' + dataCfg.setupDone + ' title=' + JSON.stringify(dataCfg.title || ''));
   } catch (e) { console.log('[diag] tapuz-data config: absent'); }
   console.log('[diag] paths.js resolves SITE_ROOT=' + require(path.join(src, 'src', 'paths')).SITE_ROOT);

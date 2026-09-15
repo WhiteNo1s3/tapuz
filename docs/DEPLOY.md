@@ -164,7 +164,7 @@ tar --null -czf /tmp/tapuziel-deploy.tgz -T /tmp/filelist.nul   # ‎~2.3MB, ת�
    המתכון מזריק אותו לארכיון בלבד:
 
    ```bash
-   printf '/home/<hostinger-user>/tapuz-data' > .tapuz-root
+   printf '/home/<hostinger-user>/tapuz-data' > .tapuz-root   # the account's home on the host
    git ls-files -z | grep -zEv '^(config|pages|content|db)/' > /tmp/filelist.nul
    printf '.tapuz-root\0' >> /tmp/filelist.nul
    tar --null -czf /tmp/tapuziel-deploy.tgz -T /tmp/filelist.nul
@@ -176,7 +176,7 @@ tar --null -czf /tmp/tapuziel-deploy.tgz -T /tmp/filelist.nul   # ‎~2.3MB, ת�
    העץ, לא נוגעים בהם. שחזור = פריסת ארכיון, בלי אובדן תוכן.
 2. פריסה ראשונה נבדקת דרך `/admin` (יפנה ל-create-account), לא דרך `/`.
 
-**MySQL:** קיים `<hostinger-user>_Tapuziel` (נוצר 2026-08-02, 6GB) — שמור למתאם
+**MySQL:** קיים מסד `<hostinger-user>_Tapuziel` (נוצר 2026-08-02, 6GB) — שמור למתאם
 MySQL עתידי (סקייל CRM). מנוע האחסון היום הוא SQLite; ההתמדה מגיעה מהנעץ
 שלמעלה, לא מהחלפת מנוע.
 
