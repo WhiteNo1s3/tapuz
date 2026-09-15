@@ -32,6 +32,22 @@ function buildId() {
   return version() + '+dev';
 }
 
+/**
+ * The cache-busting stamp for the admin's own assets (v2.33.2). A short
+ * digest of the build id: it changes on every deploy and stays put between
+ * deploys, so `/admin-builder.js?v=<stamp>` is a NEW URL the moment new
+ * code lands — the one thing every browser and every hosting edge respects.
+ * (Headers are not enough: on Hostinger the edge serves public/ directly
+ * and drops whatever Cache-Control Node sets.) Computed once per process.
+ */
+let assetStamp = '';
+function assetVersion() {
+  if (!assetStamp) {
+    assetStamp = require('crypto').createHash('sha1').update(buildId()).digest('hex').slice(0, 10);
+  }
+  return assetStamp;
+}
+
 /** ISO time of the last static build (the exported home page), or ''. */
 function lastExportAt() {
   try {
@@ -60,4 +76,4 @@ function summaryLine() {
   return `build ${i.buildId} · site root ${i.siteRoot} · last site build ${i.lastExportAt || 'never'} · css v${i.cssVersion || '-'}`;
 }
 
-module.exports = { buildId, buildInfo, lastExportAt, summaryLine };
+module.exports = { buildId, buildInfo, lastExportAt, summaryLine, assetVersion };

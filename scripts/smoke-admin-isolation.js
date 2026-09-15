@@ -86,7 +86,9 @@ function waitUp(tries = 60) {
 function shellOf(html) {
   const head = html;
   return {
-    sheets: [...head.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*>/gi)].map((m) => (m[0].match(/href="([^"]*)"/) || [])[1]),
+    // the admin stylesheet carries a build stamp (?v=…, v2.33.2) — the
+    // question here is WHICH sheets a screen links, not which build
+    sheets: [...head.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*>/gi)].map((m) => String((m[0].match(/href="([^"]*)"/) || [])[1] || '').replace(/\?v=[^"]*$/, '')),
     styles: [...head.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n'),
     fontLinks: /fonts\.googleapis\.com|fonts\.gstatic\.com/.test(head),
     effect: /tapuz-theme-effects/.test(head)

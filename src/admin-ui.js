@@ -254,7 +254,7 @@ function layout(content, title = 'Tapuziel', accent = '#f97316', opts = {}) {
   // not its palette, fonts, base size, skin or effects — is linked into the
   // management system; admin.css carries the baseline it used to borrow.
   // The site in the owner's theme is only ever shown inside a preview frame.
-  return `<!DOCTYPE html>
+  return stampAssets(`<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -266,7 +266,24 @@ function layout(content, title = 'Tapuziel', accent = '#f97316', opts = {}) {
 <body${opts.bodyClass ? ` class="${opts.bodyClass}"` : ''}>
   ${content}${closeMain}${palette}${nav}
 </body>
-</html>`;
+</html>`);
+}
+
+/**
+ * Every admin asset an admin page emits — its own scripts (/admin-*.js), its
+ * stylesheet (/css/admin.css) and the engine bundle — leaves here with the
+ * build stamp on its URL (v2.33.2, Ben: "cyan isn't updated to latest
+ * version make it reload itself"). It WAS updated; the browser was holding
+ * yesterday's scripts, and the header fix of v2.33.1 never reached it: on
+ * Hostinger the edge serves public/ directly and drops whatever Node sets.
+ * A new URL is respected by every browser and every edge — a deploy is a
+ * fresh fetch on the next click, no reload ritual. One regex, one place,
+ * so no route template has to remember it.
+ */
+const ADMIN_ASSET_RE = /(src|href)="(\/admin-[^"?]+\.js|\/css\/admin\.css|\/admin\/bentml-engine\.js)"/g;
+function stampAssets(html) {
+  const v = require('./build-info').assetVersion();
+  return String(html).replace(ADMIN_ASSET_RE, (m, attr, url) => `${attr}="${url}?v=${v}"`);
 }
 
 module.exports = {
@@ -277,5 +294,6 @@ module.exports = {
   accentFor,
   adminNav,
   paletteBootJson,
-  layout
+  layout,
+  stampAssets
 };

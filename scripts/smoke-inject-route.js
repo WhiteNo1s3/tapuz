@@ -522,7 +522,7 @@ const logLines = () => (fs.existsSync(LOG_PATH) ? fs.readFileSync(LOG_PATH, 'utf
     check('GET /admin/inject still renders the site-builder pack UI (untouched)', page.status === 200 && /id="btn-roleplay"/.test(page.text) && /\/admin-inject\.js/.test(page.text));
     check('…and now the packs grid with a card slot per visible pack + the card script',
       /class="inj-packs-grid"/.test(page.text) && /data-inject="menu-organizer"/.test(page.text) && /data-inject="theme-designer"/.test(page.text) &&
-      /<script src="\/admin-inject-card\.js">/.test(page.text) && /TapuzInjectCard\.mount\(/.test(page.text));
+      /<script src="\/admin-inject-card\.js[?"]/.test(page.text) && /TapuzInjectCard\.mount\(/.test(page.text));
     check('the stubs get no card slot', !/data-inject="theme-effects"/.test(page.text) && !/data-inject="site-builder"/.test(page.text));
     const cardSrc = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-inject-card.js'), 'utf8');
     try { new Function('window', 'document', cardSrc); check('admin-inject-card.js parses', true); }

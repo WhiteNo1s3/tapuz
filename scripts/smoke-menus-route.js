@@ -118,7 +118,7 @@ function waitUp(tries = 40) {
 
     // ── v2.28: the organizer's layer on the menus page ──
     check('the /admin/menus page mounts the organizer card (id organizer, data-inject) and loads /admin-inject-card.js',
-      /<section class="card" id="organizer" data-inject="menu-organizer"><\/section>/.test(page.text) && /src="\/admin-inject-card\.js"/.test(page.text) && /TapuzInjectCard\.mount\(el, 'menu-organizer'/.test(page.text));
+      /<section class="card" id="organizer" data-inject="menu-organizer"><\/section>/.test(page.text) && /src="\/admin-inject-card\.js[?"]/.test(page.text) && /TapuzInjectCard\.mount\(el, 'menu-organizer'/.test(page.text));
     check('the editor head carries the capacity hint and the action row a ↩ שחזור select',
       /<p id="menu-fit" class="hint"><\/p>/.test(page.text) && /<select id="menu-restore"[^>]*><option value="">↩ שחזור<\/option>/.test(page.text));
     check('the page still works without the card script: the mount is guarded', /window\.TapuzInjectCard && typeof window\.TapuzInjectCard\.mount === 'function'/.test(page.text) && /el\.hidden = true/.test(page.text));
