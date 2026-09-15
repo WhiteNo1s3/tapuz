@@ -2,7 +2,7 @@
 
 > **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
 > Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v2.12 CRM extension spine — expand, not closed).
+> **Last updated:** 2026-09-15 (v2.33.2-alpha — the repo went PUBLIC; history rewritten).
 
 ---
 
@@ -49,17 +49,34 @@ Hostinger WP sandbox (portfolio):
 
 ---
 
-## 2. Git tips (as of handoff write)
+## 2. Git tips (as of handoff write — 2026-09-15)
 
-### Tapuz main (`WhiteNo1s3/tapuz`)
+### Tapuz main (`WhiteNo1s3/tapuz`) — **now a PUBLIC repo**
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v2.11 CRM hooks + attrs (expand spine)** on main |
-| Recent line | v2.10 portal → **v2.11 extension hooks/attrs** |
-| Package version field | **`2.12.0-alpha`** |
+| Repo | `WhiteNo1s3/tapuz` — name unchanged, **public** since 2026-09-15, MIT |
+| Tip when handoff written | `c719acf` — *Merge pull request #101 … cloud-agent-docs* |
+| Package version field | **`2.33.2-alpha`** |
+| Branches | `main`, plus a stale `cursor/chrome-whatsapp-modules-8704` (2 ahead, 89 behind) |
+| Tags / releases | **none** — the version lives in `package.json` + the ROADMAP Version Log |
 | CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
-| Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
+| Automerge | `.github/workflows/automerge.yml` lands **any** PR the moment `security` goes green — open a **draft** PR if you do not want that yet |
+| Node in CI | **24** (`engines` says `>=24`) |
+
+**The history was rewritten for the public push.** Every commit kept its content
+but got a **new hash**; the scrub removed a hosting account id, a personal
+mailbox, machine paths and a 1.1 MB `tapuziel-skeleton.zip`. Two consequences a
+future agent will trip over:
+
+- **PR numbers in commit subjects are dead links.** `#101`, `#72`, … belong to the
+  pre-public repo. The public repo has no PRs of its own yet.
+- **Any old local clone has diverged.** Its `main` is not an ancestor of the new
+  one. Re-clone rather than merge.
+
+`.gitleaks.toml` now carries custom rules so CI **refuses** the hosting account id
+(`u` + 9 digits) and a `*.hostingersite.com` hostname. Placeholders like
+`example.hostingersite.com` are fine; the real one is not.
 
 ### CRM lab (`WhiteNo1s3/tapuziel-crm-lab`)
 
@@ -69,6 +86,7 @@ Hostinger WP sandbox (portfolio):
 | Pixel embed | `docs/PIXEL-EMBED-SPEC.md`, `/tz-pixel.js`, WP plugin under `integrations/wordpress/tapuziel-pixel/` |
 | Live wire proof | `npm run test:pixel-live` (Builder + WP **shaped** beacons → `crm_events.site_id`) — **not** a real WP activation |
 | Branding | Lab admin shell uses Tapuziel icon + Shaltiel credit |
+| Caveat | Not re-checked at this handoff write — the lab is a separate repo, treat the row above as of 2026-07-26 |
 
 ---
 
@@ -97,6 +115,30 @@ WhatsApp phases W0–W3 (config/ledger/webhook/send), CRM phases on main, CS wid
 - `events.registerType` / open slugs — timeline not a sealed enum.
 - Restaurant (etc.) packages: `hooks.on(...)` + `attrs.define(...)` + custom event types — **no second identity system, no CRM fork**.
 
+### B2. v2.13 → v2.33.2 — the arc this handoff had missed (written 2026-09-15)
+
+The handoff stood still at v2.12 while ~21 sessions shipped. Grouped, newest last;
+every full row lives in `docs/ROADMAP.md`.
+
+| Arc | Versions | What it means |
+|-----|----------|----------------|
+| **BenTML at every door** | v2.15 → v2.20 | AI connection settings + extension downloads; the user-build feedback round; local hybrid-thinkers made to ANSWER and the copilot to CALL; the copy-companion extension (per-browser builds, AMO "we collect none"); inline HTML becomes marks instead of a build failure; then **one extractor** (`src/bentml/extract.js`) at every door — a fenced or `<html>`-wrapped LLM reply can no longer land in a `.pzn`. |
+| **Themes become artifacts** | v2.21 → v2.27 | The theme LIBRARY (the WordPress attitude), effects as part of the theme, master-page chrome, the theme **STUDIO**, the bench, the `.bent` theme dialect (a theme is BenTML too), then the studio redone with the effect guard + misfire matrix so nothing leaks. |
+| **The owner’s own model does the work** | v2.28 → v2.30 | The menu that never breaks + the Menu Organizer **injection**, the injection runner and a local-model eval loop; **Bridge V2** so the hosted site drives the owner’s own model; `tapuz-worker`, a pack that runs with nothing open. |
+| **Admin + builder polish** | v2.31 → v2.33.2 | The site’s theme stops reaching the admin; the copilot fits its window, keeps its thread and builds beside you; the builder tour shows **once**, is modal and the status oval is gone; every admin asset URL carries a build stamp so a deploy actually reaches the browser. |
+
+Two guards were added along the way and both are in `npm run qa`:
+
+- `scripts/smoke-version.js` — the **version rule**, enforced. An agent PR once bumped
+  2.31 → 3.32; now package.json, the lockfile, the README line, the ROADMAP current
+  line and the Version Log’s top row must agree, and the newest step must be +0.01.
+- `.gitleaks.toml` custom rules — see §2.
+
+**Known gap, not invented here:** the Version Log has **no rows for v2.12 → v2.19**
+(it jumps from v2.20 straight back to v2.11). Those sessions shipped — the commits
+name them — but their rows were never written. `smoke-version` only judges the newest
+step, so the gap does not fail CI. Fill it from `git log` if you ever want the log whole.
+
 ### C. Explicitly parked
 
 - **Israeli invoicing** (Green Invoice / iCount / Rivhit, חשבונית מס vs קבלה, allocation numbers) = **finance surface**, own round later. Not CRM.
@@ -108,9 +150,13 @@ WhatsApp phases W0–W3 (config/ledger/webhook/send), CRM phases on main, CS wid
 ```bash
 cd <repo>
 npm install          # if node_modules missing; allow better-sqlite3 native build
-npm run qa           # full report (~50s) — mirrors CI + CRM/WA spots
-npm run qa:quick     # faster path
+npm run qa           # full report (~70s) — mirrors CI + CRM/WA spots
+npm run qa:quick     # faster path (~7s)
 ```
+
+**Green at this handoff write (2026-09-15, every gate):** `test:pzn` 158/158 ·
+`test:smoke` 144 packs · registry · wizard · CRM/WA spot 16/16 · route-map in sync ·
+version rule · `npm audit` (prod, high+) clean.
 
 Script: `scripts/qa-checklist.js`  
 Report gates: `test:pzn`, `test:smoke`, registry, wizard, CRM/WA spot (7), route-map, npm audit high+.
@@ -298,12 +344,23 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 
 Full Hebrew cookbook: **`docs/SMTP-PRODUCTION.md`**.
 
+### Housekeeping the public move left behind
+
+| # | Item | Notes |
+|---|------|-------|
+| A | Version Log rows **v2.12 → v2.19** are missing | See §3.B2. The commits name them; the rows were never written |
+| B | Stale branch `cursor/chrome-whatsapp-modules-8704` | 2 ahead / 89 behind main — rebase what is worth keeping, then delete |
+| C | Commit subjects cite **pre-public PR numbers** | Nothing to fix in history; just do not chase the links |
+| D | Node | `engines` wants **24**; CI runs 24. QA also passes on 22, do not rely on it |
+
+### Product
+
 | # | Next step | Notes |
 |---|-----------|--------|
 | 1 | Real SMTP on staging | Follow SMTP-PRODUCTION.md (Gmail / SES / Resend / cPanel) |
 | 2 | Pixel on real WP | Hostinger WhiteNo1se + public CRM `site_id` |
 | 3 | Production campaign → live segment | Consent + unsubscribe war story |
-| 4 | OSS packaging | CONTRIBUTING, release, paid support SKU |
+| 4 | OSS packaging | CONTRIBUTING, release, paid support SKU — **the repo is public now, so this is live** |
 | 5 | Premium / support (sales = father) | Free core; money on support/hosting/modules |
 | 6 | Israeli invoicing | Separate finance round |
 | 7 | English product surface | Only after Hebrew is solid |
@@ -325,6 +382,14 @@ Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified witho
 | Tapuz CI green after QA tooling | **Yes** at handoff write |
 | body-parser ≥ 1.20.6 | **Yes** |
 | Chat context permanent | **No** — **this file is the memory** |
+| Repo is public | **Yes** — `WhiteNo1s3/tapuz`, created public 2026-09-15, MIT, name unchanged |
+| History rewritten for that push | **Yes** — every commit has a new hash; content identical apart from the scrub |
+| Scrub reached the whole history | **Yes** — no hosting account id, personal mailbox or skeleton zip anywhere in the new history |
+| Old PR numbers in commit subjects | **Dead** — they belong to the pre-public repo |
+| Tags / releases on the public repo | **None** |
+| v2.12–v2.19 Version Log rows | **Missing** — those sessions shipped, the rows were never written |
+| QA green at this handoff write | **Yes** — `npm run qa`, all gates (see §4) |
+| This handoff verified against the repo | **Yes** — §2, §3.B2, §4, §10, §11 re-checked 2026-09-15; §5–§9j left as written |
 
 ---
 
@@ -346,6 +411,7 @@ If the conversation dies mid-task: read this file first, then `git log -15 --one
 
 - **Product name users see:** Tapuziel (not “Tapuz” in UI).
 - **Org credit:** Shaltiel Industries · made by WhiteNo1se / WhiteNo1s3 on GitHub.
-- **Repos:** `WhiteNo1s3/tapuz` (main), `WhiteNo1s3/tapuziel-crm-lab` (lab).
+- **Repos:** `WhiteNo1s3/tapuz` (main, **public**), `WhiteNo1s3/tapuziel-crm-lab` (lab).
+- **Repo name:** `tapuz` — short name for the repo, `tapuziel` for the package and the product UI. Unchanged by the public move.
 
 *End of handoff. Prefer updating over inventing history.*
