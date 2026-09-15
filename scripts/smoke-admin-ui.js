@@ -62,6 +62,20 @@ check(full.includes('admin-palette.js'), 'a normal layout includes the command p
 check(full.includes('--admin-accent: #475569'), 'layout injects the accent as a CSS variable');
 check(full.includes('dir="rtl"') && full.includes('lang="he"'), 'layout is Hebrew/RTL by default');
 
+// ── the admin reloads itself (v2.33.2): every admin asset URL carries the
+//    build stamp, so a deploy is a new URL on any host — Hostinger's edge
+//    serves public/ itself and drops Node's cache headers ──
+const { assetVersion } = require('../src/build-info');
+const stamp = assetVersion();
+check(/^[0-9a-f]{10}$/.test(stamp) && assetVersion() === stamp, 'the asset stamp is a short digest, the same for the whole process');
+check(full.includes('href="/css/admin.css?v=' + stamp + '"'), 'layout stamps the admin stylesheet with the build');
+check(full.includes('src="/admin-palette.js?v=' + stamp + '"'), 'layout stamps the admin scripts with the build');
+const stamped = layout('<main data-admin-main><script src="/admin-chat.js"></script><script src="/admin/bentml-engine.js"></script><link rel="stylesheet" href="/css/main.css"><script src="https://cdn.example/x.js"></script></main>', 'x');
+check(stamped.includes('src="/admin-chat.js?v=' + stamp + '"') && stamped.includes('src="/admin-nav.js?v=' + stamp + '"') && stamped.includes('src="/admin/bentml-engine.js?v=' + stamp + '"'),
+  'page scripts, the nav layer and the engine bundle are stamped too');
+check(stamped.includes('href="/css/main.css"') && stamped.includes('src="https://cdn.example/x.js"'),
+  'anything that is not an admin asset is left exactly as written');
+
 try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (e) {}
 
 console.log('');

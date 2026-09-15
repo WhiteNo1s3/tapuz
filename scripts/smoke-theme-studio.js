@@ -410,7 +410,7 @@ function waitUp(tries = 40) {
     // (the full sweep over every admin screen is scripts/smoke-admin-isolation.js)
     const adminPage = await req('GET', '/admin/theme', { cookie });
     check('the studio page links the admin stylesheet only — no main.css, no admin-theme.css, no web fonts (no leak into the admin screens)',
-      /<link rel="stylesheet" href="\/css\/admin\.css">/.test(adminPage.text) && !/main\.css">|admin-theme\.css|fonts\.googleapis\.com\/css2/.test(adminPage.text) &&
+      /<link rel="stylesheet" href="\/css\/admin\.css(\?v=[0-9a-f]+)?">/.test(adminPage.text) && !/main\.css">|admin-theme\.css|fonts\.googleapis\.com\/css2/.test(adminPage.text) &&
       !fs.existsSync(path.join(ROOT, 'public', 'css', 'admin-theme.css')));
     check('the exported page carries the effect GUARD (shadowed globals), not a bare try/catch', /\(function \(window, document, self, globalThis, addEventListener/.test(index));
     check('the studio page is one styled flow — no inline-style forest, the flow strip, the warnings lists, the bench button',

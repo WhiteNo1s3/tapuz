@@ -203,22 +203,22 @@ function waitUp(tries = 40) {
     const plain = await req('GET', '/admin/edit/' + encodeURIComponent(slug), { cookie });
     const framed = await req('GET', '/admin/edit/' + encodeURIComponent(slug) + '?embed=copilot', { cookie });
     check('GET /admin/edit/:fullPath?embed=copilot → 200, still the builder (admin-builder.js + #canvas)',
-      framed.status === 200 && /<script src="\/admin-builder\.js">/.test(framed.text) && /id="canvas"/.test(framed.text));
+      framed.status === 200 && /<script src="\/admin-builder\.js[?"]/.test(framed.text) && /id="canvas"/.test(framed.text));
     check('embed allows same-origin framing (X-Frame-Options SAMEORIGIN — the gate\'s DENY lifted like /admin/preview)',
       /^sameorigin$/i.test(framed.headers['x-frame-options'] || ''));
     check('embed marks the body (builder-embed) and the window (__TAPUZ_EMBED__) BEFORE admin-builder.js',
       /class="builder-screen builder-embed"/.test(framed.text) &&
       framed.text.indexOf("window.__TAPUZ_EMBED__ = 'copilot'") !== -1 &&
-      framed.text.indexOf('__TAPUZ_EMBED__') < framed.text.indexOf('<script src="/admin-builder.js">'));
+      framed.text.indexOf('__TAPUZ_EMBED__') < framed.text.indexOf('<script src="/admin-builder.js'));
     check('embed loads NO tour, NO bridge, NO drawer — the parent owns the conversation',
       !/admin-builder-tour\.js/.test(framed.text) && !/admin-bridge\.js/.test(framed.text) && !/admin-copilot-panel\.js/.test(framed.text));
     check('embed renders no 🤖 button even though the browser provider is saved', !/id="btn-copilot"/.test(framed.text));
     check('unflagged: the gate\'s DENY stands', !/sameorigin/i.test(plain.headers['x-frame-options'] || ''));
     check('unflagged: no embed marks at all', !/builder-embed/.test(plain.text) && !/__TAPUZ_EMBED__/.test(plain.text));
     check('unflagged: tour + bridge + drawer scripts load, in that order after the builder',
-      plain.text.indexOf('<script src="/admin-builder-tour.js">') > plain.text.indexOf('<script src="/admin-builder.js">') &&
-      plain.text.indexOf('<script src="/admin-bridge.js">') > plain.text.indexOf('<script src="/admin-builder-tour.js">') &&
-      plain.text.indexOf('<script src="/admin-copilot-panel.js">') > plain.text.indexOf('<script src="/admin-bridge.js">'));
+      plain.text.indexOf('<script src="/admin-builder-tour.js') > plain.text.indexOf('<script src="/admin-builder.js') &&
+      plain.text.indexOf('<script src="/admin-bridge.js') > plain.text.indexOf('<script src="/admin-builder-tour.js') &&
+      plain.text.indexOf('<script src="/admin-copilot-panel.js') > plain.text.indexOf('<script src="/admin-bridge.js'));
     check('unflagged with the browser provider saved: the 🤖 button renders', /id="btn-copilot"/.test(plain.text));
     check('the builder exposes openResponsivePreview + _isDirty to the parent (contentWindow.TapuzBuilder)',
       /openResponsivePreview: openResponsivePreview/.test(builderJs) && /_isDirty: function/.test(builderJs));
