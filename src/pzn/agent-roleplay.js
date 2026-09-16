@@ -17,6 +17,25 @@
 
 const { buildDictionary, toMarkdown, toCompactMarkdown, toAgentTools } = require('./syntax-dictionary');
 const { COMPLETION_CONTRACT } = require('./agent-mission');
+const { getModule } = require('./modules/registry');
+
+// The leaves a local model fills with children: the SECTION-SHAPED ones — a
+// title, some text, maybe a button — which read like a box to put modules in.
+// Seen live 2026-09-14 (Gemma 4: a mediacard holding a heading and a text →
+// E_NOT_CONTAINER; repair hoists the kids out and the card renders empty), and
+// on the 2026-09-16 A/B against the real briefing: a heading, text and button
+// inside bent-cta, text inside bent-fold. A named, correct example fixed it;
+// the dictionary's "container" badge alone did not. Filtered through the
+// registry, so a module that ever becomes a container drops out of the
+// sentence instead of being taught wrong.
+const LEAF_EXAMPLES = ['cta', 'mediacard', 'plan', 'fold', 'tab', 'slide', 'feature'];
+const LEAF_EXAMPLE = '<bent-cards id="c"><bent-mediacard id="c1" title="…" excerpt="…" /></bent-cards>';
+function leafExampleTags() {
+  return LEAF_EXAMPLES
+    .filter((n) => { const d = getModule(n); return d && !d.container; })
+    .map((n) => '`bent-' + n + '`')
+    .join(', ');
+}
 
 /**
  * Compact tool inventory for the roleplay (not the full dictionary).
@@ -316,6 +335,12 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('- **לעריכה: קודם `read_page`, אחר כך `edit_page` עם המסמך המלא** — לא רק החלק ששונה.');
     lines.push('- **עברית ו‑RTL כברירת מחדל** — האתר עברי אלא אם נאמר אחרת.');
     lines.push('- **רק מודולים מהמלאי למטה.** אין HTML חופשי ואין תגיות שהומצאו; מה שלא במילון לא יעבור.');
+    // the compact tier's grammar already says "a tag without ⊃ never contains
+    // tags" and every character there is page the model cannot write — so it
+    // gets the rule and the example, the full tier gets the reason too
+    lines.push(compact
+      ? '- **עלה (שורה בלי ⊃) לא מחזיק מודולים:** ' + leafExampleTags() + ' — תוכן במאפיינים, אף פעם לא `bent-*` בפנים (`E_NOT_CONTAINER`). נכון: `' + LEAF_EXAMPLE + '`.'
+      : '- **מודול־עלה לא מחזיק מודולים.** ' + leafExampleTags() + ' וכל תגית שאינה container במילון מקבלים את התוכן במאפיינים (`title=`, `excerpt=`, `price=`, `href=` …), ולכל היותר טקסט פשוט בין התגיות כשהמילון מסמן גוף. **אסור** לשים בתוכם `bent-heading` / `bent-text` / `bent-button` — זו שגיאת `E_NOT_CONTAINER`: הכרטיס יוצא ריק והטקסט נופל מתחת לרשת. נכון: `' + LEAF_EXAMPLE + '`.');
     lines.push('- **מסמך אחד שלם** בכל תשובה שבונה דף — מ‑`<!DOCTYPE html>` ועד `</html>`, בתוך fence של html.');
     lines.push('- **טקסט אמיתי, לא "לורם איפסום".** כתב/י תוכן שאפשר לפרסם כמו שהוא.');
     lines.push('- **אל תמציא/י נתיבי תמונה.** יש רשימת מדיה אמיתית למטה; אם אין מתאימה — אמור/י זאת.');
@@ -351,6 +376,9 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('- **Ask when something is missing.** One short question beats a whole page built on a guess.');
     lines.push('- **Hebrew and RTL by default** unless told otherwise.');
     lines.push('- **Only modules from the inventory below.** No free HTML, no invented tags.');
+    lines.push(compact
+      ? '- **A leaf (a line without ⊃) holds no modules:** ' + leafExampleTags() + ' — content in attributes, never a `bent-*` inside (`E_NOT_CONTAINER`). Correct: `' + LEAF_EXAMPLE + '`.'
+      : '- **A leaf module holds no modules.** ' + leafExampleTags() + ' and every tag the dictionary does not mark container take their content in attributes (`title=`, `excerpt=`, `price=`, `href=` …), plus at most plain text between the tags where the dictionary marks a body. **Never** nest `bent-heading` / `bent-text` / `bent-button` inside them — that is `E_NOT_CONTAINER`: the card comes out empty and its text falls below the grid. Correct: `' + LEAF_EXAMPLE + '`.');
     lines.push('- **One complete document** per page-building reply — `<!DOCTYPE html>` through `</html>`, in an html fence.');
     lines.push('- **Real copy, never lorem ipsum.** Write text that could ship as-is.');
     lines.push('- **Never invent image paths.** A real media list follows; if nothing fits, say so.');
@@ -382,6 +410,14 @@ function buildCopilotBriefing(opts = {}) {
       : '## Your tools = the full dictionary at the end of this message. No tag exists outside it.');
   }
   lines.push('');
+  // said once more where a model that skipped "how to work" lands, 45K chars
+  // before the dictionary (the compact grammar says it in its own header)
+  if (!compact) {
+    lines.push(he
+      ? 'מודול שאינו מסומן **container** הוא עלה: תוכן במאפיינים, אף פעם לא `bent-*` בתוכו (`E_NOT_CONTAINER`).'
+      : 'A module not marked **container** is a leaf: content in attributes, never a `bent-*` inside it (`E_NOT_CONTAINER`).');
+    lines.push('');
+  }
 
   // compact: the lite pack's media cap and 60-char alts — every line of a
   // small window is a line the page itself cannot have
@@ -401,6 +437,13 @@ function buildCopilotBriefing(opts = {}) {
   lines.push('    <bent-text id="hero1_t">צילום אירועים בתל אביב</bent-text>');
   lines.push('    <bent-button id="hero1_b" href="/contact" variant="primary">דברו איתנו</bent-button>');
   lines.push('  </bent-hero>');
+  // the example shows a container of LEAVES too: a model copies the example's
+  // shape before it reads any rule
+  lines.push('  <bent-cards id="work">');
+  lines.push('    <bent-mediacard id="work_1" title="חתונות" excerpt="מההתארגנות ועד הריקוד" href="/weddings" />');
+  lines.push('    <bent-mediacard id="work_2" title="תדמית" excerpt="צוות ומשרד באור טבעי" href="/business" />');
+  lines.push('  </bent-cards>');
+  lines.push('  <bent-cta id="book" title="מתחתנים השנה?" buttontext="בדקו תאריך" url="/contact">נשארו תאריכים פנויים בסתיו</bent-cta>');
   lines.push('</body></html>');
   lines.push('```');
   lines.push('');

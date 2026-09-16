@@ -174,6 +174,56 @@ check('dictionary markdown renders tools + completion',
     !/const system = buildRoleplayPack/.test(wired));
 }
 
+// ── leaves hold no modules (v2.34) ─────────────────────────────────────────
+// Gemma 4, live on the copilot: a bent-mediacard with a heading and a text
+// inside → E_NOT_CONTAINER, and repair hoisted the kids so the card rendered
+// empty. One named rule with a correct example fixed it; the dictionary's
+// container badge alone did not. Both briefing tiers and the primer say it.
+{
+  const { buildCopilotBriefing } = require('../src/pzn/agent-roleplay');
+  const { buildPznPrimer } = require('../src/pzn/agent-primer');
+  const { getModule } = require('../src/pzn/modules/registry');
+  const { parse } = require('../src/pzn/language/parse');
+  const { validate } = require('../src/pzn/language/validate');
+  const leafExample = '<bent-mediacard id="c1" title="…" excerpt="…" />';
+
+  for (const locale of ['he', 'en']) {
+    for (const tier of ['full', 'compact']) {
+      const t = buildCopilotBriefing({ locale, tier }).text;
+      check(`briefing ${locale}/${tier} carries the leaf rule, E_NOT_CONTAINER and a self-closing mediacard`,
+        t.includes('E_NOT_CONTAINER') && t.includes(leafExample) &&
+        ['bent-cta', 'bent-mediacard', 'bent-plan', 'bent-fold'].every((tag) => t.includes('`' + tag + '`')));
+      // the example a model copies first must itself be a clean page
+      const start = t.indexOf('```html\n<!DOCTYPE html>') + 8;
+      const example = t.slice(start, t.indexOf('</body></html>', start) + 14);
+      let errors = ['unparsed'];
+      try { errors = validate(parse(example)).filter((x) => x.severity === 'error'); } catch (e) { errors = [e.message]; }
+      check(`briefing ${locale}/${tier} example validates with no errors: cards of self-closing leaves, a cta with plain body text`,
+        errors.length === 0 && /<bent-cards[^>]*>\s*<bent-mediacard [^>]*\/>/.test(example) &&
+        /<bent-cta [^>]*>[^<]+<\/bent-cta>/.test(example));
+    }
+    check(`briefing ${locale}/full repeats the rule where the tool list starts`,
+      /(מודול שאינו מסומן \*\*container\*\* הוא עלה|A module not marked \*\*container\*\* is a leaf)/.test(buildCopilotBriefing({ locale }).text));
+  }
+  check('the compact grammar still says a tag without ⊃ never contains tags (the compact tier leans on it)',
+    buildCopilotBriefing({ tier: 'compact' }).text.includes('תג בלי ⊃ לא מכיל תגים') &&
+    buildCopilotBriefing({ locale: 'en', tier: 'compact' }).text.includes('a tag without ⊃ never contains tags'));
+  check('every leaf the briefing names really is a registered leaf',
+    ['cta', 'mediacard', 'plan', 'fold', 'tab', 'slide', 'feature'].every((n) => getModule(n) && !getModule(n).container));
+
+  const primer = buildPznPrimer();
+  check('primer contract item 9: leaf vs container, E_NOT_CONTAINER, the mediacard example',
+    /^9\. \*\*Leaf vs container:\*\*/m.test(primer) && primer.includes('E_NOT_CONTAINER') && primer.includes(leafExample));
+  check('primer marks every module Leaf or Container', (() => {
+    const blocks = primer.split(/\n### `<bent-/).slice(1);
+    return blocks.length > 30 && blocks.every((b) => /\n(Leaf —|Container)/.test(b));
+  })());
+  check('primer lists real props (it printed none before: the catalog entry has no prop schemas)',
+    /### `<bent-mediacard>`[\s\S]*?Props:\n  - image: url[\s\S]*?  - excerpt: string[\s\S]*?Leaf —/.test(primer));
+  check('primer says where BODY text goes (a leaf may still have a body)',
+    /### `<bent-heading>`[\s\S]*?← goes in the tag BODY[\s\S]*?Leaf —/.test(primer));
+}
+
 console.log('');
 console.log(fail ? 'SMOKE ROLEPLAY: FAIL' : 'SMOKE ROLEPLAY: PASS');
 process.exit(fail ? 1 : 0);
