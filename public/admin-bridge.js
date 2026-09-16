@@ -235,7 +235,17 @@
       var p = waiting.get(m.id);
       p.arm();
       if (typeof p.onProgress === 'function') {
-        try { p.onProgress({ chars: Number(m.chars) || 0, tokens: Number(m.tokens) || 0 }); }
+        // started/tool (0.5.3): a bridge that sends them says whether the model
+        // is still reading or already writing into a tool call; an older one
+        // leaves `started` undefined, and the page must not guess
+        try {
+          p.onProgress({
+            chars: Number(m.chars) || 0,
+            tokens: Number(m.tokens) || 0,
+            started: typeof m.started === 'boolean' ? m.started : undefined,
+            tool: typeof m.tool === 'string' ? m.tool.slice(0, 40) : ''
+          });
+        }
         catch (e) { /* a UI that throws must not kill the generation */ }
       }
       return;

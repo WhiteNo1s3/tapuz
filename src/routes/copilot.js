@@ -815,6 +815,7 @@ router.get('/admin/chat', (req, res) => {
       .bubble.system { background:#f1f5f9; color:#334155; align-self:center; text-align:center; font-size:.86rem; }
       .bubble.system.warn { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
       .bubble.system.danger { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+      .bubble.system.clock { background:transparent; color:#64748b; font-size:.78rem; padding:2px 10px; }
       .bubble.system .fix { display:block; margin-top:6px; font-size:.8rem; opacity:.9; }
       .bubble.user { background:#0a66c2; color:#fff; align-self:flex-start; }
       .bubble.assistant { background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; align-self:flex-end; }
@@ -968,6 +969,7 @@ router.get('/admin/chat', (req, res) => {
       </div>
     </div>
     <script src="/admin-bridge.js"></script>
+    <script src="/admin-turn-clock.js"></script>
     <script src="/admin-chat.js"></script>
   `;
   res.send(layout(html, 'קופיילוט', accentFor('chat')));
