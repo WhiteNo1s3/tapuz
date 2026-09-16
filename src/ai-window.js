@@ -456,6 +456,15 @@ function fitTurns(turns, roomChars) {
 const FIX_WINDOW = 'LM Studio → My Models → ⚙ ליד המודל → Context Length → 32768 → Reload, ואז שלחו את ההודעה שוב.';
 const FIX_BRIDGE = 'הורידו את Bridge V2 0.5.0 מחיבור AI (/admin/ai-setup), טענו מחדש ב-chrome://extensions (או about:debugging ב-Firefox) ורעננו את הדף. אם המודל טעון עם חלון של 8K — הגדילו ל-32768.';
 
+/** "E_CHILD: <bent-faq> cannot contain <bent-fold>; E_CHILD: …" → "E_CHILD ×4" (distinct codes, counted). */
+function briefErrors(msg) {
+  const codes = String(msg || '').match(/\bE_[A-Z_]+/g);
+  if (!codes) return String(msg || '').slice(0, 80);
+  const n = {};
+  codes.forEach((c) => { n[c] = (n[c] || 0) + 1; });
+  return Object.keys(n).map((c) => c + (n[c] > 1 ? ' ×' + n[c] : '')).join(', ');
+}
+
 const HE = {
   fixWindow: FIX_WINDOW,
   fixBridge: FIX_BRIDGE,
@@ -477,6 +486,10 @@ const HE = {
     'המסמך (' + fmt(chars) + ' תווים) גדול מחלון ההקשר של המודל (מותר ' + fmt(limit) + ') — ' +
     'אמור/י לבעל/ת האתר להגדיל את Context Length ב-LM Studio, או הצע/י שינוי שלא דורש את כל הדף.',
   memoProposed: (summary) => 'הצעתי: ' + summary + ' — ממתין לאישור',
+  // v2.37 — a proposal that fails the write's own checks goes back to the model
+  proposalRefused: (why) => 'הקופיילוט הציע מסמך שלא עובר את הבדיקה (' + briefErrors(why) + ') — החזרתי לו את השגיאה לתיקון, לפני שתתבקשו לאשר.',
+  proposalFixForModel: 'המסמך לא נשמר ולא הוצג לבעל/ת האתר. תקן/י בדיוק את השגיאות שלמעלה (למשל ילד שהמיכל לא מקבל — ראו ⊃ / Accepts children במילון) והצע/י את המסמך המלא שוב.',
+  proposalGaveUp: (why) => 'הקופיילוט לא הצליח להציע מסמך תקין גם אחרי תיקון (' + briefErrors(why) + '). נסחו את הבקשה אחרת, או בקשו דף קצר יותר.',
   memoCreated: (slug) => 'בוצע: נוצר הדף "' + slug + '" כטיוטה',
   memoEdited: (slug) => 'בוצע: הדף "' + slug + '" עודכן כטיוטה',
   memoWarnings: (n) => ' · ' + fmt(n) + ' אזהרות',

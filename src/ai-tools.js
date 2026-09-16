@@ -110,11 +110,16 @@ function checkSource(raw) {
   return { source, doc, blocks, meta: ex.page && ex.page.meta };
 }
 
-function createPage(args) {
-  const { source, doc, blocks, meta } = checkSource(args && args.source);
+/** The slug a create_page call would take — shared by the write and its preflight. */
+function slugFor(args, doc) {
   const title = String((args && args.title) || doc.title || 'דף חדש');
   const { deriveSlug } = require('./pzn/intent');
-  const slug = deriveSlug(String((args && args.slug) || doc.slug || '').trim() || title);
+  return { title, slug: deriveSlug(String((args && args.slug) || doc.slug || '').trim() || title) };
+}
+
+function createPage(args) {
+  const { source, doc, blocks, meta } = checkSource(args && args.source);
+  const { title, slug } = slugFor(args, doc);
   const { getPageByFullPath, createPage: create, savePageSource } = require('./pages');
   if (getPageByFullPath(slug)) {
     throw new Error('דף בשם "' + slug + '" כבר קיים — לעריכה השתמש/י ב-edit_page');
@@ -135,6 +140,31 @@ function editPage(args) {
   // until the owner publishes it, and the previous draft is in the revisions.
   const r = savePageSource(slug, source, { publish: false, meta });
   return { slug, title: page.title, edited: true, blocks: r.blocks, warnings: r.warnings || [], moduleCount: blocks.length };
+}
+
+/**
+ * Everything a write would refuse, checked BEFORE the owner is asked (v2.37).
+ * Seen live on the Bridge challenges: Gemma proposed a pricing page whose
+ * bent-faq held bent-fold (the accordion's child) — the owner clicked
+ * approve, and only then did create_page throw E_CHILD. The same checks the
+ * write runs (the source validates, the slug is free / the page exists), with
+ * no side effect; a throw carries the message the write would have thrown.
+ */
+function preflight(name, args) {
+  if (name === 'create_page') {
+    const { doc } = checkSource(args && args.source);
+    const { slug } = slugFor(args, doc);
+    if (require('./pages').getPageByFullPath(slug)) {
+      throw new Error('דף בשם "' + slug + '" כבר קיים — לעריכה השתמש/י ב-edit_page');
+    }
+    return;
+  }
+  if (name === 'edit_page') {
+    const slug = String((args && args.slug) || '').trim();
+    if (!slug) throw new Error('slug required');
+    if (!require('./pages').getPageByFullPath(slug)) throw new Error('אין דף בשם "' + slug + '"');
+    checkSource(args && args.source);
+  }
 }
 
 const TOOLS = [
@@ -213,4 +243,4 @@ function toolsForProvider(style) {
   return TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema }));
 }
 
-module.exports = { TOOLS, getTool, describeCall, toolsForProvider, MAX_SOURCE };
+module.exports = { TOOLS, getTool, describeCall, toolsForProvider, preflight, MAX_SOURCE };

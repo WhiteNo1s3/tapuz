@@ -113,7 +113,10 @@ const wantsWrite = {
     message: {
       content: 'אני אבנה', tool_calls: [{
         id: 'c1', type: 'function',
-        function: { name: 'create_page', arguments: JSON.stringify({ source: PZN('לא מאושר', 'לא') }) }
+        // a FREE slug: 'tool-test' was created by the direct checks above, and
+        // since v2.37 a proposal whose slug is taken is refused before the owner
+        // is asked (it used to become a card that failed only after approval)
+        function: { name: 'create_page', arguments: JSON.stringify({ source: PZN('לא מאושר', 'לא', 'pending-test') }) }
       }]
     }
   }]
@@ -129,6 +132,16 @@ const wantsWrite = {
     typeof out.pending.summary === 'string' && out.pending.summary.length > 3);
   check('NOTHING was written while waiting for approval',
     require('../src/pages').listPages().length === before);
+
+  // v2.37: a proposal the write would refuse (here: its slug is taken) never
+  // becomes a card — the model is answered with the reason and asked again
+  scripted = [
+    { choices: [{ message: { content: '', tool_calls: [{ id: 'dup1', type: 'function', function: { name: 'create_page', arguments: JSON.stringify({ source: PZN('כפול', 'כפול', 'existing') }) } }] } }] },
+    { choices: [{ message: { content: 'הדף כבר קיים — אערוך אותו במקום.', tool_calls: null } }] }
+  ];
+  const dup = await ai.converse({ system: '<bent-heading>', user: 'צור דף existing' });
+  check('a create_page on a taken slug is refused BEFORE approval (no pending; the model got the reason and answered)',
+    !dup.pending && /כבר קיים/.test(dup.reply || '') && /לפני שתתבקשו לאשר/.test(dup.notice || ''));
 
   // refusing must not write, and must tell the model so
   scripted = [{ choices: [{ message: { content: 'הבנתי, לא אבצע', tool_calls: null } }] }];

@@ -95,7 +95,7 @@ function baseOpts(block, props, extra = {}) {
 /**
  * @param {object} block  { type, id?, data }
  */
-function blockToModule(block) {
+function blockToModuleInner(block) {
   if (!block || !block.type) return null;
   const type = block.type;
   const data = block.data || {};
@@ -630,7 +630,7 @@ function finishBlock(node, type, data) {
  * @param {object} node module AST node
  * @returns {object|null} Tapuz JSON block { type, id?, data }
  */
-function moduleToBlock(node) {
+function moduleToBlockInner(node) {
   if (!node || !node.name) return null;
   const props = node.props || {};
 
@@ -1189,6 +1189,56 @@ function moduleToBlock(node) {
       // module with no Tapuz equivalent yet — preserve as unknown type
       return finishBlock(node, node.name, { ...(node.props || {}), ...(node.text ? { text: node.text } : {}) });
   }
+}
+
+// ── item ids across the block model (v2.37) ─────────────────────────────
+// A container's leaves (cards → mediacard, faq → qa, pricing → plan, …) live
+// in the block as plain data — `items` / `images` / `fields` / `rows` — and
+// no case carried their ids. Any save through the builder, including the
+// silent autosave before every copilot turn, rewrote the page without them.
+// Seen live on the Bridge challenges: bridge-challenge-cards lost card_1…3
+// between its creation and the copilot's read_page, so "keep every id" could
+// not be kept. One pass per direction, aligned by position with the children
+// the case produced — rather than an id line in each of 27 cases. A length
+// mismatch (a case that filtered or merged children) carries nothing: never
+// a wrong id on the wrong item.
+const ITEM_ARRAYS = ['items', 'images', 'fields', 'rows'];
+
+/** pzn node → block, with each accepted child's id kept on its item. */
+function moduleToBlock(node) {
+  const block = moduleToBlockInner(node);
+  if (!block || !node || !Array.isArray(node.children) || !node.children.length) return block;
+  const def = getModule(node.name);
+  const accept = def && Array.isArray(def.accept) ? def.accept : [];
+  if (!accept.length) return block;
+  const kids = node.children.filter((c) => c && accept.includes(c.name));
+  const data = block.data || {};
+  for (const key of ITEM_ARRAYS) {
+    const arr = data[key];
+    if (!Array.isArray(arr) || arr.length !== kids.length) continue;
+    arr.forEach((item, i) => {
+      if (item && typeof item === 'object' && !Array.isArray(item) && kids[i].id && item.id === undefined) item.id = kids[i].id;
+    });
+    break;
+  }
+  return block;
+}
+
+/** block → pzn node, with each item's id back on its child module. */
+function blockToModule(block) {
+  const mod = blockToModuleInner(block);
+  if (!mod || !Array.isArray(mod.children) || !mod.children.length) return mod;
+  const data = (block && block.data) || {};
+  for (const key of ITEM_ARRAYS) {
+    const arr = data[key];
+    if (!Array.isArray(arr) || arr.length !== mod.children.length) continue;
+    arr.forEach((item, i) => {
+      const child = mod.children[i];
+      if (item && typeof item === 'object' && typeof item.id === 'string' && item.id && child && !child.id) child.id = item.id;
+    });
+    break;
+  }
+  return mod;
 }
 
 module.exports = { fromTapuzPage, blockToModule, toTapuzPage, moduleToBlock };

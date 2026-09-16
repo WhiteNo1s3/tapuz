@@ -459,6 +459,7 @@ function readRelayReply(result, meta = {}) {
 // the server-side call and the browser step feed the same judgement.
 
 const MAX_TOOL_HOPS = 6;          // a model that needs more is looping
+const MAX_PROPOSAL_REFUSALS = 2;  // v2.37: invalid proposals sent back for repair before the turn gives up
 const MAX_SHRINKS = 3;            // full → compact → recalibrated compact, then stop
 const PENDING_TTL_MS = 10 * 60 * 1000;
 const pendings = new Map();
@@ -1015,6 +1016,27 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       }
     }
     if (write) {
+      // v2.37 — a proposal the write would refuse never reaches the owner.
+      // Live (Bridge challenges, Gemma 4 31B): a bent-faq holding bent-fold
+      // was approved and only THEN failed E_CHILD; the model fixed it on its
+      // next turn, after a wasted click. Now the errors go straight back to
+      // the model as the call's answer, and the owner is asked only about a
+      // document that will land. Capped: after MAX_PROPOSAL_REFUSALS the turn
+      // ends with the reason instead of looping on the owner's GPU.
+      let refusal = '';
+      try { tools.preflight(write.name, write.input); } catch (e) { refusal = e.message; }
+      if (refusal) {
+        st.refusals = (st.refusals || 0) + 1;
+        if (st.refusals > MAX_PROPOSAL_REFUSALS) {
+          st.memo = win.HE.proposalGaveUp(refusal);
+          return envelope({ reply: reply.text || '' });
+        }
+        results.push({ id: write.id, output: { error: refusal, proposed: false, fix: win.HE.proposalFixForModel }, isError: true });
+        st.notice = win.HE.proposalRefused(refusal);
+        st.extra = appendToolTurn(style, st.extra, reply, results);
+        st.hop++;
+        continue;
+      }
       const summary = tools.describeCall(write.name, write.input);
       const id = putPending({ st, reply, call: write, others: results });
       st.memo = win.HE.memoProposed(summary);
