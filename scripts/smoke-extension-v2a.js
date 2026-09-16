@@ -210,8 +210,8 @@ const aiSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'ai.js'), 'utf8'
 check('FIRST_FRAME_MS mirrors the server\'s LOCAL_TIMEOUT_MS (20 min); STREAM_IDLE_MS stays 2 min',
   /FIRST_FRAME_MS = 20 \* 60 \* 1000/.test(bg) && /STREAM_IDLE_MS = 120000/.test(bg) &&
   /LOCAL_TIMEOUT_MS = 20 \* 60 \* 1000/.test(aiSrc));
-check('the watchdog picks the ceiling by whether the stream has started',
-  /started \? STREAM_IDLE_MS : FIRST_FRAME_MS/.test(bg) && /started = true;/.test(bg));
+check('the watchdog picks the ceiling by what has FLOWED (0.5.4) — a tool call LM Studio delivers whole is not a stall',
+  /const flowing = \(\) => \(content\.length \+ argChars\) > 0;/.test(bg) && /live \? STREAM_IDLE_MS : FIRST_FRAME_MS/.test(bg));
 check('heartbeat and watchdog are armed BEFORE the request leaves (the page\'s ceiling is reset while the model reads)',
   (() => {
     const fn = (bg.match(/async function streamChat[\s\S]*?\n\}\n/) || [''])[0];
@@ -608,8 +608,9 @@ const EXCEED = { error: {
     await driveViaPort(L, { messages: [] });
     check('vm: the FIRST watchdog armed (before any byte) is the 20-minute first-frame ceiling',
       delays.length > 1 && delays[0] === 20 * 60 * 1000);
-    check('vm: once bytes arrive the watchdog re-arms at the 2-minute idle ceiling',
-      delays.slice(1).every((d) => d === 120000));
+    const firstIdle = delays.indexOf(120000);
+    check('vm: once text flows the watchdog re-arms at the 2-minute idle ceiling (and never goes back to 20 minutes)',
+      firstIdle > 0 && delays.slice(firstIdle).every((d) => d === 120000));
     // the abort path: a fetch that never answers, fired by the watchdog → the first-frame sentence
     {
       let fire = null;
@@ -623,8 +624,29 @@ const EXCEED = { error: {
       fire();
       const { done } = await p;
       check('vm: a model that never starts answering fails with the first-frame sentence (20 minutes, no first token)',
-        done.ok === false && /לא ענה בזמן/.test(done.error) && /20 דקות/.test(done.error) && /טוקן ראשון/.test(done.error));
+        done.ok === false && /לא ענה בזמן/.test(done.error) && /20 דקות/.test(done.error) && /שום טקסט/.test(done.error));
     }
+  }
+
+  /* ── RUN the live failure (0.5.4): a tool call's opener, then silence ──
+   * LM Studio sends the call's name with empty arguments when the model
+   * stops reading, then nothing until the whole argument text lands. Live, an
+   * 11-section page was cut at "הזרם שתק 2 דקות באמצע כתיבה". While only the
+   * opener has arrived, every re-arm must stay the 20-minute ceiling. */
+  {
+    const delays = [];
+    const recTimeout = (fn, ms) => { delays.push(ms); return setTimeout(fn, ms); };
+    const OPENER_ONLY = chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_long', type: 'function', function: { name: 'create_page', arguments: '' } }] });
+    const L = bootWorker(() => Promise.resolve(fakeResponse({ sse: OPENER_ONLY })), { setTimeout: recTimeout });
+    await driveViaPort(L, { messages: [] });
+    check('vm (0.5.4): after a tool call\'s opener frame with no arguments yet, the watchdog stays at 20 minutes (the page is being written)',
+      delays.length > 1 && delays.every((d) => d === 20 * 60 * 1000));
+    const delays2 = [];
+    const rec2 = (fn, ms) => { delays2.push(ms); return setTimeout(fn, ms); };
+    const L2 = bootWorker(() => Promise.resolve(fakeResponse({ sse: TOOL_STREAM })), { setTimeout: rec2 });
+    await driveViaPort(L2, { messages: [] });
+    check('vm (0.5.4): once the arguments arrive, a stall is caught at 2 minutes again',
+      delays2.includes(120000) && delays2[delays2.length - 1] === 120000);
   }
 
   /* ── RUN the content bridge: the failure result carries `data` ──

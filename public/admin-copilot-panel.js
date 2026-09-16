@@ -228,6 +228,7 @@
     postChat({ approve: { id: p.id, ok: ok }, window: bridgeWindow() || undefined }).then(function (d) {
       stopClock();
       if (!d.ok) throw fail(d);
+      if (!ok) bubble('system', '✕ דחיתם את ההצעה — שום דבר לא נשמר.'); // v2.40: the page's word before the model's
       absorb(d);
       if (d.pending) { renderApproval(d.pending); setBusy(false, ''); return; }
       // the draft changed on disk — reload the builder to show it. `applied`

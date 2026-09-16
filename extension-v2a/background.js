@@ -192,7 +192,7 @@ function timeoutError(reason) {
   err.tzReason = reason;
   return err;
 }
-const FIRST_FRAME_REASON = 'המודל המקומי לא ענה בזמן — ' + Math.round(FIRST_FRAME_MS / 60000) + ' דקות בלי טוקן ראשון; בדקו ש-LM Studio עדיין מעבד את הבקשה';
+const FIRST_FRAME_REASON = 'המודל המקומי לא ענה בזמן — ' + Math.round(FIRST_FRAME_MS / 60000) + ' דקות בלי שום טקסט מהמודל; בדקו ש-LM Studio עדיין מעבד את הבקשה';
 const STREAM_IDLE_REASON = 'המודל המקומי לא ענה בזמן — הזרם שתק ' + Math.round(STREAM_IDLE_MS / 60000) + ' דקות באמצע כתיבה; בדקו את LM Studio';
 
 async function readWholeBody(res) {
@@ -339,12 +339,24 @@ async function streamChat(base, body, ac, onProgress) {
   let announced = false;   // the first frame's progress went out
   let timedOut = null;     // the watchdog that fired, if one did
   let idle = null;
+  // 0.5.4 — which silence is legitimate is decided by what has FLOWED, not
+  // by whether a frame arrived. Live (the hard tests, an 11-section page on
+  // Gemma 4 31B): LM Studio sends a tool call's first frame (its name, empty
+  // arguments) the moment the model stops reading, then nothing at all until
+  // the whole argument text lands in one frame at the end. 0.5.3 armed the
+  // 2-minute mid-stream ceiling on that first frame and cut every page that
+  // took longer than two minutes to write ("הזרם שתק 2 דקות באמצע כתיבה").
+  // So: until text or arguments have actually streamed, the model is reading
+  // or writing a tool call LM Studio will deliver whole — the server's twenty
+  // minutes; once they flow, a stall is caught at two.
+  const flowing = () => (content.length + argChars) > 0;
   const bump = () => {
     clearTimeout(idle);
+    const live = flowing();
     idle = setTimeout(() => {
-      timedOut = timeoutError(started ? STREAM_IDLE_REASON : FIRST_FRAME_REASON);
+      timedOut = timeoutError(live ? STREAM_IDLE_REASON : FIRST_FRAME_REASON);
       ac.abort();
-    }, started ? STREAM_IDLE_MS : FIRST_FRAME_MS);
+    }, live ? STREAM_IDLE_MS : FIRST_FRAME_MS);
   };
   const beat = setInterval(() => post(true), HEARTBEAT_MS);
 
@@ -381,7 +393,6 @@ async function streamChat(base, body, ac, onProgress) {
     for (;;) {
       const step = await reader.read();
       started = true;
-      bump(); // silence is what we cap, not how long the answer takes
       if (step.done) break;
       // {stream:true} also rejoins a multi-byte character split across chunks
       // — Hebrew arrives two or three bytes at a time and WILL be cut.
@@ -394,6 +405,9 @@ async function streamChat(base, body, ac, onProgress) {
         if (frame === DONE_FRAME) { ended = true; break; }
         if (frame) apply(frame);
       }
+      // re-armed AFTER the chunk's frames count, so the ceiling reflects
+      // what has flowed — silence is what we cap, not how long the answer takes
+      bump();
       // the first applied frame is announced at once (with the tool's name,
       // when it is a tool call) — not on the next heartbeat, ten seconds on
       const announce = !announced && applied > 0;

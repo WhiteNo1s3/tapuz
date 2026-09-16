@@ -42,7 +42,7 @@
   'use strict';
 
   const B = typeof browser !== 'undefined' ? browser : chrome;
-  const VERSION = '0.5.3'; // must equal manifest.json "version" (smoke pins it)
+  const VERSION = '0.5.4'; // must equal manifest.json "version" (smoke pins it)
   const PORT_NAME = 'tz-llm';
   const CHAT_PATH = '/v1/chat/completions';
 
