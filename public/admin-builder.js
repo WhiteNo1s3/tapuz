@@ -1795,10 +1795,26 @@
     if (d.className) wrap.className += ' ' + d.className;
 
     if (block.type === 'hero') {
+      // v2.38: a hero written in BenTML keeps its authored children in
+      // data.blocks (src/pzn/hero-children.js). The canvas edits the title and
+      // subtitle as before; whatever else the hero holds is named here, so the
+      // owner can see it is there and kept — the live page draws all of it.
+      var heroKids = Array.isArray(d.blocks) ? d.blocks : [];
+      var heroSeen = { heading: false, text: false, button: false };
+      var heroMore = heroKids.filter(function (k) {
+        if (!k || !k.type) return false;
+        if (heroSeen[k.type] === false) { heroSeen[k.type] = true; return false; }
+        return true;
+      });
+      var heroMoreLine = heroMore.length
+        ? '<div class="preview-hero-more" title="נשמרים ומוצגים באתר">+ ' + heroMore.length + ' רכיבים נוספים בפתיח: ' +
+          esc(heroMore.map(function (k) { return typeLabel(k.type); }).join(' · ')) + '</div>'
+        : '';
       wrap.innerHTML =
         '<div class="preview-hero">' +
         '<h1 data-inline-key="title">' + esc(d.title || 'כותרת ראשית') + '</h1>' +
         '<p data-inline-key="subtitle">' + esc(d.subtitle || 'תת כותרת — לחצו לעריכה') + '</p>' +
+        heroMoreLine +
         '</div>';
       wireInlineEditable(wrap, block);
       return wrap;
@@ -5097,6 +5113,19 @@
     } else if (isBlocksContainer(b.type)) {
       ensureBlocks(b).forEach(freshIds);
     }
+    // v2.38: items carry their ids now (cards → mediacard, faq → qa, …, v2.37)
+    // and a hero keeps its authored children in data.blocks — a copy must not
+    // repeat either, or the page holds two of one id and the validator (and
+    // every copilot edit of it) refuses the document
+    var d = b.data || {};
+    ['items', 'images', 'fields', 'rows'].forEach(function (key) {
+      if (!Array.isArray(d[key])) return;
+      d[key].forEach(function (it, i) {
+        // the index keeps a whole list copied in one millisecond unique
+        if (it && typeof it === 'object' && !Array.isArray(it) && typeof it.id === 'string') it.id = uid('item') + '_' + i;
+      });
+    });
+    if (b.type === 'hero' && Array.isArray(d.blocks)) d.blocks.forEach(freshIds);
     return b;
   }
 

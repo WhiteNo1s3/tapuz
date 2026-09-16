@@ -3122,6 +3122,7 @@ img.preview-author-photo { display: block; }
 }
 .preview-hero h1 { margin: 0 0 8px; font-size: 1.8rem; color: white; }
 .preview-hero p { margin: 0; opacity: 0.9; }
+.preview-hero-more { margin-top: 8px; font-size: .72rem; opacity: .8; }
 .preview-btn {
   display: inline-block;
   background: #0a66c2;
