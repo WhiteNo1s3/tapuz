@@ -384,6 +384,16 @@ require('../src/pages').savePageSource('home', PZN('הבית', 'שלום', 'home
   const d0 = await ai.converse({ systemFor, user: 'שלום' });
   check('(d) browser with NO hint → compact (unknown never full, a stale hint does not linger)',
     d0.modelCall && d0.modelCall.body.messages[0].content.length < 12000 && d0.window.source === 'unknown');
+  // v2.33: the relayed call is the FULL briefing, never a bare request — C1
+  // (gemma-4-31b with no briefing) invents a ```bentml dialect with zero
+  // bent-* tags. A caller that hands the loop no BenTML briefing is refused
+  // BEFORE any GPU minute is spent, with its own code.
+  check('(d) every modelCall carries the leaf rule + the local ceiling for the page (timeoutMs = LOCAL_TIMEOUT_MS)',
+    [d0, d1, d2].every((d) => /E_NOT_CONTAINER/.test(d.modelCall.body.messages[0].content) && d.timeoutMs === ai.LOCAL_TIMEOUT_MS));
+  const nb1 = await rejects(() => ai.converse({ system: 'no briefing here', user: 'בנה דף' }), 'NO_BRIEFING');
+  const nb2 = await rejects(() => ai.converse({ system: '', user: 'בנה דף' }), 'NO_BRIEFING');
+  check('(d) a briefing-less request to the local model over the bridge is refused (NO_BRIEFING), never relayed',
+    nb1 && nb1.code === 'NO_BRIEFING' && !nb1.modelCall && nb2 && nb2.code === 'NO_BRIEFING' && /BenTML/.test(nb1.message));
   // step: the exceed body → a NEW modelCall + notice
   const d3 = await ai.converse({ step: { id: d2.modelCall.id, result: EXCEED } });
   check('(d) step = the exceed body → a NEW modelCall (different id) at compact + notice',
