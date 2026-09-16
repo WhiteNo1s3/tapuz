@@ -111,6 +111,16 @@ unaffected.
 
 ---
 
+## 5. Model-written raw HTML (v2.39)
+
+`<bent-html>` renders **raw** by design — it is the owner's escape hatch, script included (`src/renderer.js`). A **model's** document is different: its output can be steered by what it read, so it is untrusted input. Found in the live hard tests: a copilot proposal carrying `<script>`, `onerror=` and a `javascript:` link passed every check, was approved (the proposal preview is sandboxed, so nothing showed) and saved; the builder's 👁 live preview then ran it on the admin origin, inside the owner's session, and the paste flow's "save and publish" would have served it to visitors.
+
+- **Every AI door scrubs** `bent-html` content with `src/html-sanitize.js` (`src/ai-html-guard.js`): the copilot proposal (so the owner approves exactly what will be saved, with a Hebrew notice), `create_page` / `edit_page`, `POST /admin/api/pzn/create-from-source`, `POST /agent/v1/create-from-source`, and the paste flow's `POST /admin/api/pzn/source` (marked `from: 'ai'`). The owner's own source editor and builder keep raw HTML exactly as written.
+- **The admin previews run in an opaque origin**: the builder's live preview iframe and the paste preview iframe are `sandbox` without `allow-same-origin` (scripts still run, so the preview is faithful, but they cannot reach the admin session), and `/admin/preview/:page` sends `Content-Security-Policy: sandbox allow-scripts allow-popups` for the page opened on its own.
+- **Residual:** the theme studio canvas renders the site same-origin (its effect guard reports through `postMessage` with an origin check, and site scripts that touch storage would fail in an opaque origin). Model-written page HTML no longer reaches it through the AI doors; a theme's effect JS is the owner-approved theme and runs there by design.
+
+Pinned by `scripts/smoke-ai-html-guard.js`.
+
 ## Operator checklist
 
 - [ ] Serve Tapuz **behind HTTPS** (so `Secure` cookies engage) via a reverse proxy.

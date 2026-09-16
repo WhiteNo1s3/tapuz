@@ -179,6 +179,12 @@ router.get('/admin/preview/:fullPath', (req, res) => {
     // the builder iframes this route — SAMEORIGIN (not the global DENY) keeps
     // clickjacking protection while letting the admin frame its own preview
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    // v2.39: a draft's raw HTML (the owner's, or an older model's from before
+    // the AI doors scrubbed it) runs in an OPAQUE origin — its script still
+    // runs, so the preview is faithful, but it cannot reach the admin session.
+    // The builder's iframe carries the same sandbox; this header covers the
+    // page opened on its own. Appended: a second policy, the global one stays.
+    res.append('Content-Security-Policy', 'sandbox allow-scripts allow-popups');
     res.type('html').send(renderPage(page, { useDraft: true }));
   } catch (e) {
     res.status(500).send(e.message);

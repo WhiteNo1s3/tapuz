@@ -98,7 +98,8 @@ function checkSource(raw) {
   // around the keyword dialect, all gone; a keyword document is compiled to
   // .pzn here, so the model may answer in either dialect
   const ex = require('./pzn-source').toPznSource(String(raw || ''));
-  const source = ex.source;
+  // v2.39: the copilot's writes are model-authored — no script in raw HTML
+  const source = require('./ai-html-guard').scrubAiSource(ex.source).source;
   if (!source.trim()) throw new Error('source ריק');
   if (source.length > MAX_SOURCE) throw new Error('המסמך ארוך מדי');
   const pznApi = require('./pzn/index');
