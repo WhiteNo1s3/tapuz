@@ -1016,6 +1016,15 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       }
     }
     if (write) {
+      // v2.39 — a model's raw HTML loses its script BEFORE it is proposed, so
+      // the owner approves exactly what will be saved (src/ai-html-guard.js)
+      if (write.input && typeof write.input.source === 'string') {
+        const g = require('./ai-html-guard').scrubAiSource(write.input.source);
+        if (g.scrubbed) {
+          write.input = Object.assign({}, write.input, { source: g.source });
+          st.notice = require('./ai-html-guard').scrubNotice(g.scrubbed);
+        }
+      }
       // v2.37 — a proposal the write would refuse never reaches the owner.
       // Live (Bridge challenges, Gemma 4 31B): a bent-faq holding bent-fold
       // was approved and only THEN failed E_CHILD; the model fixed it on its

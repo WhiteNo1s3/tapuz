@@ -97,7 +97,7 @@ router.get('/admin/ai', (req, res) => {
         </section>
         <section class="card">
           <h3 class="sub-head">3 · תצוגה מקדימה חיה</h3>
-          <iframe id="preview-frame" title="תצוגה מקדימה"
+          <iframe id="preview-frame" title="תצוגה מקדימה" sandbox="allow-scripts"
             class="preview-frame"></iframe>
         </section>
       </div>

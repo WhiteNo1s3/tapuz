@@ -719,6 +719,7 @@
             'נוצרה טיוטה ✓ הדף פתוח בקנבס · ' +
             '<a href="/admin/edit/' + encodeURIComponent(d.fullPath) + '">בונה מלא</a>' +
             (d.warnings && d.warnings.length ? ' · ' + d.warnings.length + ' אזהרות' : ''));
+          if (d.scrubbed) bubble('system', esc(d.notice || ''), 'warn'); // v2.39: script removed from the model's HTML
           btn.textContent = 'נוצר ✓';
         } catch (e) {
           bubble('system', 'הבנייה נכשלה: ' + esc(e.message), 'danger');

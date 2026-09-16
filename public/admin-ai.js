@@ -161,7 +161,8 @@
       } else {
         r = await api('/admin/api/pzn/source', {
           method: 'POST',
-          body: JSON.stringify({ fullPath: target, source, loose: true, publish })
+          // from:'ai' — this is a model's reply: raw HTML loses its script (v2.39)
+          body: JSON.stringify({ fullPath: target, source, loose: true, publish, from: 'ai' })
         });
       }
       const fp = encodeURIComponent(r.fullPath);
@@ -171,6 +172,7 @@
       const wentLive = publish && !r.repaired;
       applyResult.innerHTML =
         (r.created ? 'הדף נוצר! ' : 'נשמר! ') +
+        (r.scrubbed ? '<strong>' + String(r.notice || '').replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</strong> ' : '') +
         (r.repaired ? `<strong>תוקן אוטומטית (${(r.changes || []).length} שינויים)</strong> ונשמר כטיוטה. ` : '') +
         `<a href="/admin/edit/${fp}">פתח בבונה הדפים</a>` +
         (wentLive ? ` · <a href="${publicPath}" target="_blank">צפה בדף החי</a>` : ' (טיוטה — פרסמו מהבונה כשמוכן)');

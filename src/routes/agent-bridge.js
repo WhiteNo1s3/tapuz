@@ -227,7 +227,9 @@ router.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) =>
     // v2.20: take only the BenTML — fence, chat, <html> brackets gone — and
     // accept BOTH dialects (a "BENTML 0.2" reply is compiled to .pzn here)
     const ex = require('../pzn-source').toPznSource(source);
-    source = ex.source;
+    // v2.39: an agent's document is model-authored — raw HTML loses its script
+    const guard = require('../ai-html-guard').scrubAiSource(ex.source);
+    source = guard.source;
     const pznApi = require('../pzn/index');
     let doc;
     let repaired = false;
@@ -270,7 +272,7 @@ router.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) =>
     const doPublish = !!publish && !repaired; // never auto-publish a repaired page
     const result = savePageSource(slug, source, { publish: doPublish, meta: ex.page && ex.page.meta });
     if (doPublish) exportAll();
-    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings, repaired, changes, published: doPublish, dialect: ex.dialect, extracted: ex.extracted });
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings, repaired, changes, published: doPublish, dialect: ex.dialect, extracted: ex.extracted, scrubbed: guard.scrubbed });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, fix: e.fix, issues: e.issues });
   }

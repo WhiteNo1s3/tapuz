@@ -1207,7 +1207,7 @@
       '<span class="rsp-note">הרינדור האמיתי של הטיוטה</span>' +
       '<button type="button" class="rsp-close" aria-label="סגור">✕</button>' +
       '</div>' +
-      '<div class="rsp-stage"><div class="rsp-frame" style="width:375px"><iframe title="תצוגת טיוטה"></iframe></div></div>';
+      '<div class="rsp-stage"><div class="rsp-frame" style="width:375px"><iframe title="תצוגת טיוטה" sandbox="allow-scripts allow-popups"></iframe></div></div>';
     document.body.appendChild(overlay);
 
     var frame = overlay.querySelector('.rsp-frame');

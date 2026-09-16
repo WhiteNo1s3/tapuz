@@ -167,8 +167,10 @@ function renderBlock(block, direction = 'rtl') {
     // <script> written here RUNS on the live site. Anyone who can edit a page
     // can therefore run script on visitors. What stays scrubbed is content from
     // OUTSIDE — src/pzn/graduate.js still sanitizes scraped third-party markup
-    // on import. Trusted-author raw, untrusted-source scrubbed: that is the
-    // line, and it is intentional.
+    // on import, and since v2.39 every AI door (the copilot's writes, the agent
+    // API, the paste flow) scrubs a MODEL's raw HTML the same way
+    // (src/ai-html-guard.js). Trusted-author raw, untrusted-source scrubbed:
+    // that is the line, and it is intentional.
     case 'html': {
       const raw = (block.data && block.data.content) || '';
       // v1.49 flipped the default: an author reaching for the HTML tool means

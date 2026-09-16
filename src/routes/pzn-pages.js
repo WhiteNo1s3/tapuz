@@ -49,10 +49,19 @@ router.post('/admin/api/pzn/source', (req, res) => {
     }
     ex = toPznSource(source); // a broken keyword document throws line + fix
     source = ex.source;
+    // v2.39: the paste flow marks a model's reply (from:'ai'); the owner's own
+    // source editor does not, and its raw HTML stays exactly as written
+    let scrubbed = 0;
+    if ((req.body || {}).from === 'ai') {
+      const g = require('../ai-html-guard').scrubAiSource(source);
+      source = g.source;
+      scrubbed = g.scrubbed;
+    }
     const { savePageSource } = require('../pages');
     const result = savePageSource(fullPath, source, { publish: !!publish, meta: ex.page && ex.page.meta });
     if (publish) exportAll(); // publish from the paste flow means LIVE now
-    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings, dialect: ex.dialect, extracted: ex.extracted });
+    res.json({ ok: true, fullPath, blocks: result.blocks, warnings: result.warnings, dialect: ex.dialect, extracted: ex.extracted, scrubbed,
+      notice: scrubbed ? require('../ai-html-guard').scrubNotice(scrubbed) : '' });
   } catch (e) {
     // Strict save failed — compute an auto-correction the user can apply with
     // one click (v0.49 "auto-correct, then you apply"). No save happens here.
@@ -229,7 +238,10 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
     // v2.20: take only the BenTML — fence, chat, <html> brackets gone — and
     // accept BOTH dialects (a "BENTML 0.2" reply is compiled to .pzn here)
     const ex = toPznSource(source);
-    source = ex.source;
+    // v2.39: this door takes a MODEL's reply (the chat's button, the paste
+    // flow) — raw HTML loses its script before anything is saved or published
+    const guard = require('../ai-html-guard').scrubAiSource(ex.source);
+    source = guard.source;
     const pznApi = require('../pzn/index');
     // repair-first (v2.19.1): this is the route the copilot chat's "צור דף"
     // calls, and it was the ONE create path with no forgiveness — a model
@@ -281,7 +293,8 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
     res.json({
       ok: true, fullPath: slug, created: true, blocks: result.blocks,
       warnings: result.warnings, repaired, changes, published: doPublish,
-      dialect: ex.dialect, extracted: ex.extracted
+      dialect: ex.dialect, extracted: ex.extracted, scrubbed: guard.scrubbed,
+      notice: guard.scrubbed ? require('../ai-html-guard').scrubNotice(guard.scrubbed) : ''
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column, fix: e.fix });
