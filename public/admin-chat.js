@@ -588,6 +588,9 @@
       const d = await chatTurn({ approve: { id: p.id, ok } });
       remember('assistant', d.reply || d.memo);
       hideProposal();
+      // v2.40: the owner's own word comes first — a model has claimed a
+      // refused edit was done; this line is the page's, not the model's
+      if (!ok) bubble('system', '✕ דחיתם את ההצעה — שום דבר לא נשמר.');
       const a = d.applied;
       if (ok && a && a.edited) {
         bubble('system', 'בוצע ✓ הטיוטה בקנבס' +

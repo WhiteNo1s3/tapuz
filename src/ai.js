@@ -735,7 +735,16 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     if (!approve.ok) {
       // Refusal is information: tell the model so it can offer something else
       // instead of silently repeating the same proposal.
-      output = { refused: true, reason: 'בעל/ת האתר דחה/תה את הפעולה' };
+      // v2.40 — the live reject test: after a refusal Gemma told the owner
+      // "I fixed the typos and added the CTA — the edit was sent for your
+      // approval". The answer says, in the one place the model reads right
+      // before it speaks, that nothing happened and what to say instead.
+      output = {
+        refused: true,
+        done: false,
+        reason: 'בעל/ת האתר דחה/תה את הפעולה — שום דבר לא נשמר ושום דבר לא השתנה',
+        instruction: 'אמור/י לבעל/ת האתר שההצעה לא בוצעה ושאל/י מה לשנות. אל תכתוב/י שביצעת אותה או שהיא ממתינה לאישור.'
+      };
       isError = true;
       st.memo = win.HE.memoRefused(summary);
     } else {

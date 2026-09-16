@@ -461,6 +461,20 @@ function waitUp(tries = 40) {
       check('the fixed proposal (bent-qa) → the approval card, with the document to preview',
         !!(p3 && p3.pending && p3.pending.tool === 'create_page' && p3.pending.input.source === GOOD));
 
+      // v2.40 — refuse it: the model is told in so many words that nothing
+      // happened (live, Gemma had claimed a refused edit was done)
+      const r3 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { approve: { id: p3 && p3.pending ? p3.pending.id : 'x', ok: false } } }));
+      const refusalMsg = ((r3 && r3.modelCall && r3.modelCall.body.messages) || []).filter((m) => m.role === 'tool').pop();
+      check('a refusal answers the model with done:false, "nothing was saved" and "do not say you did it"',
+        !!(refusalMsg && /"done":false/.test(refusalMsg.content) && /שום דבר לא נשמר/.test(refusalMsg.content) && /אל תכתוב\/י שביצעת/.test(refusalMsg.content)));
+      const pagesAfterRefusal = parse(await req('GET', '/admin/api/pages', { cookie }));
+      check('…and the refused page was not written', !((Array.isArray(pagesAfterRefusal) ? pagesAfterRefusal : (pagesAfterRefusal && pagesAfterRefusal.pages) || []).some((pg) => pg.full_path === 'preflight-page')));
+      const chatSrc = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-chat.js'), 'utf8');
+      const panelSrc = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-copilot-panel.js'), 'utf8');
+      check('the screen and the drawer both show the owner\'s own line after a refusal, before the model speaks',
+        /if \(!ok\) bubble\('system', '✕ דחיתם את ההצעה — שום דבר לא נשמר\.'\)/.test(chatSrc) &&
+        /if \(!ok\) bubble\('system', '✕ דחיתם את ההצעה — שום דבר לא נשמר\.'\)/.test(panelSrc));
+
       // the cap: three invalid proposals in one turn → the turn ends with the reason
       const g1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'שוב', history: [], context: { canvas: 'blank', surface: 'copilot' }, window: { tokens: 262144, source: 'bridge' } } }));
       let g = g1;
