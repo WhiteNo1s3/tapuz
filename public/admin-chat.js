@@ -633,10 +633,23 @@
       noteTurn(d);
       return d;
     });
-    const onProgress = (p) => setStatus('✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים');
-    const d = await post(payload);
-    if (d.modelCall) setStatus('המודל המקומי חושב… (דרך התוסף)');
-    return bridge.drive(d, post, undefined, onProgress);
+    // one line in the chat every 45 s while the turn runs (v2.36): a local
+    // model reads for minutes before its first token, and silence looked dead
+    const clock = window.TapuzTurnClock
+      ? window.TapuzTurnClock.start((text) => bubble('system', esc(text), 'clock'))
+      : null;
+    const onProgress = (p) => {
+      if (clock) clock.progress(p);
+      // a heartbeat with nothing streamed is the model READING, not writing 0
+      setStatus(window.TapuzTurnClock ? window.TapuzTurnClock.status(p) : '✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים');
+    };
+    try {
+      const d = await post(payload);
+      if (d.modelCall) setStatus('המודל המקומי חושב… (דרך התוסף)');
+      return await bridge.drive(d, post, undefined, onProgress);
+    } finally {
+      if (clock) clock.stop();
+    }
   }
 
   async function send() {

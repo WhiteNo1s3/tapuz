@@ -279,7 +279,21 @@ async function streamChat(base, body, ac, onProgress) {
     // A model writing a document INTO a tool call (create_page/edit_page)
     // produces no `content` at all; without argChars the page would show a
     // dead counter through the whole generation.
-    onProgress({ chars: content.length + argChars, tokens: deltas });
+    // 0.5.3: `started` + `tool`. LM Studio sends a tool call's FIRST frame
+    // (the name, empty arguments) the moment the model stops reading, then
+    // nothing until the whole argument text lands in one frame — measured on
+    // Gemma 4 31B: first frame at 32.0 s, all 936 argument chars at 61.8 s.
+    // With chars alone the page could not tell "still reading the prompt"
+    // from "writing a page into create_page"; these two fields can.
+    const firstCall = toolCalls.find(Boolean);
+    onProgress({
+      chars: content.length + argChars,
+      tokens: deltas,
+      // a FRAME arrived (not merely a byte: the first chunk can cut the first
+      // frame in half) — the model has stopped reading and is answering
+      started: applied > 0,
+      tool: (firstCall && firstCall.function.name) || ''
+    });
   };
 
   const applyToolCall = (tc) => {
@@ -298,7 +312,9 @@ async function streamChat(base, body, ac, onProgress) {
     }
   };
 
+  let applied = 0;          // frames applied so far (0.5.3: the first one is announced at once)
   const apply = (frame) => {
+    applied++;
     if (!meta && frame.id) meta = { id: frame.id, model: frame.model, created: frame.created };
     if (frame.usage) usage = frame.usage; // include_usage: the final frame
     const ch = frame.choices && frame.choices[0];
@@ -320,6 +336,7 @@ async function streamChat(base, body, ac, onProgress) {
   // heartbeat beats through both — it is what resets the PAGE's ceiling and
   // the MV3 worker's idle timer while the model is still reading.
   let started = false;
+  let announced = false;   // the first frame's progress went out
   let timedOut = null;     // the watchdog that fired, if one did
   let idle = null;
   const bump = () => {
@@ -377,7 +394,11 @@ async function streamChat(base, body, ac, onProgress) {
         if (frame === DONE_FRAME) { ended = true; break; }
         if (frame) apply(frame);
       }
-      post(false);
+      // the first applied frame is announced at once (with the tool's name,
+      // when it is a tool call) — not on the next heartbeat, ten seconds on
+      const announce = !announced && applied > 0;
+      if (announce) announced = true;
+      post(announce);
       if (ended) break;
     }
     // A last line with no trailing newline still counts.
@@ -554,7 +575,7 @@ B.runtime.onConnect.addListener((port) => {
     if (pre.error) return say({ type: 'done', ok: false, error: pre.error });
     try {
       const out = path === CHAT_PATH
-        ? await streamChat(pre.base, msg.body || {}, ac, (p) => say({ type: 'progress', chars: p.chars, tokens: p.tokens }))
+        ? await streamChat(pre.base, msg.body || {}, ac, (p) => say({ type: 'progress', chars: p.chars, tokens: p.tokens, started: p.started, tool: p.tool }))
         : await plainFetch(pre.base, path, msg.body, ac);
       say({ type: 'done', ok: out.ok, status: out.status, data: out.data });
     } catch (e) {

@@ -454,7 +454,9 @@
           state.ctrl ? state.ctrl.signal : undefined).then(function (r) { return r.json; });
       }, d.timeoutMs, function (p) {
         // the model is visibly writing — say so, instead of a dead spinner
-        if (!state.destroyed) setStatus('✍ המודל שלכם כותב… ' + (p.tokens || 0).toLocaleString() + ' טוקנים');
+        // nothing streamed yet = the model is reading the pack, not writing 0
+        if (!state.destroyed) setStatus(p.chars ? '✍ המודל שלכם כותב… ' + (p.tokens ? p.tokens.toLocaleString() + ' טוקנים' : p.chars.toLocaleString() + ' תווים')
+          : (p.started === false ? '⏳ המודל שלכם קורא את החבילה…' : '⏳ המודל שלכם עובד…'));
       });
     }
 

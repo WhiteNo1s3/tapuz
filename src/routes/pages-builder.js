@@ -423,6 +423,7 @@ router.get('/admin/edit/:fullPath', (req, res) => {
     ${embed ? '' : '<script src="/admin-builder-tour.js"></script>'}
     <script src="/admin-prompt-builder.js"></script>
     ${embed ? '' : '<script src="/admin-bridge.js"></script>'}
+    ${embed ? '' : '<script src="/admin-turn-clock.js"></script>'}
     ${embed ? '' : '<script src="/admin-copilot-panel.js"></script>'}
     <script>
       TapuzBuilder.init({

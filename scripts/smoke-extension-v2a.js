@@ -276,6 +276,11 @@ check('a server that ignores `stream` falls back to one JSON body, never a failu
 check('a 400 on stream_options is retried once without it',
   /text\.indexOf\('stream_options'\) !== -1/.test(bg) &&
   /shoot\(Object\.assign\(\{\}, body, \{ stream: true \}\)\)/.test(bg));
+check('0.5.3: progress carries started + tool on every hop (worker → content script → page)',
+  /say\(\{ type: 'progress', chars: p\.chars, tokens: p\.tokens, started: p\.started, tool: p\.tool \}\)/.test(bg) &&
+  /type: 'tz-local-llm-progress', id, chars: m\.chars, tokens: m\.tokens, started: m\.started, tool: m\.tool/.test(content) &&
+  /started: typeof m\.started === 'boolean' \? m\.started : undefined/.test(cmsBridge));
+check('0.5.3: the first applied frame is posted at once (not on the next heartbeat)', /const announce = !announced && applied > 0;[\s\S]{0,80}post\(announce\);/.test(bg));
 check('progress is throttled (~4/sec) and heartbeats through silence',
   /PROGRESS_MS = 250/.test(bg) && /HEARTBEAT_MS = 10000/.test(bg) &&
   /now - lastPost < PROGRESS_MS/.test(bg) &&
@@ -478,6 +483,13 @@ const EXCEED = { error: {
     const last = progress[progress.length - 1];
     check('vm: progress counted the argument characters (the page sees the document being written)',
       !!last && last.chars === ARGS.length && last.tokens === 3);
+    // 0.5.3: LM Studio sends a tool call's name first and its text in one
+    // frame at the end — `started` + `tool` let the page say "writing the
+    // page" instead of "still reading" through that silence
+    const firstStarted = progress.find((m) => m.started === true);
+    check('vm (0.5.3): progress says started + which tool once a frame arrived',
+      !!firstStarted && firstStarted.tool === 'read_page' &&
+      progress.filter((m) => m.started === true).every((m) => m.tool === 'read_page') && last.started === true);
   }
   // (2) a plain text stream keeps the 0.4.0 shape — no tool_calls key at all
   {

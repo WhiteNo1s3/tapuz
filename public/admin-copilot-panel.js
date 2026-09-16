@@ -103,6 +103,24 @@
 
   function fmt(n) { return Number(n).toLocaleString('en-US'); }
 
+  /* The turn clock (v2.36, admin-turn-clock.js): one muted line in the log
+     every 45 s while a turn runs — a local model reads for minutes before its
+     first token. Turn-scoped: postChat recurses through the bridge driver, so
+     the clock lives here and send/answerApproval start and stop it. */
+  var turnClock = null;
+  function startClock() {
+    stopClock();
+    if (!window.TapuzTurnClock) return;
+    turnClock = TapuzTurnClock.start(function (text) {
+      var b = bubble('system', text);
+      b.classList.add('cp-clock');
+    });
+  }
+  function stopClock() {
+    if (turnClock) turnClock.stop();
+    turnClock = null;
+  }
+
   /** The chip in the head: `חלון 8,192 · מקוצר` — tooltip carries the sentence. */
   function showWindow(w, message) {
     var chip = $('cp-window');
@@ -183,7 +201,8 @@
         if (d.window) showWindow(d.window);
         if (d.notice) bubble('system', d.notice);
         return TapuzBridge.drive(d, postChat, undefined, function (p) {
-          setBusy(true, '✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים');
+          if (turnClock) turnClock.progress(p);
+          setBusy(true, window.TapuzTurnClock ? TapuzTurnClock.status(p) : '✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים');
         });
       }
       return d;
@@ -205,7 +224,9 @@
     card.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
     if (openCard === card) openCard = null;
     setBusy(true, ok ? 'מבצע ושומר טיוטה…' : 'מודיע לקופיילוט…');
+    startClock();
     postChat({ approve: { id: p.id, ok: ok }, window: bridgeWindow() || undefined }).then(function (d) {
+      stopClock();
       if (!d.ok) throw fail(d);
       absorb(d);
       if (d.pending) { renderApproval(d.pending); setBusy(false, ''); return; }
@@ -220,6 +241,7 @@
         setBusy(false, '');
       }
     }).catch(function (e) {
+      stopClock();
       bubble('system', 'שגיאה: ' + e.message, e.fix);
       setBusy(false, '');
     });
@@ -249,15 +271,18 @@
     var payload = { message: message, history: history, context: ctx };
     var w = bridgeWindow();
     if (w) payload.window = w;
+    startClock();
     (saved && saved.then ? saved.catch(function () {}) : Promise.resolve()).then(function () {
       return postChat(payload);
     }).then(function (d) {
+      stopClock();
       if (!d.ok) throw fail(d);
       remember('user', message);
       absorb(d);
       if (d.pending) renderApproval(d.pending);
       setBusy(false, '');
     }).catch(function (e) {
+      stopClock();
       bubble('system', 'שגיאה: ' + e.message + (e.fix ? '' : ' — יש מפתח/מודל מקומי מוגדר? (⚙ /admin/chat)'), e.fix);
       setBusy(false, '');
     });

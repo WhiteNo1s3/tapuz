@@ -16,7 +16,7 @@
  *                   part: the CMS reads the numbers, shrinks its briefing and
  *                   retries. 0.4.0 threw the body away and the page could only
  *                   say "no response". Additive: an older page reads `error`.
- *   progress      : { source:'tapuziel-bridge', type:'tz-local-llm-progress', id, chars, tokens }
+ *   progress      : { source:'tapuziel-bridge', type:'tz-local-llm-progress', id, chars, tokens, started, tool }
  *                   — 0.4.0+, purely ADDITIVE: an older page ignores it, and
  *                   the result shape above did not change at all.
  *   presence      : bridge announces 'tz-bridge-hello' on load and answers
@@ -42,7 +42,7 @@
   'use strict';
 
   const B = typeof browser !== 'undefined' ? browser : chrome;
-  const VERSION = '0.5.2'; // must equal manifest.json "version" (smoke pins it)
+  const VERSION = '0.5.3'; // must equal manifest.json "version" (smoke pins it)
   const PORT_NAME = 'tz-llm';
   const CHAT_PATH = '/v1/chat/completions';
 
@@ -105,7 +105,7 @@
     port.onMessage.addListener((m) => {
       if (!m) return;
       if (m.type === 'progress') {
-        return send({ type: 'tz-local-llm-progress', id, chars: m.chars, tokens: m.tokens });
+        return send({ type: 'tz-local-llm-progress', id, chars: m.chars, tokens: m.tokens, started: m.started, tool: m.tool });
       }
       if (m.type === 'done') {
         finish(m.ok ? { ok: true, status: m.status, data: m.data } : failure(m));
