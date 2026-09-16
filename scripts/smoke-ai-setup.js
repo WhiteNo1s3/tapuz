@@ -79,6 +79,37 @@ check('the Firefox honesty note is on the page (temporary load until signing)',
     z.includes(Buffer.from('{"name":"override"}')) && !z.includes(Buffer.from('{"name":"orig"}')));
   fs.rmSync(t2, { recursive: true, force: true });
 }
+// ── v2.34: the bridge ZIP arrives connected to the site it came from. A
+//    tester's hand-patched manifest (their live host in content_scripts) sat
+//    in a git checkout and every pull wiped it; the public repo can carry no
+//    real hostname. The copy made FOR a site now carries that site. ──
+{
+  const { siteMatchPattern, wireBridgeToSite } = require('../src/bridge-manifest');
+  const src = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'extension-v2a', 'manifest.json'), 'utf8'));
+  check('the route wires the BRIDGE build (only) to req.hostname',
+    /if \(req\.params\.which === 'bridge'\) require\('\.\.\/bridge-manifest'\)\.wireBridgeToSite\(manifest, req\.hostname\)/.test(copilotRoute));
+  const m = JSON.parse(JSON.stringify(src));
+  const wired = wireBridgeToSite(m, 'My-Site.example.com');
+  check('a hosted site: one *:// pattern (both schemes, no port) in host_permissions + a content script on it',
+    wired === '*://my-site.example.com/*' &&
+    m.host_permissions.includes('*://my-site.example.com/*') &&
+    m.host_permissions.includes('http://127.0.0.1/*') &&
+    Array.isArray(m.content_scripts) && m.content_scripts.length === 1 &&
+    m.content_scripts[0].matches.join() === '*://my-site.example.com/*' &&
+    m.content_scripts[0].js.join() === 'content-bridge.js');
+  check('wiring twice does not duplicate the host permission',
+    (wireBridgeToSite(m, 'my-site.example.com'), m.host_permissions.filter((h) => h === '*://my-site.example.com/*').length === 1));
+  const bad = ['localhost', '127.0.0.1', '[::1]', '', 'evil.com/*', '*.example.com', 'a b.com', 'host:8443', '-x.com', 'x'.repeat(300)];
+  check('loopback, empty and pattern-bending hosts wire nothing (the popup stays the way in)',
+    bad.every((h) => siteMatchPattern(h) === null) &&
+    bad.every((h) => { const c = JSON.parse(JSON.stringify(src)); return wireBridgeToSite(c, h) === null && !c.content_scripts && c.host_permissions.join() === src.host_permissions.join(); }));
+  check('a LAN IPv4 site wires like a DNS name', siteMatchPattern('192.168.1.20') === '*://192.168.1.20/*');
+  check('the SOURCE manifest stays loopback-only (no host lives in the repo)',
+    !src.content_scripts && src.host_permissions.every((h) => /localhost|127\.0\.0\.1/.test(h)));
+  const popupJs = fs.readFileSync(path.join(__dirname, '..', 'extension-v2a', 'popup.js'), 'utf8');
+  check('the popup lists a site wired by the download (it has no registration to disconnect)',
+    /function builtInSites\(\)/.test(popupJs) && /getManifest\(\)\.content_scripts/.test(popupJs) && /'מההורדה'/.test(popupJs));
+}
 check('the local test endpoint refuses non-loopback addresses',
   /router\.post\('\/admin\/api\/ai\/test', requireAdmin/.test(copilotRoute) &&
   /resolveLocalEndpoint\(raw\)/.test(copilotRoute) &&

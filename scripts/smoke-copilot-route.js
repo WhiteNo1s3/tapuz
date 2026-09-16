@@ -155,7 +155,7 @@ const toolCall = (id, name, args) => ({
 });
 const parse = (r) => { try { return JSON.parse(r.text); } catch (e) { return null; } };
 
-function req(method, urlPath, { form, json, cookie } = {}) {
+function req(method, urlPath, { form, json, cookie, host } = {}) {
   return new Promise((resolve, reject) => {
     let data = null;
     const headers = { Accept: 'text/html', Origin: BASE };
@@ -167,6 +167,7 @@ function req(method, urlPath, { form, json, cookie } = {}) {
       headers['Content-Type'] = 'application/json';
     }
     if (cookie) headers['Cookie'] = cookie;
+    if (host) headers['Host'] = host; // the site as the owner's browser named it
     const r = http.request(BASE + urlPath, { method, headers }, (res) => {
       res.setEncoding('utf8'); // Hebrew bodies: don't let a chunk boundary split a multi-byte char
       let buf = '';
@@ -237,6 +238,37 @@ function waitUp(tries = 40) {
     try { dict = JSON.parse(dictJson.text); } catch (e) { /* leave null → check fails */ }
     check('GET /admin/api/syntax-dictionary → pzn JSON carrying the agent tools[]',
       dictJson.status === 200 && dict && dict.ok === true && Array.isArray(dict.tools) && dict.tools.length === toAgentTools().length);
+
+    // ── v2.34: the bridge ZIP is wired to the site that served it ──
+    // (a STORE zip: manifest.json sits in the body as plain JSON text)
+    {
+      const manifestOf = (r) => {
+        const at = r.text.indexOf('{\n  "manifest_version"');
+        try { return JSON.parse(r.text.slice(at, r.text.indexOf('\n}\n', at) + 2)); } catch (e) { return null; }
+      };
+      const hosted = await req('GET', '/admin/ai-setup/extension-bridge-chrome.zip', { cookie, host: 'owner-site.example.com' });
+      const hm = manifestOf(hosted);
+      check('bridge ZIP downloaded from a hosted name carries that site: content script + host permission',
+        hosted.status === 200 && !!hm &&
+        hm.host_permissions.includes('*://owner-site.example.com/*') &&
+        hm.content_scripts.length === 1 && hm.content_scripts[0].matches.join() === '*://owner-site.example.com/*');
+      const ff = await req('GET', '/admin/ai-setup/extension-bridge-firefox.zip', { cookie, host: 'owner-site.example.com:8443' });
+      const fm = manifestOf(ff);
+      check('the Firefox build is wired too, and the port never reaches the pattern',
+        ff.status === 200 && !!fm && !!fm.browser_specific_settings &&
+        fm.content_scripts[0].matches.join() === '*://owner-site.example.com/*' && !JSON.stringify(fm).includes('8443'));
+      const local = await req('GET', '/admin/ai-setup/extension-bridge-chrome.zip', { cookie });
+      const lm = manifestOf(local);
+      check('a loopback download wires nothing (the popup connects a local site)',
+        local.status === 200 && !!lm && !lm.content_scripts && lm.host_permissions.every((h) => /localhost|127\.0\.0\.1/.test(h)));
+      const setupHosted = await req('GET', '/admin/ai-setup', { cookie, host: 'owner-site.example.com' });
+      const setupLocal = await req('GET', '/admin/ai-setup', { cookie });
+      check('the setup page tells a hosted site its ZIP arrives connected, and a local one to use the popup',
+        setupHosted.status === 200 && setupHosted.text.includes('Bridge V2 מגיע מחובר לאתר הזה') &&
+        setupLocal.status === 200 && setupLocal.text.includes('Bridge V2 באתר מקומי') && !setupLocal.text.includes('מגיע מחובר לאתר הזה'));
+      const byot = await req('GET', '/admin/ai-setup/extension-byot-chrome.zip', { cookie, host: 'owner-site.example.com' });
+      check('the copy companion is never wired to the site', byot.status === 200 && !byot.text.includes('owner-site.example.com'));
+    }
 
     // ── /admin/agent (the extension pairing screen) ──
     const agent = await req('GET', '/admin/agent', { cookie });

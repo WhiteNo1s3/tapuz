@@ -126,7 +126,11 @@ check('pickTier: 6000 → null (compact does not fit either)', tier(6000, 'probe
   const compact = buildCopilotBriefing({ locale: 'he', media, siteTitle: 'אתר', tier: 'compact' });
   check('buildCopilotBriefing() with no tier === tier "full", byte for byte', mask(plain.text) === mask(full.text) && plain.tier === 'full');
   check('the full tier is today\'s ~45K text with the whole dictionary', full.chars > 40000 && /## Syntax Dictionary|מילון/.test(full.text));
-  check(`compact.chars ≤ 11000 (${compact.chars}) and carries the compact grammar`, compact.chars <= 11000 && compact.text.includes('דקדוק מקוצר') && compact.tier === 'compact');
+  // 11,000 → 11,500 (v2.34): the leaf rule + a cards-of-leaves example cost
+  // the compact tier ~530 chars (~200 tokens). An 8,192 window still leaves
+  // 5,760 prompt tokens (≈ 15K chars) — and one mediacard with a heading
+  // nested inside it is a whole page that renders empty cards.
+  check(`compact.chars ≤ 11500 (${compact.chars}) and carries the compact grammar`, compact.chars <= 11500 && compact.text.includes('דקדוק מקוצר') && compact.tier === 'compact');
   check('compact caps the media manifest at 12 lines with trimmed alts',
     (compact.text.match(/- `\/uploads\/w\d+\.webp`/g) || []).length === 12 && compact.text.includes('+18 תמונות נוספות'));
   check('compact tells the model its window is small — build short, do not guess', compact.text.includes('החלון של המודל הזה קטן'));

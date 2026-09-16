@@ -1,5 +1,6 @@
 /* Tapuziel Bridge V2 — content script on the OWNER'S OWN SITE (granted via
- * the popup's "connect this site"). The page side of the relay.
+ * the popup's "connect this site", or — 0.5.1 — written into the manifest of
+ * the ZIP that site served). The page side of the relay.
  *
  * The site may live anywhere — a Hostinger/cPanel host, a VPS, localhost.
  * The model never does: it answers on loopback, on THIS machine, and only the
@@ -41,7 +42,7 @@
   'use strict';
 
   const B = typeof browser !== 'undefined' ? browser : chrome;
-  const VERSION = '0.5.0'; // must equal manifest.json "version" (smoke pins it)
+  const VERSION = '0.5.1'; // must equal manifest.json "version" (smoke pins it)
   const PORT_NAME = 'tz-llm';
   const CHAT_PATH = '/v1/chat/completions';
 

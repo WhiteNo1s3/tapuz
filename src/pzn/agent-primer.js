@@ -10,6 +10,10 @@
  */
 
 const { getCommandCatalog } = require('./modules/commands');
+const { getModule } = require('./modules/registry');
+
+// on every module — said once above the list instead of 96 times in it
+const UNIVERSAL_PROPS = new Set(['id', 'class', 'animate']);
 
 function propLine(name, schema) {
   const bits = [schema.type];
@@ -42,6 +46,7 @@ function buildPznPrimer() {
   lines.push('6. Tags/teaser/card image (for article cubes): `<meta name="bent-tags|bent-teaser|bent-card-image" content="...">`.');
   lines.push('7. Styling comes from module props; `class="..."` is an advanced escape hatch — never invent inline styles.');
   lines.push('8. If you are correcting a previous attempt, return the full corrected document again.');
+  lines.push('9. **Leaf vs container:** a module NOT marked Container below is a leaf — its content goes in attributes (`title=`, `excerpt=`, `price=` …) and, where a prop says BODY, plain text between its tags. Never nest child `bent-*` tags inside a leaf: that is `E_NOT_CONTAINER`, and the card renders empty. Correct: `<bent-cards id="c"><bent-mediacard id="c1" title="…" excerpt="…" /></bent-cards>`.');
   lines.push('');
   lines.push('## You do not have to be perfect — the server repairs');
   lines.push('');
@@ -72,6 +77,8 @@ function buildPznPrimer() {
   lines.push('');
   lines.push(`## Modules (${catalog.modules.length}) — the complete vocabulary`);
   lines.push('');
+  lines.push('Every module also takes `id`, `class` and `animate=none|fade|rise|zoom` — not repeated below.');
+  lines.push('');
 
   for (const mod of catalog.modules) {
     lines.push(`### \`<${mod.tag}>\` — ${mod.label.he} / ${mod.label.en}`);
@@ -79,13 +86,18 @@ function buildPznPrimer() {
     lines.push('```html');
     lines.push(mod.command.snippet);
     lines.push('```');
-    const props = Object.entries(mod.props || {}).filter(([k]) => k !== 'id' && k !== 'class');
+    // the catalog entry carries perks and a snippet, not the prop schemas —
+    // read those from the registry, or this list never prints at all
+    const def = getModule(mod.type);
+    const props = Object.entries((def && def.props) || {}).filter(([k]) => !UNIVERSAL_PROPS.has(k));
     if (props.length) {
       lines.push('Props:');
       for (const [name, schema] of props) lines.push(propLine(name, schema));
     }
     if (mod.container) {
       lines.push(`Container${mod.accept && mod.accept.length ? ` — children: only \`bent-${mod.accept.join('`, `bent-')}\`` : ' — nest other modules inside'}.`);
+    } else {
+      lines.push('Leaf — attributes (and BODY text) only; never nest child `bent-*` tags inside this module.');
     }
     lines.push('');
   }

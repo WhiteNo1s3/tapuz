@@ -551,6 +551,9 @@ router.get('/admin/ai-setup/extension-:which-:browser.zip', requireAdmin, (req, 
       // Firefox build: event page via scripts (FF ignores/limits workers)
       manifest.background.scripts = [manifest.background.service_worker];
     }
+    // the bridge ZIP arrives connected to the site it was downloaded from, so
+    // no hand-patched manifest in a git checkout is needed (src/bridge-manifest.js)
+    if (req.params.which === 'bridge') require('../bridge-manifest').wireBridgeToSite(manifest, req.hostname);
     const buf = zipDirectory(dir, '', {
       'manifest.json': JSON.stringify(manifest, null, 2) + '\n'
     });
@@ -563,6 +566,8 @@ router.get('/admin/ai-setup/extension-:which-:browser.zip', requireAdmin, (req, 
 });
 
 router.get('/admin/ai-setup', requireAdmin, (req, res) => {
+  // the bridge ZIP is wired to this host unless it is loopback — say which
+  const bridgeWired = !!require('../bridge-manifest').siteMatchPattern(req.hostname);
   const html = `
     ${adminNav('ai-setup', 'חיבור AI')}
     <div class="container page-body" style="max-width:1180px">
@@ -660,7 +665,10 @@ router.get('/admin/ai-setup', requireAdmin, (req, res) => {
           <strong>Firefox:</strong> פותחים <code dir="ltr">about:debugging#/runtime/this-firefox</code>,
           לוחצים <strong>Load Temporary Add-on</strong> ובוחרים את ה-ZIP שהורדתם.
           <span class="muted">(התקנה קבועה ב-Firefox דורשת חתימת Mozilla — בינתיים הטעינה הזמנית עובדת מצוין,
-          ונחתום כשנעלה לחנות.)</span>
+          ונחתום כשנעלה לחנות.)</span><br>
+          ${bridgeWired
+            ? '<strong>Bridge V2 מגיע מחובר לאתר הזה</strong> — ה-ZIP נבנה בשבילו, אז אחרי ההתקנה מרעננים את הדף וזהו. חלצו אותו לתיקייה משלו, לא לתוך עותק של הריפו. לאתר נוסף: פופאפ התוסף → ״חבר את האתר הפתוח״.'
+            : '<strong>Bridge V2 באתר מקומי:</strong> אחרי ההתקנה — פופאפ התוסף → ״חבר את האתר הפתוח״. (ZIP שיורד מאתר מאוחסן מגיע כבר מחובר אליו.)'}
         </div>
       </section>
     </div>

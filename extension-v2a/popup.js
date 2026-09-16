@@ -200,11 +200,39 @@ async function disconnectSite(id, matches) {
   status('האתר נותק ✓ רעננו את דפי האדמין שלו כדי לסגור את הגשר שכבר רץ בהם.', 'ok');
 }
 
+/** Sites the download itself was wired to (0.5.1): the ZIP from the site's
+ *  own /admin/ai-setup carries its host in the manifest, so a reload, an
+ *  update or a `git pull` can never unwire it. There is no registration to
+ *  drop — the browser's per-extension site access (or removing the
+ *  extension) turns one off. */
+function builtInSites() {
+  try {
+    const declared = (B.runtime.getManifest().content_scripts || []);
+    return declared.reduce((all, c) => all.concat(c.matches || []), []);
+  } catch (e) {
+    return [];
+  }
+}
+
 async function renderSites() {
   const box = $('sites');
   const scripts = await listBridgeScripts();
+  const builtIn = builtInSites();
   box.textContent = '';
-  if (!scripts.length) {
+  for (const m of builtIn) {
+    const row = document.createElement('div');
+    row.className = 'site';
+    const name = document.createElement('span');
+    name.textContent = m.replace(/^\*:\/\//, '').replace(/\/\*$/, '');
+    name.title = 'מחובר מההורדה — כדי לנתק: הגדרות התוסף בדפדפן → גישה לאתרים, או הסרת התוסף';
+    const tag = document.createElement('small');
+    tag.textContent = 'מההורדה';
+    tag.title = name.title;
+    row.appendChild(name);
+    row.appendChild(tag);
+    box.appendChild(row);
+  }
+  if (!scripts.length && !builtIn.length) {
     const p = document.createElement('p');
     p.className = 'empty';
     p.textContent = 'אין עדיין אתר מחובר.';
