@@ -22,6 +22,14 @@ acts there. Their UI can change every week and nothing here breaks.
 - **Firefox** (115+): `about:debugging` → This Firefox → Load Temporary
   Add-on → pick `manifest.json` (permanent install needs AMO signing)
 
+**0.4.2 — Firefox works.** Up to 0.4.1 the popup read and wrote its settings
+with callbacks (`storage.local.get(keys, cb)`). Chrome accepts that; Firefox's
+promise-only `browser.*` refuses it, so the Firefox build never loaded its site
+address or token and every button said "connect first". Storage is now
+promise-style, the one shape both browsers take, and `smoke-extension` runs the
+popup against a strict Firefox-like `browser` that throws on a callback.
+Reload the extension after updating (download the ZIP again from חיבור AI).
+
 ## Connect
 
 Create an agent token in ניהול → גשר סוכן, paste it in the popup with your

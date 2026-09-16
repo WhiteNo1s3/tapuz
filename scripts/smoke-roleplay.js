@@ -219,6 +219,20 @@ check('dictionary markdown renders tools + completion',
     check('the nested form the rule forbids really is E_NOT_CONTAINER',
       nested !== example && validate(parse(nested)).some((d) => d.code === 'E_NOT_CONTAINER'));
   }
+  // the pack the copy companion copies into any chat (v2.37): the full pack
+  // says the rule; the lite pack stays inside its free-plan budget and leans
+  // on the compact grammar's own 'a tag without ⊃ never contains tags'
+  for (const loc of ['he', 'en']) {
+    const fullPack = buildRoleplayPack({ locale: loc });
+    const litePack = buildRoleplayPack({ locale: loc, size: 'lite' });
+    check(`roleplay pack ${loc}/full carries the leaf rule with the named leaves and the self-closing example`,
+      fullPack.text.includes('E_NOT_CONTAINER') && fullPack.text.includes(leafExample) && fullPack.text.includes('`bent-cta`'));
+    check(`roleplay pack ${loc}/lite stays lean (no duplicate rule) and keeps the grammar's leaf line`,
+      !litePack.text.includes(leafExample) && /⊃/.test(litePack.text));
+  }
+  // v2.37: the owner hears plain words about the page, not module jargon
+  check('briefing he/full asks for plain Hebrew when describing the page (no Hero/CTA jargon); en/full likewise',
+    /בעברית של בני אדם/.test(buildCopilotBriefing({ locale: 'he' }).text) && /use plain words/.test(buildCopilotBriefing({ locale: 'en' }).text));
   check('every leaf the briefing names really is a registered leaf',
     ['cta', 'mediacard', 'plan', 'fold', 'tab', 'slide', 'feature'].every((n) => getModule(n) && !getModule(n).container));
 

@@ -435,6 +435,43 @@ function waitUp(tries = 40) {
          publishedAfter && publishedAfter.ok && publishedBefore.source === publishedAfter.source &&
          !/שלום מהקופיילוט/.test(publishedAfter.source)));
 
+    // ── v2.37: a proposal the write would refuse never reaches the owner ──
+    // Live on the Bridge challenges (Gemma 4 31B): a bent-faq holding
+    // bent-fold was approved and only then failed E_CHILD. Now the errors go
+    // back to the model as the call's answer, and only a document that will
+    // land becomes an approval card; after two refusals the turn gives up.
+    {
+      const pageDoc = (slug, faqKids) => '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/><title>מחירים</title><meta name="bent-slug" content="' + slug + '"/></head>\n<body>\n  <bent-heading id="h" level="1">מחירים</bent-heading>\n  <bent-faq id="faq">\n' + faqKids + '\n  </bent-faq>\n</body></html>';
+      const BAD = pageDoc('preflight-page', '    <bent-fold id="f1" title="שאלה?">תשובה</bent-fold>\n    <bent-fold id="f2" title="עוד שאלה?">עוד תשובה</bent-fold>');
+      const GOOD = pageDoc('preflight-page', '    <bent-qa id="q1" question="שאלה?">תשובה</bent-qa>\n    <bent-qa id="q2" question="עוד שאלה?">עוד תשובה</bent-qa>');
+      const p1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'דף מחירים עם שאלות נפוצות', history: [], context: { canvas: 'blank', surface: 'copilot' }, window: { tokens: 262144, source: 'bridge' } } }));
+      const p2 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: p1 && p1.modelCall ? p1.modelCall.id : 'x', result: toolCall('w1', 'create_page', { source: BAD }) } } }));
+      check('an invalid create_page (bent-faq ⊃ bent-fold) → NO approval card, a new model call instead',
+        !!(p2 && p2.ok && !p2.pending && p2.modelCall));
+      check('…the owner is told, in Hebrew, with the codes counted (E_CHILD ×2)',
+        !!(p2 && /לפני שתתבקשו לאשר/.test(p2.notice || '') && /E_CHILD ×2/.test(p2.notice || '')));
+      const p2msgs = (p2 && p2.modelCall && p2.modelCall.body.messages) || [];
+      const toolAnswer = p2msgs.filter((m) => m.role === 'tool').pop();
+      check('…and the model gets the exact validator errors as the call\'s answer (not saved, not shown)',
+        !!(toolAnswer && /E_CHILD: <bent-faq> cannot contain <bent-fold>/.test(toolAnswer.content) && /"proposed":false/.test(toolAnswer.content)));
+      const pagesMid = parse(await req('GET', '/admin/api/pages', { cookie }));
+      const listMid = Array.isArray(pagesMid) ? pagesMid : ((pagesMid && pagesMid.pages) || []);
+      check('…and nothing was written (no page "preflight-page")', !listMid.some((pg) => pg.full_path === 'preflight-page'));
+      const p3 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: p2 && p2.modelCall ? p2.modelCall.id : 'x', result: toolCall('w2', 'create_page', { source: GOOD }) } } }));
+      check('the fixed proposal (bent-qa) → the approval card, with the document to preview',
+        !!(p3 && p3.pending && p3.pending.tool === 'create_page' && p3.pending.input.source === GOOD));
+
+      // the cap: three invalid proposals in one turn → the turn ends with the reason
+      const g1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'שוב', history: [], context: { canvas: 'blank', surface: 'copilot' }, window: { tokens: 262144, source: 'bridge' } } }));
+      let g = g1;
+      for (let i = 0; i < 3; i++) {
+        g = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: g && g.modelCall ? g.modelCall.id : 'x', result: toolCall('b' + i, 'create_page', { source: BAD }) } } }));
+        if (!g || !g.modelCall) break;
+      }
+      check('after two refusals the third invalid proposal ends the turn — no card, no endless loop, the reason in the memo',
+        !!(g && g.ok && !g.pending && !g.modelCall && /לא הצליח להציע מסמך תקין/.test(g.memo || '')));
+    }
+
     // the window endpoint the chip and the setup screen read
     const win = await req('GET', '/admin/api/ai/window?tokens=8192&source=bridge', { cookie });
     const winD = parse(win);

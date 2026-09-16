@@ -164,6 +164,15 @@ function buildRoleplayPack(opts = {}) {
     ? '6. **המהלך הוא המסמך.** שום פרוזה מסביב ל-fence: בלי "הנה הדף", בלי סיכום, בלי הצעות. ההדבקה כמו-שהיא חייבת לקמפל.'
     : '6. **The move IS the document.** No prose around the fence: no "here is your page", no summary, no offers. Pasted as-is, it must compile.');
   lines.push(he ? '7. אחרי שהמסמך מוכן השחקן מפרסם; הבונה הויזואלי מציג את אותה צורה.' : '7. After the document is ready the player publishes; the visual builder shows the same shape.');
+  // the leaf rule (v2.37) — the pack the copy companion hands to any chat.
+  // Full pack only: the lite pack sits at its free-plan budget and its compact
+  // grammar already says "a tag without ⊃ never contains tags" (the same
+  // split as the copilot's compact tier)
+  if (!lite) {
+    lines.push(he
+      ? '8. **מודול־עלה לא מחזיק מודולים.** ' + leafExampleTags() + ' וכל כלי שאינו container במילון מקבלים את התוכן במאפיינים, ולכל היותר טקסט פשוט בין התגיות — אף פעם לא `bent-*` בפנים (`E_NOT_CONTAINER`, והכרטיס יוצא ריק). נכון: `' + LEAF_EXAMPLE + '`.'
+      : '8. **A leaf module holds no modules.** ' + leafExampleTags() + ' and every tool the dictionary does not mark container take their content in attributes, plus at most plain text between the tags — never a `bent-*` inside (`E_NOT_CONTAINER`, and the card renders empty). Correct: `' + LEAF_EXAMPLE + '`.');
+  }
   lines.push('');
 
   // ONE vocabulary per pack, never two renderings of the same modules:
@@ -345,6 +354,11 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('- **טקסט אמיתי, לא "לורם איפסום".** כתב/י תוכן שאפשר לפרסם כמו שהוא.');
     lines.push('- **אל תמציא/י נתיבי תמונה.** יש רשימת מדיה אמיתית למטה; אם אין מתאימה — אמור/י זאת.');
     lines.push('- לשאלות שאינן בניית דף (איך משנים צבע, איפה התפריטים) — פשוט ענה/י בעברית, בלי fence.');
+    // seen live (v2.37): after building a page Gemma told the owner it made a
+    // "**Hero**" and a "**CTA**" — module names and English jargon are the
+    // model's words, not the owner's. Full tier only: the compact tier is at
+    // its size line
+    if (!compact) lines.push('- **כשאת/ה מספר/ת לבעל/ת האתר מה בנית — בעברית של בני אדם:** "פתיח", "קריאה לפעולה", "טבלת מחירים", "שאלות נפוצות" — לא שמות מודולים ולא ז׳רגון באנגלית (Hero, CTA, section).');
     // the compact tier's one extra rule: a small window cannot take a long
     // page back for editing, and a model that guesses at the part it never
     // saw deletes it — say so instead
@@ -383,6 +397,7 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('- **Real copy, never lorem ipsum.** Write text that could ship as-is.');
     lines.push('- **Never invent image paths.** A real media list follows; if nothing fits, say so.');
     lines.push('- For non-building questions (how to change a colour, where menus live) just answer plainly, no fence.');
+    if (!compact) lines.push('- **When you tell the owner what you built, use plain words** ("the opening", "the call to action", "the price table") — not module names or jargon (hero, CTA, section).');
     if (compact) lines.push('- **This model\'s window is small** — build short, focused pages; a long existing page may not fit for editing, and then say so to the owner instead of guessing.');
     lines.push('');
   }

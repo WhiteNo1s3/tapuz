@@ -22,13 +22,18 @@
 var $ = function (id) { return document.getElementById(id); };
 var store = (typeof browser !== 'undefined' ? browser : chrome).storage.local;
 
+// Promise-style storage, the one shape both browsers take. Firefox's
+// `browser.*` has NO callbacks — `browser.storage.local.get(keys, cb)` is an
+// argument error there, so the popup never loaded its settings and every
+// button said "connect first"; Chrome MV3 returns a promise when the callback
+// is left out. (Bridge V2 learned this first — smoke-extension-v2a.)
 function getCfg() {
-  return new Promise(function (resolve) {
-    store.get(['baseUrl', 'token', 'packSize'], function (c) { resolve(c || {}); });
-  });
+  return Promise.resolve()
+    .then(function () { return store.get(['baseUrl', 'token', 'packSize']); })
+    .then(function (c) { return c || {}; }, function () { return {}; });
 }
 function setCfg(patch) {
-  return new Promise(function (resolve) { store.set(patch, resolve); });
+  return Promise.resolve().then(function () { return store.set(patch); });
 }
 
 function status(id, msg, kind) {
