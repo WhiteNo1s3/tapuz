@@ -120,9 +120,12 @@ const NATIVE_FETCH = globalThis.fetch;
 // list): WINDOW_TOO_SMALL (compact does not fit either), BRIDGE_TOO_OLD (a
 // 0.4.0 bridge relayed a bodiless 400), BRIDGE_DROPPED_TOOLS (the stream
 // accumulator lost the tool call), REPLY_CUT (a document hit max_tokens).
+// v2.35 appends NO_BRIEFING: the tool loop refused to send a local model a
+// request with no BenTML briefing in it (a 31B model with no briefing
+// invents a ```bentml dialect with zero bent-* tags — measured, C1).
 const ERROR_CODES = [
   'NO_PROVIDER', 'BROWSER_RELAY', 'NETWORK', 'TIMEOUT', 'PROVIDER_ERROR', 'EMPTY_REPLY',
-  'WINDOW_TOO_SMALL', 'BRIDGE_TOO_OLD', 'BRIDGE_DROPPED_TOOLS', 'REPLY_CUT'
+  'WINDOW_TOO_SMALL', 'BRIDGE_TOO_OLD', 'BRIDGE_DROPPED_TOOLS', 'REPLY_CUT', 'NO_BRIEFING'
 ];
 
 function coded(message, code, extra) {
@@ -818,6 +821,13 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       throw tooSmall(pt.promptTokens + win.replyReserve(w.tokens) + win.TEMPLATE_HEADROOM_TOKENS, w.tokens);
     }
     const sys = systemText(pt.tier);
+    // The tool loop exists to build BenTML pages; a request that leaves for
+    // a LOCAL model without the briefing is a bug upstream, never a call to
+    // make — without it the model answers in an invented dialect (C1: zero
+    // bent-* tags), and over the bridge it would burn minutes of GPU first.
+    if (local && !/<bent-|bent-\*/.test(sys)) {
+      throw coded('הבקשה למודל יצאה בלי תדריך BenTML — זו תקלה במערכת, לא במודל; נסו לרענן את הדף', 'NO_BRIEFING');
+    }
     const extraChars = win.turnsChars(st.extra);
     const turns = win.fitTurns(st.base, pt.roomChars === Infinity ? Infinity : pt.roomChars - extraChars).concat(st.extra);
     const maxTokens = w.tokens === Infinity ? Math.max(4096, provider.maxTokens || 4096) : win.replyReserve(w.tokens);
@@ -884,6 +894,10 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         // the stored copy carries the notice into every later step of the turn.
         const env = envelope({});
         env.modelCall = { id: putStep(st), body: p.body };
+        // the page's ceiling for THIS call = the one a server-side local call
+        // gets; the relayed model is the same local model, reading the same
+        // briefing, and after an approval it re-reads the whole conversation
+        env.timeoutMs = LOCAL_TIMEOUT_MS;
         return env;
       }
       ({ status, data } = await callProvider(provider, p.body));

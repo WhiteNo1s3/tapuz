@@ -36,6 +36,16 @@
   var waiting = new Map();
   var seq = 0;
 
+  /** The page's own ceiling for one relayed call when the route sent none.
+   *  It measures SILENCE — every progress message from the bridge re-arms it
+   *  — and the 0.4.0+ bridge heartbeats every 10 s from the moment the
+   *  request leaves, so this only fires when the extension has gone quiet
+   *  for good. Mirrors src/ai.js LOCAL_TIMEOUT_MS: the server allows its own
+   *  local call twenty minutes, and the page must never be the shorter leash
+   *  (v2.35 — 180 s here cut long Gemma turns off while the model was still
+   *  reading the prompt). The probes pass their own short ceilings. */
+  var LOCAL_CALL_MS = 20 * 60 * 1000;
+
   /** A loaded model whose window matters: anything that CHATS. LM Studio's
    *  `type` is 'llm', 'vlm' (a vision-capable chat model — gemma-4-31b and
    *  every qwen3.x on the measured box report 'vlm') or 'embeddings'. Only
@@ -105,7 +115,7 @@
       return new Promise(function (resolve, reject) {
         if (!B.present) return reject(new Error('תוסף Bridge V2 לא מחובר לאתר הזה'));
         var id = 'llm-' + (++seq) + '-' + Date.now();
-        var ms = timeoutMs || 180000;
+        var ms = timeoutMs || LOCAL_CALL_MS;
         var w = { resolve: resolve, reject: reject, onProgress: onProgress, timer: null };
         w.arm = function () {
           clearTimeout(w.timer);

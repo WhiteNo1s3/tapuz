@@ -769,6 +769,9 @@ router.post('/admin/api/ai/chat', async (req, res) => {
       memo: out.memo || '',
       pending: out.pending || null,
       modelCall: out.modelCall || null,
+      // the page's ceiling for the relayed call (admin-bridge.js drive reads
+      // d.timeoutMs) — the local model's twenty minutes, never the page's guess
+      ...(out.modelCall ? { timeoutMs: out.timeoutMs } : {}),
       applied: out.applied || null,
       used: out.used || [],
       reads: out.reads || [],

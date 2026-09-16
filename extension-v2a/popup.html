@@ -23,6 +23,10 @@
   .site span { flex: 1; direction: ltr; text-align: left; font-size: .72rem; color: #7c2d12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .site button { width: auto; padding: 3px 9px; font-size: .72rem; font-weight: 600; background: #fff; color: #b91c1c; border: 1px solid #fecaca; }
   .site small { font-size: .66rem; color: #9a3412; white-space: nowrap; }
+  /* a recorded site whose registration or grant did not survive a reload */
+  .site.stale { background: #f1f5f9; }
+  .site.stale span { color: #64748b; text-decoration: line-through; }
+  .site.stale button:first-of-type { color: #0f766e; border-color: #99f6e4; }
   .empty { font-size: .75rem; color: #94a3b8; margin: 0 0 4px; }
   .hint { font-size: .72rem; color: #94a3b8; margin: 4px 0 0; }
 </style>

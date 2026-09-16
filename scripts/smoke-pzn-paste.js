@@ -45,6 +45,21 @@ check('primer never teaches the decompile-only bands',
   decompileOnly.size > 0 && [...decompileOnly].every((n) => !primer.includes(`<bent-${n}>`)));
 check('primer carries the reply contract', primer.includes('ONE fenced code block'));
 check('primer includes the page template', primer.includes('bent-version="0.1"'));
+// leaf vs container (gemma-4-31b nested heading/text inside a mediacard →
+// E_NOT_CONTAINER): the contract says it once, and every module section says
+// which side of the line it is on — a leaf is marked as loudly as a container
+check('primer contract item 9 teaches leaf vs container with the self-closing mediacard',
+  /^9\. \*\*Leaf vs container:\*\*/m.test(primer) && /E_NOT_CONTAINER/.test(primer) &&
+  primer.includes('<bent-mediacard id="c1" title="…" excerpt="…" />'));
+const taught = listModules().filter((m) => !m.decompileOnly);
+check('every taught module section is marked Container or Leaf (registry truth)',
+  taught.every((m) => {
+    const start = primer.indexOf(`### \`<bent-${m.name}>\``);
+    if (start < 0) return false;
+    const next = primer.indexOf('\n### ', start + 1);
+    const section = primer.slice(start, next < 0 ? undefined : next);
+    return m.container ? /^Container/m.test(section) && !/^Leaf/m.test(section) : /^Leaf — attributes/m.test(section) && !/^Container/m.test(section);
+  }));
 
 // ── extraction ───────────────────────────────────────────────────────
 const doc = `<!DOCTYPE html>

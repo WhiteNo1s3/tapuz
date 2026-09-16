@@ -324,6 +324,17 @@ function waitUp(tries = 40) {
          /תפוזיאל|BenTML|bent-/i.test(call.body.messages[0].content)));
     check('the relayed body carries the tool definitions',
       !!(call && Array.isArray(call.body.tools) && call.body.tools.length));
+    // the C1 lesson (gemma-4-31b, 2026-09-16): with no briefing the model
+    // invents a ```bentml dialect with zero bent-* tags; with it, it builds
+    // the page. The relayed system message is the FULL briefing — the leaf
+    // rule included — never a bare user message.
+    check('the relayed briefing teaches leaf modules (E_NOT_CONTAINER + the self-closing mediacard)',
+      !!(call && /E_NOT_CONTAINER/.test(call.body.messages[0].content) &&
+         call.body.messages[0].content.includes('<bent-mediacard id="c1" title="…" excerpt="…" />')));
+    check('the relayed call carries reasoning_effort:none (hybrid-thinking models must answer)',
+      !!(call && call.body.reasoning_effort === 'none'));
+    check('a modelCall rides with the local model\'s 20-minute ceiling for the page (timeoutMs)',
+      (() => { try { return JSON.parse(turn1.text).timeoutMs === 20 * 60 * 1000; } catch (e) { return false; } })());
 
     const turn2 = await req('POST', '/admin/api/ai/chat', {
       cookie,

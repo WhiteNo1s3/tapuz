@@ -208,6 +208,17 @@ check('dictionary markdown renders tools + completion',
   check('the compact grammar still says a tag without ⊃ never contains tags (the compact tier leans on it)',
     buildCopilotBriefing({ tier: 'compact' }).text.includes('תג בלי ⊃ לא מכיל תגים') &&
     buildCopilotBriefing({ locale: 'en', tier: 'compact' }).text.includes('a tag without ⊃ never contains tags'));
+  // the rule's counter-example, proven: a mediacard holding a heading and a
+  // text (what Gemma wrote) really is refused as E_NOT_CONTAINER (from #2)
+  {
+    const heText = buildCopilotBriefing({ locale: 'he' }).text;
+    const start = heText.indexOf('```html' + '\n<!DOCTYPE html>') + 8;
+    const example = heText.slice(start, heText.indexOf('</body></html>', start) + 14);
+    const nested = example.replace(/<bent-mediacard id="work_2"[^>]*\/>/,
+      '<bent-mediacard id="work_2"><bent-heading id="bad_h" level="3">א</bent-heading><bent-text id="bad_t">ב</bent-text></bent-mediacard>');
+    check('the nested form the rule forbids really is E_NOT_CONTAINER',
+      nested !== example && validate(parse(nested)).some((d) => d.code === 'E_NOT_CONTAINER'));
+  }
   check('every leaf the briefing names really is a registered leaf',
     ['cta', 'mediacard', 'plan', 'fold', 'tab', 'slide', 'feature'].every((n) => getModule(n) && !getModule(n).container));
 
