@@ -2,6 +2,7 @@
 
 const { createDocument, createModule } = require('../language/ast');
 const { getModule } = require('../modules/registry');
+const { heroChildren } = require('../hero-children');
 
 /**
  * Bridge: Tapuz JSON blocks ⇄ benTML document AST.
@@ -559,6 +560,12 @@ function blockToModuleInner(block) {
 
     case 'hero': {
       const props = pickProps(data, ['image', 'height', 'overlay', 'parallax']);
+      // v2.38: the authored children, with the builder form's edits applied
+      // (src/pzn/hero-children.js); a hero without them keeps the old trio
+      const authored = heroChildren(data);
+      if (authored) {
+        return createModule('hero', baseOpts(block, props, { children: authored.map(blockToModule).filter(Boolean) }));
+      }
       const children = [];
       if (data.title) {
         children.push(createModule('heading', { props: { level: 1 }, text: data.title }));
@@ -1158,6 +1165,14 @@ function moduleToBlockInner(node) {
           if (child.props?.href !== undefined) data.buttonUrl = child.props.href;
         }
       }
+      // v2.38: every child as a block — ids, levels, aligns, extras, order —
+      // beside the four fields the builder's hero form edits. Only when the
+      // children say more than those fields: a plain trio (what a builder hero
+      // serializes to) stays exactly the block it always was.
+      if (!isPlainHeroTrio(node.children || [], data)) {
+        const kids = (node.children || []).map(moduleToBlock).filter(Boolean);
+        if (kids.length) data.blocks = kids;
+      }
       return finishBlock(node, 'hero', data);
     }
 
@@ -1189,6 +1204,23 @@ function moduleToBlockInner(node) {
       // module with no Tapuz equivalent yet — preserve as unknown type
       return finishBlock(node, node.name, { ...(node.props || {}), ...(node.text ? { text: node.text } : {}) });
   }
+}
+
+/** True when a hero's children are exactly the heading/text/button the four
+ *  flat fields rebuild (no ids, classes or other props, nothing more) — then
+ *  the flat fields ARE the hero, and no data.blocks is stored. */
+function isPlainHeroTrio(children, data) {
+  const legacy = blockToModuleInner({ type: 'hero', data: {
+    title: data.title, subtitle: data.subtitle, buttonText: data.buttonText, buttonUrl: data.buttonUrl
+  } }).children;
+  if (legacy.length !== children.length) return false;
+  const norm = (props) => JSON.stringify(Object.keys(props || {}).sort().map((k) => [k, String(props[k])]));
+  return children.every((c, i) => {
+    const l = legacy[i];
+    return c && l && c.name === l.name && !c.id && !c.className &&
+      String(c.text || '') === String(l.text || '') && norm(c.props) === norm(l.props) &&
+      !(c.children && c.children.length);
+  });
 }
 
 // ── item ids across the block model (v2.37) ─────────────────────────────

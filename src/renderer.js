@@ -6,6 +6,7 @@ const { loadConfig } = require('./config');
 const { getMenuForLocation, normalizeItems } = require('./menus');
 const { loadOverrides, overridesToCss, menuKnobs, menuBodyClasses } = require('./theme');
 const { renderSocialFromData } = require('./pzn/social-html');
+const { heroChildren } = require('./pzn/hero-children');
 const { renderProductsFromData } = require('./pzn/products-html');
 const { renderCodeFromData, renderTagsFromData } = require('./pzn/blog-html');
 const {
@@ -331,6 +332,29 @@ function renderBlock(block, direction = 'rtl') {
       if (userDecls) heroStyle.push(userDecls);
       const heroStyleAttr = heroStyle.length ? ` style="${heroStyle.join(';')}"` : '';
       let html = `<section class="hero${hClass}${overlayCls}${parallaxCls}${extraClass}"${extraId}${heroStyleAttr} dir="${direction}">`;
+      // v2.38: a hero that carries its authored children renders ALL of them,
+      // in order — the same page the proposal preview showed. The first
+      // heading defaults to <h1> and the first text wears .subtitle, so the
+      // theme's hero rules still land; a hero without children keeps the trio.
+      const authored = heroChildren(d);
+      if (authored) {
+        let h1Done = false;
+        let subDone = false;
+        html += authored.map((child) => {
+          const c = child;
+          if (!h1Done && c.type === 'heading') {
+            h1Done = true;
+            if (!c.data || c.data.level === undefined) c.data = Object.assign({}, c.data, { level: 1 });
+          } else if (!subDone && c.type === 'text') {
+            subDone = true;
+            const cls = String((c.data && c.data.className) || '');
+            c.data = Object.assign({}, c.data, { className: (cls ? cls + ' ' : '') + 'subtitle' });
+          }
+          return renderBlock(c, direction);
+        }).join('');
+        html += `</section>`;
+        return html;
+      }
       html += `<h1>${title}</h1>`;
       if (subtitle) html += `<p class="subtitle">${subtitle}</p>`;
       if (btnText) html += `<a href="${btnUrl}" class="btn btn-primary">${btnText}</a>`;
