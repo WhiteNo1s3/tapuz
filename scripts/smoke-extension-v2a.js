@@ -174,12 +174,12 @@ check('the list renders on popup open — after the worker reconciled the record
   /^restoreSitesNow\(\)\.then\(renderSites\);/m.test(popup) &&
   /id="sites"/.test(popupHtml) && /\$\('sites'\)/.test(popup));
 
-// ── connected sites survive a Reload (0.5.1) ──
+// ── connected sites survive a Reload (0.5.2) ──
 // The tracked manifest names no site (the repo is public; a *.hostingersite
 // hostname is refused by .gitleaks.toml), so the live site rides a DYNAMIC
 // registration — and that went dark after `git pull` + Reload. The worker
 // keeps its own record and puts the sites back on every boot.
-check('version >= 0.5.1 (the connected-sites record + the two silence ceilings)', cmpSemver(manifest.version, '0.5.1') >= 0);
+check('version >= 0.5.2 (the connected-sites record + the two silence ceilings)', cmpSemver(manifest.version, '0.5.2') >= 0);
 check('the tracked manifest still names NO site and no content_scripts (hostnames are the owner\'s, not the repo\'s)',
   !manifest.content_scripts && !JSON.stringify(manifest).includes('hostingersite'));
 check('worker and popup agree on the record key and the id prefix',
@@ -199,10 +199,10 @@ check('popup shows a recorded site that is not live with a "reconnect" (gesture-
   /live: false/.test(popup) && /חבר מחדש/.test(popup) &&
   /async function reconnectSite\(pattern\) \{\s*status\([^)]*\);\s*let granted;\s*try \{\s*granted = await B\.permissions\.request/.test(popup) &&
   /\.stale/.test(popupHtml));
-check('README tells the 0.5.1 story (record, Reload, reconnect)',
-  /0\.5\.1/.test(readme) && /storage\.local/.test(readme) && /חבר מחדש/.test(readme) && /Reload/.test(readme));
+check('README tells the 0.5.2 story (record, Reload, reconnect)',
+  /0\.5\.2/.test(readme) && /storage\.local/.test(readme) && /חבר מחדש/.test(readme) && /Reload/.test(readme));
 
-// ── two silences (0.5.1): reading the prompt vs. stuck mid-stream ──
+// ── two silences (0.5.2): reading the prompt vs. stuck mid-stream ──
 // Before the first frame the model is READING; the CMS gives its own local
 // call 20 minutes (src/ai.js LOCAL_TIMEOUT_MS) and the bridge must not be the
 // shorter leash. Mid-stream, two minutes of silence is a stuck model.
@@ -570,7 +570,7 @@ const EXCEED = { error: {
         s.js[0] === 'content-bridge.js' && s.runAt === 'document_idle' && s.persistAcrossSessions === true));
     check('vm: a recorded site whose grant is gone is NOT registered (no permission request from the worker) and is reported',
       out.unpermitted.includes(GONE) && !scripting.live.some((s) => s.id === 'tz-bridge-gone-1'));
-    check('vm: a live registration the record never saw (0.5.0 install) is adopted into the record',
+    check('vm: a live registration the record never saw (still held at boot) is adopted into the record',
       storage.data.sites.some((s) => s.id === 'tz-bridge-old-1' && s.pattern === OLD) &&
       !out.restored.includes(OLD) && scripting.live.filter((s) => s.id === 'tz-bridge-old-1').length === 1);
     check('vm: entries that are not ours (foreign id, non-host pattern) are ignored, never registered',

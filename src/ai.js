@@ -120,7 +120,7 @@ const NATIVE_FETCH = globalThis.fetch;
 // list): WINDOW_TOO_SMALL (compact does not fit either), BRIDGE_TOO_OLD (a
 // 0.4.0 bridge relayed a bodiless 400), BRIDGE_DROPPED_TOOLS (the stream
 // accumulator lost the tool call), REPLY_CUT (a document hit max_tokens).
-// v2.33 appends NO_BRIEFING: the tool loop refused to send a local model a
+// v2.35 appends NO_BRIEFING: the tool loop refused to send a local model a
 // request with no BenTML briefing in it (a 31B model with no briefing
 // invents a ```bentml dialect with zero bent-* tags — measured, C1).
 const ERROR_CODES = [

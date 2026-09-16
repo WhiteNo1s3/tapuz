@@ -42,7 +42,7 @@
    *  request leaves, so this only fires when the extension has gone quiet
    *  for good. Mirrors src/ai.js LOCAL_TIMEOUT_MS: the server allows its own
    *  local call twenty minutes, and the page must never be the shorter leash
-   *  (v2.33 — 180 s here cut long Gemma turns off while the model was still
+   *  (v2.35 — 180 s here cut long Gemma turns off while the model was still
    *  reading the prompt). The probes pass their own short ceilings. */
   var LOCAL_CALL_MS = 20 * 60 * 1000;
 

@@ -27,7 +27,7 @@ const status = (html, cls) => { $('status').innerHTML = html; $('status').classN
 
 const LOCAL_ORIGINS = ['http://localhost/*', 'http://127.0.0.1/*'];
 const SCRIPT_PREFIX = 'tz-bridge-';
-// The connected-sites record the WORKER restores from on every boot (0.5.1:
+// The connected-sites record the WORKER restores from on every boot (0.5.2:
 // a Reload of the unpacked tree lost the live site). Same key as background.js.
 const SITES_KEY = 'sites';
 const SITE_LABEL = 'חיבור AI → "מקומי — דרך הדפדפן (Bridge V2)"';

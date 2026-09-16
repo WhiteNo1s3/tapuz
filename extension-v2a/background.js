@@ -53,7 +53,7 @@
  * the middle of the prompt (the 400 only comes at ≥ 2×), so the page must
  * know the window up front rather than wait for an error that may never come.
  *
- * CONNECTED SITES SURVIVE A RELOAD (0.5.1). The popup's "connect this site"
+ * CONNECTED SITES SURVIVE A RELOAD (0.5.2). The popup's "connect this site"
  * registers the content bridge dynamically (scripting.registerContentScripts,
  * persistAcrossSessions) — the tracked manifest names no site, on purpose:
  * the repo is public and the owner's hostnames are theirs. But a dynamic
@@ -64,10 +64,14 @@
  * Reload, browser start, wake — re-registers any site in the record that
  * still holds its host permission and is not registered any more. Storage
  * and granted optional permissions outlive a Reload; the record makes the
- * registration outlive it too. Registrations that predate the record (a
- * 0.5.0 install) are adopted into it on the first boot.
+ * registration outlive it too. Registrations that predate the record are
+ * adopted when the browser still holds them at boot — but Chrome drops a
+ * dynamic registration on update and Reload BEFORE the new worker boots
+ * (measured), so an owner who connected from a 0.5.0/0.5.1 popup connects
+ * once more after updating. A site wired by the downloaded ZIP (0.5.1,
+ * static content_scripts) never depended on any of this.
  *
- * TWO SILENCES (0.5.1). Before the first frame the model is READING the
+ * TWO SILENCES (0.5.2). Before the first frame the model is READING the
  * prompt: a 45K-char briefing plus history on a 31B model is minutes of
  * legitimate silence, and after an approval the whole conversation is
  * re-read. 0.5.0 capped that at the same two minutes as mid-stream silence,

@@ -384,7 +384,7 @@ require('../src/pages').savePageSource('home', PZN('הבית', 'שלום', 'home
   const d0 = await ai.converse({ systemFor, user: 'שלום' });
   check('(d) browser with NO hint → compact (unknown never full, a stale hint does not linger)',
     d0.modelCall && d0.modelCall.body.messages[0].content.length < 12000 && d0.window.source === 'unknown');
-  // v2.33: the relayed call is the FULL briefing, never a bare request — C1
+  // v2.35: the relayed call is the FULL briefing, never a bare request — C1
   // (gemma-4-31b with no briefing) invents a ```bentml dialect with zero
   // bent-* tags. A caller that hands the loop no BenTML briefing is refused
   // BEFORE any GPU minute is spent, with its own code.
