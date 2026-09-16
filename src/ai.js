@@ -884,6 +884,10 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         // the stored copy carries the notice into every later step of the turn.
         const env = envelope({});
         env.modelCall = { id: putStep(st), body: p.body };
+        // the page's ceiling for THIS call = the one a server-side local call
+        // gets; the relayed model is the same local model, reading the same
+        // briefing, and after an approval it re-reads the whole conversation
+        env.timeoutMs = LOCAL_TIMEOUT_MS;
         return env;
       }
       ({ status, data } = await callProvider(provider, p.body));

@@ -58,6 +58,7 @@ const content = fs.readFileSync(path.join(DIR, 'content-bridge.js'), 'utf8');
 const popup = fs.readFileSync(path.join(DIR, 'popup.js'), 'utf8');
 const popupHtml = fs.readFileSync(path.join(DIR, 'popup.html'), 'utf8');
 const readme = fs.readFileSync(path.join(DIR, 'README.md'), 'utf8');
+const cmsBridge = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-bridge.js'), 'utf8');
 const all = bg + content + popup;
 
 // every script parses
@@ -169,8 +170,66 @@ check('disconnect unregisters the script AND hands the host permission back',
 // handing that back on disconnect would cut the model off with the site.
 check('disconnect never hands loopback back',
   /matches\.filter\(\(m\) => !LOCAL_ORIGINS\.includes\(m\)\)/.test(popup));
-check('the list renders on popup open', /^renderSites\(\);/m.test(popup) &&
+check('the list renders on popup open — after the worker reconciled the record',
+  /^restoreSitesNow\(\)\.then\(renderSites\);/m.test(popup) &&
   /id="sites"/.test(popupHtml) && /\$\('sites'\)/.test(popup));
+
+// ── connected sites survive a Reload (0.5.1) ──
+// The tracked manifest names no site (the repo is public; a *.hostingersite
+// hostname is refused by .gitleaks.toml), so the live site rides a DYNAMIC
+// registration — and that went dark after `git pull` + Reload. The worker
+// keeps its own record and puts the sites back on every boot.
+check('version >= 0.5.1 (the connected-sites record + the two silence ceilings)', cmpSemver(manifest.version, '0.5.1') >= 0);
+check('the tracked manifest still names NO site and no content_scripts (hostnames are the owner\'s, not the repo\'s)',
+  !manifest.content_scripts && !JSON.stringify(manifest).includes('hostingersite'));
+check('worker and popup agree on the record key and the id prefix',
+  /SITES_KEY = 'sites'/.test(bg) && /SITES_KEY = 'sites'/.test(popup) &&
+  /SCRIPT_PREFIX = 'tz-bridge-'/.test(bg) && /SCRIPT_PREFIX = 'tz-bridge-'/.test(popup));
+check('the worker reconciles the record on EVERY boot (top-level call, not only onInstalled)',
+  /^const restoring = restoreSites\(\)/m.test(bg) && /async function restoreSites/.test(bg));
+check('the worker never asks for a permission itself (that is the owner\'s click in the popup)',
+  !/permissions\.request/.test(bg) && /hasSitePermission/.test(bg));
+check('the worker registers EXACTLY what the popup registers (one shape, two writers)',
+  /js: \['content-bridge\.js'\], matches: \[pattern\], runAt: 'document_idle', persistAcrossSessions: true/.test(bg) &&
+  /js: \['content-bridge\.js'\],\s*matches: \[pattern\],\s*runAt: 'document_idle',\s*persistAcrossSessions: true/.test(popup));
+check('popup writes the record on connect and forgets it BEFORE unregistering on disconnect',
+  /await rememberSite\(scriptIdFor\(site\.pattern\), site\.pattern\)/.test(popup) &&
+  /async function disconnectSite[\s\S]*?await forgetSite\(id\);[\s\S]*?unregisterContentScripts/.test(popup));
+check('popup shows a recorded site that is not live with a "reconnect" (gesture-first permissions.request)',
+  /live: false/.test(popup) && /חבר מחדש/.test(popup) &&
+  /async function reconnectSite\(pattern\) \{\s*status\([^)]*\);\s*let granted;\s*try \{\s*granted = await B\.permissions\.request/.test(popup) &&
+  /\.stale/.test(popupHtml));
+check('README tells the 0.5.1 story (record, Reload, reconnect)',
+  /0\.5\.1/.test(readme) && /storage\.local/.test(readme) && /חבר מחדש/.test(readme) && /Reload/.test(readme));
+
+// ── two silences (0.5.1): reading the prompt vs. stuck mid-stream ──
+// Before the first frame the model is READING; the CMS gives its own local
+// call 20 minutes (src/ai.js LOCAL_TIMEOUT_MS) and the bridge must not be the
+// shorter leash. Mid-stream, two minutes of silence is a stuck model.
+const aiSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'ai.js'), 'utf8');
+check('FIRST_FRAME_MS mirrors the server\'s LOCAL_TIMEOUT_MS (20 min); STREAM_IDLE_MS stays 2 min',
+  /FIRST_FRAME_MS = 20 \* 60 \* 1000/.test(bg) && /STREAM_IDLE_MS = 120000/.test(bg) &&
+  /LOCAL_TIMEOUT_MS = 20 \* 60 \* 1000/.test(aiSrc));
+check('the watchdog picks the ceiling by whether the stream has started',
+  /started \? STREAM_IDLE_MS : FIRST_FRAME_MS/.test(bg) && /started = true;/.test(bg));
+check('heartbeat and watchdog are armed BEFORE the request leaves (the page\'s ceiling is reset while the model reads)',
+  (() => {
+    const fn = (bg.match(/async function streamChat[\s\S]*?\n\}\n/) || [''])[0];
+    const beatAt = fn.indexOf('const beat = setInterval');
+    const bumpAt = fn.indexOf('bump();');
+    const shootAt = fn.indexOf('res = await shoot(outgoing)');
+    return beatAt > 0 && bumpAt > 0 && shootAt > 0 && beatAt < shootAt && bumpAt < shootAt;
+  })());
+check('a watchdog abort names WHICH silence it caught (still an AbortError)',
+  /err\.name = 'AbortError'/.test(bg) && /tzReason/.test(bg) &&
+  /FIRST_FRAME_REASON/.test(bg) && /STREAM_IDLE_REASON/.test(bg) &&
+  /if \(timedOut && e && e\.name === 'AbortError'\) throw timedOut;/.test(bg));
+check('the page glue\'s default ceiling is the server\'s 20 minutes, not a 180 s guess',
+  /LOCAL_CALL_MS = 20 \* 60 \* 1000/.test(cmsBridge) && /timeoutMs \|\| LOCAL_CALL_MS/.test(cmsBridge) && !/180000/.test(cmsBridge));
+check('the server sends timeoutMs with every modelCall and the route forwards it',
+  /env\.timeoutMs = LOCAL_TIMEOUT_MS;/.test(aiSrc) &&
+  /timeoutMs: out\.timeoutMs/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'copilot.js'), 'utf8')) &&
+  /timeoutMs \|\| d\.timeoutMs/.test(cmsBridge));
 
 // ── the popup still reads as a popup: narrow, RTL, three steps ──
 check('popup stays 300px RTL Hebrew', /dir="rtl"/.test(popupHtml) && /width: 300px/.test(popupHtml));
@@ -236,7 +295,6 @@ check('a dead worker answers the page instead of hanging it',
   /port\.onDisconnect\.addListener\(\(\) => finish\(/.test(content));
 
 // ── the CMS side speaks the same protocol ──
-const cmsBridge = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-bridge.js'), 'utf8');
 check('page glue and extension agree on message names',
   ['tz-bridge-hello', 'tz-bridge-ping', 'tz-local-llm', 'tz-local-llm-result', 'tz-local-llm-progress']
     .every((t) => cmsBridge.includes(t) && content.includes(t)));
@@ -268,22 +326,52 @@ check('drive reports a bodiless HTTP failure as a relay_http_error step (network
  * same port the content script opens, and feeds the SSE frames measured from
  * LM Studio (map.md, 2026-09-14) through a fake fetch — chunked at odd byte
  * offsets so frames AND Hebrew characters are cut in half on the way. */
-function bootWorker(fetchImpl) {
+function bootWorker(fetchImpl, opts = {}) {
   const listeners = { message: null, connect: null };
   const chrome = {
     runtime: {
       onMessage: { addListener: (fn) => { listeners.message = fn; } },
       onConnect: { addListener: (fn) => { listeners.connect = fn; } }
     },
-    storage: { local: { get: () => Promise.resolve({}) } },
-    permissions: { contains: () => Promise.resolve(true) }
+    storage: { local: opts.storage || { get: () => Promise.resolve({}) } },
+    permissions: opts.permissions || { contains: () => Promise.resolve(true) }
   };
+  if (opts.scripting) chrome.scripting = opts.scripting;
   const ctx = {
     chrome, fetch: fetchImpl, TextDecoder, TextEncoder, AbortController, URL, JSON, Math, Date, Number, Array,
-    Object, String, Promise, setTimeout, clearTimeout, setInterval, clearInterval, console
+    Object, String, Promise, Set, Error, setTimeout: opts.setTimeout || setTimeout, clearTimeout, setInterval, clearInterval, console
   };
   vm.runInNewContext(bg, ctx, { filename: 'background.js' });
   return listeners;
+}
+
+/** A storage.local double with a real backing object. */
+function fakeStorage(initial) {
+  const data = Object.assign({}, initial || {});
+  return {
+    data,
+    get: (keys) => Promise.resolve(Object.fromEntries((keys || []).filter((k) => k in data).map((k) => [k, data[k]]))),
+    set: (obj) => { Object.assign(data, obj); return Promise.resolve(); }
+  };
+}
+
+/** A scripting API double: `registered` is the browser's live list. */
+function fakeScripting(registered) {
+  const live = (registered || []).slice();
+  const calls = [];
+  return {
+    live, calls,
+    getRegisteredContentScripts: (filter) => Promise.resolve(
+      filter && filter.ids ? live.filter((s) => filter.ids.includes(s.id)) : live.slice()),
+    registerContentScripts: (scripts) => {
+      calls.push(scripts);
+      for (const s of scripts) {
+        if (live.some((x) => x.id === s.id)) return Promise.reject(new Error('Duplicate script ID \'' + s.id + '\''));
+        live.push(s);
+      }
+      return Promise.resolve();
+    }
+  };
 }
 
 /** Body → a Response-like object. `sse` streams the text in ragged chunks;
@@ -457,6 +545,74 @@ const EXCEED = { error: {
     const r3 = (await driveViaPort(L3, { messages: [] })).done;
     check('vm: text already streamed wins over a trailing error frame (the partial reply is kept)',
       r3.ok === true && r3.data.choices[0].message.content === 'חצי');
+  }
+
+  /* ── RUN the record: a Reload that lost the registration, a 0.5.0 install
+   * that predates the record, a site whose grant is gone ── */
+  {
+    const SITE = 'https://live.example/*';
+    const OLD = 'https://old.example/*';
+    const GONE = 'https://gone.example/*';
+    const storage = fakeStorage({ sites: [
+      { id: 'tz-bridge-live-1', pattern: SITE },          // recorded, not live any more → restore
+      { id: 'tz-bridge-gone-1', pattern: GONE },          // recorded, grant revoked → leave, report
+      { id: 'evil', pattern: SITE },                      // not ours (no prefix) → ignored
+      { id: 'tz-bridge-bad', pattern: 'https://x/y/*' }   // not a host pattern → ignored
+    ] });
+    // the browser still holds ONE registration the record never saw (0.5.0)
+    const scripting = fakeScripting([{ id: 'tz-bridge-old-1', matches: [OLD], js: ['content-bridge.js'] }]);
+    const permissions = { contains: ({ origins }) => Promise.resolve(origins[0] !== GONE) };
+    const L = bootWorker(() => Promise.reject(new Error('no fetch here')), { storage, scripting, permissions });
+    // the boot-time restore is async — the popup's message waits for it, then reconciles once more
+    const out = await new Promise((resolve) => L.message({ type: 'tz-restore-sites' }, {}, resolve));
+    check('vm: a recorded site that is not registered any more is registered again AT BOOT — the popup\'s exact shape',
+      scripting.calls.length === 1 && scripting.live.some((s) => s.id === 'tz-bridge-live-1' && s.matches[0] === SITE &&
+        s.js[0] === 'content-bridge.js' && s.runAt === 'document_idle' && s.persistAcrossSessions === true));
+    check('vm: a recorded site whose grant is gone is NOT registered (no permission request from the worker) and is reported',
+      out.unpermitted.includes(GONE) && !scripting.live.some((s) => s.id === 'tz-bridge-gone-1'));
+    check('vm: a live registration the record never saw (0.5.0 install) is adopted into the record',
+      storage.data.sites.some((s) => s.id === 'tz-bridge-old-1' && s.pattern === OLD) &&
+      !out.restored.includes(OLD) && scripting.live.filter((s) => s.id === 'tz-bridge-old-1').length === 1);
+    check('vm: entries that are not ours (foreign id, non-host pattern) are ignored, never registered',
+      !scripting.live.some((s) => s.id === 'evil' || s.id === 'tz-bridge-bad'));
+    // a second reconcile is a no-op: nothing to restore, nothing duplicated
+    const again = await new Promise((resolve) => L.message({ type: 'tz-restore-sites' }, {}, resolve));
+    check('vm: reconciling twice registers nothing twice', again.restored.length === 0 && again.unpermitted.includes(GONE) &&
+      scripting.live.filter((s) => s.id === 'tz-bridge-live-1').length === 1);
+    // a worker without the scripting API (an older fake, or a broken build) must not throw at boot
+    const L2 = bootWorker(() => Promise.reject(new Error('x')), { storage: fakeStorage({ sites: [{ id: 'tz-bridge-a', pattern: SITE }] }) });
+    const out2 = await new Promise((resolve) => L2.message({ type: 'tz-restore-sites' }, {}, resolve));
+    check('vm: a missing scripting API degrades to "nothing restored", not a crash', out2 && out2.restored.length === 0);
+  }
+
+  /* ── RUN the two silences: which ceiling is armed when ──
+   * setTimeout is replaced with a recorder: the delay the worker asks for
+   * before the first bytes must be the server's 20 minutes, and after the
+   * first bytes the 2-minute idle ceiling. */
+  {
+    const delays = [];
+    const recTimeout = (fn, ms) => { delays.push(ms); return setTimeout(fn, ms); };
+    const L = bootWorker(() => Promise.resolve(fakeResponse({ sse: TEXT_STREAM })), { setTimeout: recTimeout });
+    await driveViaPort(L, { messages: [] });
+    check('vm: the FIRST watchdog armed (before any byte) is the 20-minute first-frame ceiling',
+      delays.length > 1 && delays[0] === 20 * 60 * 1000);
+    check('vm: once bytes arrive the watchdog re-arms at the 2-minute idle ceiling',
+      delays.slice(1).every((d) => d === 120000));
+    // the abort path: a fetch that never answers, fired by the watchdog → the first-frame sentence
+    {
+      let fire = null;
+      const instant = (fn, ms) => { if (ms === 20 * 60 * 1000) { fire = fn; return 0; } return setTimeout(fn, ms); };
+      const L3 = bootWorker((url, init) => new Promise((_, reject) => {
+        init.signal.addEventListener('abort', () => { const e = new Error('aborted'); e.name = 'AbortError'; reject(e); });
+      }), { setTimeout: instant });
+      const p = driveViaPort(L3, { messages: [] });
+      await new Promise((r) => setTimeout(r, 0));
+      check('vm: the first-frame watchdog was armed before the fetch settled', typeof fire === 'function');
+      fire();
+      const { done } = await p;
+      check('vm: a model that never starts answering fails with the first-frame sentence (20 minutes, no first token)',
+        done.ok === false && /לא ענה בזמן/.test(done.error) && /20 דקות/.test(done.error) && /טוקן ראשון/.test(done.error));
+    }
   }
 
   /* ── RUN the content bridge: the failure result carries `data` ──

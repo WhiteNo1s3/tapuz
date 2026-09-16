@@ -27,6 +27,9 @@ const status = (html, cls) => { $('status').innerHTML = html; $('status').classN
 
 const LOCAL_ORIGINS = ['http://localhost/*', 'http://127.0.0.1/*'];
 const SCRIPT_PREFIX = 'tz-bridge-';
+// The connected-sites record the WORKER restores from on every boot (0.5.1:
+// a Reload of the unpacked tree lost the live site). Same key as background.js.
+const SITES_KEY = 'sites';
 const SITE_LABEL = 'חיבור AI → "מקומי — דרך הדפדפן (Bridge V2)"';
 const PORT_NAME = 'tz-llm';
 const CHAT_PATH = '/v1/chat/completions';
@@ -180,8 +183,36 @@ function listBridgeScripts() {
     .catch(() => []);
 }
 
+/* The record. The browser's registration list is what RUNS; the record is
+ * what the worker puts back when that list comes up empty after a Reload.
+ * Both are read when rendering, so a site that lost its registration (or its
+ * grant) is still shown — with a "reconnect" instead of a "disconnect". */
+function readSites() {
+  return Promise.resolve(B.storage.local.get([SITES_KEY]))
+    .then((r) => (Array.isArray(r[SITES_KEY]) ? r[SITES_KEY] : []).filter((s) => s && typeof s.id === 'string' && typeof s.pattern === 'string'))
+    .catch(() => []);
+}
+
+async function rememberSite(id, pattern) {
+  const sites = (await readSites()).filter((s) => s.id !== id);
+  sites.push({ id, pattern });
+  await B.storage.local.set({ [SITES_KEY]: sites });
+}
+
+async function forgetSite(id) {
+  const sites = (await readSites()).filter((s) => s.id !== id);
+  await B.storage.local.set({ [SITES_KEY]: sites });
+}
+
+/** Ask the worker to reconcile the record with the browser now — it answers
+ *  which recorded sites it could not restore because their grant is gone. */
+function restoreSitesNow() {
+  return sendBg({ type: 'tz-restore-sites' }).catch(() => null);
+}
+
 async function disconnectSite(id, matches) {
   status('מנתק…');
+  await forgetSite(id); // first — or the worker's next boot would put it back
   try {
     await B.scripting.unregisterContentScripts({ ids: [id] });
   } catch (e) {
@@ -214,11 +245,37 @@ function builtInSites() {
   }
 }
 
+/** A recorded site whose registration or grant did not survive: ask for the
+ *  grant again (first await — the gesture rule) and register. */
+async function reconnectSite(pattern) {
+  status('מבקש הרשאה לאתר…');
+  let granted;
+  try {
+    granted = await B.permissions.request({ origins: [pattern] });
+  } catch (e) {
+    return status('בקשת ההרשאה נכשלה: ' + e.message, 'bad');
+  }
+  if (!granted) return status('לא אושרה גישה לאתר.', 'bad');
+  try {
+    await ensureRegistered(pattern);
+    await renderSites();
+    status('האתר חובר מחדש ✓ רעננו את דפי האדמין שלו.', 'ok');
+  } catch (e) {
+    status('שגיאה: ' + e.message, 'bad');
+  }
+}
+
 async function renderSites() {
   const box = $('sites');
-  const scripts = await listBridgeScripts();
+  const [scripts, recorded] = await Promise.all([listBridgeScripts(), readSites()]);
   const builtIn = builtInSites();
+  const rows = scripts.map((s) => ({ id: s.id, origins: (s.matches || []).slice(), live: true }));
+  for (const r of recorded) {
+    if (!rows.some((x) => x.id === r.id)) rows.push({ id: r.id, origins: [r.pattern], live: false });
+  }
   box.textContent = '';
+  // a site wired into the manifest by the download (0.5.1) survives any
+  // reload by itself and has no registration to drop — shown, never "stale"
   for (const m of builtIn) {
     const row = document.createElement('div');
     row.className = 'site';
@@ -232,24 +289,29 @@ async function renderSites() {
     row.appendChild(tag);
     box.appendChild(row);
   }
-  if (!scripts.length && !builtIn.length) {
+  if (!rows.length && !builtIn.length) {
     const p = document.createElement('p');
     p.className = 'empty';
     p.textContent = 'אין עדיין אתר מחובר.';
     box.appendChild(p);
     return;
   }
-  for (const s of scripts) {
-    const origins = (s.matches || []).slice();
+  for (const s of rows) {
     const row = document.createElement('div');
-    row.className = 'site';
+    row.className = 'site' + (s.live ? '' : ' stale');
     const name = document.createElement('span');
-    name.textContent = origins.map((m) => m.replace(/\/\*$/, '')).join(', ') || s.id;
-    name.title = name.textContent;
+    name.textContent = s.origins.map((m) => m.replace(/\/\*$/, '')).join(', ') || s.id;
+    name.title = s.live ? name.textContent : name.textContent + ' — הרישום או ההרשאה לא שרדו את הטעינה מחדש';
+    row.appendChild(name);
+    if (!s.live) {
+      const again = document.createElement('button');
+      again.textContent = 'חבר מחדש';
+      again.addEventListener('click', () => reconnectSite(s.origins[0]));
+      row.appendChild(again);
+    }
     const btn = document.createElement('button');
     btn.textContent = 'נתק';
-    btn.addEventListener('click', () => disconnectSite(s.id, origins));
-    row.appendChild(name);
+    btn.addEventListener('click', () => disconnectSite(s.id, s.origins));
     row.appendChild(btn);
     box.appendChild(row);
   }
@@ -331,6 +393,7 @@ $('connect').addEventListener('click', async () => {
   if (!granted) return status('לא אושרה גישה לאתר.', 'bad');
   try {
     const mode = await ensureRegistered(site.pattern);
+    await rememberSite(scriptIdFor(site.pattern), site.pattern);
     const live = await injectNow(site.tabId);
     await renderSites();
     const head = mode === 'already' ? 'האתר כבר מחובר ✓' : 'האתר חובר ✓';
@@ -343,4 +406,6 @@ $('connect').addEventListener('click', async () => {
 });
 
 loadActiveSite();
-renderSites();
+// Reconcile first, then draw: after a Reload the worker may have just put
+// the sites back, and the list should show what is live NOW.
+restoreSitesNow().then(renderSites);
