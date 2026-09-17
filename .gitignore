@@ -9,6 +9,11 @@ node_modules/
 # next to the repo on the QA machine, carry local paths, and the repo is
 # public). Nothing here is part of the product.
 ai-qa/
+# The tester's running logs — the bug log names the live host and the QA
+# machine's paths, and the gates draft is a working document, not a release
+# note. Both are promoted by hand (rewritten, host removed) if they ever ship.
+docs/TAPUZ-TESTER-BUGS.md
+docs/BEYOND-ALPHA-GATES-DRAFT.md
 
 # Admin auth secrets — session signing key + scrypt password hashes.
 # NEVER commit this: it is generated at runtime and lives outside the
