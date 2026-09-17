@@ -135,6 +135,78 @@ function coded(message, code, extra) {
   return e;
 }
 
+// ── the briefing gate (v2.42: NO_BRIEFING on EVERY local/bridge path) ────
+//
+// HARD-BATTERY-v2, C1 (2026-09-17, Gemma 4 31B): a chat/completions call to
+// LM Studio with NO system briefing came back as an invented ```bentml
+// dialect — a fake <document>, zero bent-* tags. No model knows BenTML on
+// its own; the briefing IS the product. v2.35 refused that request in the
+// tool loop only. This gate is the same rule on every path a request takes
+// to a local model — the tool loop, the injection runner, the browser relay,
+// the worker queue — applied to the BYTES about to leave (the composed
+// body), so a caller that forgets the briefing, a pack composed without its
+// dialect, or a new route that never heard of the rule all stop here, before
+// any GPU minute is spent. What the rule cannot reach, on purpose: a naked
+// call to the OpenAI-compatible API from outside the CMS. C1's raw-API case
+// stays FAIL_INVENT by nature — only the CMS/Bridge paths are the product,
+// and those always brief or refuse (docs/LOCAL-LLM.md).
+//
+// The marker is the dialect itself — a `<bent-` tag or the `bent-*` family
+// name — present in every briefing tier, every pack (menus, theme, pages)
+// and every repair turn's history. A request whose system text, user text
+// and remembered turns hold none of it has no briefing in it.
+const BRIEFING_MARK = /<bent-|bent-\*/;
+const NO_BRIEFING_HE = 'הבקשה למודל יצאה בלי תדריך BenTML — זו תקלה במערכת, לא במודל; נסו לרענן את הדף';
+
+/** Does this text carry a BenTML briefing (any tier, any pack)? */
+function hasBriefing(text) {
+  return BRIEFING_MARK.test(String(text || ''));
+}
+
+/** Every string the model will read out of a composed body, in both shapes
+ *  (openai-chat: system rides as a message; anthropic-messages: `system`
+ *  beside `messages`; a message's content may be a string or content parts). */
+function bodyText(body) {
+  if (!body || typeof body !== 'object') return '';
+  const parts = [];
+  if (typeof body.system === 'string') parts.push(body.system);
+  for (const m of (Array.isArray(body.messages) ? body.messages : [])) {
+    if (!m) continue;
+    if (typeof m.content === 'string') parts.push(m.content);
+    else if (Array.isArray(m.content)) {
+      for (const c of m.content) if (c && typeof c.text === 'string') parts.push(c.text);
+    }
+  }
+  return parts.join('\n');
+}
+
+/** Is this provider the owner's LOCAL model — the server's socket or the
+ *  browser relay? Those are the only ones this gate binds: a cloud key with
+ *  no briefing is still a bug, but not the one that burns the owner's GPU
+ *  inventing a dialect. */
+function isLocalProvider(provider) {
+  return !!provider && (provider.id === 'local' || !!provider.browserRelay);
+}
+
+/**
+ * The gate. Throws NO_BRIEFING when a request bound for a local model
+ * carries no BenTML anywhere in its composed body. `prose` is the ONE
+ * declared exception: a caller whose reply is never compiled as BenTML —
+ * today only the visitor's customer-service chat (src/crm/cs.js), which
+ * answers in words about the business and whose door is a length cap, not
+ * the BenTML compiler. smoke-no-briefing pins that the flag appears nowhere
+ * else.
+ * @param {object} provider the provider descriptor the body is composed for
+ * @param {object} body the composed request body (openai-chat or anthropic)
+ * @param {{ prose?: boolean }} [opts]
+ */
+function assertBriefed(provider, body, opts = {}) {
+  if (!isLocalProvider(provider)) return;
+  if (opts && opts.prose === true) return;
+  if (hasBriefing(bodyText(body))) return;
+  throw coded(NO_BRIEFING_HE, 'NO_BRIEFING');
+}
+
 /** Chars → tokens for a Hebrew-heavy pack. Measured on the live probe:
  *  3,651 chars of organizer prompt → 1,580 prompt tokens, i.e. ~2.3 chars
  *  per token — Hebrew tokenizes far denser than the 4-chars-per-token
@@ -289,7 +361,7 @@ function buildRequest(provider, key, system, userText, model, history = [], turn
  * shape is pinned by smoke-byok / smoke-local-llm / smoke-copilot-tools.
  * @returns {Promise<{text: string, usage: {prompt_tokens: number, completion_tokens: number, reasoning_tokens?: number}, ms: number, provider: {id: string, model: string}}>}
  */
-async function generateDetailed({ system = '', user = '', history = [], maxTokens = 0, timeoutMs = 0, turnCap = 0 } = {}) {
+async function generateDetailed({ system = '', user = '', history = [], maxTokens = 0, timeoutMs = 0, turnCap = 0, prose = false } = {}) {
   const opts = { maxTokens, timeoutMs };
   const started = Date.now();
   const s = load();
@@ -331,6 +403,9 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
   const { headers, body } = buildRequest(provider, key, system, user, model, history, turnCap > 0 ? turnCap : undefined);
   // an injection runner may ask for a longer answer than the table's default
   if (Number(opts.maxTokens) > 0) body.max_tokens = Math.min(32768, Math.round(Number(opts.maxTokens)));
+  // the last gate before the wire: a local model is never sent a request
+  // without its BenTML briefing (v2.42) — see assertBriefed
+  assertBriefed(provider, body, { prose });
 
   let res;
   try {
@@ -396,7 +471,7 @@ function isRelayProvider() {
  * this path. An empty model name means "whatever the bridge reports loaded".
  * @returns {{ body: object, provider: {id: string, model: string} }}
  */
-function relayRequest({ system = '', user = '', history = [], maxTokens = 0, turnCap = 0 } = {}) {
+function relayRequest({ system = '', user = '', history = [], maxTokens = 0, turnCap = 0, prose = false } = {}) {
   const s = load();
   const provider = getProvider(s.provider || 'claude');
   if (!provider || !provider.browserRelay) {
@@ -405,6 +480,9 @@ function relayRequest({ system = '', user = '', history = [], maxTokens = 0, tur
   const model = String(s.model || '').trim();
   const { body } = buildRequest(provider, '', system, user, model, history, turnCap > 0 ? turnCap : undefined);
   if (Number(maxTokens) > 0) body.max_tokens = Math.min(32768, Math.round(Number(maxTokens)));
+  // the relayed model is the owner's local model: the same gate as the
+  // server-side call, before the body is handed to the page (v2.42)
+  assertBriefed(provider, body, { prose });
   return { body, provider: { id: provider.id, model } };
 }
 
@@ -835,9 +913,10 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     // a LOCAL model without the briefing is a bug upstream, never a call to
     // make — without it the model answers in an invented dialect (C1: zero
     // bent-* tags), and over the bridge it would burn minutes of GPU first.
-    if (local && !/<bent-|bent-\*/.test(sys)) {
-      throw coded('הבקשה למודל יצאה בלי תדריך BenTML — זו תקלה במערכת, לא במודל; נסו לרענן את הדף', 'NO_BRIEFING');
-    }
+    // STRICTER than the body gate below on purpose: here the SYSTEM text
+    // must carry the dialect — an owner typing `<bent-hero>` into the chat
+    // is not a briefing.
+    if (local && !hasBriefing(sys)) throw coded(NO_BRIEFING_HE, 'NO_BRIEFING');
     const extraChars = win.turnsChars(st.extra);
     const turns = win.fitTurns(st.base, pt.roomChars === Infinity ? Infinity : pt.roomChars - extraChars).concat(st.extra);
     const maxTokens = w.tokens === Infinity ? Math.max(4096, provider.maxTokens || 4096) : win.replyReserve(w.tokens);
@@ -903,6 +982,7 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         // the state the step stores has already been told once — otherwise
         // the stored copy carries the notice into every later step of the turn.
         const env = envelope({});
+        assertBriefed(provider, p.body); // the bytes the page will relay, judged once more
         env.modelCall = { id: putStep(st), body: p.body };
         // the page's ceiling for THIS call = the one a server-side local call
         // gets; the relayed model is the same local model, reading the same
@@ -1091,6 +1171,9 @@ async function callProvider(provider, body) {
     else headers[provider.authHeader || 'x-api-key'] = key;
   }
   Object.assign(headers, provider.extraHeaders || {});
+  // the tool loop's plan() already refused a briefing-less SYSTEM text; this
+  // is the wire-level gate every server-side local call passes (v2.42)
+  assertBriefed(provider, body);
 
   let res;
   try {
@@ -1182,6 +1265,10 @@ module.exports = {
   estimateTokens,
   contextBudget,
   ERROR_CODES,
+  // the briefing gate (v2.42): the worker queue and the smokes ask the same question
+  hasBriefing,
+  assertBriefed,
+  BRIEFING_MARK,
   LOCAL_TIMEOUT_MS,
   PUBLIC_TIMEOUT_MS,
   // the window (v2.32): what the routes and the setup screen ask

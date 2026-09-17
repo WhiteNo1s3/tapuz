@@ -24,6 +24,27 @@
  *                   (דרך הדפדפן)" option only when a bridge is present. The
  *                   hello carries `version`; the page uses it to tell the
  *                   owner when the extension is older than the CMS expects.
+ *                   0.5.5: the hello also carries `instance` — one random id
+ *                   per injected copy of this file — and a copy that finds
+ *                   itself ORPHANED says so: { type:'tz-bridge-bye', instance }.
+ *
+ * ORPHANS (0.5.5). When the extension is reloaded or updated (↻ on
+ * chrome://extensions, the Bridge folder synced), Chrome invalidates the
+ * extension context of every content script already running in a tab, but
+ * leaves the script itself in place. Measured on Chrome 148: in that copy
+ * `chrome.runtime.id` is undefined and `runtime.connect` / `sendMessage`
+ * throw "Extension context invalidated". 0.5.4 kept answering pings from
+ * such a copy (so the page believed the bridge was present) and then either
+ * hung the request — the synchronous throw inside relayViaMessage escaped
+ * the listener and no result was ever posted — or reported "extension
+ * unavailable". That was the flaky reconnect after a sync. Now every message
+ * from the page first asks `alive()`; a dead copy RETIRES: it removes its
+ * listener, posts one `tz-bridge-bye`, and never speaks again. The new
+ * worker injects a fresh copy into the open tab on boot (background.js), the
+ * fresh copy posts `tz-bridge-takeover`, and the orphan hears that and
+ * retires at once — without waiting for the owner's next request. The page
+ * glue (public/admin-bridge.js) prefers the newest instance and re-posts the
+ * requests the orphan swallowed.
  *
  * Chat goes over a PORT, not sendMessage: one question and one answer has
  * nowhere to put progress, and the port's traffic is also what keeps the MV3
@@ -42,12 +63,18 @@
   'use strict';
 
   const B = typeof browser !== 'undefined' ? browser : chrome;
-  const VERSION = '0.5.4'; // must equal manifest.json "version" (smoke pins it)
+  const VERSION = '0.5.5'; // must equal manifest.json "version" (smoke pins it)
   const PORT_NAME = 'tz-llm';
   const CHAT_PATH = '/v1/chat/completions';
 
   function send(payload) {
     window.postMessage(Object.assign({ source: 'tapuziel-bridge' }, payload), window.location.origin);
+  }
+
+  /** Is this copy still attached to a living extension? An orphaned copy
+   *  (the extension was reloaded under it) has no runtime id any more. */
+  function alive() {
+    try { return !!(B && B.runtime && B.runtime.id); } catch (e) { return false; }
   }
 
   /** The page-facing shape of a failed relay. `error` is always a string (an
@@ -70,21 +97,43 @@
     };
   }
 
-  function announce() {
-    send({ type: 'tz-bridge-hello', version: VERSION });
-  }
-
   /* Re-injection guard. The popup injects this file into the already-open tab
    * the moment a site is connected (so nothing needs a reload), while the
-   * registration also fires on the next load — and a second "connect" injects
-   * again. Content scripts of one extension share an isolated world, so this
-   * flag is visible across injections: a repeat just re-announces instead of
-   * installing a second listener that would double every relayed request. */
+   * registration also fires on the next load — the worker injects again on
+   * every boot (0.5.5) — and a second "connect" injects again. Content
+   * scripts of one extension share an isolated world, so this flag is visible
+   * across injections: a repeat just re-announces instead of installing a
+   * second listener that would double every relayed request. The repeat
+   * announces under the instance id the FIRST copy chose, so the page never
+   * mistakes it for a new bridge (a new instance makes the page re-post what
+   * it is waiting on — right after a Reload, wrong here). */
   if (window.__tzBridgeV2) {
-    announce();
+    send({ type: 'tz-bridge-hello', version: VERSION, instance: window.__tzBridgeV2Instance || '' });
     return;
   }
+  const INSTANCE = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   window.__tzBridgeV2 = VERSION;
+  window.__tzBridgeV2Instance = INSTANCE;
+
+  function announce() {
+    send({ type: 'tz-bridge-hello', version: VERSION, instance: INSTANCE });
+  }
+
+  let retired = false;
+  /** This copy is orphaned: stop listening, say goodbye once, free the
+   *  world's guard. Nothing is answered — the page glue handles the bye
+   *  (re-ping, and either the fresh copy takes over or the owner is told to
+   *  refresh) — because an answer from a dead copy could only be a lie. */
+  function retire() {
+    if (retired) return;
+    retired = true;
+    try { window.removeEventListener('message', onMessage); } catch (e) { /* already gone */ }
+    if (window.__tzBridgeV2Instance === INSTANCE) {
+      window.__tzBridgeV2 = null;
+      window.__tzBridgeV2Instance = null;
+    }
+    send({ type: 'tz-bridge-bye', version: VERSION, instance: INSTANCE });
+  }
 
   /** A streaming chat request. Progress goes to the page as it arrives; the
    *  final answer arrives in the unchanged non-streaming shape. */
@@ -118,17 +167,31 @@
 
   /** Everything that answers at once — the model lists. */
   function relayViaMessage(id, path, body) {
-    Promise.resolve(B.runtime.sendMessage({ type: 'tz-local-llm', path, body }))
+    // sendMessage THROWS synchronously in an invalidated context (measured);
+    // inside the promise chain it becomes a rejection like any other
+    new Promise((resolve) => resolve(B.runtime.sendMessage({ type: 'tz-local-llm', path, body })))
       .then((res) => (res && res.ok) ? res : failure(res))
       .catch((err) => ({ ok: false, error: (err && err.message) || 'extension unavailable' }))
       .then((res) => send(Object.assign({ type: 'tz-local-llm-result', id }, res)));
   }
 
-  window.addEventListener('message', (ev) => {
+  function onMessage(ev) {
     // Same window, same origin — a frame or another window never reaches us.
     if (ev.source !== window || ev.origin !== window.location.origin) return;
     const msg = ev.data;
-    if (!msg || msg.source !== 'tapuziel-cms') return;
+    if (!msg) return;
+
+    // another copy of this file took over this tab (the worker injected it
+    // after a Reload): if we are the orphan, retire now rather than on the
+    // owner's next request
+    if (msg.source === 'tapuziel-bridge') {
+      if (msg.type === 'tz-bridge-takeover' && msg.instance !== INSTANCE && !alive()) retire();
+      return;
+    }
+    if (msg.source !== 'tapuziel-cms') return;
+
+    // the first thing any request meets: a dead copy answers nothing
+    if (!alive()) return retire();
 
     if (msg.type === 'tz-bridge-ping') return announce();
 
@@ -136,7 +199,11 @@
       if (msg.path === CHAT_PATH) return relayViaPort(msg.id, msg.path, msg.body);
       return relayViaMessage(msg.id, msg.path, msg.body);
     }
-  });
+  }
+  window.addEventListener('message', onMessage);
 
   announce();
+  // hello FIRST, then the takeover: the page learns the new instance before
+  // an orphan's bye arrives, so the bye is recognised as a stale copy leaving
+  send({ type: 'tz-bridge-takeover', instance: INSTANCE });
 })();

@@ -71,6 +71,25 @@
  * once more after updating. A site wired by the downloaded ZIP (0.5.1,
  * static content_scripts) never depended on any of this.
  *
+ * THE OPEN TAB COMES BACK TOO (0.5.5). Putting the registration back only
+ * covers the NEXT page load. The admin tab that was open through the Reload
+ * keeps the OLD content script, now orphaned: Chrome invalidates its
+ * extension context (measured on Chrome 148: `chrome.runtime.id` is
+ * undefined there, `runtime.connect` and `sendMessage` throw "Extension
+ * context invalidated"). That script still answered the page's ping with a
+ * hello, so the page believed the bridge was present — and every relay
+ * through it either hung with no result at all (the model lists) or came
+ * back "extension unavailable" (chat). This was the flaky reconnect after a
+ * sync: the popup said connected, the page said nothing, and only a page
+ * refresh or a forced connect helped. So every boot, after the record is
+ * reconciled, the worker finds the open tabs of every connected site
+ * (`tabs.query({ url })` — permitted by the host grant, no `tabs` permission
+ * needed) and injects the content bridge into them again. The new copy lands
+ * in a fresh isolated world beside the orphan (measured: two hellos, one
+ * working relay), announces itself, and the orphan retires when it hears it
+ * (content-bridge.js). A wake after idle injects into a tab whose bridge is
+ * alive: same world, the re-injection guard turns it into a re-announce.
+ *
  * TWO SILENCES (0.5.2). Before the first frame the model is READING the
  * prompt: a 45K-char briefing plus history on a 31B model is minutes of
  * legitimate silence, and after an approval the whole conversation is
@@ -543,19 +562,61 @@ async function restoreSites() {
   if (record.length !== recorded.length) {
     try { await B.storage.local.set({ [SITES_KEY]: record }); } catch (e) { /* the next boot adopts again */ }
   }
+  out.revived = await reviveOpenTabs(await connectedPatterns());
   return out;
 }
 
+/** Every pattern the bridge serves right now: the live registrations (the
+ *  record, just restored) and the sites the download wired into the
+ *  manifest (0.5.1). What reviveOpenTabs looks for. */
+async function connectedPatterns() {
+  const live = await liveBridgeScripts();
+  const out = [];
+  for (const s of live) for (const m of (Array.isArray(s.matches) ? s.matches : [])) if (m && !out.includes(m)) out.push(m);
+  try {
+    for (const c of (B.runtime.getManifest().content_scripts || [])) {
+      for (const m of (Array.isArray(c.matches) ? c.matches : [])) if (m && !out.includes(m)) out.push(m);
+    }
+  } catch (e) { /* no manifest access: the record alone */ }
+  return out;
+}
+
+/** Inject the content bridge into every open tab of the connected sites, so
+ *  a tab that lived through a Reload works again without a refresh. Returns
+ *  how many tabs took it. Never throws: a tab that refuses (discarded, still
+ *  loading, a privileged page that matched) is simply not counted — its next
+ *  load gets the registered script anyway. */
+async function reviveOpenTabs(patterns) {
+  if (!patterns.length || !B.tabs || !B.scripting || typeof B.scripting.executeScript !== 'function') return 0;
+  let tabs;
+  try {
+    tabs = await B.tabs.query({ url: patterns });
+  } catch (e) {
+    return 0;
+  }
+  let revived = 0;
+  for (const t of (tabs || [])) {
+    if (!t || typeof t.id !== 'number') continue;
+    try {
+      await B.scripting.executeScript({ target: { tabId: t.id }, files: ['content-bridge.js'] });
+      revived++;
+    } catch (e) { /* not this tab — see above */ }
+  }
+  return revived;
+}
+
 // Every boot of the worker — install, update, the Reload after a git pull,
-// browser start, a wake after idle — puts the connected sites back.
-const restoring = restoreSites().catch(() => ({ restored: [], unpermitted: [], live: 0 }));
+// browser start, a wake after idle — puts the connected sites back, and the
+// bridge back into their open tabs.
+const EMPTY_RESTORE = () => ({ restored: [], unpermitted: [], live: 0, revived: 0 });
+const restoring = restoreSites().catch(EMPTY_RESTORE);
 
 B.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return;
   // the popup asks the worker to reconcile now (after a connect/disconnect,
   // or to show which recorded sites lost their grant)
   if (msg.type === 'tz-restore-sites') {
-    restoring.then(() => restoreSites()).then(sendResponse, () => sendResponse({ restored: [], unpermitted: [], live: 0 }));
+    restoring.then(() => restoreSites()).then(sendResponse, () => sendResponse(EMPTY_RESTORE()));
     return true;
   }
   if (msg.type !== 'tz-local-llm') return;

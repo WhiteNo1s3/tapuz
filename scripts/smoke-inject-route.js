@@ -119,7 +119,8 @@ const FAKE = {
   id: 'fake-pack', kind: 'fake', family: 'site', title: '🧪 חבילת בדיקה', blurb: 'לבדיקה בלבד',
   budget: { lite: 9000, full: 14000 },
   buildPrompt({ brief = '', size = 'lite' } = {}) {
-    const text = '# ⚠️ FRESH\nPROMPT ' + size + ' ' + brief;
+    // a pack always teaches its dialect — the NO_BRIEFING gate (v2.42) refuses one that does not
+    const text = '# ⚠️ FRESH\nPROMPT ' + size + ' ' + brief + '\n<bent-menus> — הדיאלקט שהחבילה מלמדת';
     return { text, chars: text.length, meta: { size } };
   },
   parse(reply) {

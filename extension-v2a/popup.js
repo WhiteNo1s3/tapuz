@@ -407,5 +407,14 @@ $('connect').addEventListener('click', async () => {
 
 loadActiveSite();
 // Reconcile first, then draw: after a Reload the worker may have just put
-// the sites back, and the list should show what is live NOW.
-restoreSitesNow().then(renderSites);
+// the sites back, and the list should show what is live NOW. The worker also
+// re-injects the bridge into the connected sites' open tabs (0.5.5) and says
+// how many took it — so after a Reload the owner sees the tabs came back
+// without touching them.
+restoreSitesNow().then((r) => {
+  renderSites();
+  const n = r && Number(r.revived) || 0;
+  if (n > 0 && !$('status').textContent) {
+    status('הגשר פעיל ב-' + n + (n === 1 ? ' טאב פתוח' : ' טאבים פתוחים') + ' של האתרים המחוברים ✓', 'ok');
+  }
+});

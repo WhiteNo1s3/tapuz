@@ -63,6 +63,10 @@ const https = require('https');
 // ── constants ───────────────────────────────────────────────────────────
 
 const DEFAULT_MODEL_BASE = 'http://127.0.0.1:1234/v1';
+// the BenTML briefing's fingerprint — byte for byte src/ai.js BRIEFING_MARK
+// (this file requires nothing from the repo, so the rule is repeated here
+// and smoke-no-briefing pins the two equal)
+const BRIEFING_MARK = /<bent-|bent-\*/;
 const DEFAULT_POLL_MS = 5000;
 const DEFAULT_IDLE_MS = 120000;   // silence, not duration
 const BACKOFF_MIN_MS = 1000;
@@ -655,6 +659,16 @@ async function runJob(cfg, job) {
   if (!job.prompt || !String(job.prompt).trim()) {
     // nothing to run — say so rather than sending an empty turn
     await reportFailure(cfg, job.id, 'BAD_JOB', 'העבודה הגיעה בלי פרומפט — אין מה להריץ.');
+    return 'failed';
+  }
+  // The last hop before the GPU (v2.42): a local model with no BenTML
+  // briefing invents its own dialect (HARD-BATTERY-v2, C1), so a job whose
+  // system text and prompt carry no `<bent-` / `bent-*` at all is refused
+  // here too — the same rule the CMS applies at the queue (src/ai.js
+  // assertBriefed), for a site older than that rule.
+  if (!BRIEFING_MARK.test(String(job.system || '') + '\n' + String(job.prompt || ''))) {
+    warn('✖ העבודה הגיעה בלי תדריך BenTML — לא נשלחת למודל.');
+    await reportFailure(cfg, job.id, 'NO_BRIEFING', 'העבודה הגיעה בלי תדריך BenTML — זו תקלה בחבילה, לא במודל; לא נשלחה למודל.');
     return 'failed';
   }
 

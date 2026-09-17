@@ -569,11 +569,46 @@
     armUnload();
   }
 
+  /* What an approved write left behind, said the moment the page KNOWS it
+     (v2.42). Over the bridge the server applies the write and answers with
+     the model's closing call as a continuation — and that envelope already
+     carries `applied`. The closing turn re-reads the whole conversation on a
+     31B model (HARD-BATTERY-v2: ~4 minutes of «כותב» after the draft existed),
+     so the draft is announced and opened in the canvas right here, and the
+     status line says the model is only summarising. `appliedShown` keeps the
+     line from repeating when the turn finally ends. */
+  let appliedShown = null;
+
+  async function showApplied(a) {
+    if (!a || appliedShown) return;
+    appliedShown = a;
+    // the proposal became a draft: its "not saved yet" preview must go now,
+    // and the canvas below shows the draft itself
+    hideProposal();
+    const warn = a.warnings && a.warnings.length ? ' · ' + a.warnings.length + ' אזהרות' : '';
+    if (a.edited) {
+      bubble('system', 'בוצע ✓ הטיוטה בקנבס' + warn);
+      if (loadedPath === a.slug) reloadCanvas();
+      else selectPage(a.slug);
+      loadPages();
+    } else if (a.created) {
+      await loadPages(a.slug);
+      selectPage(a.slug);
+      bubble('system', 'נוצרה טיוטה ✓ הדף פתוח בקנבס · <a href="/admin/edit/' + encodeURIComponent(a.slug) + '">בונה מלא</a>' + warn);
+    }
+  }
+
+  /** The status line while the model still works AFTER the draft landed. */
+  function statusWithDraft(text) {
+    return appliedShown ? 'הטיוטה כבר נשמרה ✓ · המודל מסכם: ' + text : text;
+  }
+
   /** The gate — the chat card and the proposal bar both land here. */
   async function answer(ok) {
     if (inflight || !openProposal) return;
     const { pending: p, card } = openProposal;
     openProposal = null;
+    appliedShown = null;
     card.querySelectorAll('[data-ok]').forEach((x) => { x.disabled = true; });
     const pressed = card.querySelector('[data-ok="' + (ok ? '1' : '0') + '"]');
     if (pressed) pressed.textContent = ok ? 'מבצע…' : 'נדחה';
@@ -591,19 +626,9 @@
       // v2.40: the owner's own word comes first — a model has claimed a
       // refused edit was done; this line is the page's, not the model's
       if (!ok) bubble('system', '✕ דחיתם את ההצעה — שום דבר לא נשמר.');
-      const a = d.applied;
-      if (ok && a && a.edited) {
-        bubble('system', 'בוצע ✓ הטיוטה בקנבס' +
-          (a.warnings && a.warnings.length ? ' · ' + a.warnings.length + ' אזהרות' : ''));
-        if (loadedPath === a.slug) reloadCanvas();
-        else selectPage(a.slug);
-        loadPages();
-      } else if (ok && a && a.created) {
-        await loadPages(a.slug);
-        selectPage(a.slug);
-        bubble('system', 'נוצרה טיוטה ✓ הדף פתוח בקנבס · <a href="/admin/edit/' + encodeURIComponent(a.slug) + '">בונה מלא</a>' +
-          (a.warnings && a.warnings.length ? ' · ' + a.warnings.length + ' אזהרות' : ''));
-      }
+      // a key provider finishes in one round, so the draft is announced here;
+      // over the bridge chatTurn already said it when the continuation arrived
+      if (ok) await showApplied(d.applied);
       renderTurn(d);
     } catch (e) {
       errorBubble(e);
@@ -632,23 +657,26 @@
      approval request) arrives. Key providers finish in a single round.
      Every hop's window rides back on the response; the chip follows. */
   async function chatTurn(payload) {
-    const post = (p) => api('/admin/api/ai/chat', { method: 'POST', body: JSON.stringify(p) }).then((d) => {
+    const post = (p) => api('/admin/api/ai/chat', { method: 'POST', body: JSON.stringify(p) }).then(async (d) => {
       noteTurn(d);
+      // the write already landed and the model is only being asked to say
+      // so (v2.42): show the draft NOW, not after its closing turn
+      if (d.modelCall && d.applied) await showApplied(d.applied);
       return d;
     });
     // one line in the chat every 45 s while the turn runs (v2.36): a local
     // model reads for minutes before its first token, and silence looked dead
     const clock = window.TapuzTurnClock
-      ? window.TapuzTurnClock.start((text) => bubble('system', esc(text), 'clock'))
+      ? window.TapuzTurnClock.start((text) => bubble('system', esc(statusWithDraft(text)), 'clock'))
       : null;
     const onProgress = (p) => {
       if (clock) clock.progress(p);
       // a heartbeat with nothing streamed is the model READING, not writing 0
-      setStatus(window.TapuzTurnClock ? window.TapuzTurnClock.status(p) : '✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים');
+      setStatus(statusWithDraft(window.TapuzTurnClock ? window.TapuzTurnClock.status(p) : '✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים'));
     };
     try {
       const d = await post(payload);
-      if (d.modelCall) setStatus('המודל המקומי חושב… (דרך התוסף)');
+      if (d.modelCall) setStatus(statusWithDraft('המודל המקומי חושב… (דרך התוסף)'));
       return await bridge.drive(d, post, undefined, onProgress);
     } finally {
       if (clock) clock.stop();
@@ -660,6 +688,7 @@
     const message = input.value.trim();
     if (!message) return;
     usedShown = 0; // a new turn, a new ledger
+    appliedShown = null;
     const p = savedProvider();
     // a keyless provider (local / browser-relay) is ready without any key
     if (!settings.hasKey && !p.keyOptional) {

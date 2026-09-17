@@ -31,6 +31,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { CONFIG_DIR } = require('./paths');
+const { hasBriefing } = require('./ai');
 
 const STORE = path.join(CONFIG_DIR, 'inject-jobs.json');
 
@@ -98,6 +99,15 @@ function publicView(job) {
 function createJob({ packId, brief = '', size = 'lite', variant = 'A', locale = 'he', prompt, promptChars = 0, maxTokens = 2048, model = '' }) {
   if (!packId) throw new Error('createJob needs a packId');
   if (!prompt) throw new Error('createJob needs the composed prompt');
+  // The worker on the other end is always the owner's LOCAL model, and a
+  // local model with no BenTML briefing invents its own dialect (v2.42,
+  // HARD-BATTERY-v2 C1). A pack composed without its dialect is a bug in
+  // the pack — refused at the queue, before a worker spends a GPU on it.
+  if (!hasBriefing(prompt)) {
+    const e = new Error('העבודה יצאה בלי תדריך BenTML — זו תקלה בחבילה, לא במודל; העבודה לא נוספה לתור');
+    e.code = 'NO_BRIEFING';
+    throw e;
+  }
   const data = load();
   const job = {
     id: newId(),
@@ -133,12 +143,31 @@ function reviveStale(data) {
   let changed = false;
   for (const j of data.jobs) {
     if (j.status === 'running' && j.claimedAt && now - j.claimedAt > CLAIM_STALE_MS) {
+      changed = true;
+      if (j.round > 1) {
+        // A stale REPAIR starts over from round 1 — so from the PACK. askRepair
+        // put the repair instructions in `prompt`; revived as they were, the
+        // worker got "fix these, return the whole document" with no pack and
+        // no briefing: a model that invents a dialect (v2.42 review; the
+        // worker now refuses it as NO_BRIEFING). The pack is `packPrompt`, or
+        // — for a job asked to repair before that field existed — the first
+        // turn of the repair history.
+        const first = Array.isArray(j.history) && j.history[0] && j.history[0].role === 'user' ? j.history[0].content : '';
+        const pack = String(j.packPrompt || first || '');
+        if (!pack) {
+          j.status = 'failed';
+          j.finishedAt = now;
+          j.error = { code: 'STALE_REPAIR', message: 'סבב התיקון נתקע והחבילה המקורית לא נשמרה — הריצו את החבילה מחדש.' };
+          continue;
+        }
+        j.prompt = pack;
+        delete j.packPrompt;
+      }
       j.status = 'pending';
       j.claimedBy = '';
       j.claimedAt = 0;
       j.round = 1;
       j.history = [];
-      changed = true;
     }
   }
   return changed;
@@ -202,9 +231,16 @@ function updateJob(id, patch = {}) {
   return job;
 }
 
-/** Hand the worker a second turn: the door asked for a repair. */
+/** Hand the worker a second turn: the door asked for a repair. The pack the
+ *  first turn ran is kept aside (`packPrompt`): `prompt` becomes the repair
+ *  instructions, and a repair that goes stale must start over from the pack. */
 function askRepair(id, { history, prompt }) {
-  return updateJob(id, { round: 2, history: history || [], prompt: String(prompt || ''), claimedAt: Date.now() });
+  const job = getJob(id);
+  if (!job) return null;
+  return updateJob(id, {
+    round: 2, history: history || [], prompt: String(prompt || ''),
+    packPrompt: job.packPrompt || job.prompt, claimedAt: Date.now()
+  });
 }
 
 function finishJob(id, { status = 'done', reply = '', usage = null, result = null, error = null }) {

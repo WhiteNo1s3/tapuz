@@ -192,6 +192,21 @@
      modelCall continuation, TapuzBridge (loaded on the edit page) relays it
      to the local model and loops until a real reply arrives. The token count
      climbs in the status line while the model writes. */
+  /* The draft an approval landed, said when the page KNOWS it (v2.42): over
+     the bridge the server applies the write and answers with the model's
+     closing call as a continuation — that envelope already carries
+     `applied`, and the closing turn re-reads the whole conversation (minutes
+     on a 31B). So the line goes up here, once per turn; the builder still
+     reloads only when the turn ends, so the model's closing words are kept. */
+  var draftNoted = false;
+  function landedWord(a) { return a && a.created ? 'נוצרה טיוטה' : 'הטיוטה עודכנה'; }
+  function noteDraft(a) {
+    if (!a || draftNoted) return;
+    draftNoted = true;
+    bubble('system', '✓ ' + landedWord(a) + ' — היא כבר שמורה. המודל מסכם מה עשה, ואז הבונה ייטען מחדש.');
+  }
+  function withDraft(text) { return draftNoted ? 'הטיוטה נשמרה ✓ · ' + text : text; }
+
   function postChat(payload) {
     return fetch('/admin/api/ai/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -200,9 +215,10 @@
       if (d && d.ok && d.modelCall && window.TapuzBridge) {
         if (d.window) showWindow(d.window);
         if (d.notice) bubble('system', d.notice);
+        if (d.applied) noteDraft(d.applied);
         return TapuzBridge.drive(d, postChat, undefined, function (p) {
           if (turnClock) turnClock.progress(p);
-          setBusy(true, window.TapuzTurnClock ? TapuzTurnClock.status(p) : '✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים');
+          setBusy(true, withDraft(window.TapuzTurnClock ? TapuzTurnClock.status(p) : '✍ המודל שלכם כותב… ' + fmt(p.tokens || 0) + ' טוקנים'));
         });
       }
       return d;
@@ -224,6 +240,7 @@
     card.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
     if (openCard === card) openCard = null;
     setBusy(true, ok ? 'מבצע ושומר טיוטה…' : 'מודיע לקופיילוט…');
+    draftNoted = false;
     startClock();
     postChat({ approve: { id: p.id, ok: ok }, window: bridgeWindow() || undefined }).then(function (d) {
       stopClock();
@@ -234,7 +251,7 @@
       // the draft changed on disk — reload the builder to show it. `applied`
       // is the server's word (v2.32); an older server that has no such field
       // is trusted on the approval alone, as before.
-      var landed = d.applied ? (d.applied.created ? 'נוצרה טיוטה' : 'הטיוטה עודכנה') : 'נשמר כטיוטה';
+      var landed = d.applied ? landedWord(d.applied) : 'נשמר כטיוטה';
       if (d.applied || (ok && !('applied' in d))) {
         setBusy(true, '✓ ' + landed + ' — טוען מחדש…');
         setTimeout(function () { location.reload(); }, 900);
@@ -254,6 +271,7 @@
     var message = input.value.trim();
     if (!message) return;
     input.value = '';
+    draftNoted = false;
     // a proposal left hanging is closed, and the model is told so — otherwise
     // its next turn still believes an answer is coming
     if (openCard) {
