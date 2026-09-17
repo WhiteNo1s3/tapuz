@@ -517,48 +517,20 @@ router.post('/admin/api/ai/test', requireAdmin, async (req, res) => {
   }
 });
 
-// Extension downloads, one build per BROWSER (v2.18.1 — Ben installed the
-// generic zip on Firefox and it refused). Rules learned the hard way:
-//   • manifest.json must sit at the ZIP ROOT (no wrapping folder) — both
-//     Chrome's drag-install and Firefox's about:debugging reject otherwise
-//   • Firefox needs browser_specific_settings.gecko; Chrome warns on it —
-//     so each browser gets a manifest tailored from the same source folder.
-// Whitelist keyed — no param ever touches the filesystem.
-const EXTENSION_DIRS = {
-  byot: { dir: 'extension', base: 'tapuziel-companion' },
-  bridge: { dir: 'extension-v2a', base: 'tapuziel-bridge-v2' }
-};
+// Extension downloads, one build per BROWSER (v2.18.1), the Bridge wired to
+// the site it was downloaded from (v2.34). The build itself — the whitelist,
+// the per-browser manifest, the wiring — is src/extension-build.js (v2.41),
+// shared with scripts/update-bridge.js so a developer's folder and this ZIP
+// never differ. No param ever touches the filesystem.
 router.get('/admin/ai-setup/extension-:which-:browser.zip', requireAdmin, (req, res) => {
-  const entry = EXTENSION_DIRS[req.params.which];
-  const browser = req.params.browser;
-  if (!entry || !['chrome', 'firefox'].includes(browser)) {
-    return res.status(404).json({ ok: false, error: 'unknown extension build' });
-  }
   try {
-    const path = require('path');
-    const fs = require('fs');
+    const { extensionBuild } = require('../extension-build');
+    const build = extensionBuild(req.params.which, req.params.browser, req.hostname);
+    if (!build) return res.status(404).json({ ok: false, error: 'unknown extension build' });
     const { zipDirectory } = require('../zip-store');
-    const dir = path.join(__dirname, '..', '..', entry.dir);
-    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
-    if (browser === 'chrome') {
-      delete manifest.browser_specific_settings; // Chrome-only build: no FF keys, no warnings
-      // Firefox MV3 uses background.scripts alongside service_worker; Chrome
-      // wants only the worker (the bridge ships both for cross-browser)
-      if (manifest.background && manifest.background.scripts && manifest.background.service_worker) {
-        delete manifest.background.scripts;
-      }
-    } else if (manifest.background && manifest.background.service_worker && !manifest.background.scripts) {
-      // Firefox build: event page via scripts (FF ignores/limits workers)
-      manifest.background.scripts = [manifest.background.service_worker];
-    }
-    // the bridge ZIP arrives connected to the site it was downloaded from, so
-    // no hand-patched manifest in a git checkout is needed (src/bridge-manifest.js)
-    if (req.params.which === 'bridge') require('../bridge-manifest').wireBridgeToSite(manifest, req.hostname);
-    const buf = zipDirectory(dir, '', {
-      'manifest.json': JSON.stringify(manifest, null, 2) + '\n'
-    });
+    const buf = zipDirectory(build.dir, '', { 'manifest.json': build.manifestText });
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${entry.base}-${browser}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${build.base}-${req.params.browser}.zip"`);
     res.send(buf);
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
