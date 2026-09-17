@@ -285,6 +285,38 @@ const jobsStore = require('../src/inject-jobs');
     check('a worker that vanished mid-job does not strand it — the claim goes stale and is re-issued',
       revived.json.job && revived.json.job.id === q6.json.job.id);
 
+    // ── a stale REPAIR starts over from the pack (v2.42 review) ──
+    // askRepair turns `prompt` into the repair instructions; the revive used
+    // to keep them and drop the history, so the next worker got "fix these"
+    // with no pack and no briefing — a model inventing its own dialect
+    {
+      const stale = Date.now() - (jobsStore.CLAIM_STALE_MS + 1000);
+      const REPAIR = 'תיקונים נדרשים:\n- משהו\nהחזירו את המסמך המלא, מתוקן.';
+      const mk = async () => (await req('POST', '/admin/api/inject/worker-pack/job', { cookie, body: { brief: 'repair', size: 'lite' } })).json.job.id;
+      const current = await mk();
+      const pack = jobsStore.getJob(current).prompt;
+      jobsStore.updateJob(current, { status: 'running', claimedAt: Date.now() });
+      jobsStore.askRepair(current, { prompt: REPAIR, history: [{ role: 'user', content: pack }, { role: 'assistant', content: 'first reply' }] });
+      jobsStore.updateJob(current, { claimedAt: stale });
+      // a job asked to repair before `packPrompt` existed: the pack is history[0]
+      const legacy = await mk();
+      jobsStore.updateJob(legacy, { status: 'running', round: 2, prompt: REPAIR, history: [{ role: 'user', content: pack }, { role: 'assistant', content: 'x' }], claimedAt: stale });
+      // nothing to start over from
+      const lost = await mk();
+      jobsStore.updateJob(lost, { status: 'running', round: 2, prompt: REPAIR, history: [], claimedAt: stale });
+      jobsStore.claimNext('smoke'); // any claim revives every stale job
+      const a = jobsStore.getJob(current);
+      const b = jobsStore.getJob(legacy);
+      const c = jobsStore.getJob(lost);
+      const briefed = (j) => require('../src/ai').hasBriefing(j.prompt);
+      check('a stale repair is re-queued as round 1 with the PACK as its prompt (not the repair instructions alone)',
+        a.round === 1 && a.prompt === pack && a.history.length === 0 && briefed(a) && !('packPrompt' in a) && a.status !== 'failed');
+      check('…and one asked to repair before packPrompt existed recovers the pack from its history',
+        b.round === 1 && b.prompt === pack && b.history.length === 0 && briefed(b));
+      check('…and one with no pack left to recover fails with STALE_REPAIR instead of reaching a model',
+        c.status === 'failed' && c.error && c.error.code === 'STALE_REPAIR');
+    }
+
     // ── the invariant ──
     check('NOTHING was ever applied (the menus table is untouched)',
       JSON.stringify(require('../src/menus').loadMenus()) === menusBefore);
