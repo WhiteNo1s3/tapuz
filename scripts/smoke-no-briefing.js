@@ -236,7 +236,9 @@ const PLAIN = 'שלום, כתוב לי דף בית יפה';
     for (const name of fs.readdirSync(dir)) {
       const full = path.join(dir, name);
       if (fs.statSync(full).isDirectory()) walk(full);
-      else if (/\.js$/.test(name) && /prose: true/.test(fs.readFileSync(full, 'utf8'))) proseUsers.push(path.relative(REPO, full));
+      // forward slashes on every OS: path.relative() answers `src\crm\cs.js`
+      // on Windows, and the pin below is written the way the repo spells paths
+      else if (/\.js$/.test(name) && /prose: true/.test(fs.readFileSync(full, 'utf8'))) proseUsers.push(path.relative(REPO, full).split(path.sep).join('/'));
     }
   })(path.join(REPO, 'src'));
   check('`prose: true` appears in exactly one place in src/ — the visitor chat (src/crm/cs.js)', JSON.stringify(proseUsers) === JSON.stringify(['src/crm/cs.js']));
