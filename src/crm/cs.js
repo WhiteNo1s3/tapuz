@@ -232,7 +232,12 @@ async function answer({ config, conversation, text, generate } = {}) {
   let reply;
   try {
     const gen = generate || ((args) => require('../ai').generate(args));
-    reply = await gen({ system, user: question, history: prior });
+    // `prose`: this is the ONE model call in the CMS whose answer is words
+    // for a visitor, never a BenTML document — so the NO_BRIEFING gate that
+    // binds every other local-model request (src/ai.js assertBriefed, v2.42)
+    // is declared off here, explicitly and nowhere else. The door for this
+    // reply is the length cap below, not the compiler.
+    reply = await gen({ system, user: question, history: prior, prose: true });
   } catch (e) {
     // The call failed, so it should not count against the day's budget.
     releaseCall();

@@ -31,6 +31,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { CONFIG_DIR } = require('./paths');
+const { hasBriefing } = require('./ai');
 
 const STORE = path.join(CONFIG_DIR, 'inject-jobs.json');
 
@@ -98,6 +99,15 @@ function publicView(job) {
 function createJob({ packId, brief = '', size = 'lite', variant = 'A', locale = 'he', prompt, promptChars = 0, maxTokens = 2048, model = '' }) {
   if (!packId) throw new Error('createJob needs a packId');
   if (!prompt) throw new Error('createJob needs the composed prompt');
+  // The worker on the other end is always the owner's LOCAL model, and a
+  // local model with no BenTML briefing invents its own dialect (v2.42,
+  // HARD-BATTERY-v2 C1). A pack composed without its dialect is a bug in
+  // the pack — refused at the queue, before a worker spends a GPU on it.
+  if (!hasBriefing(prompt)) {
+    const e = new Error('העבודה יצאה בלי תדריך BenTML — זו תקלה בחבילה, לא במודל; העבודה לא נוספה לתור');
+    e.code = 'NO_BRIEFING';
+    throw e;
+  }
   const data = load();
   const job = {
     id: newId(),

@@ -719,10 +719,17 @@ router.post('/admin/api/inject/:id/job', requireAdmin, (req, res) => {
   }
   const settings = ai.getSettings();
   const model = (settings.provider === 'local' || settings.provider === 'browser') ? (settings.model || '') : '';
-  const job = jobs.createJob({
-    packId: pack.id, brief, size, variant, locale,
-    prompt: built.text, promptChars: built.chars, maxTokens: pack.run.maxTokens, model
-  });
+  let job;
+  try {
+    job = jobs.createJob({
+      packId: pack.id, brief, size, variant, locale,
+      prompt: built.text, promptChars: built.chars, maxTokens: pack.run.maxTokens, model
+    });
+  } catch (e) {
+    // NO_BRIEFING: the queue refused a pack composed without its dialect (v2.42)
+    logRun({ id: pack.id, action: 'job', provider: 'worker', model, ok: false, code: e.code || 'QUEUE_FAILED', promptChars: built.chars, ms: 0 });
+    return refuse(res, e);
+  }
   logRun({
     id: pack.id, action: 'job', provider: 'worker', model, ok: true, code: 'QUEUED',
     promptChars: built.chars, ms: 0
