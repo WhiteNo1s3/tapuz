@@ -26,6 +26,13 @@
  *    click path, instead of "no response"
  *  - when the builder is framed inside the copilot screen the parent owns
  *    the conversation — this drawer stays out (boot returns early)
+ *
+ * v2.43 — the menu tools reach the drawer too (one tool loop, every surface).
+ * The drawer has no canvas for a menu, so its approval card says in words
+ * what the organizer's door judged (the fit line, what moved / was added /
+ * removed / renamed) and that approving is LIVE, not a draft; after the apply
+ * the builder is NOT reloaded — the page's draft never moved. The rendered
+ * header lives on the copilot screen (/admin/chat), and the card says so.
  */
 (function () {
   'use strict';
@@ -172,7 +179,29 @@
       '    <button type="button" class="cp-no">✗ דחה</button>' +
       '  </div>' +
       '</div>');
-    card.querySelector('.cp-approve-txt').textContent = p.summary || p.text || 'הקופיילוט מבקש לבצע שינוי';
+    // v2.43 — a menu is the one write that is NOT a draft (src/ai-tools.js):
+    // the button must not promise one. The drawer has no canvas for it, so
+    // the card carries what the door judged in words — the fit line and what
+    // moved — and points at the screen that shows it on the real header.
+    var isMenu = p.tool === 'organize_menu';
+    var text = p.summary || p.text || 'הקופיילוט מבקש לבצע שינוי';
+    if (isMenu) {
+      card.querySelector('.cp-ok').textContent = '✓ אשר — החל על האתר (עם גיבוי)';
+      var pv = p.preview || {};
+      if (pv.fitLine) text += '\n' + pv.fitLine;
+      var main = pv.diff && pv.diff.main;
+      if (main) {
+        var parts = [];
+        if ((main.added || []).length) parts.push('נוספו: ' + main.added.join(', '));
+        if ((main.removed || []).length) parts.push('הוסרו: ' + main.removed.join(', '));
+        if ((main.moved || []).length) parts.push('הוזזו: ' + main.moved.join(', '));
+        if ((main.relabeled || []).length) parts.push('שונו שמות: ' + main.relabeled.map(function (x) { return x[0] + ' → ' + x[1]; }).join(', '));
+        if (parts.length) text += '\n' + parts.join(' · ');
+      }
+      text += '\nלתצוגה על הכותרת האמיתית לפני האישור: מסך הקופיילוט (/admin/chat).';
+      card.querySelector('.cp-approve-txt').style.whiteSpace = 'pre-wrap';
+    }
+    card.querySelector('.cp-approve-txt').textContent = text;
     card.querySelector('.cp-ok').addEventListener('click', function () { answerApproval(card, p, true); });
     card.querySelector('.cp-no').addEventListener('click', function () { answerApproval(card, p, false); });
     log.appendChild(card);
@@ -199,13 +228,17 @@
      on a 31B). So the line goes up here, once per turn; the builder still
      reloads only when the turn ends, so the model's closing words are kept. */
   var draftNoted = false;
-  function landedWord(a) { return a && a.created ? 'נוצרה טיוטה' : 'הטיוטה עודכנה'; }
+  var menuNoted = false; // v2.43: what landed was the MENU — live, and the page draft did not move
+  function landedWord(a) { return a && a.organized ? 'התפריט עודכן באתר' : (a && a.created ? 'נוצרה טיוטה' : 'הטיוטה עודכנה'); }
   function noteDraft(a) {
     if (!a || draftNoted) return;
     draftNoted = true;
-    bubble('system', '✓ ' + landedWord(a) + ' — היא כבר שמורה. המודל מסכם מה עשה, ואז הבונה ייטען מחדש.');
+    menuNoted = !!a.organized;
+    bubble('system', a.organized
+      ? '✓ התפריט עודכן באתר — גיבוי נשמר. לביטול: עורך התפריטים (/admin/menus) ← ↩ שחזור.'
+      : '✓ ' + landedWord(a) + ' — היא כבר שמורה. המודל מסכם מה עשה, ואז הבונה ייטען מחדש.');
   }
-  function withDraft(text) { return draftNoted ? 'הטיוטה נשמרה ✓ · ' + text : text; }
+  function withDraft(text) { return draftNoted ? (menuNoted ? 'התפריט עודכן ✓ · ' : 'הטיוטה נשמרה ✓ · ') + text : text; }
 
   function postChat(payload) {
     return fetch('/admin/api/ai/chat', {
@@ -252,6 +285,14 @@
       // is the server's word (v2.32); an older server that has no such field
       // is trusted on the approval alone, as before.
       var landed = d.applied ? landedWord(d.applied) : 'נשמר כטיוטה';
+      if (d.applied && d.applied.organized) {
+        // the menu changed, the page's draft did not — reloading the builder
+        // would cost the owner their place for nothing (a key provider
+        // finishes in one round, so the line may not have been said yet)
+        noteDraft(d.applied);
+        setBusy(false, '');
+        return;
+      }
       if (d.applied || (ok && !('applied' in d))) {
         setBusy(true, '✓ ' + landed + ' — טוען מחדש…');
         setTimeout(function () { location.reload(); }, 900);

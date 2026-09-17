@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**294 routes across 38 files.**
+**295 routes across 38 files.**
 
 ## By file (what each module owns)
 
@@ -266,7 +266,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/upload`
 - `GET /admin/media-library`
 
-### `src/routes/menus.js` — 11 routes
+### `src/routes/menus.js` — 12 routes
 
 - `GET /admin/api/menus`
 - `POST /admin/api/menus`
@@ -274,6 +274,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/menus/export.bent`
 - `GET /admin/api/menus/backups`
 - `POST /admin/api/menus/restore`
+- `GET /admin/api/menus/state`
 - `POST /admin/api/menus/preview`
 - `GET /admin/menus/preview/:id`
 - `POST /admin/api/menus/:name/delete`
@@ -479,6 +480,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/menus/fit` | GET | `src/routes/menus.js` |
 | `/admin/api/menus/preview` | POST | `src/routes/menus.js` |
 | `/admin/api/menus/restore` | POST | `src/routes/menus.js` |
+| `/admin/api/menus/state` | GET | `src/routes/menus.js` |
 | `/admin/api/mission/activate/:id` | POST | `src/routes/mission.js` |
 | `/admin/api/mission/create` | POST | `src/routes/mission.js` |
 | `/admin/api/mission/providers` | GET | `src/routes/mission.js` |

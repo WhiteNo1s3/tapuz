@@ -20,11 +20,17 @@
  *   to the owner. Nothing touches the site until a human presses approve.
  *
  * What is deliberately absent is as much of the design as what is here:
- * no publish, no delete, no theme or settings writes. Every write lands in a
- * DRAFT, which the existing revision history already makes reversible, and
- * going live stays a human act on the publish button. A model that can put
+ * no publish, no delete, no theme or settings writes. Every PAGE write lands
+ * in a DRAFT, which the existing revision history already makes reversible,
+ * and going live stays a human act on the publish button. A model that can put
  * words in front of the public without anyone reading them first is a
  * different product, and not one this commit is going to invent quietly.
+ *
+ * v2.43 adds the menus (read_menus / organize_menu — see "the menus" below).
+ * It is the one write that is NOT a draft, because a site has no draft menu:
+ * the same gate stands in front of it, the owner sees the proposal rendered
+ * on the real header first, and a backup is taken before the apply. Nobody
+ * reads a menu the owner did not approve.
  */
 
 const MAX_SOURCE = 60000;
@@ -143,6 +149,149 @@ function editPage(args) {
   return { slug, title: page.title, edited: true, blocks: r.blocks, warnings: r.warnings || [], moduleCount: blocks.length };
 }
 
+// ── the menus (v2.43) ────────────────────────────────────────────────────
+//
+// Ben: "we must make sure that the menu sorter is also included in the ai
+// helper that connects to the api (lm studio or public doesn't matter they
+// will work the same), there are option to sort the menu using the co-pilot".
+//
+// Until now "put the new page in the menu" had no tool: the copilot could
+// only answer with a page, and a model that has one hammer proposed an
+// edit_page holding a bent-nav. The Menu Organizer already had everything a
+// menu change needs — a tolerant dialect, a door that never lets a broken
+// link through, a preview on the real header, a backup before every apply —
+// but only the injection card could reach it. These two tools are that SAME
+// machinery behind the copilot's own rules, nothing forked:
+//
+//   read_menus     READ. The menus as the `<bent-menus>` document the pack
+//                  shows a chat, the ONE computed number (how many items fit
+//                  a row), and the page table — the only place a legal
+//                  `page="…"` comes from. Runs on its own, like read_page.
+//
+//   organize_menu  WRITE. Takes the whole document back. preflight IS the
+//                  organizer's door (parseMenuReply): a refusal — NO_MENU,
+//                  TOO_MANY_UNKNOWN, a page that does not exist — goes back
+//                  to the model as the call's answer, before the owner is
+//                  asked (the v2.37 rule). What passes is shown on the
+//                  canvas, rendered on the real header, and only ✓ applies.
+//
+// ONE HONEST DIFFERENCE from the page tools, and the UI says it in so many
+// words: a page write lands in a DRAFT; a site has no "draft menu". An
+// approved organize_menu is LIVE — so applyMenuPlan takes its backup first
+// (config/menu-backups, newest 10) and the chat offers the undo the moment it
+// lands. The gate is the same; what is behind it is not, and pretending
+// otherwise would be the one lie in this file.
+
+/** The door, for both the preflight and the write — one parse, one verdict.
+ *  `opts.brief` is the owner's own message: the door judges LAYOUT_UNASKED
+ *  against what the OWNER asked, never against the model's account of it. */
+function checkMenuDoc(args, opts) {
+  const org = require('./menu-organizer');
+  // `source` is tolerated: a model that just used edit_page reaches for the
+  // argument name it knows, and refusing a good document over its key would
+  // burn one of the turn's two repair rounds on nothing
+  const doc = String((args && (args.document || args.source)) || '');
+  if (!doc.trim()) throw new Error('document ריק — צריך מסמך <bent-menus> שלם (קרא/י read_menus קודם)');
+  const ctx = org.siteStateForMenus();
+  const parsed = org.parseMenuReply(doc, ctx, { brief: String((opts && opts.brief) || '') });
+  // A HARD warning means the door DROPPED a link (a page that does not exist,
+  // an unsafe url, a bad phone). The card lets an owner force that through;
+  // the copilot has a better move — the model is right here and can fix it —
+  // and an approval card must only ever show a document that will land.
+  if (parsed.hard) {
+    const hard = parsed.warnings.filter((w) => org.HARD.includes(w.code)).map((w) => w.message);
+    throw Object.assign(new Error(hard.join(' · ')), { code: 'HARD_WARNINGS' });
+  }
+  // the degenerate answer: asking the owner to approve their own menu
+  const echo = parsed.warnings.find((w) => w.code === 'NO_CHANGE');
+  if (echo) throw Object.assign(new Error(echo.message), { code: 'NO_CHANGE' });
+  return { parsed, ctx };
+}
+
+/**
+ * The menus as the model needs them to re-sort them. The document is handed
+ * over WHOLE or not at all (organize_menu replaces every menu it names, so a
+ * model that saw half a menu deletes the other half — the read_page rule);
+ * the page table is what gives when room is short, from the bottom, and says
+ * how many rows it left out (pageTable's own line).
+ */
+function readMenus(args, opts) {
+  const org = require('./menu-organizer');
+  const theme = require('./theme');
+  const ctx = org.siteStateForMenus();
+  const knobs = theme.menuKnobs(ctx.overrides);
+  const document = org.serializeMenus({ knobs, menus: ctx.menus, locations: ctx.locations });
+  const mainItems = (ctx.menus || {})[(ctx.locations || {}).main || 'main'] || [];
+  const capacity = org.capacitySentence(ctx.fit, mainItems.length);
+  // The dialect rides HERE, not in the compact briefing: `document` is the
+  // site's own menu in the language (a worked example), and these are the
+  // organizer's lines for what a live menu may never show — nesting, groups,
+  // free targets, fold. Paid only on a turn that touches the menu.
+  const grammar = org.menuGrammar({ compact: true });
+  // (the bent-nav warning lives here, not in the compact briefing: a model
+  // that learned the PAGE language reaches for the page's nav module)
+  const how = 'לשינוי: organize_menu עם מסמך <bent-menus> שלם, באותה שפה — לא bent-nav ולא bent-item (אלה מודולים של דף). page="…" רק מעמודת page בטבלה. יותר פריטים עליונים ממה שנכנס בשורה → קבצו תחת הורה, או <bent-menu-layout fold="' + Math.max(2, ctx.fit.capacity - 1) + '" />.';
+  const limit = allowance(opts);
+  const fixed = document.length + capacity.length + grammar.length + how.length;
+  if (fixed > limit) {
+    return {
+      document: '',
+      tooLong: true,
+      chars: fixed,
+      limitChars: limit,
+      hint: require('./ai-window').HE.readMenusTooLong(fixed, limit)
+    };
+  }
+  let table = org.pageTable(ctx, 'full');
+  let truncated = false;
+  if (limit !== Infinity) {
+    let rowsCap = table.rows;
+    while (fixed + table.text.length > limit && rowsCap > 1) {
+      rowsCap = Math.max(1, Math.floor(rowsCap * 0.7));
+      table = org.pageTable(ctx, 'full', { rowsCap, dropDrafts: true, dropArticles: true });
+      truncated = true;
+    }
+  }
+  return {
+    document,
+    capacity,
+    grammar,
+    pages: table.text,
+    ...(truncated ? { truncated: true, shownPages: table.rows, publishedPages: table.published } : {}),
+    how
+  };
+}
+
+function organizeMenu(args, opts) {
+  const org = require('./menu-organizer');
+  // parsed AGAIN at the moment of writing, against the site as it is NOW: the
+  // owner may have unpublished a page between the proposal and the click
+  const { parsed, ctx } = checkMenuDoc(args, opts);
+  const r = org.applyMenuPlan(parsed.plan, { reason: 'copilot:organize_menu', ctx });
+  return {
+    organized: true,
+    menus: r.changed.menus,
+    knobs: r.changed.knobs,
+    backupId: r.backupId,
+    fitLine: parsed.preview.fitLine,
+    note: parsed.plan.note || '',
+    warnings: parsed.warningTexts,
+    rebuildError: r.rebuildError || ''
+  };
+}
+
+/** "main: 7 קישורים, footer: 2" — read from the document with the dialect's
+ *  own parser, so the approval line counts what the door will count. */
+function menuSummary(a) {
+  let what = '';
+  try {
+    const doc = require('./bentml/menu-dialect').parseMenusDoc(String((a && (a.document || a.source)) || ''));
+    const count = (items) => (items || []).reduce((n, it) => n + 1 + count(it.children), 0);
+    what = Object.keys(doc.menus).map((name) => name + ': ' + count(doc.menus[name].items) + ' קישורים').join(', ');
+  } catch (e) { /* an unreadable document still gets a truthful line */ }
+  return 'לעדכן את תפריטי האתר' + (what ? ' (' + what + ')' : '') + ' — חל על האתר החי, עם גיבוי';
+}
+
 /**
  * Everything a write would refuse, checked BEFORE the owner is asked (v2.37).
  * Seen live on the Bridge challenges: Gemma proposed a pricing page whose
@@ -150,8 +299,19 @@ function editPage(args) {
  * approve, and only then did create_page throw E_CHILD. The same checks the
  * write runs (the source validates, the slug is free / the page exists), with
  * no side effect; a throw carries the message the write would have thrown.
+ *
+ * v2.43: for organize_menu the check IS the organizer's door, and what it
+ * learned on the way rides back — `{ preview, warnings }`. The tool loop puts
+ * them on the pending, so the canvas renders the very plan the door judged
+ * (the tree, the diff, the fit line, the real header's frame) instead of
+ * parsing the document a second time in the browser's name. `opts.brief` is
+ * the owner's message. The page tools still return nothing.
  */
-function preflight(name, args) {
+function preflight(name, args, opts) {
+  if (name === 'organize_menu') {
+    const { parsed } = checkMenuDoc(args, opts);
+    return { preview: parsed.preview, warnings: parsed.warningTexts };
+  }
   if (name === 'create_page') {
     const { doc } = checkSource(args && args.source);
     const { slug } = slugFor(args, doc);
@@ -217,6 +377,31 @@ const TOOLS = [
     },
     summary: (a) => 'לערוך את הדף "' + String((a && a.slug) || '?') + '" (נשמר כטיוטה)',
     run: editPage
+  },
+  // The descriptions are SHORT on purpose: every declared tool rides in every
+  // request, and in an 8,192 window a sentence here is a sentence of page the
+  // model cannot read back. The grammar is taught once, in the briefing.
+  {
+    name: 'read_menus',
+    mutates: false,
+    description: 'תפריטי האתר כמסמך <bent-menus> + כמה פריטים נכנסים בשורה + טבלת הדפים לקישור. חובה לפני organize_menu.',
+    schema: { type: 'object', properties: {}, required: [] },
+    run: readMenus
+  },
+  {
+    name: 'organize_menu',
+    mutates: true,
+    description: 'החלפת תפריטי האתר במסמך <bent-menus> שלם. דורש אישור; אחריו חל על האתר החי, עם גיבוי.',
+    schema: {
+      type: 'object',
+      properties: { document: { type: 'string', description: 'המסמך המלא אחרי השינוי' } },
+      required: ['document']
+    },
+    summary: menuSummary,
+    // what the model is told when the door refuses its document (the page
+    // tools' line talks about containers and children — wrong advice here)
+    fixHint: 'התפריט לא הוחל ולא הוצג לבעל/ת האתר. תקן/י בדיוק את מה שכתוב למעלה — page="…" רק מעמודת page של read_menus, מועתק מילה במילה — והצע/י את מסמך <bent-menus> המלא שוב.',
+    run: organizeMenu
   }
 ];
 
@@ -232,16 +417,27 @@ function describeCall(name, input) {
   return t.summary ? t.summary(input || {}) : t.description;
 }
 
+// The menu pair, by name — what a window too small to answer them leaves out.
+const MENU_TOOLS = ['read_menus', 'organize_menu'];
+
 /** Provider-shaped tool declarations. The two APIs disagree on the wrapper
- *  but agree on JSON Schema, so only the envelope differs. */
-function toolsForProvider(style) {
+ *  but agree on JSON Schema, so only the envelope differs.
+ *
+ *  `opts.menus === false` (v2.43) leaves the menu pair OUT. Every declared
+ *  tool rides in every request, and the pair costs ~530 chars of schema; in
+ *  an 8,192 window that is the difference between the compact tier fitting
+ *  and WINDOW_TOO_SMALL — for two tools whose answer (a whole menu read back)
+ *  could not fit in what is left anyway. src/ai.js decides (pickCopilotTier):
+ *  a tool the window cannot answer is not declared. Absent/true = all six. */
+function toolsForProvider(style, opts) {
+  const list = opts && opts.menus === false ? TOOLS.filter((t) => !MENU_TOOLS.includes(t.name)) : TOOLS;
   if (style === 'openai-chat') {
-    return TOOLS.map((t) => ({
+    return list.map((t) => ({
       type: 'function',
       function: { name: t.name, description: t.description, parameters: t.schema }
     }));
   }
-  return TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema }));
+  return list.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema }));
 }
 
-module.exports = { TOOLS, getTool, describeCall, toolsForProvider, preflight, MAX_SOURCE };
+module.exports = { TOOLS, MENU_TOOLS, getTool, describeCall, toolsForProvider, preflight, MAX_SOURCE };

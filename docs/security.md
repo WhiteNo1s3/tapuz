@@ -121,6 +121,17 @@ unaffected.
 
 Pinned by `scripts/smoke-ai-html-guard.js`.
 
+### 5א. The copilot's menu write (v2.43)
+
+`organize_menu` is the one copilot write that is **live, not a draft** (a site has no draft menu), so its gate carries more weight than the page tools':
+
+- **Nothing a model writes reaches the menus without the owner's ✓.** The write is `mutates:true` — the tool loop stops, the conversation state stays on the server under a single-use id, and the browser holds only that id. A refusal writes nothing and takes no backup. (Checked by hand while building it: with `organize_menu` flipped to `mutates:false` the smoke goes red exactly at "NOTHING was written … while the proposal waits" — the checks can fail.)
+- **The document goes through the organizer's door** (`parseMenuReply`) at the proposal *and again* at the moment of writing: a url allowlist, not a blocklist (`javascript:` split by a tab, a newline or a bidi mark is dropped — see [bent-menus.md](bent-menus.md) "Warnings"); a link to a page that does not exist is refused to the model, never shown to the owner; labels are text and reach every admin surface through `textContent`.
+- **The way back is not a tool.** `applyMenuPlan` snapshots the menus, the locations and the layout knobs first (`config/menu-backups`, newest 10); undo is the owner's own click on the existing restore route, which snapshots again before restoring. The copilot cannot restore, delete or publish.
+- **The previews are framed without scripts.** The menu canvas and the proposal frame load `/admin/menus/preview/:id` in `sandbox="allow-same-origin"` — no `allow-scripts` — the same rule as the page proposal frame; the route answers `X-Frame-Options: SAMEORIGIN` and `frame-ancestors 'self'`.
+
+Pinned by `scripts/smoke-copilot-tools.js` and the numbered gate in `scripts/smoke-copilot-route.js`.
+
 ## Operator checklist
 
 - [ ] Serve Tapuz **behind HTTPS** (so `Secure` cookies engage) via a reverse proxy.

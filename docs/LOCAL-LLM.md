@@ -76,6 +76,20 @@ Guidance by card:
 
 A cloud key is not bound by this gate: a briefing-less request there is a different bug, not the one that burns the owner's GPU inventing a dialect. The **one declared exception** is the visitor's customer-service chat (`src/crm/cs.js`), whose answer is words for a visitor and whose door is a length cap, never the compiler — it passes `prose: true`, and `smoke-no-briefing` pins that the flag appears nowhere else in `src/`. The same smoke runs the real copilot briefing (both tiers) and every ready pack (both sizes) through the gate, so a product prompt can never be the one it refuses; strips the briefing on every seam and asserts refusal with no fetch; and runs the real worker script `--once` against a fake site that hands it a bare job.
 
+## 1ג. The menu tools and the window (v2.43)
+
+The copilot has six tools: `list_pages`, `read_page`, `create_page`, `edit_page` — and, since v2.43, `read_menus` and `organize_menu` (the Menu Organizer's door behind the copilot's approval gate; the whole story is in [bent-menus.md](bent-menus.md) "In the copilot"). They work the same over every courier — the server's own socket to LM Studio, a cloud key (both tool envelopes), and the Bridge V2 relay. **The extension did not change**: the bridge assembles `tool_calls` generically and relays the same `/v1/chat/completions` path, so nothing needs reloading for this release.
+
+**A tool the window cannot answer is not declared.** Every declared tool rides in every request, and the menu pair costs ~530 chars of schema plus ~200 of briefing. Found by `smoke-ai-window` (c) while building it — the silent band at a probed 8,192: once a reply recalibrates the chars-per-token ratio to its 2.0 clamp, the whole prompt budget is 5,760 × 2.0 = 11,520 chars; v2.42 sat about 100 under that, and the pair pushed the compact tier to `WINDOW_TOO_SMALL` — on the very model §1א is about. And where it still fit, it was useless: `read_menus` hands the WHOLE menu back (never a slice — `organize_menu` replaces whole menus), which needs more room than such a window has left. So `ai.pickCopilotTier` asks one more question:
+
+| Window | Tier | Tools | Menus |
+|---|---|---|---|
+| ≥ 32,768 (probed / hinted / learned), or a cloud key | full | six | the briefing teaches the organizer's grammar |
+| e.g. 16,384 — the compact tier fits with ≥ 3,000 chars left (`MENU_TOOLS_MIN_ROOM_CHARS`) | compact | six | two tool bullets only ROUTE the request ("תפריט ≠ דף"); the grammar rides in `read_menus`' answer, paid on the turns that touch a menu |
+| 8,192 | compact, **lean** | the four page tools | not a word about menus — the request is v2.42's, byte for byte |
+
+In the lean case the copilot answers a menu request in words, the page says why once ("החלון של המודל קטן מדי לכלי התפריט…") with the same fix as everywhere else here — **Context Length → 32768** — and the menu canvas still *shows* the menu. The shrink-and-retry ladder gained the matching rung: full → compact → lean → stop (still inside `MAX_SHRINKS`), so a model that refuses the compact tier by a few hundred tokens gets the smaller request instead of an error. `GET /admin/api/ai/window` answers `menuTools` for the chip with the same planner the turn uses.
+
 ## 2. Point the CMS at it
 
 `/admin/ai` → provider **מודל מקומי**, endpoint `http://127.0.0.1:1234/v1`, model `tapuz-gemma` (or leave the model empty for whatever is loaded). The connection test lists the loaded models. From then on every **▶ הרץ עם ה-AI המחובר** button in the admin (the menu organizer on `/admin/menus`, the packs on `/admin/inject`) runs through this endpoint, with the same doors as the paste flow.

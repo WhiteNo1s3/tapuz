@@ -37,11 +37,22 @@ check('the copilot can propose writes (create_page, edit_page)',
 for (const forbidden of ['publish_page', 'delete_page', 'save_theme', 'save_settings', 'run_sql', 'build_site']) {
   check(`NO tool named ${forbidden} exists`, !names.includes(forbidden));
 }
+// v2.43 — the menus (Ben: "the menu sorter is also included in the ai helper").
+// One read, one gated write — and the way BACK is deliberately not a tool:
+// putting a menu back is the owner's click, like publishing.
+check('the copilot can look at the menus and propose a new one (read_menus, organize_menu)',
+  names.includes('read_menus') && names.includes('organize_menu'));
+for (const forbidden of ['undo_menu', 'restore_menu', 'delete_menu', 'save_menus', 'apply_menu']) {
+  check(`NO tool named ${forbidden} exists (undo / restore stay the owner's)`, !names.includes(forbidden));
+}
+check('exactly six tools — a seventh arrives with its own gate checks, never quietly', names.length === 6);
 check('reads are marked safe, writes are marked mutating',
   tools.getTool('list_pages').mutates === false &&
   tools.getTool('read_page').mutates === false &&
+  tools.getTool('read_menus').mutates === false &&
   tools.getTool('create_page').mutates === true &&
-  tools.getTool('edit_page').mutates === true);
+  tools.getTool('edit_page').mutates === true &&
+  tools.getTool('organize_menu').mutates === true);
 check('every tool carries a description and a JSON schema',
   tools.TOOLS.every((t) => t.description && t.schema && t.schema.type === 'object'));
 check('both provider envelopes are produced from the same schemas',
@@ -236,6 +247,156 @@ const wantsWrite = {
     /בו זמנית/.test(require('../src/pages').getPageSource('existing', 'draft')));
   check('every converse result carries the window envelope (tier, source) and reads[]',
     mixedDone.window && typeof mixedDone.window.tier === 'string' && Array.isArray(mixedDone.reads));
+
+  // ══ v2.43 — the menus: the organizer's door, behind the copilot's gate ══
+  // Ben: "the menu sorter is also included in the ai helper that connects to
+  // the api (lm studio or public doesn't matter they will work the same)".
+  // Last in the file on purpose: it publishes pages and rewrites the menus.
+  {
+    const menusLib = require('../src/menus');
+    const org = require('../src/menu-organizer');
+    const FIX = path.join(__dirname, '..', 'test', 'fixtures', 'inject', 'menu-organizer', 'replies');
+    for (const slug of ['home', 'about', 'contact']) createPage({ title: slug, slug, status: 'published', blocks: [] });
+    menusLib.saveMenus({
+      main: [
+        { label: 'צור קשר', type: 'page', target: 'contact' },
+        { label: 'אודות', type: 'page', target: 'about' },
+        { label: 'הבית', type: 'page', target: 'home' }
+      ],
+      footer: []
+    });
+    const order = () => menusLib.loadMenus().main.map((i) => i.target || i.label).join(',');
+    const backups = () => menusLib.listMenuBackups().length;
+    const START = order();
+
+    // ── read_menus: what the model gets ──
+    const rm = tools.getTool('read_menus').run({});
+    check('read_menus returns the menus as the <bent-menus> document — the organizer\'s own serialization',
+      rm.document === org.serializeMenus({ knobs: require('../src/theme').menuKnobs(org.siteStateForMenus().overrides), menus: menusLib.loadMenus(), locations: menusLib.getMenuLocations() }) &&
+      /<bent-link label="צור קשר" page="contact" \/>/.test(rm.document));
+    check('…the ONE computed number, in the organizer\'s sentence (capacity is computed, never guessed)',
+      /בשורה אחת נכנסים עד \d+ פריטים עליונים ועד \d+ תווים/.test(rm.capacity) && /היום: 3 פריטים/.test(rm.capacity));
+    check('…the page table — the only place a legal page="…" comes from (drafts never get a row)',
+      /\| about \|/.test(rm.pages) && /\| contact \|/.test(rm.pages) && !/\| tool-test \|/.test(rm.pages));
+    check('…and the grammar a live menu may never show (nesting, groups, free targets, fold) — the ORGANIZER\'s lines, not a second grammar',
+      rm.grammar === org.menuGrammar({ compact: true }) && /הורה בלי מאפיין יעד = קבוצה/.test(rm.grammar) && /tel=/.test(rm.grammar) && /fold=/.test(rm.grammar));
+    check('the pack and the copilot teach ONE grammar: every compact line is a line of the pack\'s own',
+      org.menuGrammar({ compact: true }).split('\n').filter((l) => !/bent-menu-layout/.test(l)).every((l) => org.menuGrammar().includes(l)));
+    const tight = tools.getTool('read_menus').run({}, { maxSourceChars: 60 });
+    check('read_menus over the allowance is REFUSED with a hint — never a sliced menu (organize_menu replaces whole menus)',
+      tight.tooLong === true && tight.document === '' && tight.limitChars === 60 && /Context Length/.test(tight.hint) && /אל תציע\/י תפריט שלא קראת/.test(tight.hint));
+    const roomy = rm.document.length + rm.capacity.length + rm.grammar.length + rm.how.length;
+    const mid = tools.getTool('read_menus').run({}, { maxSourceChars: roomy + 150 });
+    check('…when only the TABLE does not fit, the document stays whole and the table gives rows from the bottom, flagged',
+      mid.document === rm.document && mid.truncated === true && mid.shownPages < mid.publishedPages);
+
+    // ── preflight IS the organizer's door: its canned refusals, verbatim ──
+    const canned = (re) => fs.readFileSync(path.join(FIX, fs.readdirSync(FIX).find((f) => re.test(f) && f.endsWith('.txt'))), 'utf8');
+    const refusedAs = (doc) => { try { tools.preflight('organize_menu', { document: doc }, { brief: '' }); return 'PASSED'; } catch (e) { return e.code || 'NO_CODE'; } };
+    for (const [file, code] of [[/theme-doc/, 'THEME_NOT_MENU'], [/page-doc/, 'PAGE_NOT_MENU'], [/31-nothing/, 'NO_MENU'], [/bad-menu-name/, 'BAD_MENU_NAME'], [/too-many-items/, 'TOO_MANY_ITEMS'], [/too-many-unknown/, 'TOO_MANY_UNKNOWN']]) {
+      check(`preflight refuses the organizer's canned reply ${file.source} as ${code} — same door, same verdict`, refusedAs(canned(file)) === code);
+    }
+    check('an empty document is refused before the door is even asked', refusedAs('   ') === 'NO_CODE');
+    const UNKNOWN = '<bent-menus version="1"><bent-menu name="main" location="main"><bent-link label="הבית" page="home"/><bent-link label="אודות" page="about"/><bent-link label="צור קשר" page="contact"/><bent-link label="מחירון" page="pricing"/></bent-menu></bent-menus>';
+    check('a link to a page that does not exist is refused to the MODEL (HARD_WARNINGS) — an approval card only ever shows a document that will land',
+      refusedAs(UNKNOWN) === 'HARD_WARNINGS');
+    check('the current menu echoed back is refused (NO_CHANGE) — the owner is never asked to approve their own menu',
+      refusedAs(rm.document) === 'NO_CHANGE');
+    check('none of those refusals wrote anything or took a backup', order() === START && backups() === 0);
+
+    // a model returns BARE documents, fenced ones, and sometimes names the
+    // argument like the page tools do — all three are the same document
+    const NEW = [
+      '<bent-menus version="1" note="הבית ראשון, צור קשר אחרון">',
+      '  <bent-menu name="main" location="main">',
+      '    <bent-link label="הבית" page="home" />',
+      '    <bent-link label="אודות" page="about" />',
+      '    <bent-link label="צור קשר" page="contact" />',
+      '  </bent-menu>',
+      '</bent-menus>'
+    ].join('\n');
+    const pre = tools.preflight('organize_menu', { document: NEW }, { brief: 'סדר את התפריט' });
+    check('a good document passes the door and the preflight hands back what it judged: the diff, the fit line, the framed header',
+      pre && pre.preview && pre.preview.diff.main.moved.length > 0 && /✓|⚠/.test(pre.preview.fitLine) && /^\/admin\/menus\/preview\/mp_/.test(pre.preview.previewUrl) && Array.isArray(pre.warnings));
+    check('fence optional (models return bare documents) and `source` tolerated as the argument name',
+      refusedAs('בטח!\n```html\n' + NEW + '\n```') === 'PASSED' &&
+      (() => { try { tools.preflight('organize_menu', { source: NEW }, {}); return true; } catch (e) { return false; } })());
+    check('the approval line counts what the door will count, and says LIVE — never "draft"',
+      /main: 3 קישורים/.test(tools.describeCall('organize_menu', { document: NEW })) && /האתר החי/.test(tools.describeCall('organize_menu', { document: NEW })) && !/טיוטה/.test(tools.describeCall('organize_menu', { document: NEW })));
+
+    // ── through the loop, openai-chat shape ──
+    const callMenu = (id, doc) => ({ choices: [{ message: { content: '', tool_calls: [{ id, type: 'function', function: { name: 'organize_menu', arguments: JSON.stringify({ document: doc }) } }] } }] });
+    scripted = [
+      { choices: [{ message: { content: '', tool_calls: [{ id: 'rm1', type: 'function', function: { name: 'read_menus', arguments: '{}' } }] } }] },
+      callMenu('om1', NEW)
+    ];
+    const prop = await ai.converse({ system: 's', user: 'סדר את התפריט: הבית ראשון' });
+    check('read_menus runs FREE, organize_menu STOPS the loop: a pending with the door\'s preview (diff + fit line + frame url)',
+      prop.used.includes('read_menus') && prop.pending && prop.pending.tool === 'organize_menu' && !!prop.pending.id &&
+      prop.pending.preview && prop.pending.preview.diff.main.moved.length > 0 && !!prop.pending.preview.fitLine && /^\/admin\/menus\/preview\/mp_/.test(prop.pending.preview.previewUrl));
+    check('NOTHING was written and NO backup was taken while the proposal waits', order() === START && backups() === 0);
+    check('the request carried both menu tools, declared in the openai envelope',
+      (lastBody.tools || []).some((t) => t.type === 'function' && t.function.name === 'organize_menu' && t.function.parameters.required[0] === 'document') &&
+      (lastBody.tools || []).some((t) => t.function.name === 'read_menus'));
+
+    // REJECT — chat-only: nothing written, no backup, and the model is told
+    scripted = [{ choices: [{ message: { content: 'הבנתי, לא שיניתי את התפריט.', tool_calls: null } }] }];
+    const rej = await ai.converse({ approve: { id: prop.pending.id, ok: false } });
+    const told = (lastBody.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'om1').pop();
+    check('a REFUSED menu proposal writes nothing and takes NO backup', order() === START && backups() === 0 && !rej.applied);
+    check('…and the model is told the owner declined, the same words a declined edit_page gets (done:false, do not claim it)',
+      !!told && /"done":false/.test(told.content) && /שום דבר לא נשמר/.test(told.content) && /אל תכתוב\/י שביצעת/.test(told.content) && /דחה/.test(rej.memo));
+
+    // a bad proposal never reaches the owner — and the fix line is the MENU's
+    scripted = [callMenu('bad1', UNKNOWN), { choices: [{ message: { content: 'אין דף מחירון — אשאיר אותו בחוץ.', tool_calls: null } }] }];
+    const bad = await ai.converse({ system: 's', user: 'הוסף מחירון לתפריט' });
+    const badAnswer = (lastBody.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'bad1').pop();
+    check('a document the door refuses → NO approval card; the model gets the door\'s own sentence back',
+      !bad.pending && /לפני שתתבקשו לאשר/.test(bad.notice || '') && !!badAnswer && /מצביע על דף שלא קיים \(pricing\)/.test(badAnswer.content) && /"proposed":false/.test(badAnswer.content));
+    check('…with the MENU\'s fix line (page="…" from read_menus), not the page tools\' advice about containers',
+      !!badAnswer && /read_menus/.test(badAnswer.content) && !/Accepts children/.test(badAnswer.content) && order() === START && backups() === 0);
+
+    // APPROVE — applies through applyMenuPlan: backup first, then the menus
+    scripted = [callMenu('om2', NEW)];
+    const again = await ai.converse({ system: 's', user: 'סדר את התפריט: הבית ראשון' });
+    scripted = [{ choices: [{ message: { content: '', tool_calls: null } }] }];
+    const done = await ai.converse({ approve: { id: again.pending.id, ok: true } });
+    check('an APPROVED proposal applies: the menu is in the new order', order() === 'home,about,contact');
+    check('…a backup of the OLD menu was taken first (config/menu-backups), reason copilot:organize_menu',
+      backups() === 1 && menusLib.listMenuBackups()[0].reason === 'copilot:organize_menu' && done.applied.backupId === menusLib.listMenuBackups()[0].id &&
+      fs.existsSync(path.join(menusLib.BACKUPS_DIR, done.applied.backupId + '.json')));
+    check('…applied says organized (no slug, no draft), with the fit line; the memo says LIVE and that the way back exists',
+      done.applied.organized === true && done.applied.tool === 'organize_menu' && done.applied.menus.join() === 'main' && !!done.applied.fitLine &&
+      !done.applied.created && !done.applied.edited && /התפריט עודכן באתר החי/.test(done.memo) && /אפשר לבטל/.test(done.memo) && !/טיוטה/.test(done.memo));
+    check('a menu pending id is single-use too', await (async () => {
+      try { await ai.converse({ approve: { id: again.pending.id, ok: true } }); return false; } catch (e) { return /פגה/.test(e.message); }
+    })());
+    const undone = org.undoLast();
+    check('undo stays reachable: undoLast restores the very backup the copilot\'s apply took', undone.restored === done.applied.backupId && order() === START);
+
+    // ── the SAME loop in the anthropic shape ("lm studio or public doesn't
+    //    matter they will work the same") ──
+    providers.PROVIDERS.__fakeA = {
+      id: '__fakeA', label: 'test-a', endpoint: 'http://127.0.0.1:1/v1/messages',
+      method: 'POST', authScheme: 'x-api-key', authHeader: 'x-api-key', extraHeaders: {},
+      defaultModel: 'm', models: [], openModel: true, keyOptional: true, maxTokens: 100,
+      responsePath: ['content', 0, 'text'], body: { style: 'anthropic-messages' }
+    };
+    // (the endpoint policy is about where a KEY may go; this fake sends none)
+    ai.saveSettings({ provider: '__fakeA', baseUrl: '' });
+    const before2 = backups();
+    scripted = [{ content: [{ type: 'text', text: 'מסדר' }, { type: 'tool_use', id: 'tu1', name: 'organize_menu', input: { document: NEW } }], stop_reason: 'tool_use' }];
+    const aProp = await ai.converse({ system: 's', user: 'סדר את התפריט' });
+    check('anthropic shape: the tools ride as {name, input_schema} and a tool_use block becomes the SAME pending',
+      (lastBody.tools || []).some((t) => t.name === 'organize_menu' && t.input_schema && t.input_schema.required[0] === 'document') && typeof lastBody.system === 'string' &&
+      aProp.pending && aProp.pending.tool === 'organize_menu' && !!aProp.pending.preview.fitLine && order() === START && backups() === before2);
+    scripted = [{ content: [{ type: 'text', text: 'התפריט עודכן.' }], stop_reason: 'end_turn' }];
+    const aDone = await ai.converse({ approve: { id: aProp.pending.id, ok: true } });
+    const resultBlock = (((lastBody.messages || []).filter((m) => m.role === 'user' && Array.isArray(m.content)).pop() || {}).content || [])[0];
+    check('anthropic shape: approve applies, and the write is answered as a tool_result for tu1',
+      aDone.applied && aDone.applied.organized === true && order() === 'home,about,contact' && backups() === before2 + 1 &&
+      !!resultBlock && resultBlock.type === 'tool_result' && resultBlock.tool_use_id === 'tu1' && /"organized":true/.test(resultBlock.content));
+  }
 
   console.log('');
   console.log(fail ? 'SMOKE COPILOT-TOOLS: FAIL' : 'SMOKE COPILOT-TOOLS: PASS');

@@ -81,6 +81,23 @@ The estimate is ±15% with wide Google fonts or emoji-heavy labels — which is 
 
 `GET /admin/api/menus/export.bent` returns the live state as this document — the same text the prompt shows the model as "the menus today".
 
+## In the copilot (v2.43) — the same door, behind the approval gate
+
+Ben: *"we must make sure that the menu sorter is also included in the ai helper that connects to the api (lm studio or public doesn't matter they will work the same) … i want the copilot to show canvas of the menu when needed."* The connected copilot (`/admin/chat`, and the 🤖 drawer in the builder) reaches the organizer through two tools in `src/ai-tools.js`. Nothing is forked: they call `parseMenuReply` and `applyMenuPlan` as they are.
+
+| Tool | Kind | What it does |
+|---|---|---|
+| `read_menus` | READ — runs on its own | `document` (this file's serialization of the live menus), `capacity` (the computed sentence: how many top items and characters fit a row, and where the menu stands today), `grammar` (the organizer's lines for what a live menu may never show — nesting, groups, free targets, fold), `pages` (the page table — the only source of a legal `page="…"`), `how`. Over the turn's read allowance the **document is refused whole** with a hint (never sliced — `organize_menu` replaces every menu it names); the page table is what gives, from the bottom, flagged `truncated`. |
+| `organize_menu` | WRITE — `mutates:true`, **never runs on its own** | Takes the whole `<bent-menus>` document (fence optional; `source` tolerated as the argument name). Its preflight **is the door**: every refusal above, plus a hard warning (the door dropped a link) and `NO_CHANGE` (an echo), goes back to the model as the call's answer — before the owner is asked, capped at two repair rounds. What passes becomes an approval that carries the door's `preview`; ✓ applies it through `applyMenuPlan` (backup first, reason `copilot:organize_menu`). The document is parsed again at the moment of writing, against the site as it is then. |
+
+**Live, not a draft.** A page write lands in a draft; a site has no draft menu. The approval card, the canvas overlay, the drawer's button and the briefing all say so in words ("חל על האתר החי, עם גיבוי"), and the line that follows an apply carries **↩ בטל** — the owner's own click on `POST /admin/api/menus/restore`. The copilot has no undo tool: putting a menu back is a human act, like publishing. `LAYOUT_UNASKED` is judged against the **owner's** message of that turn, never the model's account of it.
+
+**The canvas.** `/admin/chat` has a third canvas state beside blank and page: **🧭 תפריט האתר** in the dropdown — opened by the owner, by the robot's `read_menus` into an empty canvas, or by any menu proposal (a page the owner is editing is never pulled away for a mere read). It shows the tree and the fit line over the real header, framed at the site's own width: `GET /admin/api/menus/state` returns `currentMenuPreview()` — today's menus as the identity plan through `buildMenuPreview`, header first — plus the newest backups. A proposal uses the page proposal's overlay: moved / added / removed / renamed, the fit line, the warnings and the knob diff **as the door judged them on the server** (the browser re-parses nothing), drawn by the injection card's own `renderPreview`, with the candidate header in the frame beneath and the 375 / 768 / 1024 widths. Both frames are sandboxed `allow-same-origin` with no scripts.
+
+**The weaker mode.** A model with no tool support, or a courier that returns no tool calls, can only *describe*: it prints a `<bent-menus>` document into the chat. The page recognises it as a menu (it used to take any `<bent-` for a page and offer "create page"), previews it through `POST /admin/api/menus/preview` — which never writes — and shows it closable. There is no pending id behind it, so there is nothing to approve there; applying it stays where a pasted reply has always been applied, the organizer card above.
+
+**Small windows.** Every declared tool rides in every request. When the room left in the model's window could not hold a menu read (`ai.pickCopilotTier`, `MENU_TOOLS_MIN_ROOM_CHARS`), the pair is not declared and the briefing says nothing about menus — an 8,192 window gets exactly the request it got before these tools existed, and the page tells the owner once. See [LOCAL-LLM.md](LOCAL-LLM.md) §1ג.
+
 ## Zero-JS limits (published pages ship no script)
 
 - Sub-menus open on hover and on keyboard focus (`:focus-within`); on touch the first tap on a parent opens it (WebKit/Android hover emulation).

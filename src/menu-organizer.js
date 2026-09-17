@@ -20,6 +20,14 @@
  * The prompt is composed on src/injections/compose.js (the ten fixed
  * sections); the eval harness (scripts/eval-injections.js) and the injection
  * descriptor (src/injections/menu-organizer.js) call exactly these names.
+ *
+ * v2.43 — the copilot walks through the SAME door. Its `read_menus` /
+ * `organize_menu` tools (src/ai-tools.js) call parseMenuReply and
+ * applyMenuPlan as they are; what it needed beyond them is reuse, not a fork:
+ *   menuGrammar({pageSource, compact})  the dialect lines, taught by the pack AND the briefing
+ *   capacitySentence(fit, n)            the one computed number, as the model reads it
+ *   pageTable(ctx, size, trim)          the page inventory (`page=` comes from nowhere else)
+ *   currentMenuPreview(ctx)             today's menus in the preview's shape — the canvas
  */
 
 const crypto = require('crypto');
@@ -308,6 +316,48 @@ function ladderText(fit, capacity) {
   ].join('\n');
 }
 
+/**
+ * The dialect, one line per tag — the pack's "הדקדוק" section. Since v2.43
+ * the copilot's briefing teaches the SAME lines (src/pzn/agent-roleplay.js):
+ * one grammar, two readers, so a tag the door learns to accept is taught to
+ * both by editing this list. `pageSource` names where a legal `page=` value
+ * comes from — the pack has a table in the prompt, the copilot has the table
+ * `read_menus` hands back.
+ *
+ * `compact` is what rides INSIDE read_menus' answer, beside the site's own
+ * serialized document. That document already demonstrates the wrapper, the
+ * `<bent-menu>` line and a page link — so the compact list keeps only what a
+ * live menu may never show (a flat menu has no parent; few have a tel link;
+ * fold is usually 0): the layout tag cut to the two knobs a sort reaches
+ * for, the free targets, and nesting. Where it rides matters more than its
+ * size: a briefing is paid on EVERY turn, a tool answer only on the turns
+ * that touch the menu — and in an 8,192 window that difference is whether
+ * the menu can be read back at all.
+ * @param {{ pageSource?: string, compact?: boolean }} [opts]
+ */
+function menuGrammar(opts = {}) {
+  const pageSource = opts.pageSource || 'הערך מעמודת `page` בטבלה';
+  const wrapper = '- `<bent-menus version="1" note="משפט אחד לבעל האתר">` — העוטף, פעם אחת.';
+  const layout = opts.compact
+    ? '- `<bent-menu-layout fold="0..12" width="content|wide|full" />` — 0..1; `fold="N"` = מה שאחרי N הפריטים נכנס תחת "עוד".'
+    : '- `<bent-menu-layout placement="top|side" flow="wrap|scroll|drawer" fold="0..12" collapse="sm|md|lg|never" width="content|wide|full" align="start|center|end|between" gap="sm|md|lg" size="sm|md|lg" current="underline|pill|bold|none" />` — 0..1, אותו תג כמו במסמך הערכה; מאפיין שלא כתבתם = ידית שלא משתנה.';
+  const menu = '- `<bent-menu name="main|footer" location="main|footer">` — תפריט לכל שם; `main` = הכותרת, `footer` = התחתית.';
+  const link = '- `<bent-link label="…" page="…" />` — קישור לדף; `page` = ' + pageSource + ', מועתק מילה במילה.';
+  const free = '- `<bent-link label="…" url="…" />` · `tel="…"` · `mailto="…"` · `anchor="id"` — קישור חופשי / חיוג / מייל / עוגן. בדיוק מאפיין יעד אחד.';
+  const parent = '- הורה: `<bent-link label="…" page="…">` … `</bent-link>` עוטף ילדים (רמה אחת בלבד). הורה בלי מאפיין יעד = קבוצה.';
+  return (opts.compact ? [layout, free, parent] : [wrapper, layout, menu, link, free, parent]).join('\n');
+}
+
+/**
+ * The ONE computed number, as the sentence the model reads: how many top
+ * items fit a row, the character budget, and where the menu stands today.
+ * The pack embeds it in its capacity block; `read_menus` (v2.43) returns it
+ * verbatim — the CMS computes capacity, a model never guesses it.
+ */
+function capacitySentence(fit, itemCount) {
+  return `**בשורה אחת נכנסים עד ${fit.capacity} פריטים עליונים ועד ${fit.charBudget} תווים בסך התוויות**. היום: ${itemCount} פריטים / ${fit.labelChars} תווים → ${fit.rowsNow} שורות.`;
+}
+
 const EXAMPLE_DOC = [
   '<bent-menus version="1" note="שירותים קובצו תחת הורה אחד כדי להיכנס בשורה">',
   '  <bent-menu-layout placement="top" flow="wrap" fold="0" width="wide" />',
@@ -397,19 +447,12 @@ function buildMenuPrompt(opts = {}) {
   const capacityBlock = [
     '## כלל הקיבולת (חשבנו בשבילך)',
     '',
-    `רוחב פנוי לשורת התפריט ~${r(fit.availPx)}px (כותרת ${knobs.width}, לוגו ${r(fit.logoPx)}px). פריט ממוצע ${r(fit.avgItemPx)}px + רווח ${r(fit.gapPx)}px ⇒ **בשורה אחת נכנסים עד ${fit.capacity} פריטים עליונים ועד ${fit.charBudget} תווים בסך התוויות**. היום: ${mainItems.length} פריטים / ${fit.labelChars} תווים → ${fit.rowsNow} שורות. יש ${table.published} דפים מפורסמים, ${table.articles} מאמרים, ${table.drafts} טיוטות.`,
+    `רוחב פנוי לשורת התפריט ~${r(fit.availPx)}px (כותרת ${knobs.width}, לוגו ${r(fit.logoPx)}px). פריט ממוצע ${r(fit.avgItemPx)}px + רווח ${r(fit.gapPx)}px ⇒ ${capacitySentence(fit, mainItems.length)} יש ${table.published} דפים מפורסמים, ${table.articles} מאמרים, ${table.drafts} טיוטות.`,
     '',
     ladderText(fit, fit.capacity)
   ].join('\n');
 
-  const grammar = [
-    '- `<bent-menus version="1" note="משפט אחד לבעל האתר">` — העוטף, פעם אחת.',
-    '- `<bent-menu-layout placement="top|side" flow="wrap|scroll|drawer" fold="0..12" collapse="sm|md|lg|never" width="content|wide|full" align="start|center|end|between" gap="sm|md|lg" size="sm|md|lg" current="underline|pill|bold|none" />` — 0..1, אותו תג כמו במסמך הערכה; מאפיין שלא כתבתם = ידית שלא משתנה.',
-    '- `<bent-menu name="main|footer" location="main|footer">` — תפריט לכל שם; `main` = הכותרת, `footer` = התחתית.',
-    '- `<bent-link label="…" page="…" />` — קישור לדף; `page` = הערך מעמודת `page` בטבלה, מועתק מילה במילה.',
-    '- `<bent-link label="…" url="…" />` · `tel="…"` · `mailto="…"` · `anchor="id"` — קישור חופשי / חיוג / מייל / עוגן. בדיוק מאפיין יעד אחד.',
-    '- הורה: `<bent-link label="…" page="…">` … `</bent-link>` עוטף ילדים (רמה אחת בלבד). הורה בלי מאפיין יעד = קבוצה.'
-  ].join('\n');
+  const grammar = menuGrammar();
 
   const rules = [
     'המסמך הוא כל התשובה — גדר ```html מתקבלת בברכה, אבל שום דבר לפניה או אחריה.',
@@ -790,6 +833,27 @@ function buildMenuPreview(plan, ctx = siteStateForMenus(), resolved) {
   };
 }
 
+/**
+ * The menus as they ARE, in the preview's own shape (v2.43). The copilot's
+ * canvas shows today's menu the way it shows a proposal — the same tree, the
+ * same fit line, the same real header in a frame — so the owner compares like
+ * with like. It is the identity plan (every menu, no knob touched) through
+ * buildMenuPreview: the diff comes back empty and the fit's before === after,
+ * which is the point. Never writes; registers one preview entry.
+ */
+function currentMenuPreview(ctx = siteStateForMenus()) {
+  const plan = { menus: {}, knobs: {}, note: '', dropped: [] };
+  // The HEADER's menu first, the footer's second, the rest after (seen live
+  // while building this: a seeded `explore` menu sorted ahead of `main`, and
+  // the one menu the owner came to look at was the one cut off below).
+  const loc = ctx.locations || {};
+  const lead = [loc.main || 'main', loc.footer || 'footer'];
+  const names = Object.keys(ctx.menus || {});
+  const ordered = lead.filter((n) => names.includes(n)).concat(names.filter((n) => !lead.includes(n)).sort());
+  for (const name of ordered) plan.menus[name] = { items: ctx.menus[name] || [] };
+  return buildMenuPreview(plan, ctx);
+}
+
 // ── apply / undo ─────────────────────────────────────────────────────
 
 /**
@@ -854,10 +918,16 @@ module.exports = {
   buildMenuPrompt,
   parseMenuReply,
   buildMenuPreview,
+  currentMenuPreview,
   applyMenuPlan,
   undoLast,
   registerMenuPreview,
   getMenuPreview,
+  // what the copilot reuses instead of forking (v2.43): the grammar lines the
+  // briefing teaches, and the table + capacity sentence read_menus returns
+  menuGrammar,
+  capacitySentence,
+  pageTable,
   REPAIRABLE,
   HARD,
   LAYOUT_ASK_RE,

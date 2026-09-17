@@ -358,9 +358,24 @@ function getBriefingSizes() {
   briefingSizes = {
     full: buildCopilotBriefing({ locale: 'he', tier: 'full' }).chars,
     compact: buildCopilotBriefing({ locale: 'he', tier: 'compact' }).chars,
-    fixedChars: JSON.stringify(tools.toolsForProvider('openai-chat')).length
+    // v2.43: the lean pair — what a window too small for the menu tools gets
+    compactLean: buildCopilotBriefing({ locale: 'he', tier: 'compact', menus: false }).chars,
+    fixedChars: JSON.stringify(tools.toolsForProvider('openai-chat')).length,
+    leanFixedChars: JSON.stringify(tools.toolsForProvider('openai-chat', { menus: false })).length
   };
   return briefingSizes;
+}
+
+/** The door's own planner (ai.pickCopilotTier) on the route's cached sizes —
+ *  so the setup screen and the connection test answer the question the turn
+ *  will ask, the menu tools included. */
+function planTier(tokens, source, ratio) {
+  const sizes = getBriefingSizes();
+  return require('../ai').pickCopilotTier({
+    tokens, source, ratio,
+    sizes: { full: sizes.full, compact: sizes.compact, compactLean: sizes.compactLean },
+    toolsChars: sizes.fixedChars, leanToolsChars: sizes.leanFixedChars
+  });
 }
 
 /**
@@ -393,7 +408,6 @@ async function planWindowAs(hint, providerOverride) {
   const known = cloud
     ? { tokens: Infinity, source: 'cloud', ratio: aw.DEFAULT_RATIO, maxTokens: null, jit: false }
     : aw.getWindow(aw.windowKey(providerId, model));
-  const sizes = getBriefingSizes();
   // An UNKNOWN window (no probe, no hint — an old bridge, a non-LM-Studio
   // server, a model LM Studio will JIT-load) is planned on the advisory
   // number, which the door uses for the compact tier's history budget only
@@ -401,10 +415,7 @@ async function planWindowAs(hint, providerOverride) {
   // the copilot starts compact and shrinks further if the model refuses.
   const advisory = (require('../providers').getProvider('local') || {}).contextTokens || 24000;
   const planOn = known.tokens ? { tokens: known.tokens, source: known.source } : { tokens: advisory, source: 'advisory' };
-  const plan = aw.pickTier({
-    tokens: planOn.tokens, source: planOn.source, ratio: known.ratio,
-    sizes: { full: sizes.full, compact: sizes.compact }, fixedChars: sizes.fixedChars
-  });
+  const plan = planTier(planOn.tokens, planOn.source, known.ratio);
   // what read_page may hand back whole — the door's own rule, so the
   // sentence promises exactly what the tool keeps
   const editMaxChars = plan.tier ? aw.editAllowance(plan.roomChars) : 0;
@@ -428,6 +439,7 @@ async function planWindowAs(hint, providerOverride) {
     message,
     recommended: aw.RECOMMENDED_WINDOW,
     editMaxChars: Number.isFinite(editMaxChars) ? editMaxChars : null,
+    menuTools: !!(plan.tier && plan.menus),
     probe
   };
 }
@@ -454,7 +466,10 @@ router.get('/admin/api/ai/window', requireAdmin, async (req, res) => {
       tierHe: plan.tierHe,
       message: plan.message,
       recommended: plan.recommended,
-      editMaxChars: plan.editMaxChars
+      editMaxChars: plan.editMaxChars,
+      // v2.43 — does this window get read_menus / organize_menu? (false in
+      // an 8K window: the page greys the promise, not the owner's hopes)
+      menuTools: !!plan.menuTools
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || '' });
@@ -491,13 +506,9 @@ router.post('/admin/api/ai/test', requireAdmin, async (req, res) => {
       const probe = await aw.probeLocalWindow(raw, model);
       if (probe) {
         window = { tokens: probe.tokens, maxTokens: probe.maxTokens, model: probe.model, jit: !!probe.jit, loaded: probe.loaded || [] };
-        const sizes = getBriefingSizes();
         // a JIT case (configured model not loaded yet) has no number — the
         // sentence says what LM Studio will do on the first request
-        const plan = aw.pickTier({
-          tokens: probe.tokens || 0, source: 'probe', ratio: aw.DEFAULT_RATIO,
-          sizes: { full: sizes.full, compact: sizes.compact }, fixedChars: sizes.fixedChars
-        });
+        const plan = planTier(probe.tokens || 0, 'probe', aw.DEFAULT_RATIO);
         windowMessage = aw.describeWindow({
           tokens: probe.tokens, source: 'probe', tier: probe.tokens ? plan.tier : undefined,
           model: probe.model || model, jit: !!probe.jit,
@@ -699,9 +710,13 @@ router.post('/admin/api/ai/chat', async (req, res) => {
     // on (the builder drawer or the copilot screen with its own canvas) and
     // whether that canvas is blank — a blank canvas means "build", an open
     // page means "read it first, then edit".
+    // v2.43 adds a third canvas: 'menu' — the owner picked "תפריט האתר" (or
+    // the robot's own read_menus opened it), so "סדר את זה" means the menu.
     const ctx = b.context && typeof b.context === 'object' ? b.context : null;
     const surface = ctx && ctx.surface === 'copilot' ? 'copilot' : 'builder';
-    const canvas = ctx && ctx.canvas === 'blank' ? 'blank' : (ctx && (ctx.canvas === 'page' || ctx.page) ? 'page' : undefined);
+    const canvas = ctx && ctx.canvas === 'blank' ? 'blank'
+      : ctx && ctx.canvas === 'menu' ? 'menu'
+        : (ctx && (ctx.canvas === 'page' || ctx.page) ? 'page' : undefined);
     let situation = '';
     if (ctx && ctx.page) {
       const pageSlug = String(ctx.page).slice(0, 200);
@@ -715,17 +730,37 @@ router.post('/admin/api/ai/chat', async (req, res) => {
           (sel.text ? ' — הטקסט הנוכחי שלו: "' + String(sel.text).slice(0, 280) + '"' : '') +
           '. כשמבקשים "הוסף טקסט לפריט המסומן" או "שנה את זה" — הכוונה לבלוק הזה בדיוק, לא לדף אחר ולא לבלוק אחר.\n';
       }
+    } else if (canvas === 'menu') {
+      // the sentence that follows this head is chosen per REQUEST (menuLine,
+      // below): the door decides whether this window gets the menu tools, and
+      // a situation must never tell a model to call a tool it was not given
+      situation = '\n\n---\n\n## המצב עכשיו — בעל/ת האתר במסך הקופיילוט, התפריט של האתר פתוח בקנבס\n';
     } else if (canvas === 'blank') {
       situation = '\n\n---\n\n## המצב עכשיו — בעל/ת האתר במסך הקופיילוט, הקנבס ריק\n' +
         'אין דף פתוח. כשמבקשים לבנות דף — create_page; כשמבקשים לערוך דף קיים — list_pages ואז read_page ואז edit_page.\n';
     }
+    let situationTail = '';
     if (surface === 'copilot') {
-      situation += '\nבעל/ת האתר רואה את הדף בקנבס לידך; כל הצעה שלך מוצגת לו/ה ברינדור אמיתי לפני האישור — לכן החזר/י תמיד מסמך שלם.';
+      situationTail = canvas === 'menu'
+        ? '\nבעל/ת האתר רואה את התפריט בקנבס לידך; כל הצעה שלך מוצגת לו/ה ברינדור אמיתי לפני האישור — לכן החזר/י תמיד מסמך שלם.'
+        : '\nבעל/ת האתר רואה את הדף בקנבס לידך; כל הצעה שלך מוצגת לו/ה ברינדור אמיתי לפני האישור — לכן החזר/י תמיד מסמך שלם.';
     }
     // The door picks the TIER (full dictionary vs. one line per tool) from the
     // window it measured, so the route hands it a builder, not a string — the
     // same situation rides on whichever tier fits.
-    const systemFor = (tier) => buildCopilotBriefing({ locale: 'he', media, siteTitle, tier, canvas }).text + situation;
+    // v2.43 — the door also says whether THIS window gets the menu tools
+    // (ai.js pickCopilotTier: a tool the window cannot answer is not
+    // declared). The briefing and the situation follow it, so nothing here
+    // ever promises read_menus / organize_menu to a request without them.
+    const MENU_ON = 'כשמבקשים לסדר, לקבץ, לקצר או לשנות "את התפריט" / "את זה" — הכוונה לתפריט האתר: read_menus ואז organize_menu עם המסמך המלא. ' +
+      'ההצעה תוצג לבעל/ת האתר על הכותרת האמיתית של האתר לפני האישור.\n';
+    const MENU_OFF = 'החלון של המודל הזה קטן מדי לכלי התפריט — אינך יכול/ה לקרוא או לשנות את התפריט. אם מבקשים זאת, אמור/י זאת בפשטות, ' +
+      'הצע/י סדר במילים, והפנה/י להגדלת Context Length ב-LM Studio (32768) או לעורך התפריטים (/admin/menus).\n';
+    const systemFor = (tier, o) => {
+      const menus = !o || o.menus !== false;
+      const menuLine = canvas === 'menu' ? (menus ? MENU_ON : MENU_OFF) : '';
+      return buildCopilotBriefing({ locale: 'he', media, siteTitle, tier, canvas, menus }).text + situation + menuLine + situationTail;
+    };
     const out = await require('../ai').converse({
       systemFor,
       user: message,
@@ -770,6 +805,21 @@ router.post('/admin/api/ai/chat', async (req, res) => {
 // sandboxed frame ABOVE the canvas — it is never painted into the builder
 // before the owner approves, because a proposal is not a draft yet.
 // The settings card keeps every id it always had, folded under <details>.
+//
+// v2.43 — the canvas can show the MENU. Ben: "i want the copilot to show
+// canvas of the menu when needed". A third canvas state beside blank and
+// page: the dropdown's "🧭 תפריט האתר" entry (or the robot's own read_menus)
+// opens #cp-menu-canvas — the organizer's tree + fit line over the REAL site
+// header in a frame (GET /admin/menus/preview/:id renders the home page with
+// a given menu set at the site's own width, so overflow and the "עוד" fold
+// show as they will on the site). A menu PROPOSAL uses the same overlay a
+// page proposal does: #cp-proposal-menu carries what the door judged (what
+// moved / was added / removed / renamed, the fit line, the warnings) and the
+// proposal frame loads the candidate header — before ✓, never after. Both
+// frames keep the page proposal's sandbox (`allow-same-origin`, no scripts):
+// a published page ships no script, so nothing is lost and nothing can run.
+// The strip is drawn by the injection card's own renderPreview — one
+// renderer for the organizer's preview on /admin/menus and here.
 router.get('/admin/chat', (req, res) => {
   const html = `
     ${adminNav('chat', 'קופיילוט — הדף נבנה לידכם')}
@@ -827,6 +877,18 @@ router.get('/admin/chat', (req, res) => {
       #cp-proposal .rsp-frame { width:100%; min-height:0; height:100%; }
       #cp-proposal .rsp-frame iframe { height:100%; min-height:400px; }
       #cp-proposal-error { margin:0 14px 14px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:10px; padding:10px 12px; font-size:.85rem; white-space:pre-wrap; }
+      /* the menu canvas (v2.43): the organizer's tree + fit line over the real header */
+      #cp-menu-canvas:not([hidden]) { flex:1; display:flex; flex-direction:column; min-height:0; }
+      .cp-menu-strip { max-height:42%; overflow:auto; padding:10px 14px; border-bottom:1px solid #e2e8f0; background:#f8fafc; overflow-wrap:anywhere; }
+      .cp-menu-strip .inject-preview { border:none; padding:0; background:transparent; }
+      .cp-menu-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-weight:700; font-size:.88rem; color:#334155; margin-bottom:6px; }
+      .cp-menu-head .muted { font-weight:400; font-size:.8rem; }
+      #cp-menu-frame { flex:1; width:100%; min-height:240px; border:none; background:#fff; }
+      /* a menu PROPOSAL: what the door judged, above the candidate header's frame */
+      #cp-proposal-menu:not([hidden]) { margin:14px 14px 0; max-height:42%; overflow:auto; background:#fff; border-radius:12px; padding:10px 14px; overflow-wrap:anywhere; }
+      #cp-proposal-menu .inject-preview { border:none; padding:0; background:transparent; }
+      #cp-proposal-menu .cp-menu-warn { margin:8px 0 0; padding-inline-start:18px; color:#92400e; font-size:.84rem; }
+      #cp-proposal-menu .cp-menu-live { margin:0 0 8px; font-size:.84rem; color:#7c2d12; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:6px 10px; }
       /* Provider choice as RADIOS (v1.70, Ben). An option that is not ready is
          toned down — still clickable (picking it is HOW you configure it),
          but honest about not working yet. */
@@ -849,6 +911,9 @@ router.get('/admin/chat', (req, res) => {
         .chat-main { min-height:calc(100vh - 170px); }
         .chat-stage { min-height:calc(100vh - 170px); }
         .stage-bar select { max-width:100%; }
+        /* on a phone the stage has no fixed height, so a % cap resolves to
+           nothing and the tree pushed the header's frame off the screen */
+        .cp-menu-strip, #cp-proposal-menu:not([hidden]) { max-height:36vh; }
       }
     </style>
     <div id="cp-tabs">
@@ -919,6 +984,13 @@ router.get('/admin/chat', (req, res) => {
           <div><span class="big">🖼</span>הקנבס ריק. בחרו דף מהרשימה למעלה — או תארו לקופיילוט דף חדש, והוא יופיע כאן לפני האישור ואחריו.</div>
         </div>
         <iframe id="cp-canvas-frame" title="בונה הדפים" hidden></iframe>
+        <div id="cp-menu-canvas" hidden>
+          <div class="cp-menu-strip inject-card">
+            <div class="cp-menu-head">🧭 תפריט האתר — כפי שהוא היום <span class="muted" id="cp-menu-status"></span></div>
+            <div class="inject-preview" id="cp-menu-preview"></div>
+          </div>
+          <iframe id="cp-menu-frame" sandbox="allow-same-origin" title="כותרת האתר עם התפריט הנוכחי"></iframe>
+        </div>
         <div id="cp-proposal" hidden>
           <div class="rsp-bar">
             <strong>הצעת הקופיילוט — עדיין לא נשמרה</strong>
@@ -935,12 +1007,19 @@ router.get('/admin/chat', (req, res) => {
               <button type="button" class="act" data-close="1" hidden>סגור</button>
             </span>
           </div>
+          <div id="cp-proposal-menu" class="inject-card" hidden>
+            <p class="cp-menu-live">אישור <b>מחיל את התפריט על האתר החי</b> — לא טיוטה. גיבוי נשמר לפני ההחלה, ואפשר לבטל בלחיצה.</p>
+            <div class="inject-preview" id="cp-proposal-menu-preview"></div>
+            <ul class="cp-menu-warn" id="cp-proposal-menu-warn" hidden></ul>
+          </div>
           <div class="rsp-stage"><div class="rsp-frame"><iframe id="cp-proposal-frame" sandbox="allow-same-origin" title="תצוגת ההצעה"></iframe></div></div>
           <div id="cp-proposal-error" hidden></div>
         </div>
       </div>
     </div>
     <script src="/admin-bridge.js"></script>
+    <!-- the organizer's preview renderer (v2.43) — the menu canvas draws with it; nothing is mounted -->
+    <script src="/admin-inject-card.js"></script>
     <script src="/admin-turn-clock.js"></script>
     <script src="/admin-chat.js"></script>
   `;
