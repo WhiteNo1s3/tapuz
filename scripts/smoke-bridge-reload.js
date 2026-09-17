@@ -21,7 +21,7 @@
  *
  * What is proven here, with the REAL worker, content bridge and page glue:
  *   1. a connected site's open tab talks to the bridge (hello, a relay)
- *   2. chrome.runtime.reload() — the dynamic registration is dropped by
+ *   2. a Reload (the unpacked folder loaded again) — the dynamic registration is dropped by
  *      Chrome (that is why the record exists) and the record survives
  *   3. NOTHING is touched — no page refresh, no popup — and ~1.5 s later
  *      the same tab is on a NEW bridge instance: the worker injected it on
@@ -64,7 +64,9 @@ if (!CHROME) {
 
 const REPO = path.join(__dirname, '..');
 const SITE_PORT = Number(process.env.SMOKE_SITE_PORT) || 4326;
-const LM_PORT = 1234; // the extension's default endpoint — the fake LM Studio must sit there
+// the extension's default endpoint; SMOKE_LM_PORT runs the scenario beside a
+// real LM Studio (the worker is then pointed at the fake through llm_base)
+const LM_PORT = Number(process.env.SMOKE_LM_PORT) || 1234;
 
 let fail = false;
 function check(name, cond) {
@@ -158,7 +160,7 @@ function startFakeLm(port) {
   try {
     lm = await startFakeLm(LM_PORT);
   } catch (e) {
-    console.log('SMOKE BRIDGE-RELOAD: SKIPPED (127.0.0.1:' + LM_PORT + ' is taken — probably a real LM Studio; stop it to run the Reload scenario)');
+    console.log('SMOKE BRIDGE-RELOAD: SKIPPED (127.0.0.1:' + LM_PORT + ' is taken — probably a real LM Studio; set SMOKE_LM_PORT=1299 to run beside it)');
     site.close();
     process.exit(0);
   }
@@ -176,7 +178,7 @@ function startFakeLm(port) {
     proc.kill();
     site.close();
     lm.close();
-    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); // Chrome may still be writing its profile
   };
   const bail = setTimeout(async () => { console.log('FAIL the scenario did not finish in 90 s'); await finish(); process.exit(1); }, 90000);
 
@@ -187,9 +189,12 @@ function startFakeLm(port) {
 
   await cdp.send('Target.setDiscoverTargets', { discover: true });
   const targets = async () => (await cdp.send('Target.getTargets')).targetInfos;
+  // THIS extension's worker by its id: Chrome for Testing 153 runs a component
+  // extension whose worker is also background.js (measured — matching the file
+  // name alone attached to it, where chrome.scripting does not exist)
   async function findWorker(not) {
     for (let i = 0; i < 100; i++) {
-      const t = (await targets()).find((x) => x.type === 'service_worker' && /background\.js/.test(x.url) && x.targetId !== not);
+      const t = (await targets()).find((x) => x.type === 'service_worker' && x.url === 'chrome-extension://' + extId + '/background.js' && x.targetId !== not);
       if (t) return t;
       await sleep(100);
     }
@@ -211,7 +216,7 @@ function startFakeLm(port) {
   // a dynamic registration beside the manifest's static one: proves Chrome drops it on Reload and the record brings it back
   await evalIn(ws, `(async () => {
     await chrome.scripting.registerContentScripts([{ id: 'tz-bridge-other-test-smoke', js: ['content-bridge.js'], matches: ['http://other.test/*'], runAt: 'document_idle', persistAcrossSessions: true }]);
-    await chrome.storage.local.set({ sites: [{ id: 'tz-bridge-other-test-smoke', pattern: 'http://other.test/*' }] });
+    await chrome.storage.local.set(Object.assign({ sites: [{ id: 'tz-bridge-other-test-smoke', pattern: 'http://other.test/*' }] }, ${LM_PORT === 1234 ? '{}' : JSON.stringify({ llm_base: 'http://127.0.0.1:' + LM_PORT })}));
     return 'ok';
   })()`);
   const regsBefore = await evalIn(ws, `chrome.scripting.getRegisteredContentScripts().then(r => JSON.stringify(r.map(s => s.id)))`);
@@ -225,7 +230,14 @@ function startFakeLm(port) {
   const relay = async (waitMs) => {
     await evalIn(ss, `window.__tzLog = []; window.__tzOut = null; window.TapuzBridge.call('/v1/models', null, 8000).then(function (d) { window.__tzOut = { ok: true, ids: d.data.map(function (x) { return x.id; }) }; }, function (e) { window.__tzOut = { ok: false, error: e.message }; }); 'sent'`);
     await sleep(waitMs || 1200);
-    return evalIn(ss, `JSON.stringify({ out: window.__tzOut, results: window.__tzLog.filter(function (m) { return m.type === 'tz-local-llm-result'; }).length })`).then(JSON.parse);
+    // `results` = the most results any ONE request id got. Counting every
+    // result was wrong: a bridge that comes back makes the page re-list the
+    // models and re-probe the window on its own (two more requests, measured)
+    return evalIn(ss, `JSON.stringify({ out: window.__tzOut, results: (function () {
+      var per = {};
+      window.__tzLog.forEach(function (m) { if (m.type === 'tz-local-llm-result') per[m.id] = (per[m.id] || 0) + 1; });
+      return Object.keys(per).reduce(function (n, k) { return Math.max(n, per[k]); }, 0);
+    })() })`).then(JSON.parse);
   };
   const s1 = await state();
   check('1. the open admin tab hears the bridge (hello with version ' + version + ' and an instance id)',
@@ -234,9 +246,13 @@ function startFakeLm(port) {
   check('1. a relay through the tab reaches the fake LM Studio', r1.out && r1.out.ok === true && r1.out.ids[0] === 'smoke-model' && r1.results === 1);
 
   // ── 2. Reload ──
+  // ↻ Reload on an unpacked extension = load it again from its folder. That
+  // is what is sent here: headless Chrome for Testing 153 never starts a new
+  // worker after chrome.runtime.reload() (measured — no target for 10 s)
+  const reload = () => cdp.send('Extensions.loadUnpacked', { path: ext }).catch((e) => console.log('reload: ' + e.message));
   const oldWorker = worker.targetId;
   const t0 = Date.now();
-  cdp.send('Runtime.evaluate', { expression: 'chrome.runtime.reload()' }, ws).catch(() => {});
+  reload();
   worker = await findWorker(oldWorker);
   ws = await attach(worker.targetId);
   await sleep(1500);
@@ -263,7 +279,7 @@ function startFakeLm(port) {
 
   // ── 5. a request in the gap: fired 50 ms after the Reload, before the worker could revive the tab ──
   const oldWorker2 = worker.targetId;
-  cdp.send('Runtime.evaluate', { expression: 'chrome.runtime.reload()' }, ws).catch(() => {});
+  reload();
   await sleep(50);
   const r5 = await relay(3000);
   worker = await findWorker(oldWorker2);
