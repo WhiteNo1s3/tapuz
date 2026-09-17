@@ -15,6 +15,8 @@ const check = (n, c) => { console.log((c ? 'OK  ' : 'FAIL') + ' ' + n); if (!c) 
 
 const root = path.join(__dirname, '..');
 const copilotRoute = fs.readFileSync(path.join(root, 'src', 'routes', 'copilot.js'), 'utf8');
+// the per-browser build moved out of the route in v2.41, shared with scripts/update-bridge.js
+const extensionBuildSrc = fs.readFileSync(path.join(root, 'src', 'extension-build.js'), 'utf8');
 const builderRoute = fs.readFileSync(path.join(root, 'src', 'routes', 'pages-builder.js'), 'utf8');
 const adminUi = fs.readFileSync(path.join(root, 'src', 'admin-ui.js'), 'utf8');
 const client = fs.readFileSync(path.join(root, 'public', 'admin-ai-setup.js'), 'utf8');
@@ -42,21 +44,22 @@ fs.rmSync(tmp, { recursive: true, force: true });
 check('GET /admin/ai-setup exists and is admin-gated',
   /router\.get\('\/admin\/ai-setup', requireAdmin/.test(copilotRoute));
 check('the extension zip route is whitelist-keyed (no path from the param)',
-  /EXTENSION_DIRS = \{/.test(copilotRoute) &&
-  /EXTENSION_DIRS\[req\.params\.which\]/.test(copilotRoute));
+  /EXTENSION_DIRS = \{/.test(extensionBuildSrc) &&
+  /hasOwnProperty\.call\(EXTENSION_DIRS, which\)/.test(extensionBuildSrc) &&
+  /extensionBuild\(req\.params\.which, req\.params\.browser, req\.hostname\)/.test(copilotRoute));
 check('both extensions are offered (bridge + byot)',
-  /extension-v2a/.test(copilotRoute) && /'extension'/.test(copilotRoute.match(/EXTENSION_DIRS = \{[\s\S]{0,400}\}/)[0]));
+  /extension-v2a/.test(extensionBuildSrc) && /'extension'/.test(extensionBuildSrc.match(/EXTENSION_DIRS = \{[\s\S]{0,400}\}/)[0]));
 
 // ── per-browser builds (v2.18.1 — Ben's Firefox zips refused to install) ──
 check('the download route serves one build per browser',
   /extension-:which-:browser\.zip/.test(copilotRoute) &&
-  /\['chrome', 'firefox'\]\.includes\(browser\)/.test(copilotRoute));
+  /const BROWSERS = \['chrome', 'firefox'\]/.test(extensionBuildSrc) && /BROWSERS\.includes\(browser\)/.test(extensionBuildSrc));
 check('the zip is packed at ROOT (no wrapping folder — browsers reject those)',
-  /zipDirectory\(dir, '', \{/.test(copilotRoute));
+  /zipDirectory\(build\.dir, '', \{/.test(copilotRoute));
 check('chrome build strips the firefox-only manifest keys',
-  /delete manifest\.browser_specific_settings/.test(copilotRoute));
+  /delete manifest\.browser_specific_settings/.test(extensionBuildSrc));
 check('firefox build gets background.scripts when only a worker exists',
-  /manifest\.background\.scripts = \[manifest\.background\.service_worker\]/.test(copilotRoute));
+  /manifest\.background\.scripts = \[manifest\.background\.service_worker\]/.test(extensionBuildSrc));
 check('the screen offers a plain button per browser, per extension',
   /extension-byot-chrome\.zip/.test(copilotRoute) && /extension-byot-firefox\.zip/.test(copilotRoute) &&
   /extension-bridge-chrome\.zip/.test(copilotRoute) && /extension-bridge-firefox\.zip/.test(copilotRoute));
@@ -87,7 +90,8 @@ check('the Firefox honesty note is on the page (temporary load until signing)',
   const { siteMatchPattern, wireBridgeToSite } = require('../src/bridge-manifest');
   const src = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'extension-v2a', 'manifest.json'), 'utf8'));
   check('the route wires the BRIDGE build (only) to req.hostname',
-    /if \(req\.params\.which === 'bridge'\) require\('\.\.\/bridge-manifest'\)\.wireBridgeToSite\(manifest, req\.hostname\)/.test(copilotRoute));
+    /extensionBuild\(req\.params\.which, req\.params\.browser, req\.hostname\)/.test(copilotRoute) &&
+    /if \(which === 'bridge'\) require\('\.\/bridge-manifest'\)\.wireBridgeToSite\(manifest, hostname\)/.test(extensionBuildSrc));
   const m = JSON.parse(JSON.stringify(src));
   const wired = wireBridgeToSite(m, 'My-Site.example.com');
   check('a hosted site: one *:// pattern (both schemes, no port) in host_permissions + a content script on it',
