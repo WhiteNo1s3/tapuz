@@ -29,6 +29,18 @@
  * string "no response"; resolving it hands the body to the server as the
  * step's result, and the server — the one place that knows the briefing
  * tiers — shrinks and retries. The page never judges a model reply.
+ *
+ * INSTANCES AND THE BYE (bridge 0.5.5, v2.42): a Reload of the extension
+ * leaves the tab's content script orphaned — it still answered pings, and
+ * swallowed requests. Every copy of the bridge now carries an `instance` id
+ * in its hello; an orphaned copy says `tz-bridge-bye` and falls silent, and
+ * the new worker injects a fresh copy into the open tab. Here: a hello from
+ * a NEW instance re-posts every request nobody has answered yet (the orphan
+ * never reached the model, so nothing runs twice); a bye from the CURRENT
+ * instance marks the bridge absent, pings once more, and if no copy answers
+ * within a short grace the waiting requests fail with "refresh the page"
+ * instead of hanging on the twenty-minute ceiling. A bye from a stale
+ * instance is a copy leaving that was never ours to lose.
  */
 (function () {
   'use strict';
@@ -45,6 +57,12 @@
    *  (v2.35 — 180 s here cut long Gemma turns off while the model was still
    *  reading the prompt). The probes pass their own short ceilings. */
   var LOCAL_CALL_MS = 20 * 60 * 1000;
+
+  /** After a bye: how long a fresh copy of the bridge gets to answer the
+   *  re-ping before the waiting requests are failed. The worker injects the
+   *  fresh copy on boot, about a second after a Reload (measured). */
+  var BYE_GRACE_MS = 2500;
+  var BYE_MESSAGE = 'התוסף Bridge V2 נטען מחדש — רעננו את הדף כדי להמשיך';
 
   /** A loaded model whose window matters: anything that CHATS. LM Studio's
    *  `type` is 'llm', 'vlm' (a vision-capable chat model — gemma-4-31b and
@@ -85,6 +103,10 @@
      *  page compares it against 0.5.0: an older bridge drops streamed tool
      *  calls, so "read / create / edit a page" needs the newer one. */
     version: '',
+    /** The id of the bridge copy the page is talking to (0.5.5 hellos carry
+     *  one; '' for an older bridge). Changes exactly when a fresh copy took
+     *  over the tab after a Reload. */
+    instance: '',
     /** { tokens, maxTokens, model, source:'bridge', bridgeVersion } once the
      *  probe has read LM Studio's loaded context length; null before the
      *  probe, and null for good when the bridge cannot ask (< 0.5.0). */
@@ -116,7 +138,13 @@
         if (!B.present) return reject(new Error('תוסף Bridge V2 לא מחובר לאתר הזה'));
         var id = 'llm-' + (++seq) + '-' + Date.now();
         var ms = timeoutMs || LOCAL_CALL_MS;
-        var w = { resolve: resolve, reject: reject, onProgress: onProgress, timer: null };
+        // `request` is kept so a fresh bridge copy can be handed the same
+        // request again; `heard` flips on the first progress message — proof
+        // that a living copy took it (0.5.5)
+        var w = {
+          resolve: resolve, reject: reject, onProgress: onProgress, timer: null, heard: false,
+          request: { source: 'tapuziel-cms', type: 'tz-local-llm', id: id, path: path, body: body }
+        };
         w.arm = function () {
           clearTimeout(w.timer);
           w.timer = setTimeout(function () {
@@ -126,7 +154,7 @@
         };
         w.arm();
         waiting.set(id, w);
-        window.postMessage({ source: 'tapuziel-cms', type: 'tz-local-llm', id: id, path: path, body: body }, window.location.origin);
+        window.postMessage(w.request, window.location.origin);
       });
     },
 
@@ -209,6 +237,30 @@
     }
   };
 
+  var byeTimer = null;
+
+  /** Hand every request no living copy has taken to the copy that just
+   *  announced. Only requests without a single progress message qualify:
+   *  a request the old copy relayed reports progress within ten seconds
+   *  (the worker's heartbeat), and one the orphan swallowed never does. */
+  function repost() {
+    waiting.forEach(function (w) {
+      if (w.heard) return;
+      w.arm();
+      window.postMessage(w.request, window.location.origin);
+    });
+  }
+
+  function failWaiting(message) {
+    var all = [];
+    waiting.forEach(function (w) { all.push(w); });
+    waiting.clear();
+    all.forEach(function (w) {
+      clearTimeout(w.timer);
+      w.reject(new Error(message));
+    });
+  }
+
   window.addEventListener('message', function (ev) {
     if (ev.source !== window || ev.origin !== window.location.origin) return;
     var m = ev.data;
@@ -216,9 +268,20 @@
     if (m.type === 'tz-bridge-hello') {
       // a re-announce (the popup re-injects) may carry a newer version
       if (typeof m.version === 'string' && m.version) B.version = m.version;
-      if (B.present) return;
+      var instance = typeof m.instance === 'string' ? m.instance : '';
+      var fresh = !!instance && !!B.instance && instance !== B.instance;
+      B.instance = instance;
+      clearTimeout(byeTimer);
+      byeTimer = null;
+      if (B.present) {
+        // a NEW copy took over this tab (the extension was reloaded): what
+        // the orphan swallowed goes to the copy that can actually relay it
+        if (fresh) repost();
+        return;
+      }
       B.present = true;
       emit('tapuz-bridge-hello');
+      if (fresh) repost();
       // what does the local runtime actually serve? (best effort) — and then,
       // with what window? The probe runs AFTER the list so a page that only
       // knows 'tapuz-bridge-models' sees nothing new in the order of events.
@@ -229,10 +292,26 @@
         .then(function () { return B.probeWindow(); });
       return;
     }
+    if (m.type === 'tz-bridge-bye') {
+      // a copy that was never the current one leaving is no loss
+      if (typeof m.instance === 'string' && m.instance && B.instance && m.instance !== B.instance) return;
+      B.present = false;
+      emit('tapuz-bridge-bye');
+      // is a fresh copy already here? it answers this ping with its hello
+      window.postMessage({ source: 'tapuziel-cms', type: 'tz-bridge-ping' }, window.location.origin);
+      clearTimeout(byeTimer);
+      byeTimer = setTimeout(function () {
+        byeTimer = null;
+        if (B.present) return;
+        failWaiting(BYE_MESSAGE);
+      }, BYE_GRACE_MS);
+      return;
+    }
     // streaming progress (bridge 0.4.0+): keeps the UI honest AND restarts
     // the silence ceiling. An older bridge simply never sends it.
     if (m.type === 'tz-local-llm-progress' && waiting.has(m.id)) {
       var p = waiting.get(m.id);
+      p.heard = true;
       p.arm();
       if (typeof p.onProgress === 'function') {
         // started/tool (0.5.3): a bridge that sends them says whether the model

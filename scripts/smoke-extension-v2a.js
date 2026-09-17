@@ -171,7 +171,7 @@ check('disconnect unregisters the script AND hands the host permission back',
 check('disconnect never hands loopback back',
   /matches\.filter\(\(m\) => !LOCAL_ORIGINS\.includes\(m\)\)/.test(popup));
 check('the list renders on popup open — after the worker reconciled the record',
-  /^restoreSitesNow\(\)\.then\(renderSites\);/m.test(popup) &&
+  /^restoreSitesNow\(\)\.then\(\(r\) => \{\s*renderSites\(\);/m.test(popup) &&
   /id="sites"/.test(popupHtml) && /\$\('sites'\)/.test(popup));
 
 // ── connected sites survive a Reload (0.5.2) ──
@@ -201,6 +201,41 @@ check('popup shows a recorded site that is not live with a "reconnect" (gesture-
   /\.stale/.test(popupHtml));
 check('README tells the 0.5.2 story (record, Reload, reconnect)',
   /0\.5\.2/.test(readme) && /storage\.local/.test(readme) && /חבר מחדש/.test(readme) && /Reload/.test(readme));
+
+// ── the open tab comes back after a Reload (0.5.5) ──
+// Measured on Chrome 148 (HARD-BATTERY-v2, "reconnect is flaky after sync"):
+// a Reload orphans the content script in every open admin tab — its
+// chrome.runtime.id is undefined, connect/sendMessage throw "Extension
+// context invalidated" — yet it kept answering pings and swallowed requests.
+check('version >= 0.5.5 (the open tab is revived on boot; an orphaned bridge retires)', cmpSemver(manifest.version, '0.5.5') >= 0);
+check('the worker re-injects the bridge into the connected sites\' open tabs after reconciling the record',
+  /async function reviveOpenTabs\(patterns\)/.test(bg) && /B\.tabs\.query\(\{ url: patterns \}\)/.test(bg) &&
+  /executeScript\(\{ target: \{ tabId: t\.id \}, files: \['content-bridge\.js'\] \}\)/.test(bg) &&
+  /out\.revived = await reviveOpenTabs\(await connectedPatterns\(\)\)/.test(bg));
+check('the patterns it revives are the live registrations AND the sites the download wired into the manifest',
+  /async function connectedPatterns/.test(bg) && /getManifest\(\)\.content_scripts/.test(bg) && /liveBridgeScripts\(\)/.test(bg));
+check('no `tabs` permission is asked for (the host grant is what lets tabs.query see the tab)',
+  !(manifest.permissions || []).includes('tabs'));
+check('the content bridge asks alive() before answering anything, and a dead copy retires (removes its listener, says bye once)',
+  /function alive\(\)/.test(content) && /B\.runtime && B\.runtime\.id/.test(content) &&
+  /if \(!alive\(\)\) return retire\(\);/.test(content) && /function retire\(\)/.test(content) &&
+  /removeEventListener\('message', onMessage\)/.test(content) && /type: 'tz-bridge-bye'/.test(content));
+check('every copy carries an instance id; a repeat injection in the same world re-announces under the FIRST copy\'s id',
+  /const INSTANCE = /.test(content) && /window\.__tzBridgeV2Instance = INSTANCE/.test(content) &&
+  /type: 'tz-bridge-hello', version: VERSION, instance: window\.__tzBridgeV2Instance \|\| ''/.test(content));
+check('a fresh copy posts a takeover AFTER its hello, and an orphan hearing a takeover retires at once',
+  /send\(\{ type: 'tz-bridge-takeover', instance: INSTANCE \}\)/.test(content) &&
+  content.indexOf("announce();\n  // hello FIRST") < content.indexOf("send({ type: 'tz-bridge-takeover'") &&
+  /msg\.type === 'tz-bridge-takeover' && msg\.instance !== INSTANCE && !alive\(\)\) retire\(\)/.test(content));
+check('relayViaMessage cannot leak a synchronous throw out of the listener any more (the swallowed model-list probe)',
+  /new Promise\(\(resolve\) => resolve\(B\.runtime\.sendMessage/.test(content));
+check('the page glue tracks the instance, re-posts unheard requests to a new copy, and fails waiting requests after a bye with no successor',
+  /instance: ''/.test(cmsBridge) && /function repost\(\)/.test(cmsBridge) && /if \(w\.heard\) return;/.test(cmsBridge) &&
+  /m\.type === 'tz-bridge-bye'/.test(cmsBridge) && /BYE_GRACE_MS/.test(cmsBridge) && /failWaiting\(BYE_MESSAGE\)/.test(cmsBridge) &&
+  /p\.heard = true;/.test(cmsBridge));
+check('the popup tells the owner how many open tabs the worker revived', /revived/.test(popup) && /הגשר פעיל ב-/.test(popup));
+check('README tells the 0.5.5 story (the orphaned tab, the bye, the revival on boot)',
+  /0\.5\.5/.test(readme) && /tz-bridge-bye/.test(readme) && /Extension context invalidated/.test(readme));
 
 // ── two silences (0.5.2): reading the prompt vs. stuck mid-stream ──
 // Before the first frame the model is READING; the CMS gives its own local
@@ -342,6 +377,8 @@ function bootWorker(fetchImpl, opts = {}) {
     permissions: opts.permissions || { contains: () => Promise.resolve(true) }
   };
   if (opts.scripting) chrome.scripting = opts.scripting;
+  if (opts.tabs) chrome.tabs = opts.tabs;
+  if (opts.manifest) chrome.runtime.getManifest = () => opts.manifest;
   const ctx = {
     chrome, fetch: fetchImpl, TextDecoder, TextEncoder, AbortController, URL, JSON, Math, Date, Number, Array,
     Object, String, Promise, Set, Error, setTimeout: opts.setTimeout || setTimeout, clearTimeout, setInterval, clearInterval, console
@@ -360,12 +397,15 @@ function fakeStorage(initial) {
   };
 }
 
-/** A scripting API double: `registered` is the browser's live list. */
-function fakeScripting(registered) {
+/** A scripting API double: `registered` is the browser's live list;
+ *  `injected` records every executeScript, `refuse` names tab ids that
+ *  throw (a discarded tab, a privileged page). */
+function fakeScripting(registered, opts = {}) {
   const live = (registered || []).slice();
   const calls = [];
+  const injected = [];
   return {
-    live, calls,
+    live, calls, injected,
     getRegisteredContentScripts: (filter) => Promise.resolve(
       filter && filter.ids ? live.filter((s) => filter.ids.includes(s.id)) : live.slice()),
     registerContentScripts: (scripts) => {
@@ -375,6 +415,31 @@ function fakeScripting(registered) {
         live.push(s);
       }
       return Promise.resolve();
+    },
+    executeScript: (args) => {
+      if ((opts.refuse || []).includes(args.target.tabId)) return Promise.reject(new Error('Cannot access contents of the page'));
+      injected.push(args);
+      return Promise.resolve([{ frameId: 0, result: null }]);
+    }
+  };
+}
+
+/** A tabs API double: answers `query({ url })` with the tabs whose url
+ *  matches one of the patterns (host + scheme, the way match patterns do). */
+function fakeTabs(open) {
+  const queries = [];
+  const matches = (pattern, url) => {
+    const m = /^(\*|https?):\/\/([^/]+)\/\*$/.exec(pattern);
+    if (!m) return false;
+    const u = new URL(url);
+    return (m[1] === '*' || m[1] + ':' === u.protocol) && m[2] === u.hostname;
+  };
+  return {
+    queries,
+    query: (q) => {
+      queries.push(q);
+      const pats = Array.isArray(q.url) ? q.url : [q.url];
+      return Promise.resolve(open.filter((t) => pats.some((p) => matches(p, t.url))));
     }
   };
 }
@@ -594,7 +659,136 @@ const EXCEED = { error: {
     // a worker without the scripting API (an older fake, or a broken build) must not throw at boot
     const L2 = bootWorker(() => Promise.reject(new Error('x')), { storage: fakeStorage({ sites: [{ id: 'tz-bridge-a', pattern: SITE }] }) });
     const out2 = await new Promise((resolve) => L2.message({ type: 'tz-restore-sites' }, {}, resolve));
-    check('vm: a missing scripting API degrades to "nothing restored", not a crash', out2 && out2.restored.length === 0);
+    check('vm: a missing scripting API degrades to "nothing restored", not a crash', out2 && out2.restored.length === 0 && out2.revived === 0);
+  }
+
+  /* ── RUN the revival (0.5.5): the tabs that lived through the Reload ──
+   * Two connected sites — one recorded (dynamic), one wired into the
+   * manifest by the download — with three tabs open between them, one of
+   * which refuses injection; an unrelated tab; a tab of a recorded site
+   * whose grant is gone. The worker must inject into exactly the tabs of
+   * the sites it serves, count them, and never throw. */
+  {
+    const LIVE = 'https://live.example/*';
+    const WIRED = '*://wired.example/*';
+    const GONE = 'https://gone.example/*';
+    const storage = fakeStorage({ sites: [
+      { id: 'tz-bridge-live-1', pattern: LIVE },
+      { id: 'tz-bridge-gone-1', pattern: GONE }
+    ] });
+    const scripting = fakeScripting([], { refuse: [3] });
+    const tabs = fakeTabs([
+      { id: 1, url: 'https://live.example/admin/chat' },
+      { id: 2, url: 'https://wired.example/admin/edit/home' },
+      { id: 3, url: 'https://wired.example/admin' },          // refuses (discarded)
+      { id: 4, url: 'https://unrelated.example/' },
+      { id: 5, url: 'https://gone.example/admin/chat' }       // grant gone → not registered → not revived
+    ]);
+    const permissions = { contains: ({ origins }) => Promise.resolve(origins[0] !== GONE) };
+    const manifest = { content_scripts: [{ matches: [WIRED], js: ['content-bridge.js'] }] };
+    const L = bootWorker(() => Promise.reject(new Error('no fetch here')), { storage, scripting, tabs, permissions, manifest });
+    const out = await new Promise((resolve) => L.message({ type: 'tz-restore-sites' }, {}, resolve));
+    const askedFor = tabs.queries.length ? tabs.queries[0].url : [];
+    check('vm (0.5.5): after the record is reconciled the worker asks for the open tabs of the live registrations AND the manifest-wired site',
+      Array.isArray(askedFor) && askedFor.includes(LIVE) && askedFor.includes(WIRED) && !askedFor.includes(GONE));
+    // the boot-time restore revived once already; the popup's message reconciles (and revives) again —
+    // the SET of tabs is what matters, and a live tab takes a repeat as a re-announce
+    const tabIds = [...new Set(scripting.injected.map((a) => a.target.tabId))].sort();
+    check('vm (0.5.5): the content bridge is injected into every open tab of those sites (files: content-bridge.js), never into an unrelated tab or an unpermitted site\'s tab',
+      JSON.stringify(tabIds) === JSON.stringify([1, 2]) && scripting.injected.every((a) => a.files[0] === 'content-bridge.js'));
+    check('vm (0.5.5): a tab that refuses the injection is skipped, not fatal — and the count the popup shows is the tabs that took it',
+      out.revived === 2 && scripting.live.some((s) => s.id === 'tz-bridge-live-1') && out.unpermitted.includes(GONE));
+    // no tabs API at all (an older browser, a stripped build): nothing revived, nothing thrown
+    const scripting2 = fakeScripting([]);
+    const L2 = bootWorker(() => Promise.reject(new Error('x')), { storage: fakeStorage({ sites: [{ id: 'tz-bridge-live-1', pattern: LIVE }] }), scripting: scripting2 });
+    const out2 = await new Promise((resolve) => L2.message({ type: 'tz-restore-sites' }, {}, resolve));
+    check('vm (0.5.5): without a tabs API the restore still answers — the site registered, revived: 0',
+      scripting2.live.some((s) => s.id === 'tz-bridge-live-1') && out2.revived === 0 && scripting2.injected.length === 0);
+  }
+
+  /* ── RUN the orphan (0.5.5): the content bridge whose extension was reloaded under it ──
+   * Chrome's exact symptoms, as measured: runtime.id undefined, connect and
+   * sendMessage throw "Extension context invalidated". */
+  function bootBridge(win, chromeObj) {
+    vm.runInNewContext(content, { window: win, chrome: chromeObj, Object, Promise, String, Math, Date, console }, { filename: 'content-bridge.js' });
+  }
+  function fakeWindow() {
+    const posted = [];
+    const listeners = [];
+    const win = {
+      location: { origin: 'https://site.example' },
+      postMessage: (m) => posted.push(m),
+      addEventListener: (type, fn) => { if (type === 'message') listeners.push(fn); },
+      removeEventListener: (type, fn) => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); }
+    };
+    // deliver like the browser would: every listener still registered, in order
+    const deliver = (data) => listeners.slice().forEach((fn) => fn({ source: win, origin: win.location.origin, data }));
+    return { win, posted, listeners, deliver };
+  }
+  const invalidated = () => { throw new Error('Extension context invalidated.'); };
+  const deadChrome = { runtime: { id: undefined, connect: invalidated, sendMessage: invalidated } };
+  const liveChrome = () => ({ runtime: {
+    id: 'abcdefghijklmnopabcdefghijklmnop',
+    connect: () => ({ onMessage: { addListener: () => {} }, onDisconnect: { addListener: () => {} }, postMessage: () => {}, disconnect: () => {} }),
+    sendMessage: () => Promise.resolve({ ok: true, status: 200, data: { data: [] } })
+  } });
+  {
+    // (a) a live copy: hello carries an instance, then the takeover
+    const f = fakeWindow();
+    bootBridge(f.win, liveChrome());
+    const hello = f.posted.find((m) => m.type === 'tz-bridge-hello');
+    const takeover = f.posted.find((m) => m.type === 'tz-bridge-takeover');
+    check('vm (0.5.5): a fresh copy announces hello (version + instance) and THEN a takeover with the same instance',
+      !!hello && hello.version === manifest.version && typeof hello.instance === 'string' && hello.instance.length >= 8 &&
+      !!takeover && takeover.instance === hello.instance && f.posted.indexOf(hello) < f.posted.indexOf(takeover));
+    check('vm (0.5.5): the world remembers the instance for repeat injections', f.win.__tzBridgeV2 === manifest.version && f.win.__tzBridgeV2Instance === hello.instance);
+    // a repeat injection in the same world (the worker's wake, the popup's connect): same instance, no second listener
+    bootBridge(f.win, liveChrome());
+    const hellos = f.posted.filter((m) => m.type === 'tz-bridge-hello');
+    check('vm (0.5.5): a repeat injection re-announces under the FIRST instance id and installs no second listener',
+      hellos.length === 2 && hellos[1].instance === hello.instance && f.listeners.length === 1 &&
+      f.posted.filter((m) => m.type === 'tz-bridge-takeover').length === 1);
+    // a takeover from ANOTHER instance while this copy is alive: ignored
+    f.deliver({ source: 'tapuziel-bridge', type: 'tz-bridge-takeover', instance: 'someone-else' });
+    check('vm (0.5.5): a live copy ignores another copy\'s takeover (only a dead one retires)',
+      f.listeners.length === 1 && !f.posted.some((m) => m.type === 'tz-bridge-bye'));
+  }
+  /** Boot a copy against a living extension, then pull the rug the way a
+   *  Reload does: the copy keeps the `chrome` object it read at load, and
+   *  its bindings die under it. */
+  function bootThenOrphan() {
+    const c = liveChrome();
+    const g = fakeWindow();
+    bootBridge(g.win, c);
+    g.instance = g.win.__tzBridgeV2Instance;
+    Object.assign(c.runtime, deadChrome.runtime);
+    g.posted.length = 0;
+    return g;
+  }
+  {
+    // (b) the orphan: its extension was reloaded → the next ping retires it
+    const g = bootThenOrphan();
+    const gInst = g.instance;
+    g.deliver({ source: 'tapuziel-cms', type: 'tz-bridge-ping' });
+    const bye = g.posted.find((m) => m.type === 'tz-bridge-bye');
+    check('vm (0.5.5): an orphaned copy answers a ping with BYE (its own instance), never with a hello that lies',
+      !!bye && bye.instance === gInst && !g.posted.some((m) => m.type === 'tz-bridge-hello'));
+    check('vm (0.5.5): the orphan removed its listener and freed the world\'s guard', g.listeners.length === 0 && g.win.__tzBridgeV2 === null && g.win.__tzBridgeV2Instance === null);
+    g.posted.length = 0;
+    g.deliver({ source: 'tapuziel-cms', type: 'tz-local-llm', id: 'after', path: '/v1/models' });
+    g.deliver({ source: 'tapuziel-cms', type: 'tz-bridge-ping' });
+    check('vm (0.5.5): a retired copy never speaks again (no result, no bye twice)', g.posted.length === 0);
+    // (c) the orphan meets a request first: bye, and NO result (the fresh copy or the glue's grace answers)
+    const h = bootThenOrphan();
+    h.deliver({ source: 'tapuziel-cms', type: 'tz-local-llm', id: 'swallowed', path: '/v1/chat/completions', body: {} });
+    await new Promise((r) => setTimeout(r, 0));
+    check('vm (0.5.5): an orphan handed a request says bye and posts NO result for it (nothing it says could be true)',
+      h.posted.length === 1 && h.posted[0].type === 'tz-bridge-bye' && !h.posted.some((m) => m.type === 'tz-local-llm-result'));
+    // (d) the takeover: a fresh copy lands in another world; the orphan hears it and retires without waiting for a request
+    const k = bootThenOrphan();
+    k.deliver({ source: 'tapuziel-bridge', type: 'tz-bridge-takeover', instance: 'fresh-copy' });
+    check('vm (0.5.5): an orphan that hears a fresh copy\'s takeover retires at once (bye, listener gone)',
+      k.posted.length === 1 && k.posted[0].type === 'tz-bridge-bye' && k.listeners.length === 0);
   }
 
   /* ── RUN the two silences: which ceiling is armed when ──
@@ -663,6 +857,7 @@ const EXCEED = { error: {
       addEventListener: (type, fn) => { if (type === 'message') onWindowMessage = fn; }
     };
     const chrome = { runtime: {
+      id: 'abcdefghijklmnopabcdefghijklmnop', // a LIVE extension has one (0.5.5: no id = orphaned = retire)
       connect: () => {
         connects++;
         return {
@@ -673,7 +868,7 @@ const EXCEED = { error: {
       },
       sendMessage: () => Promise.resolve({ ok: false, status: 400, data: EXCEED })
     } };
-    vm.runInNewContext(content, { window: win, chrome, Object, Promise, String, console }, { filename: 'content-bridge.js' });
+    vm.runInNewContext(content, { window: win, chrome, Object, Promise, String, Math, Date, console }, { filename: 'content-bridge.js' });
     const hello = posted.find((m) => m.type === 'tz-bridge-hello');
     check('vm: the content bridge announces its version', !!hello && hello.version === manifest.version);
     check('vm: the content bridge listens on window messages', typeof onWindowMessage === 'function');
@@ -841,6 +1036,58 @@ const EXCEED = { error: {
     await g.tick(); await g.tick();
     check('glue: a 0.4.0 bridge → B.window null, still settled, event fired, version known',
       g.B.window === null && g.B.windowSettled === true && g.events.includes('tapuz-bridge-window') && g.B.version === '0.4.0');
+  }
+  /* ── the page glue and the Reload (0.5.5): instances, the bye, the re-post ── */
+  {
+    const g = bootGlue();
+    g.answer({ type: 'tz-bridge-hello', version: manifest.version, instance: 'copy-A' });
+    check('glue (0.5.5): the hello\'s instance is remembered', g.B.present === true && g.B.instance === 'copy-A');
+    // settle the boot probes so the outbox only holds what this block sends
+    g.reply('/v1/models', { ok: true, status: 200, data: { data: [] } });
+    await g.tick(); await g.tick();
+    g.reply('/api/v0/models', { ok: false, error: 'x' });
+    await g.tick(); await g.tick();
+    // a stale copy leaving is nobody's loss
+    g.answer({ type: 'tz-bridge-bye', instance: 'copy-that-never-was' });
+    check('glue (0.5.5): a bye from a copy that is not the current one is ignored', g.B.present === true && !g.events.includes('tapuz-bridge-bye'));
+    // a repeat hello under the same instance (the worker's wake re-injects): no re-post
+    const chat = g.B.call('/v1/chat/completions', { messages: [] }, 60000);
+    const sent = () => g.outbox.filter((m) => m.type === 'tz-local-llm' && m.path === '/v1/chat/completions').length;
+    const before = sent();
+    g.answer({ type: 'tz-bridge-hello', version: manifest.version, instance: 'copy-A' });
+    check('glue (0.5.5): a repeat hello under the SAME instance re-posts nothing', sent() === before);
+    // the Reload: the orphan says bye (current instance) — present drops, a ping goes out, and the grace starts
+    const pingsBefore = g.outbox.filter((m) => m.type === 'tz-bridge-ping').length;
+    g.answer({ type: 'tz-bridge-bye', instance: 'copy-A' });
+    check('glue (0.5.5): a bye from the CURRENT copy → present false, event fired, one re-ping',
+      g.B.present === false && g.events.includes('tapuz-bridge-bye') &&
+      g.outbox.filter((m) => m.type === 'tz-bridge-ping').length === pingsBefore + 1);
+    const during = await Promise.race([chat.then(() => 'settled', () => 'rejected'), g.tick().then(() => 'pending')]);
+    check('glue (0.5.5): the waiting chat request is NOT failed yet — the fresh copy gets its grace', during === 'pending');
+    // the fresh copy (the worker injected it) announces under a new instance → the swallowed request is re-posted to it
+    g.answer({ type: 'tz-bridge-hello', version: manifest.version, instance: 'copy-B' });
+    check('glue (0.5.5): a hello from a NEW instance → present again, instance updated, and the unheard request is posted once more',
+      g.B.present === true && g.B.instance === 'copy-B' && sent() === before + 1 &&
+      g.outbox.filter((m) => m.type === 'tz-local-llm' && m.path === '/v1/chat/completions').slice(-1)[0].id ===
+      g.outbox.filter((m) => m.type === 'tz-local-llm' && m.path === '/v1/chat/completions').slice(-2)[0].id);
+    g.reply('/v1/chat/completions', { ok: true, status: 200, data: { choices: [{ message: { content: 'שלום' } }] } });
+    check('glue (0.5.5): the re-posted request resolves normally', (await chat).choices[0].message.content === 'שלום');
+    // a request the old copy DID take (progress arrived) is never re-posted: a second copy would run the GPU twice
+    const heard = g.B.call('/v1/chat/completions', { messages: [] }, 60000, () => {});
+    const req = g.outbox.filter((m) => m.type === 'tz-local-llm' && m.path === '/v1/chat/completions').pop();
+    g.answer({ type: 'tz-local-llm-progress', id: req.id, chars: 0, tokens: 0 });
+    const heardBefore = sent();
+    g.answer({ type: 'tz-bridge-hello', version: manifest.version, instance: 'copy-C' });
+    check('glue (0.5.5): a request that already reported progress is NOT re-posted to a new copy', sent() === heardBefore && g.B.instance === 'copy-C');
+    g.reply('/v1/chat/completions', { ok: true, status: 200, data: { choices: [{ message: { content: 'x' } }] } });
+    await heard;
+    // no successor at all (the extension was removed, not reloaded): after the grace the waiting requests fail with "refresh"
+    const alone = g.B.call('/v1/chat/completions', { messages: [] }, 60000);
+    g.answer({ type: 'tz-bridge-bye', instance: 'copy-C' });
+    const t0 = Date.now();
+    const err = await alone.then(() => null, (e) => e);
+    check('glue (0.5.5): a bye with no fresh copy behind it fails the waiting request after the grace (~2.5 s, not twenty minutes) with "refresh the page"',
+      !!err && /נטען מחדש/.test(err.message) && /רעננו/.test(err.message) && Date.now() - t0 >= 2000 && Date.now() - t0 < 10000 && g.B.present === false);
   }
 
   console.log('');
