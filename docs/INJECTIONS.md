@@ -51,7 +51,7 @@ Refusals are `{ok:false, error, code}`: 400 for a door code, `NO_PROVIDER`, `BRO
 ### The run
 
 1. The pack is composed; `estimateTokens(chars) = ceil(chars / 2.3)` + `run.maxTokens` is checked against the provider's context budget (local 20,000 — a 24K window minus headroom) **before** any money is spent.
-2. `ai.generateDetailed({system:'', user: pack, maxTokens, timeoutMs})` — one hop, no history, no tools (`generate()` never attaches tools; only the copilot's `converse()` does). Local models get `reasoning_effort:'none'` and up to 4 minutes; cloud keys 90 seconds.
+2. `ai.generateDetailed({system:'', user: pack, maxTokens, timeoutMs})` — one hop, no history, no tools (`generate()` never attaches tools; only the copilot's `converse()` does). Local models get `reasoning_effort:'none'` and up to 4 minutes; cloud keys 90 seconds. The system turn is empty on purpose — the pack IS the briefing, its dialect section included — and since v2.42 a local model is never sent a body that carries no `<bent-` / `bent-*` at all: `assertBriefed` throws `NO_BRIEFING` before the wire on this call, on the relay body, and at the worker queue (docs/LOCAL-LLM.md §1ב).
 3. The door parses. If it refuses, or raises a warning in `run.repairable`, exactly **one** repair turn is sent with the first exchange as history and "תיקונים נדרשים: …". The reply with fewer hard warnings wins (tie → the repaired one).
 4. The response carries the reply, the preview and the warnings; the card puts the reply into the same textarea the paste flow uses, so **apply is always the owner's second click on text they can read**.
 
