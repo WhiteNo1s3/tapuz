@@ -145,6 +145,21 @@ check('status: writing counts tokens, or characters when the text goes into a to
   check('the lines are styled quiet on both surfaces',
     /\.bubble\.system\.clock \{/.test(copilotRoute) && /#copilot-drawer \.cp-clock \{/.test(css));
   check('the clock never cancels or retries anything (it reports)', !/abort|reject|\.call\(|fetch\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
+
+  // ── v2.42: the draft is announced when the page KNOWS it, not after the
+  // model's closing turn. Over the bridge the approval's continuation
+  // (modelCall) already carries `applied`; HARD-BATTERY-v2 watched ~4 minutes
+  // of «כותב» after the draft existed.
+  check('the screen announces an applied write the moment a modelCall envelope carries it (once per turn), and the closing turn\'s status says the draft is already saved',
+    /if \(d\.modelCall && d\.applied\) await showApplied\(d\.applied\);/.test(chat) &&
+    /async function showApplied\(a\) \{\s*if \(!a \|\| appliedShown\) return;\s*appliedShown = a;[\s\S]{0,400}hideProposal\(\);/.test(chat) &&
+    /function statusWithDraft\(text\)/.test(chat) && /הטיוטה כבר נשמרה ✓ · המודל מסכם: /.test(chat) &&
+    /setStatus\(statusWithDraft\(/.test(chat) && (chat.match(/appliedShown = null;/g) || []).length === 3 &&
+    /if \(ok\) await showApplied\(d\.applied\);/.test(chat));
+  check('the drawer says the draft landed when the continuation carries it, keeps reloading only when the turn ends, and prefixes the status',
+    /if \(d\.applied\) noteDraft\(d\.applied\);/.test(panel) && /function noteDraft\(a\) \{\s*if \(!a \|\| draftNoted\) return;/.test(panel) &&
+    /setBusy\(true, withDraft\(/.test(panel) && (panel.match(/draftNoted = false;/g) || []).length === 3 &&
+    /setTimeout\(function \(\) \{ location\.reload\(\); \}, 900\);/.test(panel));
 }
 
 console.log('');
