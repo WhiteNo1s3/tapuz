@@ -1,135 +1,96 @@
 # Session handoff — Tapuziel (read this if the chat died)
 
-> **Purpose:** Survive lost Grok/Claude/Cursor chats, sleep, crashes.
-> Update this file whenever a big milestone lands or direction changes.
-> **Last updated:** 2026-07-26 (v2.12 CRM extension spine — expand, not closed).
+> **Purpose:** survive a lost Claude/Grok/Cursor chat, a crash, or a night's sleep.
+> Refresh it whenever a milestone lands or the direction changes (§12).
+> **Last updated:** 2026-09-18 — v2.43-alpha, main at `dbdaf30`, live and deploying from main.
 
 ---
 
-## 0. Where to work (worktrees)
+## 0. Where to work
 
-| Path | Branch | Role |
-|------|--------|------|
-| `<repo>` | `main` | **Main gig — Tapuziel CMS** (`WhiteNo1s3/tapuz`) |
-| `<handoff-worktree>` | `session/handoff` | Crash-recovery worktree (same tip as main when created) |
-| `<crm-lab-repo>` | `main` | CRM lab prototype (`WhiteNo1s3/tapuziel-crm-lab`) |
-| `<crm-lab-worktree>` | `lab/continue` | Older lab worktree (may lag main) |
+| Path | Role |
+|------|------|
+| the repo checkout | `main` — **the product** (`WhiteNo1s3/tapuz`) |
+| `.claude/worktrees/<name>` | where an agent session actually works: an isolated copy on its own branch |
+| the QA machine's install dir | the tester's harness, batteries and letters — **outside** this repo on purpose |
 
-```bash
-# Resume Tapuz main
-cd <repo> && git pull && npm run qa:quick
+**Worktree rule.** A session started in a worktree edits only that worktree. Its file tools refuse the base checkout, because those edits would not be on the session's branch. Work lands through a branch → PR → main, and the base checkout catches up with `git pull`. Files that are not in git (the QA logs) are written with shell commands instead.
 
-# Resume from this handoff worktree
-cd <handoff-worktree> && git fetch && git merge origin/main
-```
+**Ship rule.** Branch, PR, green CI, merge. A green PR **auto-merges** (`.github/workflows/automerge.yml`), and a merge to `main` **deploys the live site**. Never commit into `main` directly.
 
-**Product rule:** Tapuz main is the source of truth. Lab ideas return *rebuilt*, not raw-merged.
-
-**Language rule:** **Hebrew first, English later** — product UI, owner docs, and cookbooks. Same maker / same company (Shaltiel Industries · WhiteNo1se): CMS + CRM + lab are one family of apps.
+**Language rule.** Hebrew first for product UI and owner docs; English for code, comments and these notes.
 
 ---
 
 ## 1. Product north star
 
-**Tapuziel** (תפוזיאל) — Hebrew-first RTL CMS with visual builder, `.pzn`, agents, and growing CRM/WhatsApp surfaces.
+**Tapuziel** (תפוזיאל) — a Hebrew-first RTL CMS: BenTML (`.pzn`) → compile → visual builder → publish → decompile, with an agent loop and a CRM/WhatsApp surface beside it. `docs/NORTH-STAR.md` is the long version.
 
-**Two-product competition story (Ben):**
+The part that makes it different from a page builder: **the owner's own model does the work**, locally and for free, and nothing reaches the site without the owner pressing approve.
 
-1. **Tapuziel CMS** — beat Elementor / theme grind (authoring).
-2. **Tapuziel CRM** — pixel + contacts + messaging that can ride **on** WordPress/Builder until sites migrate.
-
-Hostinger WP sandbox (portfolio):  
-`https://<wp-sandbox>`  
-- Site title **WhiteNo1se**, Elementor + Pro, **Coming Soon** when logged out.  
-- Themes: WhiteNo1se Child (active), Grokskin, Paz Sketch, PazView, …  
-- **Tapuziel Pixel plugin was NOT installed there** when last checked.  
-- Its admin password is not in this repo and must never be.
-
-**Brand:** citrus orange `#f97316` / `#ea580c`, fruit icon (`public/tapuziel-icon.png` on lab; extension icons on main), credit **Shaltiel Industries · made by WhiteNo1se**.
+**Never in this repo** (it is public): a real hostname, hosting or account ids, machine names, personal paths, credentials of any kind. gitleaks blocks most of it; the rest is discipline.
 
 ---
 
-## 2. Git tips (as of handoff write)
-
-### Tapuz main (`WhiteNo1s3/tapuz`)
+## 2. State of main (as of this write)
 
 | | |
 |---|---|
-| Tip when handoff written | see `git log -1` — **v2.11 CRM hooks + attrs (expand spine)** on main |
-| Recent line | v2.10 portal → **v2.11 extension hooks/attrs** |
-| Package version field | **`2.12.0-alpha`** |
-| CI | `.github/workflows/security.yml` — gitleaks + `test:pzn` + `test:smoke` + registry + wizard + audit high+ |
-| Node in CI | **24** (setup-node); deprecation warnings about action runtimes may still appear |
-
-### CRM lab (`WhiteNo1s3/tapuziel-crm-lab`)
-
-| | |
-|---|---|
-| Tip | `c1682fc` — ROUTE-MAP regen (fixed CI drift after pixel routes) |
-| Pixel embed | `docs/PIXEL-EMBED-SPEC.md`, `/tz-pixel.js`, WP plugin under `integrations/wordpress/tapuziel-pixel/` |
-| Live wire proof | `npm run test:pixel-live` (Builder + WP **shaped** beacons → `crm_events.site_id`) — **not** a real WP activation |
-| Branding | Lab admin shell uses Tapuziel icon + Shaltiel credit |
+| Package / ROADMAP | **`2.43.0-alpha`** — the Version Log's top row must name it (`smoke-version`) |
+| Main tip | `dbdaf30` |
+| Live | deploys from `main` on merge; the generator meta carries version + stamp + sha |
+| CI | `.github/workflows/security.yml` — gitleaks, the test suite, npm audit (high+, prod deps); Node 24 |
+| Version rule | every shipped session is **+0.01** with a Version Log row; docs-only PRs bump nothing |
+| Local model | provider `local` (a loopback runtime) or `browser` — **Bridge V2 0.5.5**, the extension in `extension-v2a/` |
+| The Bridge, for a developer | `npm run bridge:update -- --site <host>` writes it into a folder **outside** any checkout, with an updater beside it (`scripts/update-bridge.js`) |
+| QA | a separate tester agent; its logs and letters are git-ignored (`ai-qa/`, `docs/TAPUZ-TESTER-BUGS.md`, `docs/BEYOND-ALPHA-GATES-DRAFT.md`) |
 
 ---
 
-## 3. What was built / decided this multi-session arc
+## 3. The arc since v2.12 (what a new session should know)
 
-### A. CRM lab (then partly ported to main)
+**BenTML at every door.** Pages are `.pzn` documents; the same parser, validator and repair pass stand behind the builder, the paste flow, the agent API and the copilot. Leaf modules (`bent-mediacard` and friends) take props, not children — the briefing and the primer both say so, because a model that guesses puts children in a leaf.
 
-- Contacts, lists, campaigns, pixels, CAPI, GA MP, segments, social gadget, CS chat, enterprise pixel.
-- **WhatsApp Cloud API spike (lab):** `docs/WHATSAPP-SPEC.md`, `src/crm/whatsapp*.js`, send + webhook + opt-in.
-- **Pixel embed (any CMS):** golden path `tz-pixel.js` + CORS collect + `site_id`; thin WP plugin + Builder README.
-- Lesson: **one deep integration at a time** (don’t ship four toys before the spine works).
+**The owner's model does the work.** `/admin/ai-setup` connects either a loopback runtime or **Bridge V2**, a dev-mode extension that relays the page's request to a local model. The ZIP the site serves arrives already wired to that site (`src/bridge-manifest.js`). The Bridge streams, survives its worker dying, picks its timeout by what has actually flowed, and after a Reload it puts a fresh copy into the open tab (0.5.5).
 
-### B. Tapuz main (current focus)
+**Nothing ships without approval.** The copilot's tools read freely and stop for approval on every write: `create_page` / `edit_page` land in a **draft**; `organize_menu` is the one live write, so it takes a backup first and offers the undo. A refusal writes nothing and the model is told so in those words. A proposal that the door refuses goes back to the model, never to the owner (`src/ai-tools.js` preflight).
 
-WhatsApp phases W0–W3 (config/ledger/webhook/send), CRM phases on main, CS widget, premium DB, restore-as-.pzn, etc.  
-**Do not re-port lab blindly** — main has its own modules (`wa-ledger`, `wa-send`, `wa-webhook`, smokes).
+**A local model is never asked without its briefing.** `assertBriefed` (`src/ai.js`) gates every local/Bridge path — the tool loop, the injection runner, the relay body, the worker queue — because a model with no briefing invents a dialect. The visitor support chat is the single declared exception (`prose: true`).
 
-**v2.10 (named customers + portal):**
-- Dual lifecycle: provisional ghosts short path; **named/reachable** → erase only after `namedQuietDays` (default **365**) or owner delete (`0` = never auto).
-- List: `?kind=real` + «אמיתיים» tile; last-seen on rows.
-- Portal: `src/crm/portal.js` + `src/routes/portal.js` (`/account/*`); flags `crm.portal.enabled` + `allowSelfRegister` **both default false**. Owner mints from contact card (`POST /admin/crm/:id/portal`). Cookie `tapuz_portal` ≠ admin. Privacy UI owns cards + portal.
+**A model's HTML is untrusted.** `src/ai-html-guard.js` scrubs script, `on…=` and `javascript:` out of every `bent-html` a model wrote, on every AI door; admin previews render in a sandboxed iframe without same-origin. `docs/security.md` §5.
 
-**v2.12 (enterprise expand spine — Ben: not a closed script):**
-- `src/crm/hooks.js` — bus for verticals; core emits stable event names.
-- `src/crm/attrs.js` — open namespaced attributes on contacts; public → portal.
-- `events.registerType` / open slugs — timeline not a sealed enum.
-- Restaurant (etc.) packages: `hooks.on(...)` + `attrs.define(...)` + custom event types — **no second identity system, no CRM fork**.
-
-### C. Explicitly parked
-
-- **Israeli invoicing** (Green Invoice / iCount / Rivhit, חשבונית מס vs קבלה, allocation numbers) = **finance surface**, own round later. Not CRM.
+**Guards worth knowing before you change anything:** the version smoke, the route-map guard, gitleaks' custom rules, the login brute-force guard (5 attempts, then a doubling lockout), and the origin CSRF gate.
 
 ---
 
-## 4. QA — one command (do this first after crash)
+## 4. QA — what to run after a crash
 
 ```bash
-cd <repo>
-npm install          # if node_modules missing; allow better-sqlite3 native build
-npm run qa           # full report (~50s) — mirrors CI + CRM/WA spots
-npm run qa:quick     # faster path
+npm install            # if node_modules is missing (better-sqlite3 builds natively)
+npm run test:pzn       # 158 language tests
+npm run test:smoke     # ~157 suites, the real gate
+npm run qa:quick       # the checklist's fast path
+npm run qa             # the full report
 ```
 
-Script: `scripts/qa-checklist.js`  
-Report gates: `test:pzn`, `test:smoke`, registry, wizard, CRM/WA spot (7), route-map, npm audit high+.
+Opt-in, not in CI: `node scripts/smoke-bridge-reload.js` needs a real Chrome (`CHROME=…`, and `SMOKE_LM_PORT=1299` to run beside a live model runtime).
 
-```bash
-# Lab only if needed
-cd <crm-lab-repo>
-npm run test:pixel-embed
-npm run test:pixel-live
-npm run test:crm
-```
+A smoke that writes into the tracked tree is a bug in the smoke: set `TAPUZ_ROOT` to a temp dir **before** requiring anything from `src/`.
 
 ---
 
-## 5. Important paths (Tapuz main)
+## 5. Important paths
 
 | Area | Path |
 |------|------|
 | Server assembly | `src/server.js` |
+| BenTML language + validator | `src/pzn/` (`index.js`, `repair.js`, `registry.js`) |
+| The briefing a model reads | `src/pzn/agent-roleplay.js`, `src/pzn/agent-primer.js` |
+| The copilot: loop, tools, guards | `src/ai.js`, `src/ai-tools.js`, `src/ai-window.js`, `src/ai-html-guard.js` |
+| Menus + the organizer | `src/menus.js`, `src/menu-organizer.js`, `src/bentml/menu-dialect.js` |
+| The Bridge extension + its build | `extension-v2a/`, `src/extension-build.js`, `src/bridge-manifest.js`, `scripts/update-bridge.js` |
+| Admin chat / builder / drawer | `public/admin-chat.js`, `public/admin-builder.js`, `public/admin-copilot-panel.js`, `public/admin-bridge.js` |
+| Security write-up | `docs/security.md` |
 | CRM | `src/crm/*`, `src/routes/crm.js`, `src/routes/crm-track.js` |
 | WhatsApp | `src/crm/whatsapp.js`, `wa-ledger.js`, `wa-send.js`, `wa-webhook.js`, `src/routes/wa-webhook.js` |
 | Specs | `docs/WHATSAPP-INTEGRATION.md`, `docs/ROADMAP.md`, `docs/ROUTE-MAP.md` |
@@ -149,7 +110,11 @@ npm run test:crm
 
 ---
 
-## 6. Progressive customer cards (shipped this session)
+## 6–9. History: the CRM/WhatsApp arc (v1.92 → v2.12)
+
+> The sections below are kept as written when they shipped. They are history, not current state — check the code before trusting a detail.
+
+### 6. Progressive customer cards (shipped this session)
 
 **Idea:** legit first-party pixel/visit → open a **customer card**; email/name/pages enrich **one** card; stitch with first-party cookie `tz_v` (no raw IP store); quiet provisional → garbage → erase. Service, not surveillance.
 
@@ -296,49 +261,46 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 
 ## 10. Open / next (when resuming)
 
-Full Hebrew cookbook: **`docs/SMTP-PRODUCTION.md`**.
-
 | # | Next step | Notes |
 |---|-----------|--------|
-| 1 | Real SMTP on staging | Follow SMTP-PRODUCTION.md (Gmail / SES / Resend / cPanel) |
-| 2 | Pixel on real WP | Hostinger WhiteNo1se + public CRM `site_id` |
-| 3 | Production campaign → live segment | Consent + unsubscribe war story |
-| 4 | OSS packaging | CONTRIBUTING, release, paid support SKU |
-| 5 | Premium / support (sales = father) | Free core; money on support/hosting/modules |
-| 6 | Israeli invoicing | Separate finance round |
-| 7 | English product surface | Only after Hebrew is solid |
+| 1 | Beyond-alpha gates | The criteria draft lives on the QA machine (git-ignored). Promote the agreed ones into ROADMAP/NORTH-STAR when they hold. |
+| 2 | The compact briefing's safety net | The injection-awareness rule is full-tier only — the compact tier sits at the edge of an 8K window (`smoke-ai-window`). Its net is the server-side scrub. |
+| 3 | The theme studio canvas | Still a same-origin iframe; the other admin previews are sandboxed (`docs/security.md` §5). |
+| 4 | The host strips the preview's CSP | On the live host only the iframe's own `sandbox` attribute protects; the header does not survive the proxy. |
+| 5 | Two machines, one git | The owner works on two machines on one LAN and wants pulls between them without going through the forge. A bare repo over SSH on the LAN, with the forge kept for CI and deploy. |
+| 6 | OSS packaging / support SKU | Free core; money on support, hosting and modules. |
+| 7 | English product surface | Only once Hebrew is solid. |
 
-**Company:** Ben builds (behind the scenes). Father sells (face). OSS community + paid support. Long exit optional.
+**Owner actions that agents must not take:** deleting pages (permanent — no trash), changing the admin password, publishing test drafts, removing an extension from the browser.
 
-Avoid: multi-feature sprawl; pushing secrets; claiming WP/Builder verified without browser/CMS install.
+Avoid: multi-feature sprawl; a real hostname in a commit; claiming a live verification that was actually a local one.
 
 ---
 
-## 11. Honesty log (don’t overclaim)
+## 11. Honesty log (don't overclaim)
 
 | Claim | Truth |
 |-------|--------|
-| WP Hostinger explored | **Yes** — logged into admin, themes/plugins/pages listed |
-| Tapuziel Pixel live on that WP | **No** |
-| Builder.io space tested | **No** — recipes + HTTP wire only |
-| Pixel `site_id` → CRM | **Yes** via `test:pixel-live` simulated Origins |
-| Tapuz CI green after QA tooling | **Yes** at handoff write |
-| body-parser ≥ 1.20.6 | **Yes** |
-| Chat context permanent | **No** — **this file is the memory** |
+| The live site runs what `main` holds | **Yes** — merge deploys; the generator meta names version, stamp and sha |
+| The copilot writes pages without approval | **No** — every write waits for the owner; refusals write nothing |
+| An approved menu sort changes the live menu | **Yes** — measured end to end with a real local model (v2.43 row), backup taken, undo restores |
+| A local model is ever asked without its briefing | **No** on every CMS/Bridge path (`assertBriefed`); a raw call to a model runtime from outside the CMS is not ours to gate |
+| The Bridge survives a Reload with the tab open | **Yes** from 0.5.5 — measured in a real Chrome; a tab opened under 0.5.4 needs one refresh |
+| A model's raw HTML can run on the admin origin | **No** — scrubbed on every AI door; previews are sandboxed |
+| Chat context is permanent | **No** — this file and `docs/ROADMAP.md` are the memory |
 
 ---
 
 ## 12. Update protocol (future agents / future you)
 
-When you finish a real chunk of work:
+When a real chunk of work lands:
 
-1. Bump the **Last updated** date at the top.
-2. Refresh **§2 Git tips** (commit hash + one-line version log).
-3. Move done items out of **§6 Open/next** into **§3 What was built**.
-4. Add any new **Honesty log** lines.
-5. Commit: `docs: session handoff — <short why>` and push `main` (or update `session/handoff` then merge).
+1. Bump **Last updated** and refresh **§2 State of main**.
+2. Add the Version Log row in `docs/ROADMAP.md` (+0.01) — the version smoke fails without it.
+3. Move anything finished out of **§10**, and add a line to **§11** for anything you verified or chose not to.
+4. Commit as `docs: session handoff — <why>` on a branch, and let the PR merge it.
 
-If the conversation dies mid-task: read this file first, then `git log -15 --oneline`, then `npm run qa:quick`.
+If a conversation dies mid-task: read this file, then `git log -15 --oneline`, then `npm run test:smoke`.
 
 ---
 
@@ -346,6 +308,6 @@ If the conversation dies mid-task: read this file first, then `git log -15 --one
 
 - **Product name users see:** Tapuziel (not “Tapuz” in UI).
 - **Org credit:** Shaltiel Industries · made by WhiteNo1se / WhiteNo1s3 on GitHub.
-- **Repos:** `WhiteNo1s3/tapuz` (main), `WhiteNo1s3/tapuziel-crm-lab` (lab).
+- **Repos:** `WhiteNo1s3/tapuz` (the product), `WhiteNo1s3/tapuziel-crm-lab` (an older CRM lab).
 
 *End of handoff. Prefer updating over inventing history.*
