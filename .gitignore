@@ -5,6 +5,11 @@ node_modules/
 .env
 .env.*
 
+# QA scratch: the tester's scenario specs, batteries and letters (they live
+# next to the repo on the QA machine, carry local paths, and the repo is
+# public). Nothing here is part of the product.
+ai-qa/
+
 # Admin auth secrets — session signing key + scrypt password hashes.
 # NEVER commit this: it is generated at runtime and lives outside the
 # web-served config. Supply via config/auth.json or the TAPUZ_ADMIN_SECRET env.
