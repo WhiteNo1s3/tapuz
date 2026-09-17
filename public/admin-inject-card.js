@@ -159,6 +159,10 @@
   }
 
   function renderPreview(box, preview) {
+    // v2.43: the copilot's menu canvas calls this WITHOUT mounting a card
+    // (public/admin-chat.js) — one renderer for the organizer's preview on
+    // both screens — so the stylesheet cannot wait for mount(). Idempotent.
+    ensureCss();
     clear(box);
     var p = preview && typeof preview === 'object' ? preview : {};
     if (p.name) box.appendChild(h('p', 'inject-note', '🎨 ' + p.name));

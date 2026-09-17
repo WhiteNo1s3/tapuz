@@ -280,15 +280,23 @@ function buildRoleplayPack(opts = {}) {
  * what the runtime actually loaded — a Gemma at 8,192 tokens got the full
  * text, LM Studio silently threw the middle of it away, and the copilot
  * answered from a briefing with no dictionary in it (map.md, addendum 1).
- * `canvas` ('blank'|'page') is echoed back for the caller; the situation
+ * `canvas` ('blank'|'page'|'menu') is echoed back for the caller; the situation
  * block that describes the canvas is the route's, appended after this text.
- * @param {{ locale?: 'he'|'en', media?: Array, siteTitle?: string, ownerName?: string, tier?: 'full'|'compact', canvas?: 'blank'|'page' }} [opts]
+ *
+ * `menus` (v2.43, default true) — whether the menu tools (read_menus /
+ * organize_menu) are declared beside this briefing. `menus: false` is the
+ * window too small to answer them (ai.js pickCopilotTier): the text then says
+ * nothing about menus — it was compared byte for byte with v2.42's when this
+ * was written, and smoke-ai-window pins "not a word about menus, four tools"
+ * — what is not declared is not promised, and the 8,192 budget is not spent.
+ * @param {{ locale?: 'he'|'en', media?: Array, siteTitle?: string, ownerName?: string, tier?: 'full'|'compact', canvas?: 'blank'|'page'|'menu', menus?: boolean }} [opts]
  */
 function buildCopilotBriefing(opts = {}) {
   const locale = opts.locale === 'en' ? 'en' : 'he';
   const he = locale === 'he';
   const tier = opts.tier === 'compact' ? 'compact' : 'full';
   const compact = tier === 'compact';
+  const menus = opts.menus !== false;
   const dict = buildDictionary();
   const tools = toAgentTools(dict);
   const siteTitle = String(opts.siteTitle || '').trim();
@@ -318,15 +326,37 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('');
     lines.push('## הכלים שלך — את/ה רואה את האתר');
     lines.push('');
-    lines.push('אינך עובד/ת באפלה. יש לך ארבעה כלים, ואת/ה קורא/ת לפי הצורך:');
+    lines.push('אינך עובד/ת באפלה. יש לך ' + (menus ? 'שישה' : 'ארבעה') + ' כלים, ואת/ה קורא/ת לפי הצורך:');
     lines.push('');
     lines.push('- **`list_pages`** — אילו דפים קיימים (slug, כותרת, סטטוס). רץ מיד, בלי לשאול.');
     lines.push('- **`read_page`** — המקור המלא של דף קיים. רץ מיד. **חובה לקרוא דף לפני שעורכים אותו** —');
     lines.push('  עריכה מחליפה את כל התוכן, אז מי שלא קרא/ה קודם מוחק/ת בטעות.');
     lines.push('- **`create_page`** — דף חדש. **דורש אישור** מבעל/ת האתר.');
     lines.push('- **`edit_page`** — החלפת תוכן של דף קיים. **דורש אישור**.');
+    // v2.43 (Ben: "the menu sorter is also included in the ai helper") — the
+    // menus get their own pair; without it a model asked to "put the page in
+    // the menu" reached for the one write it knew and proposed a page.
+    // The compact tier's two bullets ARE its whole menu lesson: they route
+    // the request ("תפריט ≠ דף") and say the write is live. Measured: a
+    // separate routing line + the grammar here cost ~950 chars on EVERY turn
+    // and left an 8,192 window too little to read a ten-item menu back. So
+    // read_menus answers with the site's own document (a worked example of
+    // the dialect) and the organizer's grammar lines — paid only on the
+    // turns that touch a menu.
+    // `menus:false` = the window cannot afford the pair at all (ai.js
+    // pickCopilotTier): not a word about them, so the text is v2.42's, byte
+    // for byte — a tool that is not declared must not be promised.
+    if (!menus) {
+      /* the four page tools only */
+    } else if (compact) {
+      lines.push('- **`read_menus`** — התפריטים, הדקדוק שלהם וטבלת הדפים. רץ מיד.');
+      lines.push('- **`organize_menu`** — תפריט ≠ דף: לכל בקשה על התפריט מחזירים את **כל** מסמך `<bent-menus>`. **דורש אישור**; חל על האתר החי, עם גיבוי.');
+    } else {
+      lines.push('- **`read_menus`** — התפריטים של האתר, כמה פריטים נכנסים בשורה, ואילו דפים מותר לקשר. רץ מיד.');
+      lines.push('- **`organize_menu`** — החלפת התפריטים במסמך `<bent-menus>` שלם. **דורש אישור** — ואחריו חל על האתר החי, עם גיבוי.');
+    }
     lines.push('');
-    lines.push('**שני הכלים שכותבים לא רצים לבד.** כשאת/ה מבקש/ת אותם, המערכת עוצרת ומציגה');
+    lines.push((menus ? '**הכלים שכותבים לא רצים לבד.**' : '**שני הכלים שכותבים לא רצים לבד.**') + ' כשאת/ה מבקש/ת אותם, המערכת עוצרת ומציגה');
     lines.push('לבעל/ת האתר מה עומד לקרות, עם כפתור אישור. זה תקין ומכוון — אל תתנצל/י על כך');
     lines.push('ואל תנסה/י לעקוף. אם הבקשה נדחית, הצע/י משהו אחר במקום לחזור על אותה בקשה.');
     if (!compact) lines.push('**נדחה = שום דבר לא נשמר.** אל תכתוב/י שעשית את השינוי או שהוא "ממתין לאישור" — אמור/י שלא בוצע ושאל/י מה לשנות.');
@@ -336,8 +366,13 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('הדף לא משתנה, ובעל/ת האתר נשאר/ת עם קיר טקסט. הדפסת מקור שמורה למקרה אחד בלבד —');
     lines.push('כשביקשו ממך במפורש "תראה לי את הקוד".');
     lines.push('');
-    lines.push('כל כתיבה נשמרת כ**טיוטה**. אינך יכול/ה לפרסם, למחוק דף, לשנות ערכת נושא או הגדרות —');
+    lines.push((menus ? 'כל כתיבה של דף נשמרת כ**טיוטה**.' : 'כל כתיבה נשמרת כ**טיוטה**.') + ' אינך יכול/ה לפרסם, למחוק דף, לשנות ערכת נושא או הגדרות —');
     lines.push('הדברים האלה נשארים בידיים של בעל/ת האתר. אם מבקשים מהם, הסבר/י איפה זה נמצא בממשק.');
+    // the one write that is NOT a draft — said plainly, so the model never
+    // tells an owner "it is only a draft" about a menu that just went live.
+    // Full tier only: the compact tier's tool bullet above already says
+    // "live, with a backup", and every line there is paid on every turn
+    if (!compact && menus) lines.push('**התפריט הוא היוצא מן הכלל:** לאתר אין "תפריט טיוטה", אז `organize_menu` שאושר חל מיד על האתר החי — עם גיבוי שבעל/ת האתר משחזר/ת בלחיצה.');
     lines.push('');
     lines.push('## איך לעבוד');
     lines.push('');
@@ -409,6 +444,43 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('- For non-building questions (how to change a colour, where menus live) just answer plainly, no fence.');
     if (!compact) lines.push('- **When you tell the owner what you built, use plain words** ("the opening", "the call to action", "the price table") — not module names or jargon (hero, CTA, section).');
     if (compact) lines.push('- **This model\'s window is small** — build short, focused pages; a long existing page may not fit for editing, and then say so to the owner instead of guessing.');
+    // the English branch never listed the tools; the menu pair gets one line
+    // so a menu request does not come back as a page there either
+    if (menus) lines.push('- **Menus are not pages.** For any menu request call `read_menus`, then `organize_menu` with the whole `<bent-menus>` document. It needs approval — and once approved it is LIVE, with a backup the owner can restore.');
+    lines.push('');
+  }
+
+  // ── the menus (v2.43) — the FULL tier's lesson, both locales ──
+  // The grammar lines are the ORGANIZER's (menu-organizer.js menuGrammar):
+  // the pack and this briefing teach one dialect from one list, so a tag the
+  // door learns is taught to both. Required lazily — the organizer pulls in
+  // the theme and the DB, which this module's other callers never need.
+  // The capacity NUMBER is deliberately absent: it is computed per site and
+  // rides in read_menus' answer, never in a briefing built once per process.
+  // FULL tier only — the compact tier's menu lesson is its two tool bullets
+  // (Hebrew) / its one "menus are not pages" bullet (English), above.
+  if (!compact && menus) {
+    const { menuGrammar } = require('../menu-organizer');
+    const from = he ? 'הערך מעמודת `page` בטבלה ש-`read_menus` מחזיר' : 'the value from the `page` column of the table `read_menus` returns';
+    lines.push(he ? '## התפריטים של האתר — `read_menus` ואז `organize_menu`' : '## The site menus — `read_menus`, then `organize_menu`');
+    lines.push('');
+    lines.push(he
+      ? 'בקשה על התפריט — לסדר, לקבץ תחת הורה, להוסיף או להסיר דף, לקצר תוויות, לקפל תחת "עוד" — **לא עוברת דרך דף**. קרא/י `read_menus`, והצע/י ב-`organize_menu` את **כל** מסמך `<bent-menus>` אחרי השינוי (תפריט שמופיע במסמך מוחלף כולו). בעל/ת האתר רואה את התפריט המוצע על הכותרת האמיתית של האתר לפני האישור.'
+      : 'A request about the menu — reorder, group under a parent, add or remove a page, shorten labels, fold under "more" — **never goes through a page**. Call `read_menus`, then propose the WHOLE `<bent-menus>` document after the change with `organize_menu` (a menu the document names is replaced whole). The owner sees the proposed menu on the site\'s real header before approving.');
+    lines.push('');
+    lines.push(menuGrammar({ pageSource: from }));
+    lines.push('');
+    if (he) {
+      lines.push('- `page="…"` רק מהטבלה, מועתק מילה במילה — דף שלא שם נדחה לפני שבעל/ת האתר נשאל/ת.');
+      lines.push('- רמת קינון אחת; הבית ראשון, צרו קשר אחרון, דפים משפטיים ב-`footer`; תוויות 2–12 תווים.');
+      lines.push('- יותר פריטים עליונים ממה ש-`read_menus` אומר שנכנסים בשורה → קבצו תחת הורה, או `<bent-menu-layout fold="N" />`. `placement` / `flow` רק כשביקשו זאת במפורש.');
+      lines.push('- לעולם לא `bent-nav` ולא `bent-item` — אלה מודולים של דף, לא תגים של תפריט.');
+    } else {
+      lines.push('- `page="…"` only from the table, copied verbatim — a page that is not there is refused before the owner is asked.');
+      lines.push('- One nesting level; home first, contact last, legal pages in `footer`; labels 2–12 characters.');
+      lines.push('- More top items than `read_menus` says fit a row → group under a parent, or `<bent-menu-layout fold="N" />`. `placement` / `flow` only when explicitly asked.');
+      lines.push('- Never `bent-nav` or `bent-item` — those are page modules, not menu tags.');
+    }
     lines.push('');
   }
 
@@ -486,7 +558,8 @@ function buildCopilotBriefing(opts = {}) {
     locale,
     chars: text.length,
     tier,
-    canvas: opts.canvas === 'blank' ? 'blank' : (opts.canvas === 'page' ? 'page' : '')
+    menus,
+    canvas: ['blank', 'page', 'menu'].includes(opts.canvas) ? opts.canvas : ''
   };
 }
 

@@ -767,6 +767,54 @@ function windowFor(provider, key) {
   return { ...g, tokens: ((p && Number(p.contextTokens)) || 24000), source: 'advisory', known: false };
 }
 
+// ── a tool the window cannot answer is not declared (v2.43) ─────────────
+//
+// The menu pair (read_menus / organize_menu) costs ~530 chars of schema in
+// EVERY request plus ~200 chars of briefing. Found by smoke-ai-window (c), the
+// silent band at a probed 8,192: once a reply recalibrates the ratio to the
+// 2.0 clamp the whole budget is 5,760 × 2.0 = 11,520 chars, v2.42 sat ~100
+// chars under it, and the pair pushed the compact tier OVER — WINDOW_TOO_SMALL
+// on the very model this module exists for (Ben's Gemma, loaded at LM
+// Studio's 8,192 default). And where it still squeezed in, it was useless:
+// read_menus hands a WHOLE menu back (never a slice), which needs more room
+// than such a window has left. Paying every turn for a tool that can only
+// ever answer "too long" is strictly worse than not declaring it.
+//
+// So the planner asks one more question. If the full tier fits → all six
+// tools. If the compact tier fits with at least MENU_TOOLS_MIN_ROOM_CHARS
+// left for history and read-backs → all six. Otherwise → LEAN: the four page
+// tools and a briefing that says nothing about menus — v2.42's bytes exactly
+// (compared against the committed v2.42 file when this was written, every
+// locale × tier × media; smoke-ai-window pins what can be pinned without a
+// copy of it: not a word about menus, four tools) — so an 8K owner loses
+// nothing they had.
+// A menu request there is answered in words (the weaker mode), the page says
+// why, and the window sentence already names the fix (Context Length 32768).
+const MENU_TOOLS_MIN_ROOM_CHARS = 3000;
+
+/**
+ * pickTier, plus whether the menu tools are declared.
+ * @param {{ tokens, source, ratio, sizes: {full:number, compact:number, compactLean?:number}, toolsChars:number, leanToolsChars:number, extraChars?:number }} o
+ * @returns {{ tier:'full'|'compact'|null, roomChars:number, promptTokens:number, budget:number, menus:boolean }}
+ */
+function pickCopilotTier(o = {}) {
+  const sizes = o.sizes || {};
+  const extra = Math.max(0, Number(o.extraChars) || 0);
+  const all = win.pickTier({
+    tokens: o.tokens, source: o.source, ratio: o.ratio,
+    sizes: { full: sizes.full, compact: sizes.compact }, fixedChars: (Number(o.toolsChars) || 0) + extra
+  });
+  if (all.tier === 'full') return { ...all, menus: true };
+  if (all.tier && all.roomChars >= MENU_TOOLS_MIN_ROOM_CHARS) return { ...all, menus: true };
+  const lean = win.pickTier({
+    tokens: o.tokens, source: o.source, ratio: o.ratio,
+    sizes: { full: sizes.full, compact: sizes.compactLean || sizes.compact }, fixedChars: (Number(o.leanToolsChars) || 0) + extra
+  });
+  // lean.tier null too → the caller reports WINDOW_TOO_SMALL with the numbers
+  // of the SMALLEST request we could have sent, not the largest
+  return { ...lean, menus: false };
+}
+
 /**
  * A turn that may use tools.
  * @param {{ system?, systemFor?, user?, history?, approve?, step?, window?, context? }} args
@@ -791,6 +839,10 @@ async function converse({ system = '', systemFor = null, user = '', history = []
   const toolDefs = tools.toolsForProvider(style);
   const toolNames = tools.TOOLS.map((t) => t.name);
   const toolsChars = JSON.stringify(toolDefs).length;
+  // the LEAN set (v2.43): the four page tools, for a window that cannot
+  // answer a menu read — see pickCopilotTier
+  const leanToolDefs = tools.toolsForProvider(style, { menus: false });
+  const leanToolsChars = JSON.stringify(leanToolDefs).length;
   const local = provider.id === 'local' || !!provider.browserRelay;
   const errPrefix = local ? 'שגיאת המודל המקומי: ' : 'שגיאת ספק: ';
 
@@ -827,7 +879,9 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       st.memo = win.HE.memoRefused(summary);
     } else {
       try {
-        output = tools.getTool(write.name).run(write.input);
+        // `brief` = the owner's own message of this turn. Only the menu door
+        // reads it (LAYOUT_UNASKED is judged against what the OWNER asked).
+        output = tools.getTool(write.name).run(write.input, { brief: st.userText || '' });
         st.used.push(write.name);
         st.applied = {
           tool: write.name,
@@ -835,10 +889,20 @@ async function converse({ system = '', systemFor = null, user = '', history = []
           title: output.title,
           ...(output.created ? { created: true } : {}),
           ...(output.edited ? { edited: true } : {}),
+          // v2.43 — a menu is not a page: no slug, no draft. What the page
+          // needs is that it LANDED, which backup undoes it, and the fit line.
+          ...(output.organized ? {
+            organized: true,
+            menus: Array.isArray(output.menus) ? output.menus : [],
+            backupId: String(output.backupId || ''),
+            fitLine: String(output.fitLine || ''),
+            rebuildError: String(output.rebuildError || '')
+          } : {}),
           warnings: Array.isArray(output.warnings) ? output.warnings : [],
           moduleCount: Number(output.moduleCount) || 0
         };
-        st.memo = (output.created ? win.HE.memoCreated(output.slug) : win.HE.memoEdited(output.slug)) +
+        st.memo = (output.organized ? win.HE.memoOrganized(output.fitLine)
+          : output.created ? win.HE.memoCreated(output.slug) : win.HE.memoEdited(output.slug)) +
           (st.applied.warnings.length ? win.HE.memoWarnings(st.applied.warnings.length) : '');
       } catch (e) {
         output = { error: e.message };
@@ -865,6 +929,7 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       base: [],              // history + the current message (fitted per plan)
       extra: [],             // this turn's tool units (appended as they happen)
       userChars: text.length,
+      userText: text.slice(0, 1500), // the menu door's brief (v2.43) — the organizer's own BRIEF_MAX
       used: [],
       reads: [],
       hop: 0,
@@ -886,12 +951,22 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     st.base.push({ role: 'user', content: text });
   }
 
-  const systemText = (tier) => {
-    if (st.sysCache[tier] === undefined) st.sysCache[tier] = String(st.systemFor(tier) || '');
-    return st.sysCache[tier];
+  // `menus` is the second thing the builder is told (v2.43): a briefing must
+  // not promise tools the request does not declare. A legacy one-argument
+  // builder ignores it — its lean text is then simply the same text.
+  const systemText = (tier, menus = true) => {
+    const k = tier + (menus ? '' : ':lean');
+    if (st.sysCache[k] === undefined) st.sysCache[k] = String(st.systemFor(tier, { menus }) || '');
+    return st.sysCache[k];
   };
   const sizes = () => {
-    if (!st.sizes) st.sizes = { full: systemText('full').length, compact: systemText('compact').length };
+    if (!st.sizes) {
+      st.sizes = {
+        full: systemText('full').length,
+        compact: systemText('compact').length,
+        compactLean: systemText('compact', false).length
+      };
+    }
     return st.sizes;
   };
 
@@ -902,13 +977,19 @@ async function converse({ system = '', systemFor = null, user = '', history = []
   const plan = () => {
     const w = windowFor(provider, st.key);
     const source = st.forceCompact && w.source !== 'cloud' ? 'advisory' : w.source;
-    const fixedChars = toolsChars + st.userChars;
-    const pt = win.pickTier({ tokens: w.tokens, source, ratio: w.ratio, sizes: sizes(), fixedChars });
+    // v2.43: the tier AND whether the menu pair is declared — a tool the
+    // window cannot answer is not declared (pickCopilotTier)
+    const pt = pickCopilotTier({
+      tokens: w.tokens, source, ratio: w.ratio, sizes: sizes(),
+      toolsChars, leanToolsChars, extraChars: st.userChars
+    });
     if (!pt.tier) {
       if (st.lastFail) throw tooSmall(st.lastFail.nPrompt, st.lastFail.nCtx);
       throw tooSmall(pt.promptTokens + win.replyReserve(w.tokens) + win.TEMPLATE_HEADROOM_TOKENS, w.tokens);
     }
-    const sys = systemText(pt.tier);
+    const sys = systemText(pt.tier, pt.menus);
+    const defs = pt.menus ? toolDefs : leanToolDefs;
+    const defsChars = pt.menus ? toolsChars : leanToolsChars;
     // The tool loop exists to build BenTML pages; a request that leaves for
     // a LOCAL model without the briefing is a bug upstream, never a call to
     // make — without it the model answers in an invented dialect (C1: zero
@@ -920,13 +1001,14 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     const extraChars = win.turnsChars(st.extra);
     const turns = win.fitTurns(st.base, pt.roomChars === Infinity ? Infinity : pt.roomChars - extraChars).concat(st.extra);
     const maxTokens = w.tokens === Infinity ? Math.max(4096, provider.maxTokens || 4096) : win.replyReserve(w.tokens);
-    const body = composeBody(provider, s, sys, turns, toolDefs, maxTokens);
+    const body = composeBody(provider, s, sys, turns, defs, maxTokens);
     const tChars = win.turnsChars(turns);
     return {
       tier: pt.tier,
+      menus: pt.menus,
       body,
-      sentChars: sys.length + tChars + toolsChars,
-      estPromptTokens: Math.ceil((sys.length + tChars + toolsChars) / w.ratio),
+      sentChars: sys.length + tChars + defsChars,
+      estPromptTokens: Math.ceil((sys.length + tChars + defsChars) / w.ratio),
       roomAfter: pt.roomChars === Infinity ? Infinity : Math.max(0, pt.roomChars - (tChars - st.userChars)),
       window: w
     };
@@ -949,6 +1031,9 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         tokens: w.known ? w.tokens : null,
         source: w.known ? w.source : 'unknown',
         tier: st.tier || null,
+        // v2.43 — false = this window got the four page tools only; the page
+        // says so when the owner asks about the menu (undefined before a plan)
+        menuTools: st.menus === undefined ? null : !!st.menus,
         promptTokens: st.lastPromptTokens || st.estPromptTokens || 0,
         model: w.model || st.model || '',
         ratio: w.ratio,
@@ -972,6 +1057,7 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     } else {
       const p = plan();
       st.tier = p.tier;
+      st.menus = p.menus;
       st.sentChars = p.sentChars;
       st.estPromptTokens = p.estPromptTokens;
       st.roomAfter = p.roomAfter;
@@ -1122,14 +1208,21 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       // document that will land. Capped: after MAX_PROPOSAL_REFUSALS the turn
       // ends with the reason instead of looping on the owner's GPU.
       let refusal = '';
-      try { tools.preflight(write.name, write.input); } catch (e) { refusal = e.message; }
+      // v2.43 — what the check learned rides to the page: for organize_menu
+      // the preflight IS the organizer's door, and its preview (tree, diff,
+      // fit line, the framed header) is what the canvas shows before ✓
+      let pre = null;
+      try { pre = tools.preflight(write.name, write.input, { brief: st.userText || '' }); } catch (e) { refusal = e.message; }
       if (refusal) {
         st.refusals = (st.refusals || 0) + 1;
         if (st.refusals > MAX_PROPOSAL_REFUSALS) {
           st.memo = win.HE.proposalGaveUp(refusal);
           return envelope({ reply: reply.text || '' });
         }
-        results.push({ id: write.id, output: { error: refusal, proposed: false, fix: win.HE.proposalFixForModel }, isError: true });
+        // the fix line is the TOOL's when it has one: "a child the container
+        // does not accept" is advice about pages, and wrong for a menu
+        const fix = (tools.getTool(write.name) || {}).fixHint || win.HE.proposalFixForModel;
+        results.push({ id: write.id, output: { error: refusal, proposed: false, fix }, isError: true });
         st.notice = win.HE.proposalRefused(refusal);
         st.extra = appendToolTurn(style, st.extra, reply, results);
         st.hop++;
@@ -1139,7 +1232,10 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       const id = putPending({ st, reply, call: write, others: results });
       st.memo = win.HE.memoProposed(summary);
       return envelope({
-        pending: { id, tool: write.name, summary, input: write.input },
+        pending: {
+          id, tool: write.name, summary, input: write.input,
+          ...(pre && pre.preview ? { preview: pre.preview, warnings: Array.isArray(pre.warnings) ? pre.warnings : [] } : {})
+        },
         reply: reply.text || ''
       });
     }
@@ -1209,13 +1305,20 @@ async function planWindow({ hint = null, sizes = null } = {}) {
     try { media = require('./media').listAllMedia(40); } catch (e) { /* no library yet */ }
     sz = {
       full: buildCopilotBriefing({ locale: 'he', media, tier: 'full' }).chars,
-      compact: buildCopilotBriefing({ locale: 'he', media, tier: 'compact' }).chars
+      compact: buildCopilotBriefing({ locale: 'he', media, tier: 'compact' }).chars,
+      compactLean: buildCopilotBriefing({ locale: 'he', media, tier: 'compact', menus: false }).chars
     };
   }
   const tools = require('./ai-tools');
   const style = (provider.body && provider.body.style) || 'anthropic-messages';
-  const fixedChars = JSON.stringify(tools.toolsForProvider(style)).length + 400;
-  const pt = win.pickTier({ tokens: w.tokens, source: w.source, ratio: w.ratio, sizes: sz, fixedChars });
+  // the SAME question the turn asks (v2.43) — the chip and the turn must
+  // never disagree about the tier, nor about whether the menu tools are in
+  const pt = pickCopilotTier({
+    tokens: w.tokens, source: w.source, ratio: w.ratio, sizes: sz,
+    toolsChars: JSON.stringify(tools.toolsForProvider(style)).length,
+    leanToolsChars: JSON.stringify(tools.toolsForProvider(style, { menus: false })).length,
+    extraChars: 400
+  });
   const editMaxChars = pt.tier ? (pt.roomChars === Infinity ? null : win.editAllowance(pt.roomChars)) : 0;
   const message = win.describeWindow({
     tokens: w.known ? w.tokens : (w.source === 'cloud' ? Infinity : null),
@@ -1242,7 +1345,8 @@ async function planWindow({ hint = null, sizes = null } = {}) {
     message,
     recommended: win.RECOMMENDED_WINDOW,
     editMaxChars,
-    promptTokens: pt.promptTokens
+    promptTokens: pt.promptTokens,
+    menuTools: !!(pt.tier && pt.menus)
   };
 }
 
@@ -1273,6 +1377,9 @@ module.exports = {
   PUBLIC_TIMEOUT_MS,
   // the window (v2.32): what the routes and the setup screen ask
   planWindow,
+  // …and whether that window gets the menu tools (v2.43)
+  pickCopilotTier,
+  MENU_TOOLS_MIN_ROOM_CHARS,
   composeBody,
   probeLocalWindow: win.probeLocalWindow,
   describeWindow: win.describeWindow,

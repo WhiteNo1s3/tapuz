@@ -19,6 +19,14 @@
  * role:'tool' answers, an approved edit lands as a DRAFT and the published
  * page is untouched, and /admin/chat carries the builder in a frame with a
  * page dropdown, a proposal frame and a window chip.
+ *
+ * v2.43 adds the MENU and its acceptance gate, by number (search "GATE"):
+ * the copilot reads the menus, proposes an order WITH the diff, and the
+ * owner's confirm applies it — GET /admin/api/menus shows the new order with
+ * no inject-card step, a backup exists; a reject leaves the menus
+ * byte-identical with no backup and tells the model; a model that returns no
+ * tool call can still only describe, and that does not break. Plus the menu
+ * canvas: its markup, its sandbox, its one renderer, its state route.
  */
 
 const fs = require('fs');
@@ -110,8 +118,9 @@ function check(name, cond) {
     /d\.reply \|\| d\.memo/.test(chatJs) && !/content: d\.reply \|\| ''/.test(chatJs));
   check('an unanswered proposal is told to the model, history is capped, a reset button exists',
     /\(הצעה קודמת לא נענתה\)/.test(chatJs) && /HISTORY_CAP = 40/.test(chatJs) && /cp-new-chat/.test(chatJs));
+  // (pin updated in v2.43: the canvas has a third state — the menu)
   check('the page sends canvas + surface context and the bridge\'s window hint',
-    /surface: 'copilot'/.test(chatJs) && /canvas: loadedPath \? 'page' : 'blank'/.test(chatJs) && /bridge\.window/.test(chatJs));
+    /surface: 'copilot'/.test(chatJs) && /canvas: menuOpen \? 'menu' : \(loadedPath \? 'page' : 'blank'\)/.test(chatJs) && /bridge\.window/.test(chatJs));
   check('the window chip reads GET /admin/api/ai/window and follows d.window after every turn',
     /\/admin\/api\/ai\/window/.test(chatJs) && /הפנייה האחרונה/.test(chatJs) && /d\.window/.test(chatJs));
   check('errors print the fix line; an old bridge gets the 0.5.0 nudge',
@@ -131,8 +140,65 @@ function check(name, cond) {
     /override \? await planWindowAs\(hint, override\) : await require\('\.\.\/ai'\)\.planWindow\(\{ hint \}\)/.test(copilotSrc));
   check('the page treats a bridge probe that settled before it ran as settled (no 3 s stall, no empty chip)',
     /bridge\.window \|\| bridge\.windowSettled/.test(chatJs));
+  // (pin updated in v2.43: an open MENU canvas is not an empty canvas)
   check('an empty canvas follows the first page the robot read — even when the same turn proposes',
-    /if \(!loadedPath && Array\.isArray\(d\.reads\) && d\.reads\[0\]\) \{/.test(chatJs));
+    /if \(!loadedPath && !menuOpen && Array\.isArray\(d\.reads\) && d\.reads\[0\]\) \{/.test(chatJs));
+
+  // ── v2.43: the canvas shows the MENU (Ben: "i want the copilot to show
+  //    canvas of the menu when needed, it requires particular kind of
+  //    programming") ──
+  const MENU_IDS = ['cp-menu-canvas', 'cp-menu-preview', 'cp-menu-status', 'cp-menu-frame', 'cp-proposal-menu', 'cp-proposal-menu-preview', 'cp-proposal-menu-warn'];
+  check('/admin/chat markup carries the menu canvas and the menu proposal strip', MENU_IDS.every((id) => new RegExp('id="' + id + '"').test(chatRoute)));
+  check('the menu frame keeps the page proposal\'s sandbox — same-origin for the site\'s css, NO scripts',
+    /<iframe id="cp-menu-frame" sandbox="allow-same-origin"/.test(chatRoute) && !/id="cp-menu-frame"[^>]*allow-scripts/.test(chatRoute));
+  check('"🧭 תפריט האתר" sits in the dropdown beside the pages, under a key no page can carry (deriveSlug strips the colon)',
+    /const MENU_KEY = '::menu::'/.test(chatJs) && /🧭 תפריט האתר/.test(chatJs) &&
+    require('../src/pzn/intent').deriveSlug('::menu::') !== '::menu::' && require('../src/pzn/intent').deriveSlug('__menu__') === '__menu__');
+  check('the menu canvas reads GET /admin/api/menus/state and frames the REAL header (a fresh preview id every load)',
+    /\/admin\/api\/menus\/state/.test(chatJs) && /\$\('cp-menu-frame'\)\.src = /.test(chatJs) && /loadMenuCanvas/.test(chatJs));
+  check('ONE renderer for the organizer\'s preview on both screens: the injection card\'s, loaded but never mounted here',
+    /<script src="\/admin-inject-card\.js"><\/script>/.test(chatRoute) && /TapuzInjectCard\.renderPreview/.test(chatJs) && !/TapuzInjectCard\.mount/.test(chatJs));
+  const cardJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-inject-card.js'), 'utf8');
+  check('…which draws model-written labels with textContent only, and brings its own stylesheet when called unmounted',
+    /function renderPreview\(box, preview\) \{[\s\S]{0,400}ensureCss\(\);/.test(cardJs) && !/innerHTML/.test(cardJs.slice(cardJs.indexOf('function renderTree'), cardJs.indexOf('function renderWarnings'))));
+  check('a menu proposal is drawn from pending.preview — what the DOOR judged — never re-parsed in the browser\'s name',
+    /function showMenuProposal\(p, answerable\)/.test(chatJs) && /const preview = p\.preview \|\| \{\}/.test(chatJs) && /proposalFrame\.src = String\(preview\.previewUrl\)/.test(chatJs));
+  check('srcdoc is cleared before src is set (srcdoc wins over src) and both are cleared on hide',
+    /proposalFrame\.removeAttribute\('srcdoc'\); \/\/ srcdoc wins over src/.test(chatJs) &&
+    /function hideProposal\(\) \{\s*proposal\.hidden = true;\s*proposalFrame\.removeAttribute\('src'\);\s*proposalFrame\.removeAttribute\('srcdoc'\);/.test(chatJs));
+  check('the approval says the TRUTH per tool: a page is a draft, a menu is LIVE with a backup (screen, overlay and drawer)',
+    /אישור <b>מחיל את התפריט על האתר החי<\/b>/.test(chatJs) && /✓ אשר והחל על האתר/.test(chatJs) &&
+    /אישור <b>מחיל את התפריט על האתר החי<\/b> — לא טיוטה/.test(chatRoute) &&
+    /p\.tool === 'organize_menu'/.test(panel) && /✓ אשר — החל על האתר \(עם גיבוי\)/.test(panel));
+  check('after a menu lands the drawer does NOT reload the builder (the page\'s draft never moved)',
+    /if \(d\.applied && d\.applied\.organized\) \{[\s\S]{0,420}return;\s*\}/.test(panel));
+  check('the way back is the OWNER\'s click (restore route, only inside undoMenu) — the copilot has no undo tool',
+    (chatJs.match(/api\('\/admin\/api\/menus\/restore'/g) || []).length === 1 && /async function undoMenu\(backupId, btn\)[\s\S]{0,400}api\('\/admin\/api\/menus\/restore'/.test(chatJs) && /data-undo="1"/.test(chatJs));
+  check('a mere read_menus opens the menu only into an EMPTY canvas; a menu PROPOSAL opens it under the overlay (the draft saved first)',
+    /if \(!loadedPath && !menuOpen && fresh\.includes\('read_menus'\)\) selectPage\(MENU_KEY\);/.test(chatJs) &&
+    /if \(!menuOpen\) saveCanvas\(\)\.then\(/.test(chatJs));
+  check('the route knows the menu canvas ("סדר את זה" = the menu) and says the owner sees the MENU beside the chat',
+    /ctx\.canvas === 'menu' \? 'menu'/.test(copilotSrc) && /התפריט של האתר פתוח בקנבס/.test(copilotSrc) && /רואה את התפריט בקנבס לידך/.test(copilotSrc));
+  check('a window too small for the menu tools is SAID, once, where it matters (the menu open / a menu ask) — never a silent "cannot"',
+    /function noteMenuToolsOff\(\)/.test(chatJs) && /if \(!menuOpen && !\/תפריט\|menu\/i\.test\(lastUserMessage\)\) return;/.test(chatJs) &&
+    /החלון של המודל קטן מדי לכלי התפריט/.test(chatJs) && /d\.window\.menuTools === false/.test(chatJs) && /d\.menuTools === false/.test(chatJs));
+  check('the route builds systemFor(tier, {menus}) — the door decides, the briefing AND the situation follow',
+    /const systemFor = \(tier, o\) => \{/.test(copilotSrc) && /const menuLine = canvas === 'menu' \? \(menus \? MENU_ON : MENU_OFF\) : '';/.test(copilotSrc) &&
+    /pickCopilotTier/.test(copilotSrc));
+  // GATE 3 (the weaker mode must not break): a tool-less model PRINTS the
+  // menu; before v2.43 the `<bent-` test took it for a page and lit "צור דף"
+  check('GATE 3 — weaker mode: a <bent-menus> document in a plain reply is recognised as a MENU, judged by the never-writes preview route, shown closable — never offered as a page',
+    /function carriesMenuDocument\(reply\)/.test(chatJs) && /if \(carriesMenuDocument\(reply\)\) \{\s*return '<div class="actions">'/.test(chatJs) &&
+    /if \(!d\.pending && carriesMenuDocument\(d\.reply\)\) \{\s*previewMenuReply\(d\.reply\);\s*\} else if/.test(chatJs) &&
+    /\/admin\/api\/menus\/preview/.test(chatJs) && /showMenuProposal\(\{ tool: 'organize_menu', preview: d\.preview, warnings: d\.warningTexts \|\| \[\] \}, false\)/.test(chatJs));
+  {
+    // run the two classifiers exactly as the page has them
+    const grab = (name) => new Function('return (' + chatJs.slice(chatJs.indexOf('function ' + name + '(')).match(/^function [\s\S]*?\n  \}/)[0] + ')')();
+    const isMenu = grab('carriesMenuDocument');
+    const MENU_REPLY = 'הנה הסדר המוצע:\n<bent-menus version="1"><bent-menu name="main"><bent-link label="הבית" page="home" /></bent-menu></bent-menus>';
+    check('…the classifier: a menu document is a menu, a page is not, prose is not',
+      isMenu(MENU_REPLY) === true && isMenu('<!DOCTYPE html><html><body><bent-hero id="h"></bent-hero></body></html>') === false && isMenu('סדרו: הבית, אודות, צור קשר') === false);
+  }
 }
 
 // the EXACT body LM Studio answers with when the prompt is ≥ 2× the window
@@ -199,7 +265,8 @@ function waitUp(tries = 40) {
   runSetup({
     title: 'אתר בדיקה', description: 'copilot-route smoke',
     colors: { primary: '#0a66c2', bg: '#fff', lightBg: '#f0f9ff', text: '#0f172a' },
-    menuPlacement: 'top', pages: ['home'], menuPages: ['home'], external: []
+    // three pages since v2.43: a menu needs something to re-order
+    menuPlacement: 'top', pages: ['home', 'about', 'contact'], menuPages: ['home', 'about', 'contact'], external: []
   });
   const { createAdmin } = require('../src/auth');
   createAdmin('owner', 'owner-pass-1');
@@ -379,6 +446,27 @@ function waitUp(tries = 40) {
       !!(bigCall && bigCall.body.messages[0].content.length > 40000 && bigCall.body.max_tokens === 4096));
     check('…window.tier full', !!(big && big.window && big.window.tier === 'full'));
 
+    // v2.43 — a tool the window cannot answer is not declared: the 8K owner
+    // keeps exactly what v2.42 gave them (the pair would have pushed this
+    // very window to WINDOW_TOO_SMALL once the ratio recalibrated), and the
+    // 32K owner gets the menus
+    check('an 8K window → the four page tools only, a briefing with not a word about menus, window.menuTools false',
+      !!(smallCall && smallCall.body.tools.map((t) => t.function.name).join() === 'list_pages,read_page,create_page,edit_page' &&
+         !/read_menus|organize_menu/.test(smallCall.body.messages[0].content) && small.window.menuTools === false));
+    check('a 32K window → all six tools, the briefing teaches the menus, window.menuTools true',
+      !!(bigCall && bigCall.body.tools.length === 6 && /`organize_menu`/.test(bigCall.body.messages[0].content) && big.window.menuTools === true));
+    const smallMenu = parse(await req('POST', '/admin/api/ai/chat', {
+      cookie, json: { message: 'סדר את התפריט', history: [], context: { canvas: 'menu', surface: 'copilot' }, window: { tokens: 8192, source: 'bridge' } }
+    }));
+    const smallMenuSys = (smallMenu && smallMenu.modelCall && smallMenu.modelCall.body.messages[0].content) || '';
+    check('…and with the MENU open at 8K the model is told the truth — it cannot touch the menu here, describe and point to Context Length / the editor — never to call a tool it was not given',
+      /קטן מדי לכלי התפריט/.test(smallMenuSys) && /Context Length/.test(smallMenuSys) && !/read_menus ואז organize_menu/.test(smallMenuSys) &&
+      smallMenu.modelCall.body.tools.length === 4 && smallMenuSys.length < 12000);
+    const winSmall = parse(await req('GET', '/admin/api/ai/window?tokens=8192&source=bridge', { cookie }));
+    const winBig = parse(await req('GET', '/admin/api/ai/window?tokens=32768&source=bridge', { cookie }));
+    check('the window endpoint answers the same question for the chip: menuTools false at 8K, true at 32K',
+      !!winSmall && winSmall.menuTools === false && winSmall.tier === 'compact' && !!winBig && winBig.menuTools === true);
+
     const none = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'שלום', history: [] } }));
     check('no hint → compact (an unknown window NEVER promotes to the full dictionary)',
       !!(none && none.modelCall && none.modelCall.body.messages[0].content.length < 12000 && none.window && none.window.tier === 'compact'));
@@ -434,6 +522,141 @@ function waitUp(tries = 40) {
       !!(publishedBefore && publishedBefore.ok && typeof publishedBefore.source === 'string' &&
          publishedAfter && publishedAfter.ok && publishedBefore.source === publishedAfter.source &&
          !/שלום מהקופיילוט/.test(publishedAfter.source)));
+
+    // ══ v2.43 — THE MENU, and its acceptance gate ═══════════════════════════
+    // Ben: "we must make sure that the menu sorter is also included in the ai
+    // helper that connects to the api (lm studio or public doesn't matter
+    // they will work the same), there are option to sort the menu using the
+    // co-pilot". The tester's gap was "advise vs act": the copilot told the
+    // order and changed nothing. The gate, pinned here by number on a REAL
+    // server over the browser relay (the courier with the most seams):
+    //   GATE 1  reads the menus → proposes the order WITH the diff → the
+    //           owner's confirm APPLIES it
+    //   GATE 2  reject stays chat-only: nothing written, no backup, the model
+    //           is told the owner declined (as for a declined edit_page)
+    //   GATE 4  after confirm GET /admin/api/menus reflects the new order —
+    //           the inject card's separate apply path is never touched
+    // (GATE 3, the weaker mode, is pinned statically above and on the wire below.)
+    {
+      const getMenus = async () => parse(await req('GET', '/admin/api/menus', { cookie }));
+      const getBackups = async () => (parse(await req('GET', '/admin/api/menus/backups', { cookie })) || {}).backups || [];
+      const targets = (m) => ((m && m.menus && m.menus.main) || []).map((i) => i.target || i.url).join(',');
+      const say = (json) => req('POST', '/admin/api/ai/chat', { cookie, json });
+      const big = { tokens: 262144, source: 'bridge' };
+      const NEW_MENU = [
+        '<bent-menus version="1" note="צור קשר לפני אודות">',
+        '  <bent-menu name="main" location="main">',
+        '    <bent-link label="הבית" page="home" />',
+        '    <bent-link label="צרו קשר" page="contact" />',
+        '    <bent-link label="אודות" page="about" />',
+        '  </bent-menu>',
+        '</bent-menus>'
+      ].join('\n');
+
+      const menusBefore = await getMenus();
+      const rawBefore = JSON.stringify(menusBefore);
+      check('(fixture) the site starts with home, about, contact in the header and no menu backups',
+        targets(menusBefore) === 'home,about,contact' && (await getBackups()).length === 0);
+
+      // the canvas's own read: today's menu in the PREVIEW's shape
+      const stateRes = await req('GET', '/admin/api/menus/state', { cookie });
+      const state = parse(stateRes);
+      check('GET /admin/api/menus/state → the current menu as a preview: tree, empty diff, fit line, the framed-header url, the backups',
+        stateRes.status === 200 && !!state && state.ok && state.preview.menus.main.tree.length === 3 && state.preview.diff.main.moved.length === 0 &&
+        !!state.preview.fitLine && /^\/admin\/menus\/preview\/mp_/.test(state.preview.previewUrl) && Array.isArray(state.backups));
+      // seen live while building it: a seeded `explore` menu sorted ahead of
+      // `main`, and the one menu the owner came to look at was cut off below
+      check('…the HEADER\'s menu comes first in the canvas, the footer\'s second, the rest after',
+        !!state && Object.keys(state.preview.menus)[0] === 'main' && Object.keys(state.preview.menus)[1] === 'footer');
+      check('/admin/api/menus/state is not reachable unauthenticated', (await req('GET', '/admin/api/menus/state', {})).status !== 200);
+      check('…and reading it wrote nothing', JSON.stringify(await getMenus()) === rawBefore);
+
+      // GATE 1 — read → propose with the diff
+      const m1 = parse(await say({ message: 'סדר את התפריט: צור קשר לפני אודות', history: [], context: { canvas: 'menu', surface: 'copilot' }, window: big }));
+      const m1sys = (m1 && m1.modelCall && m1.modelCall.body.messages[0].content) || '';
+      check('the menu canvas rides the briefing ("the menu is open in the canvas" → read_menus, then organize_menu)',
+        /התפריט של האתר פתוח בקנבס/.test(m1sys) && /read_menus ואז organize_menu/.test(m1sys) && /רואה את התפריט בקנבס לידך/.test(m1sys));
+      check('the relayed body declares the menu tools beside the page tools (six, one loop for every courier)',
+        !!(m1 && m1.modelCall) && ['list_pages', 'read_page', 'create_page', 'edit_page', 'read_menus', 'organize_menu']
+          .every((n) => m1.modelCall.body.tools.some((t) => t.function.name === n)) && m1.modelCall.body.tools.length === 6);
+      const m2 = parse(await say({ step: { id: m1 && m1.modelCall ? m1.modelCall.id : 'x', result: toolCall('rm', 'read_menus', {}) } }));
+      const rmAnswer = ((m2 && m2.modelCall && m2.modelCall.body.messages) || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'rm').pop();
+      const rmOut = rmAnswer ? JSON.parse(rmAnswer.content) : null;
+      check('GATE 1 — the copilot READS the current menus: read_menus ran free and answered with the document, the capacity and the page table',
+        !!(m2 && m2.ok && !m2.pending && m2.modelCall && m2.used.includes('read_menus')) && !!rmOut &&
+        /<bent-link label="[^"]*" page="about" \/>/.test(rmOut.document) && /בשורה אחת נכנסים עד/.test(rmOut.capacity) && /\| contact \|/.test(rmOut.pages));
+      const m3 = parse(await say({ step: { id: m2 && m2.modelCall ? m2.modelCall.id : 'x', result: toolCall('om', 'organize_menu', { document: NEW_MENU }) } }));
+      const pv = m3 && m3.pending && m3.pending.preview;
+      check('GATE 1 — it PROPOSES the order with the DIFF: an approval envelope carrying what moved, what was renamed, the fit line and the frame url',
+        !!(m3 && m3.ok && m3.pending && m3.pending.tool === 'organize_menu' && m3.pending.id && !m3.modelCall) && !!pv &&
+        pv.diff.main.moved.length > 0 && pv.diff.main.relabeled.some((x) => x[1] === 'צרו קשר') && pv.diff.main.added.length === 0 && pv.diff.main.removed.length === 0 &&
+        /✓|⚠/.test(pv.fitLine) && /^\/admin\/menus\/preview\/mp_/.test(pv.previewUrl));
+      check('…the approval line says LIVE with a backup (never "draft"), and the memo is what history keeps',
+        !!(m3 && m3.pending) && /האתר החי/.test(m3.pending.summary) && /גיבוי/.test(m3.pending.summary) && !/טיוטה/.test(m3.pending.summary) && /הצעתי/.test(m3.memo || ''));
+      check('…and while the owner looks at it NOTHING is written and NO backup exists',
+        JSON.stringify(await getMenus()) === rawBefore && (await getBackups()).length === 0);
+
+      // the canvas's frame: the candidate on the REAL header, framable only by us
+      const frame = await req('GET', pv ? pv.previewUrl : '/admin/menus/preview/none', { cookie });
+      const navHtml = frame.text.slice(frame.text.indexOf('<nav'), frame.text.indexOf('</nav>'));
+      check('the proposal frame renders the site\'s real page with the CANDIDATE menu, in the candidate order (צרו קשר before אודות)',
+        frame.status === 200 && /<nav/.test(frame.text) && navHtml.indexOf('צרו קשר') > -1 && navHtml.indexOf('צרו קשר') < navHtml.indexOf('אודות'));
+      check('…same-origin framing only (X-Frame-Options + frame-ancestors), like the theme preview',
+        frame.headers['x-frame-options'] === 'SAMEORIGIN' && /frame-ancestors 'self'/.test(String(frame.headers['content-security-policy'] || '')));
+
+      // GATE 2 — reject first: chat-only
+      const rj = parse(await say({ approve: { id: m3 && m3.pending ? m3.pending.id : 'x', ok: false } }));
+      const rjMsg = ((rj && rj.modelCall && rj.modelCall.body.messages) || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'om').pop();
+      check('GATE 2 — REJECT stays chat-only: the menus are byte-identical and NO backup was made',
+        !!(rj && rj.ok && !rj.applied) && JSON.stringify(await getMenus()) === rawBefore && (await getBackups()).length === 0);
+      check('GATE 2 — …and the model is told the owner declined, in the words a declined edit_page gets',
+        !!rjMsg && /"refused":true/.test(rjMsg.content) && /"done":false/.test(rjMsg.content) && /שום דבר לא נשמר/.test(rjMsg.content) && /אל תכתוב\/י שביצעת/.test(rjMsg.content) && /דחה/.test(rj.memo || ''));
+      if (rj && rj.modelCall) await say({ step: { id: rj.modelCall.id, result: { choices: [{ message: { content: 'בסדר, לא שיניתי את התפריט.' } }] } } });
+
+      // GATE 4 — a second run, confirmed this time
+      const c1 = parse(await say({ message: 'בכל זאת — סדר את התפריט: צור קשר לפני אודות', history: [], context: { canvas: 'menu', surface: 'copilot' }, window: big }));
+      const c2 = parse(await say({ step: { id: c1 && c1.modelCall ? c1.modelCall.id : 'x', result: toolCall('om2', 'organize_menu', { document: NEW_MENU }) } }));
+      const okM = parse(await say({ approve: { id: c2 && c2.pending ? c2.pending.id : 'x', ok: true } }));
+      check('GATE 1 — on the owner\'s CONFIRM the menu ops are APPLIED (applied.organized, the backup\'s id, the fit line)',
+        !!(okM && okM.ok && okM.applied && okM.applied.organized === true && okM.applied.tool === 'organize_menu' && okM.applied.backupId && okM.applied.fitLine && okM.applied.rebuildError === ''));
+      check('…and the envelope that carries `applied` over the bridge is the one that lets the page show it NOW (v2.42 rule), memo says live + undoable',
+        !!(okM && okM.modelCall) && /התפריט עודכן באתר החי/.test(okM.memo || '') && /אפשר לבטל/.test(okM.memo || ''));
+      const menusAfter = await getMenus();
+      check('GATE 4 — after confirm, /admin/menus (GET /admin/api/menus) reflects the new order WITHOUT the inject-card\'s separate apply path being needed for the happy path',
+        targets(menusAfter) === 'home,contact,about' && menusAfter.menus.main[1].label === 'צרו קשר');
+      const backupsAfter = await getBackups();
+      check('GATE 4 — …and a backup of the old menu exists (reason copilot:organize_menu), the very id the chat\'s ↩ button holds',
+        backupsAfter.length === 1 && backupsAfter[0].id === okM.applied.backupId && backupsAfter[0].reason === 'copilot:organize_menu' && backupsAfter[0].counts.main === 3);
+      check('…the static site was rebuilt with it (the exported home carries the new order)', (() => {
+        const home = fs.readFileSync(path.join(ROOT, 'public', 'home.html'), 'utf8');
+        const nav = home.slice(home.indexOf('<nav'), home.indexOf('</nav>'));
+        return nav.indexOf('צרו קשר') > -1 && nav.indexOf('צרו קשר') < nav.indexOf('אודות');
+      })());
+      if (okM && okM.modelCall) await say({ step: { id: okM.modelCall.id, result: { choices: [{ message: { content: 'התפריט עודכן.' } }] } } });
+
+      // undo stays reachable — the route the chat's ↩ button calls
+      const undo = parse(await req('POST', '/admin/api/menus/restore', { cookie, json: { backupId: okM && okM.applied ? okM.applied.backupId : 'x' } }));
+      check('the ↩ the chat offers (POST /admin/api/menus/restore with that id) puts the old order back, and is itself undoable (pre-restore backup)',
+        !!(undo && undo.ok) && targets(await getMenus()) === 'home,about,contact' && (await getBackups())[0].reason === 'pre-restore');
+
+      // GATE 3 on the wire — the weaker mode: no tool call, the menu PRINTED
+      const w1 = parse(await say({ message: 'סדר את התפריט', history: [], context: { canvas: 'menu', surface: 'copilot' }, window: big }));
+      const rawMid = JSON.stringify(await getMenus());
+      const w2 = parse(await say({ step: { id: w1 && w1.modelCall ? w1.modelCall.id : 'x', result: { choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: 'הנה הסדר המוצע:\n' + NEW_MENU } }] } } }));
+      check('GATE 3 — a model that returns NO tool call can still only DESCRIBE: the turn completes with its words, no pending, nothing written',
+        !!(w2 && w2.ok && !w2.pending && !w2.applied && !w2.modelCall) && /<bent-menus/.test(w2.reply || '') && JSON.stringify(await getMenus()) === rawMid);
+      const wp = parse(await req('POST', '/admin/api/menus/preview', { cookie, json: { reply: w2 ? w2.reply : '', brief: 'סדר את התפריט' } }));
+      check('GATE 3 — …the page previews that printed menu through the organizer\'s never-writes route (the door\'s diff), and it wrote nothing',
+        !!(wp && wp.ok && wp.preview && wp.preview.diff.main.moved.length > 0) && JSON.stringify(await getMenus()) === rawMid);
+
+      // the door refuses → the model is answered, the owner is never asked
+      const b1 = parse(await say({ message: 'הוסף מחירון לתפריט', history: [], context: { canvas: 'menu', surface: 'copilot' }, window: big }));
+      const b2 = parse(await say({ step: { id: b1 && b1.modelCall ? b1.modelCall.id : 'x', result: toolCall('bad', 'organize_menu', { document: NEW_MENU.replace('</bent-menu>', '  <bent-link label="מחירון" page="pricing" />\n  </bent-menu>') }) } }));
+      const badMsg = ((b2 && b2.modelCall && b2.modelCall.body.messages) || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'bad').pop();
+      check('a menu linking a page that does not exist → NO approval card: the door\'s sentence goes back to the model with the menu\'s fix line',
+        !!(b2 && b2.ok && !b2.pending && b2.modelCall) && /לפני שתתבקשו לאשר/.test(b2.notice || '') && !!badMsg &&
+        /מצביע על דף שלא קיים \(pricing\)/.test(badMsg.content) && /read_menus/.test(badMsg.content) && JSON.stringify(await getMenus()) === rawMid);
+    }
 
     // ── v2.37: a proposal the write would refuse never reaches the owner ──
     // Live on the Bridge challenges (Gemma 4 31B): a bent-faq holding

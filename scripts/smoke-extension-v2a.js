@@ -249,7 +249,9 @@ check('the watchdog picks the ceiling by what has FLOWED (0.5.4) — a tool call
   /const flowing = \(\) => \(content\.length \+ argChars\) > 0;/.test(bg) && /live \? STREAM_IDLE_MS : FIRST_FRAME_MS/.test(bg));
 check('heartbeat and watchdog are armed BEFORE the request leaves (the page\'s ceiling is reset while the model reads)',
   (() => {
-    const fn = (bg.match(/async function streamChat[\s\S]*?\n\}\n/) || [''])[0];
+    // \r? — on a CRLF checkout (Windows) the function ends `}\r\n`; the bare
+    // \n form matched nothing there and the check failed on a correct file
+    const fn = (bg.match(/async function streamChat[\s\S]*?\r?\n\}\r?\n/) || [''])[0];
     const beatAt = fn.indexOf('const beat = setInterval');
     const bumpAt = fn.indexOf('bump();');
     const shootAt = fn.indexOf('res = await shoot(outgoing)');

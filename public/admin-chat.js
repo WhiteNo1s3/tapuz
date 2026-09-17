@@ -19,7 +19,21 @@
    which tier the copilot runs in, and an error carries a `fix` line with the
    LM Studio click path. Reply hygiene: an empty reply is never pushed into
    history (that was the "2 turns to get an unrelated answer"); the server's
-   `memo` stands in for it. */
+   `memo` stands in for it.
+
+   v2.43 (Ben: "i want the copilot to show canvas of the menu when needed"):
+   the canvas has a THIRD state beside blank and page — the site's MENU. The
+   dropdown's "🧭 תפריט האתר" entry opens it; so does the robot, when it
+   reads the menus into an empty canvas or proposes a new one. It shows the
+   organizer's tree and fit line over the REAL header in a frame
+   (GET /admin/api/menus/state → /admin/menus/preview/:id). A menu proposal
+   rides the same overlay a page proposal does, with what the DOOR judged —
+   moved / added / removed / renamed, the fit line, the warnings — drawn by
+   the injection card's own renderPreview (one renderer, two screens), and
+   the candidate header framed under it. One thing differs and the page says
+   so in words: an approved menu is LIVE, not a draft — so the line that
+   follows the apply carries the ↩ undo (POST /admin/api/menus/restore, the
+   owner's own click; the copilot has no such tool). */
 (function () {
   'use strict';
 
@@ -35,7 +49,28 @@
   let providers = [];
   let settings = { provider: 'claude', model: '', hasKey: false, keyTail: '' };
   let pages = []; // the dropdown's source of truth (GET /admin/api/pages)
-  let loadedPath = ''; // the page in the canvas ('' = blank)
+  let loadedPath = ''; // the page in the canvas ('' = blank OR the menu — see menuOpen)
+  // v2.43 — the canvas's third state. MENU_KEY is the dropdown's value for it.
+  // The colons are the point: deriveSlug (src/pzn/intent.js) strips `:` from
+  // every page path, so no page can ever carry this value — `__menu__` could
+  // (underscores survive), and a page by that name would have hijacked it.
+  const MENU_KEY = '::menu::';
+  let menuOpen = false; // the site's menu is in the canvas (loadedPath stays '')
+  // A window too small to answer a menu read does not get the menu tools at
+  // all (src/ai.js pickCopilotTier — an 8,192 window keeps v2.42's bytes).
+  // The owner is told ONCE, where it matters: with the menu open, or when
+  // they ask about it. Never silently — a robot that "cannot" without saying
+  // why looks broken.
+  let menuToolsOff = false;
+  let menuToolsNoted = false;
+  function noteMenuToolsOff() {
+    if (!menuToolsOff || menuToolsNoted) return;
+    if (!menuOpen && !/תפריט|menu/i.test(lastUserMessage)) return;
+    menuToolsNoted = true;
+    bubble('system',
+      'החלון של המודל קטן מדי לכלי התפריט — הקופיילוט יכול להציע סדר במילים, אבל לא לקרוא או לשנות את התפריט. ' +
+      'הגדילו את Context Length ל-32768 ב-LM Studio, או סדרו ב<a href="/admin/menus">עורך התפריטים</a>.', 'warn');
+  }
   let inflight = false; // ONE turn per page — composer, send and approvals lock
   let openProposal = null; // { pending, card } while an approval card waits
   let unloadArmed = false;
@@ -316,6 +351,8 @@
     try {
       const d = await api('/admin/api/ai/window' + q);
       setChip({ tokens: d.window && d.window.tokens, tier: d.tier, model: d.model, message: d.message });
+      menuToolsOff = d.menuTools === false && !!d.tier; // (no tier at all is the chip's own, louder story)
+      noteMenuToolsOff();
       if (d.message && d.message !== lastWindowMessage) {
         lastWindowMessage = d.message;
         bubble('system', esc(d.message), d.tier === 'full' ? '' : d.tier === 'compact' ? 'warn' : 'danger');
@@ -377,22 +414,42 @@
     const opt = (p) => '<option value="' + esc(p.full_path) + '">' + line(p) + '</option>';
     const drafts = pages.filter((p) => p.status !== 'published');
     const published = pages.filter((p) => p.status === 'published');
+    // the menu sits beside the pages (v2.43): it is the one thing on the site
+    // the copilot edits that is not a page
     select.innerHTML = '<option value="">— קנבס ריק —</option>' +
+      '<option value="' + MENU_KEY + '">🧭 תפריט האתר</option>' +
       (drafts.length ? '<optgroup label="טיוטות">' + drafts.map(opt).join('') + '</optgroup>' : '') +
       (published.length ? '<optgroup label="פורסמו">' + published.map(opt).join('') + '</optgroup>' : '');
-    const want = keep != null ? keep : loadedPath;
+    const want = menuOpen ? MENU_KEY : (keep != null ? keep : loadedPath);
     select.value = want;
     if (select.value !== want) select.value = ''; // the page is gone — the canvas says so
   }
 
-  /** Put a page in the canvas (or clear it). The URL follows, so a reload or
-   *  a shared link lands on the same page. */
+  /** Put a page in the canvas, or the site's menu (MENU_KEY), or clear it.
+   *  The URL follows, so a reload or a shared link lands on the same canvas. */
   function selectPage(fullPath, opts = {}) {
-    loadedPath = String(fullPath || '');
+    const want = String(fullPath || '');
+    menuOpen = want === MENU_KEY;
+    loadedPath = menuOpen ? '' : want;
     const empty = $('cp-canvas-empty');
     const open = $('cp-open-full');
     const prev = $('btn-stage-preview');
-    if (!loadedPath) {
+    const menuCanvas = $('cp-menu-canvas');
+    menuCanvas.hidden = !menuOpen;
+    if (!menuOpen) $('cp-menu-frame').removeAttribute('src');
+    if (menuOpen) {
+      // no builder here: the menu's editor is /admin/menus, and 👁 is the
+      // builder's own device preview — the framed header IS the live view
+      frame.hidden = true;
+      frame.removeAttribute('src');
+      empty.hidden = true;
+      open.href = '/admin/menus';
+      open.textContent = 'פתחו בעורך התפריטים ↗';
+      open.hidden = false;
+      prev.disabled = true;
+      loadMenuCanvas();
+      noteMenuToolsOff(); // the canvas still SHOWS the menu; the robot just cannot touch it here
+    } else if (!loadedPath) {
       frame.hidden = true;
       frame.removeAttribute('src');
       empty.hidden = false;
@@ -403,14 +460,52 @@
       frame.hidden = false;
       empty.hidden = true;
       open.href = '/admin/edit/' + encodeURIComponent(loadedPath);
+      open.textContent = 'פתחו בבונה המלא ↗';
       open.hidden = false;
       prev.disabled = false;
     }
-    if (select.value !== loadedPath) select.value = loadedPath;
+    if (select.value !== want) select.value = want;
     if (!opts.keepUrl) {
       const u = new URL(location.href);
       if (loadedPath) u.searchParams.set('page', loadedPath); else u.searchParams.delete('page');
+      if (menuOpen) u.searchParams.set('canvas', 'menu'); else u.searchParams.delete('canvas');
       replaceUrl(u);
+    }
+  }
+
+  /* ── the menu canvas (v2.43): today's menu, as the organizer sees it ── */
+
+  /** The organizer's preview without its own frame — this page frames the
+   *  header itself (the canvas fills the pane; a proposal gets the device
+   *  widths). Drawn by the injection card's renderer: textContent only, so a
+   *  label a model wrote can never become markup here. */
+  function drawMenuPreview(box, preview) {
+    const p = Object.assign({}, preview || {}, { previewUrl: '', previewHtml: '' });
+    if (window.TapuzInjectCard && typeof window.TapuzInjectCard.renderPreview === 'function') {
+      window.TapuzInjectCard.renderPreview(box, p);
+    } else {
+      // the renderer did not load: the fit line alone is still the truth
+      box.textContent = p.fitLine || '';
+    }
+  }
+
+  let menuLoadSeq = 0;
+  /** GET /admin/api/menus/state → the tree + the fit line + the real header
+   *  in the frame. Called on select, after an apply and after an undo. */
+  async function loadMenuCanvas() {
+    const seq = ++menuLoadSeq;
+    const status = $('cp-menu-status');
+    status.textContent = 'טוען…';
+    try {
+      const d = await api('/admin/api/menus/state');
+      if (seq !== menuLoadSeq || !menuOpen) return; // the owner moved on
+      drawMenuPreview($('cp-menu-preview'), d.preview);
+      // a fresh preview id every load — so the frame can never show a stale menu
+      $('cp-menu-frame').src = (d.preview && d.preview.previewUrl) || '/admin/menus/preview/live';
+      status.textContent = '';
+    } catch (e) {
+      if (seq !== menuLoadSeq) return;
+      status.textContent = 'לא הצלחתי לטעון את התפריט: ' + (e.message || e);
     }
   }
   function replaceUrl(u) {
@@ -425,8 +520,10 @@
     try { await b.savePage({ silent: true }); } catch (e) { /* view-only or mid-load */ }
   }
 
-  /** The draft changed on disk — the embedded builder reloads to show it. */
+  /** The draft changed on disk — the embedded builder reloads to show it.
+   *  (The menu canvas refetches instead: there is no builder to reload.) */
   function reloadCanvas() {
+    if (menuOpen) { loadMenuCanvas(); return; }
     if (!loadedPath) return;
     try { frame.contentWindow.location.reload(); }
     catch (e) { frame.src = frame.getAttribute('src'); }
@@ -445,7 +542,8 @@
 
   /** What the copilot is told about where the owner stands. */
   function pageContext() {
-    const ctx = { canvas: loadedPath ? 'page' : 'blank', surface: 'copilot' };
+    // 'menu' (v2.43): with the menu in the canvas, "סדר את זה" means the menu
+    const ctx = { canvas: menuOpen ? 'menu' : (loadedPath ? 'page' : 'blank'), surface: 'copilot' };
     if (loadedPath) {
       ctx.page = loadedPath;
       const sel = selectedInfo();
@@ -468,8 +566,10 @@
     proposal.hidden = false;
     $('cp-proposal-what').textContent = what || '';
     $('cp-proposal-error').hidden = true;
+    $('cp-proposal-menu').hidden = true; // a page proposal carries no menu strip
     proposal.querySelectorAll('[data-ok]').forEach((b) => { b.hidden = !answerable; b.disabled = inflight; });
     proposal.querySelector('[data-close]').hidden = !!answerable;
+    proposalFrame.removeAttribute('src');
     proposalFrame.removeAttribute('srcdoc');
     armUnload();
     try {
@@ -483,14 +583,52 @@
     }
   }
 
+  /** A MENU proposal (v2.43), over the canvas like a page proposal — never in
+   *  it. Nothing is parsed here: `p.preview` is what the organizer's door
+   *  judged on the server (the tool loop's preflight), so the owner approves
+   *  the very plan that will be applied — what moved, what was added,
+   *  removed or renamed, the fit line, the knob changes — and sees it on the
+   *  real header, framed at the device width they pick. `src`, not `srcdoc`:
+   *  the candidate is rendered by GET /admin/menus/preview/:id. Same sandbox
+   *  as the page proposal (no scripts; a published page ships none).
+   *  `answerable` false = the weaker mode (see previewMenuReply): a document
+   *  the reply merely carried — shown, closable, and NOT approvable here. */
+  function showMenuProposal(p, answerable) {
+    const preview = p.preview || {};
+    proposal.hidden = false;
+    $('cp-proposal-what').textContent = answerable ? proposalTitle(p) : 'תפריט מהתשובה — להחלה: מסדר/ת התפריטים בעורך התפריטים';
+    $('cp-proposal-error').hidden = true;
+    proposal.querySelectorAll('[data-ok]').forEach((b) => { b.hidden = !answerable; b.disabled = inflight; });
+    proposal.querySelector('[data-close]').hidden = !!answerable;
+    drawMenuPreview($('cp-proposal-menu-preview'), preview);
+    const warn = $('cp-proposal-menu-warn');
+    warn.textContent = '';
+    (p.warnings || []).forEach((t) => {
+      const li = document.createElement('li');
+      li.textContent = String(t);
+      warn.appendChild(li);
+    });
+    warn.hidden = !(p.warnings || []).length;
+    // "approval applies this to the LIVE site" is only true where there IS an approval
+    proposal.querySelector('.cp-menu-live').hidden = !answerable;
+    $('cp-proposal-menu').hidden = false;
+    proposalFrame.removeAttribute('srcdoc'); // srcdoc wins over src — it must go first
+    if (preview.previewUrl) proposalFrame.src = String(preview.previewUrl);
+    else proposalFrame.removeAttribute('src');
+    armUnload();
+  }
+
   function hideProposal() {
     proposal.hidden = true;
+    proposalFrame.removeAttribute('src');
     proposalFrame.removeAttribute('srcdoc');
+    $('cp-proposal-menu').hidden = true;
     armUnload();
   }
 
   function proposalTitle(p) {
     const inp = p.input || {};
+    if (p.tool === 'organize_menu') return 'סידור התפריט — על הכותרת האמיתית של האתר';
     if (p.tool === 'create_page') {
       const m = /<title>([^<]*)<\/title>/i.exec(String(inp.source || ''));
       return 'דף חדש: "' + ((inp.title || (m && m[1]) || '').trim() || 'ללא כותרת') + '"';
@@ -510,7 +648,7 @@
     // came before the proposal — show only what is new since the last render
     const fresh = (d.used || []).slice(usedShown);
     usedShown = (d.used || []).length;
-    const looked = fresh.filter((t) => t === 'list_pages' || t === 'read_page');
+    const looked = fresh.filter((t) => t === 'list_pages' || t === 'read_page' || t === 'read_menus');
     if (looked.length) {
       bubble('system', '🔎 הקופיילוט קרא מהאתר: ' + esc(looked.join(', ')));
     }
@@ -520,8 +658,12 @@
         replyActions(d.reply));
       wireActions(b, d.reply);
       // a document in the reply with no tool call: still show it rendered —
-      // the 🪄 button above creates it, the frame lets the owner see it first
-      if (!d.pending && carriesDocument(d.reply)) {
+      // the 🪄 button above creates it, the frame lets the owner see it first.
+      // A MENU document is not a page (v2.43): it goes to the organizer's
+      // door, never to the page compiler — see previewMenuReply.
+      if (!d.pending && carriesMenuDocument(d.reply)) {
+        previewMenuReply(d.reply);
+      } else if (!d.pending && carriesDocument(d.reply)) {
         showProposal(d.reply, 'מסמך מהתשובה — לחצו 🪄 בצ׳אט כדי ליצור', false);
       }
     } else if (d.memo && !d.pending && !d.applied) {
@@ -533,9 +675,14 @@
     // first page it looked at — also when the same turn already proposes an
     // edit to it, so the owner compares the proposal against the page under
     // it (approval then reloads that same canvas)
-    if (!loadedPath && Array.isArray(d.reads) && d.reads[0]) {
+    if (!loadedPath && !menuOpen && Array.isArray(d.reads) && d.reads[0]) {
       selectPage(d.reads[0]);
     }
+    // …and the menu the same way (v2.43): an EMPTY canvas opens the menu the
+    // robot just read. A page the owner is working on is never pulled away
+    // for a mere read — only a menu PROPOSAL does that (renderApproval), since
+    // the owner must see what they are about to change.
+    if (!loadedPath && !menuOpen && fresh.includes('read_menus')) selectPage(MENU_KEY);
   }
 
   /** Every turn ends here: the chip learns the last window, a notice from the
@@ -544,6 +691,10 @@
     if (!d) return;
     if (d.notice) bubble('system', esc(d.notice), 'warn');
     if (d.window) {
+      // the TURN's own word on the menu tools beats the chip's forecast
+      if (d.window.menuTools === false) menuToolsOff = true;
+      else if (d.window.menuTools === true) menuToolsOff = false;
+      noteMenuToolsOff();
       setChip({
         tokens: d.window.tokens, tier: d.window.tier, model: d.window.model,
         promptTokens: d.window.promptTokens, message: lastWindowMessage
@@ -552,20 +703,36 @@
   }
 
   function renderApproval(p) {
+    const isMenu = p.tool === 'organize_menu';
+    // The fine print is per tool because the truth is (v2.43): a page write
+    // is a draft, a menu write is LIVE. Saying "draft only" over a menu
+    // would be the one lie on this screen.
+    const fine = isMenu
+      ? 'שום דבר לא השתנה עדיין. אישור <b>מחיל את התפריט על האתר החי</b> — גיבוי נשמר לפני ההחלה, ואפשר לבטל בלחיצה. ההצעה מוצגת בקנבס, על הכותרת האמיתית.'
+      : 'שום דבר לא נשמר עדיין. אישור יוצר/יעדכן <b>טיוטה</b> בלבד — הדף החי לא משתנה.' +
+        (p.input && p.input.source ? ' ההצעה מוצגת בקנבס.' : '');
     const b = bubble('system',
       '<div style="font-weight:700;margin-bottom:6px">✋ הקופיילוט מבקש רשות</div>' +
       '<div style="margin-bottom:4px">' + esc(p.summary) + '</div>' +
-      '<div class="faint" style="font-size:.78rem;margin-bottom:8px">שום דבר לא נשמר עדיין. אישור יוצר/יעדכן <b>טיוטה</b> בלבד — הדף החי לא משתנה.' +
-      (p.input && p.input.source ? ' ההצעה מוצגת בקנבס.' : '') + '</div>' +
+      (isMenu && p.preview && p.preview.fitLine ? '<div style="margin-bottom:4px;font-size:.84rem">' + esc(p.preview.fitLine) + '</div>' : '') +
+      '<div class="faint" style="font-size:.78rem;margin-bottom:8px">' + fine + '</div>' +
       '<div class="actions">' +
-      '<button type="button" class="act primary" data-ok="1">✓ אשר</button>' +
+      '<button type="button" class="act primary" data-ok="1">' + (isMenu ? '✓ אשר והחל על האתר' : '✓ אשר') + '</button>' +
       '<button type="button" class="act" data-ok="0">✕ לא עכשיו</button>' +
       '</div>');
     openProposal = { pending: p, card: b };
     b.querySelectorAll('[data-ok]').forEach((btn) => {
       btn.addEventListener('click', () => answer(btn.dataset.ok === '1'));
     });
-    if (p.input && p.input.source) showProposal(p.input.source, proposalTitle(p), true);
+    if (isMenu) {
+      // the owner must see what they are about to change: the menu canvas
+      // opens UNDER the proposal (the builder's draft is saved first — the
+      // owner may have typed while the model was thinking)
+      if (!menuOpen) saveCanvas().then(() => { if (openProposal && openProposal.pending === p) selectPage(MENU_KEY); });
+      showMenuProposal(p, true);
+    } else if (p.input && p.input.source) {
+      showProposal(p.input.source, proposalTitle(p), true);
+    }
     armUnload();
   }
 
@@ -586,6 +753,19 @@
     // and the canvas below shows the draft itself
     hideProposal();
     const warn = a.warnings && a.warnings.length ? ' · ' + a.warnings.length + ' אזהרות' : '';
+    if (a.organized) {
+      // v2.43 — live, not a draft: say where it landed and hand the way back
+      // in the same breath. The canvas shows the menu as it now IS.
+      if (menuOpen) loadMenuCanvas(); else selectPage(MENU_KEY);
+      const line = bubble('system',
+        'התפריט עודכן באתר ✓' + (a.fitLine ? ' · ' + esc(a.fitLine) : '') + warn +
+        (a.rebuildError ? ' · <span class="fix">בניית האתר נכשלה: ' + esc(a.rebuildError) + '</span>' : '') +
+        (a.backupId ? '<div class="actions"><button type="button" class="act" data-undo="1">↩ בטל — החזר את התפריט הקודם</button>' +
+          '<a class="act" href="/admin/menus" style="text-decoration:none">עורך התפריטים ↗</a></div>' : ''));
+      const undo = line.querySelector('[data-undo]');
+      if (undo) undo.addEventListener('click', () => undoMenu(a.backupId, undo));
+      return;
+    }
     if (a.edited) {
       bubble('system', 'בוצע ✓ הטיוטה בקנבס' + warn);
       if (loadedPath === a.slug) reloadCanvas();
@@ -598,9 +778,32 @@
     }
   }
 
-  /** The status line while the model still works AFTER the draft landed. */
+  /** ↩ the owner's own click (v2.43). The copilot has NO undo tool — putting
+   *  a menu back is a human act, like publishing — so this is the page
+   *  calling the menus route directly (POST /admin/api/menus/restore, which
+   *  snapshots the current state first: an undo is itself undoable from
+   *  /admin/menus). The model is told on its next turn, through history. */
+  async function undoMenu(backupId, btn) {
+    if (inflight) return;
+    btn.disabled = true;
+    btn.textContent = 'מחזיר…';
+    try {
+      await api('/admin/api/menus/restore', { method: 'POST', body: JSON.stringify({ backupId }) });
+      btn.textContent = 'הוחזר ✓';
+      bubble('system', '↩ התפריט הקודם הוחזר. (השינוי שבוטל נשמר כגיבוי בעורך התפריטים.)');
+      remember('user', '(ביטלתי את שינוי התפריט האחרון — התפריט הקודם הוחזר)');
+      if (menuOpen) loadMenuCanvas();
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = '↩ בטל — החזר את התפריט הקודם';
+      errorBubble(e);
+    }
+  }
+
+  /** The status line while the model still works AFTER the write landed. */
   function statusWithDraft(text) {
-    return appliedShown ? 'הטיוטה כבר נשמרה ✓ · המודל מסכם: ' + text : text;
+    if (!appliedShown) return text;
+    return (appliedShown.organized ? 'התפריט כבר עודכן ✓ · המודל מסכם: ' : 'הטיוטה כבר נשמרה ✓ · המודל מסכם: ') + text;
   }
 
   /** The gate — the chat card and the proposal bar both land here. */
@@ -643,7 +846,42 @@
     return /<bent-|<!DOCTYPE html|^\s*BENTML\s+v?\d+\.\d+/im.test(reply);
   }
 
+  /* ── the weaker mode (v2.43): a menu the model could only DESCRIBE ──
+     A model with no tool support — or a courier that returns no tool calls —
+     cannot call organize_menu; asked to sort the menu it prints a
+     `<bent-menus>` document into the chat. That must not break: before this
+     the `<bent-` test above took it for a PAGE, lit "🪄 צור דף" over a menu
+     and pushed it through the page compiler. Now it is recognised for what
+     it is, judged by the organizer's own door (POST /admin/api/menus/preview
+     — never writes) and shown on the canvas like any proposal, with a close
+     button instead of an approval: there is no pending id behind it, so this
+     page has nothing to approve. Applying it stays where a pasted reply has
+     always been applied — the organizer card on /admin/menus. */
+  function carriesMenuDocument(reply) {
+    return /<bent-menus?[\s>]/i.test(reply) && !/<!DOCTYPE html/i.test(reply);
+  }
+
+  let lastUserMessage = ''; // the door's brief in the weaker mode (what the OWNER asked)
+
+  async function previewMenuReply(reply) {
+    try {
+      const d = await api('/admin/api/menus/preview', { method: 'POST', body: JSON.stringify({ reply, brief: lastUserMessage }) });
+      if (openProposal) return; // a real proposal arrived meanwhile — it owns the overlay
+      if (!menuOpen && !loadedPath) selectPage(MENU_KEY);
+      showMenuProposal({ tool: 'organize_menu', preview: d.preview, warnings: d.warningTexts || [] }, false);
+    } catch (e) {
+      // the door refused it (no menu in it, too many unknown pages…): say why, show nothing
+      bubble('system', 'התפריט שבתשובה לא עבר את הבדיקה: ' + esc(e.message), 'warn');
+    }
+  }
+
   function replyActions(reply) {
+    if (carriesMenuDocument(reply)) {
+      return '<div class="actions">' +
+        '<a class="act primary" href="/admin/menus" style="text-decoration:none">🧭 להחלה: מסדר/ת התפריטים ↗</a>' +
+        '<button type="button" class="act" data-act="copy">העתק</button>' +
+        '</div>';
+    }
     if (!carriesDocument(reply)) return '';
     return '<div class="actions">' +
       '<button type="button" class="act primary" data-act="create">🪄 צור דף מהתשובה (טיוטה)</button>' +
@@ -707,6 +945,7 @@
       remember('assistant', '(הצעה קודמת לא נענתה)');
     }
     input.value = '';
+    lastUserMessage = message;
     bubble('user', esc(message));
     setInflight(true, 'חושב…');
     try {
@@ -777,12 +1016,14 @@
 
     // the canvas: the dropdown, the preselected page, the buttons
     await loadPages();
-    const want = new URL(location.href).searchParams.get('page') || '';
+    const params = new URL(location.href).searchParams;
+    const want = params.get('page') || '';
     if (want && pages.some((p) => p.full_path === want)) selectPage(want, { keepUrl: true });
+    else if (params.get('canvas') === 'menu') selectPage(MENU_KEY, { keepUrl: true });
     else selectPage('', { keepUrl: true });
 
     select.addEventListener('change', () => {
-      if (inflight) { select.value = loadedPath; return; }
+      if (inflight) { select.value = menuOpen ? MENU_KEY : loadedPath; return; }
       selectPage(select.value);
     });
     $('btn-stage-preview').addEventListener('click', () => {

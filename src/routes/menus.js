@@ -87,6 +87,20 @@ router.post('/admin/api/menus/restore', requireAdmin, (req, res) => {
   }
 });
 
+// The menus as they are TODAY, in the preview's own shape (v2.43) — what the
+// copilot's canvas shows when the owner picks "תפריט האתר" or the robot reads
+// the menus: the same tree, fit line and framed real header a proposal gets
+// (menu-organizer.currentMenuPreview), so the owner compares like with like.
+// `backups` is the way back the chat offers after an apply. Never writes.
+router.get('/admin/api/menus/state', (req, res) => {
+  try {
+    const org = require('../menu-organizer');
+    res.json({ ok: true, preview: org.currentMenuPreview(), backups: menusLib.listMenuBackups().slice(0, 5) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // a candidate document → its preview (tree, diff, fit, an iframe url); never writes
 router.post('/admin/api/menus/preview', (req, res) => {
   try {

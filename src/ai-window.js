@@ -485,6 +485,11 @@ const HE = {
   readTooLong: (chars, limit) =>
     'המסמך (' + fmt(chars) + ' תווים) גדול מחלון ההקשר של המודל (מותר ' + fmt(limit) + ') — ' +
     'אמור/י לבעל/ת האתר להגדיל את Context Length ב-LM Studio, או הצע/י שינוי שלא דורש את כל הדף.',
+  // v2.43 — the same refusal for the menus: never a sliced document (the
+  // model hands the WHOLE menu back, so half a menu read is half a menu lost)
+  readMenusTooLong: (chars, limit) =>
+    'התפריטים (' + fmt(chars) + ' תווים) גדולים מחלון ההקשר של המודל (מותר ' + fmt(limit) + ') — ' +
+    'אמור/י לבעל/ת האתר להגדיל את Context Length ב-LM Studio. אל תציע/י תפריט שלא קראת.',
   memoProposed: (summary) => 'הצעתי: ' + summary + ' — ממתין לאישור',
   // v2.37 — a proposal that fails the write's own checks goes back to the model
   proposalRefused: (why) => 'הקופיילוט הציע מסמך שלא עובר את הבדיקה (' + briefErrors(why) + ') — החזרתי לו את השגיאה לתיקון, לפני שתתבקשו לאשר.',
@@ -492,6 +497,9 @@ const HE = {
   proposalGaveUp: (why) => 'הקופיילוט לא הצליח להציע מסמך תקין גם אחרי תיקון (' + briefErrors(why) + '). נסחו את הבקשה אחרת, או בקשו דף קצר יותר.',
   memoCreated: (slug) => 'בוצע: נוצר הדף "' + slug + '" כטיוטה',
   memoEdited: (slug) => 'בוצע: הדף "' + slug + '" עודכן כטיוטה',
+  // v2.43 — NOT a draft: an approved menu is live, so the memo says where it
+  // landed and that the way back exists (applyMenuPlan backs up first)
+  memoOrganized: (fitLine) => 'בוצע: התפריט עודכן באתר החי' + (fitLine ? ' · ' + fitLine : '') + ' · גיבוי נשמר, אפשר לבטל',
   memoWarnings: (n) => ' · ' + fmt(n) + ' אזהרות',
   memoRefused: (summary) => 'בעל/ת האתר דחה/תה את ההצעה: ' + summary,
   memoRead: (used) => 'קראתי: ' + used.join(', '),

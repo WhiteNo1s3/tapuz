@@ -130,12 +130,74 @@ check('pickTier: 6000 → null (compact does not fit either)', tier(6000, 'probe
   // the compact tier ~530 chars (~200 tokens). An 8,192 window still leaves
   // 5,760 prompt tokens (≈ 15K chars) — and one mediacard with a heading
   // nested inside it is a whole page that renders empty cards.
-  check(`compact.chars ≤ 11500 (${compact.chars}) and carries the compact grammar`, compact.chars <= 11500 && compact.text.includes('דקדוק מקוצר') && compact.tier === 'compact');
+  // 11,500 → 11,600 (v2.43): the two menu tools cost the compact tier 201
+  // chars — two bullets that route a menu request ("תפריט ≠ דף"), say the
+  // WHOLE document goes back, and that the write is live with a backup. The
+  // grammar itself was kept OUT of this tier (it rides in read_menus' answer
+  // — see the v2.43 checks below); getting under 11,500 would have meant
+  // cutting "whole" and "backup", which is squeezing meaning to fit a number.
+  // What this pin stands in for is pinned directly below: read-back room at
+  // 8,192 with all six tools declared.
+  check(`compact.chars ≤ 11600 (${compact.chars}) and carries the compact grammar`, compact.chars <= 11600 && compact.text.includes('דקדוק מקוצר') && compact.tier === 'compact');
   check('compact caps the media manifest at 12 lines with trimmed alts',
     (compact.text.match(/- `\/uploads\/w\d+\.webp`/g) || []).length === 12 && compact.text.includes('+18 תמונות נוספות'));
   check('compact tells the model its window is small — build short, do not guess', compact.text.includes('החלון של המודל הזה קטן'));
   check('full does NOT carry the small-window line', !full.text.includes('החלון של המודל הזה קטן'));
   check('both tiers carry the same module count (one vocabulary)', compact.moduleCount === full.moduleCount && compact.moduleCount > 30);
+
+  // ── v2.43: the menus, and what they may cost the window ──
+  // Both tiers must ROUTE a menu request to the menu tools (without that a
+  // model asked to "put the page in the menu" proposes a page). But the
+  // grammar is paid differently: the full tier teaches it; the compact tier
+  // only routes, and read_menus answers with the grammar — paid on the turns
+  // that touch a menu, not on every turn. Measured while building it: the
+  // grammar in the compact tier cost ~950 chars per turn and left an 8,192
+  // window ~950 chars of read-back — not enough to read a ten-item menu.
+  const org = require('../src/menu-organizer');
+  check('both tiers name the menu tools and route a menu request to them; the full tier adds "never bent-nav / bent-item"',
+    [full, compact].every((b) => /`read_menus`/.test(b.text) && /`organize_menu`/.test(b.text)) && /לעולם לא `bent-nav`/.test(full.text));
+  check('both tiers say the truth about the ONE write that is not a draft (live, with a backup)',
+    [full, compact].every((b) => /חל על האתר החי, עם גיבוי/.test(b.text)) && /התפריט הוא היוצא מן הכלל/.test(full.text));
+  check('the full tier teaches the ORGANIZER\'s grammar, line for line (one list, two readers — never a second grammar)',
+    org.menuGrammar({ pageSource: 'הערך מעמודת `page` בטבלה ש-`read_menus` מחזיר' }).split('\n').every((l) => full.text.includes(l)));
+  check('the compact tier only ROUTES — the grammar rides in read_menus\' answer, not in every turn\'s prompt',
+    /תפריט ≠ דף/.test(compact.text) && !compact.text.includes('הורה בלי מאפיין יעד = קבוצה') && !compact.text.includes('<bent-menu-layout'));
+  check('the English briefing routes menus too', /`read_menus`/.test(buildCopilotBriefing({ locale: 'en', tier: 'compact' }).text) && /`organize_menu`/.test(buildCopilotBriefing({ locale: 'en', tier: 'full' }).text));
+  {
+    // ── a tool the window cannot answer is not declared (ai.pickCopilotTier) ──
+    // Found by check (c) below while building v2.43: at a probed 8,192, once
+    // a reply recalibrates the ratio to the 2.0 clamp, the whole budget is
+    // 5,760 × 2.0 = 11,520 chars; v2.42 sat ~100 under it, and the menu pair
+    // (+~530 of schema, +~200 of briefing) pushed it to WINDOW_TOO_SMALL —
+    // on the very model this file exists for. So the small window goes LEAN.
+    const lean = buildCopilotBriefing({ locale: 'he', media, siteTitle: 'אתר', tier: 'compact', menus: false });
+    check('menus:false says NOTHING about menus (not a word: a tool that is not declared is not promised) and counts four tools',
+      !/read_menus|organize_menu|bent-menus|תפריט ≠/.test(lean.text) && /יש לך ארבעה כלים/.test(lean.text) && /שני הכלים שכותבים לא רצים לבד/.test(lean.text) && lean.menus === false);
+    check(`…and is smaller than the tier with them (${lean.chars} < ${compact.chars}); the default says six`,
+      lean.chars < compact.chars && /יש לך שישה כלים/.test(compact.text) && compact.menus === true);
+    const six = JSON.stringify(tools.toolsForProvider('openai-chat')).length;
+    const four = JSON.stringify(tools.toolsForProvider('openai-chat', { menus: false })).length;
+    check(`toolsForProvider(style, {menus:false}) declares the four page tools only, in both envelopes (${four} < ${six} chars)`,
+      tools.toolsForProvider('openai-chat', { menus: false }).map((t) => t.function.name).join() === 'list_pages,read_page,create_page,edit_page' &&
+      tools.toolsForProvider('anthropic-messages', { menus: false }).map((t) => t.name).join() === 'list_pages,read_page,create_page,edit_page' &&
+      tools.toolsForProvider('openai-chat').length === 6 && four < six);
+    check(`the six declarations stay under 2,000 chars (${six}) — they ride in every request that has them`, six < 2000);
+    const real = { full: buildCopilotBriefing({ locale: 'he', tier: 'full' }).chars, compact: buildCopilotBriefing({ locale: 'he', tier: 'compact' }).chars, compactLean: buildCopilotBriefing({ locale: 'he', tier: 'compact', menus: false }).chars };
+    // extraChars = the owner's message; 10 is check (c)'s «בנה דף בית» — the
+    // scenario the rule was found in (with a 400-char message the 2.0 clamp
+    // refuses v2.42's bytes too; that is the window's limit, not this rule's)
+    const pick = (tokens, source, ratio) => ai.pickCopilotTier({ tokens, source, ratio: ratio || 2.6, sizes: real, toolsChars: six, leanToolsChars: four, extraChars: 10 });
+    check('pickCopilotTier: 8,192 → compact, LEAN (the room left could not hold a menu read — do not pay for the pair)',
+      pick(8192, 'probe').tier === 'compact' && pick(8192, 'probe').menus === false);
+    check('pickCopilotTier: 8,192 at the pessimistic 2.0 ratio STILL fits lean — with the pair it would be WINDOW_TOO_SMALL (the regression this rule exists for)',
+      pick(8192, 'probe', 2.0).tier === 'compact' && pick(8192, 'probe', 2.0).menus === false &&
+      win.pickTier({ tokens: 8192, source: 'probe', ratio: 2.0, sizes: real, fixedChars: six + 10 }).tier === null);
+    check(`pickCopilotTier: 16,384 → compact WITH the menu tools (room ≥ ${ai.MENU_TOOLS_MIN_ROOM_CHARS}); 32,768 → full with them; a cloud key → full with them`,
+      pick(16384, 'probe').tier === 'compact' && pick(16384, 'probe').menus === true && pick(16384, 'probe').roomChars >= ai.MENU_TOOLS_MIN_ROOM_CHARS &&
+      pick(32768, 'probe').tier === 'full' && pick(32768, 'probe').menus === true && pick(Infinity, 'cloud').menus === true);
+    check('pickCopilotTier: a window too small even for lean → tier null (the caller says WINDOW_TOO_SMALL with the SMALLEST request\'s numbers)',
+      pick(4096, 'probe').tier === null && pick(4096, 'probe').menus === false);
+  }
   check('canvas is echoed back, never painted into the text', buildCopilotBriefing({ canvas: 'blank' }).canvas === 'blank' && mask(buildCopilotBriefing({ canvas: 'blank' }).text) === mask(buildCopilotBriefing({}).text));
 }
 
@@ -225,7 +287,9 @@ const PZN = (title, body, slug = 'w-page') =>
   `  <bent-heading id="h1" level="1">${body}</bent-heading>\n</body></html>`;
 
 let media = [];
-const systemFor = (t) => buildCopilotBriefing({ locale: 'he', media, siteTitle: 'אתר הבדיקה', tier: t }).text;
+// (tier, {menus}) since v2.43 — exactly as the route builds it: the door
+// says whether this window gets the menu tools, the briefing follows
+const systemFor = (t, o) => buildCopilotBriefing({ locale: 'he', media, siteTitle: 'אתר הבדיקה', tier: t, menus: !o || o.menus !== false }).text;
 
 createPage({ title: 'הבית', slug: 'home', status: 'published', blocks: [] });
 require('../src/pages').savePageSource('home', PZN('הבית', 'שלום', 'home'), { publish: true });
@@ -247,15 +311,33 @@ require('../src/pages').savePageSource('home', PZN('הבית', 'שלום', 'home
   check('(a) fetch was called exactly twice (a shrink does not consume a hop)', seen.length === 2);
   check('(a) usage calibrated the ratio for this model', a.window.ratio >= 2.0 && a.window.ratio <= 3.5);
 
-  // (b) two exceeds → WINDOW_TOO_SMALL with a fix
+  // (b) the whole ladder, then WINDOW_TOO_SMALL with a fix.
+  // Pin updated in v2.43 (was: two exceeds, two requests). The ladder has one
+  // more honest rung now: full → compact with the six tools → LEAN (the menu
+  // pair dropped — the one thing left that CAN be dropped) → stop. A model
+  // that refuses the compact tier by a few hundred tokens now gets the
+  // smaller request instead of an error; a third refusal ends it, still
+  // inside MAX_SHRINKS, with the numbers of the last attempt.
   ai.saveSettings({ model: 'm-b' });
-  scripted = [http400(EXCEED), http400({ error: { type: 'exceed_context_size_error', message: 'request (9000 tokens) exceeds the available context size (8192 tokens), try increasing it', n_prompt_tokens: 9000, n_ctx: 8192 } })];
+  const exceedOf = (n) => http400({ error: { type: 'exceed_context_size_error', message: 'request (' + n + ' tokens) exceeds the available context size (8192 tokens), try increasing it', n_prompt_tokens: n, n_ctx: 8192 } });
+  scripted = [http400(EXCEED), exceedOf(9000), exceedOf(8500)];
   seen = [];
   const b = await rejects(() => ai.converse({ systemFor, user: 'שלום' }), 'WINDOW_TOO_SMALL');
-  check('(b) two exceeds → rejects WINDOW_TOO_SMALL', b && b.code === 'WINDOW_TOO_SMALL');
-  check('(b) …the message carries both numbers and .fix carries Context Length',
-    b && /9,000/.test(b.message) && /8,192/.test(b.message) && /Context Length/.test(b.fix || ''));
-  check('(b) exactly two requests went out', seen.length === 2);
+  check('(b) three exceeds → rejects WINDOW_TOO_SMALL', b && b.code === 'WINDOW_TOO_SMALL');
+  check('(b) …the message carries the LAST attempt\'s numbers and .fix carries Context Length',
+    b && /8,500/.test(b.message) && /8,192/.test(b.message) && /Context Length/.test(b.fix || ''));
+  check('(b) exactly three requests went out: full (6 tools) → compact (6 tools) → lean (4 tools, not a word about menus), each smaller than the last',
+    seen.length === 3 && seen[0].messages[0].content.length > 40000 && seen[0].tools.length === 6 &&
+    seen[1].messages[0].content.length < 12000 && seen[1].tools.length === 6 &&
+    seen[2].tools.length === 4 && !/read_menus|organize_menu/.test(seen[2].messages[0].content) &&
+    JSON.stringify(seen[2]).length < JSON.stringify(seen[1]).length);
+  // …and when the lean request FITS, the turn simply completes — the rung is a rescue, not just a longer road to the error
+  ai.saveSettings({ model: 'm-b2' });
+  scripted = [http400(EXCEED), exceedOf(9000), text('שלום! (מהבקשה הרזה)', { usage: { prompt_tokens: 5600, completion_tokens: 8 } })];
+  seen = [];
+  const b2 = await ai.converse({ systemFor, user: 'שלום' });
+  check('(b) a model that refuses the compact tier by a little is RESCUED by the lean rung: the reply arrives, menuTools false, the notice says it shrank',
+    b2.reply === 'שלום! (מהבקשה הרזה)' && seen.length === 3 && seen[2].tools.length === 4 && b2.window.menuTools === false && b2.window.tier === 'compact');
 
   // (c) the silent band: a 200 whose usage exceeds the PROBED window is discarded
   ai.saveSettings({ model: 'm-c' });
@@ -384,6 +466,16 @@ require('../src/pages').savePageSource('home', PZN('הבית', 'שלום', 'home
   const d0 = await ai.converse({ systemFor, user: 'שלום' });
   check('(d) browser with NO hint → compact (unknown never full, a stale hint does not linger)',
     d0.modelCall && d0.modelCall.body.messages[0].content.length < 12000 && d0.window.source === 'unknown');
+  // v2.43 — through the door: the body carries the tools the window can answer
+  const names = (d) => d.modelCall.body.tools.map((t) => t.function.name).join();
+  check('(d) hint 8192 → LEAN: four page tools, a briefing with not a word about menus, window.menuTools false',
+    names(d1) === 'list_pages,read_page,create_page,edit_page' && !/read_menus|organize_menu/.test(d1.modelCall.body.messages[0].content) && d1.window.menuTools === false);
+  check('(d) hint 32768 → all six tools, the briefing teaches the menus, window.menuTools true',
+    names(d2) === 'list_pages,read_page,create_page,edit_page,read_menus,organize_menu' && /`organize_menu`/.test(d2.modelCall.body.messages[0].content) && d2.window.menuTools === true);
+  const dMid = await ai.converse({ systemFor, user: 'שלום', window: hint(16384) });
+  check('(d) hint 16384 → COMPACT with all six (the two-bullet menu lesson; the grammar waits in read_menus\' answer)',
+    dMid.window.tier === 'compact' && dMid.modelCall.body.tools.length === 6 && /תפריט ≠ דף/.test(dMid.modelCall.body.messages[0].content) &&
+    !dMid.modelCall.body.messages[0].content.includes('הורה בלי מאפיין יעד = קבוצה') && dMid.window.menuTools === true);
   // v2.35: the relayed call is the FULL briefing, never a bare request — C1
   // (gemma-4-31b with no briefing) invents a ```bentml dialect with zero
   // bent-* tags. A caller that hands the loop no BenTML briefing is refused

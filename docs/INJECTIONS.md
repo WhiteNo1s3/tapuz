@@ -13,6 +13,8 @@ The packs share one contract so a new pack is a descriptor, a grammar and a smok
 | `theme-effects` | theme | effects JS + CSS | `/admin/theme` effects door | prompt + paste only |
 | `site-builder` | pages | `.pzn` page source | `/admin/inject` (`pznSourceToBlocks`, the repair engine) | prompt + paste only |
 
+**A pack's door is not the pack's alone (v2.43).** The connected copilot walks through the menu organizer's door too: its `read_menus` / `organize_menu` tools (`src/ai-tools.js`) call `parseMenuReply` and `applyMenuPlan` as they are, behind the copilot's own approval gate, and the proposal is shown on a canvas of the real header before ✓ — see [bent-menus.md](bent-menus.md) "In the copilot". What the copilot reuses is exported from the organizer rather than re-typed: `menuGrammar` (the dialect lines the pack AND the briefing teach — one list, two readers), `capacitySentence`, `pageTable`, `currentMenuPreview`. The card's `renderPreview` draws the preview on both screens. A pack that wants the same treatment needs the same three things: a door that refuses with a code and a Hebrew sentence the model can act on, a preview object that says what will change, and an apply that backs up first.
+
 ## The descriptor (`src/injections/<id>.js`)
 
 ```js
