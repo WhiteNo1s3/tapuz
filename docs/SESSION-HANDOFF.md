@@ -267,9 +267,10 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | 2 | The compact briefing's safety net | The injection-awareness rule is full-tier only — the compact tier sits at the edge of an 8K window (`smoke-ai-window`). Its net is the server-side scrub. |
 | 3 | The theme studio canvas | Still a same-origin iframe; the other admin previews are sandboxed (`docs/security.md` §5). |
 | 4 | The host strips the preview's CSP | On the live host only the iframe's own `sandbox` attribute protects; the header does not survive the proxy. |
-| 5 | Two machines, one git | The owner works on two machines on one LAN and wants pulls between them without going through the forge. A bare repo over SSH on the LAN, with the forge kept for CI and deploy. |
-| 6 | OSS packaging / support SKU | Free core; money on support, hosting and modules. |
-| 7 | English product surface | Only once Hebrew is solid. |
+| 5 | OSS packaging / support SKU | Free core; money on support, hosting and modules. |
+| 6 | English product surface | Only once Hebrew is solid. |
+
+**Decided, not open:** GitHub is the one remote for both machines. A LAN hub was tried on 2026-09-18 and dropped the same day — every change has to reach GitHub anyway for CI and the live deploy, so a second sync point only adds a place to forget to push.
 
 **Owner actions that agents must not take:** deleting pages (permanent — no trash), changing the admin password, publishing test drafts, removing an extension from the browser.
 
