@@ -291,6 +291,26 @@ function buildRoleplayPack(opts = {}) {
  * — what is not declared is not promised, and the 8,192 budget is not spent.
  * @param {{ locale?: 'he'|'en', media?: Array, siteTitle?: string, ownerName?: string, tier?: 'full'|'compact', canvas?: 'blank'|'page'|'menu', menus?: boolean }} [opts]
  */
+// v2.44 — the copilot's OWN completion contract. Until now the connected
+// copilot carried the PASTE flow's (agent-mission COMPLETION_CONTRACT): "an
+// automated bridge publishes…", "Prefer silence after the fence (or only
+// PZN_READY)". None of it is true here — nothing is published, the document
+// travels as a tool argument, and the owner is a person waiting for a
+// sentence. The battery heard it: nemotron-3-nano answered an approved edit
+// with the single word "PZN_READY", twice, and qwen3.6 printed a whole page
+// in a fence instead of calling create_page. Same size as the one it replaces
+// (the compact tier has no room to give — smoke-ai-window pins the margin).
+const COPILOT_CONTRACT = [
+  '## COMPLETION CONTRACT (required — half a document is never saved)',
+  'A page you build or edit is ALWAYS a FULL document: <!DOCTYPE html> … </html> with at least one <bent-*> module in <body>.',
+  '1. With tools: it is the `source` of create_page / edit_page — do not print it.',
+  '2. Only if you cannot call tools: print it in ONE ```html fence.',
+  'No explanations inside it. Afterwards tell the owner in a sentence or two what you did.',
+  'An open fence or a missing </html> is refused — finish the document.'
+].join('\n');
+// the dictionary's own closing line belongs to the paste flow too
+const stripPasteReady = (md) => String(md).replace(/^Optional final line: `PZN_READY`\r?\n/m, '');
+
 function buildCopilotBriefing(opts = {}) {
   const locale = opts.locale === 'en' ? 'en' : 'he';
   const he = locale === 'he';
@@ -360,6 +380,13 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('לבעל/ת האתר מה עומד לקרות, עם כפתור אישור. זה תקין ומכוון — אל תתנצל/י על כך');
     lines.push('ואל תנסה/י לעקוף. אם הבקשה נדחית, הצע/י משהו אחר במקום לחזור על אותה בקשה.');
     if (!compact) lines.push('**נדחה = שום דבר לא נשמר.** אל תכתוב/י שעשית את השינוי או שהוא "ממתין לאישור" — אמור/י שלא בוצע ושאל/י מה לשנות.');
+    // v2.44 — battery T1 (qwen3.8-27b, 32K, full tier): "שלום! מה אתה יודע
+    // לעשות באתר שלי?" was answered with list_pages, read_menus and a
+    // create_page card for a page nobody asked for, and not one word. The
+    // gate held — nothing was written — but a greeting must not cost the
+    // owner a refusal. One sentence; the compact tier cannot afford it (it
+    // sits at the edge of an 8,192 window — smoke-ai-window pins the margin).
+    if (!compact) lines.push('**שאלה או ברכה = תשובה במילים.** כלי שכותב מפעילים רק כשביקשו במפורש לבנות, לערוך או לסדר משהו — לא כדי להדגים מה אפשר.');
     lines.push('');
     lines.push('**כשמבקשים ממך שינוי — קרא/י לכלי, אל תדפיס/י את המסמך.** תשובה שמדביקה את');
     lines.push('ה‑`.pzn` המעודכן בצ׳אט במקום לקרוא ל‑`edit_page` לא עושה כלום: אין כפתור אישור,');
@@ -544,11 +571,11 @@ function buildCopilotBriefing(opts = {}) {
   lines.push('</body></html>');
   lines.push('```');
   lines.push('');
-  lines.push(COMPLETION_CONTRACT);
+  lines.push(COPILOT_CONTRACT);
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push(compact ? toCompactMarkdown(dict, { locale }) : toMarkdown(dict));
+  lines.push(stripPasteReady(compact ? toCompactMarkdown(dict, { locale }) : toMarkdown(dict)));
 
   const text = lines.join('\n');
   return {

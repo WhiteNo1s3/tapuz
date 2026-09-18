@@ -339,6 +339,31 @@ require('../src/pages').savePageSource('home', PZN('הבית', 'שלום', 'home
   check('(b) a model that refuses the compact tier by a little is RESCUED by the lean rung: the reply arrives, menuTools false, the notice says it shrank',
     b2.reply === 'שלום! (מהבקשה הרזה)' && seen.length === 3 && seen[2].tools.length === 4 && b2.window.menuTools === false && b2.window.tier === 'compact');
 
+  // (s) v2.44 — the POOL. Measured on LM Studio 0.4.x (Gemma 4 31B at 32,768,
+  // Max Concurrent Predictions 4, Unified KV Cache): three 13K-token requests
+  // at once and ALL THREE die with this body — HTTP 400, `error` a STRING, no
+  // numbers in it. Not the prompt's fault: nothing is learned, nothing shrinks,
+  // and nothing is retried (a retry beside a neighbour kills the neighbour).
+  const SHARED = { error: 'Engine protocol predict stream returned an error: {"code":500,"message":"Context size has been exceeded.","type":"server_error"}' };
+  check('(s) parseShared reads the body of the pool — a string, an object, never the exceed',
+    win.parseShared(SHARED) === true && win.parseShared({ error: { code: 500, message: 'Context size has been exceeded.', type: 'server_error' } }) === true &&
+    win.parseShared(EXCEED) === false && win.parseShared({ error: { message: 'model not found' } }) === false && win.parseShared({ choices: [] }) === false &&
+    win.parseExceed(SHARED) === null);
+  ai.saveSettings({ model: 'm-s' });
+  win.noteWindow(win.windowKey('__fake', 'm-s'), 32768, 'probe');
+  scripted = [http400(SHARED), text('לא אמור להישלח')];
+  seen = [];
+  const sh = await rejects(() => ai.converse({ systemFor, user: 'שלום' }), 'WINDOW_SHARED');
+  check('(s) a filled pool → WINDOW_SHARED, in Hebrew, with the setting in .fix (Max Concurrent Predictions → 1, --parallel 1)',
+    sh && sh.code === 'WINDOW_SHARED' && /חלון/.test(sh.message) && !/Engine protocol/.test(sh.message) &&
+    /Max Concurrent Predictions/.test(sh.fix || '') && /--parallel 1/.test(sh.fix || ''));
+  check('(s) exactly ONE request went out — no retry, no shrink', seen.length === 1 && seen[0].messages[0].content.length > 40000);
+  check('(s) …and the window it knew is untouched (32,768 by probe — the pool error teaches nothing)',
+    win.getWindow(win.windowKey('__fake', 'm-s')).tokens === 32768 && win.getWindow(win.windowKey('__fake', 'm-s')).source === 'probe');
+  check('(s) the reader of the relay says the same (the Bridge hands the body back as it came)',
+    (() => { try { ai.readRelayReply(SHARED, {}); return false; } catch (e) { return e.code === 'WINDOW_SHARED' && /Max Concurrent/.test(e.fix || ''); } })());
+  scripted = [];
+
   // (c) the silent band: a 200 whose usage exceeds the PROBED window is discarded
   ai.saveSettings({ model: 'm-c' });
   win.noteWindow(win.windowKey('__fake', 'm-c'), 8192, 'probe');
@@ -554,6 +579,32 @@ require('../src/pages').savePageSource('home', PZN('הבית', 'שלום', 'home
     hbOut && hbOut.tooLong === true && hbOut.source === '' && hbOut.chars > 30000 && hbOut.limitChars < 30000 && /Context Length/.test(hbOut.hint));
   check('(h) …the tool counts as used, but reads[] does not list a page the model never saw',
     hb2.used.includes('read_page') && !hb2.reads.includes('huge'));
+
+  // (h2) v2.44 — a READ outranks old chat turns. Battery T3 at 8,192 (Gemma 4
+  // 31B, both couriers): the copilot created a 2,198-char page and one turn
+  // later could not read it back — the allowance was what was left AFTER the
+  // conversation that made the page. Self-calibrating: sized off the chip.
+  {
+    const plan8 = await ai.planWindow({ hint: hint(8192) });
+    const editMax = plan8.editMaxChars;
+    const pageChars = Math.floor(editMax * 0.8);   // fits the window the chip promises
+    const chatChars = Math.floor(editMax * 0.857); // …but not beside this much old chat
+    createPage({ title: 'מחירון', slug: 'made', status: 'draft', blocks: [] });
+    require('../src/pages').savePageSource('made', PZN('מחירון', 'y'.repeat(pageChars - 260), 'made'), { publish: false });
+    const old = [{ role: 'user', content: 'בנה דף מחירון' }, { role: 'assistant', content: 'ז'.repeat(chatChars) }];
+    const hc1 = await ai.converse({ systemFor, user: 'שנה את הכותרת הראשית', history: old, window: hint(8192) });
+    check('(h2) (fixture) the old chat rides the first request', hc1.modelCall.body.messages.some((m) => m.role === 'assistant' && /^ז+$/.test(m.content || '')));
+    const hc2 = await ai.converse({ step: { id: hc1.modelCall.id, result: { choices: [{ message: { role: 'assistant', content: '', tool_calls: [{ id: 'rm2', type: 'function', function: { name: 'read_page', arguments: '{"slug":"made"}' } }] }, finish_reason: 'tool_calls' }] } } });
+    const hcTool = hc2.modelCall && hc2.modelCall.body.messages.find((m) => m.role === 'tool' && m.tool_call_id === 'rm2');
+    const hcOut = hcTool ? JSON.parse(hcTool.content) : null;
+    check('(h2) a page that fits the window is READ even when old chat was in the way (not tooLong, the whole source)',
+      !!hcOut && hcOut.tooLong === undefined && hcOut.source.length >= pageChars - 260 && hc2.reads.includes('made'));
+    const msgs2 = (hc2.modelCall && hc2.modelCall.body.messages) || [];
+    check('(h2) …the OLD turns left to make the room; the owner’s current message and the read stayed',
+      !msgs2.some((m) => m.role === 'assistant' && /^ז+$/.test(m.content || '')) &&
+      msgs2.some((m) => m.role === 'user' && m.content === 'שנה את הכותרת הראשית') && !!hcTool);
+    check('(h2) …and the request still fits the 8,192 plan (compact tier)', hc2.window.tier === 'compact');
+  }
 
   // (g) contextBudget — last, in its own block: it changes process-wide state
   {

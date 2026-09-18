@@ -324,8 +324,42 @@ const wantsWrite = {
     check('the approval line counts what the door will count, and says LIVE — never "draft"',
       /main: 3 קישורים/.test(tools.describeCall('organize_menu', { document: NEW })) && /האתר החי/.test(tools.describeCall('organize_menu', { document: NEW })) && !/טיוטה/.test(tools.describeCall('organize_menu', { document: NEW })));
 
+    // ── v2.44: a menu that LOSES pages nobody asked to remove goes back to the
+    //    model, once. Battery T9 (nemotron-3-nano): asked to GROUP ten items,
+    //    it returned five — every link legal, so the door had nothing hard to
+    //    say, and ✓ took five published pages off the live header. ──
+    const LOSSY = [
+      '<bent-menus version="1" note="קיצרתי">',
+      '  <bent-menu name="main" location="main">',
+      '    <bent-link label="הבית" page="home" />',
+      '    <bent-link label="אודות" page="about" />',
+      '  </bent-menu>',
+      '</bent-menus>'
+    ].join('\n');
+    const lossy =(opts) => { try { tools.preflight('organize_menu', { document: LOSSY }, opts); return 'PASSED'; } catch (e) { return (e.code || 'NO_CODE') + ' ' + e.message; } };
+    check('a document that drops a page the menu HAD is sent back to the model (PAGES_LOST), naming the page and saying the owner never asked',
+      /^PAGES_LOST /.test(lossy({ brief: 'קבץ את התפריט כדי שייכנס בשורה' })) && /צור קשר|contact/.test(lossy({ brief: 'קבץ' })) && /לא ביקש/.test(lossy({ brief: 'קבץ' })));
+    check('…judged against the OWNER’s words: "הסר את צור קשר מהתפריט" / "remove contact" pass straight to the card',
+      lossy({ brief: 'הסר את צור קשר מהתפריט' }) === 'PASSED' && lossy({ brief: 'תוריד את צור קשר' }) === 'PASSED' && lossy({ brief: 'please remove contact from the menu' }) === 'PASSED');
+    check('…and only ONCE: a model that insists reaches the card (lostAsked) — the owner is the judge, PAGES_MISSING still on the card',
+      lossy({ brief: 'קבץ', lostAsked: true }) === 'PASSED' &&
+      tools.preflight('organize_menu', { document: LOSSY }, { brief: 'קבץ', lostAsked: true }).warnings.some((w) => /לא מופיעים באף תפריט/.test(w)));
+    check('a page that was NEVER in a menu is not "lost" (the door’s own PAGES_MISSING covers it; nothing is sent back)',
+      (() => { const r = require('../src/menu-organizer').parseMenuReply(NEW, require('../src/menu-organizer').siteStateForMenus(), { brief: '' }); return Array.isArray(r.lost) && r.lost.length === 0; })());
+    check('none of that wrote anything or took a backup', order() === START && backups() === 0);
+
     // ── through the loop, openai-chat shape ──
     const callMenu = (id, doc) => ({ choices: [{ message: { content: '', tool_calls: [{ id, type: 'function', function: { name: 'organize_menu', arguments: JSON.stringify({ document: doc }) } }] } }] });
+    // the lossy proposal first: NO card — the model hears why and tries again; its second try is the card
+    scripted = [callMenu('lo1', LOSSY), callMenu('lo2', LOSSY)];
+    const lo = await ai.converse({ system: 's', user: 'קבץ את התפריט' });
+    const loTold = (lastBody.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'lo1').pop();
+    check('through the loop: the FIRST lossy proposal never reaches the owner — the model is told which pages vanished (proposed:false)',
+      !!loTold && /"proposed":false/.test(loTold.content) && /נעלמו ממנו/.test(loTold.content) && /לפני שתתבקשו לאשר/.test(lo.notice || ''));
+    check('…the SECOND one does (a deliberate removal is the owner’s call): a card, with the door’s warning on it, nothing written',
+      !!(lo.pending && lo.pending.tool === 'organize_menu') && (lo.pending.warnings || []).some((w) => /לא מופיעים באף תפריט/.test(w)) && order() === START && backups() === 0);
+    scripted = [{ choices: [{ message: { content: 'לא שיניתי.', tool_calls: null } }] }];
+    await ai.converse({ approve: { id: lo.pending.id, ok: false } });
     scripted = [
       { choices: [{ message: { content: '', tool_calls: [{ id: 'rm1', type: 'function', function: { name: 'read_menus', arguments: '{}' } }] } }] },
       callMenu('om1', NEW)
