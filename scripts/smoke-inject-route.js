@@ -285,6 +285,18 @@ const logLines = () => (fs.existsSync(LOG_PATH) ? fs.readFileSync(LOG_PATH, 'utf
     check('a reply that arrives after the socket idle cap (1.5 s here, 30 s live) still reaches the client — the run lifts the cap for its socket',
       slow.status === 200 && slow.json.ok && slow.json.reply === 'DOC CLEAN');
 
+    // ── v2.44: the SAME cap, the copilot's chat route. It never lifted it: on a
+    //    server-side courier any turn the model took more than 30 s over lost
+    //    its connection (the copilot battery, Gemma 4 31B — a page takes 27–35 s
+    //    to write, so the same scenario passed and failed on the same day). ──
+    calls.length = 0;
+    scripted = [() => new Promise((resolve) => setTimeout(() => resolve(okReply('שלום! איך אפשר לעזור?')), 2500))];
+    const slowChat = await req('POST', '/admin/api/ai/chat', { cookie, body: { message: 'שלום', history: [] } }).catch((e) => ({ status: 0, json: { error: e.code || e.message } }));
+    check('a copilot turn whose model is silent past the idle cap still reaches the owner — /admin/api/ai/chat lifts the cap for its socket',
+      slowChat.status === 200 && slowChat.json && slowChat.json.ok === true && slowChat.json.reply === 'שלום! איך אפשר לעזור?');
+    check('…and the cap it lifts to covers the whole turn: every call the loop can make at the provider\'s own ceiling',
+      ai.turnCeilingMs() >= 6 * ai.PUBLIC_TIMEOUT_MS && ai.turnCeilingMs() < 24 * 60 * 60 * 1000);
+
     // ── run: repairable warning → ONE repair round, the repaired reply wins ──
     calls.length = 0; scripted = ['DOC FIXME', 'DOC CLEAN'];
     const run2 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '', size: 'lite' } });

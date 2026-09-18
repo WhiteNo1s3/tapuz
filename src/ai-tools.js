@@ -182,6 +182,10 @@ function editPage(args) {
 // lands. The gate is the same; what is behind it is not, and pretending
 // otherwise would be the one lie in this file.
 
+// "take it off the menu", in the owner's words (he + en). Loose on purpose:
+// a false "asked" only skips one repair round — the card still warns.
+const REMOVE_ASK_RE = /(?:הסר|תסיר|הסיר|להסיר|מחק|תמחק|למחוק|מחיק|הורד|תוריד|להוריד|הוצא|תוציא|להוציא|העלם|תעלים|להעלים|הסתר|תסתיר|להסתיר|בלי |ללא |השאר רק|רק את |remove|delete|drop|hide|without|only keep|keep only)/i;
+
 /** The door, for both the preflight and the write — one parse, one verdict.
  *  `opts.brief` is the owner's own message: the door judges LAYOUT_UNASKED
  *  against what the OWNER asked, never against the model's account of it. */
@@ -310,6 +314,25 @@ function menuSummary(a) {
 function preflight(name, args, opts) {
   if (name === 'organize_menu') {
     const { parsed } = checkMenuDoc(args, opts);
+    // v2.44 — a menu that LOSES pages nobody asked to remove goes back to the
+    // model, once. Battery T9 (nemotron-3-nano, 2026-09-18): asked to GROUP a
+    // ten-item row, the model returned five links. Every link was legal, so
+    // the door had nothing hard to say; the card carried PAGES_MISSING as one
+    // soft line, and ✓ took five published pages off the LIVE header. The
+    // injection runner already gives the model a repair round for this
+    // (org.REPAIRABLE) — the copilot did not. Judged like LAYOUT_UNASKED,
+    // against the OWNER's own words: "הסר / תוריד / remove" gets what it asked
+    // for. And only once (`opts.lostAsked`): a model that insists reaches the
+    // card, warning and all — the owner is the judge; the door only makes
+    // sure they are asked a clean question first.
+    const lost = parsed.lost || [];
+    if (lost.length && !(opts && opts.lostAsked) && !REMOVE_ASK_RE.test(String((opts && opts.brief) || ''))) {
+      const names = lost.slice(0, 8).map((p) => p.title).join(', ') + (lost.length > 8 ? '…' : '');
+      throw Object.assign(new Error(
+        lost.length + ' דפים שהיו בתפריט נעלמו ממנו: ' + names + '. בעל/ת האתר לא ביקש/ה להסיר דפים — ' +
+        'החזר/י אותם (אפשר כפריטי משנה תחת קבוצה) והצע/י שוב את המסמך השלם. אם ההסרה מכוונת — הצע/י שוב את אותו מסמך ואמור/י זאת במילים.'
+      ), { code: 'PAGES_LOST' });
+    }
     return { preview: parsed.preview, warnings: parsed.warningTexts };
   }
   if (name === 'create_page') {

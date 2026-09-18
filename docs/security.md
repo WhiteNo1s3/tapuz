@@ -70,7 +70,11 @@ Implemented at the application (L7) layer, in-memory, zero dependencies:
   through it — and that endpoint is behind auth + rate limiting.
 - **Slow-loris timeouts.** The HTTP server sets `setTimeout(30s)`,
   `headersTimeout=20s`, `requestTimeout=60s`, and `keepAliveTimeout=15s` so a
-  client cannot hold sockets open by trickling bytes.
+  client cannot hold sockets open by trickling bytes. Two admin-gated routes
+  lift the 30 s idle cap **for their own socket only**, and put it back when the
+  response is out (`src/socket-timeout.js`): the injection runner and — since
+  v2.44 — the copilot's chat turn. Both wait on a model that legitimately says
+  nothing for longer than that; the intake timeouts still apply to them.
 
 ### What the app CANNOT do — you MUST put infrastructure in front
 

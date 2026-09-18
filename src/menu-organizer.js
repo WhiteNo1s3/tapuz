@@ -699,6 +699,13 @@ function parseMenuReply(reply, ctx = siteStateForMenus(), opts = {}) {
   const reached = reachedPaths(res.menus, homePath);
   const missing = pages.filter((p) => isMenuPage(p) && !reached.has(p.full_path));
   if (missing.length) warn(warnings, 'PAGES_MISSING', { count: missing.length, list: missing.slice(0, 8).map((p) => p.title || p.full_path).join(', ') + (missing.length > 8 ? '…' : '') });
+  // v2.44 — the pages this reply LOSES: reachable from a menu today, from
+  // none after it. PAGES_MISSING cannot tell a page that was never linked
+  // from one the model just dropped; the copilot's preflight needs exactly
+  // that difference (ai-tools.js). Not a warning — the owner's card already
+  // says PAGES_MISSING — just a fact that rides on the result.
+  const reachedBefore = reachedPaths(ctx.menus, homePath);
+  const lost = missing.filter((p) => reachedBefore.has(p.full_path)).map((p) => ({ full_path: p.full_path, title: p.title || p.full_path }));
   const beforeDoc = serializeMenus({ knobs: knobsBefore, menus: ctx.menus, locations: ctx.locations });
   const afterDoc = serializeMenus({ knobs: res.knobsAfter, menus: res.menus, locations: res.locations });
   if (beforeDoc === afterDoc) warn(warnings, 'NO_CHANGE');
@@ -711,7 +718,7 @@ function parseMenuReply(reply, ctx = siteStateForMenus(), opts = {}) {
   plan.hard = hard;
   plan.warnings = warnings;
   const preview = buildMenuPreview(plan, ctx, res);
-  return { doc, plan, warnings, warningTexts: warnings.map((w) => w.message), notes: doc.notes.slice(), hard, preview };
+  return { doc, plan, warnings, warningTexts: warnings.map((w) => w.message), notes: doc.notes.slice(), hard, preview, lost };
 }
 
 function stripIds(it) {

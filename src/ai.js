@@ -123,9 +123,12 @@ const NATIVE_FETCH = globalThis.fetch;
 // v2.35 appends NO_BRIEFING: the tool loop refused to send a local model a
 // request with no BenTML briefing in it (a 31B model with no briefing
 // invents a ```bentml dialect with zero bent-* tags — measured, C1).
+// v2.44 appends WINDOW_SHARED: the runtime's window is ONE pool for its
+// parallel requests, and a neighbour's request filled it (ai-window.js
+// parseShared) — every request on the pool died, none of them too big.
 const ERROR_CODES = [
   'NO_PROVIDER', 'BROWSER_RELAY', 'NETWORK', 'TIMEOUT', 'PROVIDER_ERROR', 'EMPTY_REPLY',
-  'WINDOW_TOO_SMALL', 'BRIDGE_TOO_OLD', 'BRIDGE_DROPPED_TOOLS', 'REPLY_CUT', 'NO_BRIEFING'
+  'WINDOW_TOO_SMALL', 'BRIDGE_TOO_OLD', 'BRIDGE_DROPPED_TOOLS', 'REPLY_CUT', 'NO_BRIEFING', 'WINDOW_SHARED'
 ];
 
 function coded(message, code, extra) {
@@ -421,6 +424,8 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
     throw coded('קריאה לספק נכשלה (רשת): ' + e.message, 'NETWORK');
   }
   const data = res.data;
+  // v2.44 — the pool (ai-window.js parseShared): a neighbour's request took the window
+  if (win.parseShared(data)) throw coded(win.HE.shared, 'WINDOW_SHARED', { fix: win.HE.fixShared, status: res.status });
   if (res.status < 200 || res.status >= 300) {
     const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + res.status);
     throw coded('שגיאת ספק: ' + msg, 'PROVIDER_ERROR', { status: res.status, providerMessage: String(msg) });
@@ -501,6 +506,7 @@ function readRelayReply(result, meta = {}) {
   const data = result && typeof result === 'object' ? result : null;
   if (!data) throw coded('הדפדפן לא החזיר תשובה מהמודל', 'EMPTY_REPLY');
   // a local runtime reports its own failures in the body it hands back
+  if (win.parseShared(data)) throw coded(win.HE.shared, 'WINDOW_SHARED', { fix: win.HE.fixShared });
   if (data.error) {
     const msg = (data.error && (data.error.message || data.error)) || 'שגיאה לא ידועה';
     throw coded('שגיאת המודל המקומי: ' + String(msg), 'PROVIDER_ERROR', { providerMessage: String(msg) });
@@ -1010,6 +1016,11 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       sentChars: sys.length + tChars + defsChars,
       estPromptTokens: Math.ceil((sys.length + tChars + defsChars) / w.ratio),
       roomAfter: pt.roomChars === Infinity ? Infinity : Math.max(0, pt.roomChars - (tChars - st.userChars)),
+      // v2.44 — what a READ may count on: the room with the OLD chat turns
+      // given back. Only this turn's own tool units are untouchable; the
+      // history is not, and fitTurns already drops its oldest turns when the
+      // units grow — so the next plan() makes this number true.
+      roomForRead: pt.roomChars === Infinity ? Infinity : Math.max(0, pt.roomChars - extraChars),
       window: w
     };
   };
@@ -1061,6 +1072,7 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       st.sentChars = p.sentChars;
       st.estPromptTokens = p.estPromptTokens;
       st.roomAfter = p.roomAfter;
+      st.roomForRead = p.roomForRead;
       if (provider.browserRelay) {
         // Pause here: the page executes this call through the bridge and
         // returns with { step: { id, result } } — the loop resumes above.
@@ -1097,6 +1109,12 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       if (next.sentChars >= st.sentChars) throw tooSmall(st.lastFail.nPrompt, st.lastFail.nCtx);
       continue; // a shrink does not consume a hop
     }
+    // v2.44 — the pool: another request was running on the same window and
+    // the runtime dropped them all. Not this prompt's fault, so nothing is
+    // learned and nothing shrinks; and NO silent retry — a retry that lands
+    // beside a neighbour still generating takes the window from under it and
+    // kills that one too (measured). The owner is told, with the setting.
+    if (win.parseShared(data)) throw coded(win.HE.shared, 'WINDOW_SHARED', { fix: win.HE.fixShared, status });
     const err = data && typeof data === 'object' ? data.error : null;
     if (err && typeof err === 'object' && err.type === 'relay_http_error') {
       // a 0.4.0 bridge drops the error body; a 400 there is almost always the
@@ -1169,7 +1187,14 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     // id is answered NOW so the stored unit is complete once the write's
     // answer joins it.
     const write = reply.calls.find((c) => (tools.getTool(c.name) || {}).mutates);
-    const allowance = win.editAllowance(st.roomAfter === undefined ? Infinity : st.roomAfter);
+    // v2.44 — a read outranks old chat turns. The allowance used to be what
+    // was left AFTER the history, so at 8,192 the copilot could not read back
+    // the page it had created one turn earlier (battery T3, Gemma 4 31B, both
+    // couriers: a 2,198-char page refused because the conversation that made
+    // it was in the way). Sized against roomForRead, the page comes back and
+    // the oldest turns leave instead — the owner asked about the page.
+    const readRoom = st.roomForRead === undefined ? st.roomAfter : st.roomForRead;
+    const allowance = win.editAllowance(readRoom === undefined ? Infinity : readRoom);
     const results = [];
     for (const c of reply.calls) {
       if (write && c === write) continue;
@@ -1212,7 +1237,11 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       // the preflight IS the organizer's door, and its preview (tree, diff,
       // fit line, the framed header) is what the canvas shows before ✓
       let pre = null;
-      try { pre = tools.preflight(write.name, write.input, { brief: st.userText || '' }); } catch (e) { refusal = e.message; }
+      // `lostAsked` (v2.44): a menu that loses pages is sent back ONCE per turn
+      try { pre = tools.preflight(write.name, write.input, { brief: st.userText || '', lostAsked: !!st.lostAsked }); } catch (e) {
+        refusal = e.message;
+        if (e.code === 'PAGES_LOST') st.lostAsked = true;
+      }
       if (refusal) {
         st.refusals = (st.refusals || 0) + 1;
         if (st.refusals > MAX_PROPOSAL_REFUSALS) {
@@ -1242,6 +1271,19 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     st.extra = appendToolTurn(style, st.extra, reply, results);
     st.hop++;
   }
+}
+
+/**
+ * The longest a whole copilot turn may hold its socket (v2.44): every model
+ * call the loop can make — the hops, the shrink retries, the proposal
+ * repairs — at the provider's own per-call ceiling, plus a margin. An upper
+ * bound for routes/copilot.js to lift the server's 30 s idle cap to; each
+ * call is still cut by its own ceiling (postJson).
+ */
+function turnCeilingMs() {
+  const provider = getProvider(load().provider || 'claude');
+  const perCall = provider && (provider.id === 'local' || provider.browserRelay) ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS;
+  return (MAX_TOOL_HOPS + MAX_SHRINKS + MAX_PROPOSAL_REFUSALS + 1) * perCall + 30000;
 }
 
 /**
@@ -1375,6 +1417,7 @@ module.exports = {
   BRIEFING_MARK,
   LOCAL_TIMEOUT_MS,
   PUBLIC_TIMEOUT_MS,
+  turnCeilingMs,
   // the window (v2.32): what the routes and the setup screen ask
   planWindow,
   // …and whether that window gets the menu tools (v2.43)

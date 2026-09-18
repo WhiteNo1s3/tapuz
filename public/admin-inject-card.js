@@ -510,6 +510,10 @@
               lite.checked = true;
               say('warn', (d.error || 'החבילה גדולה מדי למודל.') + ' עברנו לחבילה לייט — לחצו "הרץ" שוב.');
               break;
+            case 'WINDOW_SHARED':
+              // the request was fine — a neighbour took the window (v2.44)
+              say('warn', (d.error || 'המודל עסוק בבקשה אחרת.') + (d.fix ? ' ' + d.fix : ''));
+              break;
             case 'TIMEOUT':
             case 'PROVIDER_ERROR':
             case 'EMPTY_REPLY':

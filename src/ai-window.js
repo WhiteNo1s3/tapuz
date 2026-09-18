@@ -193,6 +193,27 @@ function parseExceed(data) {
   return { nPrompt: nPrompt > 0 ? Math.round(nPrompt) : 0, nCtx: Math.round(nCtx) };
 }
 
+/**
+ * The OTHER context error (v2.44) — the window is a POOL. Measured on LM
+ * Studio 0.4.x, Gemma 4 31B at 32,768 with the default Max Concurrent
+ * Predictions = 4 (Unified KV Cache on, also the default): one request of
+ * 13K tokens answers; two at once answer; three at once (39K > 32K) and ALL
+ * THREE die mid-stream — HTTP 400 whose `error` is a STRING:
+ * `Engine protocol predict stream returned an error: {"code":500,"message":
+ * "Context size has been exceeded.","type":"server_error"}`. It names no
+ * numbers, because no single request was too big: the same request alone is
+ * fine. So it must never teach a window or shrink a briefing (parseExceed's
+ * job) — the honest reaction is to wait for the neighbour and ask again.
+ * @returns {boolean}
+ */
+function parseShared(data) {
+  const err = data && typeof data === 'object' ? data.error : null;
+  if (!err) return false;
+  const msg = typeof err === 'object' ? String(err.message || '') : String(err);
+  if (/exceeds the available context size/i.test(msg)) return false; // that one is parseExceed's
+  return /context size has been exceeded/i.test(msg);
+}
+
 // ── the cache ───────────────────────────────────────────────────────────
 
 /**
@@ -454,7 +475,11 @@ function fitTurns(turns, roomChars) {
 // ── Hebrew (the one place; the routes and pages reuse, never re-type) ───
 
 const FIX_WINDOW = 'LM Studio → My Models → ⚙ ליד המודל → Context Length → 32768 → Reload, ואז שלחו את ההודעה שוב.';
-const FIX_BRIDGE = 'הורידו את Bridge V2 0.5.0 מחיבור AI (/admin/ai-setup), טענו מחדש ב-chrome://extensions (או about:debugging ב-Firefox) ורעננו את הדף. אם המודל טעון עם חלון של 8K — הגדילו ל-32768.';
+// v2.44 — the pool. LM Studio's name for the setting is "Max Concurrent
+// Predictions" (the CLI's --parallel); at 1 a second request QUEUES behind
+// the first instead of taking the window from under it.
+const FIX_SHARED = 'חכו שהבקשה האחרת תסתיים ושלחו שוב. כדי שזה לא יחזור: LM Studio → My Models → ⚙ ליד המודל → Max Concurrent Predictions → 1 → Reload (בטרמינל: lms load <model> --context-length 32768 --parallel 1) — בקשה שנייה תמתין בתור במקום להפיל את שתיהן.';
+const FIX_BRIDGE ='הורידו את Bridge V2 0.5.0 מחיבור AI (/admin/ai-setup), טענו מחדש ב-chrome://extensions (או about:debugging ב-Firefox) ורעננו את הדף. אם המודל טעון עם חלון של 8K — הגדילו ל-32768.';
 
 /** "E_CHILD: <bent-faq> cannot contain <bent-fold>; E_CHILD: …" → "E_CHILD ×4" (distinct codes, counted). */
 function briefErrors(msg) {
@@ -468,6 +493,9 @@ function briefErrors(msg) {
 const HE = {
   fixWindow: FIX_WINDOW,
   fixBridge: FIX_BRIDGE,
+  fixShared: FIX_SHARED,
+  // v2.44 — the window is a pool the runtime's parallel requests share (parseShared)
+  shared: 'המודל המקומי עצר את הבקשה באמצע: חלון ההקשר שלו התמלא כי בקשה נוספת רצה עליו באותו זמן (LM Studio חולק חלון אחד בין כל הבקשות המקבילות) — הבקשה עצמה תקינה.',
   tooSmall: (nPrompt, nCtx) =>
     'הבקשה (' + fmt(nPrompt) + ' טוקנים) לא נכנסת בחלון של המודל (' + fmt(nCtx) + ') גם במצב המקוצר.',
   // {bridgeVersion} is what the bridge said in its hello; an unknown version
@@ -515,7 +543,8 @@ function describeWindow({ tokens, source, tier, model, bridgeVersion, jit, editM
   const who = 'המודל ' + (name ? name + ' ' : '');
   const n = Number(tokens);
   const known = Number.isFinite(n) && n > 0;
-  const loadLine = '(או בטרמינל: lms load ' + (name || '<model>') + ' --context-length 32768)';
+  // --parallel 1 (v2.44): a second request queues instead of sharing the window — see parseShared
+  const loadLine = '(או בטרמינל: lms load ' + (name || '<model>') + ' --context-length 32768 --parallel 1)';
   const compactTail = (t) =>
     'הקופיילוט עובד במצב מקוצר: יוצר דפים קצרים, אבל דף קיים ארוך מ-~' +
     fmt(Number.isFinite(Number(editMaxChars)) && Number(editMaxChars) > 0 ? Number(editMaxChars) : editAllowance(pickTier({ tokens: t, source: 'probe', sizes: { full: 45400, compact: 10500 }, fixedChars: 1500 }).roomChars)) +
@@ -552,6 +581,7 @@ module.exports = {
   PROBE_TTL_MS,
   probeLocalWindow,
   parseExceed,
+  parseShared,
   noteWindow,
   forgetWindow,
   noteUsage,

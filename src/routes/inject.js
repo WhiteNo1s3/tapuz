@@ -41,6 +41,8 @@ const STATUS_BY_CODE = {
   NO_PROVIDER: 400, BROWSER_RELAY: 400, PACK_TOO_BIG: 400, NOT_READY: 400, RUN_DISABLED: 400,
   NO_BACKUP: 400, EMPTY_PASTE: 400, REPLY_TOO_LONG: 400,
   PROVIDER_ERROR: 502, EMPTY_REPLY: 502, NETWORK: 502,
+  // v2.44: the runtime's window is a pool and a neighbour filled it — come back later
+  WINDOW_SHARED: 503,
   TIMEOUT: 504,
   HARD_WARNINGS: 409
 };
@@ -65,7 +67,8 @@ function replyTooLong(reply) {
 function refuse(res, e, extra) {
   const code = (e && e.code) || '';
   const status = STATUS_BY_CODE[code] || 400;
-  return res.status(status).json(Object.assign({ ok: false, error: (e && e.message) || 'שגיאה', code }, extra || {}));
+  // `fix` (v2.44): the click path that ends the failure, when the door knows one
+  return res.status(status).json(Object.assign({ ok: false, error: (e && e.message) || 'שגיאה', code }, e && e.fix ? { fix: String(e.fix) } : {}, extra || {}));
 }
 
 function packOr404(req, res) {
@@ -83,13 +86,8 @@ function notReady(pack) {
   return e;
 }
 
-function liftSocketTimeout(req, res, ms) {
-  const sock = req.socket;
-  if (!sock || typeof sock.setTimeout !== 'function') return;
-  const prev = Number(sock.timeout) > 0 ? Number(sock.timeout) : 0;
-  try { sock.setTimeout(Math.max(prev, ms)); } catch (e) { return; }
-  res.on('finish', () => { try { if (prev) sock.setTimeout(prev); } catch (e) { /* socket gone */ } });
-}
+// (v2.44: the helper moved to src/socket-timeout.js — the copilot's chat route needs it too)
+const { liftSocketTimeout } = require('../socket-timeout');
 
 function sizeFor(pack, raw) {
   return String(raw || 'lite') === 'full' && pack.ui.sizes.includes('full') ? 'full' : 'lite';

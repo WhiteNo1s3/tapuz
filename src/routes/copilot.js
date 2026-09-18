@@ -761,6 +761,12 @@ router.post('/admin/api/ai/chat', async (req, res) => {
       const menuLine = canvas === 'menu' ? (menus ? MENU_ON : MENU_OFF) : '';
       return buildCopilotBriefing({ locale: 'he', media, siteTitle, tier, canvas, menus }).text + situation + menuLine + situationTail;
     };
+    // v2.44 — server.js drops a socket that says nothing for 30 s (S4), and on
+    // a server-side courier (מודל מקומי, a cloud key) this socket says nothing
+    // for as long as the model thinks. Without the lift a turn of 31 s ended
+    // as a network error in the owner's chat while the turn ran on without
+    // them. A relayed turn answers at once, so the lift costs it nothing.
+    require('../socket-timeout').liftSocketTimeout(req, res, require('../ai').turnCeilingMs());
     const out = await require('../ai').converse({
       systemFor,
       user: message,
