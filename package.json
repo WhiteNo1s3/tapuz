@@ -1,6 +1,6 @@
 {
   "name": "tapuziel",
-  "version": "2.43.0-alpha",
+  "version": "2.44.0-alpha",
   "description": "Tapuziel — a Hebrew-first (RTL) modular CMS with a visual builder. תפוזיאל: הטפוז עם הכנפיים.",
   "main": "src/server.js",
   "bin": {
@@ -187,7 +187,8 @@
     "test:bridge-run": "node scripts/smoke-bridge-run.js",
     "test:inject-worker": "node scripts/smoke-inject-worker.js",
     "worker": "node scripts/tapuz-worker.js",
-    "eval:inject": "node scripts/eval-injections.js"
+    "eval:inject": "node scripts/eval-injections.js",
+    "battery:copilot": "node scripts/battery-copilot.js"
   },
   "keywords": [
     "cms",
