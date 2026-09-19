@@ -62,6 +62,18 @@ LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma npm run batt
 Use `--only=T3,T9` to re-run a single scenario. `LOCAL_LLM_MODEL` may also be
 the runtime id (`google/gemma-4-31b`); the artifact name sanitises it.
 
+**`LOCAL_LLM_MODEL` empty = whatever is loaded.** A name that does not match a
+loaded identifier makes LM Studio JIT-load another copy at its default window
+(§1א) or answer with an error — which the CMS reports as `PROVIDER_ERROR`. If
+the model was loaded under a different identifier than `tapuz-gemma`, leave
+the variable out: the `local` provider then sends the placeholder
+`local-model` and LM Studio answers with the loaded model. The artifact is
+then named `<stamp>-model-local.json/.md` (2026-09-19 Mac run):
+
+```bash
+LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 npm run battery:copilot -- --courier=local --runs=1
+```
+
 The `local` courier goes through the CMS's loopback rule, so `LOCAL_LLM_BASE`
 must be `127.0.0.1` / `localhost`. The `relay` courier calls the runtime from
 the battery process itself, so from a *second* machine on the LAN
