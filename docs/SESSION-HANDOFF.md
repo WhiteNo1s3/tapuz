@@ -2,7 +2,7 @@
 
 > **Purpose:** survive a lost Claude/Grok/Cursor chat, a crash, or a night's sleep.
 > Refresh it whenever a milestone lands or the direction changes (§12).
-> **Last updated:** 2026-09-19 — v2.46-alpha (the battery speaks the owner's language; an empty media library is said, invented pictures and links go back once), live and deploying from main.
+> **Last updated:** 2026-09-20 — v2.47-alpha (the human dreams D9–D14 and `--briefs=dreams`; styling that does nothing goes back once, and the briefing says where the look lives), live and deploying from main.
 
 ---
 
@@ -36,8 +36,8 @@ The part that makes it different from a page builder: **the owner's own model do
 
 | | |
 |---|---|
-| Package / ROADMAP | **`2.46.0-alpha`** — the Version Log's top row must name it (`smoke-version`) |
-| Main tip | the v2.46 merge — `git log -1 origin/main` |
+| Package / ROADMAP | **`2.47.0-alpha`** — the Version Log's top row must name it (`smoke-version`) |
+| Main tip | the v2.47 merge — `git log -1 origin/main` |
 | Recommended local model | **Gemma 4**, by card: 12–16 GB → 12B (Google's QAT 4-bit), 24 GB → 26B-A4B, 32 GB → 31B; the E-models run the one-shot packs only (`docs/LOCAL-LLM.md` §1א, §5) |
 | Live | deploys from `main` on merge; the generator meta carries version + stamp + sha |
 | CI | `.github/workflows/security.yml` — gitleaks, the test suite, npm audit (high+, prod deps); Node 24 |
@@ -63,6 +63,8 @@ The part that makes it different from a page builder: **the owner's own model do
 **The copilot is measured, not assumed (v2.44).** `scripts/battery-copilot.js` asks a REAL local model thirteen things the way an owner asks them and judges by what landed in the pages and menus tables (`docs/LOCAL-LLM.md` §3א, results §5). It is how the 30-second socket, the shared window, the unreadable-own-page at 8K, the page-dropping menu and the `PZN_READY` reply were found — every one of them invisible to a canned smoke. One GPU job at a time: LM Studio's window is a pool (`--parallel 1`, §1ד).
 
 **Test with an owner's words, not a spec (v2.46).** Ben's rule: the customer brings DREAMS, so a check must start from a reasonable human sentence and be judged the way that person would judge — and against the page builder (does it open, render, survive a save). `node scripts/battery-copilot.js --track=dreams` is that; its first run found nine invented pictures in one page. When you add a copilot feature, add a dream for it, not only a T-scenario — and when a model's answer surprises the judge, ask whether a person would have accepted it before calling it a miss.
+
+**Do not talk robot to the robot (v2.47).** Ben, sharper: *"we cannot make his life easy 'hero <XXXX> bla bla' … think about humans, what they ask you to do all the time — that is the attitude."* A test sentence names no module, no count and no attribute. It is a wish ("warm, the side in purple, a moving message I can change"), a pile of her own material ("here is my doc — make it beautiful, with chapters"), a complaint, a change of heart ("put it back"), somebody else's words, a fact that changed. The judge asks what SHE would ask: are MY facts on it (the ones no model knows from training), is it what I said, did you tell me the truth about what you did. The same goes for the one-shot packs: `eval-injections.js --briefs=dreams`. The first such sentence found the copilot claiming colours and a fixed background it had written as Tailwind classes — a lie no spec-shaped test could have heard.
 
 **The door helps a model that is almost right (v2.45).** A document the model PRINTED instead of calling the write tool is adopted as that call — same preflight, same approval card — but only for a page or a menu it READ this turn; a closing tag that almost matches is read as the open element; `E_CHILD` names what the container accepts; a refused proposal followed by plain words gets "nothing was saved" beside it (`docs/LOCAL-LLM.md` §3ב). When a smaller model fails a scenario, run the battery with `--courier=relay` first: the transcript shows what the door told it.
 
@@ -280,6 +282,8 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | 2ו | A picture slot the owner can fill | With an empty library the copilot now builds WITHOUT images. What an owner may want instead is a slot: an image module with no source that the builder shows as "choose a picture" and the published page simply omits. Today the renderer prints `<img src="">` for an empty source — a product decision (renderer + builder), not a door. |
 | 2ה | Read-before-edit, enforced | The briefing says "חובה לקרוא דף לפני שעורכים אותו"; only the v2.45 ADOPTION enforces it. A real `edit_page` call for a page the model did not `read_page` this turn still reaches the card (battery T6, gemma-4-26B-A4B: the paragraph beside the edited heading vanished). Send it back once ("קרא/י את הדף קודם"), like `PAGES_LOST`; the scripted smokes that edit without reading need a `read_page` first. |
 | 2ד | The E-models in the copilot | gemma-4-E2B/E4B *describe* the tool they are about to call and stop (12–13/26). The packs work on them; the copilot does not. A nudge ("you said you would call read_menus — call it") is the untried idea. |
+| 2ז | A look-and-feel wish in the copilot | An owner tells the HELPER "warm, the side in purple, a background that stays still" — she does not know the theme is another screen. From v2.47 the copilot does the page part (the moving message), says plainly that the rest is **עיצוב ← ערכת נושא** and drafts the sentence for the AI designer there. What a person expects is one more step: a gated `propose_theme` tool that hands her wish to the theme designer and shows the result on the theme canvas for ✓. A seventh tool arrives with its own gate checks (`smoke-copilot-tools` pins "exactly six"). |
+| 2ח | What the human dreams still hear | (a) "Shorten it" keeps what she named (phone, prices) and, since the v2.47 sentence, her name — but still drops her **street address** (D11, gemma-4-31B ×2). (b) For "warm, and the SIDE in purple" the theme designer paints the *whole site* lavender and leaves the rail white (theme dream 1). Both are soft today; both are prompt work, not doors. |
 | 3 | The theme studio canvas | Still a same-origin iframe; the other admin previews are sandboxed (`docs/security.md` §5). |
 | 4 | The host strips the preview's CSP | On the live host only the iframe's own `sandbox` attribute protects; the header does not survive the proxy. |
 | 5 | OSS packaging / support SKU | Free core; money on support, hosting and modules. |
@@ -308,6 +312,7 @@ Avoid: multi-feature sprawl; a real hostname in a commit; claiming a live verifi
 | Two requests can share a local model's window | **No** — LM Studio's context is one pool; concurrent big requests all die. The door says so in Hebrew (`WINDOW_SHARED`); the cure is `--parallel 1` |
 | A local model under 31B can drive the copilot | **Yes from 12B** — measured per size and per card in `docs/LOCAL-LLM.md` §5; the 2B/4B-effective models cannot, and the doc says so |
 | A model's page can show a broken picture or a dead call-to-action | **Much less** from v2.46 — an empty library is said in the briefing, and new image paths / internal links that do not exist go back to the model once; what it insists on is written beside the card for the owner. A draft is still the owner's to read before publishing |
+| The copilot can change how the site LOOKS | **No** — it writes pages and menus; colours, fonts, the background and a side menu are the theme screen. Before v2.47 it *said* it had (Tailwind classes and `style=` that do nothing here); now those go back to the model once, the briefing names the screen, and what a model insists on is flagged to the owner beside the card |
 | The battery ran against the live site or the real extension | **No** — a scratch CMS on localhost; `relay` plays the Bridge's part from Node. Production was only ever checked for its version stamp |
 | Chat context is permanent | **No** — this file and `docs/ROADMAP.md` are the memory |
 
