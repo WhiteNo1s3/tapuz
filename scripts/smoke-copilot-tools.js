@@ -625,6 +625,51 @@ const wantsWrite = {
     check('…and the paste packs are untouched by it', !/הספרייה ריקה|אין תמונות באתר/.test(rp.buildRoleplayPack({ locale: 'he', size: 'lite', playerBrief: 'x', media: [] }).text));
   }
 
+  // ── v2.47: styling that does nothing here. Dreams D10 (gemma-4-31B): "warm, the side in purple, a
+  //    background that stays still" came back as Tailwind classes + <body style=…>, and the reply told
+  //    the owner the colours and the fixed background were DONE. ──
+  {
+    ai.saveSettings({ provider: '__fake', baseUrl: 'http://127.0.0.1:1/v1' });
+    const pagesLib = require('../src/pages');
+    const says = (content) => ({ choices: [{ message: { content, tool_calls: [] }, finish_reason: 'stop' }] });
+    const calls = (id, name, args) => ({ choices: [{ message: { content: '', tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] } }] });
+    const page = (bodyAttr, body) => '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/><title>חלום</title><meta name="bent-slug" content="dream-look"/></head>\n<body' + bodyAttr + '>\n' + body + '\n</body></html>';
+    const TAILWIND = page(' style="background-attachment: fixed;"', '  <bent-marquee id="m" speed="md" class="bg-purple-600 text-white py-2">הודעה ✦</bent-marquee>\n  <bent-heading id="h" level="1" class="text-purple-900">שלום</bent-heading>');
+    const CLEAN = page('', '  <bent-marquee id="m" speed="md">הודעה ✦</bent-marquee>\n  <bent-heading id="h" level="1">שלום</bent-heading>');
+    const OWN = page('', '  <bent-heading id="h" level="1" class="hero-dark wedding">שלום</bent-heading>');
+
+    const dead = tools.deadStyling(TAILWIND, '');
+    check('deadStyling: an inline style and utility-framework classes are named (' + dead.length + ')', dead.length === 3 && /background-attachment/.test(dead.join()) && /bg-purple-600/.test(dead.join()) && /text-purple-900/.test(dead.join()));
+    check('…an owner\'s own hook for the theme skin (class="hero-dark wedding") is none of the door\'s business', tools.deadStyling(OWN, '').length === 0);
+    check('…nor is styling that was ALREADY on the page being edited', tools.deadStyling(TAILWIND, TAILWIND).length === 0);
+    check('…and a clean page has none', tools.deadStyling(CLEAN, '').length === 0);
+
+    scripted = [calls('s1', 'create_page', { source: TAILWIND }), calls('s2', 'create_page', { source: CLEAN })];
+    const q1 = await ai.converse({ system: '<bent-heading>', user: 'אני רוצה שהאתר ירגיש חם, ואת הצד בסגול' });
+    const told = (lastBody.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 's1').pop();
+    check('dead styling goes back to the MODEL once: what is dead, that the look is the THEME, where the theme lives, and not to claim it',
+      !!told && /"proposed":false/.test(told.content) && /bg-purple-600/.test(told.content) && /Tailwind/.test(told.content) && /עיצוב ← ערכת נושא/.test(told.content) && /admin\/theme/.test(told.content) && /אל תכתוב/.test(told.content));
+    check('…its clean page is the card, with nothing to warn about', !!(q1.pending && q1.pending.tool === 'create_page' && !/class=|style=/.test(q1.pending.input.source)) && !/אין להם משמעות/.test(q1.notice || ''));
+    scripted = [says('בסדר.')];
+    await ai.converse({ approve: { id: q1.pending.id, ok: false } });
+
+    scripted = [calls('s3', 'create_page', { source: TAILWIND }), calls('s4', 'create_page', { source: TAILWIND })];
+    const q2 = await ai.converse({ system: '<bent-heading>', user: 'אני רוצה שהאתר ירגיש חם, ואת הצד בסגול' });
+    check('a model that insists reaches the card — and the OWNER is told the styling changes nothing, whatever the reply says, and where colours live',
+      !!(q2.pending && q2.pending.tool === 'create_page') && /אין להם משמעות באתר/.test(q2.notice || '') && /גם אם התשובה אומרת אחרת/.test(q2.notice || '') && /עיצוב ← ערכת נושא/.test(q2.notice || ''));
+    scripted = [says('בסדר.')];
+    await ai.converse({ approve: { id: q2.pending.id, ok: false } });
+    check('none of that wrote a page', !pagesLib.getPageByFullPath('dream-look'));
+
+    const rp = require('../src/pzn/agent-roleplay');
+    const full = rp.buildCopilotBriefing({ locale: 'he', media: [], siteTitle: 'x', tier: 'full' }).text;
+    const compact = rp.buildCopilotBriefing({ locale: 'he', media: [], siteTitle: 'x', tier: 'compact' }).text;
+    check('the full briefing says WHERE the look lives (עיצוב ← ערכת נושא, /admin/theme), that Tailwind and style= do nothing, and that facts survive a shortening',
+      /עיצוב ← ערכת נושא/.test(full) && /admin\/theme/.test(full) && /Tailwind/.test(full) && /לקצר או לשכתב ≠ למחוק עובדות/.test(full) && /מילה במילה/.test(full));
+    check('…the compact tier pays nothing for it (the door teaches it there, when it happens)', !/Tailwind/.test(compact) && !/לקצר או לשכתב/.test(compact));
+    check('…and the paste packs keep their bytes', !/Tailwind|לקצר או לשכתב/.test(rp.buildRoleplayPack({ locale: 'he', size: 'lite', playerBrief: 'x', media: [] }).text));
+  }
+
   console.log('');
   console.log(fail ? 'SMOKE COPILOT-TOOLS: FAIL' : 'SMOKE COPILOT-TOOLS: PASS');
   process.exit(fail ? 1 : 0);

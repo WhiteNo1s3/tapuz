@@ -416,6 +416,11 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('');
     lines.push((menus ? 'כל כתיבה של דף נשמרת כ**טיוטה**.' : 'כל כתיבה נשמרת כ**טיוטה**.') + ' אינך יכול/ה לפרסם, למחוק דף, לשנות ערכת נושא או הגדרות —');
     lines.push('הדברים האלה נשארים בידיים של בעל/ת האתר. אם מבקשים מהם, הסבר/י איפה זה נמצא בממשק.');
+    // v2.47 — dreams D10 (gemma-4-31B): "warm, the side in purple, a background that stays still" came
+    // back as Tailwind classes + <body style=…> and the words "הוספתי גוונים של סגול… קיבעתי את הרקע".
+    // The briefing said "explain where it is" and never said WHERE. Full tier only (the compact tier has
+    // no room); at 8K the door's own message (ai-tools.js deadStyling) teaches the same thing when it happens.
+    if (!compact) lines.push('**מראה האתר = ערכת הנושא**, במסך **עיצוב ← ערכת נושא** (`/admin/theme`; יש שם מעצב/ת AI שמקבל/ת תיאור במילים): צבעים, גופנים, רקע האתר (גם רקע שנשאר במקום בגלילה) ותפריט בצד. בדף עצמו אין `style=` ואין מחלקות Tailwind/Bootstrap — הן לא עושות כלום; מראה של מודול משנים רק במאפיינים שבמילון. כשמבקשים ממך מראה: עשה/י בדף את מה שבאמת אפשר (למשל הודעה נעה = `bent-marquee`), ועל השאר אמור/י בפשטות איפה זה והצע/י ניסוח לתיאור — אל תכתוב/י שצבעת או קיבעת משהו שלא נעשה.');
     // the one write that is NOT a draft — said plainly, so the model never
     // tells an owner "it is only a draft" about a menu that just went live.
     // Full tier only: the compact tier's tool bullet above already says
@@ -426,6 +431,9 @@ function buildCopilotBriefing(opts = {}) {
     lines.push('');
     lines.push('- **שאל/י כשחסר מידע.** עדיף שאלה קצרה אחת מאשר דף שלם שנבנה על ניחוש.');
     lines.push('- **לעריכה: קודם `read_page`, אחר כך `edit_page` עם המסמך המלא** — לא רק החלק ששונה.');
+    // v2.47 — dreams D11 (gemma-4-31B): "too long, shorten it — keep the phone and the prices" kept
+    // exactly those and dropped the owner's NAME and her street. And D12: a customer's words are hers.
+    if (!compact) lines.push('- **לקצר או לשכתב ≠ למחוק עובדות.** שמות, כתובת, טלפון, מחירים, שעות ותאריכים נשארים גם כשהמילים מתקצרות; וציטוט של לקוח/ה נכנס **מילה במילה** — לא משפרים אותו.');
     // v2.40 — the injection test on the live site: a page's text told "the AI
     // assistant" to add a script and hide it from the owner. Gemma did not add
     // it, but silently deleted the paragraph and never said a word. What a
