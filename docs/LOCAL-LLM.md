@@ -50,8 +50,10 @@ Ben's 17,246-token request errored only because half of it was still over 8,192;
 
 Guidance by card:
 
-- **16 GB** — none of the models above fit at full offload at any window. Load a smaller model at 32K (≈ 12B dense, or a 3B-active MoE at Q4 with ~9–10 GB of weights), or accept CPU offload and the speed that comes with it. The copilot's compact mode is the fallback, not the plan.
-- **24–32 GB** (a 4090 / 5090) — Gemma 4 31B at **32K** fits with nothing else on the card (28.1 GiB); close the game first. Qwen 3.6 35B-A3B at 32K is the cheap alternative (22.2 GiB).
+- **8 GB** — Gemma 4 **E4B** (≈ 5 GB at 32K) or **E2B** (≈ 3.3 GB). The one-shot packs work well on them (menu organizer 25/27 and 24/27, theme designer 10/10), but they cannot drive the copilot's tool loop (12/26, 13/26) — they *describe* the tool they are about to call and stop. Use `/admin/inject` and the organizer card; leave the copilot to a bigger model or a cloud key. Measured in §5.
+- **12–16 GB** — **Gemma 4 12B, Google's QAT 4-bit build** (`gemma-4-12B-it-QAT`, ≈ 8.4 GB at 32K, so 32K fits a 12 GB card): copilot 24/26, 12/13 at 8K, organizer 27/27, theme 10/10. The generic Q4_K_M of the same model is a step behind (23/26, 10/13).
+- **24 GB** (a 3090 / 4090) — **Gemma 4 26B-A4B** (MoE, 4B active, ≈ 18.5 GB at 32K): copilot 25/26 and the fastest of the family that can drive it — the whole double battery in 185 s against ≈ 500 s for the 31B.
+- **32 GB** (a 5090) — **Gemma 4 31B** at 32K with nothing else on the card (≈ 23 GB measured at `--parallel 1`); still the only local model at 39/39. Close the game first.
 - **A cluster / a workstation card** — 64K–128K; the full dictionary plus several long pages in one conversation.
 
 **Bridge V2 0.5.0.** The hosted flow needs the extension to (a) stream tool calls — 0.4.0 dropped `delta.tool_calls`, so every `list_pages` / `read_page` / `edit_page` came back as an empty reply, which was the other half of Ben's "unrelated" turn — (b) forward the model's error body, so the 8K explanation reaches the page instead of "no response", and (c) call `/api/v0/models` for the window. The ZIP is built from the CMS, so an update ships with it: download Bridge V2 again from `/admin/ai-setup`, reload it at `chrome://extensions` (or `about:debugging` in Firefox) and refresh the admin tab. An older bridge still works for plain chat, and the page says which version it sees and what it cannot do with it.
@@ -297,3 +299,27 @@ Thirteen owner sentences per run (§3א), judged from the pages and menus tables
 | nemotron-3-nano-omni Q4_K_M | 32,768 | local ×2 | 18/26 | 4 | 176 | drops pages from a menu even after being told, rewrites the wrong block, answers "PZN_READY" — not recommended |
 
 What the first round looked like, before the fixes it caused: Gemma 13/13 on both couriers at 32K but 12/13 at 8K (could not read back the page it had made); qwen3.8 12/13; qwen3.6 12/13; nemotron 8/13 — and a second Gemma run that lost nine scenarios in a row to the 30-second socket (§1ה). **Gemma 4 31B stays the recommended local model; qwen3.8-27b is its equal on this battery and faster.**
+
+### The Gemma 4 family — which size for which card (2026-09-19, RTX 5090, `--parallel 1`, v2.44 code)
+
+Ben: *"we will recommend gemma4 for our product … there are versions of it lower — measure the other gemma4 that are available from google official."* Google's family is **E2B, E4B, 12B, 26B-A4B (MoE) and 31B** — there is no 9B — plus Google's own quantization-aware-trained 4-bit builds (QAT). Every size ran the same suite: the copilot battery (§3א, 32K ×2 and 8K ×1), the organizer eval (27 runs) and the theme-designer eval (10 runs). **VRAM is what the model ADDS** at that window — the desktop was holding ≈ 3.7 GB beside it — and Gemma 4's window is cheap: 8K → 32K costs 0.1–0.5 GB, so there is no reason to load any of them below 32K.
+
+| Model (GGUF) | VRAM @32K | @8K | Copilot 32K ×2 | Copilot 8K | Organizer (27) | Theme designer (10) |
+|---|---|---|---|---|---|---|
+| gemma-4-E2B Q4_K_M | 3.3 GB | 3.2 GB | 13/26 · 102 s | 9/13 | 24 PASS · 17 strict · 10 second rounds · 2 s | 10/10 · 9 clean · 7 s |
+| gemma-4-E4B Q4_K_M | 5.1 GB | 4.7 GB | 12/26 · 193 s | 8/13 | 25 PASS · 24 strict · 3 second rounds · 2 s | 10/10 · 2 clean · 10 s |
+| gemma-4-12B Q4_K_M | 8.8 GB | 8.4 GB | 23/26 · 247 s | 10/13 | 26 PASS · 24 strict · 3 second rounds · 4 s | 10/10 · 4 clean · 13 s |
+| **gemma-4-12B QAT Q4_0** (Google's own 4-bit) | **8.4 GB** | 8.0 GB | **24/26** · 223 s | **12/13** | **27 PASS** · 24 strict · 3 second rounds · 3 s | 10/10 · **8 clean** · 14 s |
+| **gemma-4-26B-A4B Q4_K_M** (MoE, 4B active) | 18.5 GB | 18.0 GB | **25/26 · 185 s** | 12/13 | **27 PASS** · 24 strict · 3 second rounds · 2 s | 10/10 · 2 clean · 8 s |
+| gemma-4-31B Q4_K_M (the row above, for scale) | ≈ 23 GB | – | **39/39** (×3) · ≈ 500 s per ×2 | 13/13 | 27 PASS · 27 strict · 0 second rounds · 6 s | 10/10 · 8 clean · 34 s |
+
+What the numbers say:
+
+- **The packs are easy, the tool loop is not.** Every size — even the 2B — lands the one-shot packs (theme designer 10/10 everywhere). The copilot is a different job: read, decide, call a write tool with a whole document. The E-models *describe* the call ("אריץ עכשיו את `read_menus`") and stop, or ask for a slug the situation already gave them. That is the model, not a parsing gap.
+- **12B is where the copilot starts working**, and **Google's QAT build is the one to download**: smaller and better than the generic Q4_K_M on every line.
+- **26B-A4B is the sweet spot for a 24 GB card** — within one scenario of the 31B and ≈ 2.7× faster, because only 4B parameters are active per token.
+- **One habit is shared by the 12B, the 26B and qwen3.6: the second try is PRINTED.** After the door sends a proposal back (a typo, a wrong child), the corrected page arrives as a fenced document in the chat instead of a tool call; the 12B does the same with a regrouped menu after `read_menus`. Every 12B-QAT miss at 32K is that one case. It is a product gap, not a model one — tracked as the next change (adopt a printed document as the proposal it was meant to be, through the same approval gate).
+
+Not measured yet (downloaded, waiting for a quiet GPU): the QAT builds of the 26B-A4B and the 31B, Dicta's Hebrew models (`DictaLM-3.0-Nemotron-12B-Instruct`, `DictaLM-3.0-24B-Thinking`) and `gpt-oss-20b`.
+
+**Two machines, one LM Studio.** With LM Link on, `lms ps` / `lms ls` list the models of every linked device, and **`lms unload --all` unloads them on every device** — including a model someone is chatting with on the other machine. It works in both directions: the family run above lost a battery to an unload that came from elsewhere, and its own `unload --all` cut a chat on the linked Mac. A script that shares the mesh unloads **by identifier** (`lms unload tapuz-gemma`), never `--all`, and treats "Model unloaded by user or API request" as *someone else is using the GPU* — stop and ask, do not retry.
