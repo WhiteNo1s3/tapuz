@@ -188,6 +188,64 @@ function editPage(args) {
 // a false "asked" only skips one repair round — the card still warns.
 const REMOVE_ASK_RE = /(?:הסר|תסיר|הסיר|להסיר|מחק|תמחק|למחוק|מחיק|הורד|תוריד|להוריד|הוצא|תוציא|להוציא|העלם|תעלים|להעלים|הסתר|תסתיר|להסתיר|בלי |ללא |השאר רק|רק את |remove|delete|drop|hide|without|only keep|keep only)/i;
 
+// ── pictures and links that do not exist (v2.46) ─────────────────────────
+//
+// The dreams battery (an owner's own words, a brand-new site): one page came
+// back with NINE invented image paths and three links to sub-pages nobody
+// made. A page is a draft, so nothing broke in public — but the owner was
+// asked to approve broken pictures, and a draft is one click from live.
+//
+//   a NEW local image path the site does not have  → back to the model, once
+//                                                    (the model is right here
+//                                                    and can build without it);
+//                                                    a model that insists
+//                                                    reaches the card, and the
+//                                                    owner is told which ones
+//   a link to a page that does not exist           → the same, in the same
+//                                                    message, with the list of
+//                                                    real pages ("/contact" on
+//                                                    a site whose contact page
+//                                                    is "/צרו-קשר" is a CTA
+//                                                    that 404s)
+// "New" = not already in the page being edited: an owner's own broken path is
+// not the model's to answer for. External (https:) pictures are not judged.
+const IMAGE_ATTR_RE = /\b(?:src|image|poster|avatar|photo|logo|cardimage|ogimage)="([^"]+)"/gi;
+const LINK_ATTR_RE = /\b(?:href|ctaurl|url|link)="([^"]+)"/gi;
+const isLocalPath = (v) => /^\/(?!\/)/.test(v) || (!/^[a-z][a-z0-9+.-]*:/i.test(v) && !v.startsWith('#') && /\.(?:jpe?g|png|webp|gif|svg|avif)$/i.test(v));
+function attrValues(source, re) {
+  const out = new Set();
+  for (const m of String(source || '').matchAll(re)) out.add(m[1].trim());
+  return out;
+}
+function fileIsServed(p) {
+  const fs = require('fs');
+  const path = require('path');
+  const rel = decodeURIComponent(String(p).split(/[?#]/)[0]).replace(/^\/+/, '');
+  if (!rel || rel.includes('..')) return false;
+  let roots = [path.join(__dirname, '..', 'public')];
+  try { const paths = require('./paths'); roots = [paths.PUBLIC_DIR, paths.ASSETS_DIR && path.dirname(paths.ASSETS_DIR), ...roots].filter(Boolean); } catch (e) { /* defaults */ }
+  return roots.some((root) => { try { return fs.statSync(path.join(root, rel)).isFile(); } catch (e) { return false; } });
+}
+/** Image paths in `source` that are local, NEW (absent from `baseline`) and exist nowhere. */
+function missingImages(source, baseline) {
+  let known = new Set();
+  try { known = new Set(require('./media').listAllMedia(0).map((m) => m.url)); } catch (e) { /* no library */ }
+  const before = attrValues(baseline, IMAGE_ATTR_RE);
+  return [...attrValues(source, IMAGE_ATTR_RE)].filter((v) => v && isLocalPath(v) && !before.has(v) && !known.has(v) && !fileIsServed(v));
+}
+/** Internal links in `source` that are NEW and lead to no page of this site. */
+function deadLinks(source, baseline) {
+  const { getPageByFullPath } = require('./pages');
+  const before = attrValues(baseline, LINK_ATTR_RE);
+  return [...attrValues(source, LINK_ATTR_RE)].filter((v) => {
+    if (!v || before.has(v) || !/^\/(?!\/)/.test(v) || v === '/') return false;
+    const slug = decodeURIComponent(v.split(/[?#]/)[0]).replace(/^\/+|\/+$/g, '').replace(/\.html$/i, '');
+    if (!slug || /^(?:admin|assets|uploads|css|js|demo)\b/.test(slug) || /\.[a-z0-9]{2,5}$/i.test(slug)) return false;
+    return !getPageByFullPath(slug);
+  });
+}
+const listed = (arr) => arr.slice(0, 6).join(', ') + (arr.length > 6 ? '…' : '');
+
 /** The door, for both the preflight and the write — one parse, one verdict.
  *  `opts.brief` is the owner's own message: the door judges LAYOUT_UNASKED
  *  against what the OWNER asked, never against the model's account of it. */
@@ -338,19 +396,50 @@ function preflight(name, args, opts) {
     return { preview: parsed.preview, warnings: parsed.warningTexts };
   }
   if (name === 'create_page') {
-    const { doc } = checkSource(args && args.source);
+    const { doc, source } = checkSource(args && args.source);
     const { slug } = slugFor(args, doc);
     if (require('./pages').getPageByFullPath(slug)) {
       throw new Error('דף בשם "' + slug + '" כבר קיים — לעריכה השתמש/י ב-edit_page');
     }
-    return;
+    return pageInventions(source, '', opts);
   }
   if (name === 'edit_page') {
     const slug = String((args && args.slug) || '').trim();
     if (!slug) throw new Error('slug required');
     if (!require('./pages').getPageByFullPath(slug)) throw new Error('אין דף בשם "' + slug + '"');
-    checkSource(args && args.source);
+    const { source } = checkSource(args && args.source);
+    return pageInventions(source, require('./pages').getPageSource(slug, 'draft') || '', opts);
   }
+}
+
+/** v2.46 — what a page proposal invented. Pictures and dead links go back to
+ *  the model ONCE, together (`opts.inventionsAsked`) — it is right here, it has
+ *  the page list, and "/contact" on a site whose contact page is "/צרו-קשר" is a
+ *  call-to-action that 404s. Whatever a model insists on becomes a line for
+ *  the owner beside the card: a dream page may well point at a page that comes
+ *  next, and that is the owner's call, not the door's. */
+function pageInventions(source, baseline, opts) {
+  const images = missingImages(source, baseline);
+  const links = deadLinks(source, baseline);
+  if ((images.length || links.length) && !(opts && opts.inventionsAsked)) {
+    const parts = [];
+    if (images.length) {
+      parts.push(images.length + ' תמונות במסמך לא קיימות באתר: ' + listed(images) + '. אל תמציא/י נתיבי תמונה — כל אחד מהם יהיה תמונה שבורה מול הגולשים. ' +
+        'השתמש/י רק בנתיבים מרשימת המדיה; אם אין תמונה מתאימה — בנה/י את החלק הזה בלי תמונה (טקסט, כרטיסים, יתרונות).');
+    }
+    if (links.length) {
+      let real = [];
+      try { real = require('./pages').listPages().map((pg) => '/' + pg.full_path).slice(0, 30); } catch (e) { /* no list */ }
+      parts.push(links.length + ' קישורים מובילים לדפים שלא קיימים באתר: ' + listed(links) + '. ' +
+        (real.length ? 'הדפים הקיימים: ' + real.join(' · ') + '. ' : '') +
+        'קשר/י רק לדף קיים (או לעוגן #… בתוך הדף); אם הדף עוד לא נבנה — השמט/י את הקישור ואמור/י לבעל/ת האתר שכדאי ליצור אותו.');
+    }
+    throw Object.assign(new Error(parts.join(' ') + ' הצע/י שוב את המסמך המלא.'), { code: 'PAGE_INVENTIONS' });
+  }
+  const notes = [];
+  if (images.length) notes.push(images.length + ' תמונות בהצעה לא קיימות באתר (' + listed(images) + ') — הן יוצגו שבורות עד שתבחרו תמונות בבונה.');
+  if (links.length) notes.push(links.length + ' קישורים מובילים לדפים שעדיין לא קיימים (' + listed(links) + ') — צרו אותם, או שנו את הקישור בבונה לפני הפרסום.');
+  return notes.length ? { notes } : undefined;
 }
 
 const TOOLS = [
@@ -465,4 +554,4 @@ function toolsForProvider(style, opts) {
   return list.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema }));
 }
 
-module.exports = { TOOLS, MENU_TOOLS, getTool, describeCall, toolsForProvider, preflight, MAX_SOURCE };
+module.exports = { TOOLS, MENU_TOOLS, getTool, describeCall, toolsForProvider, preflight, MAX_SOURCE, missingImages, deadLinks };

@@ -1342,9 +1342,11 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       // fit line, the framed header) is what the canvas shows before ✓
       let pre = null;
       // `lostAsked` (v2.44): a menu that loses pages is sent back ONCE per turn
-      try { pre = tools.preflight(write.name, write.input, { brief: st.userText || '', lostAsked: !!st.lostAsked }); } catch (e) {
+      // `inventionsAsked` (v2.46): invented pictures and dead links go back ONCE per turn too
+      try { pre = tools.preflight(write.name, write.input, { brief: st.userText || '', lostAsked: !!st.lostAsked, inventionsAsked: !!st.inventionsAsked }); } catch (e) {
         refusal = e.message;
         if (e.code === 'PAGES_LOST') st.lostAsked = true;
+        if (e.code === 'PAGE_INVENTIONS') st.inventionsAsked = true;
       }
       if (refusal) {
         st.refusals = (st.refusals || 0) + 1;
@@ -1361,6 +1363,10 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         st.hop++;
         continue;
       }
+      // v2.46 — what the proposal invented and the door let through (a link to
+      // a page that does not exist yet; a picture the model insisted on): the
+      // owner reads it beside the card, before ✓
+      if (pre && Array.isArray(pre.notes) && pre.notes.length) st.notice = (st.notice ? st.notice + ' ' : '') + pre.notes.join(' ');
       const summary = tools.describeCall(write.name, write.input);
       const id = putPending({ st, reply, call: write, others: results });
       st.memo = win.HE.memoProposed(summary);
