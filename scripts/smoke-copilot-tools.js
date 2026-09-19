@@ -432,6 +432,128 @@ const wantsWrite = {
       !!resultBlock && resultBlock.type === 'tool_result' && resultBlock.tool_use_id === 'tu1' && /"organized":true/.test(resultBlock.content));
   }
 
+  // ── v2.45: a document the model PRINTED is adopted as the write it was meant
+  //    to be. The battery, Gemma 4 12B (2026-09-19): it read the menus,
+  //    regrouped them well — and printed the <bent-menus> document in a fence.
+  //    The chat has nothing to press for a printed menu, and only "create" for
+  //    a printed page. Adopted, it walks the same road: preflight → the card. ──
+  {
+    ai.saveSettings({ provider: '__fake', baseUrl: 'http://127.0.0.1:1/v1' });
+    const pagesLib = require('../src/pages');
+    const menusLib2 = require('../src/menus');
+    const says = (content, finish) => ({ choices: [{ message: { content, tool_calls: [] }, finish_reason: finish || 'stop' }] });
+    const calls = (id, name, args) => ({ choices: [{ message: { content: '', tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] } }] });
+    const fenced = (doc, before = 'בניתי את הדף:', after = 'מקווה שזה מתאים.') => before + '\n\n```html\n' + doc + '\n```\n\n' + after;
+    const count = () => pagesLib.listPages().length;
+
+    // (1) a NEW page, printed → a create_page card; the prose stays words, the document is gone from it
+    const n0 = count();
+    scripted = [says(fenced(PZN('מודפס', 'דף שהודפס', 'printed-new')))];
+    const p1 = await ai.converse({ system: '<bent-heading>', user: 'בנה דף קצר' });
+    check('a printed NEW page becomes a create_page card — same gate, nothing written',
+      !!(p1.pending && p1.pending.tool === 'create_page' && /printed-new/.test(p1.pending.input.source)) && count() === n0);
+    check('…the reply keeps the model’s words and loses the document (the page never sees two offers for one page)',
+      /בניתי את הדף/.test(p1.reply) && /מקווה/.test(p1.reply) && !/<bent-|<!DOCTYPE|```/.test(p1.reply));
+    check('…and the owner is told what happened, once', /הדפיס את המסמך/.test(p1.notice || ''));
+    scripted = [says('נוצר.')];
+    const p1ok = await ai.converse({ approve: { id: p1.pending.id, ok: true } });
+    check('…approve lands it as a draft, and the write is answered under the adopted call’s id',
+      !!(p1ok.applied && p1ok.applied.created && p1ok.applied.slug === 'printed-new') && (pagesLib.getPageByFullPath('printed-new') || {}).status === 'draft' &&
+      (lastBody.messages || []).some((m) => m.role === 'tool' && m.tool_call_id === 'doc_0' && /"created":true/.test(m.content)));
+
+    // (2) an EDIT: read_page this turn, then the whole page printed → an edit_page card for that page
+    scripted = [calls('r1', 'read_page', { slug: 'printed-new' }), says(fenced(PZN('מודפס', 'כותרת חדשה', 'printed-new'), 'עדכנתי את הכותרת:'))];
+    const p2 = await ai.converse({ system: '<bent-heading>', user: 'שנה את הכותרת', context: { page: 'printed-new' } });
+    check('a page the model READ this turn, printed back → an edit_page card for that page (hop 1 → doc_1)',
+      !!(p2.pending && p2.pending.tool === 'edit_page' && p2.pending.input.slug === 'printed-new' && /כותרת חדשה/.test(p2.pending.input.source)));
+    scripted = [says('לא שיניתי.')];
+    await ai.converse({ approve: { id: p2.pending.id, ok: false } });
+    check('…refused → the draft is untouched', !/כותרת חדשה/.test(pagesLib.getPageSource('printed-new', 'draft') || ''));
+
+    // (3) the doc carries no slug → the OPEN page is the target, under the same read rule
+    const NOSLUG = PZN('מודפס', 'בלי סלאג', 'x').replace(/<meta name="bent-slug"[^>]*\/>/, '');
+    scripted = [calls('r2', 'read_page', { slug: 'printed-new' }), says(fenced(NOSLUG))];
+    const p3 = await ai.converse({ system: '<bent-heading>', user: 'ערוך', context: { page: 'printed-new' } });
+    check('a printed page with no bent-slug belongs to the OPEN page — when the model read it', !!(p3.pending && p3.pending.tool === 'edit_page' && p3.pending.input.slug === 'printed-new'));
+    scripted = [says('בסדר.')];
+    await ai.converse({ approve: { id: p3.pending.id, ok: false } });
+
+    // (4) NOT adopted: an existing page the model never read (an edit replaces the whole page)
+    scripted = [says(fenced(PZN('מודפס', 'עריכה עיוורת', 'printed-new')))];
+    const p4 = await ai.converse({ system: '<bent-heading>', user: 'שנה משהו', context: { page: 'printed-new' } });
+    check('an existing page the model did NOT read this turn is never adopted — the reply stays a reply', !p4.pending && /עריכה עיוורת/.test(p4.reply));
+
+    // (5) NOT adopted: the owner asked to SEE the code
+    scripted = [says(fenced(PZN('חדש', 'רק להראות', 'printed-show')))];
+    const p5 = await ai.converse({ system: '<bent-heading>', user: 'תראה לי את הקוד של דף כזה' });
+    check('"תראה לי את הקוד" → printing is what the owner asked for: no card', !p5.pending && /רק להראות/.test(p5.reply));
+
+    // (6) NOT adopted: a reply that hit max_tokens
+    scripted = [says(fenced(PZN('חדש', 'חתוך', 'printed-cut')), 'length')];
+    const p6 = await ai.converse({ system: '<bent-heading>', user: 'בנה דף' });
+    check('a reply cut at max_tokens is never adopted (half a document must not become a card)', !p6.pending && p6.truncated === true);
+
+    // (7) a MENU: read_menus, then the <bent-menus> document printed → an organize_menu card with the door's preview
+    const orderNow = () => (menusLib2.loadMenus().main || []).map((i) => i.target).join();
+    const startOrder = orderNow();
+    const backups0 = menusLib2.listMenuBackups().length;
+    const MENU = ['<bent-menus version="1" note="צור קשר שני">', '  <bent-menu name="main" location="main">',
+      '    <bent-link label="הבית" page="home" />', '    <bent-link label="צור קשר" page="contact" />', '    <bent-link label="אודות" page="about" />',
+      '  </bent-menu>', '</bent-menus>'].join('\n');
+    scripted = [calls('m1', 'read_menus', {}), says(fenced(MENU, 'סידרתי את התפריט:', ''))];
+    const p7 = await ai.converse({ system: '<bent-heading>', user: 'העבר את צור קשר למקום השני' });
+    check('a printed <bent-menus> document becomes an organize_menu card WITH the door’s preview (diff, fit line) — and nothing moved',
+      !!(p7.pending && p7.pending.tool === 'organize_menu' && p7.pending.preview && p7.pending.preview.diff && p7.pending.preview.fitLine) &&
+      orderNow() === startOrder && menusLib2.listMenuBackups().length === backups0);
+    check('…the owner is told the document was printed and adopted — on a LATER hop too (the read came first)', /הדפיס את המסמך/.test(p7.notice || ''));
+    scripted = [says('התפריט עודכן.')];
+    const p7ok = await ai.converse({ approve: { id: p7.pending.id, ok: true } });
+    check('…approve applies it live with a backup, exactly like a called organize_menu',
+      !!(p7ok.applied && p7ok.applied.organized) && orderNow() === 'home,contact,about' && menusLib2.listMenuBackups().length === backups0 + 1);
+
+    // (8) a printed menu that the DOOR refuses goes back to the model, not to the owner
+    const BADMENU = MENU.replace('page="about"', 'page="no-such-page"').replace('צור קשר שני', 'שבור');
+    scripted = [calls('m2', 'read_menus', {}), says(fenced(BADMENU, '', '')), says('לא הצלחתי.')];
+    const p8 = await ai.converse({ system: '<bent-heading>', user: 'סדר את התפריט' });
+    check('an adopted document is judged like a called one: the door’s refusal goes back to the MODEL under the adopted id, no card',
+      !p8.pending && (lastBody.messages || []).some((m) => m.role === 'tool' && m.tool_call_id === 'doc_1' && /"proposed":false/.test(m.content)));
+
+    // (8b) the v2.43 weaker mode stays what it was: a model that never READ the menus only describes
+    scripted = [says(fenced(MENU.replace('צור קשר שני', 'בלי קריאה'), 'הנה תפריט:', ''))];
+    const p8b = await ai.converse({ system: '<bent-heading>', user: 'סדר את התפריט' });
+    check('a printed menu from a model that never called read_menus is NOT adopted — describe-only, as the tester’s gate 3 says',
+      !p8b.pending && /<bent-menus/.test(p8b.reply));
+
+    // (8c) a refused proposal followed by WORDS: the model's sentence stays, the truth goes beside it
+    //      (battery T3, Gemma 4 12B: "עדכנתי את כותרת ההירו" — after a refusal, with nothing proposed)
+    const BADPAGE = '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/><title>שבור</title><meta name="bent-slug" content="printed-bad"/></head>\n<body>\n  <bent-faq id="f"><bent-fold id="x" title="שאלה">תשובה</bent-fold></bent-faq>\n</body></html>';
+    scripted = [calls('w9', 'create_page', { source: BADPAGE }), says('עדכנתי את הדף, הכול מוכן.')];
+    const p8c = await ai.converse({ system: '<bent-heading>', user: 'בנה דף שאלות' });
+    check('a refusal followed by plain words: no card, the model\'s sentence is kept — and the notice says nothing was saved, whatever the reply claims',
+      !p8c.pending && !p8c.applied && /הכול מוכן/.test(p8c.reply) && /שום דבר לא נשמר/.test(p8c.notice || '') && !pagesLib.getPageByFullPath('printed-bad'));
+    scripted = [says('שלום!')];
+    const p8d = await ai.converse({ system: '<bent-heading>', user: 'שלום' });
+    check('…and an ordinary reply carries no such notice', !/שום דבר לא נשמר/.test(p8d.notice || ''));
+
+    // (8e) a closer that is almost the open tag does not cost the owner a round trip (battery: `</bent/heading>`,
+    //      repeated by the 26B when the door sent it back) — and the card holds what the write will save
+    const TYPO = PZN('מודפס', 'כותרת עם טעות', 'printed-typo').replace('</bent-heading>', '</bent/heading>');
+    scripted = [calls('w10', 'create_page', { source: TYPO })];
+    const p8e = await ai.converse({ system: '<bent-heading>', user: 'בנה דף' });
+    check('a create_page whose closer is `</bent/heading>` reaches the owner as a card, already corrected — no refusal, no second model call',
+      !!(p8e.pending && p8e.pending.tool === 'create_page') && /<\/bent-heading>/.test(p8e.pending.input.source) && !/bent\/heading/.test(p8e.pending.input.source) && !/לפני שתתבקשו לאשר/.test(p8e.notice || ''));
+    scripted = [says('נוצר.')];
+    const p8eOk = await ai.converse({ approve: { id: p8e.pending.id, ok: true } });
+    check('…and it lands', !!(p8eOk.applied && p8eOk.applied.created) && /כותרת עם טעות/.test(pagesLib.getPageSource('printed-typo', 'draft') || ''));
+
+    // (9) the unit: a tool the request did not declare is never adopted (the lean 8K request has no menu tools)
+    check('adoptPrintedDocument: an undeclared tool is never adopted; prose with no document is left alone',
+      ai.adoptPrintedDocument(fenced(MENU), { declared: ['list_pages', 'read_page', 'create_page', 'edit_page'] }) === null &&
+      ai.adoptPrintedDocument('סתם תשובה במילים.', { declared: ['create_page'] }) === null &&
+      ai.adoptPrintedDocument(fenced(MENU), { declared: ['organize_menu'], used: [] }) === null &&
+      ai.adoptPrintedDocument(fenced(MENU), { declared: ['organize_menu'], used: ['read_menus'] }).calls[0].name === 'organize_menu');
+  }
+
   console.log('');
   console.log(fail ? 'SMOKE COPILOT-TOOLS: FAIL' : 'SMOKE COPILOT-TOOLS: PASS');
   process.exit(fail ? 1 : 0);

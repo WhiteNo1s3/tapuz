@@ -246,6 +246,28 @@ Two couriers: `local` — the server calls the runtime itself; `relay` — the `
 
 Checks are **hard** (site state) or **soft** (wording); a scenario passes on its hard checks and lists its soft misses. Every turn — what was sent, what the card held, the reply, the seconds — is written to `eval/battery/<stamp>-<model>-<courier>.json` (+ `.md`); `eval/` is git-ignored. Results: §5.
 
+## 3ב. What the door does for a model that is almost right (v2.45)
+
+The family run (§5) showed that a 12B or a 4B-active MoE is *nearly* able to drive the copilot — and loses whole scenarios to three small habits, none of which is about understanding the owner. Each now has an answer in the tool loop; all three keep the rule that **nothing is written without ✓**.
+
+**1. The document is PRINTED instead of called.** After the door bounces a first proposal, gemma-4-12B and the 26B-A4B send the corrected page as a fenced document in the chat; the 12B does the same with a regrouped menu after `read_menus`; qwen3.6 does it for every page. For a page the chat has a "create from the reply" button (create only — useless for an edit); for a menu there is nothing to press. `ai.adoptPrintedDocument` adopts the document as the call it was meant to be, and it walks the same road a real call walks — preflight, the door's verdict back to the model under the adopted call's id, the approval card with its canvas:
+
+| printed | becomes | only when |
+|---|---|---|
+| `<bent-menus>…</bent-menus>` | `organize_menu` | `read_menus` ran **this turn** and the tool is declared |
+| `<!DOCTYPE html>…</html>` whose `bent-slug` (else the open page) names an existing page | `edit_page` | the model **read that page this turn** — an edit replaces the whole page |
+| … whose slug names no page | `create_page` | — |
+
+Never adopted: a reply that hit `max_tokens` (half a document), a tool the request did not declare (the lean 8K request has no menu tools), a turn where the owner asked to **see** the code ("תראה לי את הקוד" — printing is what they wanted), and a menu from a model that never read the menus — that is the v2.43 *weaker mode* and it stays describe-only (the tester's gate 3). The reply keeps the model's words and loses the document, so the page never shows two offers for one page; the owner is told once that the document was adopted. openai-chat shape only — the models that do this are local.
+
+**2. A closing tag that is ALMOST the open one.** `</bent/heading>`, `</int-hero>` (26B-A4B), `</bent_qa>` (12B) — and the model **repeats** the typo when the page is sent back: the same error twice in a row, ~30 s of GPU each, then it gives up. A closer has exactly one sane reading. `fixCloserTypos` (`src/pzn/repair.js`) rewrites it to the element that is open — only when the name is not a real tag, nothing on the open stack matches it, and it resembles the innermost open `bent-*` element (same name once `_ / .` read as `-`, same word after the first dash, or two edits away). Plain HTML closers are never touched; a clean document passes byte-identical. It runs inside `repair()` for every forgiving door (`CLOSER_TYPO`) and at the copilot's own strict door, **before** the proposal is shown — the card holds what the write will save.
+
+**3. The door said what was wrong, never what was right.** `<bent-pricing> cannot contain <bent-priceitem>` — twice in a row, because the answer (`bent-plan`) is one line in a 45K-char dictionary. `E_CHILD` now ends with `— it accepts: bent-plan, …` and `E_NOT_CONTAINER` with `— it is a leaf: its content goes in attributes (title, text, href …)`. (The keyword dialect's parser always said `allowed: …`.)
+
+And one honesty guard: when the door refused a proposal this turn and the model's last word is plain words — seen live: *"עדכנתי את כותרת ההירו"* with nothing proposed and nothing saved — the model's sentence stays and the truth goes beside it: **«ההצעה נפסלה בבדיקה… שום דבר לא נשמר ושום דבר לא השתנה, גם אם התשובה אומרת אחרת»**.
+
+The battery helps find these: with `--courier=relay` it sees every body the CMS composes, so its transcript keeps **what the door told the model** about each refused proposal (`↩` lines, `refusals` in the JSON) — that is how `</bent/heading>` and `bent-priceitem` were found.
+
 ## 4. The eval — the 99.9% instrument
 
 ```bash

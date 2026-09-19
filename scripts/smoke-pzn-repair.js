@@ -147,6 +147,43 @@ repairClean('hoist <bent-text> out of <bent-columns>', doc('    <bent-columns id
   check('  both texts survive as text modules', pzn.parse(t.source).body.map((n) => n.name).join(',') === 'text,text');
 }
 
+
+// ── v2.45: a closing tag that is ALMOST the open one. The copilot battery
+//    (2026-09-19): gemma-4-26B-A4B wrote `</bent/heading>` and `</int-hero>`,
+//    gemma-4-12B wrote `</bent_qa>` — and repeated the typo when the door sent
+//    the page back. A closer has one sane reading: the element that is open. ──
+{
+  const { fixCloserTypos } = require('../src/pzn/repair');
+  const fx = (s) => fixCloserTypos(s);
+  const a = fx('<bent-hero id="h"><bent-heading id="a" level="1">שלום</bent/heading></int-hero>');
+  check('</bent/heading> and </int-hero> are read as the elements that were open', a.fixed === 2 && a.source === '<bent-hero id="h"><bent-heading id="a" level="1">שלום</bent-heading></bent-hero>');
+  const b = fx('<bent-faq id="f"><bent-qa id="q" question="?">כן</bent_qa></bent-faq>');
+  check('</bent_qa> → </bent-qa>', b.fixed === 1 && /<\/bent-qa><\/bent-faq>$/.test(b.source));
+  check('two edits away (</bent-txt>) is a typo; a self-closed module before it is not "open"',
+    fx('<bent-image id="i" src="/x.webp" /><bent-text id="t">x</bent-txt>').source.endsWith('x</bent-text>'));
+  check('a plain HTML closer is never touched', fx('<bent-text id="t">a <b>bold</b> <p>para</p></bent-text>').fixed === 0);
+  check('a REAL other module as the closer is a structural error, not a typo — left for the parser to refuse',
+    fx('<bent-text id="t">x</bent-heading>').fixed === 0);
+  check('nothing open → nothing guessed', fx('x</bent/heading>').fixed === 0);
+  const clean = doc('<bent-section id="s">\n  <bent-heading id="h" level="2">א</bent-heading>\n</bent-section>');
+  check('a clean document passes through byte-identical', fx(clean).source === clean && fx(clean).fixed === 0);
+  const whole = repair(doc('<bent-heading id="h1" level="1">כותרת</bent/heading>\n<bent-text id="t1">טקסט</bent-text>'));
+  check('through repair(): the page lands, the change is named CLOSER_TYPO',
+    whole.ok && whole.remaining.length === 0 && whole.changes.some((c) => c.code === 'CLOSER_TYPO') &&
+    pzn.parse(whole.source).body.map((n) => n.name).join(',') === 'heading,text');
+}
+
+// ── v2.45: the validator names the fix, not only the fault (the 26B-A4B
+//    proposed bent-pricing ⊃ bent-priceitem twice in a row) ──
+{
+  const issues = pzn.validate(pzn.parse(doc('<bent-faq id="f">\n  <bent-fold id="x" title="שאלה">תשובה</bent-fold>\n</bent-faq>')), { strict: false }).filter((i) => i.severity === 'error');
+  const child = issues.find((i) => i.code === 'E_CHILD');
+  check('E_CHILD says what the container ACCEPTS', !!child && /cannot contain <bent-fold> — it accepts: .*bent-qa/.test(child.message));
+  const leafIssues = pzn.validate(pzn.parse(doc('<bent-button id="b" href="/x">\n  <bent-text id="t">טקסט</bent-text>\n</bent-button>')), { strict: false }).filter((i) => i.severity === 'error');
+  const leaf = leafIssues.find((i) => i.code === 'E_NOT_CONTAINER');
+  check('E_NOT_CONTAINER says the module is a leaf and names its attributes', !!leaf && /cannot have child modules — it is a leaf: its content goes in attributes \(.*href/.test(leaf.message));
+}
+
 console.log('');
 console.log(fail ? 'SMOKE PZN-REPAIR: FAIL' : 'SMOKE PZN-REPAIR: PASS');
 process.exit(fail ? 1 : 0);
