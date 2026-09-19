@@ -246,6 +246,42 @@ function deadLinks(source, baseline) {
 }
 const listed = (arr) => arr.slice(0, 6).join(', ') + (arr.length > 6 ? '…' : '');
 
+/** v2.47 — styling that does NOTHING here. Dreams D10 (gemma-4-31B, 2026-09-20): "אני רוצה שהאתר ירגיש
+ *  חם, את הצד בסגול, שהרקע יישאר במקום…" came back as `class="bg-purple-600 text-white py-2"` on every
+ *  module and `<body style="background-attachment: fixed">` — and the reply told the owner "הוספתי גוונים
+ *  של סגול… הגדרתי שהרקע יישאר במקומו". There is no Tailwind on a Tapuziel site and BenTML has no
+ *  `style=` (the parser drops it without a word; a class survives as a dead hook). Nothing she was told
+ *  happened. Only the unambiguous shapes of a utility framework are judged — `hero-dark` is an owner's own
+ *  hook for the theme skin and is none of the door's business. "New" = not already on the page. */
+const UTILITY_CLASS_RE = new RegExp('^(?:(?:sm|md|lg|xl|2xl|hover|focus|active|dark|group-hover):)*(?:' + [
+  '(?:bg|text|border|ring|from|via|to|fill|stroke|decoration|divide|outline|shadow)-(?:[a-z]+-)?\\d{2,3}(?:\\/\\d+)?',
+  '(?:bg|text|border)-(?:white|black|transparent|current|primary|secondary|success|danger|warning|info|light|dark|muted)',
+  '-?(?:p|m|px|py|pt|pb|pl|pr|ps|pe|mx|my|mt|mb|ml|mr|ms|me|gap|gap-x|gap-y|space-x|space-y|w|h|min-w|min-h|max-w|max-h|top|left|right|bottom|inset|z|basis)-(?:\\d+(?:[./]\\d+)?|px|auto|full|screen|\\[[^\\]]+\\])',
+  'max-w-(?:xs|sm|md|lg|xl|[2-7]xl|prose|screen-[a-z0-9]+)',
+  'rounded-(?:none|sm|md|lg|xl|[23]xl|full|[trblse]{1,2}(?:-[a-z0-9]+)?)',
+  'shadow-(?:sm|md|lg|xl|2xl|inner|none)',
+  'font-(?:thin|extralight|light|normal|medium|semibold|bold|extrabold|black|sans|serif|mono)',
+  'text-(?:xs|sm|base|lg|xl|[2-9]xl|center|left|right|justify|start|end)',
+  '(?:items|justify|content|self|place-items)-(?:start|end|center|between|around|evenly|stretch|baseline)',
+  'grid-cols-\\d+|col-span-\\d+|col-(?:xs|sm|md|lg|xl|xxl)-\\d+|row-cols-\\d+',
+  'd-(?:flex|none|block|inline|grid)|btn-[a-z-]+|(?:bg|text)-gradient-to-[a-z]+',
+  'tracking-[a-z]+|leading-(?:\\d+|none|tight|snug|normal|relaxed|loose)|opacity-\\d+|duration-\\d+|ease-[a-z-]+|animate-[a-z]+|backdrop-blur(?:-[a-z0-9]+)?|bg-(?:fixed|cover|center|no-repeat)|object-(?:cover|contain)'
+].join('|') + ')$');
+function deadStyling(source, baseline) {
+  const seen = (text, re) => { const set = new Set(); String(text || '').replace(re, (m, q, a, b) => { set.add(String(a != null ? a : b).trim()); return m; }); return set; };
+  const STYLE_RE = /\sstyle\s*=\s*("([^"]*)"|'([^']*)')/gi;
+  const CLASS_RE = /\sclass\s*=\s*("([^"]*)"|'([^']*)')/gi;
+  const hadStyle = seen(baseline, STYLE_RE); const hadClass = seen(baseline, CLASS_RE);
+  const dead = [];
+  for (const v of seen(source, STYLE_RE)) if (v && !hadStyle.has(v)) dead.push('style="' + v.slice(0, 40) + (v.length > 40 ? '…' : '') + '"');
+  for (const v of seen(source, CLASS_RE)) {
+    if (!v || hadClass.has(v)) continue;
+    const util = v.split(/\s+/).filter((t) => UTILITY_CLASS_RE.test(t));
+    if (util.length) dead.push('class="' + util.slice(0, 4).join(' ') + (util.length > 4 ? ' …' : '') + '"');
+  }
+  return dead;
+}
+
 /** The door, for both the preflight and the write — one parse, one verdict.
  *  `opts.brief` is the owner's own message: the door judges LAYOUT_UNASKED
  *  against what the OWNER asked, never against the model's account of it. */
@@ -421,8 +457,16 @@ function preflight(name, args, opts) {
 function pageInventions(source, baseline, opts) {
   const images = missingImages(source, baseline);
   const links = deadLinks(source, baseline);
-  if ((images.length || links.length) && !(opts && opts.inventionsAsked)) {
+  const styling = deadStyling(source, baseline);
+  if ((images.length || links.length || styling.length) && !(opts && opts.inventionsAsked)) {
     const parts = [];
+    if (styling.length) {
+      parts.push(styling.length + ' מאפייני עיצוב במסמך לא עושים כלום באתר הזה: ' + listed(styling) + '. אין כאן Tailwind/Bootstrap ואין `style=` — ' +
+        'הם נזרקים או נשארים מתים, והגולשים לא יראו שום שינוי. מראה של מודול משנים רק במאפיינים שבמילון (למשל `tone=`, `variant=`, `align=`). ' +
+        'צבעי האתר, הגופנים, רקע האתר (גם רקע שנשאר במקום בגלילה) ותפריט בצד שייכים ל**ערכת הנושא** — אין לך כלי לזה: ' +
+        'אמור/י לבעל/ת האתר שזה במסך **עיצוב ← ערכת נושא** (`/admin/theme`), שיש שם מעצב/ת AI שמקבל/ת תיאור במילים, והצע/י ניסוח לתיאור. ' +
+        'הסר/י את ה-class/style האלה, ואל תכתוב/תכתבי שצבעת או קיבעת משהו שלא נעשה.');
+    }
     if (images.length) {
       parts.push(images.length + ' תמונות במסמך לא קיימות באתר: ' + listed(images) + '. אל תמציא/י נתיבי תמונה — כל אחד מהם יהיה תמונה שבורה מול הגולשים. ' +
         'השתמש/י רק בנתיבים מרשימת המדיה; אם אין תמונה מתאימה — בנה/י את החלק הזה בלי תמונה (טקסט, כרטיסים, יתרונות).');
@@ -439,6 +483,7 @@ function pageInventions(source, baseline, opts) {
   const notes = [];
   if (images.length) notes.push(images.length + ' תמונות בהצעה לא קיימות באתר (' + listed(images) + ') — הן יוצגו שבורות עד שתבחרו תמונות בבונה.');
   if (links.length) notes.push(links.length + ' קישורים מובילים לדפים שעדיין לא קיימים (' + listed(links) + ') — צרו אותם, או שנו את הקישור בבונה לפני הפרסום.');
+  if (styling.length) notes.push('בהצעה יש ' + styling.length + ' מאפייני class/style שאין להם משמעות באתר (' + listed(styling) + ') — הם לא ישנו את המראה, גם אם התשובה אומרת אחרת. צבעים, רקע ותפריט בצד משנים במסך עיצוב ← ערכת נושא.');
   return notes.length ? { notes } : undefined;
 }
 
@@ -554,4 +599,4 @@ function toolsForProvider(style, opts) {
   return list.map((t) => ({ name: t.name, description: t.description, input_schema: t.schema }));
 }
 
-module.exports = { TOOLS, MENU_TOOLS, getTool, describeCall, toolsForProvider, preflight, MAX_SOURCE, missingImages, deadLinks };
+module.exports = { TOOLS, MENU_TOOLS, getTool, describeCall, toolsForProvider, preflight, MAX_SOURCE, missingImages, deadLinks, deadStyling };

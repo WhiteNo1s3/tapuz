@@ -60,6 +60,7 @@ const VARIANT = String(flag('variant', 'A'));
 const PROVIDER = String(flag('provider', 'cms'));
 const REPAIR = !!flag('repair', false);
 const TEMPERATURE = Number(flag('temperature', 0.3));
+const BRIEFS = String(flag('briefs', 'spec')) === 'dreams' ? 'dreams' : 'spec'; // dreams = an owner's sentences, judged by her questions
 const STAMP = new Date().toISOString().slice(0, 10);
 
 require('../src/db');
@@ -95,6 +96,89 @@ const MENU_BRIEFS = [
   'סדר לי את התפריט — הדגש את יצירת הקשר',
   'תפריט קצר: עד 5 פריטים למעלה, השאר בתפריטי משנה'
 ];
+
+// ── the DREAMS (Ben, 2026-09-20): "we cannot talk robot to the robot … it must be 'I want the theme to be
+//    warm, I want the side in purple, a background that stays still while scrolling, a moving message I can
+//    change on the go'." The briefs above are a designer's checklist; these are what an owner says — and
+//    each carries the questions SHE would ask of what came back (`--briefs=dreams`).
+const hsl = (hex) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16); const r = ((n >> 16) & 255) / 255; const g = ((n >> 8) & 255) / 255; const b = (n & 255) / 255;
+  const max = Math.max(r, g, b); const min = Math.min(r, g, b); const l = (max + min) / 2; const d = max - min;
+  let h = 0; const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: (h * 60 + 360) % 360, s, l };
+};
+const lum = (hex) => { const c = hsl(hex); if (!c) return null; const n = parseInt(String(hex).replace('#', ''), 16); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255); };
+const contrast = (a, b) => { const x = lum(a); const y = lum(b); if (x == null || y == null) return 0; return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+const inHue = (hex, from, to, minS = 0.15) => { const c = hsl(hex); return !!c && c.s >= minS && (from <= to ? c.h >= from && c.h <= to : c.h >= from || c.h <= to); };
+const warm = (hex) => inHue(hex, 335, 55);
+const purple = (hex) => inHue(hex, 255, 320, 0.2);
+const green = (hex) => inHue(hex, 75, 170, 0.15);
+const gold = (hex) => inHue(hex, 30, 58, 0.3);
+const allCss = (o) => [(o.skin || {}).css, (o.effects || {}).css].filter(Boolean).join('\n');
+const hexesIn = (css) => (String(css).match(/#[0-9a-f]{6}\b/gi) || []);
+const col = (o, k) => (o.colors || {})[k];
+// the declarations of every skin rule that targets the header / the side rail
+const railRules = (css) => [...String(css).matchAll(/([^{}]*)\{([^{}]*)\}/g)].filter((m) => /menu-side|site-header|header-inner|main-nav/.test(m[1])).map((m) => m[2]);
+const THEME_DREAMS = [
+  {
+    brief: 'אני רוצה שהאתר ירגיש חם. את הצד אני רוצה בסגול. שהרקע יישאר במקום כשגוללים, ושתהיה לי הודעה שזזה, כזאת שאני יכולה לשנות מתי שבא לי.',
+    asks: [
+      ['hard', 'it feels warm — the page or its main colour is a warm one', (o) => warm(col(o, 'bg')) || warm(col(o, 'lightBg')) || warm(col(o, 'primary'))],
+      ['hard', '"the side": the menu is a side rail', (o) => (o.layout || {}).menuPlacement === 'side'],
+      ['hard', '…and THE SIDE is purple — the colour of the rail itself (header-bg), or a skin rule that paints the rail', (o) => purple((o.chrome || {}).headerBg) || railRules(allCss(o)).some((body) => hexesIn(body).some(purple))],
+      ['hard', 'the background stays still while she scrolls', (o) => /background-attachment\s*:\s*fixed/i.test(allCss(o)) || /(?:body|html)[^{}]*(?:::?before|::?after)\s*\{[^}]*position\s*:\s*fixed/i.test(allCss(o))],
+      ['soft', 'the moving message: a theme cannot put one on a page — but it dresses the ticker, or says so', (o, t, reply) => /\.bent-(?:ticker|marquee)/.test(allCss(o)) || /טיקר|מבזק|הודעה (?:נעה|רצה|זזה)|marquee|ticker/i.test(String((o.skin || {}).note || '') + ' ' + String(reply).replace(/<bent-theme[\s\S]*<\/bent-theme>/, ''))]
+    ]
+  },
+  {
+    brief: 'אני רוצה משהו נקי ורגוע, כמו קליניקה. לא צועק. הרבה לבן, ומגע של ירוק.',
+    asks: [
+      ['hard', 'a lot of white — the page is light', (o) => { const c = hsl(col(o, 'bg')); return !!c && c.l >= 0.92; }],
+      ['hard', 'a touch of green', (o) => green(col(o, 'primary')) || green(col(o, 'secondary'))],
+      ['hard', '"not shouting": nothing moves by itself (no effect script)', (o) => !String((o.effects || {}).js || '').trim()],
+      ['soft', '…and no heavy shadows', (o) => (o.style || {}).shadow !== 'deep']
+    ]
+  },
+  {
+    brief: 'האתר שלי נראה כמו משנות התשעים. תעשה אותו מודרני, כהה כזה, כמו של חברות הייטק.',
+    asks: [
+      ['hard', 'dark — the page background is dark', (o) => { const c = hsl(col(o, 'bg')); return !!c && c.l <= 0.2; }],
+      ['hard', '…and she can still read it (text on background ≥ 4.5)', (o) => contrast(col(o, 'text'), col(o, 'bg')) >= 4.5],
+      ['soft', 'cards are readable too (text on surface ≥ 4.5)', (o) => contrast(col(o, 'text'), col(o, 'surface')) >= 4.5]
+    ]
+  },
+  {
+    brief: 'הלקוחות שלי מבוגרים. אני רוצה שיהיה קל לקרוא — אותיות גדולות, ניגודיות טובה, ובלי דברים שקופצים.',
+    asks: [
+      ['hard', 'big letters (base size 18px or more)', (o) => parseFloat((o.fonts || {}).baseSize) >= 18],
+      ['hard', 'good contrast (text on background ≥ 7)', (o) => contrast(col(o, 'text'), col(o, 'bg')) >= 7],
+      ['hard', 'nothing jumps (no effect script, no animation in the skin)', (o) => !String((o.effects || {}).js || '').trim() && !/@keyframes|animation\s*:/i.test(allCss(o))]
+    ]
+  },
+  {
+    brief: 'אני מוכרת תכשיטים בעבודת יד. שיהיה יוקרתי אבל לא קר — זהב עדין, הרבה אוויר, ושהכותרות ירגישו כמו הזמנה לחתונה.',
+    asks: [
+      ['hard', 'gold is there', (o) => gold(col(o, 'primary')) || gold(col(o, 'secondary')) || hexesIn(allCss(o)).some(gold)],
+      ['hard', '"not cold": the page colour is not a cold one', (o) => !inHue(col(o, 'bg'), 170, 260, 0.08)],
+      ['hard', 'the headlines have their own face (a heading font that is not the body font)', (o) => { const f = o.fonts || {}; return !!String(f.headingFamily || '').trim() && String(f.headingFamily).trim() !== String(f.family || '').trim(); }],
+      ['soft', 'that face is loaded (it is on the Google shelf list)', (o) => { const f = o.fonts || {}; const first = String(f.headingFamily || '').split(',')[0].replace(/["']/g, '').trim(); return !!first && (f.google || []).some((g) => String(g).trim() === first); }]
+    ]
+  }
+];
+const PAGE_DREAMS = [
+  { brief: 'אני פותחת סטודיו קטן לקרמיקה ביפו. אני רוצה דף שירגיש חם וביתי, שאנשים יבינו מי אני וירצו לבוא לסדנה אצלי.', words: ['קרמיקה', 'יפו', 'סדנ'] },
+  { brief: 'אני מוכר דבש מהגליל, של המשפחה שלי, כבר שלושה דורות. תעשה לי דף שגורם לאנשים להזמין.', words: ['דבש', 'גליל', 'דורות'] },
+  { brief: 'אני מאמן כושר אישי ברעננה, בעיקר לאנשים אחרי גיל חמישים שמפחדים להתחיל. אני רוצה דף שמרגיע אותם ומסביר איך זה עובד אצלי.', words: ['כושר', 'רעננה', 'חמישים'] },
+  { brief: 'יש לנו צימר בגולן, שתי יחידות, בריכה מחוממת, מתאים לזוגות. אנשים תמיד שואלים אותנו אותן שאלות בטלפון — אני רוצה דף שעונה על הכול ושיהיה אפשר להזמין.', words: ['צימר', 'גולן', 'בריכה'] },
+  { brief: 'אני עורכת דין לענייני משפחה בחיפה. אני לא רוצה שזה ייראה כמו כל האתרים של עורכי הדין — שיהיה אנושי, שירגישו שאפשר לדבר איתי.', words: ['משפחה', 'חיפה'] }
+];
+/** The owner's questions, asked of a landed theme → [{kind, name, ok}] */
+function askTheme(c, t, reply) {
+  return (c.asks || []).map(([kind, name, test]) => { let ok = false; try { ok = !!test(t.overrides || {}, t, reply); } catch (e) { ok = false; } return { kind, name, ok }; });
+}
 
 // ── talking to the model ──────────────────────────────────────────────
 /** direct: one raw chat/completions call (no CMS pipeline) — for speed when
@@ -154,31 +238,42 @@ function packs() {
   list.push({
     id: 'theme-designer',
     maxTokens: 6000,
-    cases: THEME_BRIEFS.map((brief, i) => ({ name: 'brief-' + (i + 1), brief })),
+    cases: BRIEFS === 'dreams'
+      ? THEME_DREAMS.map((d, i) => ({ name: 'dream-' + (i + 1), brief: d.brief, asks: d.asks }))
+      : THEME_BRIEFS.map((brief, i) => ({ name: 'brief-' + (i + 1), brief })),
     prompt: (c) => themeRp.buildThemePrompt({ siteTitle: 'פרחי נועה', description: 'חנות פרחים', brief: c.brief }).text,
-    judge: (reply) => {
+    judge: (reply, c) => {
       const t = theme.extractThemeReply(reply, 'eval');
       let bench = { blocks: [], warnings: [] };
       let benchError = '';
       if (t.specimen) { try { bench = require('../src/theme-canvas').blocksFromSource(t.specimen); } catch (e) { benchError = e.message; } }
       const sections = Object.keys(t.overrides).length;
-      return { landed: true, pass: sections >= 4 && !benchError, sections, warnings: t.warnings, repairs: bench.warnings, benchBlocks: bench.blocks.length, benchError, hasSkin: !!(t.overrides.skin && t.overrides.skin.css), hasEffect: !!(t.overrides.effects && t.overrides.effects.js) };
+      // a dream is passed when the theme is sound AND she got what she asked for (every hard ask)
+      const asked = askTheme(c || {}, t, reply);
+      const structural = sections >= 4 && !benchError;
+      return { landed: true, pass: structural && asked.filter((a) => a.kind === 'hard').every((a) => a.ok), structural, asked, sections, warnings: t.warnings, repairs: bench.warnings, benchBlocks: bench.blocks.length, benchError, hasSkin: !!(t.overrides.skin && t.overrides.skin.css), hasEffect: !!(t.overrides.effects && t.overrides.effects.js) };
     }
   });
   const rp = require('../src/pzn/agent-roleplay');
   const { pznSourceToBlocks } = require('../src/pzn-source');
-  const judgePage = (reply) => {
+  const judgePage = (reply, c) => {
     const r = pznSourceToBlocks(reply);
     const count = (list) => list.reduce((n, b) => n + 1 + (b.data && Array.isArray(b.data.blocks) ? count(b.data.blocks) : 0) + (b.data && Array.isArray(b.data.columns) ? b.data.columns.reduce((m, c) => m + count(c.blocks || []), 0) : 0), 0);
     const blocks = count(r.view.blocks || []);
     const htmlBlocks = JSON.stringify(r.view.blocks).split('"type":"html"').length - 1;
-    return { landed: true, pass: blocks >= 3 && htmlBlocks === 0, blocks, repairs: (r.changes || []).map((c) => c.code || c.message), warnings: (r.extracted || []).map((c) => c.code), repaired: !!r.repaired, htmlBlocks };
+    const said = String(reply).replace(/<[^>]+>/g, ' ') + ' ' + [...String(reply).matchAll(/\b(?:title|text|subtitle|label|question|answer|caption|quote)="([^"]*)"/g)].map((m) => m[1]).join(' ');
+    const hers = ((c && c.words) || []).filter((w) => said.includes(w));
+    const asked = c && c.words ? [{ kind: 'hard', name: 'it speaks about HER business (' + hers.length + '/' + c.words.length + ' of her own words)', ok: hers.length >= Math.min(2, c.words.length) }, { kind: 'hard', name: 'it is a page, not a stub (6+ modules)', ok: blocks >= 6 }] : [];
+    const structural = blocks >= 3 && htmlBlocks === 0;
+    return { landed: true, pass: structural && asked.every((a) => a.ok), structural, asked, blocks, repairs: (r.changes || []).map((c) => c.code || c.message), warnings: (r.extracted || []).map((c) => c.code), repaired: !!r.repaired, htmlBlocks };
   };
   for (const size of ['lite', 'full']) {
     list.push({
       id: 'site-builder-' + size,
       maxTokens: 6000,
-      cases: PAGE_BRIEFS.map((brief, i) => ({ name: 'brief-' + (i + 1), brief })),
+      cases: BRIEFS === 'dreams'
+        ? PAGE_DREAMS.map((d, i) => ({ name: 'dream-' + (i + 1), brief: d.brief, words: d.words }))
+        : PAGE_BRIEFS.map((brief, i) => ({ name: 'brief-' + (i + 1), brief })),
       prompt: (c) => rp.buildRoleplayPack({ locale: 'he', size, playerBrief: c.brief, media: [] }).text,
       judge: judgePage
     });
@@ -353,7 +448,8 @@ const ADVICE = {
           (r.coverage != null ? ` · cov ${r.coverage}%` : '') +
           (r.rowsNow != null ? ` · rows ${r.rowsNow}/${r.capacity}` : '') +
           (r.repairs && r.repairs.length ? ' · repairs: ' + r.repairs.length : '') +
-          (r.warnings && r.warnings.length ? ' · ' + r.warnings.slice(0, 6).join(',') : ''));
+          (r.warnings && r.warnings.length ? ' · ' + r.warnings.slice(0, 6).join(',') : '') +
+          (r.asked && r.asked.length ? ' · asked ' + r.asked.filter((a) => a.ok).length + '/' + r.asked.length + (r.asked.some((a) => !a.ok) ? ' — missed: ' + r.asked.filter((a) => !a.ok).map((a) => (a.kind === 'soft' ? '~' : '✗') + a.name.slice(0, 60)).join(' | ') : '') : ''));
       }
     }
   }
@@ -404,6 +500,16 @@ const ADVICE = {
       '| Fixture | Runs | PASS | Strict | Avg coverage | Avg s | Top codes |',
       '|---|---|---|---|---|---|---|',
       ...fixtureRows.map((f) => `| ${f.fixture} | ${f.runs} | ${f.pass} (${pct(f.pass, f.runs)}%) | ${f.strict} | ${Math.round(f.cov / f.runs)}% | ${Math.round(f.secs / f.runs)} | ${Object.entries(f.codes).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([c, n]) => `${c}×${n}`).join(' ') || '—'} |`),
+      ''
+    ] : []),
+    ...(results.some((r) => r.asked && r.asked.length) ? [
+      '## What the owner asked for (`--briefs=dreams`)',
+      '',
+      'An owner\'s sentence has no spec. Each dream carries the questions SHE would ask of what came back; a run passes when the result is sound **and** every hard ask is met.',
+      '',
+      '| Pack · dream | Runs | PASS | Asks met | What was missed |',
+      '|---|---|---|---|---|',
+      ...Object.values(results.filter((r) => r.asked && r.asked.length).reduce((acc, r) => { const k = r.pack + ' · ' + r.fixture; const row = acc[k] = acc[k] || { k, brief: r.brief, runs: 0, pass: 0, met: 0, of: 0, missed: {} }; row.runs++; if (r.pass) row.pass++; for (const a of r.asked) { row.of++; if (a.ok) row.met++; else row.missed[a.name] = (row.missed[a.name] || 0) + 1; } return acc; }, {})).map((row) => `| ${row.k} — “${String(row.brief).slice(0, 70)}…” | ${row.runs} | ${row.pass} | ${row.met}/${row.of} | ${Object.entries(row.missed).map(([n, x]) => `${n.slice(0, 70)} ×${x}`).join(' · ') || '—'} |`),
       ''
     ] : []),
     '## What the doors had to do (most frequent first)',

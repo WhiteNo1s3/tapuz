@@ -603,9 +603,10 @@ async function judgeLandedPage(chat, c, slug, dream) {
   // — no inventions —
   const real = new Set(site.slugs());
   const hrefs = [...src.matchAll(/\b(?:href|ctaUrl|url)="([^"]+)"/g)].map((m) => m[1]);
-  const dead = hrefs.filter((h) => h.startsWith('/') && h !== '/' && !real.has(decodeURIComponent(h.replace(/^\/+/, '').replace(/\.html$/, '').replace(/#.*$/, ''))));
+  const was = String(dream.baseline || ''); // an existing page: what was already there is the owner's, not the model's
+  const dead = hrefs.filter((h) => h.startsWith('/') && h !== '/' && !was.includes('"' + h + '"') && !real.has(decodeURIComponent(h.replace(/^\/+/, '').replace(/\.html$/, '').replace(/#.*$/, ''))));
   c.soft('its links lead somewhere that exists' + (dead.length ? ' (dead: ' + dead.slice(0, 3).join(', ') + ')' : ''), dead.length === 0);
-  const imgs = [...src.matchAll(/\b(?:src|image)="([^"]+)"/g)].map((m) => m[1]).filter((u) => u && !/^(?:https?:|data:)/.test(u));
+  const imgs = [...src.matchAll(/\b(?:src|image)="([^"]+)"/g)].map((m) => m[1]).filter((u) => u && !/^(?:https?:|data:)/.test(u) && !was.includes('"' + u + '"'));
   c.soft('no invented image path (the site has no uploads yet)' + (imgs.length ? ' (' + imgs.slice(0, 2).join(', ') + ')' : ''), imgs.length === 0);
 }
 
@@ -657,6 +658,7 @@ const DREAMS = [
     run: async (chat, c) => {
       const slug = 'היסודות';
       const live = site.published(slug);
+      const was = site.draft(slug);
       const before = flatBlocks(require('../src/pzn-source').pznSourceToBlocks(site.draft(slug)).view.blocks).length;
       const d = await dreamTurn(chat, c, 'הדף הזה נראה לי יבש ומשעמם. תן לו קצת חיים, אבל אל תמחק לי מה שכתבתי.', onPage(slug));
       c.hard('the turn completes', !!d.ok);
@@ -667,7 +669,7 @@ const DREAMS = [
       c.hard('what the owner wrote is still there', draft.includes(MARK(slug)));
       c.hard('the page grew (it had ' + before + ' modules)', flatBlocks(require('../src/pzn-source').pznSourceToBlocks(draft).view.blocks).length > before);
       c.hard('the PUBLISHED page did not move', site.published(slug) === live);
-      await judgeLandedPage(chat, c, slug, { existing: true, words: [] });
+      await judgeLandedPage(chat, c, slug, { existing: true, words: [], baseline: was });
     }
   },
   {
@@ -746,7 +748,7 @@ const DREAMS = [
       c.soft('…and it says it is the HOLIDAY sale, as she did', /חג/.test(draft));
       c.hard('what was there before is still there', draft.includes(MARK(slug)));
       c.hard('the PUBLISHED page did not move', site.published(slug) === live);
-      await judgeLandedPage(chat, c, slug, { existing: true, words: ['מבצע', 'הנחה'] });
+      await judgeLandedPage(chat, c, slug, { existing: true, words: ['מבצע', 'הנחה'], baseline: live });
     }
   },
   {
@@ -776,6 +778,155 @@ const DREAMS = [
       c.hard('the sentence is there (free · no credit card)', /חינם/.test(draft) && /אשראי/.test(draft));
       c.hard('the rest of the page survived', draft.includes(MARK(slug)) && /<bent-button/.test(draft));
       c.hard('the PUBLISHED page did not move', site.published(slug) === live);
+    }
+  },
+  // ── D9–D14 (Ben, 2026-09-20): "we cannot talk robot to the robot … think about humans, what they ask
+  //    you to do all the time — that is the attitude." A pasted document, a look-and-feel wish, "too long",
+  //    a customer's words, "put it back", new opening hours.
+  {
+    id: 'D9', name: 'a long document of her own, pasted: "make it beautiful, with chapters, spread the information with elegance"',
+    run: async (chat, c) => {
+      if (WINDOW && WINDOW < 16000) return c.note('skipped — a pasted document does not fit a ' + WINDOW + ' window');
+      const doc = fs.readFileSync(path.join(__dirname, '..', 'test', 'fixtures', 'battery', 'owner-doc-harry-potter.he.txt'), 'utf8').trim();
+      const dream = { words: ['הארי פוטר', 'ינשוף הדואר', 'הוגוורטס', 'מועדון'], minModules: 8 };
+      const d = await dreamTurn(chat, c, 'אני רוצה לכתוב דף על הארי פוטר ועל המועדון שלנו. כתבתי לעצמי מסמך עם כל המידע, הנה הוא למטה. אני רוצה שזה ייצא יפה, עם פרקים, ושתפזר את המידע באלגנטיות — לא גוש אחד של טקסט.\n\n' + doc);
+      c.hard('the turn completes', !!d.ok);
+      const slug = await landDream(chat, c, d, dream);
+      c.hard('the document became a page proposal', !!slug);
+      if (!slug) return;
+      await judgeLandedPage(chat, c, slug, dream);
+      const src = site.draft(slug);
+      const words = src.replace(/<[^>]+>/g, ' ') + ' ' + [...src.matchAll(/\b(?:title|text|subtitle|label|question|answer|caption|quote|alt|value|items|features)="([^"]*)"/g)].map((m) => m[1]).join(' ');
+      // chapters: titled units a reader can jump between
+      const chapters = (src.match(/<bent-heading[^>]*level="[23]"/g) || []).length + (src.match(/<bent-(?:fold|tab)\b[^>]*\btitle="/g) || []).length;
+      c.hard('it has chapters (4+ titled parts — it had ' + chapters + ')', chapters >= 4);
+      // HER facts — the ones no model knows from its training (the club, the day, the phone)…
+      const HERS = [/ינשוף הדואר/, /שלישי/, /19:00/, /רחובות/, /08-?5550142/, /שלושים ושניים|32/, /ל"ג בעומר|ל״ג בעומר|לג בעומר/, /כרטיס קורא/];
+      const hers = HERS.filter((re) => re.test(words)).length;
+      c.hard('HER OWN facts made it to the page — the club, the day, the hour, the phone (' + hers + '/' + HERS.length + ', 6+ needed)', hers >= 6);
+      // …and the world's facts she bothered to write down
+      const FACTS = [/1997/, /2007/, /רולינג/, /בר[- ]הלל/, /גריפינדור/, /הפלפאף/, /רייבנקלו/, /סלית['׳’]?רין/, /הרמיוני/, /רון/, /דמבלדור/, /סנייפ/, /וולדמורט/, /קווידיץ/, /שמונה סרטים|8 סרטים/, /אבן החכמים/, /אוצרות המוות/, /תשע ושלושה רבעים/, /500 מיליון/, /80 שפות/];
+      const facts = FACTS.filter((re) => re.test(words)).length;
+      c.hard('the information is there (' + facts + '/' + FACTS.length + ' of the facts she wrote, 14+ needed)', facts >= 14);
+      c.soft('nearly all of it (18+ of ' + FACTS.length + ')', facts >= 18);
+      const types = new Set(flatBlocks(require('../src/pzn-source').pznSourceToBlocks(src).view.blocks).map((b) => b.type));
+      const elegant = [...types].filter((t) => !/^(?:heading|text|section|button|spacer|divider|hero|col|columns)$/.test(t));
+      c.soft('"with elegance": more than headings and paragraphs (3+ other kinds of module — it used: ' + (elegant.join(', ') || 'none') + ')', elegant.length >= 3);
+      const longest = Math.max(0, ...[...src.matchAll(/<bent-text[^>]*>([\s\S]*?)<\/bent-text>/g)].map((m) => (m[1].match(/[֐-׿]/g) || []).length));
+      c.soft('"not one block of text": no paragraph longer than 600 letters (the longest has ' + longest + ')', longest <= 600);
+    }
+  },
+  {
+    id: 'D10', name: 'a look-and-feel wish: "warm, the side in purple, a background that stays still, a moving message I can change"',
+    run: async (chat, c) => {
+      const slug = 'הבונה';
+      const live = site.published(slug);
+      const wasAll = new Map(site.slugs().map((p) => [p, site.draft(p)]));
+      const d = await dreamTurn(chat, c, 'אני רוצה שהאתר ירגיש חם. את הצד אני רוצה בסגול. שהרקע יישאר במקום כשגוללים, ושתהיה לי הודעה שזזה, כזאת שאני יכולה לשנות מתי שבא לי.', onPage(slug));
+      c.hard('the turn completes', !!d.ok);
+      // the part that is in its hands: the moving message is a MODULE on a page — that one it can do, on a card
+      c.hard('it does the part it can: a page card', !!(d.pending && /edit_page|create_page/.test(d.pending.tool)));
+      const said = [d.reply, d.memo].join(' ');
+      if (d.pending && /edit_page|create_page/.test(d.pending.tool)) {
+        const ok = await chat.answer(d.pending, true);
+        const at = (ok.applied && ok.applied.slug) || slug;
+        const draft = site.draft(at);
+        c.hard('the moving message is on the page — a marquee or a ticker she can edit in the builder', /<bent-(?:marquee|ticker)\b/.test(draft));
+        if (at === slug) c.hard('the rest of the page survived', draft.includes(MARK(slug)));
+        c.hard('the PUBLISHED page did not move', site.published(slug) === live);
+        await judgeLandedPage(chat, c, at, { existing: true, words: [], baseline: wasAll.get(at) || '' });
+        c.soft('it is honest about the rest: colours and the side menu are the THEME, and it says where that lives', /ערכת[- ]?ה?נושא|מסך העיצוב|עיצוב האתר|\/admin\/theme|theme/i.test(said + ' ' + (ok.reply || '') + ' ' + (ok.memo || '')));
+      } else {
+        c.soft('it is honest about the rest: colours and the side menu are the THEME, and it says where that lives', /ערכת[- ]?ה?נושא|מסך העיצוב|עיצוב האתר|\/admin\/theme|theme/i.test(said));
+      }
+    }
+  },
+  {
+    id: 'D11', name: '"this page is too long, nobody will read it — shorten it, but keep the phone and the prices"',
+    run: async (chat, c) => {
+      const source = fs.readFileSync(path.join(__dirname, '..', 'test', 'fixtures', 'battery', 'long-page-flowers.pzn.html'), 'utf8');
+      const made = await req('POST', '/admin/api/pzn/create-from-source', { cookie: chat.cookie, json: { source } });
+      const slug = (made.json && made.json.fullPath) || '';
+      c.hard('the owner\'s long page exists (fixture)', !!slug);
+      if (!slug) return;
+      const letters = (s) => (String(s).replace(/<[^>]+>/g, ' ').match(/[֐-׿]/g) || []).length;
+      const before = letters(site.draft(slug));
+      const was = site.draft(slug);
+      const d = await dreamTurn(chat, c, 'הדף הזה ארוך מדי, אף אחד לא יקרא את כל זה. תקצר אותו שיהיה קליל, אבל שהטלפון והמחירים יישארו.', onPage(slug));
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it proposes an edit of THIS page', !!(d.pending && d.pending.tool === 'edit_page' && String((d.pending.input || {}).slug || '') === slug));
+      if (!(d.pending && d.pending.tool === 'edit_page')) return;
+      await chat.answer(d.pending, true);
+      const draft = site.draft(slug);
+      const after = letters(draft);
+      c.hard('it IS shorter — at most two thirds of what it was (' + before + ' → ' + after + ' letters)', after > 0 && after <= before * 0.67);
+      c.hard('the phone stayed, digit for digit', /03-?5550188/.test(draft));
+      c.hard('the prices stayed (₪180 · ₪320)', /180/.test(draft) && /320/.test(draft));
+      c.soft('it is still HER page — her name, her street', /נועה/.test(draft) && /הרצל 12/.test(draft));
+      c.soft('it did not shrink to a stub (a third of the letters are still there)', after >= before * 0.2);
+      await judgeLandedPage(chat, c, slug, { existing: true, words: [], baseline: was });
+    }
+  },
+  {
+    id: 'D12', name: 'a customer\'s words: "add a recommendation from Dana — she wrote me: …" (verbatim, not improved)',
+    run: async (chat, c) => {
+      const slug = 'הלקוחות';
+      const target = site.slugs().includes(slug) ? slug : 'היסודות';
+      const live = site.published(target);
+      const QUOTE = 'הזמנתי זר ליום ההולדת של אמא והוא הגיע בדיוק בזמן, טרי ומהמם. אמא התרגשה עד דמעות';
+      const d = await dreamTurn(chat, c, 'תוסיף לדף הזה המלצה של לקוחה שלי, דנה מרמת גן. היא כתבה לי: "' + QUOTE + '."', onPage(target));
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it proposes an edit of this page', !!(d.pending && d.pending.tool === 'edit_page' && String((d.pending.input || {}).slug || '') === target));
+      if (!(d.pending && d.pending.tool === 'edit_page')) return;
+      await chat.answer(d.pending, true);
+      const draft = site.draft(target);
+      const flat = (s) => String(s).replace(/&quot;|["״”“]/g, '').replace(/\s+/g, ' ');
+      c.hard('Dana\'s words are there AS SHE WROTE THEM — not rephrased, not "improved"', flat(draft).includes(flat(QUOTE)));
+      c.hard('it says who said it (דנה)', /דנה/.test(draft));
+      c.soft('…and where she is from (רמת גן)', /רמת[- ]גן/.test(draft));
+      c.soft('it sits in a module made for it (testimonial / quote)', /<bent-(?:testimonial|quote)\b/.test(draft));
+      c.hard('what was there before is still there', draft.includes(MARK(target)));
+      c.hard('the PUBLISHED page did not move', site.published(target) === live);
+    }
+  },
+  {
+    id: 'D13', name: '"oh no, I don\'t like it — put the page back the way it was"',
+    run: async (chat, c) => {
+      const slug = 'השפה';
+      const target = site.slugs().includes(slug) ? slug : 'היסודות';
+      const original = site.draft(target);
+      const kinds = (s) => flatBlocks(require('../src/pzn-source').pznSourceToBlocks(s).view.blocks).map((b) => b.type).join();
+      const first = await dreamTurn(chat, c, 'תוסיף בראש הדף הזה באנר: "משלוח חינם השבוע בלבד".', onPage(target));
+      c.hard('the first edit reaches a card', !!(first.pending && first.pending.tool === 'edit_page'));
+      if (!(first.pending && first.pending.tool === 'edit_page')) return;
+      await chat.answer(first.pending, true);
+      c.hard('the banner landed (so there is something to take back)', /משלוח חינם/.test(site.draft(target)));
+      const d = await dreamTurn(chat, c, 'אוי, לא. זה לא נראה לי טוב בסוף. תחזיר את הדף למה שהיה לפני.', onPage(target));
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it proposes the way back, on a card', !!(d.pending && d.pending.tool === 'edit_page' && String((d.pending.input || {}).slug || '') === target));
+      if (!(d.pending && d.pending.tool === 'edit_page')) return;
+      await chat.answer(d.pending, true);
+      const draft = site.draft(target);
+      c.hard('the banner is gone', !/משלוח חינם/.test(draft));
+      c.hard('what she had before is back', draft.includes(MARK(target)));
+      c.soft('the SAME modules as before, in the same order', kinds(draft) === kinds(original));
+    }
+  },
+  {
+    id: 'D14', name: '"our opening hours changed — update it wherever it belongs" (no page named)',
+    run: async (chat, c) => {
+      const before = new Map(site.slugs().map((p) => [p, site.published(p)]));
+      const d = await dreamTurn(chat, c, 'שעות הפתיחה שלנו השתנו: ראשון עד חמישי 9:00 עד 18:00, שישי 9:00 עד 13:00, ובשבת סגור. תעדכן איפה שצריך.');
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it proposes a page change on a card', !!(d.pending && /edit_page|create_page/.test(d.pending.tool)));
+      if (!(d.pending && /edit_page|create_page/.test(d.pending.tool))) return;
+      const ok = await chat.answer(d.pending, true);
+      const at = (ok.applied && ok.applied.slug) || String((d.pending.input || {}).slug || '');
+      const draft = site.draft(at);
+      c.hard('the hours are on the page as she gave them (9:00 · 18:00 · 13:00 · שבת)', /0?9:00/.test(draft) && /18:00/.test(draft) && /13:00/.test(draft) && /שבת/.test(draft));
+      c.soft('it chose the page a visitor would look at — the contact page (it chose "' + at + '")', at === 'צרו-קשר');
+      c.soft('it EDITED a page of hers rather than opening a new one', d.pending.tool === 'edit_page');
+      c.hard('nothing went live', [...before].every(([p, pub]) => site.published(p) === pub));
     }
   }
 ];
