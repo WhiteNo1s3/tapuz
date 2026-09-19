@@ -43,6 +43,14 @@ expected artifacts `eval/battery/<stamp>-model-local.json` + `.md`
 regression row. That row, when it lands, is a **new** line (MLX build, Mac),
 not a re-measurement of the 5090 GGUF row.
 
+**Status (Ben, 03:32 UTC):** the first 2.45 process exited right after init
+with no new `eval/battery/` file (the battery writes only at the end; the
+`.out` carries the reason) and was restarted on `87493ac`. The
+`2026-09-19T03-17-16-model-local.md` artifact on the Mac (7/13, 3 soft,
+1002 s) is stamped **before** the pull and is a 2.44-era line — recorded in
+`SCORECARD-2026-09-19-cursor-harness.md` §1א, not here. Nothing 2.45 is
+measured yet.
+
 ## 2. What ran on `7a46053`, then again on `main` `87493ac` (Node 24.21.0, Linux)
 
 The second pass ran on this branch after merging `origin/main`

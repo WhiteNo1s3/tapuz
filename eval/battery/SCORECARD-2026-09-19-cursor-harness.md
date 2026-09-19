@@ -28,6 +28,28 @@ No PASS/FAIL number was invented. The §5 recommendation (Gemma 4 31B
 recommended; qwen3.8-27b equal and faster; nemotron not recommended) is
 neither confirmed nor contradicted by this run.
 
+### 1א. One live line, from the Mac — a 2.44-era run (reported by Ben, not measured here)
+
+| Model | Build / machine | Window · courier | PASS | Soft | Seconds | artifact |
+|---|---|---|---|---|---|---|
+| google/gemma-4-31b | **MLX** (Mac LM Studio), `LOCAL_LLM_MODEL` empty | local ×1 | **7/13** | 3 | 1002 | `eval/battery/2026-09-19T03-17-16-model-local.md` (Mac, git-ignored) |
+
+The stamp is 03:17:16 UTC (06:17 IDT) — **before** PR #20 merged (03:27 UTC)
+and before the Mac's ff-only pull to `87493ac`, so this is **2.44 code**, and
+a different build of the model (MLX, more bits) on a different machine than
+§5's 5090 GGUF row. It is a new line, not a re-measurement of 39/39, and it
+is not the 2.45 re-measure either. The gap to §5's 13/13 is real and
+unexplained from this VM: the `.json` beside the `.md` holds every turn
+(`✗` hard misses, `used[]`, `window`, seconds) and the `battery:` header
+line in the console log says which window LM Studio reported — the first
+things to read before naming a cause (build, window, `--parallel`, or the
+code). The 2.45 re-measure (Mac, `87493ac`) is pending: its first process
+exited after init with no `eval/battery/` file written — the battery writes
+its artifacts only at the end, so an early exit leaves nothing; the console
+`.out` carries the reason (`BATTERY COPILOT: crashed — …` is exit 2) — and
+has been restarted. Both facts are Ben's report (03:32 UTC), not this VM's
+measurement.
+
 ## 2. What DID run — every v2.44 fix, pinned by its smoke (all PASS)
 
 The five fixes in `13fe05e` ("a turn outlives thirty seconds, a read outranks
