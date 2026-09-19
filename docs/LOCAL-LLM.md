@@ -51,9 +51,9 @@ Ben's 17,246-token request errored only because half of it was still over 8,192;
 Guidance by card:
 
 - **8 GB** — Gemma 4 **E4B** (≈ 5 GB at 32K) or **E2B** (≈ 3.3 GB). The one-shot packs work well on them (menu organizer 25/27 and 24/27, theme designer 10/10), but they cannot drive the copilot's tool loop (12/26, 13/26) — they *describe* the tool they are about to call and stop. Use `/admin/inject` and the organizer card; leave the copilot to a bigger model or a cloud key. Measured in §5.
-- **12–16 GB** — **Gemma 4 12B, Google's QAT 4-bit build** (`gemma-4-12B-it-QAT`, ≈ 8.4 GB at 32K, so 32K fits a 12 GB card): copilot 24/26, 12/13 at 8K, organizer 27/27, theme 10/10. The generic Q4_K_M of the same model is a step behind (23/26, 10/13).
-- **24 GB** (a 3090 / 4090) — **Gemma 4 26B-A4B** (MoE, 4B active, ≈ 18.5 GB at 32K): copilot 25/26 and the fastest of the family that can drive it — the whole double battery in 185 s against ≈ 500 s for the 31B.
-- **32 GB** (a 5090) — **Gemma 4 31B** at 32K with nothing else on the card (≈ 23 GB measured at `--parallel 1`); still the only local model at 39/39. Close the game first.
+- **12–16 GB** — **Gemma 4 12B, Google's QAT 4-bit build** (`gemma-4-12B-it-QAT`, ≈ 8.4 GB at 32K, so 32K fits a 12 GB card): copilot 24/26 → **26/26 and 25/26 since v2.45** (§3ב adopts the document it prints), 12/13 at 8K, organizer 27/27, theme 10/10. The generic Q4_K_M of the same model is a step behind (25/26, 12/13 on v2.45).
+- **24 GB** (a 3090 / 4090) — **Gemma 4 26B-A4B, the generic Q4_K_M** (MoE, 4B active, ≈ 18.5 GB at 32K): copilot 23–25/26 and the fastest of the family that can drive it — the whole double battery in 185 s against ≈ 500 s for the 31B. Not Google's QAT build here: at this size it scored lower (21/26 — §5).
+- **32 GB** (a 5090) — **Gemma 4 31B** at 32K with nothing else on the card (≈ 23 GB measured at `--parallel 1`); still the only local Gemma at 39/39, and the one that handles an owner's vague sentence best (dreams track, §5). Close the game first.
 - **A cluster / a workstation card** — 64K–128K; the full dictionary plus several long pages in one conversation.
 
 **Bridge V2 0.5.0.** The hosted flow needs the extension to (a) stream tool calls — 0.4.0 dropped `delta.tool_calls`, so every `list_pages` / `read_page` / `edit_page` came back as an empty reply, which was the other half of Ben's "unrelated" turn — (b) forward the model's error body, so the 8K explanation reaches the page instead of "no response", and (c) call `/api/v0/models` for the window. The ZIP is built from the CMS, so an update ships with it: download Bridge V2 again from `/admin/ai-setup`, reload it at `chrome://extensions` (or `about:debugging` in Firefox) and refresh the admin tab. An older bridge still works for plain chat, and the page says which version it sees and what it cannot do with it.
@@ -257,7 +257,7 @@ Ben, reading the first scorecards: *"the prompts given to the llm are not struct
 | D1 | "אני פותחת סטודיו קטן לקרמיקה ביפו. אני רוצה דף שירגיש חם וביתי…" | a page proposal that passes the builder's questions (below) and speaks about *her* studio |
 | D2 | "אני מוכר דבש מהגליל, של המשפחה שלי, כבר שלושה דורות. תעשה לי דף שגורם לאנשים להזמין." | the same |
 | D3 | "הדף הזה נראה לי יבש ומשעמם. תן לו קצת חיים, אבל אל תמחק לי מה שכתבתי." | an edit of THIS page; what she wrote is still there; the page grew; the published page did not move |
-| D4 | "אנשים אומרים לי שהם לא מוצאים איך ליצור איתי קשר. תעזור לי?" — a complaint, not a request | it DOES something, on a card; afterwards contact is easier to reach (near the front, at the top level of a row that now fits, in the footer, or on the page) |
+| D4 | "אנשים אומרים לי שהם לא מוצאים איך ליצור איתי קשר. תעזור לי?" — a complaint, not a request | it DOES something, on a card; afterwards contact is easier to reach (near the front, at the top level of a row that now fits, in the footer, on the page, on another page that is already live — the 12B put a "צרו איתי קשר" button in the home page's hero — or the contact page itself now offers a way to reach out). A brand-new draft page does not count: nothing leads to it |
 | D5 | "התפריט שלי נהיה בלגן… תעשה בו סדר שיהיה נעים לעין." | a menu card; it fits one row; no page lost; group names a visitor understands |
 | D6 | "יש לי מבצע לחגים — 20% הנחה… תכניס את זה איפה שנראה לך." | the sale is on the page; the rest survived; published untouched |
 | D7 | "האתר לא מרגיש 'אני'. לא יודעת מה בדיוק. מה אתה מציע?" | a conversation: no card pushed at someone who asked for advice, nothing written, a question back |
@@ -265,7 +265,7 @@ Ben, reading the first scorecards: *"the prompts given to the llm are not struct
 
 **The battery answers like the owner would.** When the copilot *asks* instead of acting, the owner shrugs — "לא יודעת בדיוק… תחליט אתה" — and when it lays out a plan in words ("אם זה נשמע לך נכון, רק תגיד לי ואבצע" — good manners before touching a live menu) the owner says yes. Twice at most.
 
-**A dream has no spec, so the judge asks the builder's questions** of whatever landed: the **builder opens it** (`/admin/edit/…`), its **preview renders it** (`/admin/preview/…`), **a builder save keeps every module** (blocks → `.pzn` → blocks: same modules, same order), **nothing in it is a raw-HTML block** the owner cannot edit; it is **real** (no lorem ipsum, Hebrew prose, a headline, something to press); it is **about her business** (her own words are in it); and it **invented nothing** — no image path the site does not have, no link to a page nobody made.
+**A dream has no spec, so the judge asks the builder's questions** of whatever landed: the **builder opens it** (`/admin/edit/…`), its **preview renders it** (`/admin/preview/…`), **a builder save keeps every module** (blocks → `.pzn` → blocks: same modules, same order), **nothing in it is a raw-HTML block** the owner cannot edit; it is **real** (no lorem ipsum, Hebrew prose, a headline, something to press); it is **about her business** (her own words are in it); and it **invented nothing** — no image path the site does not have, no link to a page nobody made. "Words" are what a visitor reads — text nodes **and** the attributes BenTML keeps its words in (a feature card is `title=` + `text=`); and an **existing** page is judged by what changed, not by its length: the first survey gave every model — the two perfect ones included — the same "too little prose" miss for adding one sale line to a two-line fixture page. A miss every model gets is the judge's.
 
 Checks are **hard** (site state) or **soft** (wording); a scenario passes on its hard checks and lists its soft misses. Every turn — what was sent, what the card held, the reply, the seconds — is written to `eval/battery/<stamp>-<model>-<courier>.json` (+ `.md`); `eval/` is git-ignored. Results: §5.
 
@@ -365,8 +365,55 @@ What the numbers say:
 - **The packs are easy, the tool loop is not.** Every size — even the 2B — lands the one-shot packs (theme designer 10/10 everywhere). The copilot is a different job: read, decide, call a write tool with a whole document. The E-models *describe* the call ("אריץ עכשיו את `read_menus`") and stop, or ask for a slug the situation already gave them. That is the model, not a parsing gap.
 - **12B is where the copilot starts working**, and **Google's QAT build is the one to download**: smaller and better than the generic Q4_K_M on every line.
 - **26B-A4B is the sweet spot for a 24 GB card** — within one scenario of the 31B and ≈ 2.7× faster, because only 4B parameters are active per token.
-- **One habit is shared by the 12B, the 26B and qwen3.6: the second try is PRINTED.** After the door sends a proposal back (a typo, a wrong child), the corrected page arrives as a fenced document in the chat instead of a tool call; the 12B does the same with a regrouped menu after `read_menus`. Every 12B-QAT miss at 32K is that one case. It is a product gap, not a model one — tracked as the next change (adopt a printed document as the proposal it was meant to be, through the same approval gate).
+- **One habit is shared by the 12B, the 26B and qwen3.6: the second try is PRINTED.** After the door sends a proposal back (a typo, a wrong child), the corrected page arrives as a fenced document in the chat instead of a tool call; the 12B does the same with a regrouped menu after `read_menus`. Every 12B-QAT miss at 32K is that one case. It was a product gap, not a model one — v2.45 answers it (§3ב: a printed document is adopted as the proposal it was meant to be, through the same approval gate); the re-run is the next table.
 
-Not measured yet (downloaded, waiting for a quiet GPU): the QAT builds of the 26B-A4B and the 31B, Dicta's Hebrew models (`DictaLM-3.0-Nemotron-12B-Instruct`, `DictaLM-3.0-24B-Thinking`) and `gpt-oss-20b`.
+### After v2.45 — the same sizes, the same battery (2026-09-19)
+
+The habits §3ב answers — the printed second try, the typo'd closer, a door that never named the fix — were costing the middle of the family whole scenarios. The same battery on v2.45 code, each cell one ×2 run (a ×2 run moves by one or two scenarios between runs, so read a range, not a number):
+
+| Model | Copilot 32K ×2 — v2.44 | v2.45 | 8K — v2.44 | v2.45 |
+|---|---|---|---|---|
+| gemma-4-12B Q4_K_M | 23/26 | **25/26** | 10/13 | **12/13** |
+| gemma-4-12B QAT Q4_0 | 24/26 | **26/26**, then 25/26 | 12/13 | – |
+| gemma-4-26B-A4B Q4_K_M | 25/26 | 25/26, then 23/26 | 12/13 | – |
+| gemma-4-E4B Q4_K_M | 12/26 | 12/26 | 8/13 | – |
+| qwen3.6-35b-a3b Q4_K_M | 23/26 | 24/26 | – | – |
+| gemma-4-31B · qwen3.8-27b (regression, ×1 each) | 13/13 · 13/13 | 13/13 · 13/13 | – | – |
+
+The 12B gained the most: every one of its v2.44 misses was a printed document. The E4B did not move — its problem is upstream of the door (it describes the call and stops). The 26B-A4B's remaining misses are a different habit: after `read_page` it sometimes says nothing at all.
+
+### The rest of the survey — Google's QAT builds of the big sizes, the Hebrew models, gpt-oss (2026-09-19, `--parallel 1`)
+
+Ben: *"if you find something interesting to download other than gemma … I can handle it on disk."* Same suite as the family table. The QAT pair ran on v2.45 code, the others on v2.46.
+
+| Model (GGUF) | VRAM @32K | @8K | Copilot 32K ×2 | Copilot 8K | Organizer (27) | Theme designer (10) | Dreams (D1–D8) |
+|---|---|---|---|---|---|---|---|
+| gemma-4-26B-A4B **QAT** Q4_0 | 16.3 GB | 15.8 GB | 21/26 · 175 s | 11/13 | 27 PASS · 25 strict · 2 s | 10/10 · 2 clean · 9 s | – |
+| gemma-4-31B **QAT** Q4_0 | 22.1 GB | 20.2 GB | 25/26 · 516 s | 13/13 | 27 PASS · 27 strict · 6 s | 10/10 · 6 clean · 29 s | – |
+| DictaLM-3.0-Nemotron-12B-Instruct Q4_K_M | 8.2 GB | 7.5 GB | 17/26 · 404 s | 9/13 | 12 PASS (23 landed) · 6 strict · 20 second rounds · 9 s | 9/10 · 1 clean · 17 s | 3/8 |
+| DictaLM-3.0-24B-Thinking Q4_K_M | 18.8 GB | 15.0 GB | 21/26 · **812 s** | 10/13 | 19 PASS (25 landed) · 12 strict · 12 second rounds · 21 s | 10/10 · 3 clean · 27 s | 4/8 |
+| gpt-oss-20b MXFP4 | 12.1 GB | 11.5 GB | 19/26 · **157 s** | 12/13 | 26 PASS · 21 strict · 6 second rounds · 2 s | 10/10 · 4 clean · 6 s | 6/8 · 44 s |
+
+What it says:
+
+- **QAT is not a rule.** Google's 4-bit build is the better download at 12B (§ above) — and the worse one at 26B-A4B: 21/26 against the generic Q4_K_M's 25/26, with one habit behind every miss: after `read_page` the reply is **empty** (3 s, no words, no call). The 31B QAT is one scenario behind the Q4_K_M and saves about a gigabyte; nothing to switch for. The recommendation per card stays as it is in §1א.
+- **A Hebrew model is not what this job needs.** Both DictaLM builds write good Hebrew and lose to the 12B Gemma at the same size, because the copilot's bottleneck is the tool loop and the BenTML grammar, not the language. The 12B-Instruct **prints its tool calls as text** — a fenced `{"name": "read_page", "arguments": …}` in the chat, then "(wait for the result)" — so half its turns end before they start, and it drops pages from a menu even after the door names them. The 24B-Thinking calls tools properly but invents tags (`<phone>`, children inside leaf modules) and cannot fix them when the door sends them back; it also thinks for a long time — 812 s for the double battery against 185 s for the 26B-A4B on the same card.
+- **gpt-oss-20b is the fastest model here and drives the tools — when its reply parses.** Six of its seven misses at 32K, and both of its dreams misses, are one runtime error, not a wrong answer: LM Studio answers `500 — The model produced output that does not match the expected peg-native format` (the model's tool-call channel did not parse) — 7 of 44 turns with the six-tool request, **none** of 23 with the lean four-tool request at 8K, where it scored 12/13. The owner sees the provider's error in Hebrew and nothing is written; asking again works. Not a recommendation while one turn in six is lost — and worth a second look when the runtime's parser catches up, because everything else about it (12 GB, 157 s, 26/27 organizer) fits a 16 GB card.
+
+### The dreams track — per model (2026-09-19, v2.46 code, 32K, `--parallel 1`)
+
+Eight owner sentences (§3א), the battery answering like the owner, the verdict from the builder's questions. `×2` = two full runs.
+
+| Model | Dreams | Soft misses | Seconds | What it is like |
+|---|---|---|---|---|
+| gemma-4-31B Q4_K_M | **15/16** (×2), then D4 2/2 once the battery's "owner" says yes to a plan | 0 | 613 | zero invented pictures, no dead links; lays out a plan and asks before it touches a live menu |
+| qwen3.8-27b Q6_K | **8/8** (×1) | 0 | 273 | the same manners, faster |
+| gemma-4-26B-A4B Q4_K_M | **15/16** (×2) | 0 | **211** | three times the 31B's pace. The one miss: for "people can't find how to contact me" it built a SECOND contact page — a draft nothing leads to |
+| gemma-4-12B QAT Q4_0 | 14/16 (×2) | 1 | 328 | one miss: after the owner's "you decide" it described the ceramics page in words and never proposed it. The other was the judge's — a "צרו איתי קשר" button in the HOME page's hero is a fair answer to the complaint, and the judge accepts it now |
+| gpt-oss-20b MXFP4 | 6/8 (×1) | 0 | **44** | the quickest by far; both misses are the runtime's parse error (above), not the model's answer |
+| DictaLM-3.0-24B-Thinking | 4/8 (×1) | 2 | 349 | asks the owner for "the exact slug"; tells her to answer "אישור" so it can *publish* — nothing it says can publish, the approval card is the only way anything is saved |
+| DictaLM-3.0-Nemotron-12B | 3/8 (×1) | 3 | 153 | prints the tool call instead of making it; loses two pages from the menu; links to product pages nobody made |
+
+Soft misses are counted without one the judge gave to everybody (the prose check on a two-line fixture page — §3א, fixed in this PR's battery). What is left says the same thing the T-battery does, in an owner's voice: **the three recommended sizes understand a vague sentence** — they read first, keep what the owner wrote, put the sale where it belongs, answer "what do you suggest?" with a conversation and not a card — and the differences between them are manners under uncertainty: the 31B lays out a plan and waits for a yes before it touches a live menu; the 26B-A4B acts faster and once built the wrong thing; the 12B sometimes talks about the page instead of making it.
 
 **Two machines, one LM Studio.** With LM Link on, `lms ps` / `lms ls` list the models of every linked device, and **`lms unload --all` unloads them on every device** — including a model someone is chatting with on the other machine. It works in both directions: the family run above lost a battery to an unload that came from elsewhere, and its own `unload --all` cut a chat on the linked Mac. A script that shares the mesh unloads **by identifier** (`lms unload tapuz-gemma`), never `--all`, and treats "Model unloaded by user or API request" as *someone else is using the GPU* — stop and ask, do not retry.
