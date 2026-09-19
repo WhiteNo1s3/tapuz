@@ -519,6 +519,10 @@ const HE = {
     'התפריטים (' + fmt(chars) + ' תווים) גדולים מחלון ההקשר של המודל (מותר ' + fmt(limit) + ') — ' +
     'אמור/י לבעל/ת האתר להגדיל את Context Length ב-LM Studio. אל תציע/י תפריט שלא קראת.',
   memoProposed: (summary) => 'הצעתי: ' + summary + ' — ממתין לאישור',
+  // v2.45 — a refused proposal followed by plain words: whatever the model says, nothing changed
+  refusedThenWords: 'שימו לב: ההצעה נפסלה בבדיקה והמודל לא הגיש הצעה מתוקנת — שום דבר לא נשמר ושום דבר לא השתנה, גם אם התשובה אומרת אחרת. בקשו שוב.',
+  // v2.45 — the model printed the document instead of calling the write tool (ai.js adoptPrintedDocument)
+  adoptedPrinted: 'המודל הדפיס את המסמך בצ׳אט במקום להפעיל את הכלי — הפכתי אותו להצעה לאישור, כמו כל הצעה אחרת.',
   // v2.37 — a proposal that fails the write's own checks goes back to the model
   proposalRefused: (why) => 'הקופיילוט הציע מסמך שלא עובר את הבדיקה (' + briefErrors(why) + ') — החזרתי לו את השגיאה לתיקון, לפני שתתבקשו לאשר.',
   proposalFixForModel: 'המסמך לא נשמר ולא הוצג לבעל/ת האתר. תקן/י בדיוק את השגיאות שלמעלה (למשל ילד שהמיכל לא מקבל — ראו ⊃ / Accepts children במילון) והצע/י את המסמך המלא שוב.',

@@ -507,10 +507,73 @@ function normalizeInlineHtml(source) {
   return { source: s, changed };
 }
 
+/**
+ * v2.45 — a closing tag that is ALMOST the open one. Seen from local models
+ * on the copilot battery (2026-09-19): `</bent/heading>`, `</int-hero>`
+ * (gemma-4-26B-A4B) and `</bent_qa>` (gemma-4-12B) — and the model REPEATS the
+ * typo when the door sends the page back (the same error twice in a row, 30 s
+ * of GPU each, then it gives up). A closer has exactly one sane reading: the
+ * element that is open. Deterministic and narrow:
+ *   - only a closer whose name is NOT a real tag (it holds `-`, `_` or `/`,
+ *     is not a known module and matches nothing on the open stack);
+ *   - only when it resembles the innermost open bent-* element: the same name
+ *     once `_` `/` `.` are read as `-`, the same word after the first dash
+ *     (`int-hero` ~ `bent-hero`), or two edits away (`bent-headng`).
+ * Plain HTML closers (`</p>`, `</div>`, `</html>`) are never touched.
+ * @returns {{source: string, fixed: number}}
+ */
+function editDistance(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return dp[a.length][b.length];
+}
+function resemblesCloser(name, open) {
+  const n = name.toLowerCase().replace(/[_/.\s]+/g, '-');
+  if (n === open) return true;
+  const tail = (s) => (s.includes('-') ? s.slice(s.indexOf('-') + 1) : '');
+  if (tail(n).length >= 2 && tail(n) === tail(open)) return true;
+  return editDistance(n, open) <= 2;
+}
+function fixCloserTypos(source) {
+  const src = String(source || '');
+  const stack = [];
+  let fixed = 0;
+  const out = src.replace(/<(\/?)([^\s<>]+)([^<>]*)>/g, (whole, slash, rawName, rest) => {
+    const name = rawName.toLowerCase();
+    if (!slash) {
+      if (/^bent-[a-z0-9-]+$/.test(name) && !/\/\s*$/.test(rest) && !/\/$/.test(rawName)) stack.push(name);
+      return whole;
+    }
+    const at = stack.lastIndexOf(name);
+    if (at !== -1) { stack.length = at; return whole; }
+    if (!/[-_/]/.test(name) || KNOWN.has(name.replace(/^bent-/, ''))) return whole; // a real tag: not ours to guess
+    const open = stack[stack.length - 1];
+    if (!open || !resemblesCloser(name, open)) return whole;
+    stack.pop();
+    fixed++;
+    return '</' + open + '>';
+  });
+  return { source: out, fixed };
+}
+
 function repair(source) {
   const changes = [];
   if (typeof source !== 'string' || !source.trim()) {
     return { ok: false, changes, remaining: [], error: 'empty source' };
+  }
+
+  // a closing tag that is almost the open one (v2.45) — see fixCloserTypos
+  if (typeof source === 'string') {
+    const closers = fixCloserTypos(source);
+    if (closers.fixed) {
+      source = closers.source;
+      changes.push({ code: 'CLOSER_TYPO', message: `${closers.fixed} closing tag(s) that almost matched were read as the element that was open` });
+    }
   }
 
   // tag-name typos (v2.28, seen live from a local model): `<bent-text">` — a
@@ -552,4 +615,4 @@ function repair(source) {
   return { ok: true, source: serialize(doc), changes, remaining };
 }
 
-module.exports = { repair, ALIASES, adoptPropTwins };
+module.exports = { repair, ALIASES, adoptPropTwins, fixCloserTypos };

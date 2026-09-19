@@ -204,10 +204,16 @@ class Chat {
     let steps = 0;
     const used = [];
     const notices = [];
+    // relay only: the battery SEES every body the CMS composes, so it can keep what the door
+    // told the model about a proposal it refused (the local courier keeps that to itself)
+    const refusals = [];
     while (d.ok && d.modelCall && COURIER === 'relay') {
       if (++steps > MAX_STEPS) { d = { ok: false, error: 'battery: more than ' + MAX_STEPS + ' model calls in one turn' }; break; }
       (d.used || []).forEach((u) => used.push(u));
       if (d.notice) notices.push(d.notice);
+      for (const m of (d.modelCall.body.messages || [])) {
+        if (m.role === 'tool' && /"proposed":false/.test(String(m.content || '')) && !refusals.includes(m.content)) refusals.push(String(m.content).slice(0, 1200));
+      }
       const result = await callRuntime(d.modelCall.body);
       this.calls++;
       this.tokens += (result.usage && result.usage.completion_tokens) || 0;
@@ -221,7 +227,7 @@ class Chat {
     }
     const secs = Math.round((Date.now() - t0) / 100) / 10;
     this.seconds += secs;
-    this.log.push({ sent: json.message ? { message: json.message } : json, seconds: secs, ok: !!d.ok, error: d.error || '', code: d.code || '', reply: d.reply || '', memo: d.memo || '', used: d.used || [], reads: d.reads || [], notices: d.notices || [], window: d.window || null, pending: d.pending ? { tool: d.pending.tool, summary: d.pending.summary, source: (d.pending.input && (d.pending.input.source || d.pending.input.document)) || '' } : null, applied: d.applied || null });
+    this.log.push({ sent: json.message ? { message: json.message } : json, seconds: secs, ok: !!d.ok, error: d.error || '', code: d.code || '', reply: d.reply || '', memo: d.memo || '', used: d.used || [], reads: d.reads || [], notices: d.notices || [], refusals, window: d.window || null, pending: d.pending ? { tool: d.pending.tool, summary: d.pending.summary, source: (d.pending.input && (d.pending.input.source || d.pending.input.document)) || '' } : null, applied: d.applied || null });
     return d;
   }
 
@@ -445,7 +451,11 @@ const SCENARIOS = [
       const ok = await chat.answer(d.pending, true);
       const main = site.menus().main || [];
       c.hard('approve → applied.organized with a backup id', !!(ok.applied && ok.applied.organized && ok.applied.backupId));
-      c.hard('the live menu has fewer top-level items than ten', main.length > 0 && main.length < 10);
+      // two honest ways to fit a row: fewer top-level items (grouping), or the "עוד" fold — the
+      // door's own fit line is the judge of the second (✓ = it fits), not a count of items
+      const fitLine = String((ok.applied && ok.applied.fitLine) || '');
+      c.hard('the live menu fits one row: fewer than ten top-level items, or the door\'s fit line says ✓', main.length > 0 && (main.length < 10 || /✓/.test(fitLine)));
+      c.note('fit line: ' + fitLine);
       const r = reached(main);
       c.hard('every one of the ten pages is still reachable', FIXTURE.expect.mustPlace.every((p) => r.has(p)));
       c.hard('a backup of the old menu exists', site.backups().length === backups0 + 1);
@@ -554,6 +564,7 @@ const SCENARIOS = [
         hardMiss.forEach((k) => console.log('     ✗ ' + k.name));
         softMiss.forEach((k) => console.log('     ~ ' + k.name));
         notes.forEach((n) => console.log('     · ' + n));
+        log.flatMap((t) => t.refusals || []).forEach((r) => console.log('     ↩ the door told the model: ' + r.replace(/\s+/g, ' ').slice(0, 300)));
         log.filter((t) => !t.ok).forEach((t) => console.log('     ! ' + (t.code ? t.code + ': ' : '') + t.error));
         results.push({ id: s.id, run, name: s.name, pass, seconds: chat.seconds, tools, checks, notes, crashed, turns: log });
         if (!pass) exit = 1;
