@@ -16,6 +16,7 @@
  *   LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma node scripts/battery-copilot.js
  *   … node scripts/battery-copilot.js --courier=relay          # the hosted path: the battery plays the Bridge
  *   … node scripts/battery-copilot.js --only=T3,T9 --runs=3
+ *   … node scripts/battery-copilot.js --track=dreams              # an owner's own words (D1–D8), judged with the builder
  *   … node scripts/battery-copilot.js --window=8192            # relay only: the hint an 8K bridge would send
  *
  * Couriers: `local` — the server calls the runtime itself (provider local);
@@ -53,6 +54,8 @@ const COURIER = String(flag('courier', 'local')) === 'relay' ? 'relay' : 'local'
 const ONLY = String(flag('only', '')).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
 const RUNS = Math.max(1, Number(flag('runs', 1)) || 1);
 const WINDOW = Number(flag('window', 0)) || 0;
+// spec = the T-scenarios (exact asks, exact checks) · dreams = the D-scenarios (an owner's own words) · all
+const TRACK = ['spec', 'dreams', 'all'].includes(String(flag('track', 'spec'))) ? String(flag('track', 'spec')) : 'spec';
 const MAX_STEPS = 14; // relay: model calls per owner turn before the battery gives up
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-battery-'));
@@ -523,6 +526,250 @@ const SCENARIOS = [
   }
 ];
 
+// ── the DREAMS track (v2.46) ─────────────────────────────────────────────
+// Ben: "the prompts given to the llm are not structured in robot language —
+// it is handled with the DREAMS of the customer, so the checks must go on a
+// reasonable human input … correlate with the pagebuilder."
+//
+// The T-scenarios read like a spec ("hero, three price packages, four FAQs");
+// nobody who owns a ceramics studio talks like that. These are the sentences
+// an owner actually types — vague, warm, sometimes a complaint instead of a
+// request — and the battery answers the copilot's questions the way that
+// owner would ("לא יודעת, תחליט אתה"). A dream has no spec to check against,
+// so the judge asks what the OWNER would ask of what landed:
+//   can I open it in the builder and keep working on it? (the builder loads
+//   it, its preview renders it, a builder save keeps every module, nothing in
+//   it is a raw-HTML block) · is it real? (no lorem ipsum, Hebrew prose, a
+//   headline, something to press) · is it about MY business? (my words are in
+//   it) · did it keep its hands off what I did not ask about?
+const HUMAN_SHRUG = ['לא יודעת בדיוק… תחליט אתה מה שנראה לך הכי טוב, ותעשה.', 'מה שנראה לך. אני סומכת עליך — פשוט תעשה את זה.'];
+
+const HUMAN_YES = 'כן, נשמע מצוין. תעשה את זה.';
+
+/** Talk like an owner — twice at most. A QUESTION gets a shrug ("you decide"); a PLAN laid out in
+ *  words ("אם זה נשמע לך נכון, רק תגיד לי ואבצע" — seen from Gemma, and it is good manners before
+ *  touching a live menu) gets the yes a person would give. */
+async function dreamTurn(chat, c, message, context) {
+  let d = await chat.say(message, context);
+  for (let i = 0; i < 2 && d.ok && !d.pending && !PRINTED_PAGE(d.reply) && String(d.reply || '').trim(); i++) {
+    const asked = /\?/.test(d.reply || '');
+    c.note(asked ? 'it asked — the owner shrugged' : 'it laid out a plan — the owner said yes');
+    d = await chat.say(asked ? HUMAN_SHRUG[i] : HUMAN_YES, context);
+  }
+  return d;
+}
+
+const flatBlocks = (list) => (list || []).flatMap((b) => [b,
+  ...flatBlocks(b && b.data && Array.isArray(b.data.blocks) ? b.data.blocks : []),
+  ...((b && b.data && Array.isArray(b.data.columns) ? b.data.columns : []).flatMap((col) => flatBlocks(col.blocks || [])))]);
+
+/** What an owner would ask of a page that just landed — the builder's questions first. */
+async function judgeLandedPage(chat, c, slug, dream) {
+  const pznApi = require('../src/pzn/index');
+  const page = site.page(slug);
+  // a NEW page is a draft; an EXISTING page keeps its published side untouched — either way nothing went live
+  const rewrote = !dream.existing && dream.rewrote;
+  c.hard('a page landed, and nothing went live', !!page && (page.status === 'draft' || dream.existing === true || (rewrote && dream.publishedBefore === site.published(slug))));
+  if (rewrote) c.soft('a new business got a NEW page (it rewrote the existing page "' + slug + '" instead — its published side is untouched)', false);
+  if (!page) return;
+  const src = site.draft(slug);
+  const conv = require('../src/pzn-source').pznSourceToBlocks(src);
+  const flat = flatBlocks(conv.view.blocks || []);
+  const types = flat.map((b) => b.type);
+  c.note('modules: ' + types.join(' · ').slice(0, 220));
+  // — the builder —
+  const edit = await req('GET', '/admin/edit/' + encodeURIComponent(slug), { cookie: chat.cookie });
+  c.hard('the BUILDER opens it', edit.status === 200 && /admin-builder\.js/.test(edit.text));
+  const prev = await req('GET', '/admin/preview/' + encodeURIComponent(slug), { cookie: chat.cookie });
+  c.hard('the builder\'s preview renders it', prev.status === 200 && prev.text.length > 800 && !/Error:|is not defined|Cannot read/.test(prev.text));
+  c.hard('every part of it is a module the owner can edit — no raw-HTML block, nothing quarantined', !types.includes('html') && !/provisional="true"/.test(src));
+  let kept = false;
+  try {
+    const again = pznApi.toTapuzPage(pznApi.parse(pznApi.serialize(pznApi.fromTapuzPage({ title: page.title, slug, blocks: page.draft_blocks != null ? page.draft_blocks : page.blocks }))));
+    kept = flatBlocks(again.blocks).map((b) => b.type).join() === flatBlocks(page.draft_blocks != null ? page.draft_blocks : page.blocks).map((b) => b.type).join();
+  } catch (e) { c.note('builder round trip threw: ' + e.message.slice(0, 120)); }
+  c.hard('a builder SAVE keeps every module (blocks → .pzn → blocks, same modules in the same order)', kept);
+  // — is it real —
+  c.hard('real words — no lorem ipsum, no filler text', !/lorem|ipsum|לורם|איפסום|טקסט לדוגמה|כאן יבוא|\[.{0,30}(?:שם|טקסט|כותרת).{0,30}\]/i.test(src.replace(/<[^>]+>/g, ' ')));
+  if (!dream.existing) c.hard('it is a page, not a stub (' + (dream.minModules || 4) + '+ modules)', flat.length >= (dream.minModules || 4));
+  const prose = src.replace(/<[^>]+>/g, ' ');
+  c.soft('it has a headline', types.includes('heading') || types.includes('hero'));
+  c.soft('it gives the visitor something to press (a button, a call to action or a form)', types.some((t) => /button|cta|form|contact|whatsapp|pricing|plan/.test(t)));
+  c.soft('Hebrew prose a visitor can read (120+ characters)', (prose.match(/[֐-׿]/g) || []).length >= 120);
+  // — is it about MY business —
+  const hits = (dream.words || []).filter((w) => prose.includes(w));
+  c.soft('it speaks about the owner\'s business (' + hits.length + '/' + (dream.words || []).length + ' of their own words: ' + hits.join(', ') + ')', hits.length >= Math.min(2, (dream.words || []).length));
+  // — no inventions —
+  const real = new Set(site.slugs());
+  const hrefs = [...src.matchAll(/\b(?:href|ctaUrl|url)="([^"]+)"/g)].map((m) => m[1]);
+  const dead = hrefs.filter((h) => h.startsWith('/') && h !== '/' && !real.has(decodeURIComponent(h.replace(/^\/+/, '').replace(/\.html$/, '').replace(/#.*$/, ''))));
+  c.soft('its links lead somewhere that exists' + (dead.length ? ' (dead: ' + dead.slice(0, 3).join(', ') + ')' : ''), dead.length === 0);
+  const imgs = [...src.matchAll(/\b(?:src|image)="([^"]+)"/g)].map((m) => m[1]).filter((u) => u && !/^(?:https?:|data:)/.test(u));
+  c.soft('no invented image path (the site has no uploads yet)' + (imgs.length ? ' (' + imgs.slice(0, 2).join(', ') + ')' : ''), imgs.length === 0);
+}
+
+/** Approve whatever page card the dream produced; returns the slug ('' when nothing landed). */
+async function landDream(chat, c, d, dream) {
+  if (d.pending && (d.pending.tool === 'create_page' || d.pending.tool === 'edit_page')) {
+    c.note('card: ' + d.pending.tool + ' — ' + String(d.pending.summary || '').slice(0, 90));
+    if (dream && d.pending.tool === 'edit_page') {
+      dream.rewrote = true;
+      dream.publishedBefore = site.published(String((d.pending.input || {}).slug || ''));
+    }
+    const ok = await chat.answer(d.pending, true);
+    c.soft('the copilot tells the owner what it did, in Hebrew', hebrew(ok.reply || ok.memo));
+    return (ok.applied && ok.applied.slug) || '';
+  }
+  if (!d.pending && PRINTED_PAGE(d.reply)) {
+    c.soft('it proposed through the approval card (it printed the page — the chat\'s 🪄 button landed it)', false);
+    const r = await req('POST', '/admin/api/pzn/create-from-source', { cookie: chat.cookie, json: { source: d.reply } });
+    return (r.json && r.json.fullPath) || '';
+  }
+  return '';
+}
+
+const DREAMS = [
+  {
+    id: 'D1', name: 'a ceramics studio, in the owner\'s own words',
+    run: async (chat, c) => {
+      const dream = { words: ['קרמיקה', 'יפו', 'סדנ', 'סטודיו'] };
+      const d = await dreamTurn(chat, c, 'היי! אני פותחת סטודיו קטן לקרמיקה ביפו. אני רוצה דף שירגיש חם וביתי, שאנשים יבינו מי אני וירצו לבוא לסדנה אצלי.');
+      c.hard('the turn completes', !!d.ok);
+      const slug = await landDream(chat, c, d, dream);
+      c.hard('the dream became a page proposal', !!slug);
+      if (slug) await judgeLandedPage(chat, c, slug, dream);
+    }
+  },
+  {
+    id: 'D2', name: 'three generations of honey — "make people order"',
+    run: async (chat, c) => {
+      const dream = { words: ['דבש', 'גליל', 'משפח', 'דורות'] };
+      const d = await dreamTurn(chat, c, 'אני מוכר דבש מהגליל, של המשפחה שלי, כבר שלושה דורות. תעשה לי דף שגורם לאנשים להזמין.');
+      c.hard('the turn completes', !!d.ok);
+      const slug = await landDream(chat, c, d, dream);
+      c.hard('the dream became a page proposal', !!slug);
+      if (slug) await judgeLandedPage(chat, c, slug, dream);
+    }
+  },
+  {
+    id: 'D3', name: '"this page is dry and boring — give it some life, but don\'t delete what I wrote"',
+    run: async (chat, c) => {
+      const slug = 'היסודות';
+      const live = site.published(slug);
+      const before = flatBlocks(require('../src/pzn-source').pznSourceToBlocks(site.draft(slug)).view.blocks).length;
+      const d = await dreamTurn(chat, c, 'הדף הזה נראה לי יבש ומשעמם. תן לו קצת חיים, אבל אל תמחק לי מה שכתבתי.', onPage(slug));
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it proposes an edit of THIS page', !!(d.pending && d.pending.tool === 'edit_page' && String((d.pending.input || {}).slug || '') === slug));
+      if (!(d.pending && d.pending.tool === 'edit_page')) return;
+      await chat.answer(d.pending, true);
+      const draft = site.draft(slug);
+      c.hard('what the owner wrote is still there', draft.includes(MARK(slug)));
+      c.hard('the page grew (it had ' + before + ' modules)', flatBlocks(require('../src/pzn-source').pznSourceToBlocks(draft).view.blocks).length > before);
+      c.hard('the PUBLISHED page did not move', site.published(slug) === live);
+      await judgeLandedPage(chat, c, slug, { existing: true, words: [] });
+    }
+  },
+  {
+    id: 'D4', name: 'a complaint, not a request: "people can\'t find how to contact me"',
+    run: async (chat, c) => {
+      resetMenus();
+      const slug = 'הבונה';
+      const d = await dreamTurn(chat, c, 'אנשים אומרים לי שהם לא מוצאים איך ליצור איתי קשר. תעזור לי?', onPage(slug));
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it DOES something about it — a page edit or a menu change on a card (not only advice)', !!(d.pending && /edit_page|organize_menu|create_page/.test(d.pending.tool)));
+      if (!d.pending) return;
+      c.note('it chose: ' + d.pending.tool);
+      const ok = await chat.answer(d.pending, true);
+      const menus = site.menus();
+      const main = menus.main || [];
+      const draft = site.draft(slug);
+      // what a person would call "easier to find": contact near the front; or at the TOP level of a
+      // row that now fits (seen: Gemma grouped a two-row menu back into one, so the far end is visible
+      // again) ; or also in the footer; or a new way to reach out on the page itself
+      const fitLine = String((ok.applied && ok.applied.fitLine) || '');
+      const contactUp = main.slice(0, 3).some((i) => i.target === 'צרו-קשר');
+      const contactVisible = main.some((i) => i.target === 'צרו-קשר') && main.length < 10 && /✓/.test(fitLine);
+      const contactInFooter = reached(menus.footer || []).has('צרו-קשר');
+      const contactOnPage = /צרו-קשר|tel:|mailto:|wa\.me|bent-(?:form|contact|whatsapp)/.test(draft.replace(seedSource({ full_path: slug, title: 'הבונה' }), ''));
+      // …or the contact page ITSELF became a way to reach her (seen from the 26B-A4B: it opened that page,
+      // found a lone button, and rebuilt it with a phone, a mail address, WhatsApp and a form — a fair answer)
+      const WAYS = /tel:|mailto:|wa\.me|bent-(?:form|contact|whatsapp)/;
+      const contactPageBetter = WAYS.test(site.draft('צרו-קשר')) && !WAYS.test(seedSource({ full_path: 'צרו-קשר', title: 'צרו קשר' }));
+      c.hard('contact is now easier to reach: near the front, at the top level of a row that now fits, in the footer, on the page — or the contact page itself now offers a way to reach out',
+        contactUp || contactVisible || contactInFooter || contactOnPage || contactPageBetter);
+      c.note('contact: ' + [contactUp && 'near the front', contactVisible && 'top level of a one-row menu', contactInFooter && 'in the footer', contactOnPage && 'on the page', contactPageBetter && 'the contact page now has real ways to reach out'].filter(Boolean).join(' · '));
+      resetMenus();
+    }
+  },
+  {
+    id: 'D5', name: '"my menu became a mess — make it pleasant to look at"',
+    run: async (chat, c) => {
+      resetMenus();
+      const before = JSON.stringify(site.menus());
+      const d = await dreamTurn(chat, c, 'התפריט שלי נהיה בלגן, יש שם יותר מדי דברים. תעשה בו סדר שיהיה נעים לעין.', COPILOT_MENU);
+      if (menusOff(d)) return leanMenu(c, d, before);
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it proposes a menu on a card', !!(d.pending && d.pending.tool === 'organize_menu'));
+      if (!(d.pending && d.pending.tool === 'organize_menu')) return;
+      const ok = await chat.answer(d.pending, true);
+      const main = site.menus().main || [];
+      const fitLine = String((ok.applied && ok.applied.fitLine) || '');
+      c.hard('the menu now fits one row (fewer top-level items, or the door\'s fit line says ✓)', main.length > 0 && (main.length < 10 || /✓/.test(fitLine)));
+      c.hard('no page was lost from the menu', FIXTURE.expect.mustPlace.every((p) => reached(main).has(p)));
+      c.soft('the group names are words a visitor understands (2–20 characters, Hebrew)', main.filter((i) => (i.children || []).length).every((i) => /[֐-׿]/.test(i.label) && i.label.length >= 2 && i.label.length <= 20));
+      c.note('top-level now: ' + main.map((i) => i.label).join(' · ') + ' · ' + fitLine);
+      resetMenus();
+    }
+  },
+  {
+    id: 'D6', name: '"I have a holiday sale — put it wherever you think"',
+    run: async (chat, c) => {
+      const slug = 'השוואות';
+      const live = site.published(slug);
+      const d = await dreamTurn(chat, c, 'יש לי מבצע לחגים — 20% הנחה על הכול עד סוף החודש. תכניס את זה לדף הזה איפה שנראה לך הכי נכון.', onPage(slug));
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it proposes an edit of this page', !!(d.pending && d.pending.tool === 'edit_page'));
+      if (!(d.pending && d.pending.tool === 'edit_page')) return;
+      await chat.answer(d.pending, true);
+      const draft = site.draft(slug);
+      c.hard('the sale is on the page (20%)', /20\s?%|%\s?20|20 אחוז/.test(draft));
+      c.soft('…and it says it is the HOLIDAY sale, as she did', /חג/.test(draft));
+      c.hard('what was there before is still there', draft.includes(MARK(slug)));
+      c.hard('the PUBLISHED page did not move', site.published(slug) === live);
+      await judgeLandedPage(chat, c, slug, { existing: true, words: ['מבצע', 'הנחה'] });
+    }
+  },
+  {
+    id: 'D7', name: '"the site doesn\'t feel like me — what do you suggest?" is a conversation, not an order',
+    run: async (chat, c) => {
+      const pagesBefore = site.slugs().join();
+      const menusBefore = JSON.stringify(site.menus());
+      const d = await chat.say('אני לא מרוצה מהאתר, הוא לא מרגיש "אני". אני לא יודעת להגיד מה בדיוק. מה אתה מציע?');
+      c.hard('the turn completes', !!d.ok);
+      c.hard('no approval card is pushed at someone who only asked for advice', !d.pending);
+      c.hard('nothing was written', site.slugs().join() === pagesBefore && JSON.stringify(site.menus()) === menusBefore);
+      c.soft('it answers in Hebrew, in words', hebrew(d.reply) && !/<bent-/.test(d.reply || ''));
+      c.soft('it asks about HER — a question back, not a lecture', /\?/.test(d.reply || ''));
+    }
+  },
+  {
+    id: 'D8', name: 'one breathless sentence, no punctuation: "add a line that it\'s free and no credit card"',
+    run: async (chat, c) => {
+      const slug = 'הבונה';
+      const live = site.published(slug);
+      const d = await dreamTurn(chat, c, 'היי תוסיף לי בבקשה בעמוד של הבונה איזה משפט על זה שזה בחינם ושלא צריך כרטיס אשראי תודה');
+      c.hard('the turn completes', !!d.ok);
+      c.hard('it found the page by its name and proposes an edit of it', !!(d.pending && d.pending.tool === 'edit_page' && String((d.pending.input || {}).slug || '') === slug));
+      if (!(d.pending && d.pending.tool === 'edit_page')) return;
+      await chat.answer(d.pending, true);
+      const draft = site.draft(slug);
+      c.hard('the sentence is there (free · no credit card)', /חינם/.test(draft) && /אשראי/.test(draft));
+      c.hard('the rest of the page survived', draft.includes(MARK(slug)) && /<bent-button/.test(draft));
+      c.hard('the PUBLISHED page did not move', site.published(slug) === live);
+    }
+  }
+];
+
 // ── run ──────────────────────────────────────────────────────────────────
 (async () => {
   seed();
@@ -541,7 +788,7 @@ const SCENARIOS = [
     const win = (await req('GET', '/admin/api/ai/window', { cookie })).json || {};
     console.log(`battery: ${LLM_MODEL || '(loaded model)'} · courier=${COURIER} · runs=${RUNS} · window=${JSON.stringify(win.window || win)}`.slice(0, 400));
 
-    const list = SCENARIOS.filter((s) => !ONLY.length || ONLY.includes(s.id));
+    const list = (TRACK === 'dreams' ? DREAMS : TRACK === 'all' ? SCENARIOS.concat(DREAMS) : SCENARIOS).filter((s) => !ONLY.length || ONLY.includes(s.id));
     for (let run = 1; run <= RUNS; run++) {
       if (run > 1) resetSite();
       for (const s of list) {
@@ -574,7 +821,7 @@ const SCENARIOS = [
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const outDir = path.join(__dirname, '..', 'eval', 'battery');
     fs.mkdirSync(outDir, { recursive: true });
-    const name = `${stamp}-${(LLM_MODEL || 'model').replace(/[^\w.-]+/g, '_')}-${COURIER}${WINDOW ? '-' + WINDOW : ''}`;
+    const name = `${stamp}-${(LLM_MODEL || 'model').replace(/[^\w.-]+/g, '_')}-${COURIER}${WINDOW ? '-' + WINDOW : ''}${TRACK === 'spec' ? '' : '-' + TRACK}`;
     const passed = results.filter((r) => r.pass).length;
     const soft = results.reduce((n, r) => n + r.checks.filter((k) => k.kind === 'soft' && !k.ok).length, 0);
     const seconds = Math.round(results.reduce((n, r) => n + r.seconds, 0));

@@ -554,6 +554,77 @@ const wantsWrite = {
       ai.adoptPrintedDocument(fenced(MENU), { declared: ['organize_menu'], used: ['read_menus'] }).calls[0].name === 'organize_menu');
   }
 
+  // ── v2.46: pictures and links that do not exist. The dreams battery (an
+  //    owner's own words, a brand-new site, Gemma 4 31B): one page came back
+  //    with NINE invented image paths and three links to sub-pages nobody made. ──
+  {
+    ai.saveSettings({ provider: '__fake', baseUrl: 'http://127.0.0.1:1/v1' });
+    const pagesLib = require('../src/pages');
+    const says = (content) => ({ choices: [{ message: { content, tool_calls: [] }, finish_reason: 'stop' }] });
+    const calls = (id, name, args) => ({ choices: [{ message: { content: '', tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] } }] });
+    const withBody = (slug, body) => '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/><title>חלום</title><meta name="bent-slug" content="' + slug + '"/></head>\n<body>\n' + body + '\n</body></html>';
+    const PIC = withBody('dream-pic', '  <bent-heading id="h" level="1">סטודיו</bent-heading>\n  <bent-image id="i" src="/uploads/ceramics-hero.jpg" alt="סטודיו" />');
+    const NOPIC = withBody('dream-pic', '  <bent-heading id="h" level="1">סטודיו</bent-heading>\n  <bent-text id="t">חם וביתי</bent-text>');
+
+    check('missingImages: a local path the site does not have is missing; an external picture, an anchor and a served file are not',
+      tools.missingImages(PIC, '').join() === '/uploads/ceramics-hero.jpg' &&
+      tools.missingImages(PIC.replace('/uploads/ceramics-hero.jpg', 'https://example.org/a.jpg'), '').length === 0 &&
+      tools.missingImages(PIC.replace('/uploads/ceramics-hero.jpg', '/demo/logo-tapuziel.svg'), '').length === 0);
+    check('…and a path that was ALREADY in the page being edited is the owner\'s, not the model\'s', tools.missingImages(PIC, PIC).length === 0);
+
+    // the first proposal goes back to the MODEL with the list; its corrected page is the card
+    scripted = [calls('i1', 'create_page', { source: PIC }), calls('i2', 'create_page', { source: NOPIC })];
+    const q1 = await ai.converse({ system: '<bent-heading>', user: 'אני פותחת סטודיו לקרמיקה' });
+    const told = (lastBody.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'i1').pop();
+    check('an invented picture never reaches the owner on the first try: the model is told which path, and that it is a broken picture (proposed:false)',
+      !!told && /"proposed":false/.test(told.content) && /ceramics-hero\.jpg/.test(told.content) && /תמונה שבורה/.test(told.content));
+    check('…its second, picture-free page IS the card — with no warning on it',
+      !!(q1.pending && q1.pending.tool === 'create_page' && !/bent-image/.test(q1.pending.input.source)) && !/בהצעה לא קיימות באתר/.test(q1.notice || ''));
+    scripted = [says('בסדר.')];
+    await ai.converse({ approve: { id: q1.pending.id, ok: false } });
+
+    // a model that INSISTS reaches the card — and the owner is told which pictures are broken
+    scripted = [calls('i3', 'create_page', { source: PIC }), calls('i4', 'create_page', { source: PIC })];
+    const q2 = await ai.converse({ system: '<bent-heading>', user: 'אני פותחת סטודיו לקרמיקה' });
+    check('a model that insists reaches the card (once asked, never looped) — and the owner reads which pictures will show broken',
+      !!(q2.pending && q2.pending.tool === 'create_page') && /1 תמונות בהצעה לא קיימות באתר/.test(q2.notice || '') && /ceramics-hero\.jpg/.test(q2.notice || ''));
+    scripted = [says('בסדר.')];
+    await ai.converse({ approve: { id: q2.pending.id, ok: false } });
+
+    // a link to a page that does not exist is never refused — a dream page may point at what comes next — but the owner is told
+    const LINKY = withBody('dream-links', '  <bent-heading id="h" level="1">סדנאות</bent-heading>\n  <bent-button id="b1" href="/workshops/beginners">למתחילים</bent-button>\n  <bent-button id="b2" href="/existing">קיים</bent-button>\n  <bent-button id="b3" href="#top">למעלה</bent-button>');
+    check('deadLinks: only an internal path that names no page (a real page, an anchor and an asset are fine)', tools.deadLinks(LINKY, '').join() === '/workshops/beginners');
+    // a dead link goes back ONCE too — with the list of real pages, so "/contact" can become the page that exists
+    const FIXED = LINKY.replace('/workshops/beginners', '/existing');
+    scripted = [calls('l1', 'create_page', { source: LINKY }), calls('l2', 'create_page', { source: FIXED })];
+    const q3 = await ai.converse({ system: '<bent-heading>', user: 'דף סדנאות' });
+    const toldLink = (lastBody.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'l1').pop();
+    check('a dead internal link goes back to the model once — naming the link AND the pages that do exist',
+      !!toldLink && /"proposed":false/.test(toldLink.content) && /\/workshops\/beginners/.test(toldLink.content) && /הדפים הקיימים: .*\/existing/.test(toldLink.content));
+    check('…the corrected page is the card, with nothing to warn about',
+      !!(q3.pending && q3.pending.tool === 'create_page' && !/workshops/.test(q3.pending.input.source)) && !/עדיין לא קיימים/.test(q3.notice || ''));
+    scripted = [says('בסדר.')];
+    await ai.converse({ approve: { id: q3.pending.id, ok: false } });
+    // …and a model that insists reaches the card: a dream page may point at a page that comes next — the owner is told
+    scripted = [calls('l3', 'create_page', { source: LINKY }), calls('l4', 'create_page', { source: LINKY })];
+    const q4 = await ai.converse({ system: '<bent-heading>', user: 'דף סדנאות' });
+    check('a model that insists on the link reaches the card, and the owner reads which links lead nowhere yet',
+      !!(q4.pending && q4.pending.tool === 'create_page') && /1 קישורים מובילים לדפים שעדיין לא קיימים/.test(q4.notice || '') && /\/workshops\/beginners/.test(q4.notice || ''));
+    scripted = [says('בסדר.')];
+    await ai.converse({ approve: { id: q4.pending.id, ok: false } });
+    check('none of that wrote a page', !pagesLib.getPageByFullPath('dream-pic') && !pagesLib.getPageByFullPath('dream-links'));
+
+    // the cause: an EMPTY library is a fact the briefing states (the copilot only — the paste packs keep their bytes)
+    const rp = require('../src/pzn/agent-roleplay');
+    const brief = (tier, media) => rp.buildCopilotBriefing({ locale: 'he', media, siteTitle: 'x', tier }).text;
+    check('an empty media library is SAID: the full tier has the section, both tiers change the rule line, and neither promises "a list follows"',
+      /הספרייה ריקה/.test(brief('full', [])) && /אין תמונות באתר/.test(brief('full', [])) && /אין תמונות באתר/.test(brief('compact', [])) &&
+      !/יש רשימת מדיה אמיתית למטה/.test(brief('full', [])) && !/יש רשימת מדיה אמיתית למטה/.test(brief('compact', [])));
+    check('…with pictures in the library the briefing is what it always was',
+      /יש רשימת מדיה אמיתית למטה/.test(brief('full', [{ url: '/uploads/a.webp', alt: 'a' }])) && !/הספרייה ריקה|אין תמונות באתר/.test(brief('full', [{ url: '/uploads/a.webp', alt: 'a' }])));
+    check('…and the paste packs are untouched by it', !/הספרייה ריקה|אין תמונות באתר/.test(rp.buildRoleplayPack({ locale: 'he', size: 'lite', playerBrief: 'x', media: [] }).text));
+  }
+
   console.log('');
   console.log(fail ? 'SMOKE COPILOT-TOOLS: FAIL' : 'SMOKE COPILOT-TOOLS: PASS');
   process.exit(fail ? 1 : 0);

@@ -73,9 +73,29 @@ function toolsInventoryMarkdown(tools) {
  *   connected copilot faces the site's owner, and calling the owner a player
  *   inside their own CMS is the tell that gives away a borrowed prompt.
  */
-function mediaInventoryMarkdown(media, he, cap, askWho) {
+function mediaInventoryMarkdown(media, he, cap, askWho, opts) {
   const list = (media || []).filter((m) => m && m.url);
-  if (!list.length) return '';
+  // v2.46 — an EMPTY library is a fact the model must be told. The dreams
+  // battery (Gemma 4 31B, a brand-new site): "אני פותחת סטודיו לקרמיקה…" came
+  // back with nine invented paths in one page (/uploads/ceramics-hero.jpg, three
+  // cards, three gallery shots) — the briefing said "a real media list follows"
+  // and nothing followed, so the model filled the gap. Every one of them is a
+  // broken picture in front of visitors. Opt-in (`emptyNote`): the copilot asks
+  // for it; the paste packs keep their bytes (the lite pack's budget is pinned).
+  if (!list.length) {
+    if (!opts || !opts.emptyNote) return '';
+    // the compact tier has no room for a section (it sits at the edge of an
+    // 8,192 window — smoke-ai-window pins the margin): its RULE LINE says it
+    if (opts.compact) return '';
+    return (he
+      ? ['## מדיה זמינה — הספרייה ריקה: לאתר אין עדיין אף תמונה', '',
+        'אל תשתמש/י ב-`bent-image` או ב-`bent-gallery`, ואל תכתוב/י `image=` / `src=` עם נתיב כלשהו — אין נתיב אמיתי, וכל נתיב שתמציא/י יהיה **תמונה שבורה מול הגולשים**.',
+        'בנה/י את הדף בלי תמונות — טקסט, כרטיסים, יתרונות, ציטוטים, צבע ורקע עושים דף יפה גם כך — ואמור/י לבעל/ת האתר במשפט אחד שכדאי להעלות תמונות במסך המדיה, ואז לבקש ממך לשלב אותן.', '']
+      : ['## Available media — the library is EMPTY: the site has no images yet', '',
+        'Do not use `bent-image` or `bent-gallery`, and do not write `image=` / `src=` with any path — there is no real path, and every path you invent is a **broken picture in front of visitors**.',
+        'Build the page without images — text, cards, features, quotes, colour and background make a good page as it is — and tell the owner in one sentence to upload pictures on the media screen and then ask you to work them in.', '']
+    ).join('\n');
+  }
   const who = askWho || (he ? 'מהשחקן' : 'the player');
   const shown = cap > 0 ? list.slice(0, cap) : list;
   const lines = [];
@@ -321,6 +341,7 @@ function buildCopilotBriefing(opts = {}) {
   const tools = toAgentTools(dict);
   const siteTitle = String(opts.siteTitle || '').trim();
   const ownerName = String(opts.ownerName || '').trim();
+  const noMedia = !(opts.media || []).some((m) => m && m.url);
   const lines = [];
 
   if (he) {
@@ -423,7 +444,12 @@ function buildCopilotBriefing(opts = {}) {
       : '- **מודול־עלה לא מחזיק מודולים.** ' + leafExampleTags() + ' וכל תגית שאינה container במילון מקבלים את התוכן במאפיינים (`title=`, `excerpt=`, `price=`, `href=` …), ולכל היותר טקסט פשוט בין התגיות כשהמילון מסמן גוף. **אסור** לשים בתוכם `bent-heading` / `bent-text` / `bent-button` — זו שגיאת `E_NOT_CONTAINER`: הכרטיס יוצא ריק והטקסט נופל מתחת לרשת. נכון: `' + LEAF_EXAMPLE + '`.');
     lines.push('- **מסמך אחד שלם** בכל תשובה שבונה דף — מ‑`<!DOCTYPE html>` ועד `</html>`, בתוך fence של html.');
     lines.push('- **טקסט אמיתי, לא "לורם איפסום".** כתב/י תוכן שאפשר לפרסם כמו שהוא.');
-    lines.push('- **אל תמציא/י נתיבי תמונה.** יש רשימת מדיה אמיתית למטה; אם אין מתאימה — אמור/י זאת.');
+    // v2.46 — "a real media list follows" is false on a site with no uploads,
+    // and a model told a list is coming fills the gap (nine invented paths in
+    // one page). With an empty library the line says what is true instead.
+    lines.push(noMedia
+      ? '- **אין תמונות באתר:** בלי `bent-image`/`bent-gallery`, בלי `image=`/`src=` — כל נתיב הוא תמונה שבורה. אמור/י לבעל/ת האתר להעלות.'
+      : '- **אל תמציא/י נתיבי תמונה.** יש רשימת מדיה אמיתית למטה; אם אין מתאימה — אמור/י זאת.');
     lines.push('- לשאלות שאינן בניית דף (איך משנים צבע, איפה התפריטים) — פשוט ענה/י בעברית, בלי fence.');
     // seen live (v2.37): after building a page Gemma told the owner it made a
     // "**Hero**" and a "**CTA**" — module names and English jargon are the
@@ -467,7 +493,9 @@ function buildCopilotBriefing(opts = {}) {
       : '- **A leaf module holds no modules.** ' + leafExampleTags() + ' and every tag the dictionary does not mark container take their content in attributes (`title=`, `excerpt=`, `price=`, `href=` …), plus at most plain text between the tags where the dictionary marks a body. **Never** nest `bent-heading` / `bent-text` / `bent-button` inside them — that is `E_NOT_CONTAINER`: the card comes out empty and its text falls below the grid. Correct: `' + LEAF_EXAMPLE + '`.');
     lines.push('- **One complete document** per page-building reply — `<!DOCTYPE html>` through `</html>`, in an html fence.');
     lines.push('- **Real copy, never lorem ipsum.** Write text that could ship as-is.');
-    lines.push('- **Never invent image paths.** A real media list follows; if nothing fits, say so.');
+    lines.push(noMedia
+      ? '- **The site has no images:** no `bent-image`/`bent-gallery`, no `image=`/`src=` — any path is a broken picture. Tell the owner to upload.'
+      : '- **Never invent image paths.** A real media list follows; if nothing fits, say so.');
     lines.push('- For non-building questions (how to change a colour, where menus live) just answer plainly, no fence.');
     if (!compact) lines.push('- **When you tell the owner what you built, use plain words** ("the opening", "the call to action", "the price table") — not module names or jargon (hero, CTA, section).');
     if (compact) lines.push('- **This model\'s window is small** — build short, focused pages; a long existing page may not fit for editing, and then say so to the owner instead of guessing.');
@@ -545,7 +573,7 @@ function buildCopilotBriefing(opts = {}) {
 
   // compact: the lite pack's media cap and 60-char alts — every line of a
   // small window is a line the page itself cannot have
-  const mediaMd = mediaInventoryMarkdown(opts.media, he, compact ? LITE_MEDIA_CAP : 0, he ? 'מבעל/ת האתר' : 'the owner');
+  const mediaMd = mediaInventoryMarkdown(opts.media, he, compact ? LITE_MEDIA_CAP : 0, he ? 'מבעל/ת האתר' : 'the owner', { emptyNote: true, compact });
   if (mediaMd) lines.push(mediaMd);
 
   lines.push(he ? '## דוגמה למסמך שלם' : '## A complete document');

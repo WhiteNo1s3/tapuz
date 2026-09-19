@@ -244,11 +244,34 @@ Two couriers: `local` — the server calls the runtime itself; `relay` — the `
 | T12 | "add a link to a page that does not exist" | no invented `page=` on any card |
 | T13 | a second page in the same conversation | a second draft, no collision |
 
+### The dreams track — an owner's own words, judged with the builder (v2.46)
+
+```bash
+LOCAL_LLM_BASE=… LOCAL_LLM_MODEL=… node scripts/battery-copilot.js --track=dreams     # D1–D8   (--track=all runs both)
+```
+
+Ben, reading the first scorecards: *"the prompts given to the llm are not structured in robot language — it is handled with the DREAMS of the customer, so the checks must go on a reasonable human input! … correlate with the pagebuilder."* He is right: the T-scenarios read like a spec ("a hero, three price packages, four FAQs"), and nobody who opens a ceramics studio talks like that. The D-scenarios are the sentences an owner types — vague, warm, sometimes a complaint instead of a request:
+
+| | the owner says | what a person would expect afterwards |
+|---|---|---|
+| D1 | "אני פותחת סטודיו קטן לקרמיקה ביפו. אני רוצה דף שירגיש חם וביתי…" | a page proposal that passes the builder's questions (below) and speaks about *her* studio |
+| D2 | "אני מוכר דבש מהגליל, של המשפחה שלי, כבר שלושה דורות. תעשה לי דף שגורם לאנשים להזמין." | the same |
+| D3 | "הדף הזה נראה לי יבש ומשעמם. תן לו קצת חיים, אבל אל תמחק לי מה שכתבתי." | an edit of THIS page; what she wrote is still there; the page grew; the published page did not move |
+| D4 | "אנשים אומרים לי שהם לא מוצאים איך ליצור איתי קשר. תעזור לי?" — a complaint, not a request | it DOES something, on a card; afterwards contact is easier to reach (near the front, at the top level of a row that now fits, in the footer, or on the page) |
+| D5 | "התפריט שלי נהיה בלגן… תעשה בו סדר שיהיה נעים לעין." | a menu card; it fits one row; no page lost; group names a visitor understands |
+| D6 | "יש לי מבצע לחגים — 20% הנחה… תכניס את זה איפה שנראה לך." | the sale is on the page; the rest survived; published untouched |
+| D7 | "האתר לא מרגיש 'אני'. לא יודעת מה בדיוק. מה אתה מציע?" | a conversation: no card pushed at someone who asked for advice, nothing written, a question back |
+| D8 | one breathless line, no punctuation: "היי תוסיף לי בבקשה בעמוד של הבונה איזה משפט על זה שזה בחינם…" | it finds the page by its name; the sentence is there; the rest survived |
+
+**The battery answers like the owner would.** When the copilot *asks* instead of acting, the owner shrugs — "לא יודעת בדיוק… תחליט אתה" — and when it lays out a plan in words ("אם זה נשמע לך נכון, רק תגיד לי ואבצע" — good manners before touching a live menu) the owner says yes. Twice at most.
+
+**A dream has no spec, so the judge asks the builder's questions** of whatever landed: the **builder opens it** (`/admin/edit/…`), its **preview renders it** (`/admin/preview/…`), **a builder save keeps every module** (blocks → `.pzn` → blocks: same modules, same order), **nothing in it is a raw-HTML block** the owner cannot edit; it is **real** (no lorem ipsum, Hebrew prose, a headline, something to press); it is **about her business** (her own words are in it); and it **invented nothing** — no image path the site does not have, no link to a page nobody made.
+
 Checks are **hard** (site state) or **soft** (wording); a scenario passes on its hard checks and lists its soft misses. Every turn — what was sent, what the card held, the reply, the seconds — is written to `eval/battery/<stamp>-<model>-<courier>.json` (+ `.md`); `eval/` is git-ignored. Results: §5.
 
 ## 3ב. What the door does for a model that is almost right (v2.45)
 
-The family run (§5) showed that a 12B or a 4B-active MoE is *nearly* able to drive the copilot — and loses whole scenarios to three small habits, none of which is about understanding the owner. Each now has an answer in the tool loop; all three keep the rule that **nothing is written without ✓**.
+The family run (§5) showed that a 12B or a 4B-active MoE is *nearly* able to drive the copilot — and loses whole scenarios to a few small habits, none of which is about understanding the owner. Each now has an answer in the tool loop; all three keep the rule that **nothing is written without ✓**.
 
 **1. The document is PRINTED instead of called.** After the door bounces a first proposal, gemma-4-12B and the 26B-A4B send the corrected page as a fenced document in the chat; the 12B does the same with a regrouped menu after `read_menus`; qwen3.6 does it for every page. For a page the chat has a "create from the reply" button (create only — useless for an edit); for a menu there is nothing to press. `ai.adoptPrintedDocument` adopts the document as the call it was meant to be, and it walks the same road a real call walks — preflight, the door's verdict back to the model under the adopted call's id, the approval card with its canvas:
 
@@ -263,6 +286,8 @@ Never adopted: a reply that hit `max_tokens` (half a document), a tool the reque
 **2. A closing tag that is ALMOST the open one.** `</bent/heading>`, `</int-hero>` (26B-A4B), `</bent_qa>` (12B) — and the model **repeats** the typo when the page is sent back: the same error twice in a row, ~30 s of GPU each, then it gives up. A closer has exactly one sane reading. `fixCloserTypos` (`src/pzn/repair.js`) rewrites it to the element that is open — only when the name is not a real tag, nothing on the open stack matches it, and it resembles the innermost open `bent-*` element (same name once `_ / .` read as `-`, same word after the first dash, or two edits away). Plain HTML closers are never touched; a clean document passes byte-identical. It runs inside `repair()` for every forgiving door (`CLOSER_TYPO`) and at the copilot's own strict door, **before** the proposal is shown — the card holds what the write will save.
 
 **3. The door said what was wrong, never what was right.** `<bent-pricing> cannot contain <bent-priceitem>` — twice in a row, because the answer (`bent-plan`) is one line in a 45K-char dictionary. `E_CHILD` now ends with `— it accepts: bent-plan, …` and `E_NOT_CONTAINER` with `— it is a leaf: its content goes in attributes (title, text, href …)`. (The keyword dialect's parser always said `allowed: …`.)
+
+**4. Pictures and links that do not exist (v2.46).** The dreams track on a brand-new site (Gemma 4 31B): *"אני פותחת סטודיו לקרמיקה…"* came back with **nine invented image paths in one page** — a hero, a portrait, three cards, three gallery shots — and three links to sub-pages nobody made. The cause was ours: `mediaInventoryMarkdown` returned **nothing** for an empty library, so the briefing said *"never invent image paths — a real media list follows"* and no list followed; the model filled the gap. Now an empty library is **said** — the full tier gets the section ("הספרייה ריקה… בנה/י את הדף בלי תמונות… אמור/י לבעל/ת האתר להעלות"), both tiers swap the rule line for one that is true (the compact tier has no room for a section — +45 chars, the 8K margin still holds); the paste packs keep their bytes. After it: **zero invented pictures**, and the same page in 40 s instead of 133 s. The door is the net under it (`pageInventions`, `src/ai-tools.js`): a NEW local image path the site does not have, or a NEW internal link that names no page — `/contact` on a site whose contact page is `/צרו-קשר` is a call-to-action that 404s — goes back to the model **once**, in one message, *with the list of the pages that do exist*; whatever a model insists on becomes a line for the owner beside the card ("… יוצגו שבורות עד שתבחרו תמונות בבונה" / "… דפים שעדיין לא קיימים — צרו אותם, או שנו את הקישור"). "New" means not already in the page being edited — an owner's own broken path is not the model's to answer for; external pictures are not judged.
 
 And one honesty guard: when the door refused a proposal this turn and the model's last word is plain words — seen live: *"עדכנתי את כותרת ההירו"* with nothing proposed and nothing saved — the model's sentence stays and the truth goes beside it: **«ההצעה נפסלה בבדיקה… שום דבר לא נשמר ושום דבר לא השתנה, גם אם התשובה אומרת אחרת»**.
 
