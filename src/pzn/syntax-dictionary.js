@@ -16,6 +16,16 @@
 
 const { listModules } = require('./modules/registry');
 const { getCommand, getCommandCatalog } = require('./modules/commands');
+const { version: PACKAGE_VERSION } = require('../../package.json');
+
+// The dictionary is a pure function of the code, so its stamp is the code's
+// version — NOT the wall clock. The stamp rides in the header line of the
+// copilot briefing, ≈ 22% into a 17K-token system prompt that is rebuilt on
+// every owner turn; a millisecond timestamp there made every turn's briefing
+// a new prefix for the runtime's KV cache, so the ~13K tokens after it were
+// re-read on every turn (≈ 3 s on a 5090, ≈ 4 min on a CPU or a laptop —
+// found by the v2.45 battery on llama.cpp: slot similarity 0.188).
+const DICTIONARY_STAMP = 'v' + PACKAGE_VERSION;
 
 // Child-only leaves — nested inside a container, never used at the top level.
 // Kept in the dictionary (agents must know how to fill a container) but marked
@@ -85,7 +95,7 @@ function buildDictionary() {
   return {
     version: '0.1',
     format: 'pzn-bentml',
-    generatedAt: new Date().toISOString(),
+    generatedAt: DICTIONARY_STAMP,
     count: modules.length,
     philosophy: catalog.philosophy,
     document: {
