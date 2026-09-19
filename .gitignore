@@ -81,9 +81,11 @@ config/menu-backups/
 config/inject-log.jsonl
 config/inject-jobs.json
 # Live-model eval output (scripts/eval-injections.js) — the committed report is docs/INJECTION-EVAL.md
-# Only the battery's runbook and hand-written scorecards are tracked; every <stamp>-<model>-<courier>.json/.md stays out.
+# Only the battery's runbook, hand-written scorecards and breakage maps are tracked;
+# every <stamp>-<model>-<courier>.json/.md stays out.
 eval/*
 !eval/battery/
 eval/battery/*
 !eval/battery/RUN-ON-MAC.md
 !eval/battery/SCORECARD-*.md
+!eval/battery/BREAKAGE-*.md

@@ -39,11 +39,15 @@ and before the Mac's ff-only pull to `87493ac`, so this is **2.44 code**, and
 a different build of the model (MLX, more bits) on a different machine than
 §5's 5090 GGUF row. It is a new line, not a re-measurement of 39/39, and it
 is not the 2.45 re-measure either. The gap to §5's 13/13 is real and
-unexplained from this VM: the `.json` beside the `.md` holds every turn
-(`✗` hard misses, `used[]`, `window`, seconds) and the `battery:` header
-line in the console log says which window LM Studio reported — the first
-things to read before naming a cause (build, window, `--parallel`, or the
-code). The 2.45 re-measure (Mac, `87493ac`) is pending: its first process
+unexplained from this VM. **PR #21** (`cursor/breakage-map-human-dreams-014d`)
+carries that run's table and a per-failing-turn map:
+`eval/battery/SCORECARD-2026-09-19-mac-mlx-gemma-4-31b-v244.md` and
+`eval/battery/BREAKAGE-2026-09-19-human-dreams.md` (B1–B5: T3, T4, T6,
+T9/T11, T13). It also reports the run's runtime settings — window probed
+**262,144** and **`--parallel 4`** — neither of which is the documented
+floor (32K, `--parallel 1`; LOCAL-LLM.md §1א, §1ד), so the row is not
+comparable to §5 on settings alone, before build or code enter. Facts only;
+no cause is named there or here. The 2.45 re-measure (Mac, `87493ac`) is pending: its first process
 exited after init with no `eval/battery/` file written — the battery writes
 its artifacts only at the end, so an early exit leaves nothing; the console
 `.out` carries the reason (`BATTERY COPILOT: crashed — …` is exit 2) — and
