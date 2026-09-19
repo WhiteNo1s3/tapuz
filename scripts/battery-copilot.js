@@ -589,13 +589,14 @@ async function judgeLandedPage(chat, c, slug, dream) {
     kept = flatBlocks(again.blocks).map((b) => b.type).join() === flatBlocks(page.draft_blocks != null ? page.draft_blocks : page.blocks).map((b) => b.type).join();
   } catch (e) { c.note('builder round trip threw: ' + e.message.slice(0, 120)); }
   c.hard('a builder SAVE keeps every module (blocks → .pzn → blocks, same modules in the same order)', kept);
-  // — is it real —
-  c.hard('real words — no lorem ipsum, no filler text', !/lorem|ipsum|לורם|איפסום|טקסט לדוגמה|כאן יבוא|\[.{0,30}(?:שם|טקסט|כותרת).{0,30}\]/i.test(src.replace(/<[^>]+>/g, ' ')));
+  // — is it real — the words a visitor reads: text nodes AND the attributes BenTML keeps its words in (a feature card is title= + text=)
+  const prose = src.replace(/<[^>]+>/g, ' ') + ' ' + [...src.matchAll(/\b(?:title|text|subtitle|label|question|answer|caption|quote|alt)="([^"]*)"/g)].map((m) => m[1]).join(' ');
+  c.hard('real words — no lorem ipsum, no filler text', !/lorem|ipsum|לורם|איפסום|טקסט לדוגמה|כאן יבוא|\[.{0,30}(?:שם|טקסט|כותרת).{0,30}\]/i.test(prose));
   if (!dream.existing) c.hard('it is a page, not a stub (' + (dream.minModules || 4) + '+ modules)', flat.length >= (dream.minModules || 4));
-  const prose = src.replace(/<[^>]+>/g, ' ');
   c.soft('it has a headline', types.includes('heading') || types.includes('hero'));
   c.soft('it gives the visitor something to press (a button, a call to action or a form)', types.some((t) => /button|cta|form|contact|whatsapp|pricing|plan/.test(t)));
-  c.soft('Hebrew prose a visitor can read (120+ characters)', (prose.match(/[֐-׿]/g) || []).length >= 120);
+  // an EXISTING page is judged by what changed (the scenario's own checks) — the fixture pages are two lines long, and "add my sale" is one line more
+  if (!dream.existing) c.soft('Hebrew prose a visitor can read (120+ characters)', (prose.match(/[֐-׿]/g) || []).length >= 120);
   // — is it about MY business —
   const hits = (dream.words || []).filter((w) => prose.includes(w));
   c.soft('it speaks about the owner\'s business (' + hits.length + '/' + (dream.words || []).length + ' of their own words: ' + hits.join(', ') + ')', hits.length >= Math.min(2, (dream.words || []).length));
@@ -674,6 +675,11 @@ const DREAMS = [
     run: async (chat, c) => {
       resetMenus();
       const slug = 'הבונה';
+      // the roads to her that every live page holds BEFORE the turn (a draft an earlier scenario left is not this one's doing)
+      const ROADS = /צרו-קשר|tel:|mailto:|wa\.me|bent-(?:form|contact|whatsapp)/g;
+      const roads = (src) => (String(src).match(ROADS) || []).length;
+      const live = site.slugs().filter((p) => p !== slug && p !== 'צרו-קשר' && site.published(p));
+      const roadsBefore = new Map(live.map((p) => [p, Math.max(roads(site.draft(p)), roads(site.published(p)))]));
       const d = await dreamTurn(chat, c, 'אנשים אומרים לי שהם לא מוצאים איך ליצור איתי קשר. תעזור לי?', onPage(slug));
       c.hard('the turn completes', !!d.ok);
       c.hard('it DOES something about it — a page edit or a menu change on a card (not only advice)', !!(d.pending && /edit_page|organize_menu|create_page/.test(d.pending.tool)));
@@ -695,9 +701,13 @@ const DREAMS = [
       // found a lone button, and rebuilt it with a phone, a mail address, WhatsApp and a form — a fair answer)
       const WAYS = /tel:|mailto:|wa\.me|bent-(?:form|contact|whatsapp)/;
       const contactPageBetter = WAYS.test(site.draft('צרו-קשר')) && !WAYS.test(seedSource({ full_path: 'צרו-קשר', title: 'צרו קשר' }));
-      c.hard('contact is now easier to reach: near the front, at the top level of a row that now fits, in the footer, on the page — or the contact page itself now offers a way to reach out',
-        contactUp || contactVisible || contactInFooter || contactOnPage || contactPageBetter);
-      c.note('contact: ' + [contactUp && 'near the front', contactVisible && 'top level of a one-row menu', contactInFooter && 'in the footer', contactOnPage && 'on the page', contactPageBetter && 'the contact page now has real ways to reach out'].filter(Boolean).join(' · '));
+      // …or a NEW road to her on another page that is already live (seen from the 12B: it opened the HOME page and put a
+      // "צרו איתי קשר" button in the hero — the front door is where a lost visitor looks). A brand-new draft page does not
+      // count: nothing leads to it.
+      const contactElsewhere = live.find((p) => roads(site.draft(p)) > roadsBefore.get(p));
+      c.hard('contact is now easier to reach: near the front, at the top level of a row that now fits, in the footer, on the page, on another live page — or the contact page itself now offers a way to reach out',
+        contactUp || contactVisible || contactInFooter || contactOnPage || !!contactElsewhere || contactPageBetter);
+      c.note('contact: ' + [contactUp && 'near the front', contactVisible && 'top level of a one-row menu', contactInFooter && 'in the footer', contactOnPage && 'on the page', contactElsewhere && ('a new road to contact on "' + contactElsewhere + '"'), contactPageBetter && 'the contact page now has real ways to reach out'].filter(Boolean).join(' · '));
       resetMenus();
     }
   },
