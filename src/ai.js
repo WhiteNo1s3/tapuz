@@ -652,6 +652,84 @@ function embeddedCall(text, hop, toolNames) {
 }
 
 /**
+ * v2.45 — a DOCUMENT the model printed instead of handing it to the write
+ * tool. The copilot battery, across the Gemma 4 family (2026-09-19): the 12B
+ * reads the menus, regroups them well — and PRINTS the `<bent-menus>` document
+ * in a fence; it reads a page, is told its first proposal has a typo — and
+ * prints the corrected page. qwen3.6 does it for every page. For a page the
+ * chat screen has a "create from the reply" button (create only — useless for
+ * an edit); for a menu there is nothing to press at all. The work is done and
+ * the owner cannot take it.
+ *
+ * So a printed document is adopted as the call it was meant to be, and walks
+ * the SAME road a real call walks — preflight, the door's verdict back to the
+ * model, the approval card with its canvas. Nothing is written without ✓;
+ * the only thing that changes is that the owner is offered the card.
+ *
+ *   <bent-menus>…</bent-menus>          → organize_menu, when the model READ
+ *                                         the menus this turn (read_menus ran)
+ *   <!DOCTYPE html>…</html> + bent-*    → edit_page of a page the model READ
+ *                                         this turn (the doc's bent-slug, else
+ *                                         the open page) · create_page when
+ *                                         the slug names no page
+ *
+ * Not adopted, on purpose: a page that exists and was NOT read this turn (an
+ * edit replaces the whole page — the read-before-edit rule); a menu from a
+ * model that never called read_menus — organize_menu replaces whole menus, and
+ * a model with no tool support at all is the v2.43 "weaker mode", which stays
+ * describe-only (the tester's gate 3: shown closable, never approvable); a reply that hit
+ * max_tokens (half a document), a tool the request did not declare, and a
+ * turn where the owner asked to SEE the code ("תראה לי את הקוד") — printing is
+ * what they wanted. openai-chat shape only: the models that do this are local.
+ * @returns {object|null} a readReply-shaped reply holding one write call
+ */
+const SHOW_CODE_RE = /(?:תראה|תראי|הראה|הראי|הצג|הציגי|להציג|לראות|תדפיס|הדפס)[^.\n]{0,24}(?:קוד|מקור|pzn|bentml)|\b(?:show|print|see|view)\b[^.\n]{0,24}\b(?:code|source|markup)\b/i;
+function adoptPrintedDocument(text, o = {}) {
+  const s = String(text || '');
+  if (!s.trim() || SHOW_CODE_RE.test(String(o.userText || ''))) return null;
+  const declared = Array.isArray(o.declared) ? o.declared : [];
+  let name = '';
+  let input = null;
+  let block = '';
+  let m = /<bent-menus[\s>][\s\S]*?<\/bent-menus>/i.exec(s);
+  if (m && !/<!DOCTYPE html/i.test(s)) {
+    if (!declared.includes('organize_menu') || !(Array.isArray(o.used) ? o.used : []).includes('read_menus')) return null;
+    name = 'organize_menu';
+    block = m[0];
+    input = { document: block };
+  } else if ((m = /<!DOCTYPE html[\s\S]*?<\/html>/i.exec(s)) && /<bent-/i.test(m[0])) {
+    block = m[0];
+    const pages = require('./pages');
+    const exists = (p) => !!(p && pages.getPageByFullPath(p));
+    const slugM = /<meta\s+name=["']bent-slug["']\s+content=["']([^"']+)["']/i.exec(block);
+    const slug = slugM ? slugM[1].trim() : '';
+    const open = String(o.page || '').trim();
+    const target = slug ? (exists(slug) ? slug : '') : (exists(open) ? open : '');
+    if (target) {
+      if (!(Array.isArray(o.reads) ? o.reads : []).includes(target) || !declared.includes('edit_page')) return null;
+      name = 'edit_page';
+      input = { slug: target, source: block };
+    } else {
+      if (!declared.includes('create_page')) return null;
+      name = 'create_page';
+      input = { source: block };
+    }
+  }
+  if (!name) return null;
+  // what is left of the reply once the document (and the fence it sat in) is lifted out
+  const prose = s.replace(block, '').replace(/```[a-z]*\s*```/gi, '').trim();
+  const id = 'doc_' + (Number(o.hop) || 0);
+  return {
+    text: prose,
+    calls: [{ id, name, input }],
+    raw: { role: 'assistant', content: prose || null, tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(input) } }] },
+    finish: 'tool_calls',
+    dropped: false,
+    adopted: name
+  };
+}
+
+/**
  * Pull tool calls + text out of either provider's reply shape — and read the
  * finish reason, because it is evidence:
  *   'tool_calls' with no calls  = the 0.4.0 bridge dropped them (dropped:true)
@@ -836,7 +914,7 @@ function pickCopilotTier(o = {}) {
  *  Rejections carry `.code` ∈ ERROR_CODES and, when there is a click path,
  *  `.fix` (a second Hebrew line).
  */
-async function converse({ system = '', systemFor = null, user = '', history = [], approve = null, step = null, window: hint = null } = {}) {
+async function converse({ system = '', systemFor = null, user = '', history = [], approve = null, step = null, window: hint = null, context = null } = {}) {
   const tools = require('./ai-tools');
   const s = load();
   const provider = getProvider(s.provider || 'claude');
@@ -936,6 +1014,9 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       extra: [],             // this turn's tool units (appended as they happen)
       userChars: text.length,
       userText: text.slice(0, 1500), // the menu door's brief (v2.43) — the organizer's own BRIEF_MAX
+      // the page open in the builder / the copilot's canvas (v2.45): where a
+      // PRINTED page with no slug of its own belongs (adoptPrintedDocument)
+      page: context && typeof context === 'object' && context.page ? String(context.page).slice(0, 200) : '',
       used: [],
       reads: [],
       hop: 0,
@@ -1162,7 +1243,17 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       st.lastPromptTokens = usage.prompt_tokens;
     }
 
-    const reply = readReply(style, data, { hop: st.hop, toolNames });
+    let reply = readReply(style, data, { hop: st.hop, toolNames });
+    // v2.45 — a document the model PRINTED is adopted as the write it was
+    // meant to be, and walks the same road: preflight → the approval card
+    if (style === 'openai-chat' && !reply.calls.length && !reply.dropped && reply.finish !== 'length') {
+      const declared = st.menus === false ? toolNames.filter((n) => n !== 'read_menus' && n !== 'organize_menu') : toolNames;
+      const adopted = adoptPrintedDocument(reply.text, { hop: st.hop, declared, reads: st.reads, used: st.used, page: st.page, userText: st.userText });
+      if (adopted) {
+        reply = adopted;
+        st.notice = win.HE.adoptedPrinted;
+      }
+    }
     if (reply.dropped) {
       throw coded(win.HE.bridgeDroppedTools(st.bridgeVersion), 'BRIDGE_DROPPED_TOOLS', { fix: win.HE.fixBridge, bridgeVersion: st.bridgeVersion });
     }
@@ -1178,6 +1269,14 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         // with nothing done is the error it always was
         if (st.memo || st.used.length) return envelope({ memo: st.memo || win.HE.memoRead([...new Set(st.used)]) });
         throw coded(win.HE.emptyReply, 'EMPTY_REPLY');
+      }
+      // v2.45 — the door sent a proposal back this turn, and the model's last
+      // word is… words. Battery T3 (Gemma 4 12B): a typo'd edit was refused,
+      // and the next reply said "עדכנתי את כותרת ההירו" with no document and no
+      // call — nothing was proposed, nothing was saved, and the owner was told
+      // it was done. The model's sentence stays; the truth goes beside it.
+      if ((st.refusals || 0) > 0 && !st.applied) {
+        st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.refusedThenWords;
       }
       return envelope({ reply: reply.text, truncated: reply.finish === 'length' });
     }
@@ -1224,6 +1323,11 @@ async function converse({ system = '', systemFor = null, user = '', history = []
           write.input = Object.assign({}, write.input, { source: g.source });
           st.notice = require('./ai-html-guard').scrubNotice(g.scrubbed);
         }
+        // v2.45 — and a closer that is almost the open tag is read as that tag
+        // (pzn/repair.js fixCloserTypos), here too: what the card holds is
+        // what the write will save
+        const closers = require('./pzn/repair').fixCloserTypos(write.input.source);
+        if (closers.fixed) write.input = Object.assign({}, write.input, { source: closers.source });
       }
       // v2.37 — a proposal the write would refuse never reaches the owner.
       // Live (Bridge challenges, Gemma 4 31B): a bent-faq holding bent-fold
@@ -1418,6 +1522,7 @@ module.exports = {
   LOCAL_TIMEOUT_MS,
   PUBLIC_TIMEOUT_MS,
   turnCeilingMs,
+  adoptPrintedDocument,
   // the window (v2.32): what the routes and the setup screen ask
   planWindow,
   // …and whether that window gets the menu tools (v2.43)

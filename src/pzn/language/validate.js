@@ -80,7 +80,11 @@ function validate(doc, opts = {}) {
           issues.push({
             severity: 'error',
             code: 'E_CHILD',
-            message: `<bent-${parent.name}> cannot contain <bent-${node.name}>`,
+            // v2.45 — name the fix. The copilot battery heard the 26B-A4B propose
+            // `bent-pricing ⊃ bent-priceitem` twice in a row: the door said what
+            // was wrong, never what was right, and the answer is one line in a
+            // 45K-char dictionary. (src/bentml/parse.js always said "allowed: …".)
+            message: `<bent-${parent.name}> cannot contain <bent-${node.name}> — it accepts: ${parentDef.accept.map((n) => 'bent-' + n).join(', ')}`,
             path
           });
         }
@@ -89,7 +93,7 @@ function validate(doc, opts = {}) {
         issues.push({
           severity: 'error',
           code: 'E_NOT_CONTAINER',
-          message: `<bent-${parent.name}> cannot have child modules`,
+          message: `<bent-${parent.name}> cannot have child modules — it is a leaf: its content goes in attributes (${Object.keys(parentDef.props || {}).slice(0, 10).join(', ')})`,
           path
         });
       }
