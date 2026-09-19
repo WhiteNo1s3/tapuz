@@ -2,7 +2,7 @@
 
 > **Purpose:** survive a lost Claude/Grok/Cursor chat, a crash, or a night's sleep.
 > Refresh it whenever a milestone lands or the direction changes (§12).
-> **Last updated:** 2026-09-19 — v2.45-alpha (the Gemma 4 family measured; the door helps a model that is almost right), live and deploying from main.
+> **Last updated:** 2026-09-19 — v2.46-alpha (the battery speaks the owner's language; an empty media library is said, invented pictures and links go back once), live and deploying from main.
 
 ---
 
@@ -36,8 +36,8 @@ The part that makes it different from a page builder: **the owner's own model do
 
 | | |
 |---|---|
-| Package / ROADMAP | **`2.45.0-alpha`** — the Version Log's top row must name it (`smoke-version`) |
-| Main tip | the v2.45 merge — `git log -1 origin/main` |
+| Package / ROADMAP | **`2.46.0-alpha`** — the Version Log's top row must name it (`smoke-version`) |
+| Main tip | the v2.46 merge — `git log -1 origin/main` |
 | Recommended local model | **Gemma 4**, by card: 12–16 GB → 12B (Google's QAT 4-bit), 24 GB → 26B-A4B, 32 GB → 31B; the E-models run the one-shot packs only (`docs/LOCAL-LLM.md` §1א, §5) |
 | Live | deploys from `main` on merge; the generator meta carries version + stamp + sha |
 | CI | `.github/workflows/security.yml` — gitleaks, the test suite, npm audit (high+, prod deps); Node 24 |
@@ -61,6 +61,8 @@ The part that makes it different from a page builder: **the owner's own model do
 **A model's HTML is untrusted.** `src/ai-html-guard.js` scrubs script, `on…=` and `javascript:` out of every `bent-html` a model wrote, on every AI door; admin previews render in a sandboxed iframe without same-origin. `docs/security.md` §5.
 
 **The copilot is measured, not assumed (v2.44).** `scripts/battery-copilot.js` asks a REAL local model thirteen things the way an owner asks them and judges by what landed in the pages and menus tables (`docs/LOCAL-LLM.md` §3א, results §5). It is how the 30-second socket, the shared window, the unreadable-own-page at 8K, the page-dropping menu and the `PZN_READY` reply were found — every one of them invisible to a canned smoke. One GPU job at a time: LM Studio's window is a pool (`--parallel 1`, §1ד).
+
+**Test with an owner's words, not a spec (v2.46).** Ben's rule: the customer brings DREAMS, so a check must start from a reasonable human sentence and be judged the way that person would judge — and against the page builder (does it open, render, survive a save). `node scripts/battery-copilot.js --track=dreams` is that; its first run found nine invented pictures in one page. When you add a copilot feature, add a dream for it, not only a T-scenario — and when a model's answer surprises the judge, ask whether a person would have accepted it before calling it a miss.
 
 **The door helps a model that is almost right (v2.45).** A document the model PRINTED instead of calling the write tool is adopted as that call — same preflight, same approval card — but only for a page or a menu it READ this turn; a closing tag that almost matches is read as the open element; `E_CHILD` names what the container accepts; a refused proposal followed by plain words gets "nothing was saved" beside it (`docs/LOCAL-LLM.md` §3ב). When a smaller model fails a scenario, run the battery with `--courier=relay` first: the transcript shows what the door told it.
 
@@ -275,6 +277,7 @@ Closes the loop: pageview → interest tag → **site-wide map** → live segmen
 | 2א | The visitor chat on a slow local model | `src/crm/cs.js` still rides `server.js`'s 30 s idle cap. It is a PUBLIC route, so the cap was left alone on purpose (slow-loris); a local model that needs more than 30 s for a visitor's answer loses the socket. Stream it, or answer async. |
 | 2ב | The battery over the real extension | `--courier=relay` plays the Bridge from Node. The same thirteen sentences through Chrome + Bridge V2 would also cover the stream accumulator (does LM Studio's mid-stream pool error reach the page as `WINDOW_SHARED`?). Never against production: the battery approves its own proposals, and an approved menu is LIVE. |
 | 2ג | The rest of the model survey | Downloaded on the 5090 and not measured yet: Google's QAT builds of the 26B-A4B and the 31B, `DictaLM-3.0-Nemotron-12B-Instruct` and `DictaLM-3.0-24B-Thinking` (Dicta's Hebrew models), `gpt-oss-20b`. Same suite as §5's family table. |
+| 2ו | A picture slot the owner can fill | With an empty library the copilot now builds WITHOUT images. What an owner may want instead is a slot: an image module with no source that the builder shows as "choose a picture" and the published page simply omits. Today the renderer prints `<img src="">` for an empty source — a product decision (renderer + builder), not a door. |
 | 2ה | Read-before-edit, enforced | The briefing says "חובה לקרוא דף לפני שעורכים אותו"; only the v2.45 ADOPTION enforces it. A real `edit_page` call for a page the model did not `read_page` this turn still reaches the card (battery T6, gemma-4-26B-A4B: the paragraph beside the edited heading vanished). Send it back once ("קרא/י את הדף קודם"), like `PAGES_LOST`; the scripted smokes that edit without reading need a `read_page` first. |
 | 2ד | The E-models in the copilot | gemma-4-E2B/E4B *describe* the tool they are about to call and stop (12–13/26). The packs work on them; the copilot does not. A nudge ("you said you would call read_menus — call it") is the untried idea. |
 | 3 | The theme studio canvas | Still a same-origin iframe; the other admin previews are sandboxed (`docs/security.md` §5). |
@@ -304,6 +307,7 @@ Avoid: multi-feature sprawl; a real hostname in a commit; claiming a live verifi
 | A copilot turn longer than 30 s reaches the owner on a server-side courier | **Yes** from v2.44 — it did not before (the socket was dropped and the turn ran on alone); `smoke-inject-route` holds a slow model on both routes |
 | Two requests can share a local model's window | **No** — LM Studio's context is one pool; concurrent big requests all die. The door says so in Hebrew (`WINDOW_SHARED`); the cure is `--parallel 1` |
 | A local model under 31B can drive the copilot | **Yes from 12B** — measured per size and per card in `docs/LOCAL-LLM.md` §5; the 2B/4B-effective models cannot, and the doc says so |
+| A model's page can show a broken picture or a dead call-to-action | **Much less** from v2.46 — an empty library is said in the briefing, and new image paths / internal links that do not exist go back to the model once; what it insists on is written beside the card for the owner. A draft is still the owner's to read before publishing |
 | The battery ran against the live site or the real extension | **No** — a scratch CMS on localhost; `relay` plays the Bridge's part from Node. Production was only ever checked for its version stamp |
 | Chat context is permanent | **No** — this file and `docs/ROADMAP.md` are the memory |
 
