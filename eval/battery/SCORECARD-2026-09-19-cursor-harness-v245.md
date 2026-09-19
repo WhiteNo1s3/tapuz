@@ -29,7 +29,26 @@ records what the door told the model about each refused proposal (`refusals`
 in the JSON, `↩` lines on the console). Both are harness changes, not product
 changes; the local courier's output shape is unchanged.
 
-## 2. What ran on `7a46053` (Node 24.21.0, Linux)
+## 1א. The live rows — the Mac owns them
+
+Running while this card was written (Ben, 03:29 UTC): the Mac checkout at
+`87493ac` (ff-only), `LOCAL_LLM_BASE=http://127.0.0.1:1234/v1`,
+`LOCAL_LLM_MODEL` **empty** (the loaded model — the `PROVIDER_ERROR` way out,
+`RUN-ON-MAC.md` §2) against `google/gemma-4-31b` **MLX**, `--courier=local
+--runs=1`. The stale 2.44 battery was stopped by killing its node process
+only — nothing unloaded. Console log:
+`~/dev/tapuziel-bridge-v2-install/llm-qa/multi-model/v245-battery/battery-v245.out`;
+expected artifacts `eval/battery/<stamp>-model-local.json` + `.md`
+(`model` because the variable was empty). Target: 13/13 — PR #20's 31B
+regression row. That row, when it lands, is a **new** line (MLX build, Mac),
+not a re-measurement of the 5090 GGUF row.
+
+## 2. What ran on `7a46053`, then again on `main` `87493ac` (Node 24.21.0, Linux)
+
+The second pass ran on this branch after merging `origin/main`
+(`bfb976c`): `battery:copilot` gates (SKIPPED, exit 0), the same 15 targeted
+smokes all PASS, `test:smoke` exit 0, `test:pzn` 158/158 — identical to the
+worktree pass, as the identical tree predicts.
 
 | targeted smoke | result |
 |---|---|
