@@ -9,7 +9,7 @@ the Mac / 5090 runs (`RUN-ON-MAC.md`).
 | what | PR #20 `claude/copilot-adopts-printed-documents` — *v2.45-alpha — a model that is almost right gets the rest of the way* |
 | git SHA | `7a46053` (2 commits over `deeed4a`: `1f09cb7` feat, `7a46053` release) |
 | package | `tapuziel@2.45.0-alpha` |
-| `main` at run time | still `deeed4a` / `2.44.0-alpha` — 2.45 was **open, not merged** (03:24–03:40 UTC) |
+| `main` at run time | `deeed4a` / `2.44.0-alpha` while validating (03:24–03:40 UTC); PR #20 **merged at 03:27 UTC as `87493ac`** — its tree is byte-identical to the validated `7a46053` (`git diff 7a46053 origin/main` is empty), so these results are `main`'s |
 | runtime | Linux (Cursor Cloud VM), Node v24.21.0, validated in a detached worktree of the PR head |
 | model reachable | none (no `LOCAL_LLM_*`, nothing on `127.0.0.1:1234`) |
 | `battery:copilot` | exists; gates with `BATTERY COPILOT: SKIPPED`, exit 0 (verified on 7a46053) |
