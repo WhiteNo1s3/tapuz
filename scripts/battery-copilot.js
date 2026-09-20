@@ -933,6 +933,24 @@ const DREAMS = [
 
 // ── run ──────────────────────────────────────────────────────────────────
 (async () => {
+  // A battery that was killed leaves its SERVER alive on this port. The next run's own server then
+  // cannot bind, waitUp() is answered by the OLD one, and every turn talks to yesterday's site while the
+  // judge reads today's empty one: "applied.created = true" next to "✗ a new draft exists", a leftover
+  // `pricing` page, a backup the judge cannot find. That is the whole signature of the Mac's 7/13 row
+  // (eval/battery/SCORECARD-2026-09-19-mac-mlx-gemma-4-31b-v244.md, B1–B5). Refuse to measure a stranger.
+  const stranger = await new Promise((resolve) => {
+    const probe = http.get(BASE + '/', (res) => { res.resume(); resolve(true); });
+    probe.on('error', () => resolve(false));
+    probe.setTimeout(1500, () => { probe.destroy(); resolve(false); });
+  });
+  if (stranger) {
+    console.error('battery: something already answers on ' + BASE + ' — most likely the server of an earlier battery that was interrupted.\n' +
+      '  Running on would talk to THAT site and judge this one. Stop it first:\n' +
+      '    macOS / Linux:  lsof -ti :' + PORT + ' | xargs kill\n' +
+      '    Windows:        Get-NetTCPConnection -LocalPort ' + PORT + ' | % { Stop-Process -Id $_.OwningProcess -Force }\n' +
+      '  …or choose another port: BATTERY_PORT=3949');
+    process.exit(2);
+  }
   seed();
   const ai = require('../src/ai');
   ai.saveSettings(COURIER === 'relay' ? { provider: 'browser', model: LLM_MODEL } : { provider: 'local', baseUrl: LLM_BASE, model: LLM_MODEL });
@@ -940,10 +958,14 @@ const DREAMS = [
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], {
     env: { ...process.env, TAPUZ_ROOT: ROOT, PORT: String(PORT) }, stdio: 'ignore'
   });
+  // …and if OUR server dies under the run (a port taken in the race, a crash), say so instead of timing out turn by turn
+  let serverGone = '';
+  child.on('exit', (code) => { serverGone = 'the battery\'s own server exited (code ' + code + ')'; });
   const results = [];
   let exit = 0;
   try {
     await waitUp();
+    if (serverGone) throw new Error(serverGone + ' — nothing was measured');
     const login = await req('POST', '/admin/login', { form: { username: 'owner', password: 'owner-pass-1' } });
     const cookie = String(login.headers['set-cookie'] || '').split(';')[0];
     const win = (await req('GET', '/admin/api/ai/window', { cookie })).json || {};
