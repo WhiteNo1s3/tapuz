@@ -139,6 +139,31 @@ function lib(body, env) {
   check('…and the row for the other variant says what to click, instead of "did not load"', /THE OTHER VARIANT IS SELECTED/.test(lib('other_variant_note "google/gemma-4-31b@8bit" "google/gemma-4-31b@4bit"').out) && /choose the 8bit variant/.test(lib('other_variant_note "google/gemma-4-31b@8bit" "google/gemma-4-31b@4bit"').out));
   check('B1 a repo that is not on disk resolves to nothing (and a repo that is a PREFIX of another does not match it)', lib('resolve_key lmstudio-community/gemma-4-12B-it-MLX-8bit').out === '' && lib('resolve_key lmstudio-community/gemma-4-31B-it-MLX').out === '');
 
+  // ── the re-run: what to click BEFORE the night, and one row AFTER the click ──
+  // A pair (8-bit + 4-bit) under one virtual key can never both be selected, so the pair takes two passes with a
+  // click between them. The first script told Ben that in the morning, row by row; `variants` tells him before.
+  writeState(base());
+  const plan = lib('variants_report').out;
+  check('variants: the 8-bit row of a virtual model whose 4-bit is selected says CLICK NEEDED, and which build to choose',
+    /gemma-31b-8bit — CLICK NEEDED: 4bit is selected, this row needs 8bit\. In the app: My Models → the model → choose 8bit/.test(plan));
+  check('variants: …its 4-bit row is ready, a plain (non-virtual) key is ready, and a model not on disk says the run downloads it',
+    /gemma-31b-4bit — ready \(google\/gemma-4-31b@4bit\)/.test(plan) && /gemma-26b-a4b-8bit — ready \(gemma-4-26b-a4b-it-mlx@8bit\)/.test(plan) && /gemma-12b-8bit — not on disk yet/.test(plan));
+  check('variants: one line for every model on the list — nothing skipped silently', (plan.match(/^ {3}\S+ — /gm) || []).length === (src.match(/^[ABC]\|/gm) || []).length);
+  check('variants is READ-ONLY: no download, no load, no unload', !readState().gets && !readState().loads && !readState().unloaded);
+  const only = spawnSync('bash', [sh(SCRIPT), 'variants'], { encoding: 'utf8', cwd: ROOT, env: { ...process.env, LMS: sh(LMS), SMOKE: '1', MLX_OUT: sh(path.join(TMP, 'out3')), LLM: 'http://127.0.0.1:9' } });
+  check('`mlx-survey.sh variants` alone needs no preflight — no server, no GPU check: it works while Ben\'s own model is loaded', only.status === 0 && /CLICK NEEDED/.test(only.stdout || '') && !/== preflight/.test(only.stdout || ''));
+  check('known: a tier, a tag and a step are arguments; a typo is not', lib('known A && known gemma-31b-4bit && known sanity && known variants && ! known gemma-31b-4bits && ! known D && echo yes').out === 'yes');
+  const typo = spawnSync('bash', [sh(SCRIPT), 'gemma-31b-4bits'], { encoding: 'utf8', cwd: ROOT, env: { ...process.env, LMS: sh(LMS), SMOKE: '1', MLX_OUT: sh(path.join(TMP, 'out3')) } });
+  check('a mistyped tag is REFUSED (exit 2) before anything runs — never a run that silently measured nothing', typo.status === 2 && /is not a step .* a tier .* or a tag on the list/.test(typo.stdout || '') && !/== preflight/.test(typo.stdout || ''));
+  check('the main loop selects a model by its TAG as well as by its tier', /\[ "\$tier" = "\$t" \] \|\| \[ "\$tag" = "\$t" \]/.test(src));
+  // the card after two passes: the blocked row is superseded by the measured one; a measured row is never dropped
+  const T = (tag, dreams, note) => [tag, 'repo', 'key', '8bit', '31 GiB', '32768', '262144', '32768', '32768', dreams, dreams === '-' ? '-' : '4/5', dreams === '-' ? '-' : '5/5', note].join('\t');
+  fs.writeFileSync(path.join(TMP, 'two-pass.tsv'), [T('gemma-31b-8bit', '25/28 PASS', ''), T('gemma-31b-4bit', '-', 'THE OTHER VARIANT IS SELECTED'), T('gemma-12b-8bit', '-', 'NOT DOWNLOADED'), T('gemma-31b-4bit', '24/28 PASS', ''), T('gemma-31b-8bit', '26/28 PASS', '')].join('\n') + '\n');
+  const card = lib('card_rows "' + sh(path.join(TMP, 'two-pass.tsv')) + '"').out.split('\n');
+  check('card_rows: a row that was NOT measured disappears once a later row of the same tag exists…', card.length === 4 && !card.some((l) => /^gemma-31b-4bit\t.*OTHER VARIANT/.test(l)) && card.some((l) => /^gemma-31b-4bit\t.*24\/28/.test(l)));
+  check('card_rows: …a not-measured row with nothing after it STAYS (the card says what did not run), and a measured row is never dropped — both 8-bit passes show',
+    card.some((l) => /^gemma-12b-8bit\t.*NOT DOWNLOADED/.test(l)) && card.filter((l) => /^gemma-31b-8bit\t/.test(l)).length === 2);
+
   // ── B3: who is on the GPU ───────────────────────────────────────────────
   setModels({ data: [{ id: 'google/gemma-4-31b', type: 'vlm', state: 'not-loaded' }, { id: 'text-embedding-nomic', type: 'embeddings', state: 'loaded' }] });
   check('B3 an EMPTY GPU has no foreign model — the old table scrape read "To" and "lms" out of LM Studio\'s prose (and an embedding model is nobody\'s GPU job)',
