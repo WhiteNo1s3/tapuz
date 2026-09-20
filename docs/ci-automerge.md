@@ -13,6 +13,27 @@ always sees the latest.
   merges it into `main` (`--merge --delete-branch`), gated by
   `--match-head-commit` so only the exact commit that passed CI is landed.
 
+## Drafts
+
+A draft PR does **not** merge, and that is the point of a draft. Two things
+make it behave:
+
+- `automerge.yml` filters drafts out and says so **in green**. A draft is open,
+  so `gh pr list --state open` finds it, and merging one is refused by the API
+  — which used to end the job red. A red automerge run now means a real merge
+  failure again, not somebody's work in progress.
+- `security.yml` lists `ready_for_review` among its `pull_request` types.
+  Without it, marking a draft ready runs nothing (the default types are only
+  `opened`, `synchronize`, `reopened`), so `automerge` — which only ever fires
+  off a `security` run — would never come back, and the PR would sit green,
+  ready and unmerged forever.
+
+**Where this came from.** PR #37 (2026-09-20) was opened as a draft. CI went
+green, automerge fired on that green run and failed with `Pull Request is still
+a draft (mergePullRequest)`. Marking it ready afterwards re-ran nothing, and it
+took a human re-running the failed job to land it. The cost of the fix is one
+extra CI run per draft that is later marked ready.
+
 ## Why a workflow and not a Claude schedule
 
 A Claude scheduled job (session cron) lives **in memory and dies when its
