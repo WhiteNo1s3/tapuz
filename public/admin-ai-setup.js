@@ -178,7 +178,8 @@
       create.innerHTML = p.keyUrl
         ? '🔗 <strong>יצירת מפתח אצל ' + esc(p.label) + ':</strong> ' +
           '<a href="' + esc(p.keyUrl) + '" target="_blank" rel="noopener" dir="ltr">' + esc(p.keyUrl) + '</a>' +
-          '<div class="muted" style="margin-top:4px">נכנסים לקישור, יוצרים מפתח, מעתיקים — וחוזרים להדביק אותו כאן למטה.</div>'
+          '<div class="muted" style="margin-top:4px">נכנסים לקישור, יוצרים מפתח, מעתיקים — וחוזרים להדביק אותו כאן למטה.</div>' +
+          (p.note ? '<div class="muted" style="margin-top:6px">ℹ️ ' + esc(p.note) + '</div>' : '')
         : '';
     }
     var keyInput = $('ai-api-key');
@@ -192,8 +193,10 @@
     }
     var state = $('ai-key-state');
     if (state) {
-      state.textContent = settings.hasKey && settings.provider === p.id
-        ? 'יש מפתח שמור (מסתיים ב-' + settings.keyTail + ') — השדה ריק בכוונה; הדבקה תחליף אותו.'
+      // v2.52 — keys are kept PER supplier: what is on file for the one picked here, never another's
+      var tail = (settings.keyTails || {})[p.id] || '';
+      state.textContent = tail
+        ? 'יש מפתח שמור לספק הזה (מסתיים ב-' + tail + ') — השדה ריק בכוונה; הדבקה תחליף אותו.'
         : 'אין מפתח שמור לספק הזה עדיין.';
     }
   }

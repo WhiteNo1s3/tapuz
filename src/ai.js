@@ -41,10 +41,35 @@ function load() {
   try {
     if (fs.existsSync(STORE_PATH)) {
       const data = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
-      if (data && typeof data === 'object') return data;
+      if (data && typeof data === 'object') return migrateKeys(data);
     }
   } catch (e) { /* fall through */ }
-  return { provider: 'claude', model: '', apiKey: '', baseUrl: '' };
+  return { provider: 'claude', model: '', keys: {}, baseUrl: '' };
+}
+
+/**
+ * v2.52 — ONE KEY PER PROVIDER. The store held a single `apiKey`, and the
+ * setup card's rule is "an empty key field keeps the stored key": an owner who
+ * switched from Claude to OpenAI and pressed Save sent her Anthropic key to
+ * OpenAI in a Bearer header. With five suppliers that bill on the list that is
+ * no longer a corner. Keys now live under `keys[<provider id>]` and a call only
+ * ever takes the key filed under the provider it is calling (keyFor). A file
+ * from before v2.52 is read as it was meant: its one key belongs to the
+ * provider it was saved with. The old field is dropped on the next save.
+ */
+function migrateKeys(data) {
+  const keys = (data.keys && typeof data.keys === 'object' && !Array.isArray(data.keys)) ? { ...data.keys } : {};
+  const legacy = String(data.apiKey || '').trim();
+  const owner = String(data.provider || 'claude');
+  if (legacy && !keys[owner]) keys[owner] = legacy;
+  const out = { ...data, keys };
+  delete out.apiKey;
+  return out;
+}
+
+/** The key filed under THIS provider — never another supplier's. */
+function keyFor(s, providerId) {
+  return String((s && s.keys && s.keys[providerId]) || '').trim();
 }
 
 function save(data) {
@@ -55,19 +80,25 @@ function save(data) {
 /** Public settings — NEVER includes the key itself. */
 function getSettings() {
   const s = load();
-  const key = String(s.apiKey || '');
+  const id = s.provider || 'claude';
+  const key = keyFor(s, id);
+  // which suppliers have a key on file (last four characters, as keyTail always was) — the setup card marks each row
+  const keyTails = {};
+  Object.keys(s.keys || {}).forEach((k) => { const v = keyFor(s, k); if (v && getProvider(k)) keyTails[k] = v.slice(-4); });
   return {
-    provider: s.provider || 'claude',
+    provider: id,
     model: s.model || '',
     baseUrl: s.baseUrl || '',
     hasKey: !!key,
-    keyTail: key ? key.slice(-4) : ''
+    keyTail: key ? key.slice(-4) : '',
+    keyTails
   };
 }
 
 /**
  * @param {{ provider?, model?, apiKey?, baseUrl? }} patch
- *  apiKey: undefined = keep current; '' = clear; value = replace.
+ *  apiKey: undefined = keep current; '' = clear; value = replace — always the
+ *  key of the provider this same patch selects (or the one already selected).
  *  baseUrl: the local runtime's address — REJECTED here if it is not loopback,
  *  so a non-local address can never be stored, let alone called.
  */
@@ -78,7 +109,12 @@ function saveSettings(patch = {}) {
     s.provider = patch.provider;
   }
   if (patch.model !== undefined) s.model = String(patch.model || '');
-  if (patch.apiKey !== undefined) s.apiKey = String(patch.apiKey || '').trim();
+  if (patch.apiKey !== undefined) {
+    const v = String(patch.apiKey || '').trim();
+    const owner = s.provider || 'claude';
+    s.keys = s.keys || {};
+    if (v) s.keys[owner] = v; else delete s.keys[owner];
+  }
   if (patch.baseUrl !== undefined) {
     const raw = String(patch.baseUrl || '').trim();
     if (raw && !resolveLocalEndpoint(raw)) {
@@ -387,12 +423,87 @@ async function postJson(endpoint, headers, body, timeoutMs) {
 // which is also the shape every smoke that pins the request asserts.
 const CACHE_MIN_CHARS = 4700; // ≈ 2,048 tokens at the Hebrew ratio — twice the minimum, so it always takes
 
-/** The `system` field: a plain string, or one cached block when it is worth caching. */
+// v2.52 — WHERE the mark goes. The copilot's system text is the briefing (the
+// module dictionary — identical call after call) and then the SITUATION: the
+// page that is open, and in the builder drawer the selected item WITH ITS TEXT
+// (routes/copilot.js). One block marked at its end hashes both, so every turn
+// in which the owner selected something else missed the cache and paid the
+// 1.25× write again for a dictionary that had not changed. The text is cut at
+// the situation's head — one constant, shared with the route that writes it —
+// and only the briefing is marked; the situation rides after it, unmarked.
+const SITUATION_MARK = '\n\n---\n\n## המצב עכשיו';
+
+/** The `system` field: a plain string, or the cached briefing (+ the unmarked situation) when it is worth caching. */
 function cacheableSystem(provider, system) {
   const text = String(system || '');
   const style = (provider && provider.body && provider.body.style) || 'anthropic-messages';
   if (style !== 'anthropic-messages' || text.length < CACHE_MIN_CHARS) return text;
+  const cut = text.lastIndexOf(SITUATION_MARK);
+  if (cut >= CACHE_MIN_CHARS) {
+    return [{ type: 'text', text: text.slice(0, cut), cache_control: { type: 'ephemeral' } }, { type: 'text', text: text.slice(cut) }];
+  }
   return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+}
+
+// ── the wire, for a supplier that bills (v2.52) ─────────────────────────
+//
+// The loop builds ONE body shape per style and everything in this module reads
+// it (`max_tokens`, the `system` cacheableSystem made). What a particular
+// supplier wants on top is added at the last moment, here, so nothing upstream
+// has to know:
+//   • OpenAI renamed the reply budget (`max_completion_tokens`);
+//   • a cloud model that thinks by default is asked for the level the table
+//     names — the copilot wants an answer, and thinking is billed as output;
+//   • Anthropic, when the system is being cached anyway, also gets a top-level
+//     `cache_control`: the API moves a second breakpoint along the growing
+//     conversation, so hops 2..n of a turn read the page the model just read
+//     (3–10K tokens) at a tenth instead of paying for it again every hop.
+//
+// None of it can be tried without a paid key, so each is REVOCABLE: a 400 that
+// NAMES one of these fields drops it for that supplier (this process) and the
+// same call is repeated once. A supplier's refusal must cost one round trip,
+// never the copilot.
+const OPTIONAL_WIRE_FIELDS = ['cache_control', 'reasoning_effort', 'max_completion_tokens'];
+const refused = new Map(); // provider id → Set of the optional fields it refused
+
+function refusedFields(providerId) {
+  return Array.from(refused.get(providerId) || []);
+}
+
+function wireBody(provider, body) {
+  if (!provider || !isCloudProvider(provider) || !body || typeof body !== 'object') return body;
+  const no = refused.get(provider.id) || new Set();
+  const out = { ...body };
+  if (provider.reasoningEffort && !no.has('reasoning_effort') && out.reasoning_effort === undefined) out.reasoning_effort = provider.reasoningEffort;
+  const field = provider.maxTokensField;
+  if (field && field !== 'max_tokens' && !no.has(field) && out.max_tokens != null) { out[field] = out.max_tokens; delete out.max_tokens; }
+  if (Array.isArray(out.system)) {
+    if (no.has('cache_control')) out.system = out.system.map((b) => String((b && b.text) || '')).join('');
+    else out.cache_control = { type: 'ephemeral' };
+  }
+  return out;
+}
+
+/** Which of OUR optional fields does this 400 complain about? ('' = none, or one already dropped.) */
+function refusedField(provider, data) {
+  const d = Array.isArray(data) ? data[0] : data;
+  const err = d && d.error;
+  const text = (err && typeof err === 'object' ? [err.message, err.param, err.code].filter(Boolean).join(' ') : String(err || ''));
+  const no = refused.get(provider.id) || new Set();
+  return OPTIONAL_WIRE_FIELDS.find((f) => !no.has(f) && text.indexOf(f) >= 0) || '';
+}
+
+async function postWire(provider, endpoint, headers, body, timeoutMs) {
+  let res = await postJson(endpoint, headers, wireBody(provider, body), timeoutMs);
+  if (res.status === 400 && isCloudProvider(provider)) {
+    const field = refusedField(provider, res.data);
+    if (field) {
+      refused.set(provider.id, (refused.get(provider.id) || new Set()).add(field));
+      console.warn('[ai] ' + provider.id + ' refused the optional field "' + field + '" — dropped for this process, the call is repeated');
+      res = await postJson(endpoint, headers, wireBody(provider, body), timeoutMs);
+    }
+  }
+  return res;
 }
 
 /**
@@ -465,8 +576,8 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
   const opts = { maxTokens, timeoutMs };
   const started = Date.now();
   const s = load();
-  const key = String(s.apiKey || '');
   const provider = getProvider(s.provider || 'claude');
+  const key = provider ? keyFor(s, provider.id) : '';
   // The browser-relay provider exists only where a browser does: the owner's
   // copilot (converse via /admin/api/ai/chat). Server-initiated generation —
   // the visitor CS chat, agents, the injection runner — has no bridge to
@@ -524,7 +635,7 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
   for (;;) {
     let res;
     try {
-      res = await postJson(endpoint, headers, body, opts.timeoutMs || (provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS));
+      res = await postWire(provider, endpoint, headers, body, opts.timeoutMs || (provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS));
     } catch (e) {
       // the ceiling passing is its own failure (504 in the runner); anything
       // else is the wire
@@ -1570,7 +1681,7 @@ function turnCeilingMs() {
  */
 async function callProvider(provider, body) {
   const s = load();
-  const key = String(s.apiKey || '');
+  const key = keyFor(s, provider.id);
   if (!key && !provider.keyOptional) throw coded('לא הוגדר מפתח API — הגדירו אותו בצ׳אט (ההגדרות בצד)', 'NO_PROVIDER');
   let endpoint = provider.endpoint;
   if (provider.id === 'local') {
@@ -1592,7 +1703,7 @@ async function callProvider(provider, body) {
 
   let res;
   try {
-    res = await postJson(endpoint, headers, body, provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS);
+    res = await postWire(provider, endpoint, headers, body, provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS);
   } catch (e) {
     if (e && e.code === 'TIMEOUT') throw e;
     if (provider.id === 'local') {
@@ -1671,6 +1782,11 @@ async function planWindow({ hint = null, sizes = null } = {}) {
 }
 
 module.exports = {
+  keyFor,
+  wireBody,
+  refusedFields,
+  cacheableSystem,
+  SITUATION_MARK,
   getSettings,
   saveSettings,
   generate,
