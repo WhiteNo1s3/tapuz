@@ -28,6 +28,10 @@ const {
 // it, the Hebrew that explains it — one module, so the copilot route, the
 // setup screen and the tool loop can never disagree about the numbers.
 const win = require('./ai-window');
+// What a turn COSTS when the brain is a cloud key (v2.51): the price table,
+// the token accounting and the arithmetic, in one module so the copilot, the
+// battery and the eval runner can never disagree about a bill.
+const cost = require('./ai-cost');
 
 const STORE_PATH = path.join(CONFIG_DIR, 'ai.json');
 
@@ -296,9 +300,32 @@ function readUsage(style, data) {
     const out = { prompt_tokens: num(u.prompt_tokens), completion_tokens: num(u.completion_tokens) };
     const details = u.completion_tokens_details;
     if (details && details.reasoning_tokens != null) out.reasoning_tokens = num(details.reasoning_tokens);
+    // v2.51 — the cached part of the prompt. The two shapes disagree about
+    // where it sits, and the disagreement is resolved HERE, once, so nothing
+    // downstream has to know: openai-chat counts cached tokens INSIDE
+    // prompt_tokens, so the part billed at the full rate is what is left after
+    // taking them out.
+    const pd = u.prompt_tokens_details;
+    if (pd && pd.cached_tokens != null) {
+      out.cache_read_tokens = num(pd.cached_tokens);
+      out.billed_input_tokens = Math.max(0, out.prompt_tokens - out.cache_read_tokens);
+    }
     return out;
   }
-  return { prompt_tokens: num(u.input_tokens), completion_tokens: num(u.output_tokens) };
+  // anthropic-messages: input_tokens is ALREADY only the uncached part — the
+  // cached read and the write that created it are reported beside it. So the
+  // whole prompt is the sum of the three, and the billed-at-full-rate part is
+  // input_tokens as given.
+  const out = { prompt_tokens: num(u.input_tokens), completion_tokens: num(u.output_tokens) };
+  const read = num(u.cache_read_input_tokens);
+  const write = num(u.cache_creation_input_tokens);
+  if (u.cache_read_input_tokens != null || u.cache_creation_input_tokens != null) {
+    out.cache_read_tokens = read;
+    out.cache_write_tokens = write;
+    out.billed_input_tokens = out.prompt_tokens;
+    out.prompt_tokens = out.prompt_tokens + read + write;
+  }
+  return out;
 }
 
 /**
@@ -341,6 +368,31 @@ async function postJson(endpoint, headers, body, timeoutMs) {
     req.on('error', reject);
     req.end(payload);
   });
+}
+
+// ── the cached prefix (v2.51) ───────────────────────────────────────────
+//
+// The local tier pays nothing per token; the premium tier pays for every one,
+// and the copilot's tool loop re-sends the SAME prefix on every hop — the
+// BenTML briefing (thousands of tokens), then the tool schemas. Anthropic
+// serves a marked prefix from its cache at a TENTH of the input price, for the
+// price of writing it once at a quarter more. So a fourteen-hop turn stops
+// paying fourteen times for one briefing, which is most of what a premium
+// turn costs.
+//
+// The mark is `cache_control` on the last system block, and it is applied only
+// where it can take: Anthropic ignores a breakpoint under its minimum
+// cacheable prefix (1,024 tokens on the models this table ships) in silence,
+// so a short system prompt keeps the plain-string shape it has always had —
+// which is also the shape every smoke that pins the request asserts.
+const CACHE_MIN_CHARS = 4700; // ≈ 2,048 tokens at the Hebrew ratio — twice the minimum, so it always takes
+
+/** The `system` field: a plain string, or one cached block when it is worth caching. */
+function cacheableSystem(provider, system) {
+  const text = String(system || '');
+  const style = (provider && provider.body && provider.body.style) || 'anthropic-messages';
+  if (style !== 'anthropic-messages' || text.length < CACHE_MIN_CHARS) return text;
+  return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
 }
 
 /**
@@ -390,7 +442,7 @@ function buildRequest(provider, key, system, userText, model, history = [], turn
     body = {
       model: mdl,
       max_tokens: maxTokens,
-      system,
+      system: cacheableSystem(provider, system),
       messages: [...turns, { role: 'user', content: userText }]
     };
   }
@@ -464,7 +516,10 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
     const roomy = biggerBudget(body.max_tokens, contextBudget(provider.id), 0);
     if (roomy) body.max_tokens = roomy;
   }
-  const spent = { prompt_tokens: 0, completion_tokens: 0 };
+  let spent = cost.zero();
+  // null until a provider reports the field at all — an absent count and a
+  // zero one are different answers, and the smokes pin both
+  let reasoning = null;
   let thoughtRetry = false;
   for (;;) {
     let res;
@@ -488,8 +543,9 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
       throw coded('שגיאת ספק: ' + msg, 'PROVIDER_ERROR', { status: res.status, providerMessage: String(msg) });
     }
     const usage = readUsage(style, data);
-    spent.prompt_tokens += usage.prompt_tokens; spent.completion_tokens += usage.completion_tokens;
-    if (usage.reasoning_tokens != null) spent.reasoning_tokens = (spent.reasoning_tokens || 0) + usage.reasoning_tokens;
+    if (usage.reasoning_tokens != null) reasoning = (reasoning || 0) + usage.reasoning_tokens;
+    spent = cost.add(spent, usage);
+    if (reasoning != null) spent.reasoning_tokens = reasoning;
     const text = dig(data, provider.responsePath || ['content', 0, 'text']);
     if (text) {
       return { text, usage: spent, ms: Date.now() - started, provider: { id: provider.id, model }, ...(thoughtRetry ? { thoughtRetry: true } : {}) };
@@ -685,7 +741,7 @@ function composeBody(provider, s, system, turns, toolDefs, maxTokens, effort) {
   const max = Math.max(1, Math.round(Number(maxTokens) || provider.maxTokens || 4096));
   const body = style === 'openai-chat'
     ? { model, max_tokens: max, messages: [{ role: 'system', content: system }, ...turns] }
-    : { model, max_tokens: max, system, messages: turns };
+    : { model, max_tokens: max, system: cacheableSystem(provider, system), messages: turns };
   if (style === 'openai-chat' && (provider.id === 'local' || provider.browserRelay)) {
     // hybrid-thinking models must ANSWER (see buildRequest); v2.50 — a model that cannot be switched off is asked
     // for the LOWEST level it allows (ai-window.js probeReasoningEffort), because "none" means its default to it
@@ -1079,6 +1135,7 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     const text = String(user);
     st = {
       effort,
+      spend: cost.zero(), // the premium tier's meter — emptied by every envelope
       systemFor: sysFor,
       sizes: null,           // measured lazily (each tier once)
       sysCache: {},
@@ -1189,6 +1246,13 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     const w = windowFor(provider, st.key);
     const notice = st.notice;
     st.notice = ''; // shown once
+    // v2.51 — the bill of THIS response, then the counter goes back to zero.
+    // A relayed turn answers the page several times from one `st` (modelCall →
+    // step → … → reply), so a cumulative number would be counted again on
+    // every hop. A delta is summable: add up every `spend` a turn produced and
+    // the total is the turn's, exactly once.
+    const spend = cost.report(provider.id, st.model || w.model || '', st.spend);
+    st.spend = cost.zero();
     return {
       reply: '',
       memo: st.memo || '',
@@ -1212,6 +1276,9 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         ...(w.cap ? { probedTokens: w.probedTokens, cap: w.cap } : {})
       },
       notice,
+      // null on the free tier and whenever nothing was spent — the page shows
+      // a cost line only where there is a cost
+      spend,
       truncated: false,
       ...fields
     };
@@ -1305,6 +1372,11 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     // the silent band: a 200 whose prompt count is above the window means
     // the runtime discarded the middle of the prompt and answered anyway
     const usage = readUsage(style, data);
+    // v2.51 — the bill, before any of the paths below decide what to do with
+    // the reply. A discarded answer (the shrink retry) was still BILLED, so it
+    // is counted here and not at the exits: a turn that cost three calls must
+    // say three, whichever way it ended.
+    st.spend = cost.add(st.spend, usage);
     const known = win.getWindow(st.key);
     // (≥, not >: a prompt exactly the size of the window leaves no room to
     // generate — llama.cpp shifts the context to answer, which is the same

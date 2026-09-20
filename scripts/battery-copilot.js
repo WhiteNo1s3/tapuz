@@ -19,10 +19,27 @@
  *   … node scripts/battery-copilot.js --track=dreams              # an owner's own words (D1–D8), judged with the builder
  *   … node scripts/battery-copilot.js --window=8192            # relay only: the hint an 8K bridge would send
  *
- * Couriers: `local` — the server calls the runtime itself (provider local);
- * `relay` — provider browser: every {modelCall} comes back here, is POSTed to
- * the runtime unchanged, and its answer returns as {step} — what Bridge V2
- * does, minus the extension.
+ * THE PREMIUM TIER (v2.51) — the same sentences, a cloud key instead of the
+ * owner's own machine. The CMS calls the provider itself; every token is on
+ * the bill, so the run carries a meter and a cap:
+ *
+ *   ANTHROPIC_API_KEY=… node scripts/battery-copilot.js --provider=claude \
+ *       --model=claude-haiku-4-5 --track=dreams --only=D1 --budget=1
+ *   XAI_API_KEY=… node scripts/battery-copilot.js --provider=xai \
+ *       --model=grok-4 --price-in=3 --price-out=15 --budget=2
+ *
+ *   --provider=claude|openai|xai|openrouter   the key comes from that provider's own env var
+ *   --model=<id>                              REQUIRED on a cloud provider: a row names its weights
+ *   --budget=<usd>                            the cap; DEFAULT 5, and --budget=0 removes it
+ *   --price-in= --price-out=                  $/million tokens, when this CMS holds no quote
+ *
+ * Couriers: `local` — the server calls the runtime itself (provider local, or
+ * a cloud provider with the owner's key); `relay` — provider browser: every
+ * {modelCall} comes back here, is POSTed to the runtime unchanged, and its
+ * answer returns as {step} — what Bridge V2 does, minus the extension.
+ *
+ * Exit: 0 all passed · 1 a scenario failed · 2 refused (nothing measured) ·
+ * 5 the budget cap stopped the run (what ran is in the card).
  *
  * Checks are HARD (site state: what was written, what was not) or SOFT (the
  * model's wording). A scenario PASSES when every hard check holds; soft
@@ -37,20 +54,109 @@ const http = require('http');
 const https = require('https');
 const { spawn } = require('child_process');
 
-const LLM_BASE = (process.env.LOCAL_LLM_BASE || '').replace(/\/+$/, '');
-const LLM_MODEL = process.env.LOCAL_LLM_MODEL || process.env.EVAL_MODEL || '';
-if (!LLM_BASE) {
-  console.log('BATTERY COPILOT: SKIPPED (set LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 to run against a local model)');
-  process.exit(0);
-}
-
 const argv = process.argv.slice(2);
 const flag = (name, dflt) => {
   const hit = argv.find((a) => a === '--' + name || a.startsWith('--' + name + '='));
   if (!hit) return dflt;
   return hit.includes('=') ? hit.slice(hit.indexOf('=') + 1) : true;
 };
-const COURIER = String(flag('courier', 'local')) === 'relay' ? 'relay' : 'local';
+
+// ── which brain (v2.51) ─────────────────────────────────────────────────
+//
+// `local` is the free tier and the default: a model on the owner's own
+// machine, LOCAL_LLM_BASE. Anything else is the PREMIUM tier — the owner's
+// API key, the CMS calling the provider itself, and every token on the bill.
+// The same fourteen sentences, the same judges, the same site: what changes
+// is who thinks, so the rows compare.
+const cost = require('../src/ai-cost');
+const { getProvider } = require('../src/providers');
+const PROVIDER = String(flag('provider', 'local')).trim() || 'local';
+const CLOUD = PROVIDER !== 'local';
+// One env var per provider, named the way that provider names it, so a key
+// already exported for its own CLI is the key this run uses.
+const KEY_ENV = { claude: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', xai: 'XAI_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+
+const LLM_BASE = (process.env.LOCAL_LLM_BASE || '').replace(/\/+$/, '');
+const LLM_MODEL = String(flag('model', '')) === 'true' ? '' : (String(flag('model', '')) || process.env.LOCAL_LLM_MODEL || process.env.EVAL_MODEL || '');
+
+/** Refuse before anything is spawned, spent or written. A refusal is a result. */
+function refuse(lines) {
+  console.error('BATTERY COPILOT: REFUSED\n  ' + [].concat(lines).join('\n  '));
+  process.exit(2);
+}
+
+if (!CLOUD && !LLM_BASE) {
+  console.log('BATTERY COPILOT: SKIPPED (set LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 to run against a local model,\n' +
+    '  or --provider=claude|openai|xai|openrouter with that provider\'s key in the environment)');
+  process.exit(0);
+}
+
+let CLOUD_KEY = '';
+let PRICE = null;
+if (CLOUD) {
+  const p = getProvider(PROVIDER);
+  if (!p || !p.endpoint) refuse(['"' + PROVIDER + '" is not a provider this CMS ships.', 'The premium tier is: ' + Object.keys(KEY_ENV).join(' · ') + ' — or leave --provider off for a local model.']);
+  CLOUD_KEY = String(process.env[KEY_ENV[PROVIDER]] || '').trim();
+  if (!CLOUD_KEY) refuse([KEY_ENV[PROVIDER] + ' is not set, and ' + p.label + ' will not answer without it.', 'Keys are made at ' + (p.keyUrl || 'the provider\'s console') + ' and look like ' + (p.keyHint || 'a long string') + '.']);
+  // A model the provider's table does not list is SILENTLY replaced by that
+  // table's default inside the CMS (providers.js). In a chat that is a
+  // kindness; in a measurement it is a lie — the row would name weights that
+  // never answered. So the battery insists on a name it can prove.
+  if (!LLM_MODEL) {
+    refuse(['--model is required for a cloud provider: a row has to name the model that answered.',
+      p.openModel ? 'Ids for ' + p.label + ' are listed at ' + (p.modelsUrl || p.keyUrl) + '.' : 'This CMS ships: ' + p.models.join(' · ')]);
+  }
+  if (!p.openModel && !(p.models || []).includes(LLM_MODEL)) {
+    refuse(['"' + LLM_MODEL + '" is not in this CMS\'s list for ' + p.label + ', and the CMS would quietly run ' + p.defaultModel + ' instead.',
+      'The list is: ' + p.models.join(' · '), 'Add the id to src/providers.js if the provider has a newer one.']);
+  }
+}
+
+const COURIER = CLOUD ? 'local' : (String(flag('courier', 'local')) === 'relay' ? 'relay' : 'local');
+if (CLOUD && String(flag('courier', '')) === 'relay') {
+  refuse(['--courier=relay plays the Bridge, which relays to a model on THIS machine.', 'A cloud provider is fetched by the server itself; there is nothing to relay.']);
+}
+
+// ── the money (v2.51) ───────────────────────────────────────────────────
+//
+// Ben's rule for this tier: "a battery that won't cost me a fortune but will
+// provide information". So the cap is the DEFAULT, not the flag — forgetting
+// --budget cannot cost more than this, and only an explicit --budget=0 lifts
+// it. The run stops the moment the meter passes the cap, mid-scenario if that
+// is where it happens, and says what it had measured by then.
+const BUDGET_DEFAULT_USD = 5;
+/** A flag that must be a NUMBER. `--budget` with nothing after it is a typo,
+ *  not a zero, and a typo that lifts a spending cap must never pass quietly. */
+const numFlag = (name) => {
+  const v = flag(name, null);
+  if (v === null) return null;
+  const n = Number(v);
+  if (v === true || !Number.isFinite(n) || n < 0) refuse(['--' + name + ' needs a number (dollars): --' + name + '=2.50']);
+  return n;
+};
+const askedBudget = numFlag('budget');
+const BUDGET = CLOUD ? (askedBudget === null ? BUDGET_DEFAULT_USD : askedBudget) : 0;
+if (CLOUD) {
+  PRICE = cost.priceFor(PROVIDER, LLM_MODEL);
+  const inP = numFlag('price-in');
+  const outP = numFlag('price-out');
+  if ((inP === null) !== (outP === null)) refuse(['--price-in and --price-out come as a pair: half a price prices nothing.']);
+  if (inP !== null && outP !== null) {
+    const given = cost.priceFromNumbers(inP, outP, 'given on the command line');
+    if (!given) refuse(['--price-in / --price-out must both be dollars per million tokens, zero or more.']);
+    PRICE = given;
+  }
+  // No price and a cap asked for is the one combination that cannot be
+  // honoured: a meter with no scale cannot stop at five dollars. Say which
+  // two numbers end the argument rather than running and hoping.
+  if (!PRICE && BUDGET > 0) {
+    refuse(['I hold no price for "' + LLM_MODEL + '" on ' + PROVIDER + ', so I cannot enforce --budget=' + BUDGET + '.',
+      'Give me the two numbers from that provider\'s pricing page, in dollars per MILLION tokens:',
+      '  --price-in=0.20 --price-out=0.50',
+      'Or run with --budget=0 to measure the tokens and price them afterwards (nothing will stop the run).']);
+  }
+}
+
 const ONLY = String(flag('only', '')).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
 const RUNS = Math.max(1, Number(flag('runs', 1)) || 1);
 const WINDOW = Number(flag('window', 0)) || 0;
@@ -196,14 +302,37 @@ const reached = (items, set = new Set()) => {
   return set;
 };
 
+// ── the meter (v2.51) ───────────────────────────────────────────────────
+//
+// Every response the CMS sends carries what THAT response cost (`spend`, a
+// delta — src/ai.js envelope), so adding them up is the run's bill, counted
+// once. The local tier sends nothing and the meter stays at zero.
+let METER = cost.zero();
+const SPENT_USD = () => (PRICE ? cost.costOf(METER, PRICE) : null);
+/** Thrown the moment the cap is passed. It is not a scenario failure — the
+ *  scenario simply never finished, so it is not scored at all. */
+class BudgetStop extends Error {}
+
 // ── one owner turn, whichever courier ────────────────────────────────────
 class Chat {
-  constructor(cookie, log) { this.cookie = cookie; this.history = []; this.log = log; this.calls = 0; this.seconds = 0; this.tokens = 0; }
+  constructor(cookie, log) { this.cookie = cookie; this.history = []; this.log = log; this.calls = 0; this.seconds = 0; this.tokens = 0; this.spend = cost.zero(); }
+
+  /** Book one response's bill, then stop the world if the cap is behind us. */
+  meter(d) {
+    if (!d || !d.spend) return;
+    this.spend = cost.merge(this.spend, d.spend);
+    METER = cost.merge(METER, d.spend);
+    const usd = SPENT_USD();
+    if (BUDGET > 0 && usd != null && usd > BUDGET) {
+      throw new BudgetStop('the cap of ' + cost.usd(BUDGET) + ' was passed (' + cost.usd(usd) + ' spent)');
+    }
+  }
 
   async post(json) {
     const t0 = Date.now();
     let res = await req('POST', '/admin/api/ai/chat', { cookie: this.cookie, json });
     let d = res.json || { ok: false, error: 'non-json (' + res.status + ')' };
+    this.meter(d);
     let steps = 0;
     const used = [];
     const notices = [];
@@ -222,6 +351,7 @@ class Chat {
       this.tokens += (result.usage && result.usage.completion_tokens) || 0;
       res = await req('POST', '/admin/api/ai/chat', { cookie: this.cookie, json: { step: { id: d.modelCall.id, result } } });
       d = res.json || { ok: false, error: 'non-json (' + res.status + ')' };
+      this.meter(d);
     }
     if (d.ok) {
       d.used = [...new Set([...used, ...(d.used || [])])];
@@ -953,7 +1083,16 @@ const DREAMS = [
   }
   seed();
   const ai = require('../src/ai');
-  ai.saveSettings(COURIER === 'relay' ? { provider: 'browser', model: LLM_MODEL } : { provider: 'local', baseUrl: LLM_BASE, model: LLM_MODEL });
+  // The key is stored the way the product stores it — in the site's own
+  // config — and this site is the throwaway one under TAPUZ_ROOT, removed in
+  // the `finally` below. Nothing is written into the checkout.
+  ai.saveSettings(CLOUD
+    ? { provider: PROVIDER, model: LLM_MODEL, apiKey: CLOUD_KEY, baseUrl: '' }
+    : (COURIER === 'relay' ? { provider: 'browser', model: LLM_MODEL } : { provider: 'local', baseUrl: LLM_BASE, model: LLM_MODEL }));
+  if (CLOUD && !ai.getSettings().hasKey) {
+    console.error('BATTERY COPILOT: REFUSED — the key did not reach the site\'s settings; nothing was measured.');
+    process.exit(2);
+  }
 
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], {
     env: { ...process.env, TAPUZ_ROOT: ROOT, PORT: String(PORT) }, stdio: 'ignore'
@@ -963,6 +1102,7 @@ const DREAMS = [
   child.on('exit', (code) => { serverGone = 'the battery\'s own server exited (code ' + code + ')'; });
   const results = [];
   let exit = 0;
+  let budgetStopped = '';
   try {
     await waitUp();
     if (serverGone) throw new Error(serverGone + ' — nothing was measured');
@@ -970,9 +1110,14 @@ const DREAMS = [
     const cookie = String(login.headers['set-cookie'] || '').split(';')[0];
     const win = (await req('GET', '/admin/api/ai/window', { cookie })).json || {};
     console.log(`battery: ${LLM_MODEL || '(loaded model)'} · courier=${COURIER} · runs=${RUNS} · window=${JSON.stringify(win.window || win)}`.slice(0, 400));
+    if (CLOUD) {
+      console.log('battery: PREMIUM TIER — ' + PROVIDER + ' · ' +
+        (PRICE ? '$' + PRICE.in + '/$' + PRICE.out + ' per Mtok (' + PRICE.asOf + ')' : 'price unknown — tokens only') + ' · ' +
+        (BUDGET > 0 ? 'cap ' + cost.usd(BUDGET) + ' (the run stops there)' : 'NO CAP — --budget=0 was asked for'));
+    }
 
     const list = (TRACK === 'dreams' ? DREAMS : TRACK === 'all' ? SCENARIOS.concat(DREAMS) : SCENARIOS).filter((s) => !ONLY.length || ONLY.includes(s.id));
-    for (let run = 1; run <= RUNS; run++) {
+    runs: for (let run = 1; run <= RUNS; run++) {
       if (run > 1) resetSite();
       for (const s of list) {
         const log = [];
@@ -985,18 +1130,31 @@ const DREAMS = [
           note: (text) => notes.push(String(text))
         };
         let crashed = '';
-        try { await s.run(chat, c); } catch (e) { crashed = e.message; checks.push({ kind: 'hard', name: 'the scenario ran to its end (' + e.message + ')', ok: false }); }
+        try { await s.run(chat, c); } catch (e) {
+          // The cap is not a verdict on the model. The scenario was cut off
+          // mid-sentence, so it is not scored, not written, and not counted
+          // in the total — the card says how far the money went instead.
+          if (e instanceof BudgetStop) {
+            budgetStopped = e.message;
+            console.log(`STOP ${s.id}#${run} — ${e.message}; this scenario is not scored`);
+            break runs;
+          }
+          crashed = e.message;
+          checks.push({ kind: 'hard', name: 'the scenario ran to its end (' + e.message + ')', ok: false });
+        }
         const hardMiss = checks.filter((k) => k.kind === 'hard' && !k.ok);
         const softMiss = checks.filter((k) => k.kind === 'soft' && !k.ok);
         const pass = hardMiss.length === 0;
         const tools = [...new Set(log.flatMap((t) => t.used))];
-        console.log(`${pass ? 'PASS' : 'FAIL'} ${s.id}#${run} ${Math.round(chat.seconds)}s · ${tools.join(',') || 'no tools'} — ${s.name}`);
+        const priced = PRICE ? cost.costOf(chat.spend, PRICE) : null;
+        const money = CLOUD ? ' · ' + (priced == null ? chat.spend.calls + ' calls' : cost.usd(priced) + ' (' + cost.usd(SPENT_USD()) + ' so far)') : '';
+        console.log(`${pass ? 'PASS' : 'FAIL'} ${s.id}#${run} ${Math.round(chat.seconds)}s${money} · ${tools.join(',') || 'no tools'} — ${s.name}`);
         hardMiss.forEach((k) => console.log('     ✗ ' + k.name));
         softMiss.forEach((k) => console.log('     ~ ' + k.name));
         notes.forEach((n) => console.log('     · ' + n));
         log.flatMap((t) => t.refusals || []).forEach((r) => console.log('     ↩ the door told the model: ' + r.replace(/\s+/g, ' ').slice(0, 300)));
         log.filter((t) => !t.ok).forEach((t) => console.log('     ! ' + (t.code ? t.code + ': ' : '') + t.error));
-        results.push({ id: s.id, run, name: s.name, pass, seconds: chat.seconds, tools, checks, notes, crashed, turns: log });
+        results.push({ id: s.id, run, name: s.name, pass, seconds: chat.seconds, spend: chat.spend, usd: priced, tools, checks, notes, crashed, turns: log });
         if (!pass) exit = 1;
       }
     }
@@ -1004,16 +1162,47 @@ const DREAMS = [
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const outDir = path.join(__dirname, '..', 'eval', 'battery');
     fs.mkdirSync(outDir, { recursive: true });
-    const name = `${stamp}-${(LLM_MODEL || 'model').replace(/[^\w.-]+/g, '_')}-${COURIER}${WINDOW ? '-' + WINDOW : ''}${TRACK === 'spec' ? '' : '-' + TRACK}`;
+    const name = `${stamp}-${((CLOUD ? PROVIDER + '-' : '') + (LLM_MODEL || 'model')).replace(/[^\w.-]+/g, '_')}-${COURIER}${WINDOW ? '-' + WINDOW : ''}${TRACK === 'spec' ? '' : '-' + TRACK}`;
     const passed = results.filter((r) => r.pass).length;
     const soft = results.reduce((n, r) => n + r.checks.filter((k) => k.kind === 'soft' && !k.ok).length, 0);
     const seconds = Math.round(results.reduce((n, r) => n + r.seconds, 0));
-    fs.writeFileSync(path.join(outDir, name + '.json'), JSON.stringify({ model: LLM_MODEL, courier: COURIER, window: win, passed, total: results.length, softMisses: soft, seconds, results }, null, 2));
-    const md = [`# Copilot battery — ${LLM_MODEL} · ${COURIER}`, '', `${passed}/${results.length} PASS · ${soft} soft misses · ${seconds}s`, '',
-      '| | scenario | s | tools | misses |', '|---|---|---|---|---|',
-      ...results.map((r) => `| ${r.pass ? '✓' : '✗'} ${r.id}#${r.run} | ${r.name} | ${Math.round(r.seconds)} | ${r.tools.join(', ')} | ${r.checks.filter((k) => !k.ok).map((k) => (k.kind === 'hard' ? '✗ ' : '~ ') + k.name).join('<br>')} |`)].join('\n');
-    fs.writeFileSync(path.join(outDir, name + '.md'), md + '\n');
-    console.log(`\nBATTERY COPILOT: ${passed}/${results.length} PASS · ${soft} soft misses · ${seconds}s → eval/battery/${name}.json`);
+    // The premium tier's own two numbers: what the night cost, and what one
+    // point of the verdict cost. A model that scores 26/28 for a dollar and a
+    // model that scores 27/28 for forty are not in the same conversation, and
+    // only the second number says so.
+    const totalUsd = SPENT_USD();
+    const perPoint = totalUsd != null && passed > 0 ? totalUsd / passed : null;
+    const plain = PRICE ? cost.costWithoutCache(METER, PRICE) : null;
+    const spendBlock = CLOUD ? {
+      provider: PROVIDER,
+      budgetUsd: BUDGET || null,
+      stoppedOnBudget: budgetStopped || null,
+      price: PRICE ? { inPerMillion: PRICE.in, outPerMillion: PRICE.out, asOf: PRICE.asOf, source: PRICE.source } : null,
+      tokens: METER,
+      usd: totalUsd,
+      usdPerScenarioPassed: perPoint,
+      usdWithoutPromptCache: plain
+    } : null;
+    fs.writeFileSync(path.join(outDir, name + '.json'), JSON.stringify({ model: LLM_MODEL, provider: CLOUD ? PROVIDER : 'local', courier: COURIER, window: win, passed, total: results.length, softMisses: soft, seconds, spend: spendBlock, results }, null, 2));
+    const md = [`# Copilot battery — ${LLM_MODEL} · ${CLOUD ? PROVIDER : COURIER}`, '', `${passed}/${results.length} PASS · ${soft} soft misses · ${seconds}s`, ''];
+    if (CLOUD) {
+      md.push(`**Cost:** ${totalUsd == null ? 'tokens only, no price held' : cost.usd(totalUsd)}` +
+        (perPoint != null ? ` · ${cost.usd(perPoint)} per scenario passed` : '') +
+        (plain != null && totalUsd != null && plain > totalUsd ? ` · the prompt cache saved ${cost.usd(plain - totalUsd)}` : ''), '',
+        '`' + cost.line(METER, PRICE) + '`', '');
+      if (budgetStopped) md.push(`> **Stopped on budget** — ${budgetStopped}. The rows below are what was measured before that; the rest of the list never ran.`, '');
+    }
+    md.push('| | scenario | s |' + (CLOUD ? ' $ |' : '') + ' tools | misses |', '|---|---|---|' + (CLOUD ? '---|' : '') + '---|---|',
+      ...results.map((r) => `| ${r.pass ? '✓' : '✗'} ${r.id}#${r.run} | ${r.name} | ${Math.round(r.seconds)} |` +
+        (CLOUD ? ` ${r.usd == null ? '-' : cost.usd(r.usd)} |` : '') +
+        ` ${r.tools.join(', ')} | ${r.checks.filter((k) => !k.ok).map((k) => (k.kind === 'hard' ? '✗ ' : '~ ') + k.name).join('<br>')} |`));
+    fs.writeFileSync(path.join(outDir, name + '.md'), md.join('\n') + '\n');
+    const moneyLine = CLOUD ? ' · ' + (totalUsd == null ? cost.line(METER, null) : cost.usd(totalUsd) + (perPoint != null ? ' (' + cost.usd(perPoint) + '/point)' : '')) : '';
+    console.log(`\nBATTERY COPILOT: ${passed}/${results.length} PASS · ${soft} soft misses · ${seconds}s${moneyLine} → eval/battery/${name}.json`);
+    if (budgetStopped) {
+      console.log('BUDGET STOP: ' + budgetStopped + ' — ' + results.length + ' scenarios were measured, the rest never ran.');
+      exit = 5;
+    }
   } catch (e) {
     console.error('BATTERY COPILOT: crashed — ' + e.message);
     exit = 2;

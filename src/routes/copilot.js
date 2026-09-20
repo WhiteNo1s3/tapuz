@@ -791,6 +791,10 @@ router.post('/admin/api/ai/chat', async (req, res) => {
       used: out.used || [],
       reads: out.reads || [],
       window: out.window || null,
+      // v2.51 — what this response cost, when the brain is a cloud key: the
+      // tokens, the price we hold for that model and the money. null on the
+      // free tier (a local model bills nothing) and whenever no call was made.
+      spend: out.spend || null,
       notice: out.notice || '',
       truncated: !!out.truncated
     });
