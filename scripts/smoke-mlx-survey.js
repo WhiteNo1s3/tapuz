@@ -128,6 +128,15 @@ function lib(body, env) {
   check('B2 a bare virtual key is NEVER returned — selectedVariant floats', !/^google\/gemma-4-31b$/m.test(lib('resolve_key lmstudio-community/gemma-4-31B-it-MLX-8bit; resolve_key google/gemma-4-31b').out));
   check('B1 a non-virtual MLX model resolves by its path, case-insensitively', lib('resolve_key lmstudio-community/gemma-4-26b-a4b-it-mlx-8bit').out === 'gemma-4-26b-a4b-it-mlx@8bit' && lib('resolve_key lmstudio-community/Qwen3.5-9B-MLX-8bit').out === 'qwen3.5-9b-mlx');
   check('B1 a GGUF keeps its file in the path / in the variant id — both shapes resolve', lib('resolve_key lmstudio-community/granite-4.2-30b-GGUF').out === 'granite-4.2-30b' && lib('resolve_key lmstudio-community/Muse-Glimmer-30B-GGUF').out === 'meta/muse-glimmer@q4_k_m');
+  // v2.50 — a variant can be IDENTIFIED by its @quant but not LOADED by it: measured on a real two-variant model,
+  // `lms load google/gemma-4-e2b@q8_0` and POST /api/v1/models/load both say "Model not found"; only the bare key
+  // loads, and it loads whatever is SELECTED. So the script asks first, and says so when it is the other one.
+  check('loadable: the 4-bit variant of a virtual model IS the selected one → load the bare key (and the selection is known)',
+    lib('loadable "google/gemma-4-31b@4bit"').out === 'google/gemma-4-31b|google/gemma-4-31b@4bit');
+  check('loadable: the 8-bit variant is NOT selected → the same bare key would load the 4-bit — the caller can tell before loading',
+    lib('loadable "google/gemma-4-31b@8bit"').out === 'google/gemma-4-31b|google/gemma-4-31b@4bit');
+  check('loadable: a plain key that merely CONTAINS "@8bit" (two downloads sharing a base name) loads as it is', lib('loadable "gemma-4-26b-a4b-it-mlx@8bit"').out === 'gemma-4-26b-a4b-it-mlx@8bit|' && lib('loadable "qwen3.5-9b-mlx"').out === 'qwen3.5-9b-mlx|');
+  check('…and the row for the other variant says what to click, instead of "did not load"', /THE OTHER VARIANT IS SELECTED/.test(lib('other_variant_note "google/gemma-4-31b@8bit" "google/gemma-4-31b@4bit"').out) && /choose the 8bit variant/.test(lib('other_variant_note "google/gemma-4-31b@8bit" "google/gemma-4-31b@4bit"').out));
   check('B1 a repo that is not on disk resolves to nothing (and a repo that is a PREFIX of another does not match it)', lib('resolve_key lmstudio-community/gemma-4-12B-it-MLX-8bit').out === '' && lib('resolve_key lmstudio-community/gemma-4-31B-it-MLX').out === '');
 
   // ── B3: who is on the GPU ───────────────────────────────────────────────
@@ -147,7 +156,7 @@ function lib(body, env) {
   const ld = lib('load "google/gemma-4-31b@8bit" tapuz-mlx-x 8; echo "rc=$? eff=$EFFECTIVE quant=$QUANT size=$SIZE"', { LLM });
   check('B4 the MLX engine loading at 262,144 when 32,768 was asked is ACCEPTED and RECORDED (configured ≠ effective is a fact, not a failure)', /rc=0 eff=262144 quant=8bit size=31\.47 GiB/.test(ld.out) && /configured 32768 → effective 262144/.test(ld.out));
   const asked = (readState().loads || [])[0] || [];
-  check('…the load names the key WITH its @quant, 32768, --parallel 1 and its own identifier', asked.includes('google/gemma-4-31b@8bit') && asked.includes('32768') && asked.join(' ').includes('--parallel 1') && asked.includes('tapuz-mlx-x'));
+  check('…the load passes the key it was given, 32768, --parallel 1 and its own identifier', asked.includes('google/gemma-4-31b@8bit') && asked.includes('32768') && asked.join(' ').includes('--parallel 1') && asked.includes('tapuz-mlx-x'));
   setModels({ data: [{ id: 'tapuz-mlx-x', type: 'vlm', state: 'loaded', loaded_context_length: 262144, quantization: '4bit' }] });
   check('B2 the row means 8-bit and the runtime loaded 4bit → WRONG WEIGHTS, not measured', /rc=1/.test(lib('load k tapuz-mlx-x 8; echo "rc=$?"; echo "$LOAD_NOTE"', { LLM }).out) && /WRONG WEIGHTS: the row means 8-bit, the runtime loaded \'4bit\'/.test(lib('load k tapuz-mlx-x 8; echo "$LOAD_NOTE"', { LLM }).out));
   setModels({ data: [{ id: 'tapuz-mlx-x', type: 'vlm', state: 'loaded', loaded_context_length: 8192, quantization: '8bit' }] });

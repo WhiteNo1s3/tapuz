@@ -88,6 +88,27 @@ const EXCEED = {
     check('probe: a wire failure → null', (await win.probeLocalWindow('http://127.0.0.1:1234/v1', 'x', { fetch: async () => { throw new Error('ECONNREFUSED'); } })) === null);
     check('probe: a non-loopback address is refused before any fetch', (await win.probeLocalWindow('https://api.openai.com/v1', 'x', { fetch: fake(V0) })) === null);
 
+    // ── v2.50: how little a model may be asked to think. LM Studio's /api/v1/models lists the levels a model
+    //    ALLOWS; Muse-Glimmer has no "off", so the "none" every request carried meant its default — "high":
+    //    3,988 reasoning tokens against 796 at "low" on the same prompt (measured). ──
+    const V1 = { models: [
+      { type: 'embedding', key: 'nomic', loaded_instances: [{ id: 'nomic' }] },
+      { type: 'llm', key: 'meta/muse-glimmer', loaded_instances: [{ id: 'tapuz-muse' }], capabilities: { reasoning: { allowed_options: ['low', 'medium', 'high', 'xhigh'], default: 'high' } } },
+      { type: 'llm', key: 'google/gemma-4-31b', loaded_instances: [], capabilities: { reasoning: { allowed_options: ['off', 'on'], default: 'on' } } },
+      { type: 'llm', key: 'openai/gpt-oss-20b', loaded_instances: [], capabilities: { reasoning: { allowed_options: ['medium', 'low', 'high'], default: 'low' } } },
+      { type: 'llm', key: 'devstral-small-2', loaded_instances: [], capabilities: { reasoning: null } }
+    ] };
+    const v1Urls = [];
+    const effortOf = (model, json, ok = true) => win.probeReasoningEffort('http://127.0.0.1:1234/v1', model, { fetch: async (url) => { v1Urls.push(url); return { ok, json: async () => json }; } });
+    check('effort: a model with NO "off" is asked for the lowest level it allows — by its loaded identifier (tapuz-muse → "low")', (await effortOf('tapuz-muse', V1)) === 'low' && v1Urls[0] === 'http://127.0.0.1:1234/api/v1/models');
+    check('effort: a model that CAN be switched off keeps "none" — what every request always sent (gemma-4-31b)', (await effortOf('gemma-4-31b', V1)) === 'none');
+    check('effort: the order is by meaning, not by the list (gpt-oss: ["medium","low","high"] → "low")', (await effortOf('openai/gpt-oss-20b', V1)) === 'low');
+    check('effort: no reasoning capability listed, an unknown model, an empty setting with one model loaded → "none" / that model', (await effortOf('devstral-small-2', V1)) === 'none' && (await effortOf('', V1)) === 'low');
+    check('effort: another runtime (404), a wire failure, junk → "none", never a throw',
+      (await effortOf('x', {}, false)) === 'none' && (await win.probeReasoningEffort('http://127.0.0.1:1234/v1', 'x', { fetch: async () => { throw new Error('ECONNREFUSED'); } })) === 'none' && (await effortOf('x', { models: 'nope' })) === 'none');
+    check('effort: a non-loopback address is never fetched', (await win.probeReasoningEffort('https://api.openai.com/v1', 'x', { fetch: async () => { throw new Error('must not be called'); } })) === 'none');
+    check('lowestEffort: [] / null → none · ["none","low"] → none · ["xhigh","high"] → high', win.lowestEffort([]) === 'none' && win.lowestEffort(null) === 'none' && win.lowestEffort(['none', 'low']) === 'none' && win.lowestEffort(['xhigh', 'high']) === 'high');
+
     // ── v2.49: LOCAL_LLM_WINDOW_CAP. LM Studio's MLX engine overrides --context-length and loads at the
     //    model's maximum whenever memory allows ("configured=32,768 fitted=262,144"), so on a big Mac a
     //    "32K" run was really a 262K run — a different conversation. The cap makes the CMS budget as for

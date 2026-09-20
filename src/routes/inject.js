@@ -41,6 +41,8 @@ const STATUS_BY_CODE = {
   NO_PROVIDER: 400, BROWSER_RELAY: 400, PACK_TOO_BIG: 400, NOT_READY: 400, RUN_DISABLED: 400,
   NO_BACKUP: 400, EMPTY_PASTE: 400, REPLY_TOO_LONG: 400,
   PROVIDER_ERROR: 502, EMPTY_REPLY: 502, NETWORK: 502,
+  // v2.50: a thinking model spent the whole answer budget reasoning, twice
+  THOUGHT_OUT: 502,
   // v2.44: the runtime's window is a pool and a neighbour filled it — come back later
   WINDOW_SHARED: 503,
   TIMEOUT: 504,
@@ -428,7 +430,7 @@ router.post('/admin/api/inject/:id/run', requireAdmin, async (req, res) => {
       return refuse(res, e);
     }
     provider = call.provider || provider;
-    const id = putRelayRun({ packId: pack.id, ctx, brief, packText: built.text, promptChars, started, usage, timeoutMs });
+    const id = putRelayRun({ packId: pack.id, ctx, brief, packText: built.text, promptChars, started, usage, timeoutMs, body: call.body });
     log({ ok: true, code: 'RELAY_CALL', rounds: 1, repaired: false });
     return relayAnswer(res, { pack, id, body: call.body, provider, timeoutMs, stage: 'first', rounds: 1 });
   }
@@ -517,6 +519,18 @@ async function resumeRelayRun(req, res, pack, step) {
   try {
     r = ai.readRelayReply(step.result, { ms: Date.now() - started, model: provider.model });
   } catch (e) {
+    // v2.50 — the model THOUGHT its answer budget away (finish=length, reasoning behind an empty reply): the same
+    // call goes through the page ONCE more with a larger budget. The run's state is put back untouched.
+    if (e.code === 'THOUGHT_OUT' && !st.thought && st.body) {
+      addUsage(e.usage);
+      const next = ai.biggerBudget(st.body.max_tokens, ai.contextBudget('browser'), e.usage && e.usage.prompt_tokens);
+      if (next) {
+        const body = Object.assign({}, st.body, { max_tokens: next });
+        const id = putRelayRun(Object.assign({}, st, { body, thought: true }));
+        log({ ok: true, code: 'RELAY_THINK', rounds: st.first ? 2 : 1, repaired: false });
+        return relayAnswer(res, { pack, id, body, provider, timeoutMs, stage: 'think', rounds: st.first ? 2 : 1 });
+      }
+    }
     log({ ok: false, code: e.code || 'PROVIDER_ERROR', rounds: st.first ? 2 : 1, repaired: false });
     return refuse(res, e);
   }
@@ -543,7 +557,7 @@ async function resumeRelayRun(req, res, pack, step) {
       // no second turn to be had — the first reply still stands on its own
       return finishRun(res, { chosen: a, rounds: 1, repaired: false, started, usage, provider, log });
     }
-    const id = putRelayRun({ packId: pack.id, ctx, brief, packText, promptChars, started, usage, timeoutMs, first: a });
+    const id = putRelayRun({ packId: pack.id, ctx, brief, packText, promptChars, started, usage, timeoutMs, first: a, body: call.body });
     log({ ok: true, code: 'RELAY_REPAIR', rounds: 2, repaired: false });
     return relayAnswer(res, { pack, id, body: call.body, provider, timeoutMs, stage: 'repair', rounds: 2 });
   }

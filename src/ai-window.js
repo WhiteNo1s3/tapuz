@@ -89,6 +89,60 @@ function idMatches(id, model) {
   return a === b || a.endsWith('/' + b) || a.endsWith(b) || a.startsWith(b) || b.endsWith(a) || b.startsWith(a);
 }
 
+// ── how little a model may be asked to think (v2.50) ───────────────────────
+//
+// Every local request carried `reasoning_effort: "none"` — "hybrid-thinking models must ANSWER". For a model
+// that can be switched off that is right. Muse-Glimmer 30B cannot: LM Studio's `GET /api/v1/models` lists its
+// `capabilities.reasoning.allowed_options` as ["low","medium","high","xhigh"] — no "off" — so "none" is not a
+// level it has and it thinks at its DEFAULT, "high". Measured on the organizer pack (RTX 5090): "none" → 3,988
+// reasoning tokens, 130 s; "low" → 796 tokens, 19 s, the same valid menu. So: ask for the lowest level the
+// loaded model ALLOWS. "none" stays whenever it can be switched off, and whenever nothing is known (another
+// runtime, an older LM Studio, the browser courier — the server cannot reach the owner's runtime there).
+const EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+const efforts = new Map(); // window key → { effort, at }
+
+/** The lowest reasoning level in a model's allowed list; 'none' when it can be switched off or nothing is listed. */
+function lowestEffort(allowed) {
+  const a = (Array.isArray(allowed) ? allowed : []).map((x) => String(x).toLowerCase());
+  if (!a.length || a.includes('off') || a.includes('none')) return 'none';
+  return EFFORT_ORDER.find((e) => a.includes(e)) || 'none';
+}
+
+/**
+ * What `reasoning_effort` to send this model — LM Studio's `GET {origin}/api/v1/models`, cached a minute. Never
+ * throws and never blocks a turn on a slow answer: anything unexpected → 'none', what every request always sent.
+ * @param {string} baseUrl the owner's local address (loopback enforced)
+ * @param {string} model the configured model id or identifier ('' = whatever is loaded)
+ * @param {{fetch?: Function}} [opts] a test seam
+ * @returns {Promise<string>}
+ */
+async function probeReasoningEffort(baseUrl, model, opts = {}) {
+  const key = windowKey('local', model);
+  const hit = efforts.get(key);
+  if (hit && Date.now() - hit.at < PROBE_TTL_MS && typeof opts.fetch !== 'function') return hit.effort;
+  let effort = 'none';
+  const endpoint = resolveLocalEndpoint(baseUrl);
+  const doFetch = typeof opts.fetch === 'function' ? opts.fetch : NATIVE_FETCH;
+  if (endpoint && typeof doFetch === 'function') {
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS) : null;
+    try {
+      const r = await doFetch(new URL(endpoint).origin + '/api/v1/models', ctrl ? { signal: ctrl.signal } : {});
+      const data = r && r.ok ? await r.json() : null;
+      const all = (Array.isArray(data && data.models) ? data.models : []).filter((m) => m && !/^embed/i.test(String(m.type || '')));
+      const loaded = all.filter((m) => Array.isArray(m.loaded_instances) && m.loaded_instances.length);
+      const want = String(model || '').trim();
+      const entry = want
+        ? (loaded.find((m) => m.loaded_instances.some((i) => i && idMatches(i.id, want))) || all.find((m) => idMatches(m.key, want)) || (loaded.length === 1 ? loaded[0] : null))
+        : (loaded[0] || null);
+      const reasoning = entry && entry.capabilities && entry.capabilities.reasoning;
+      if (reasoning) effort = lowestEffort(reasoning.allowed_options);
+    } catch (e) { /* not LM Studio, not reachable, not JSON — 'none' */ } finally { if (timer) clearTimeout(timer); }
+  }
+  efforts.set(key, { effort, at: Date.now() });
+  return effort;
+}
+
 /** The measurement cap (tokens), or 0. Below the compact tier's floor it is ignored — a cap is for
  *  comparing like with like, not for starving the briefing. */
 function windowCap() {
@@ -543,6 +597,10 @@ const HE = {
   // v2.45 — a refused proposal followed by plain words: whatever the model says, nothing changed
   refusedThenWords: 'שימו לב: ההצעה נפסלה בבדיקה והמודל לא הגיש הצעה מתוקנת — שום דבר לא נשמר ושום דבר לא השתנה, גם אם התשובה אומרת אחרת. בקשו שוב.',
   // v2.45 — the model printed the document instead of calling the write tool (ai.js adoptPrintedDocument)
+  // v2.50 — a thinking model and the answer's budget
+  thoughtOut: 'המודל השתמש בכל תקציב התשובה על חשיבה ולא הגיע לתשובה עצמה — גם אחרי ניסיון נוסף עם תקציב גדול יותר. זה מודל "חושב" (reasoning) שסביבת ההרצה לא מכבה.',
+  fixThoughtOut: 'כבו את החשיבה בהגדרות המודל ב-LM Studio אם המודל מאפשר, הגדילו את Context Length כדי שיהיה מקום לתשובה ארוכה יותר, או בחרו מודל שאינו חושב — Gemma 4 עובד היטב.',
+  thinkingRetry: 'המודל חשב עד שלא נשאר לו מקום לתשובה — שלחתי שוב עם תקציב תשובה גדול יותר.',
   adoptedPrinted: 'המודל הדפיס את המסמך בצ׳אט במקום להפעיל את הכלי — הפכתי אותו להצעה לאישור, כמו כל הצעה אחרת.',
   // v2.37 — a proposal that fails the write's own checks goes back to the model
   proposalRefused: (why) => 'הקופיילוט הציע מסמך שלא עובר את הבדיקה (' + briefErrors(why) + ') — החזרתי לו את השגיאה לתיקון, לפני שתתבקשו לאשר.',
@@ -605,6 +663,8 @@ module.exports = {
   RECOMMENDED_WINDOW,
   PROBE_TTL_MS,
   probeLocalWindow,
+  probeReasoningEffort,
+  lowestEffort,
   windowCap,
   parseExceed,
   parseShared,

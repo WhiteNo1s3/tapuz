@@ -243,3 +243,17 @@ rm -f ~/bin/curl ~/bin/lms-survey-wrap; unset LMS LMS_REAL; hash -r         # no
 git pull --ff-only origin main && npm ci                                    # ≥ 2.49.0
 bash scripts/mlx-survey.sh                                                  # sanity → A → B → C; what is on disk is found, what is partial resumes
 ```
+
+## 10. One more thing the first fix got wrong (v2.50)
+
+§3 B1/B2 said: resolve the variant's key and **load it with its `@quant`**. The name is right and LM Studio cannot load it. Measured on the 5090 box on a real two-variant staff pick (`google/gemma-4-e2b` with `@q4_k_m` and `@q8_0` on disk): `lms load google/gemma-4-e2b@q8_0` → "Model not found"; `POST /api/v1/models/load {"model":"google/gemma-4-e2b@q8_0"}` → `model_not_found`; the bare key loads the *selected* variant; `lms get google/gemma-4-e2b@q8_0` downloads it and leaves the selection where it was. The Mac's own card had met this ("the LM Studio CLI refused hub `@4bit`/`@8bit` keys") before the map was written.
+
+So `mlx-survey.sh` (≥ 2.50): `resolve_key` still IDENTIFIES the variant; `loadable` returns the bare key and LM Studio's `selectedVariant`; when the row's variant is not the selected one the row says **THE OTHER VARIANT IS SELECTED** — before anything is loaded — and names the click (My Models → the model → the variant). The `quantization` check after the load stays as the second guard. Pinned in `smoke-mlx-survey`.
+
+The re-run, corrected:
+
+```bash
+rm -f ~/bin/curl ~/bin/lms-survey-wrap; unset LMS LMS_REAL; hash -r
+git pull --ff-only origin main && npm ci                                    # ≥ 2.50.0
+bash scripts/mlx-survey.sh            # rows that say THE OTHER VARIANT IS SELECTED: one click each in the app, then that tier again
+```

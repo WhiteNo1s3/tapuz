@@ -683,6 +683,75 @@ const wantsWrite = {
     check('…and the paste packs keep their bytes', !/Tailwind|לקצר או לשכתב/.test(rp.buildRoleplayPack({ locale: 'he', size: 'lite', playerBrief: 'x', media: [] }).text));
   }
 
+  // ── v2.50: a THINKING model and the answer's budget. The survey (Muse-Glimmer 30B on LM Studio): the runtime
+  //    ignores reasoning_effort "none", every reply starts with 2,000–4,000 reasoning tokens, and a budget spent
+  //    on thinking came back as finish=length + content "" — which the owner read as "empty reply". ──
+  {
+    ai.saveSettings({ provider: '__fake', baseUrl: 'http://127.0.0.1:1/v1' });
+    const says = (content) => ({ choices: [{ message: { content, tool_calls: [] }, finish_reason: 'stop' }], usage: { prompt_tokens: 900, completion_tokens: 40 } });
+    const thoughtAway = (spent) => ({
+      choices: [{ finish_reason: 'length', message: { role: 'assistant', content: '', reasoning_content: 'We need to parse the request. The owner pasted a document…', tool_calls: [] } }],
+      usage: { prompt_tokens: 900, completion_tokens: spent, completion_tokens_details: { reasoning_tokens: spent - 5 } }
+    });
+    const bodies = [];
+    const realFetch = global.fetch;
+    global.fetch = async (url, init) => { bodies.push(JSON.parse(init.body)); return realFetch(url, init); };
+
+    check('thoughtOut: finish=length + empty content + reasoning behind it — and nothing else (a plain empty reply, a cut ANSWER, a tool call, another dialect)',
+      ai.thoughtOut('openai-chat', thoughtAway(4096)) === true &&
+      ai.thoughtOut('openai-chat', { choices: [{ finish_reason: 'stop', message: { content: '' } }] }) === false &&
+      ai.thoughtOut('openai-chat', { choices: [{ finish_reason: 'length', message: { content: '' } }], usage: {} }) === false &&
+      ai.thoughtOut('openai-chat', { choices: [{ finish_reason: 'length', message: { content: 'חצי תשובה', reasoning_content: 'x' } }] }) === false &&
+      ai.thoughtOut('openai-chat', { choices: [{ finish_reason: 'length', message: { content: '', reasoning_content: 'x', tool_calls: [{ id: 'a' }] } }] }) === false &&
+      ai.thoughtOut('anthropic-messages', thoughtAway(4096)) === false);
+    check('biggerBudget: three times the first, at most 12,288, never more than the window has left — and 0 when that is not worth a call',
+      ai.biggerBudget(2048, Infinity, 0) === 6144 && ai.biggerBudget(4096, 32768, 20000) === 12288 && ai.biggerBudget(4096, 32768, 24000) === 8384 &&
+      ai.biggerBudget(4096, 32768, 27000) === 0 && ai.biggerBudget(8192, NaN, 0) === 12288 && ai.biggerBudget(12288, Infinity, 0) === 0);
+
+    // the copilot: one more call with a larger budget, and the owner is told why it took longer
+    bodies.length = 0;
+    scripted = [thoughtAway(100), says('הנה מה שאני מציע: …')];
+    const t1 = await ai.converse({ system: '<bent-heading>', user: 'מה אתה מציע לדף הבית?' });
+    check('the copilot: a reply that thought its budget away is asked ONCE more with a larger max_tokens (' + (bodies[0] || {}).max_tokens + ' → ' + (bodies[1] || {}).max_tokens + '), the same conversation',
+      bodies.length === 2 && bodies[1].max_tokens >= bodies[0].max_tokens * 1.5 && JSON.stringify(bodies[1].messages) === JSON.stringify(bodies[0].messages));
+    check('…the answer arrives, and the notice says what happened', t1.ok !== false && /הנה מה שאני מציע/.test(t1.reply || '') && /חשב עד שלא נשאר לו מקום לתשובה/.test(t1.notice || ''));
+
+    bodies.length = 0;
+    scripted = [thoughtAway(100), thoughtAway(300), says('לא אמור להישלח')];
+    let twice = null;
+    try { await ai.converse({ system: '<bent-heading>', user: 'מה אתה מציע לדף הבית?' }); } catch (e) { twice = e; }
+    check('thought away TWICE → THOUGHT_OUT with the way out — two calls, never a third, never "empty reply"',
+      !!twice && twice.code === 'THOUGHT_OUT' && /חשיבה/.test(twice.message) && /Gemma 4/.test(twice.fix || '') && bodies.length === 2);
+    scripted = [];
+
+    bodies.length = 0;
+    scripted = [{ choices: [{ finish_reason: 'stop', message: { content: '', tool_calls: [] } }], usage: { prompt_tokens: 900, completion_tokens: 0 } }];
+    let silent = null;
+    try { await ai.converse({ system: '<bent-heading>', user: 'שלום' }); } catch (e) { silent = e; }
+    check('plain silence (finish=stop, nothing thought) stays what it was: EMPTY_REPLY, one call', !!silent && silent.code === 'EMPTY_REPLY' && bodies.length === 1);
+
+    // the one-shot packs (the organizer's ▶ gives the answer 2,048 tokens). A model of its own: the copilot cases above
+    // already taught the door that THAT model thinks — which is the very memory the second check below pins
+    ai.saveSettings({ provider: '__fake', baseUrl: 'http://127.0.0.1:1/v1', model: 'a-thinker-not-seen-yet' });
+    bodies.length = 0;
+    scripted = [thoughtAway(2048), says('<bent-menus version="1"></bent-menus>')];
+    const g1 = await ai.generateDetailed({ system: '', user: '# pack\n<bent-menus> — הדיאלקט', maxTokens: 2048 });
+    check('a one-shot pack: 2,048 thought away → one more call at 6,144 → the answer; usage counts BOTH calls; the result says it retried',
+      bodies.length === 2 && bodies[0].max_tokens === 2048 && bodies[1].max_tokens === 6144 && /bent-menus/.test(g1.text) && g1.thoughtRetry === true && g1.usage.completion_tokens === 2048 + 40);
+    bodies.length = 0;
+    scripted = [says('<bent-menus version="1"></bent-menus>')];
+    await ai.generateDetailed({ system: '', user: '# pack\n<bent-menus> — הדיאלקט', maxTokens: 2048 });
+    check('…and a model SEEN thinking starts with the larger budget the next time (no wasted first call)', bodies.length === 1 && bodies[0].max_tokens === 6144);
+    bodies.length = 0;
+    scripted = [thoughtAway(6144), thoughtAway(6144)];
+    let g2 = null;
+    try { await ai.generateDetailed({ system: '', user: '# pack\n<bent-menus> — הדיאלקט', maxTokens: 2048 }); } catch (e) { g2 = e; }
+    check('…a thinker that cannot finish even then → THOUGHT_OUT (the runner answers 502 with the fix), never a loop', !!g2 && g2.code === 'THOUGHT_OUT' && bodies.length <= 2 && /Context Length/.test(g2.fix || ''));
+    scripted = [];
+    global.fetch = realFetch;
+    ai.saveSettings({ provider: '__fake', baseUrl: 'http://127.0.0.1:1/v1', model: '' });
+  }
+
   console.log('');
   console.log(fail ? 'SMOKE COPILOT-TOOLS: FAIL' : 'SMOKE COPILOT-TOOLS: PASS');
   process.exit(fail ? 1 : 0);

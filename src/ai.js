@@ -128,7 +128,10 @@ const NATIVE_FETCH = globalThis.fetch;
 // parseShared) — every request on the pool died, none of them too big.
 const ERROR_CODES = [
   'NO_PROVIDER', 'BROWSER_RELAY', 'NETWORK', 'TIMEOUT', 'PROVIDER_ERROR', 'EMPTY_REPLY',
-  'WINDOW_TOO_SMALL', 'BRIDGE_TOO_OLD', 'BRIDGE_DROPPED_TOOLS', 'REPLY_CUT', 'NO_BRIEFING', 'WINDOW_SHARED'
+  'WINDOW_TOO_SMALL', 'BRIDGE_TOO_OLD', 'BRIDGE_DROPPED_TOOLS', 'REPLY_CUT', 'NO_BRIEFING', 'WINDOW_SHARED',
+  // v2.50 appends THOUGHT_OUT: a thinking model spent the whole answer budget reasoning — it is what
+  // EMPTY_REPLY used to say for it, split off so the owner reads what happened and what to do
+  'THOUGHT_OUT'
 ];
 
 function coded(message, code, extra) {
@@ -238,6 +241,48 @@ function contextBudget(providerId) {
   if (known && Number.isFinite(known.tokens) && known.tokens > 0) return known.tokens - CONTEXT_HEADROOM_TOKENS;
   const p = getProvider('local');
   return ((p && Number(p.contextTokens)) || 24000) - CONTEXT_HEADROOM_TOKENS;
+}
+
+// ── a THINKING model and the answer's budget (v2.50) ───────────────────────
+//
+// The survey, 2026-09-20 (Muse-Glimmer 30B on LM Studio): `reasoning_effort:
+// "none"` is ignored for it, so every reply is preceded by 2,000–4,000 tokens
+// of reasoning. The organizer's ▶ gives the answer 2,048 tokens: all of them
+// were spent thinking — `finish_reason: "length"`, `content: ""`,
+// `reasoning_tokens: 2041` — and the owner read "הספק החזיר תשובה ריקה", 25 runs
+// of 27. The same prompt with 6,000 tokens returns a valid <bent-menus>. The
+// pasted-document dream died the same way in the copilot (4,096 of reply).
+//
+// An empty reply that hit the length limit WITH reasoning behind it is not
+// "empty": the answer had no room left. One retry with a larger budget, bounded
+// by the window; a model seen thinking starts there the next time; and when
+// that is not enough the owner is told what happened, not "empty reply".
+const THINK_FACTOR = 3;
+const THINK_MAX_TOKENS = 12288;
+const thinkers = new Map(); // window key → when it was last seen thinking its budget away
+
+/** Did the model think its whole answer budget away? openai-chat only — the
+ *  local runtimes; a cloud provider bills and budgets its own thinking. */
+function thoughtOut(style, data) {
+  if (style !== 'openai-chat' || !data || typeof data !== 'object') return false;
+  const choice = ((data.choices) || [])[0] || {};
+  const m = choice.message || {};
+  if (String(choice.finish_reason || '') !== 'length') return false;
+  if (typeof m.content === 'string' && m.content.trim()) return false;
+  if (Array.isArray(m.tool_calls) && m.tool_calls.length) return false;
+  const details = (data.usage && data.usage.completion_tokens_details) || {};
+  return String(m.reasoning_content || m.reasoning || '').trim().length > 0 || Number(details.reasoning_tokens) > 0;
+}
+
+/** The budget for the second try: three times the first, at most 12,288 — and
+ *  never more than the window has left after the prompt. 0 = there is no
+ *  larger budget worth a second call (under 1.5× the first). */
+function biggerBudget(prev, windowTokens, promptTokens) {
+  const p = Math.max(1, Math.floor(Number(prev) || 0));
+  let next = Math.min(THINK_MAX_TOKENS, p * THINK_FACTOR);
+  const w = Number(windowTokens);
+  if (Number.isFinite(w) && w > 0) next = Math.min(next, w - (Number(promptTokens) || 0) - 384);
+  return next >= p * 1.5 ? Math.floor(next) : 0;
 }
 
 /** The provider's own token accounting, mapped to one shape. openai-chat
@@ -409,36 +454,55 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
   // the last gate before the wire: a local model is never sent a request
   // without its BenTML briefing (v2.42) — see assertBriefed
   assertBriefed(provider, body, { prose });
+  // v2.50 — the lowest reasoning level THIS model allows ('none' whenever it can be switched off / is unknown)
+  if (provider.id === 'local' && body.reasoning_effort) body.reasoning_effort = await win.probeReasoningEffort(s.baseUrl, model);
 
-  let res;
-  try {
-    res = await postJson(endpoint, headers, body, opts.timeoutMs || (provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS));
-  } catch (e) {
-    // the ceiling passing is its own failure (504 in the runner); anything
-    // else is the wire
-    if (e && e.code === 'TIMEOUT') throw e;
-    if (provider.id === 'local') {
-      throw coded('לא הצלחתי להתחבר למודל המקומי ב-' + endpoint +
-        ' — ודאו ש-LM Studio (או Ollama) רץ ושהשרת המקומי דולק. פרטים: ' + e.message, 'NETWORK');
-    }
-    throw coded('קריאה לספק נכשלה (רשת): ' + e.message, 'NETWORK');
-  }
-  const data = res.data;
-  // v2.44 — the pool (ai-window.js parseShared): a neighbour's request took the window
-  if (win.parseShared(data)) throw coded(win.HE.shared, 'WINDOW_SHARED', { fix: win.HE.fixShared, status: res.status });
-  if (res.status < 200 || res.status >= 300) {
-    const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + res.status);
-    throw coded('שגיאת ספק: ' + msg, 'PROVIDER_ERROR', { status: res.status, providerMessage: String(msg) });
-  }
   const style = (provider.body && provider.body.style) || 'anthropic-messages';
-  const text = dig(data, provider.responsePath || ['content', 0, 'text']);
-  if (!text) throw coded('הספק החזיר תשובה ריקה', 'EMPTY_REPLY');
-  return {
-    text,
-    usage: readUsage(style, data),
-    ms: Date.now() - started,
-    provider: { id: provider.id, model }
-  };
+  const thinkKey = win.windowKey(provider.id, model);
+  // v2.50 — a model already seen thinking its budget away starts with the larger one (no wasted first call)
+  if (thinkers.has(thinkKey)) {
+    const roomy = biggerBudget(body.max_tokens, contextBudget(provider.id), 0);
+    if (roomy) body.max_tokens = roomy;
+  }
+  const spent = { prompt_tokens: 0, completion_tokens: 0 };
+  let thoughtRetry = false;
+  for (;;) {
+    let res;
+    try {
+      res = await postJson(endpoint, headers, body, opts.timeoutMs || (provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS));
+    } catch (e) {
+      // the ceiling passing is its own failure (504 in the runner); anything
+      // else is the wire
+      if (e && e.code === 'TIMEOUT') throw e;
+      if (provider.id === 'local') {
+        throw coded('לא הצלחתי להתחבר למודל המקומי ב-' + endpoint +
+          ' — ודאו ש-LM Studio (או Ollama) רץ ושהשרת המקומי דולק. פרטים: ' + e.message, 'NETWORK');
+      }
+      throw coded('קריאה לספק נכשלה (רשת): ' + e.message, 'NETWORK');
+    }
+    const data = res.data;
+    // v2.44 — the pool (ai-window.js parseShared): a neighbour's request took the window
+    if (win.parseShared(data)) throw coded(win.HE.shared, 'WINDOW_SHARED', { fix: win.HE.fixShared, status: res.status });
+    if (res.status < 200 || res.status >= 300) {
+      const msg = (data && data.error && (data.error.message || data.error)) || ('HTTP ' + res.status);
+      throw coded('שגיאת ספק: ' + msg, 'PROVIDER_ERROR', { status: res.status, providerMessage: String(msg) });
+    }
+    const usage = readUsage(style, data);
+    spent.prompt_tokens += usage.prompt_tokens; spent.completion_tokens += usage.completion_tokens;
+    if (usage.reasoning_tokens != null) spent.reasoning_tokens = (spent.reasoning_tokens || 0) + usage.reasoning_tokens;
+    const text = dig(data, provider.responsePath || ['content', 0, 'text']);
+    if (text) {
+      return { text, usage: spent, ms: Date.now() - started, provider: { id: provider.id, model }, ...(thoughtRetry ? { thoughtRetry: true } : {}) };
+    }
+    // v2.50 — empty, at the length limit, with reasoning behind it: the answer had no room left
+    if (thoughtOut(style, data)) {
+      thinkers.set(thinkKey, Date.now());
+      const next = thoughtRetry ? 0 : biggerBudget(body.max_tokens, contextBudget(provider.id), usage.prompt_tokens);
+      if (next) { body.max_tokens = next; thoughtRetry = true; continue; }
+      throw coded(win.HE.thoughtOut, 'THOUGHT_OUT', { fix: win.HE.fixThoughtOut, budget: body.max_tokens });
+    }
+    throw coded('הספק החזיר תשובה ריקה', 'EMPTY_REPLY');
+  }
 }
 
 /**
@@ -512,6 +576,11 @@ function readRelayReply(result, meta = {}) {
     throw coded('שגיאת המודל המקומי: ' + String(msg), 'PROVIDER_ERROR', { providerMessage: String(msg) });
   }
   const text = dig(data, provider.responsePath || ['choices', 0, 'message', 'content']);
+  // v2.50 — thought its budget away: the caller may send ONE more modelCall with a larger budget (thinkAgain)
+  if (!text && thoughtOut(style, data)) {
+    thinkers.set(win.windowKey('browser', String(meta.model || load().model || '')), Date.now());
+    throw coded(win.HE.thoughtOut, 'THOUGHT_OUT', { fix: win.HE.fixThoughtOut, usage: readUsage(style, data) });
+  }
   if (!text) throw coded('המודל המקומי החזיר תשובה ריקה', 'EMPTY_REPLY');
   return {
     text,
@@ -610,7 +679,7 @@ function modelFor(provider, s) {
  * anthropic-messages for claude. `maxTokens` is the reply reserve the window
  * arithmetic chose — a quarter of the window, 1,024..4,096.
  */
-function composeBody(provider, s, system, turns, toolDefs, maxTokens) {
+function composeBody(provider, s, system, turns, toolDefs, maxTokens, effort) {
   const style = (provider.body && provider.body.style) || 'anthropic-messages';
   const model = modelFor(provider, s);
   const max = Math.max(1, Math.round(Number(maxTokens) || provider.maxTokens || 4096));
@@ -618,7 +687,9 @@ function composeBody(provider, s, system, turns, toolDefs, maxTokens) {
     ? { model, max_tokens: max, messages: [{ role: 'system', content: system }, ...turns] }
     : { model, max_tokens: max, system, messages: turns };
   if (style === 'openai-chat' && (provider.id === 'local' || provider.browserRelay)) {
-    body.reasoning_effort = 'none'; // hybrid-thinking models must ANSWER (see buildRequest)
+    // hybrid-thinking models must ANSWER (see buildRequest); v2.50 — a model that cannot be switched off is asked
+    // for the LOWEST level it allows (ai-window.js probeReasoningEffort), because "none" means its default to it
+    body.reasoning_effort = effort || 'none';
   }
   if (toolDefs && toolDefs.length) body.tools = toolDefs;
   return body;
@@ -1002,8 +1073,12 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     const sysFor = typeof systemFor === 'function' ? systemFor : (() => String(system || ''));
     const model = modelFor(provider, s);
     const key = await discoverWindow(provider, s, model, hint);
+    // v2.50 — how little this model may be asked to think (the server-side local provider only: over the
+    // browser courier the server cannot reach the owner's runtime, so 'none' + the larger-budget retry stand)
+    const effort = provider.id === 'local' ? await win.probeReasoningEffort(s.baseUrl, model) : '';
     const text = String(user);
     st = {
+      effort,
       systemFor: sysFor,
       sizes: null,           // measured lazily (each tier once)
       sysCache: {},
@@ -1087,8 +1162,11 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     if (local && !hasBriefing(sys)) throw coded(NO_BRIEFING_HE, 'NO_BRIEFING');
     const extraChars = win.turnsChars(st.extra);
     const turns = win.fitTurns(st.base, pt.roomChars === Infinity ? Infinity : pt.roomChars - extraChars).concat(st.extra);
-    const maxTokens = w.tokens === Infinity ? Math.max(4096, provider.maxTokens || 4096) : win.replyReserve(w.tokens);
-    const body = composeBody(provider, s, sys, turns, defs, maxTokens);
+    const reserve = w.tokens === Infinity ? Math.max(4096, provider.maxTokens || 4096) : win.replyReserve(w.tokens);
+    // v2.50 — a model that thought its budget away this turn gets the larger one for the retry (st.replyBudget)
+    const maxTokens = Math.max(reserve, st.replyBudget || 0);
+    st.lastReplyBudget = maxTokens;
+    const body = composeBody(provider, s, sys, turns, defs, maxTokens, st.effort);
     const tChars = win.turnsChars(turns);
     return {
       tier: pt.tier,
@@ -1265,6 +1343,21 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       throw coded(win.HE.replyCut, 'REPLY_CUT');
     }
     if (!reply.calls.length) {
+      // v2.50 — not silence: the model THOUGHT its reply budget away (finish=length, reasoning behind it).
+      // One more call with a larger budget, bounded by what the window has left after this prompt.
+      if (!String(reply.text || '').trim() && thoughtOut(style, data)) {
+        thinkers.set(st.key, Date.now());
+        const next = st.thought ? 0 : biggerBudget(st.replyBudget || st.lastReplyBudget, known.tokens || windowFor(provider, st.key).tokens, usage.prompt_tokens);
+        if (next) {
+          st.thought = true;
+          st.replyBudget = next;
+          st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.thinkingRetry;
+          continue; // like a shrink: it does not consume a hop
+        }
+        // nothing larger to be had — after an ACTION the memo still tells the owner what happened
+        if (st.memo || st.used.length) return envelope({ memo: (st.memo || win.HE.memoRead([...new Set(st.used)])) + ' ' + win.HE.thoughtOut });
+        throw coded(win.HE.thoughtOut, 'THOUGHT_OUT', { fix: win.HE.fixThoughtOut });
+      }
       if (!String(reply.text || '').trim()) {
         // silence after an ACTION (a write done or refused, pages read) is
         // answered with the memo — the owner sees what happened; silence
@@ -1523,6 +1616,8 @@ module.exports = {
   // the injection runner's arithmetic + vocabulary (v2.28)
   estimateTokens,
   contextBudget,
+  thoughtOut,
+  biggerBudget,
   ERROR_CODES,
   // the briefing gate (v2.42): the worker queue and the smokes ask the same question
   hasBriefing,

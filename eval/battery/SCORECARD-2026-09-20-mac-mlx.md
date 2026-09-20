@@ -1,5 +1,15 @@
 # SCORECARD — 2026-09-20 — Mac MLX, dreams first
 
+> **Read this before quoting a row (added from the 5090 side, v2.50).** This card was produced by the FIRST version of
+> `scripts/mlx-survey.sh` (code `aa34f60`, package 2.48) — the one `BREAKAGE-2026-09-20-mlx-survey.md` is about. Its header
+> says `32768 ctx`; the MLX engine ignores that request and every model here ran at the engine's auto-fit window
+> (262,144 on this Mac), with the CMS trimming nothing. The script's window check could not pass, and the run went through
+> a wrapper ("via wrap" below). So these are **uncapped rows** — what v2.49+ calls `+autofit`: what a Mac owner gets today,
+> **never comparable with a 32K row**, on the 5090 or anywhere. The numbers are real measurements of that condition and stay
+> for that reason. The 31B rows failed for a reason the script now handles honestly (LM Studio cannot load a staff pick's
+> variant by name — see `RUN-ON-MAC.md`, "THE OTHER VARIANT IS SELECTED"). The re-run on ≥ 2.50 — budgeted at 32K by the
+> CMS, every row carrying configured → effective → budgeted → what the battery saw — supersedes this card.
+
 code: `aa34f60` · package `2.48.0-alpha` · LM Studio MLX engine · 32768 ctx · `--parallel 1` · live model runs · 128 GB unified memory
 
 Survey: `scripts/mlx-survey.sh` finished `EXIT:0` at 13:58 IDT after a mid-morning restart (RESTART2). The table below is the **completed remount pass**. An earlier interrupted pass left duplicate TSV rows; those are not re-scored here.
