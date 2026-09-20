@@ -273,7 +273,12 @@ function deadStyling(source, baseline) {
   const CLASS_RE = /\sclass\s*=\s*("([^"]*)"|'([^']*)')/gi;
   const hadStyle = seen(baseline, STYLE_RE); const hadClass = seen(baseline, CLASS_RE);
   const dead = [];
-  for (const v of seen(source, STYLE_RE)) if (v && !hadStyle.has(v)) dead.push('style="' + v.slice(0, 40) + (v.length > 40 ? '…' : '') + '"');
+  // v2.48 — `style` is ALSO a real attribute here: <bent-divider style="solid|dashed|none">. The first
+  // survey on v2.47 caught this door bouncing a good page for `style="dashed"` (gemma-4-26B-A4B, which
+  // does not recover from a bounce — it cost that model whole scenarios). Only a CSS DECLARATION is dead:
+  // an enum value never holds "property: value".
+  const CSS_DECLARATION = /[a-z-]+\s*:\s*[^\s;]/i;
+  for (const v of seen(source, STYLE_RE)) if (v && CSS_DECLARATION.test(v) && !hadStyle.has(v)) dead.push('style="' + v.slice(0, 40) + (v.length > 40 ? '…' : '') + '"');
   for (const v of seen(source, CLASS_RE)) {
     if (!v || hadClass.has(v)) continue;
     const util = v.split(/\s+/).filter((t) => UTILITY_CLASS_RE.test(t));

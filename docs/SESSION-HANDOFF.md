@@ -2,7 +2,7 @@
 
 > **Purpose:** survive a lost Claude/Grok/Cursor chat, a crash, or a night's sleep.
 > Refresh it whenever a milestone lands or the direction changes (§12).
-> **Last updated:** 2026-09-20 — v2.47-alpha (the human dreams D9–D14 and `--briefs=dreams`; styling that does nothing goes back once, and the briefing says where the look lives), live and deploying from main.
+> **Last updated:** 2026-09-20 — v2.48-alpha (`style` is also a real attribute — the dead-styling door only judges CSS declarations; before it: the human dreams D9–D14 and `--briefs=dreams`; styling that does nothing goes back once, and the briefing says where the look lives), live and deploying from main.
 
 ---
 
@@ -36,8 +36,8 @@ The part that makes it different from a page builder: **the owner's own model do
 
 | | |
 |---|---|
-| Package / ROADMAP | **`2.47.0-alpha`** — the Version Log's top row must name it (`smoke-version`) |
-| Main tip | the v2.47 merge — `git log -1 origin/main` |
+| Package / ROADMAP | **`2.48.0-alpha`** — the Version Log's top row must name it (`smoke-version`) |
+| Main tip | the v2.48 merge — `git log -1 origin/main` |
 | Recommended local model | **Gemma 4**, by card: 12–16 GB → 12B (Google's QAT 4-bit), 24 GB → 26B-A4B, 32 GB → 31B; the E-models run the one-shot packs only (`docs/LOCAL-LLM.md` §1א, §5) |
 | Live | deploys from `main` on merge; the generator meta carries version + stamp + sha |
 | CI | `.github/workflows/security.yml` — gitleaks, the test suite, npm audit (high+, prod deps); Node 24 |
@@ -65,6 +65,8 @@ The part that makes it different from a page builder: **the owner's own model do
 **Test with an owner's words, not a spec (v2.46).** Ben's rule: the customer brings DREAMS, so a check must start from a reasonable human sentence and be judged the way that person would judge — and against the page builder (does it open, render, survive a save). `node scripts/battery-copilot.js --track=dreams` is that; its first run found nine invented pictures in one page. When you add a copilot feature, add a dream for it, not only a T-scenario — and when a model's answer surprises the judge, ask whether a person would have accepted it before calling it a miss.
 
 **Do not talk robot to the robot (v2.47).** Ben, sharper: *"we cannot make his life easy 'hero <XXXX> bla bla' … think about humans, what they ask you to do all the time — that is the attitude."* A test sentence names no module, no count and no attribute. It is a wish ("warm, the side in purple, a moving message I can change"), a pile of her own material ("here is my doc — make it beautiful, with chapters"), a complaint, a change of heart ("put it back"), somebody else's words, a fact that changed. The judge asks what SHE would ask: are MY facts on it (the ones no model knows from training), is it what I said, did you tell me the truth about what you did. The same goes for the one-shot packs: `eval-injections.js --briefs=dreams`. The first such sentence found the copilot claiming colours and a fixed background it had written as Tailwind classes — a lie no spec-shaped test could have heard.
+
+**Try a new door on the models that FAIL, not only on the one that passes (v2.48).** The v2.47 door was proven on Gemma 31B — which never writes `<bent-divider style="dashed">`. The 26B-A4B does, the door bounced it for a legitimate attribute, and that model does not recover from a bounce: the false positive cost it at least four of the thirteen scenarios it lost in the first survey run. A door's proof run is the recommended model AND the weakest model that can still drive the copilot.
 
 **The door helps a model that is almost right (v2.45).** A document the model PRINTED instead of calling the write tool is adopted as that call — same preflight, same approval card — but only for a page or a menu it READ this turn; a closing tag that almost matches is read as the open element; `E_CHILD` names what the container accepts; a refused proposal followed by plain words gets "nothing was saved" beside it (`docs/LOCAL-LLM.md` §3ב). When a smaller model fails a scenario, run the battery with `--courier=relay` first: the transcript shows what the door told it.
 
