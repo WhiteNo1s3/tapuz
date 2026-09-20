@@ -1,0 +1,7 @@
+# False positives, acknowledged by fingerprint (gitleaks scans every COMMIT of a PR, so fixing the file is not enough).
+#
+# 4c1866d — scripts/smoke-mlx-survey.js: the generic-api-key rule read two LM Studio MODEL NAMES in a test fixture
+# ("…Key" next to 'qwen3.5-9b-mlx' and 'granite-4.2-30b') as secrets. They are model names. The fixture is now built
+# with helpers so the file itself no longer trips the rule.
+4c1866d0fe060ee031bede4f36245af71314be95:scripts/smoke-mlx-survey.js:generic-api-key:44
+4c1866d0fe060ee031bede4f36245af71314be95:scripts/smoke-mlx-survey.js:generic-api-key:46

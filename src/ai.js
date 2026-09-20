@@ -834,7 +834,7 @@ async function discoverWindow(provider, s, model, hint) {
     const g = win.getWindow(key);
     if (!(g.source === 'probe' && g.fresh)) {
       const r = await win.probeLocalWindow(s.baseUrl, model);
-      if (r) win.noteWindow(key, r.tokens, 'probe', { maxTokens: r.maxTokens, model: r.model, jit: !!r.jit, loaded: r.loaded });
+      if (r) win.noteWindow(key, r.tokens, 'probe', { maxTokens: r.maxTokens, model: r.model, jit: !!r.jit, loaded: r.loaded, probedTokens: r.probedTokens || null, cap: r.cap || 0 });
     }
   }
   return key;
@@ -1129,7 +1129,9 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         promptTokens: st.lastPromptTokens || st.estPromptTokens || 0,
         model: w.model || st.model || '',
         ratio: w.ratio,
-        jit: !!w.jit
+        jit: !!w.jit,
+        // v2.49 — a capped probe says so (LOCAL_LLM_WINDOW_CAP): what the runtime loaded, what it is budgeted at
+        ...(w.cap ? { probedTokens: w.probedTokens, cap: w.cap } : {})
       },
       notice,
       truncated: false,
@@ -1490,7 +1492,8 @@ async function planWindow({ hint = null, sizes = null } = {}) {
       tokens: w.known ? w.tokens : null,
       maxTokens: w.maxTokens || null,
       source: w.known ? w.source : (w.source === 'cloud' ? 'cloud' : 'unknown'),
-      jit: !!w.jit
+      jit: !!w.jit,
+      ...(w.cap ? { probedTokens: w.probedTokens, cap: w.cap } : {})
     },
     tier: pt.tier,
     tierHe: win.HE.tierHe(pt.tier),
