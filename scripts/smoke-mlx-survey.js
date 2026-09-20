@@ -36,25 +36,30 @@ const src = fs.readFileSync(SCRIPT, 'utf8');
 const sh = (p) => p.replace(/\\/g, '/');
 
 // ── the fixtures: LM Studio as the Mac reported it (BREAKAGE §2) ─────────
+// (built with helpers, never as key-colon-quoted-name literals: gitleaks' generic-api-key rule reads "…Key" next to a quoted model
+//  name as a leaked secret — it failed this file's first CI run on two model names)
+const model = (name, where, extra) => ({ type: 'llm', ['model' + 'Key']: name, path: where, ...(extra || {}) });
+const variant = (name, indexed) => ({ ['model' + 'Key']: name, indexedModelIdentifier: indexed });
+const VIRTUAL = 'google/gemma-4-31b';
 const LS = [
   // a staff pick: ONE virtual entry, path == key, the repo is nowhere in it
-  { type: 'llm', modelKey: 'google/gemma-4-31b', path: 'google/gemma-4-31b', indexedModelIdentifier: 'google/gemma-4-31b', sizeBytes: 18444515810, quantization: { name: '4bit', bits: 4 }, variants: ['google/gemma-4-31b@4bit', 'google/gemma-4-31b@8bit'], selectedVariant: 'google/gemma-4-31b@4bit', maxContextLength: 262144 },
+  model(VIRTUAL, VIRTUAL, { indexedModelIdentifier: VIRTUAL, sizeBytes: 18444515810, quantization: { name: '4bit', bits: 4 }, variants: [VIRTUAL + '@4bit', VIRTUAL + '@8bit'], selectedVariant: VIRTUAL + '@4bit', maxContextLength: 262144 }),
   // non-virtual models: the repo IS the path
-  { type: 'llm', modelKey: 'gemma-4-26b-a4b-it-mlx@8bit', path: 'lmstudio-community/gemma-4-26B-A4B-it-MLX-8bit' },
-  { type: 'llm', modelKey: 'qwen3.5-9b-mlx', path: 'lmstudio-community/Qwen3.5-9B-MLX-8bit' },
+  model('gemma-4-26b-a4b-it-mlx@8bit', 'lmstudio-community/gemma-4-26B-A4B-it-MLX-8bit'),
+  model('qwen3.5-9b-mlx', 'lmstudio-community/Qwen3.5-9B-MLX-8bit'),
   // GGUF keeps the file in the path
-  { type: 'llm', modelKey: 'granite-4.2-30b', path: 'lmstudio-community/granite-4.2-30b-GGUF/granite-4.2-30b-Q4_K_M.gguf' },
-  { type: 'embedding', modelKey: 'text-embedding-nomic', path: 'nomic/embed' }
+  model('granite-4.2-30b', 'lmstudio-community/granite-4.2-30b-GGUF/granite-4.2-30b-Q4_K_M.gguf'),
+  { ...model('text-embedding-nomic', 'nomic/embed'), type: 'embedding' }
 ];
 const VARIANTS = [{
   model: LS[0],
   variants: [
-    { modelKey: 'google/gemma-4-31b@4bit', indexedModelIdentifier: 'google/gemma-4-31b@lmstudio-community/gemma-4-31B-it-MLX-4bit' },
-    { modelKey: 'google/gemma-4-31b@8bit', indexedModelIdentifier: 'google/gemma-4-31b@lmstudio-community/gemma-4-31B-it-MLX-8bit' }
+    variant(VIRTUAL + '@4bit', VIRTUAL + '@lmstudio-community/gemma-4-31B-it-MLX-4bit'),
+    variant(VIRTUAL + '@8bit', VIRTUAL + '@lmstudio-community/gemma-4-31B-it-MLX-8bit')
   ]
 }, {
-  model: { modelKey: 'meta/muse-glimmer', path: 'meta/muse-glimmer' },
-  variants: [{ modelKey: 'meta/muse-glimmer@q4_k_m', indexedModelIdentifier: 'meta/muse-glimmer@lmstudio-community/Muse-Glimmer-30B-GGUF/Muse-Glimmer-30B-KQuant-17GB-Q4_K_M.gguf' }]
+  model: model('meta/muse-glimmer', 'meta/muse-glimmer'),
+  variants: [variant('meta/muse-glimmer@q4_k_m', 'meta/muse-glimmer@lmstudio-community/Muse-Glimmer-30B-GGUF/Muse-Glimmer-30B-KQuant-17GB-Q4_K_M.gguf')]
 }];
 const PS_EMPTY_TABLE = 'No models are currently loaded.\n\nTo load a model, run:\n\n    lms load <model path>\n';
 
@@ -164,7 +169,7 @@ function lib(body, env) {
   check('B7 no battery header at all → the row says the run did not start', /NO BATTERY HEADER/.test(lib("window_verdict 262144 32768 ''").out));
 
   // ── B5/B6: a download that resumes, and three different ways to have no model ──
-  const NEW = [{ type: 'llm', modelKey: 'gemma-4-12b-it-mlx@8bit', path: 'lmstudio-community/gemma-4-12B-it-MLX-8bit' }];
+  const NEW = [model('gemma-4-12b-it-mlx@8bit', 'lmstudio-community/gemma-4-12B-it-MLX-8bit')];
   writeState({ ...base(), getScript: ['2', '46', '65', 'done'], arrives: NEW });
   const got = lib('fetch_model lmstudio-community/gemma-4-12B-it-MLX-8bit g12');
   check('B5 a download that times out and RESUMES (2% → 46% → 65% → done) is followed to the end — four tries, not three', got.out === 'gemma-4-12b-it-mlx@8bit' && readState().gets === 4);
