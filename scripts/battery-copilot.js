@@ -936,8 +936,8 @@ const DREAMS = [
   // A battery that was killed leaves its SERVER alive on this port. The next run's own server then
   // cannot bind, waitUp() is answered by the OLD one, and every turn talks to yesterday's site while the
   // judge reads today's empty one: "applied.created = true" next to "✗ a new draft exists", a leftover
-  // `pricing` page, a backup the judge cannot find. That is the whole signature of the Mac's 7/13 row
-  // (eval/battery/SCORECARD-2026-09-19-mac-mlx-gemma-4-31b-v244.md, B1–B5). Refuse to measure a stranger.
+  // `pricing` page, a backup the judge cannot find. That was the whole of a 7/13 measured on the Mac on
+  // 2026-09-19 (the row was withdrawn — it measured the instrument, not the model). Refuse to measure a stranger.
   const stranger = await new Promise((resolve) => {
     const probe = http.get(BASE + '/', (res) => { res.resume(); resolve(true); });
     probe.on('error', () => resolve(false));

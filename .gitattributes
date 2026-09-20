@@ -1,0 +1,2 @@
+# shell scripts run on the Mac and on Linux CI — never CRLF, whatever the checkout
+*.sh text eol=lf

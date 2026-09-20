@@ -1,138 +1,79 @@
-# Copilot battery — run it on the Mac (the official instrument)
+# The Mac node — orders for the MLX survey
 
-The instrument for "did the FIXED v2.44 copilot do the right thing?" is
-`scripts/battery-copilot.js` (`npm run battery:copilot`, docs/LOCAL-LLM.md §3א):
-thirteen owner sentences in Hebrew, POSTed through `/admin/api/ai/chat` with the
-page's own envelopes, judged from the **pages and menus tables** — never from
-the model's words. A Direct `chat/completions` harness against LM Studio with no
-system briefing measures nothing about the product (§1ב: a naked call is
-`FAIL_INVENT` by design and stays so — the briefing *is* the product).
+You are the agent on the Mac (128 GB unified memory, LM Studio, MLX). The PC (RTX 5090, GGUF Q4) is
+the other node; you cannot reach it and must not try. GitHub `main` is the only thing the two
+nodes share. Your job is one command and one file.
 
-A Cursor Cloud Agent VM cannot run it: its `127.0.0.1:1234` is not this Mac's
-LM Studio, and the `local` provider is loopback-only (`src/providers.js`). So
-this file is the run, ready to paste, for the machine that has the model.
-
-> **2026-09-20 — dreams first.** Since v2.46/v2.47 the verdict on a model is the DREAMS track
-> (`--track=dreams`, D1–D14: an owner's own sentences, judged by her questions and by the page
-> builder) and `eval-injections.js --briefs=dreams`; the T1–T13 run below is the comparison column.
-> The MLX survey — which models, which bits, the sanity run, the scorecard's shape — is
-> `LETTER-2026-09-20-to-grok-mlx-dreams.md` beside this file. And: a battery that was interrupted
-> leaves its server on port 3948; the next run used to talk to THAT site and judge a fresh one
-> (that is the whole 7/13 of `SCORECARD-2026-09-19-mac-mlx-gemma-4-31b-v244.md`). The battery now
-> refuses to start on an occupied port: `lsof -ti :3948 | xargs kill`.
-
-## 0. Rules
-
-- **Never `lms unload --all`.** With LM Link on it unloads the model on every
-  linked device, including the 5090 someone is chatting with (§5, "Two
-  machines, one LM Studio"). Unload by identifier only: `lms unload tapuz-gemma`.
-- **One GPU job at a time** (§1ד). No `eval-injections`, no second admin tab,
-  no worker while the battery runs — with `--parallel 1` a neighbour queues
-  instead of killing both, but it still slows the clock.
-- **32K context, `--parallel 1`** (§1, §1א, §1ד).
-- Node ≥ 24 (`package.json` engines). The battery spawns its own scratch CMS on
-  `BATTERY_PORT` (default 3948) under a temp root and deletes it afterwards —
-  it never touches this checkout's `config/`, `db/` or the live site.
-
-## 1. Load the model
+## Do this
 
 ```bash
-LMS="$HOME/.lmstudio/bin/lms"
-"$LMS" server start --port 1234
-"$LMS" load google/gemma-4-31b --gpu max --context-length 32768 --parallel 1 --identifier tapuz-gemma -y
-"$LMS" ps
-curl -s http://127.0.0.1:1234/api/v0/models | grep -o '"loaded_context_length":[0-9]*'   # expect 32768
-```
-
-The Mac's copy is the MLX build under `~/.lmstudio/hub/models/google/gemma-4-31b`
-(more bits than the 5090's Q4_K_M GGUF, §5) — a different build of the same
-model, so a score here is a new row, not a re-measurement of the 5090 row.
-
-## 2. Run the battery (latest `main`)
-
-```bash
-cd /path/to/your/tapuz-checkout && git fetch origin main && git checkout main && git pull --ff-only origin main
-git rev-parse --short HEAD && node -e "console.log(require('./package.json').version)"   # note both for the scorecard
+cd <the tapuz checkout>
+git fetch origin main && git checkout main && git pull --ff-only origin main
 npm ci
-
-# the official run — server-side courier, one full pass of T1..T13
-LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma \
-  npm run battery:copilot -- --courier=local --runs=1
-
-# the hosted path (the battery plays Bridge V2, no extension needed)
-LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma \
-  npm run battery:copilot -- --courier=relay --runs=1
-
-# optional, to reproduce docs/LOCAL-LLM.md §5 exactly: ×3 local, and the 8K rung
-LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma npm run battery:copilot -- --courier=local --runs=3
-LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=tapuz-gemma npm run battery:copilot -- --courier=relay --window=8192
+bash scripts/mlx-survey.sh            # sanity → tier A → tier B → tier C.  DRY=1 prints the plan and runs nothing.
 ```
 
-Use `--only=T3,T9` to re-run a single scenario. `LOCAL_LLM_MODEL` may also be
-the runtime id (`google/gemma-4-31b`); the artifact name sanitises it.
+The script decides everything: which models (fifteen, fixed), which bits, how many runs, the 32K
+window, `--parallel 1`, the download, the load check, the three measurements per model, the unload.
+**Do not add, swap or reorder models. Do not edit the script.** It writes to
+`eval/battery/mlx-<date>/`: a log per step, `results.tsv`, and `SCORECARD-draft.md` at the end.
 
-**`LOCAL_LLM_MODEL` empty = whatever is loaded.** A name that does not match a
-loaded identifier makes LM Studio JIT-load another copy at its default window
-(§1א) or answer with an error — which the CMS reports as `PROVIDER_ERROR`. If
-the model was loaded under a different identifier than `tapuz-gemma`, leave
-the variable out: the `local` provider then sends the placeholder
-`local-model` and LM Studio answers with the loaded model. The artifact is
-then named `<stamp>-model-local.json/.md` (2026-09-19 Mac run):
+What is measured, per model — the verdict is human sentences, never a spec:
+1. `battery-copilot.js --track=dreams` — D1–D14, an owner's own words in Hebrew, judged by what she
+   would check and by the page builder (×2 for the recommended models, ×1 for the rest);
+2. `eval-injections.js theme-designer 1 --briefs=dreams` — five look-and-feel wishes;
+3. `eval-injections.js site-builder-lite 1 --briefs=dreams` — five "make me a page" wishes.
 
-```bash
-LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 npm run battery:copilot -- --courier=local --runs=1
-```
+Expect 6–10 hours for everything. Tiers can be run separately (`bash scripts/mlx-survey.sh A`) and
+the script skips nothing silently: a model that does not download or load becomes a row that says so.
 
-The `local` courier goes through the CMS's loopback rule, so `LOCAL_LLM_BASE`
-must be `127.0.0.1` / `localhost`. The `relay` courier calls the runtime from
-the battery process itself, so from a *second* machine on the LAN
-`LOCAL_LLM_BASE=http://<mac-ip>:1234/v1 … --courier=relay` also works.
+## Cluster rules
 
-## 3. What comes out
+1. **`main` is the sync point.** Pull before you start. Never push to `main`; never force-push.
+2. **You own one path:** `eval/battery/SCORECARD-<date>-mac-mlx.md`. Everything else in the repo is
+   read-only for you — product code, the battery, this file, the script.
+3. **One branch, one PR, at the end** (`grok/mlx-survey-<date>`). A green PR merges itself and CI
+   minutes are paid: push once, when the scorecard is complete. No version bump (nothing shipped).
+4. **Never the live site.** The battery spawns its own scratch CMS on `127.0.0.1:3948` and approves
+   its own proposals; pointed anywhere else it would publish a menu.
+5. **Only `tapuz-mlx-*` models are yours.** Never `lms unload --all`. If the script says
+   *"a model that is not mine is loaded"*, Ben is using the machine: stop and ask him. LM Link stays off.
+6. **Weights only.** No forks, no custom runtimes, no installers, no `sudo`. "Does not load in
+   stock LM Studio" is a valid result.
+7. **Disk is not a concern** (Ben's rule). Download everything on the list; delete nothing you did not download.
+8. **Public repo:** no hostname, IP, device name, `/Users/<name>` path or mailbox in anything you commit.
+9. **Never change a sentence, a check or a threshold to improve a score.** If a check looks wrong,
+   put the turn from the `.json` in the scorecard and leave the check alone.
 
-Console: one line per scenario —
+## When something goes wrong
 
-```
-battery: tapuz-gemma · courier=local · runs=1 · window={"tokens":32768,"source":"probe",...}
-PASS T1#1 9s · no tools — a hello is answered in Hebrew and writes nothing
-PASS T2#1 12s · list_pages — a question about the site is answered from a READ, not from a guess
-…
-BATTERY COPILOT: 13/13 PASS · 0 soft misses · 250s → eval/battery/<stamp>-tapuz-gemma-local.json
-```
-
-`✗` lines are hard misses (the scenario FAILS), `~` lines soft misses (wording
-only), `·` notes, `!` transport/route errors. Exit code 0 = every scenario
-passed, 1 = at least one FAIL, 2 = the harness itself crashed.
-
-Artifacts (git-ignored, keep them beside this file):
-
-| file | what |
+| the script says | do |
 |---|---|
-| `eval/battery/<stamp>-tapuz-gemma-local.json` | every turn: what was sent, the card, the reply, `used[]`, `reads[]`, notices, the window, seconds, tokens; `passed/total/softMisses` at the top |
-| `eval/battery/<stamp>-tapuz-gemma-local.md` | the 13-row table the scorecard is built from |
-| `…-tapuz-gemma-relay.json/.md` | same, hosted path |
-| `…-relay-8192.json/.md` | the 8K rung (`--window=8192`) |
+| `REFUSED: this checkout is … need ≥ 2.48.0` | `git pull --ff-only origin main` |
+| `REFUSED: something answers on port 3948` | an interrupted battery left its server: `lsof -ti :3948 \| xargs kill`, run again |
+| `STOP: a model that is not mine …` (exit 3) | ask Ben; do not unload it |
+| `INSTRUMENT BROKEN …` (exit 4) | measure nothing. Send `sanity.log` and the newest `eval/battery/*-tapuz-mlx-sanity-local.json` back |
+| `DID NOT DOWNLOAD` / `DID NOT LOAD` on a row | nothing — the row records it; the run continues |
+| the script itself crashes | report the line and the error. Do not patch it on the Mac |
 
-`<stamp>` is `YYYY-MM-DDTHH-MM-SS` UTC.
+## Send back
 
-## 4. What to expect (docs/LOCAL-LLM.md §5, v2.44 code, 5090 GGUF Q4_K_M)
+Copy `eval/battery/mlx-<date>/SCORECARD-draft.md` to `eval/battery/SCORECARD-<date>-mac-mlx.md` and
+fill its four sections from the logs and the per-turn `.json` files in `eval/battery/`:
 
-| courier / window | expected |
-|---|---|
-| local, 32K | 13/13 per run (39/39 over ×3, 1 soft miss total), ≈ 250 s per run |
-| relay, 32K | 13/13, ≈ 270 s |
-| local or relay, 8K (`--window=8192` on relay) | 13/13 — T9–T12 pass in the **lean** mode (`menuTools:false`, the menu byte-identical, the reply points at Context Length → 32768) |
+- **every ✗**, per model: the owner's sentence, what landed, the door's notice if there was one;
+- **habits** — which of these survive 8 bits, which are new: prints the page instead of calling the
+  tool · silent after a read · talks about the page instead of making it · claims a change it did
+  not make · loses the owner's facts (D9, D11, D12) · invents a picture or a link;
+- **anything the judge got wrong** — a miss a person would have accepted, with the turn;
+- **what did not download or load**, and LM Studio's own words.
 
-Anything below 13/13 at 32K on Gemma 4 31B is a regression against §5 or a
-build difference (MLX vs GGUF) — read the `✗` line and the turn in the `.json`
-before deciding which. The habits §5 names for other models (printing the
-document instead of calling `create_page`, `PZN_READY` as a reply, dropping
-pages from a menu) show up as `~ it CALLED create_page …`, `✗ approve →
-applied.created`, or the `lost` preflight note.
+Numbers are ranges: a ×2 run moves by one or two scenarios. An MLX row is a new row — it never
+corrects a 5090 row. Then the PR, and one message to Ben: the table and the link.
 
-## 5. Then
+## The 5090 rows you are answering (GGUF Q4, v2.48, `docs/LOCAL-LLM.md` §5)
 
-Copy the `.md` table into a `SCORECARD-<date>-<who>.md` beside this file (that
-pattern is tracked; the raw artifacts are not), with the git SHA and package
-version from step 2 and whether the numbers are **live model runs** or
-**harness-only**.
+Gemma 4 31B: dreams 26/28 · theme dreams 4/5 · page dreams 5/5. The other rows land in §5 when the
+5090's own survey finishes. The question for the Mac: **do more bits change the verdict** (8-bit
+against 4-bit of the same model), **and is a model that does not fit a 32 GB card the better helper**
+(tier C)?
