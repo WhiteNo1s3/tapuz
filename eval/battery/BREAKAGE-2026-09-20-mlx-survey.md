@@ -257,3 +257,60 @@ rm -f ~/bin/curl ~/bin/lms-survey-wrap; unset LMS LMS_REAL; hash -r
 git pull --ff-only origin main && npm ci                                    # ≥ 2.50.0
 bash scripts/mlx-survey.sh            # rows that say THE OTHER VARIANT IS SELECTED: one click each in the app, then that tier again
 ```
+
+## 11. What §3 B5 got wrong — a timed-out `lms get` does not stop the download (verified on MLX)
+
+Written on the Mac, 2026-09-20 19:53, by the session that wrote §1–8. §9 lists "`lms get --mlx` resuming" under
+*not verified on MLX*. It is verified now, and the mechanism is not the one §3 B5 — or the comment above
+`fetch_model` — describes.
+
+**`Download failed: Timed-out. Please try to resume.` kills only the CLI. LM Studio's daemon keeps downloading.**
+The next `lms get` does not resume anything; it re-attaches to a download that never stopped.
+
+    granite-30b-8bit   the night script's last client died 06:00 at   72.32% | 22.50 GB
+                       — no client attached for 44 minutes —
+                       the next client's FIRST reading, 06:44:         94.37% | 29.36 GB     (+6.9 GB, nobody watching)
+                       that client died 06:47 at 95.17%  →  complete on disk 06:49, nobody attached
+    qwen38-27b-8bit    written off by the script at 05:28, 65%  →  by 06:44: a 28 GB folder, no partial files,
+                       `qwen/qwen3.8-27b@8bit` 29.53 GB in the variants index, `lms get` → "already downloaded"
+    muse-glimmer-30b   written off at 06:12, 34%                →  complete 06:50 (33.4 GB), nobody attached
+    gpt-oss-120b       its client was killed with the night run, 06:42  →  complete 07:31, nobody attached
+    right after that kill: ~6 MB/s still arriving at the `LM Studio` process, no `lms` client alive
+
+Every download the night script wrote off as `DID NOT DOWNLOAD` finished by itself. Checked at 19:53 the same day,
+no reboot in between: all of them in the index, no partial file in any folder. So the 2% → 46% → 65% across the
+night's "three tries" was the daemon's progress, not the retries'. (D2, for the record: Ben had the night run
+killed at 06:42 — that is the `EXIT:143` at the end of its log. It was mid-download; nothing was half-measured.)
+
+`fetch_model` as merged (v2.49/2.50) works — for a reason other than the one in its comment. Three things are left:
+
+1. **Giving up cancels nothing.** After `PARTIAL DOWNLOAD — stalled at N%` the script moves on and measures the
+   next model while the abandoned download runs underneath it. On the night: qwen38 written off at 05:28,
+   qwen35-9b measured 05:28–05:49 — a 30 GB download was very likely running under that battery (inferred from
+   the above, not observed). That touches the seconds column, not the PASS counts. Before `load`, nothing may be
+   in flight: one more `lms get` on every repo this run gave up on must return at once — else wait, or stamp the
+   row `MEASURED UNDER A DOWNLOAD`. Killing `lms get` stops nothing either; only the app's Downloads panel does,
+   and `lms` has no subcommand for it.
+2. **The stall test reads whole percents** (`get_progress` ends in `cut -d. -f1`). 1% of `gpt-oss-120b` is
+   1.24 GB; at the 2–6 MB/s measured that night that is 3.5–10 minutes, and the CLI timed out every 1–8. Two
+   timeouts inside one percent reads as `stalled` while the download is healthy. Compare the GB figure — it is on
+   the same line, `95.17% | 29.61 GB / 31.11 GB` — or keep the decimals. Derived from the code and the night's
+   rates; not observed.
+3. **The comment is wrong** ("RESUMES on the next call"). Harmless today; the next reader will design from it.
+
+Smaller things from the same look:
+
+- **`gpt-oss-120b-MLX-8bit` is 124.2 GB on disk; the table says 65** (`C|gpt-oss-120b|…|1|65|-|`). That is the
+  scorecard's `DID NOT LOAD (resources)`: over the script's own "~90 GB" rule, and over the engine's safe ceiling
+  that night (102 GiB). Not a guardrail to tune — the row cannot run on this Mac. Ben: drop it, or the table meant
+  another build.
+- **"Is it on disk?" cannot be read from plain `lms ls --json`** for a staff pick: the entry shows the *selected*
+  variant only. The session that wrote this looked there, saw `qwen/qwen3.8-27b · 16 GB · 4bit`, and nearly
+  reported a complete 29.5 GB 8-bit as missing. Ask `--variants --json`, or look at the folder.
+- **Never parse the `To use, run: lms load <key>` hint** that `lms get` prints. Twice it named a key the index does
+  not hold (`qwen3.8-27b-mlx@8bit` for `qwen/qwen3.8-27b@8bit`; `gemma-4-31b-it-mlx@4bit` for
+  `google/gemma-4-31b@4bit`) — and per §10 the index's own `@quant` keys do not load either.
+- A lead, **not verified**: the Mac's server log shows a REST pair — `POST /api/v1/models/download` and
+  `GET /api/v1/models/download/status:job_id` (08:53, somebody's client, not this session's). A job id with a
+  status is a better thing to poll than a spinner log. Try it on the 5090's LM Studio before building on it; a POST
+  starts a real download.
