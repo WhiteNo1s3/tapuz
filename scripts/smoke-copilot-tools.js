@@ -661,6 +661,19 @@ const wantsWrite = {
     await ai.converse({ approve: { id: q2.pending.id, ok: false } });
     check('none of that wrote a page', !pagesLib.getPageByFullPath('dream-look'));
 
+    // v2.48 — `style` is ALSO a real BenTML attribute (bent-divider style="solid|dashed|none"). v2.47 bounced it:
+    // the first survey caught gemma-4-26B-A4B losing whole scenarios to `style="dashed"`.
+    const DIVIDER = page('', '  <bent-heading id="h" level="1">שלום</bent-heading>\n  <bent-divider id="d" style="dashed" />\n  <bent-text id="t">טקסט</bent-text>');
+    check('a module\'s own style= (bent-divider style="dashed") is NOT dead styling — only a CSS declaration is',
+      tools.deadStyling(DIVIDER, '').length === 0 && tools.deadStyling(DIVIDER.replace('style="dashed"', 'style="border-top: 2px dashed purple"'), '').length === 1);
+    scripted = [calls('s5', 'create_page', { source: DIVIDER })];
+    const q3 = await ai.converse({ system: '<bent-heading>', user: 'דף עם קו מפריד' });
+    const bounced = (lastBody.messages || []).some((m) => m.role === 'tool' && m.tool_call_id === 's5' && /"proposed":false/.test(m.content));
+    check('…and such a page reaches the card on the FIRST try, with nothing sent back and nothing to warn about',
+      !!(q3.pending && q3.pending.tool === 'create_page') && !bounced && !/אין להם משמעות/.test(q3.notice || ''));
+    scripted = [says('בסדר.')];
+    await ai.converse({ approve: { id: q3.pending.id, ok: false } });
+
     const rp = require('../src/pzn/agent-roleplay');
     const full = rp.buildCopilotBriefing({ locale: 'he', media: [], siteTitle: 'x', tier: 'full' }).text;
     const compact = rp.buildCopilotBriefing({ locale: 'he', media: [], siteTitle: 'x', tier: 'compact' }).text;
