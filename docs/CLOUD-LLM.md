@@ -13,17 +13,28 @@ cache header.
 
 ---
 
-## 1. What exists (v2.51)
+## 1. What exists (v2.51, v2.52)
 
 | | |
 |---|---|
-| Providers with a key | `claude` (Anthropic) · `openai` · `xai` (Grok) · `openrouter` |
-| Where a key may be sent | four hosts, hand-written in `src/providers.js` — a fifth is a code change |
+| Providers with a key | `claude` (Anthropic) · `openai` · `gemini` (Google, the owner's own AI Studio key — v2.52) · `xai` (Grok) · `openrouter` |
+| Where a key may be sent | five hosts, hand-written in `src/providers.js` — a sixth is a code change |
+| Whose key goes where | **one key per supplier** (`keys{}` in `config/ai.json`, `ai.keyFor`) — a call takes only the key filed under the supplier it calls (v2.52; before, one stored key followed the owner to whichever supplier she picked next) |
 | What a turn reports | `spend` on every chat response: calls, tokens, cache split, and the money when we hold a price |
-| The price table | `src/ai-cost.js` — Anthropic's list as read on 2026-06-24, with the date attached |
+| The price table | `src/ai-cost.js` — Anthropic's list as read on 2026-06-24; OpenAI's and Gemini's as read on 2026-09-20 (Gemini's launch price carries its end date and what follows) — every quote with its date and its page |
+| What the owner sees | one quiet line in the chat per response that cost something: the money (or "no price list"), the cache's share, the conversation so far (v2.52) |
 | A model with no price | reports `null`, never `0` — the tokens still come back, the money is worked out afterwards |
 | The battery | `scripts/battery-copilot.js --provider=… --model=…`, with a default spending cap |
 | Pinned by | `scripts/smoke-ai-cost.js` (30 checks, no key, no network, in `test:smoke`) |
+
+### What v2.52 added to the wire
+
+The tool loop builds one body shape per style and everything in `ai.js` reads it. What a particular supplier wants on top is added at the last moment (`wireBody`), so nothing upstream knows and a local model gets the very object it always got:
+
+- **OpenAI** — the reply budget rides as `max_completion_tokens` (`max_tokens` is deprecated there) and `reasoning_effort: "low"`. Its list is `gpt-5.6-terra` (default) · `luna` · `sol` · `gpt-6-astra`; the 2024 ids refuse `reasoning_effort` and are off the list.
+- **Gemini** — `reasoning_effort: "low"`: a 3.x model cannot switch thinking off (`"none"` is a 2.5-only value), and a cloud model's thinking is billed as output. v2.50's net (a reply that thought its budget away is asked once more with a larger one) is `openai-chat`-wide and covers it. **Its free tier:** Google says content sent on it is used to improve its products; the paid tier's is not — the setup screen says so where the key is pasted.
+- **Claude** — the cached system text is **cut at the situation's head** (`SITUATION_MARK`, one constant for the route that writes it and `cacheableSystem` that cuts there). In the builder drawer the situation carries the selected item *with its text*; as one block, every click on another block was a cache miss and a fresh 1.25× write of an unchanged dictionary. Now only the briefing is marked. A top-level `cache_control` adds the **second breakpoint** (§5.4): the API moves it along the conversation, so hops 2..n read the page the model just read at a tenth.
+- **Every one of these is revocable.** None can be tried without a paid key, so a `400` that *names* one of our optional fields (`cache_control`, `reasoning_effort`, `max_completion_tokens`) drops it for that supplier for the life of the process and the same call is repeated once (`postWire`); the server log says which. A `400` about anything else is reported as it always was.
 
 ---
 
@@ -115,10 +126,14 @@ The battery refuses before it spends, never after. Each one names the fix:
 ## 4. Where the key lives
 
 - The battery writes it into the **throwaway site** it spawns under a temp root, and deletes that root
-  when it finishes. Nothing is written into the checkout.
+  when it finishes. Nothing is written into the checkout. Since v2.52 the key file itself leaves **by name on
+  every way out** — the normal end, a crash, Ctrl-C — because removing the whole folder can fail on Windows
+  while sqlite holds its file.
+- **An agent never types, reads or handles a key.** The owner sets it in her own shell and runs the command;
+  the agent reads the result files.
 - In the product it lives in the site's own `config/ai.json`, and `getSettings()` never returns it —
   only whether one exists and its last four characters.
-- It may only be sent to the four hosts in `ALLOWED_API_HOSTS` (`src/providers.js`). The set is a
+- It may only be sent to the five hosts in `ALLOWED_API_HOSTS` (`src/providers.js`). The set is a
   hand-written literal, not something derived from the provider table, because the table is data and
   data is what an attacker who reached the CMS would edit. Loopback is allowed for local runtimes;
   everything public must be `https` **and** on the list. A lookalike (`api.x.ai.evil.com`) fails the
@@ -130,16 +145,17 @@ The battery refuses before it spends, never after. Each one names the fix:
 ## 5. What we do not know yet
 
 1. **What the battery actually costs.** Estimated in §2, never measured. The probe in §3 answers it.
-2. **Prices for xai / openrouter.** No quote is held, on purpose — nobody here has read their pricing
+2. **Prices for xai / openrouter** (OpenAI's and Gemini's were read on 2026-09-20 and are in the table). No quote is held, on purpose — nobody here has read their pricing
    page, and a guessed price is worse than none. Pass `--price-in` / `--price-out`, and if those
    numbers are going to be used twice, add them to `QUOTES` in `src/ai-cost.js` **with the date you
    read them**.
 3. **Whether the tool loop behaves the same on a cloud model.** Every habit in `LOCAL-LLM.md` §5 —
    silence after a read, a printed tool call, a claimed change that never happened — was found on
    local weights. The premium rows are new rows; they never correct a local row.
-4. **The second cache breakpoint.** Only the system prefix is cached today. The growing tool-result
-   history is re-sent whole on every hop and is not marked. That is the next lever, and it is bigger on
-   a long scenario than on a short one.
+4. **The second cache breakpoint — sent since v2.52, unproven.** A top-level `cache_control` asks the API to
+   move a breakpoint along the conversation. Whether it lands is one number in the first probe: the cached
+   share from the second call of a turn on. Near zero means it did not take (and a 400 naming the field means
+   the wire already dropped it — the server log says so).
 5. **RAG.** The "agent with RAGs" half of Ben's sentence is not built. Nothing here retrieves; the
    copilot reads pages with its own tools. That is its own phase.
 

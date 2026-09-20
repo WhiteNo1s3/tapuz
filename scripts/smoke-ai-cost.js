@@ -164,13 +164,15 @@ global.fetch = async (url, init) => ({ ok: true, status: 200, json: async () => 
     !!turn2.spend && turn2.spend.calls === 1 && turn2.spend.prompt_tokens === 0);
 
   // ── 6. where a key may go ─────────────────────────────────────────────
-  check('the four hosts this CMS ships are the only ones a key may reach',
-    [...providers.ALLOWED_API_HOSTS].sort().join(',') === 'api.anthropic.com,api.openai.com,api.x.ai,openrouter.ai');
+  // v2.52 widened this list by ONE host, on purpose and by hand: Google's, for the owner's own AI Studio key.
+  check('the five hosts this CMS ships are the only ones a key may reach',
+    [...providers.ALLOWED_API_HOSTS].sort().join(',') === 'api.anthropic.com,api.openai.com,api.x.ai,generativelanguage.googleapis.com,openrouter.ai');
   check('every fetching provider\'s endpoint is on that list',
     providers.listProviders().filter((p) => p.endpoint).every((p) => providers.endpointAllowed(p.endpoint)));
   check('a lookalike host is refused, and so is plain http to a real one',
     !providers.endpointAllowed('https://api.x.ai.evil.com/v1/chat/completions') &&
     !providers.endpointAllowed('https://openrouter.ai.evil.com/api/v1/chat/completions') &&
+    !providers.endpointAllowed('https://generativelanguage.googleapis.com.evil.com/v1beta/openai/chat/completions') &&
     !providers.endpointAllowed('http://api.anthropic.com/v1/messages'));
   check('the new providers carry no secret and name where their ids are listed',
     ['xai', 'openrouter'].every((id) => {

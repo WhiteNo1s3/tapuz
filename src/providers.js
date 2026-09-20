@@ -8,10 +8,19 @@
  * re-release. (Same "constants live in the CMS" rule the wizard follows with
  * LOOKS.)
  *
- * THE KEY NEVER LIVES HERE. BYOK means the user's own API key sits in the
- * extension's background worker and goes straight from there to the provider;
- * the CMS neither sees, stores, nor proxies it. This module only describes
- * the shape of a request — auth header NAME and format, not the secret.
+ * THE KEY NEVER LIVES HERE. This table only describes the shape of a request —
+ * auth header NAME and format, not the secret. (Since v0.85 the owner's key is
+ * stored by the CMS in config/ai.json and the server makes the call; since
+ * v2.52 it is stored PER PROVIDER, so a key is only ever sent to the company
+ * that issued it — ai.js keyFor.)
+ *
+ * v2.52 — two optional fields the wire obeys (ai.js wireBody), both read from
+ * the supplier's own docs on 2026-09-20 and both REVOCABLE (a 400 that names
+ * the field drops it for that supplier and the call is repeated once):
+ *   maxTokensField   the name this supplier wants for the reply budget
+ *                    (OpenAI deprecated `max_tokens` for `max_completion_tokens`)
+ *   reasoningEffort  sent as `reasoning_effort` — the copilot wants an ANSWER,
+ *                    and a cloud model's thinking is billed as output
  */
 
 // LM Studio's default listen address. Ollama uses :11434, vLLM :8000 — the
@@ -58,13 +67,45 @@ const PROVIDERS = {
     authScheme: 'bearer',
     authHeader: 'Authorization',
     extraHeaders: {},
-    defaultModel: 'gpt-4o',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1'],
+    // v2.52 — the list had rotted (gpt-4o / gpt-4o-mini / gpt-4.1). Read from OpenAI's models page on 2026-09-20.
+    // The old ids are still sold but superseded, and they refuse `reasoning_effort`; a store that still says
+    // 'gpt-4o' falls back to the default (modelFor holds a listed provider to its list).
+    defaultModel: 'gpt-5.6-terra',
+    models: ['gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-6-astra'],
     maxTokens: 8192,
+    maxTokensField: 'max_completion_tokens',
+    reasoningEffort: 'low',
     responsePath: ['choices', 0, 'message', 'content'],
     keyHint: 'sk-…',
     keyUrl: 'https://platform.openai.com/api-keys',
     modelsUrl: 'https://api.openai.com/v1/models',
+    body: { style: 'openai-chat', systemField: 'system-message' }
+  },
+  // v2.52 — Gemini, with the owner's own Google AI Studio key, through Google's OpenAI-compatible endpoint: the
+  // same openai-chat shape the local model, the Bridge and OpenAI speak, so the tool loop needs nothing new.
+  // (OpenRouter below also reaches Gemini — with OpenRouter's key and margin. This is the direct road, and the
+  // one with a free tier.) A 3.x model cannot switch thinking off ("none" is a 2.5-only value), so the floor is
+  // "low"; v2.50's net — a reply that thought its budget away is asked once more with a larger one — is
+  // openai-chat wide and covers it. Model ids read from Google's models page on 2026-09-20.
+  gemini: {
+    id: 'gemini',
+    label: 'Gemini (Google)',
+    chatHost: 'gemini.google.com',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    method: 'POST',
+    authScheme: 'bearer',
+    authHeader: 'Authorization',
+    extraHeaders: {},
+    defaultModel: 'gemini-3.8-flash',
+    models: ['gemini-3.8-flash', 'gemini-3.5-flash-lite'],
+    maxTokens: 8192,
+    reasoningEffort: 'low',
+    // AI Studio hands out a FREE tier — and Google says content sent on it is used to improve its products; the
+    // paid tier's is not. The owner's pages go through the model, so the setup screen says so where the key is pasted.
+    note: 'ל-Gemini יש שכבה חינמית — Google מציינת שתוכן שנשלח בה משמש לשיפור המוצרים שלה; בשכבה בתשלום לא. הדפים שלכם עוברים דרך המודל, אז בחרו בידיעה.',
+    responsePath: ['choices', 0, 'message', 'content'],
+    keyHint: 'מפתח מ-Google AI Studio',
+    keyUrl: 'https://aistudio.google.com/apikey',
     body: { style: 'openai-chat', systemField: 'system-message' }
   },
   // Grok (xAI). OpenAI-shaped, so nothing in the request builder changes —
@@ -213,7 +254,8 @@ const ALLOWED_API_HOSTS = new Set([
   'api.anthropic.com',
   'api.openai.com',
   'api.x.ai',
-  'openrouter.ai'
+  'openrouter.ai',
+  'generativelanguage.googleapis.com'
 ]);
 
 /** Is this hostname (already URL-normalised) the local machine itself? */

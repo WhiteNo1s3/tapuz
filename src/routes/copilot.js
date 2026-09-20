@@ -700,6 +700,10 @@ router.post('/admin/api/ai/chat', async (req, res) => {
     // inside the CMS, and it is talking to the person who owns the site. Same
     // dictionary and same real media manifest — only the framing differs.
     const { buildCopilotBriefing } = require('../pzn/agent-roleplay');
+    // v2.52 — the head every situation starts with. It is also where a billing supplier's cache cuts the system
+    // text: the briefing before it is identical call after call; the situation after it changes with the page
+    // and the selected item, and must not drag the briefing out of the cache with it (ai.js cacheableSystem).
+    const { SITUATION_MARK } = require('../ai');
     const media = require('../media').listAllMedia(40);
     let siteTitle = '';
     try { siteTitle = String(require('../config').loadConfig().title || ''); } catch (e) { /* unnamed site */ }
@@ -722,7 +726,7 @@ router.post('/admin/api/ai/chat', async (req, res) => {
     let situation = '';
     if (ctx && ctx.page) {
       const pageSlug = String(ctx.page).slice(0, 200);
-      situation = '\n\n---\n\n## המצב עכשיו — בעל/ת האתר בתוך בונה הדפים\n' +
+      situation = SITUATION_MARK + ' — בעל/ת האתר בתוך בונה הדפים\n' +
         'הדף הפתוח בבונה: `' + pageSlug + '`. כשמבקשים ממך לערוך "את הדף" — זה הדף. ' +
         'השתמש/י ב-edit_page עם ה-slug הזה והחזר/י את המסמך המלא עם השינויים המבוקשים בלבד.\n';
       const sel = ctx.selected && typeof ctx.selected === 'object' ? ctx.selected : null;
@@ -736,9 +740,9 @@ router.post('/admin/api/ai/chat', async (req, res) => {
       // the sentence that follows this head is chosen per REQUEST (menuLine,
       // below): the door decides whether this window gets the menu tools, and
       // a situation must never tell a model to call a tool it was not given
-      situation = '\n\n---\n\n## המצב עכשיו — בעל/ת האתר במסך הקופיילוט, התפריט של האתר פתוח בקנבס\n';
+      situation = SITUATION_MARK + ' — בעל/ת האתר במסך הקופיילוט, התפריט של האתר פתוח בקנבס\n';
     } else if (canvas === 'blank') {
-      situation = '\n\n---\n\n## המצב עכשיו — בעל/ת האתר במסך הקופיילוט, הקנבס ריק\n' +
+      situation = SITUATION_MARK + ' — בעל/ת האתר במסך הקופיילוט, הקנבס ריק\n' +
         'אין דף פתוח. כשמבקשים לבנות דף — create_page; כשמבקשים לערוך דף קיים — list_pages ואז read_page ואז edit_page.\n';
     }
     let situationTail = '';
@@ -850,6 +854,8 @@ router.get('/admin/chat', (req, res) => {
       .bubble.system.warn { background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
       .bubble.system.danger { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
       .bubble.system.clock { background:transparent; color:#64748b; font-size:.78rem; padding:2px 10px; }
+      .bubble.system.cost { background:transparent; color:#64748b; font-size:.76rem; padding:0 10px; }
+      .bubble.system.cost { background:transparent; color:#64748b; font-size:.76rem; padding:0 10px; }
       .bubble.system .fix { display:block; margin-top:6px; font-size:.8rem; opacity:.9; }
       .bubble.user { background:#0a66c2; color:#fff; align-self:flex-start; }
       .bubble.assistant { background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; align-self:flex-end; }

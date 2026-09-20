@@ -28,7 +28,7 @@
  *   XAI_API_KEY=… node scripts/battery-copilot.js --provider=xai \
  *       --model=grok-4 --price-in=3 --price-out=15 --budget=2
  *
- *   --provider=claude|openai|xai|openrouter   the key comes from that provider's own env var
+ *   --provider=claude|openai|gemini|xai|openrouter   the key comes from that provider's own env var
  *   --model=<id>                              REQUIRED on a cloud provider: a row names its weights
  *   --budget=<usd>                            the cap; DEFAULT 5, and --budget=0 removes it
  *   --price-in= --price-out=                  $/million tokens, when this CMS holds no quote
@@ -74,7 +74,7 @@ const PROVIDER = String(flag('provider', 'local')).trim() || 'local';
 const CLOUD = PROVIDER !== 'local';
 // One env var per provider, named the way that provider names it, so a key
 // already exported for its own CLI is the key this run uses.
-const KEY_ENV = { claude: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', xai: 'XAI_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+const KEY_ENV = { claude: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY', xai: 'XAI_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
 
 const LLM_BASE = (process.env.LOCAL_LLM_BASE || '').replace(/\/+$/, '');
 const LLM_MODEL = String(flag('model', '')) === 'true' ? '' : (String(flag('model', '')) || process.env.LOCAL_LLM_MODEL || process.env.EVAL_MODEL || '');
@@ -87,7 +87,7 @@ function refuse(lines) {
 
 if (!CLOUD && !LLM_BASE) {
   console.log('BATTERY COPILOT: SKIPPED (set LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 to run against a local model,\n' +
-    '  or --provider=claude|openai|xai|openrouter with that provider\'s key in the environment)');
+    '  or --provider=claude|openai|gemini|xai|openrouter with that provider\'s key in the environment)');
   process.exit(0);
 }
 
@@ -1089,6 +1089,13 @@ const DREAMS = [
   ai.saveSettings(CLOUD
     ? { provider: PROVIDER, model: LLM_MODEL, apiKey: CLOUD_KEY, baseUrl: '' }
     : (COURIER === 'relay' ? { provider: 'browser', model: LLM_MODEL } : { provider: 'local', baseUrl: LLM_BASE, model: LLM_MODEL }));
+  // v2.52 — the key sits in the scratch site's config for the length of the run, and it leaves on EVERY way out:
+  // the `finally` below, a crash, Ctrl-C. Removing the whole temp folder can fail on Windows while sqlite holds
+  // its file (the comment down there says so) — so the key file goes first, by name.
+  const KEY_FILE = path.join(require('../src/paths').CONFIG_DIR, 'ai.json');
+  const dropKey = () => { if (CLOUD) { try { fs.rmSync(KEY_FILE, { force: true }); } catch (e) { /* already gone */ } } };
+  process.on('exit', dropKey);
+  ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach((sig) => process.on(sig, () => { dropKey(); process.exit(130); }));
   if (CLOUD && !ai.getSettings().hasKey) {
     console.error('BATTERY COPILOT: REFUSED — the key did not reach the site\'s settings; nothing was measured.');
     process.exit(2);
@@ -1208,6 +1215,7 @@ const DREAMS = [
     exit = 2;
   } finally {
     child.kill();
+    dropKey();
     try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch (e) { /* windows may hold the sqlite file a moment */ }
   }
   process.exit(exit);

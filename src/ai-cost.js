@@ -45,19 +45,46 @@ const QUOTES = {
       'claude-sonnet-4-6': { in: 3, out: 15 },
       'claude-haiku-4-5': { in: 1, out: 5 }
     }
+  },
+  // v2.52 — read from each supplier's pricing page on 2026-09-20. Both cache a stable prefix by themselves and
+  // bill a cached token at a tenth; neither charges for writing it (cacheWrite 1 = the plain input price).
+  openai: {
+    asOf: '2026-09-20',
+    source: 'https://developers.openai.com/api/docs/pricing',
+    cacheRead: 0.1,
+    cacheWrite: 1,
+    models: {
+      'gpt-6-astra': { in: 10, out: 50 },
+      'gpt-5.6-sol': { in: 4, out: 20 },
+      'gpt-5.6-terra': { in: 2, out: 12 },
+      'gpt-5.6-luna': { in: 0.2, out: 1.2 }
+    }
+  },
+  gemini: {
+    asOf: '2026-09-20',
+    source: 'https://ai.google.dev/gemini-api/docs/pricing',
+    cacheRead: 0.1,
+    cacheWrite: 1,
+    models: {
+      // Google's launch price holds through 2026-12-31; `then` is the listed price after it — a quote that knows
+      // its own end date does not silently halve the bill on New Year's Day
+      'gemini-3.8-flash': { in: 0.75, out: 3.75, until: '2026-12-31', then: { in: 1.5, out: 7.5 } },
+      'gemini-3.5-flash-lite': { in: 0.3, out: 2.5 }
+    }
   }
-  // openai / xai / openrouter: no quote read by hand, so no quote here. The
-  // owner passes the two numbers from the provider's own pricing page
-  // (--price-in / --price-out) and the run records them beside the result.
+  // xai / openrouter: no quote read by hand, so no quote here. The owner passes the two numbers from the
+  // provider's own pricing page (--price-in / --price-out) and the run records them beside the result.
 };
 
 /** The price of one model, or null when nobody here has read one.
  *  @returns {{in:number, out:number, cacheRead:number, cacheWrite:number, asOf:string, source:string}|null} */
-function priceFor(providerId, model) {
+function priceFor(providerId, model, now) {
   const q = QUOTES[String(providerId || '')];
   if (!q) return null;
-  const m = q.models[String(model || '').trim()];
+  let m = q.models[String(model || '').trim()];
   if (!m) return null;
+  // v2.52 — a launch price with an end date: the day after it, the listed price applies
+  if (m.until && m.then && new Date(now || Date.now()).toISOString().slice(0, 10) > m.until) m = m.then;
   return { in: m.in, out: m.out, cacheRead: q.cacheRead, cacheWrite: q.cacheWrite, asOf: q.asOf, source: q.source };
 }
 

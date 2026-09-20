@@ -58,7 +58,11 @@ function check(name, cond) {
   check('the checked row is never faded', /:has\(input:checked\)/.test(copilotSrc));
   check('client renders readiness chips (מוגדר/דורש מפתח/מקומי)',
     /דורש מפתח/.test(chatJs) && /מקומי · ללא מפתח/.test(chatJs) && /מוגדר ✓/.test(chatJs));
-  check('local runtime counts as ready without a key', /p\.keyOptional \|\| \(p\.id === settings\.provider && settings\.hasKey\)/.test(chatJs));
+  // v2.52 — keys are kept PER supplier, so a row is ready when ITS key is on file (before: "the saved provider has a
+  // key" — and one stored key followed the owner to whichever supplier she picked next)
+  check('local runtime counts as ready without a key — and a supplier only with ITS OWN key on file', /p\.keyOptional \|\| !!tailOf\(p\)/.test(chatJs) && /settings\.keyTails/.test(chatJs));
+  check('the page SHOWS the premium tier\'s meter (v2.51 sent `spend`, nothing displayed it): money when a quote is held, tokens and "no price list" when not, nothing for a local model',
+    /d\.spend/.test(chatJs) && /עלות משוערת/.test(chatJs) && /אין בידינו מחירון/.test(chatJs) && /sp\.provider !== 'local' && sp\.provider !== 'browser'/.test(chatJs));
   check('off rows stay clickable (no disabled attr)', !/disabled/.test(chatJs.match(/renderSettings[\s\S]*?syncProviderUI\(\);\s*\}/)[0]));
   check('screen title dropped the Grokin label', !/Grokin/.test(copilotSrc.match(/adminNav\([^)]*\)/g).join(' ')));
 
@@ -72,7 +76,11 @@ function check(name, cond) {
   check('builder has the 🤖 button + loads the drawer',
     /id="btn-copilot"/.test(builderRoute) && /<script src="\/admin-copilot-panel\.js">/.test(builderRoute));
   check('chat route accepts builder context (page + selected item)',
-    /b\.context/.test(copilotSrc) && /המצב עכשיו/.test(copilotSrc) && /הפריט המסומן/.test(copilotSrc));
+    // v2.52 — the situation's head is ONE constant in ai.js (SITUATION_MARK): it is also where a billing supplier's
+    // cache cuts the system text, so the route and the wire must not each own a copy of it. (Read from the source:
+    // requiring src/ai up here would bind the whole CMS to the real checkout — TAPUZ_ROOT is set further down.)
+    /b\.context/.test(copilotSrc) && /SITUATION_MARK \+ ' — /.test(copilotSrc) &&
+    /const SITUATION_MARK = '[^']*## המצב עכשיו'/.test(fs.readFileSync(path.join(__dirname, '..', 'src', 'ai.js'), 'utf8')) && /הפריט המסומן/.test(copilotSrc));
   check('context strings are length-capped (no prompt-stuffing)',
     /slice\(0, 200\)/.test(copilotSrc) && /slice\(0, 280\)/.test(copilotSrc));
   check('drawer sends page + selection context each turn',
@@ -363,6 +371,22 @@ function waitUp(tries = 40) {
     try { s = JSON.parse(aiSettings.text); } catch (e) { /* leave null → check fails */ }
     check('GET /admin/api/ai/settings → ok, with providers and NO apiKey echoed back',
       aiSettings.status === 200 && s && s.ok === true && Array.isArray(s.providers) && !('apiKey' in s));
+
+    // ── v2.52 — through the real routes: Gemini is on the list the screens draw themselves from, and a key is
+    //    filed under the supplier it was pasted for — it does not follow the owner to the next one ──
+    const gem = ((s && s.providers) || []).find((p) => p.id === 'gemini');
+    check('the settings route lists Gemini with the page where a key is made and what its free tier means',
+      !!gem && gem.keyUrl === 'https://aistudio.google.com/apikey' && /חינמית/.test(gem.note || '') && gem.models.includes(gem.defaultModel));
+    const setGem = await req('POST', '/admin/api/ai/settings', { cookie, json: { provider: 'gemini', model: 'gemini-3.8-flash', apiKey: 'G-ROUTE-TEST-7777' } });
+    const afterGem = JSON.parse(setGem.text);
+    check('a key pasted for Gemini is filed under Gemini: the echo is tails only, never the key',
+      setGem.status === 200 && afterGem.hasKey === true && afterGem.keyTails && afterGem.keyTails.gemini === '7777' && !/ROUTE-TEST/.test(setGem.text));
+    const toClaude = JSON.parse((await req('POST', '/admin/api/ai/settings', { cookie, json: { provider: 'claude', model: 'claude-sonnet-5' } })).text);
+    check('switching to Claude with an EMPTY key field (the card\'s "keep the stored key") leaves Claude without a key — Google\'s key stays Google\'s',
+      toClaude.provider === 'claude' && toClaude.hasKey === false && toClaude.keyTail === '' && toClaude.keyTails.gemini === '7777' && !toClaude.keyTails.claude);
+    const chatNoKey = await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'שלום', context: { canvas: 'blank', surface: 'copilot' } } });
+    check('…and a turn on Claude is refused for want of ITS key (NO_PROVIDER) instead of leaving with another supplier\'s', chatNoKey.status === 400 && /"code":"NO_PROVIDER"/.test(chatNoKey.text));
+    await req('POST', '/admin/api/ai/settings', { cookie, json: { provider: 'gemini', apiKey: '' } }); // leave no key behind for the checks below
 
     // ── all four screens are behind the admin gate ──
     const aiNoAuth = await req('GET', '/admin/ai', {});
