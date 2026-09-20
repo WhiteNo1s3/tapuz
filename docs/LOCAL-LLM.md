@@ -50,10 +50,10 @@ Ben's 17,246-token request errored only because half of it was still over 8,192;
 
 Guidance by card:
 
-- **8 GB** — Gemma 4 **E4B** (≈ 5 GB at 32K) or **E2B** (≈ 3.3 GB). The one-shot packs work well on them (menu organizer 25/27 and 24/27, theme designer 10/10), but they cannot drive the copilot's tool loop (12/26, 13/26) — they *describe* the tool they are about to call and stop. Use `/admin/inject` and the organizer card; leave the copilot to a bigger model or a cloud key. Measured in §5.
-- **12–16 GB** — **Gemma 4 12B, Google's QAT 4-bit build** (`gemma-4-12B-it-QAT`, ≈ 8.4 GB at 32K, so 32K fits a 12 GB card): copilot 24/26 → **26/26 and 25/26 since v2.45** (§3ב adopts the document it prints), 12/13 at 8K, organizer 27/27, theme 10/10. The generic Q4_K_M of the same model is a step behind (25/26, 12/13 on v2.45).
-- **24 GB** (a 3090 / 4090) — **Gemma 4 26B-A4B, the generic Q4_K_M** (MoE, 4B active, ≈ 18.5 GB at 32K): copilot 23–25/26 and the fastest of the family that can drive it — the whole double battery in 185 s against ≈ 500 s for the 31B. Not Google's QAT build here: at this size it scored lower (21/26 — §5).
-- **32 GB** (a 5090) — **Gemma 4 31B** at 32K with nothing else on the card (≈ 23 GB measured at `--parallel 1`); still the only local Gemma at 39/39, and the one that handles an owner's vague sentence best (dreams track, §5). Close the game first.
+- **8 GB** — Gemma 4 **E4B** (≈ 5 GB at 32K) or **E2B** (≈ 3.3 GB). The one-shot packs work well on them (menu organizer 25/27 and 24/27, theme designer 10/10), but they cannot drive the copilot's tool loop (12/26, 13/26) — they *describe* the tool they are about to call and stop. Use `/admin/inject` and the organizer card; leave the copilot to a bigger model or a cloud key. Measured in §5. **For a copilot on a small card the first model that works is Qwen 3.5 9B** (Q4_K_M, 7.5 GB at 32K, 6.8 GB at 8K): 11/14 on the owner-sentence track, 23/26 on the scripted battery, 12/13 at 8K — a 10–12 GB card, and close on an 8 GB one (§5, "The human track").
+- **12–16 GB** — **Gemma 4 12B, Google's QAT 4-bit build** (`gemma-4-12B-it-QAT`, ≈ 8.4 GB at 32K, so 32K fits a 12 GB card): copilot 24/26 → **26/26 and 25/26 since v2.45** (§3ב adopts the document it prints), 12/13 at 8K, organizer 27/27, theme 10/10. The generic Q4_K_M of the same model is a step behind (25/26, 12/13 on v2.45). On an owner's own sentences (dreams D1–D14, the verdict since v2.47): **25/28** — one scenario behind the 31B.
+- **24 GB** (a 3090 / 4090) — **Gemma 4 26B-A4B, the generic Q4_K_M** (MoE, 4B active, ≈ 18.5 GB at 32K): copilot 23–25/26 and the fastest of the family that can drive it — the whole double battery in 185 s against ≈ 500 s for the 31B. Not Google's QAT build here: at this size it scored lower (21/26 — §5). **On the human track the 12B QAT is at least its equal** (25/28 against 22/28) at less than half the memory — for an owner who talks rather than specifies, load the 12B QAT here too; the 26B-A4B is the faster choice for spec-shaped requests. Muse-Glimmer 30B (17.6 GB) is the strongest newcomer (12/14, T-battery 26/26) but it is a thinking model LM Studio cannot silence — slow, and the organizer returns nothing (§5).
+- **32 GB** (a 5090) — **Gemma 4 31B** at 32K with nothing else on the card (≈ 23 GB measured at `--parallel 1`); still the only local Gemma at 39/39, and the one that handles an owner's vague sentence best (dreams track, §5). Close the game first. Dreams D1–D14: **26/28**.
 - **A cluster / a workstation card** — 64K–128K; the full dictionary plus several long pages in one conversation.
 
 **Bridge V2 0.5.0.** The hosted flow needs the extension to (a) stream tool calls — 0.4.0 dropped `delta.tool_calls`, so every `list_pages` / `read_page` / `edit_page` came back as an empty reply, which was the other half of Ben's "unrelated" turn — (b) forward the model's error body, so the 8K explanation reaches the page instead of "no response", and (c) call `/api/v0/models` for the window. The ZIP is built from the CMS, so an update ships with it: download Bridge V2 again from `/admin/ai-setup`, reload it at `chrome://extensions` (or `about:debugging` in Firefox) and refresh the admin tab. An older bridge still works for plain chat, and the page says which version it sees and what it cannot do with it.
@@ -419,6 +419,8 @@ What it says:
 
 ### The dreams track — per model (2026-09-19, v2.46 code, 32K, `--parallel 1`)
 
+*(D1–D8 only, the first judge — superseded by "The human track" below, which runs D1–D14 on v2.47–v2.48.)*
+
 Eight owner sentences (§3א), the battery answering like the owner, the verdict from the builder's questions. `×2` = two full runs.
 
 | Model | Dreams | Soft misses | Seconds | What it is like |
@@ -432,5 +434,39 @@ Eight owner sentences (§3א), the battery answering like the owner, the verdict
 | DictaLM-3.0-Nemotron-12B | 3/8 (×1) | 3 | 153 | prints the tool call instead of making it; loses two pages from the menu; links to product pages nobody made |
 
 Soft misses are counted without one the judge gave to everybody (the prose check on a two-line fixture page — §3א, fixed in this PR's battery). What is left says the same thing the T-battery does, in an owner's voice: **the three recommended sizes understand a vague sentence** — they read first, keep what the owner wrote, put the sale where it belongs, answer "what do you suggest?" with a conversation and not a card — and the differences between them are manners under uncertainty: the 31B lays out a plan and waits for a yes before it touches a live menu; the 26B-A4B acts faster and once built the wrong thing; the 12B sometimes talks about the page instead of making it.
+
+### The human track — twelve models, dreams first (2026-09-20, RTX 5090, GGUF, 32K, `--parallel 1`, v2.47–v2.48)
+
+Ben: *"it must be in a 'dream' scenario — we cannot talk robot to the robot."* From here on **the verdict on a model is the dreams column**: fourteen owner sentences (§3א, D1–D14), the battery answering like the owner, judged by what she would check and by the page builder. The theme and page dreams are the one-shot packs with an owner's sentences (`--briefs=dreams`, §4). The T-battery, the organizer and the spec theme eval are the comparison columns. `×2` rows moved by one or two scenarios between runs — read ranges. VRAM is what the model ADDS at 32K.
+
+| Model (GGUF) | file | VRAM @32K | **Dreams D1–D14** | theme dreams /5 | page dreams /5 (lite pack) | T-battery ×2 | T @8K | organizer /27 | theme spec /10 |
+|---|---|---|---|---|---|---|---|---|---|
+| **gemma-4-31B** Q4_K_M | 19.9 GB | ≈ 23 GB | **26/28** (×2) · 978 s | 4 | 5 | 39/39 (×3) | 13/13 | 27 | 10 |
+| **gemma-4-12B QAT** Q4_0 | 7.2 GB | 8.4 GB | **25/28** (×2) · 598 s | 4 | 5 | 26/26 · 25/26 | 12/13 | 27 | 10 |
+| qwen3.8-27b Q6_K | 23.4 GB | 24.5 GB | **13/14** · 467 s | 4 | 0 — four of five refused by the door | 26/26 | – | 27 | 10 |
+| Muse-Glimmer-30B Q4_K_M (Meta, dense, *thinking*) | 16.8 GB | 17.6 GB | **12/14** · 720 s | 4 · 61 s each | 5 · 72 s each | **26/26** · 834 s | 13/13 | **2** — see below | 10 · all clean · 64 s |
+| gemma-4-26B-A4B Q4_K_M | 18.0 GB | 18.5 GB | **22/28** (×2) · 510 s | 3 | 4 | 25/26 · 23/26 | 12/13 | 27 | 10 |
+| Qwen3.5-9B Q4_K_M | 5.6 GB | 7.5 GB | **11/14** · 270 s | 2 | 4 | 23/26 · 217 s | 12/13 | 24 | 8 |
+| Ornith-1.5-9B Q4_K_M (a Qwen 3.5 9B fine-tune) | 5.8 GB | 8.0 GB | 10/14 · 346 s | 4 | 3 | 21/26 | 12/13 | 27 | 10 |
+| granite-4.2-30b Q4_K_M | 17.7 GB | 25.0 GB | 10/14 · 623 s | 2 | 4 | 24/26 · 887 s | **0/13** — see below | 27 | 9 |
+| granite-4.2-8b Q4_K_M | 5.4 GB | 10.4 GB | 10/14 · 376 s | 1 | 1 | 21/26 | 1/13 | 13 | 10 |
+| Devstral-Small-2-24B Q4_K_M | 14.3 GB | 19.6 GB | 8/14 · 304 s | 3 | 5 | 22/26 | 9/13 | 22 | 10 |
+| Nemotron-3.5-Lightning-30B-A3B Q4_K_M | 24.5 GB | 23.5 GB | 4/14 · 160 s | 1 | 0 | 19/26 | 11/13 | 16 | 9 |
+| Bonsai-27B Q1_0 (1-bit, Qwen 3.6 27B) | 3.8 GB | 7.3 GB | 4/14 · 533 s | 2 | 0 | 18/26 · 610 s | 8/13 | 9 | 10 |
+
+The 26B-A4B, the 12B QAT and Qwen 3.8 were first measured on v2.47, whose new door bounced a legal attribute (`<bent-divider style="dashed">`, fixed in v2.48): 15/28, 23/28 and 12/14. The rows above are the re-runs on the fixed door; the 31B never wrote that attribute, so its row stands.
+
+**What the human track says:**
+
+- **Gemma 4 31B stays the recommendation at 32 GB** — 26/28, and its two misses are the ones §3ב describes (a customer's quote kept and the owner's own paragraph dropped; a pasted document that lost half the world's facts).
+- **On an owner's sentences the 12B QAT is at least the 26B-A4B's equal — at less than half the memory.** 25/28 against 22/28 (one ×2 run each — a range, not a verdict, but the direction held on both doors). The scripted battery had them the other way round (§ family table): the 26B-A4B's edge was speed and spec-shaped requests. Where it loses on the human track: a pasted document ends in an EMPTY reply both times (its known silence, now on a long input), "put it back" leaves the banner in, and the complaint about contact gets advice instead of a card. **For a 24 GB card the honest recommendation is now the 12B QAT too**, with the 26B-A4B as the faster alternative for owners who type specs.
+- **Qwen 3.5 9B is the first small model that drives the copilot** — 11/14 on dreams, 23/26 on the T-battery, 12/13 at 8K, in 7.5 GB at 32K (6.8 GB at 8K): a 10–12 GB card, and close on an 8 GB one. Gemma's E-models score 12–13/26 and cannot. Its weak side is taste (theme dreams 2/5) and the theme spec (8/10).
+- **Muse-Glimmer 30B is the strongest newcomer and cannot be recommended yet.** 12/14 on dreams with one soft miss, **26/26** on the T-battery, 13/13 at 8K, the theme spec 10/10 all clean. But it is a *thinking* model and LM Studio does not switch that off (`reasoning_effort: "none"` is ignored): every answer is preceded by 2,000–4,000 tokens of reasoning. It is slow (60–70 s for a theme, 834 s for the double battery), and **the organizer's ▶ returns nothing**: the pack gives the answer 2,048 tokens (`src/injections/menu-organizer.js`), Muse spends all of them thinking, and the owner reads "הספק החזיר תשובה ריקה" — 25 runs of 27. The same prompt with 6,000 tokens returns a valid `<bent-menus>` (probed: `finish=length · content 0 · reasoning_tokens 2041` → with 6,000: `finish=stop · content 773`). The pasted-document dream dies the same way in the copilot. A product gap, not a model score — tracked in SESSION-HANDOFF.
+- **Granite 4.2 cannot run at 8K here, for a reason that is ours to know:** its tokenizer spends more tokens on Hebrew (10,889 prompt tokens for the theme pack against ≈ 7,600 for Gemma and Qwen), so even the compact briefing is 8,314 tokens and the CMS says so honestly — `WINDOW_TOO_SMALL: הבקשה (8,314 טוקנים) לא נכנסת בחלון של המודל (8,192) גם במצב המקוצר`. At 32K it is a competent tool caller (24/26) with little feel for an owner's sentence (10/14, theme dreams 2/5) — Hebrew is not on its language list.
+- **Qwen 3.8 and the lite paste pack do not get along on human briefs:** four of five page dreams were refused by the door (`Bad attribute near: /bent-testimonial`, unreadable BenTML). In the copilot, with the full dictionary, the same model is 13/14. The lite pack is one line per tool; a vague brief leaves more to invent.
+- **A 27B squeezed to one bit does not survive an owner's sentence.** Bonsai (3.8 GB on disk, 7.3 GB at 32K — the KV cache of a 27B is not 1-bit) holds 18/26 on spec-shaped requests and 4/14 on dreams. The newer ternary build needs its publisher's llama.cpp fork and was not run.
+- **Not recommended:** Devstral Small 2 (an agentic *coder*: 8/14), Nemotron 3.5 Lightning (4/14 — fast and careless, like its predecessor), Granite 8B (taste 1/5 and 1/5), DictaLM, gpt-oss-20b (§ above).
+
+The MLX rows — the same track on a 128 GB Mac, 8-bit against 4-bit, and the models that do not fit a 32 GB card — come from `scripts/mlx-survey.sh` (`eval/battery/RUN-ON-MAC.md`); its first night measured the instrument, not the models (`eval/battery/BREAKAGE-2026-09-20-mlx-survey.md`).
 
 **Two machines, one LM Studio.** With LM Link on, `lms ps` / `lms ls` list the models of every linked device, and **`lms unload --all` unloads them on every device** — including a model someone is chatting with on the other machine. It works in both directions: the family run above lost a battery to an unload that came from elsewhere, and its own `unload --all` cut a chat on the linked Mac. A script that shares the mesh unloads **by identifier** (`lms unload tapuz-gemma`), never `--all`, and treats "Model unloaded by user or API request" as *someone else is using the GPU* — stop and ask, do not retry.
