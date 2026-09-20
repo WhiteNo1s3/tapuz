@@ -35,8 +35,12 @@ const PROVIDERS = {
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true'
     },
+    // The default is the middle of the list on purpose: the cheapest model
+    // that has driven the copilot's tool loop end to end. Opus is the one an
+    // owner CHOOSES; Haiku is the one a long run is priced against.
     defaultModel: 'claude-sonnet-5',
-    models: ['claude-sonnet-5', 'claude-opus-4-8', 'claude-haiku-4-5-20251001'],
+    models: ['claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-haiku-4-5'],
+    modelsUrl: 'https://api.anthropic.com/v1/models',
     maxTokens: 8192,
     // response body path to the assistant text: content[0].text
     responsePath: ['content', 0, 'text'],
@@ -60,6 +64,60 @@ const PROVIDERS = {
     responsePath: ['choices', 0, 'message', 'content'],
     keyHint: 'sk-…',
     keyUrl: 'https://platform.openai.com/api-keys',
+    modelsUrl: 'https://api.openai.com/v1/models',
+    body: { style: 'openai-chat', systemField: 'system-message' }
+  },
+  // Grok (xAI). OpenAI-shaped, so nothing in the request builder changes —
+  // only the host, and the host is the whole security question (below).
+  //
+  // `openModel` here is honesty, not laziness: xAI renames and retires model
+  // ids faster than this table can be re-read, so the CMS accepts the id the
+  // owner gives it and asks the provider itself (`modelsUrl`) rather than
+  // holding a list that silently goes stale. `defaultModel` is a starting
+  // point for the setup screen, never something a measured run relies on —
+  // the battery refuses to run an open-model provider without an explicit
+  // --model, so a row always names the weights that answered.
+  xai: {
+    id: 'xai',
+    label: 'Grok (xAI)',
+    chatHost: 'grok.com',
+    endpoint: 'https://api.x.ai/v1/chat/completions',
+    method: 'POST',
+    authScheme: 'bearer',
+    authHeader: 'Authorization',
+    extraHeaders: {},
+    defaultModel: 'grok-4',
+    models: [],
+    openModel: true,
+    maxTokens: 8192,
+    responsePath: ['choices', 0, 'message', 'content'],
+    keyHint: 'xai-…',
+    keyUrl: 'https://console.x.ai',
+    modelsUrl: 'https://api.x.ai/v1/models',
+    body: { style: 'openai-chat', systemField: 'system-message' }
+  },
+  // One key, most of the field. OpenRouter fronts Grok, Gemini, DeepSeek,
+  // Qwen, Kimi and the rest behind the same OpenAI shape — which is what
+  // makes a SURVEY of the premium tier affordable: one account, one key, one
+  // request shape, and a model id that names the vendor (`x-ai/grok-4`).
+  // Model ids are the provider's, so `openModel` applies for the same reason.
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter (Grok / Gemini / DeepSeek…)',
+    chatHost: 'openrouter.ai',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    method: 'POST',
+    authScheme: 'bearer',
+    authHeader: 'Authorization',
+    extraHeaders: {},
+    defaultModel: 'x-ai/grok-4',
+    models: [],
+    openModel: true,
+    maxTokens: 8192,
+    responsePath: ['choices', 0, 'message', 'content'],
+    keyHint: 'sk-or-…',
+    keyUrl: 'https://openrouter.ai/keys',
+    modelsUrl: 'https://openrouter.ai/api/v1/models',
     body: { style: 'openai-chat', systemField: 'system-message' }
   },
   // A model running on the owner's own machine (LM Studio, Ollama, vLLM,
@@ -146,7 +204,17 @@ const PROVIDERS = {
 // `127.0.0.1.evil.com` and `http://user@evil.com` keep their true host and
 // fail the exact match. 0.0.0.0 is deliberately NOT loopback — it means
 // "every interface", which is the opposite of private.
-const ALLOWED_API_HOSTS = new Set(['api.anthropic.com', 'api.openai.com']);
+// One entry per provider in the table above, and NOTHING else. The set is
+// written out by hand rather than derived from PROVIDERS on purpose: a
+// provider descriptor is data, and data is the thing an attacker who reached
+// the CMS would edit. A key may only go to a host that is on this literal
+// line, which means widening the blast radius is a code change and a review.
+const ALLOWED_API_HOSTS = new Set([
+  'api.anthropic.com',
+  'api.openai.com',
+  'api.x.ai',
+  'openrouter.ai'
+]);
 
 /** Is this hostname (already URL-normalised) the local machine itself? */
 function isLoopbackHost(hostname) {
