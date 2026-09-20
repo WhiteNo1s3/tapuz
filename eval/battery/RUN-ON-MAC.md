@@ -12,6 +12,15 @@ A Cursor Cloud Agent VM cannot run it: its `127.0.0.1:1234` is not this Mac's
 LM Studio, and the `local` provider is loopback-only (`src/providers.js`). So
 this file is the run, ready to paste, for the machine that has the model.
 
+> **2026-09-20 — dreams first.** Since v2.46/v2.47 the verdict on a model is the DREAMS track
+> (`--track=dreams`, D1–D14: an owner's own sentences, judged by her questions and by the page
+> builder) and `eval-injections.js --briefs=dreams`; the T1–T13 run below is the comparison column.
+> The MLX survey — which models, which bits, the sanity run, the scorecard's shape — is
+> `LETTER-2026-09-20-to-grok-mlx-dreams.md` beside this file. And: a battery that was interrupted
+> leaves its server on port 3948; the next run used to talk to THAT site and judge a fresh one
+> (that is the whole 7/13 of `SCORECARD-2026-09-19-mac-mlx-gemma-4-31b-v244.md`). The battery now
+> refuses to start on an occupied port: `lsof -ti :3948 | xargs kill`.
+
 ## 0. Rules
 
 - **Never `lms unload --all`.** With LM Link on it unloads the model on every

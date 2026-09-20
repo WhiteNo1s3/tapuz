@@ -89,3 +89,4 @@ eval/battery/*
 !eval/battery/RUN-ON-MAC.md
 !eval/battery/SCORECARD-*.md
 !eval/battery/BREAKAGE-*.md
+!eval/battery/LETTER-*.md
