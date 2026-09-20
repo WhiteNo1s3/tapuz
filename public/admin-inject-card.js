@@ -451,7 +451,8 @@
       if (!bridgeReady()) {
         return Promise.reject(new Error('הגשר לא מחובר לאתר הזה — פתחו את התוסף Bridge V2 ולחצו "חבר את האתר הפתוח"'));
       }
-      var phase = d.stage === 'repair' ? 'סבב תיקון' : 'החבילה';
+      // v2.50 — 'think': the model reasoned its answer budget away; the same call again, with room to answer
+      var phase = d.stage === 'repair' ? 'סבב תיקון' : (d.stage === 'think' ? 'החבילה שוב, עם יותר מקום לתשובה (המודל חשב עד שנגמר לו התקציב),' : 'החבילה');
       setStatus('הדפדפן מריץ את ' + phase + ' על המודל שלכם…');
       return global.TapuzBridge.drive(d, function (payload) {
         return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/run', payload,
@@ -509,6 +510,10 @@
             case 'PACK_TOO_BIG':
               lite.checked = true;
               say('warn', (d.error || 'החבילה גדולה מדי למודל.') + ' עברנו לחבילה לייט — לחצו "הרץ" שוב.');
+              break;
+            case 'THOUGHT_OUT':
+              // v2.50 — a thinking model the runtime does not silence; the server already tried once more
+              say('danger', (d.error || 'המודל חשב ולא ענה.') + (d.fix ? ' ' + d.fix : ''));
               break;
             case 'WINDOW_SHARED':
               // the request was fine — a neighbour took the window (v2.44)

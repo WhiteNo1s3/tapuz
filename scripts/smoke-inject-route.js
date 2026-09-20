@@ -418,6 +418,31 @@ const logLines = () => (fs.existsSync(LOG_PATH) ? fs.readFileSync(LOG_PATH, 'utf
     const relay4 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
     const emptyStep = await runStep({ id: relay4.json.modelCall.id, result: relayed('') });
     check('an empty relayed reply → 502 EMPTY_REPLY', emptyStep.status === 502 && emptyStep.json.code === 'EMPTY_REPLY');
+
+    // v2.50 — a THINKING model (Muse-Glimmer on LM Studio: reasoning_effort "none" is ignored) spends the whole
+    // answer budget reasoning: finish=length, content "", reasoning_tokens > 0. Not "empty" — the answer had no
+    // room left. The same call goes through the page ONCE more with a larger budget; twice is said plainly.
+    const thoughtAway = (spent) => ({
+      choices: [{ index: 0, finish_reason: 'length', message: { role: 'assistant', content: '', reasoning_content: 'We need to parse the request. The user…', tool_calls: [] } }],
+      usage: { prompt_tokens: 2737, completion_tokens: spent, completion_tokens_details: { reasoning_tokens: spent - 7 } }
+    });
+    const think1 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
+    const firstBudget = think1.json.modelCall.body.max_tokens;
+    const again = await runStep({ id: think1.json.modelCall.id, result: thoughtAway(firstBudget) });
+    const ab = (again.json.modelCall || {}).body || {};
+    check('a reply that THOUGHT its budget away comes back as one more modelCall — stage "think", the same messages, a larger max_tokens (' + firstBudget + ' → ' + ab.max_tokens + ')',
+      again.status === 200 && again.json.relay === true && again.json.stage === 'think' && again.json.modelCall.id !== think1.json.modelCall.id &&
+      ab.max_tokens >= firstBudget * 1.5 && JSON.stringify(ab.messages) === JSON.stringify(think1.json.modelCall.body.messages));
+    const answered = await runStep({ id: again.json.modelCall.id, result: relayed('DOC CLEAN') });
+    check('…and the second, roomier call finishes the run like any other', answered.status === 200 && answered.json.ok === true && !answered.json.relay);
+    const think2 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
+    const again2 = await runStep({ id: think2.json.modelCall.id, result: thoughtAway(think2.json.modelCall.body.max_tokens) });
+    const twice = await runStep({ id: again2.json.modelCall.id, result: thoughtAway(again2.json.modelCall.body.max_tokens) });
+    check('thought away TWICE → 502 THOUGHT_OUT with the way out (never a third call, never "empty reply")',
+      twice.status === 502 && twice.json.code === 'THOUGHT_OUT' && /חשיבה/.test(twice.json.error) && /Gemma 4/.test(twice.json.fix || '') && !twice.json.relay);
+    const think3 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
+    const cut = await runStep({ id: think3.json.modelCall.id, result: { choices: [{ index: 0, finish_reason: 'length', message: { role: 'assistant', content: '' } }], usage: { prompt_tokens: 900, completion_tokens: 2048 } } });
+    check('an empty reply at the length limit with NO reasoning behind it stays what it was — EMPTY_REPLY, no second call', cut.status === 502 && cut.json.code === 'EMPTY_REPLY');
     const relay5 = await req('POST', '/admin/api/inject/fake-pack/run', { cookie, body: { brief: '' } });
     const noSessionStep = await req('POST', '/admin/api/inject/fake-pack/run', { body: { step: { id: relay5.json.modelCall.id, result: relayed('DOC CLEAN') } } });
     check('a relay step is admin-gated like every other run (401 without a session)', noSessionStep.status === 401);
@@ -517,8 +542,10 @@ const logLines = () => (fs.existsSync(LOG_PATH) ? fs.readFileSync(LOG_PATH, 'utf
     // 4 undos (3 + the theme-designer NO_BACKUP; the fresh instance's direct
     // undo() bypasses the route, so no line) — the 401/403 attempts never
     // reach a handler, so no line
+    // v2.50: + 8 — the three thinking-model relay runs (call · think-again · answer; call · think-again ·
+    // THOUGHT_OUT; call · EMPTY_REPLY): a think-again is a ledger line of its own (RELAY_THINK)
     check('the ledger has one line per action (' + runs.length + ' run, ' + pastes.length + ' paste, ' + applies.length + ' apply, ' + undos.length + ' undo)',
-      runs.length === 24 && pastes.length === 6 && applies.length === 6 && undos.length === 4);
+      runs.length === 32 && pastes.length === 6 && applies.length === 6 && undos.length === 4);
     check('every line carries ts/id/action/ok, runs carry provider/model/rounds/usage/promptChars',
       entries.every((e) => e.ts && e.id && e.action && typeof e.ok === 'boolean') &&
       runs.filter((e) => e.ok && e.provider !== 'browser').every((e) => e.provider === '__fake' && e.model === 'fake-model' && e.rounds >= 1 && e.usage && e.promptChars > 0) &&

@@ -31,7 +31,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
 
 LMS="${LMS:-$HOME/.lmstudio/bin/lms}"
 LLM="${LLM:-http://127.0.0.1:1234}"
-MIN_VERSION="2.49.0"
+MIN_VERSION="2.50.0"
 CONFIGURED=32768                       # what we ASK the runtime for — and what the CMS budgets at
 STAMP="$(date -u +%Y-%m-%d)"
 OUT="${MLX_OUT:-eval/battery/mlx-$STAMP}"
@@ -83,7 +83,11 @@ loaded_gib() { # identifier → size in GiB from `lms ps --json` (fields verifie
 # ── which key loads THIS repo. A staff pick is filed under a VIRTUAL key (google/gemma-4-31b) whose `path` is the key
 #    itself and whose variants (@4bit, @8bit) share it: the repo is only in `lms ls --variants --json`, as
 #    indexedModelIdentifier "virtual@<repo>" (MLX) or "virtual@<repo>/<file>.gguf" (GGUF). A bare virtual key FLOATS
-#    (it loads whatever selectedVariant is today) — so a virtual model is only ever named with its @quant. ──────────
+#    (it loads whatever selectedVariant is today) — so a virtual model is only ever IDENTIFIED with its @quant.
+#    And it cannot be LOADED by that name: measured 2026-09-20 on a real two-variant model, `lms load
+#    google/gemma-4-e2b@q8_0` and POST /api/v1/models/load both answer "Model not found"; only the bare key loads,
+#    and `lms get …@q8_0` does not change the selection. So: `loadable` says which key to load and which variant
+#    LM Studio has selected — and when that is the other one the row says so BEFORE anything is loaded. ───────────
 resolve_key() { # repo → modelKey ('' when it is not on disk)
   { "$LMS" ls --json 2>/dev/null; printf '\n@@VARIANTS@@\n'; "$LMS" ls --variants --json 2>/dev/null; } | node -e "
     let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
@@ -95,6 +99,17 @@ resolve_key() { # repo → modelKey ('' when it is not on disk)
       const virtualKeys=new Set(virt.map(e=>e&&e.model&&String(e.model.modelKey||'').toLowerCase()));
       const hit=plain.find(m=>m&&m.type==='llm'&&!virtualKeys.has(String(m.modelKey||'').toLowerCase())&&(()=>{const p=String(m.path||'').toLowerCase();return p===repo||p.startsWith(repo+'/')})());
       console.log(hit?hit.modelKey:'')})" "$1"
+}
+
+loadable() { # resolved key → "<key lms can load>|<the selected variant, when the model is virtual>"
+  "$LMS" ls --json 2>/dev/null | node -e "
+    let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+      const k=process.argv[1]; let j=[]; try{j=JSON.parse(s)}catch(e){}
+      const virt=(Array.isArray(j)?j:[]).find(m=>m&&Array.isArray(m.variants)&&m.variants.indexOf(k)>=0&&m.modelKey!==k);
+      console.log(virt?virt.modelKey+'|'+(virt.selectedVariant||''):k+'|')})" "$1"
+}
+other_variant_note() { # wanted selected → the sentence for the row
+  say "THE OTHER VARIANT IS SELECTED — LM Studio would load ${2:-another build} for this key, and neither lms nor its API can ask for $1. In the app: My Models → this model → choose the ${1##*@} variant, then run this tier again"
 }
 
 # ── download: `lms get` dies with "Timed-out. Please try to resume." every few minutes on a slow link and RESUMES on
@@ -185,10 +200,11 @@ row() { printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$@" >> "$
 #         tag repo key quant size configured effective budgeted batteryTokens dreams theme page note
 
 sanity() {
-  say "== sanity: is the INSTRUMENT sound on this machine? (gemma 31B 8-bit, three scenarios, expect 3/3)"
+  say "== sanity: is the INSTRUMENT sound on this machine? (gemma 31B, whichever variant is selected; three scenarios, expect 3/3)"
   local repo="lmstudio-community/gemma-4-31B-it-MLX-8bit" key id="tapuz-mlx-sanity" v
   key="$(fetch_model "$repo" sanity)" || { [ -n "$DRY" ] || { say "sanity: $(cat "$OUT/sanity.fetch-state" 2>/dev/null)"; exit 4; }; }
-  load "${key:-gemma-4-31b@8bit}" "$id" 8 || { say "sanity: $LOAD_NOTE"; exit 4; }
+  local lk; lk="$(loadable "${key:-gemma-4-31b}")"; lk="${lk%%|*}"   # whichever 31B variant is selected: this step checks the INSTRUMENT
+  load "${lk:-gemma-4-31b}" "$id" - || { say "sanity: $LOAD_NOTE"; exit 4; }
   dreams_run "$id" "$OUT/sanity.log" 1 "$CONFIGURED" --only=T2,T4,T13
   [ -n "$DRY" ] && return 0
   local line; line="$(last_line "$OUT/sanity.log" 'BATTERY COPILOT')"; say "   $line"
@@ -200,17 +216,22 @@ sanity() {
 }
 
 one() { # tier tag repo runs gb bits extra
-  local tag="$2" repo="$3" runs="$4" bits="$6" extra="${7:-}" id="tapuz-mlx-$2" key dreams theme page v hdr FETCH_STATE
+  local tag="$2" repo="$3" runs="$4" bits="$6" extra="${7:-}" id="tapuz-mlx-$2" key dreams theme page v hdr FETCH_STATE lk sel
   say "== [$1] $tag  ($repo, dreams x$runs, ~$5 GB)  $(date +%T)"
   key="$(fetch_model "$repo" "$tag")"
   FETCH_STATE="$(cat "$OUT/$tag.fetch-state" 2>/dev/null)"
   if [ -z "$key" ] && [ -z "$DRY" ]; then say "   $FETCH_STATE"; row "$tag" "$repo" "-" "-" "-" "$CONFIGURED" "-" "-" "-" "-" "-" "-" "$FETCH_STATE"; return; fi
-  if ! load "${key:-$tag}" "$id" "$bits"; then say "   $LOAD_NOTE"; row "$tag" "$repo" "$key" "${QUANT:--}" "${SIZE:--}" "$CONFIGURED" "${EFFECTIVE:--}" "-" "-" "-" "-" "-" "$LOAD_NOTE"; unload_mine; return; fi
+  lk="$(loadable "${key:-$tag}")"; sel="${lk#*|}"; lk="${lk%%|*}"
+  if [ -n "$sel" ] && [ "$sel" != "$key" ] && [ -z "$DRY" ]; then
+    LOAD_NOTE="$(other_variant_note "$key" "$sel")"; say "   $LOAD_NOTE"
+    row "$tag" "$repo" "$key" "-" "-" "$CONFIGURED" "-" "-" "-" "-" "-" "-" "$LOAD_NOTE"; return
+  fi
+  if ! load "${lk:-$tag}" "$id" "$bits"; then say "   $LOAD_NOTE"; row "$tag" "$repo" "$key" "${QUANT:--}" "${SIZE:--}" "$CONFIGURED" "${EFFECTIVE:--}" "-" "-" "-" "-" "-" "$LOAD_NOTE"; unload_mine; return; fi
   for attempt in 1 2; do
     dreams_run "$id" "$OUT/$tag.dreams.log" "$runs" "$CONFIGURED" --track=dreams
     grep -q "Model unloaded\|Model is unloaded" "$OUT/$tag.dreams.log" 2>/dev/null || break
     if [ -n "$(foreign)" ]; then say "STOP: the model was unloaded under the run and somebody else's is loaded — ask Ben."; exit 3; fi
-    say "   the engine dropped the model — reloading once"; mv "$OUT/$tag.dreams.log" "$OUT/$tag.dreams.crashed.log"; load "$key" "$id" "$bits" || break
+    say "   the engine dropped the model — reloading once"; mv "$OUT/$tag.dreams.log" "$OUT/$tag.dreams.crashed.log"; load "$lk" "$id" "$bits" || break
   done
   dreams="$(last_line "$OUT/$tag.dreams.log" 'BATTERY COPILOT' | sed 's/ → .*//')"; hdr="$(last_line "$OUT/$tag.dreams.log" '^battery: ')"
   v="$(window_verdict "$EFFECTIVE" "$CONFIGURED" "$hdr")"; [ -n "$DRY" ] && v="$CONFIGURED|-|-|(dry run — nothing was measured)"

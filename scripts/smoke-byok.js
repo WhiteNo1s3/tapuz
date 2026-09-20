@@ -82,10 +82,11 @@ check('the local provider declares its advisory context window',
   getProvider('local').contextTokens === 24000);
 // v2.32 appended the window's four codes; the list is append-only so a
 // runner that switches on the first six keeps working
-check('the error vocabulary is exported (append-only: v2.28 six + v2.32 window four + v2.35 NO_BRIEFING + v2.44 WINDOW_SHARED)',
+check('the error vocabulary is exported (append-only: v2.28 six + v2.32 window four + v2.35 NO_BRIEFING + v2.44 WINDOW_SHARED + v2.50 THOUGHT_OUT)',
   JSON.stringify(ai.ERROR_CODES) === JSON.stringify([
     'NO_PROVIDER', 'BROWSER_RELAY', 'NETWORK', 'TIMEOUT', 'PROVIDER_ERROR', 'EMPTY_REPLY',
-    'WINDOW_TOO_SMALL', 'BRIDGE_TOO_OLD', 'BRIDGE_DROPPED_TOOLS', 'REPLY_CUT', 'NO_BRIEFING', 'WINDOW_SHARED'
+    'WINDOW_TOO_SMALL', 'BRIDGE_TOO_OLD', 'BRIDGE_DROPPED_TOOLS', 'REPLY_CUT', 'NO_BRIEFING', 'WINDOW_SHARED',
+    'THOUGHT_OUT'
   ]));
 
 // a scripted provider through the global.fetch seam (the copilot-tools pattern)

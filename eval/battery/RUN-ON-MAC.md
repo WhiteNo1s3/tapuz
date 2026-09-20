@@ -62,7 +62,7 @@ the script skips nothing silently: a model that does not download or load become
 
 | the script says | do |
 |---|---|
-| `REFUSED: this checkout is … need ≥ 2.49.0` | `git pull --ff-only origin main` (the 32K cap lives in the CMS) |
+| `REFUSED: this checkout is … need ≥ 2.50.0` | `git pull --ff-only origin main` (the 32K cap lives in the CMS) |
 | `REFUSED: LMS=… is not the lms binary` | unset the wrapper; the script talks to the real `lms` only |
 | `REFUSED: something answers on port 3948` | an interrupted battery left its server: `lsof -ti :3948 \| xargs kill`, run again |
 | `STOP: a model that is not mine …` (exit 3) | ask Ben; do not unload it |
@@ -70,6 +70,7 @@ the script skips nothing silently: a model that does not download or load become
 | `PARTIAL DOWNLOAD — stalled at N%` on a row | nothing now; run that tier again later — `lms` resumes where it stopped |
 | `ON DISK BUT UNRESOLVED` on a row | send back the output of `lms ls --variants --json` — the script could not match the repo to a key |
 | `NOT DOWNLOADED` / `DID NOT LOAD in stock LM Studio` | nothing — the row records it; the run continues |
+| `THE OTHER VARIANT IS SELECTED` on a row | LM Studio files a staff pick's builds (4-bit, 8-bit) under ONE key, and neither `lms load` nor its API can ask for a specific one (measured: both answer "Model not found" for `…@8bit`) — the bare key loads whatever is *selected*. The script knows which one that is and did not load the wrong weights. **One click for Ben:** LM Studio → My Models → that model → choose the variant the row names → run that tier again. Do not look for a way around it |
 | `WRONG WEIGHTS` / `LOADED TOO SMALL` on a row | nothing — the row was not measured and says why |
 | `WINDOW MISMATCH` on a row or in sanity | something between the script and the runtime is lying (a shim on PATH, an old checkout). Remove it; do not explain it away |
 | the script itself crashes | report the line and the error. Do not patch it on the Mac |
