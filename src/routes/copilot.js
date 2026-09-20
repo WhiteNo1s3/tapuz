@@ -399,7 +399,7 @@ async function planWindowAs(hint, providerOverride) {
     probe = await aw.probeLocalWindow(s.baseUrl, model);
     if (probe) {
       model = probe.model || model;
-      aw.noteWindow(aw.windowKey('local', model), probe.tokens, 'probe', { maxTokens: probe.maxTokens, jit: probe.jit });
+      aw.noteWindow(aw.windowKey('local', model), probe.tokens, 'probe', { maxTokens: probe.maxTokens, jit: probe.jit, probedTokens: probe.probedTokens || null, cap: probe.cap || 0 });
     }
   } else if (providerId === 'browser' && hint) {
     model = hint.model || model;
@@ -432,7 +432,9 @@ async function planWindowAs(hint, providerOverride) {
       tokens: cloud || !known.tokens ? null : known.tokens,
       maxTokens: known.maxTokens || null,
       source: known.source,
-      jit
+      jit,
+      // v2.49 — a capped window says so: what the runtime really loaded, and the cap it is budgeted at
+      ...(known.cap ? { probedTokens: known.probedTokens, cap: known.cap } : {})
     },
     tier: plan.tier,
     tierHe: aw.HE.tierHe(plan.tier),

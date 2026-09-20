@@ -87,6 +87,43 @@ const EXCEED = {
     check('probe: a non-LM-Studio server (404) → null, never a throw', (await win.probeLocalWindow('http://127.0.0.1:11434/v1', 'x', { fetch: fake({}, false) })) === null);
     check('probe: a wire failure → null', (await win.probeLocalWindow('http://127.0.0.1:1234/v1', 'x', { fetch: async () => { throw new Error('ECONNREFUSED'); } })) === null);
     check('probe: a non-loopback address is refused before any fetch', (await win.probeLocalWindow('https://api.openai.com/v1', 'x', { fetch: fake(V0) })) === null);
+
+    // ── v2.49: LOCAL_LLM_WINDOW_CAP. LM Studio's MLX engine overrides --context-length and loads at the
+    //    model's maximum whenever memory allows ("configured=32,768 fitted=262,144"), so on a big Mac a
+    //    "32K" run was really a 262K run — a different conversation. The cap makes the CMS budget as for
+    //    a 32K owner; it never raises a window and it never hides the real number. ──
+    const MLX = { data: [{ id: 'tapuz-mlx-gemma', type: 'vlm', state: 'loaded', max_context_length: 262144, loaded_context_length: 262144 }] };
+    const at32 = { data: [{ id: 'tapuz-mlx-gemma', type: 'vlm', state: 'loaded', max_context_length: 262144, loaded_context_length: 32768 }] };
+    const saved = process.env.LOCAL_LLM_WINDOW_CAP;
+    delete process.env.LOCAL_LLM_WINDOW_CAP;
+    const free = await win.probeLocalWindow('http://127.0.0.1:1234/v1', 'tapuz-mlx-gemma', { fetch: fake(MLX) });
+    check('cap: without the env a probe is what the runtime loaded — no cap fields at all', free && free.tokens === 262144 && free.cap === undefined && free.probedTokens === undefined);
+    process.env.LOCAL_LLM_WINDOW_CAP = '32768';
+    const capped = await win.probeLocalWindow('http://127.0.0.1:1234/v1', 'tapuz-mlx-gemma', { fetch: fake(MLX) });
+    check('cap: a 262,144 load is BUDGETED at 32,768 — and both numbers ride along', capped && capped.tokens === 32768 && capped.probedTokens === 262144 && capped.cap === 32768);
+    const real32 = await win.probeLocalWindow('http://127.0.0.1:1234/v1', 'tapuz-mlx-gemma', { fetch: fake(at32) });
+    check('cap: a model really loaded at 32,768 is untouched by a 32,768 cap', real32 && real32.tokens === 32768 && real32.cap === undefined);
+    // a provider id of its own: the window memory is shared, and (g) below asks what 'local' knows before any learn
+    const keyC = win.windowKey('captest', 'capped'); const keyR = win.windowKey('captest', 'real');
+    win.noteWindow(keyC, capped.tokens, 'probe', { maxTokens: capped.maxTokens, probedTokens: capped.probedTokens, cap: capped.cap });
+    win.noteWindow(keyR, real32.tokens, 'probe', { maxTokens: real32.maxTokens, probedTokens: null, cap: 0 });
+    const gC = win.getWindow(keyC); const gR = win.getWindow(keyR);
+    const sizes = { full: 45400, compact: 10500 };
+    const pC = win.pickTier({ tokens: gC.tokens, source: gC.source, sizes, fixedChars: 1500 }); const pR = win.pickTier({ tokens: gR.tokens, source: gR.source, sizes, fixedChars: 1500 });
+    check('cap: the capped window plans EXACTLY like a real 32K window (tier, room for history and read-back)', pC.tier === pR.tier && pC.roomChars === pR.roomChars && pC.tier === 'full');
+    check('cap: …and the remembered window still says what the runtime loaded (probedTokens 262,144, cap 32,768)', gC.probedTokens === 262144 && gC.cap === 32768 && gR.cap === 0);
+    win.noteWindow(keyC, 16384, 'error', {});
+    check('cap: a later runtime refusal (source "error") forgets the cap — only a probe can be capped', win.getWindow(keyC).cap === 0 && win.getWindow(keyC).tokens === 16384);
+    process.env.LOCAL_LLM_WINDOW_CAP = '65536';
+    const above = await win.probeLocalWindow('http://127.0.0.1:1234/v1', 'tapuz-mlx-gemma', { fetch: fake(at32) });
+    check('cap: it never RAISES a window (cap 65,536 over a 32,768 load → 32,768)', above && above.tokens === 32768 && above.cap === undefined);
+    for (const junk of ['0', '-5', 'abc', '4096', '']) {
+      process.env.LOCAL_LLM_WINDOW_CAP = junk;
+      const j = await win.probeLocalWindow('http://127.0.0.1:1234/v1', 'tapuz-mlx-gemma', { fetch: fake(MLX) });
+      if (!(j && j.tokens === 262144 && j.cap === undefined)) { check('cap: junk or a cap under 8,192 ("' + junk + '") is ignored', false); }
+    }
+    check('cap: junk, zero, or a cap under the compact floor (8,192) is ignored', true);
+    if (saved === undefined) delete process.env.LOCAL_LLM_WINDOW_CAP; else process.env.LOCAL_LLM_WINDOW_CAP = saved;
   })();
 }
 

@@ -215,3 +215,31 @@ Never change a sentence, a check or a threshold to move a score — that rule is
 `smoke-mlx-survey` green and in the chain · `DRY=1 bash scripts/mlx-survey.sh` clean · every §2 shape
 resolves to an explicit `@quant` key · no row can print a window it did not run at · RUN-ON-MAC.md
 updated (D4) · PR open with "not verified on MLX" stated · a three-line order for the Mac re-run.
+
+## 9. What was done about it (v2.49, from the 5090 box)
+
+D1 → Ben chose **(a) plus one uncapped row per recommended model**.
+
+| | fix | pinned by |
+|---|---|---|
+| D1/B4 | `LOCAL_LLM_WINDOW_CAP` in `src/ai-window.js`, next to the probe: `tokens = min(probed, cap)`, source stays `probe`, never raises, < 8,192 ignored; `probedTokens` + `cap` ride on `/admin/api/ai/window` and on every turn. The script's check is `effective ≥ 32768`; rows record configured → effective → budgeted → what the battery saw; the scorecard header no longer hard-codes a window | `smoke-ai-window` (a capped 262K plans exactly like a real 32K) · the real runtime on the 5090: a 64K load + cap → `{"tokens":32768,…,"probedTokens":65536,"cap":32768}` |
+| B1 | `resolve_key`: variants first (`indexedModelIdentifier` ends `@<repo>` or contains `@<repo>/`), then a plain entry whose `path` is the repo (or `<repo>/<file>`); never the virtual key | `smoke-mlx-survey` with §2's JSON · this box's real `lms ls --variants --json` |
+| B2 | the key always carries `@<quant>`; after every load the runtime's `quantization` must match the bits the row means → else `WRONG WEIGHTS`, not measured. The sanity fallback to a bare key is gone | `smoke-mlx-survey` |
+| B3 | `mine` / `foreign` from `/api/v0/models` (`state === "loaded"`, embeddings ignored); `lms ps --json` only for the size (`identifier`, `sizeBytes` — verified here with a model loaded) | `smoke-mlx-survey` (the empty table from §2) |
+| B5/B6 | up to 12 tries while the percentage grows, stop after two with no growth; three sentences: `ON DISK BUT UNRESOLVED` · `PARTIAL DOWNLOAD — stalled at N%` · `NOT DOWNLOADED — <lms's words>` | `smoke-mlx-survey` (2 → 46 → 65 → done; 72 → 72 → 72) |
+| B7 | the battery's own `window=` line is read from the dreams log; `WINDOW MISMATCH` when it disagrees with the script's view or with the budget; preflight prints which `lms` / `curl` / `node` and refuses an `LMS` that is not the binary (unless `SMOKE=1`) | `smoke-mlx-survey` (the shimmed-curl case) |
+| B8 | `scripts/smoke-mlx-survey.js`, in `test:smoke`. Its first run caught a bug in the rewrite: an empty foreign list came back as one space and would have stopped every load | — |
+| D4 | `RUN-ON-MAC.md`: do not wrap, alias or shadow anything the script calls; a refusal is a result; rule 10; the window paragraph; a row for every new message | — |
+
+**Not verified on MLX** (cannot be, from here): the auto-fit itself, the MLX load path, `lms get --mlx` resuming, the
+`quantization` string of `gpt-oss-120b-MLX-8bit` and of the Bonsai build (those two rows assert nothing: bits `-`).
+D2 and D3 are Ben's, on the Mac: the downloads of the night are useful, its rows are not; `~/bin/curl` and
+`~/bin/lms-survey-wrap` go before the re-run — the new preflight refuses the wrapper anyway.
+
+**The re-run, in three lines:**
+
+```bash
+rm -f ~/bin/curl ~/bin/lms-survey-wrap; unset LMS LMS_REAL; hash -r         # nothing between the script and what it calls
+git pull --ff-only origin main && npm ci                                    # ≥ 2.49.0
+bash scripts/mlx-survey.sh                                                  # sanity → A → B → C; what is on disk is found, what is partial resumes
+```

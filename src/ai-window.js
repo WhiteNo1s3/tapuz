@@ -89,6 +89,13 @@ function idMatches(id, model) {
   return a === b || a.endsWith('/' + b) || a.endsWith(b) || a.startsWith(b) || b.endsWith(a) || b.startsWith(a);
 }
 
+/** The measurement cap (tokens), or 0. Below the compact tier's floor it is ignored — a cap is for
+ *  comparing like with like, not for starving the briefing. */
+function windowCap() {
+  const n = Number(process.env.LOCAL_LLM_WINDOW_CAP);
+  return Number.isFinite(n) && n >= 8192 ? Math.floor(n) : 0;
+}
+
 /**
  * Ask LM Studio what it has loaded — `GET {origin}/api/v0/models`, 4 s.
  * Never throws: null means "not LM Studio, or not reachable" (Ollama, vLLM
@@ -150,9 +157,20 @@ async function probeLocalWindow(baseUrl, model, opts = {}) {
       entry = loadedList.length ? loadedList[0] : null;
       if (!entry) return { tokens: null, maxTokens: null, model: '', jit: true, loaded };
     }
-    const tokens = Number(entry.loaded_context_length);
+    const loadedTokens = Number(entry.loaded_context_length);
+    const probed = Number.isFinite(loadedTokens) && loadedTokens > 0 ? Math.round(loadedTokens) : null;
+    // v2.49 — LOCAL_LLM_WINDOW_CAP: budget for a SMALLER window than the runtime reports. LM Studio's MLX
+    // engine overrides --context-length and loads at the model's maximum whenever memory allows (a 128 GB
+    // Mac: always 262,144 — "configured=32,768 fitted=262,144" in its own log), so a Mac row could never
+    // be compared with a 32K row: at 262K this module trims nothing, at 32K it trims history and caps the
+    // read-back. With the cap the CMS budgets exactly as for a 32K owner — same tier, same trimming, same
+    // prompts; the spare KV changes nothing the model is sent. It never RAISES a window, the source stays
+    // 'probe', and both numbers ride along so nothing can print a window it did not run at.
+    const cap = windowCap();
+    const capped = !!(cap && probed && probed > cap);
     return {
-      tokens: Number.isFinite(tokens) && tokens > 0 ? Math.round(tokens) : null,
+      tokens: capped ? cap : probed,
+      ...(capped ? { probedTokens: probed, cap } : {}),
       maxTokens: Number(entry.max_context_length) > 0 ? Number(entry.max_context_length) : null,
       model: String(entry.id),
       jit: false,
@@ -286,7 +304,10 @@ function getWindow(key) {
     fresh: has && (e.source !== 'probe' || Date.now() - (e.at || 0) < PROBE_TTL_MS),
     jit: !!e.jit,
     model: e.model || '',
-    bridgeVersion: e.bridgeVersion || ''
+    bridgeVersion: e.bridgeVersion || '',
+    // v2.49 — only a PROBE can be capped (LOCAL_LLM_WINDOW_CAP); a later hint or error forgets it
+    probedTokens: e.source === 'probe' && e.cap ? e.probedTokens || null : null,
+    cap: e.source === 'probe' && e.cap ? e.cap : 0
   };
 }
 
@@ -584,6 +605,7 @@ module.exports = {
   RECOMMENDED_WINDOW,
   PROBE_TTL_MS,
   probeLocalWindow,
+  windowCap,
   parseExceed,
   parseShared,
   noteWindow,
