@@ -25,7 +25,7 @@ The billing subscriptions MCP timed out; capacity above is from `listOrders` + `
 | Hostname | Hostinger `*.hostingersite.com` preview (named only in artifacts) | a **different** free `*.hostingersite.com` from `generateAFreeSubdomain` |
 | Git | `WhiteNo1s3/tapuz` **`main`**, auto-deploy on | **same repo, same branch, same GitHub App installation** attached to the second site |
 | Node | 24, `app_type` express, `entry_file` `src/server.js`, `build_script` `build` | identical |
-| Data dir | live `TAPUZ_ROOT` (sibling `tapuz-data` under the hosting home) | **`TAPUZ_ROOT` = sibling `tapuz-lab-data-reset-20260921`** (empty). Previous sibling `tapuz-lab-data` is unused so the lab cannot open the live SQLite |
+| Data dir | live `TAPUZ_ROOT` (sibling `tapuz-data` under the hosting home) | **`TAPUZ_ROOT` = sibling `tapuz-lab-data-reset-20260921-b`** (empty). Older siblings `tapuz-lab-data` and `tapuz-lab-data-reset-20260921` are unused so the lab cannot open the live SQLite |
 | First HTTP (at create) | homepage 200, generator `2.52.0-alpha+20260920-201525Z.d44c9e7` | homepage **200** after owner wizard (title `TINKERiNG TApuZ`); `/admin/login` 200; `/admin/create-account` 302 → login |
 | First HTTP (**after lockout reset**) | homepage **200**, `Last-Modified: Mon, 21 Sep 2026 22:07:10 GMT`, generator `2.52.0-alpha+20260921-220706Z.ee117e5` (PR #40 auto-deploy on `main`; this reset did not restart or env-replace cyan) | `GET /admin/login` **302 → `/admin/create-account`**; `GET /` **404** until the owner wizard; no first admin |
 | Code | `origin/main` (auto-deploy on) | **same repo, same branch** |
@@ -47,11 +47,11 @@ Published homepage `<meta name="generator">` is `Tapuziel 2.52.0-alpha+20260921-
 
 Live cyan generator (GET `/` after the lab create — **unchanged at that moment**): `Tapuziel 2.52.0-alpha+20260920-201525Z.d44c9e7`. `Last-Modified: Sun, 20 Sep 2026 20:15:29 GMT`. Cyan git auto-deploy still `WhiteNo1s3/tapuz` `main`. No cyan restart, delete, or deploy was called **by the lab-create pass**.
 
-A later `main` merge (PR #40, `ee117e5`) auto-deployed both addons because both track `main`. After the **lab-only** TAPUZ_ROOT reset, cyan `GET /` was still **200** with `Last-Modified: Mon, 21 Sep 2026 22:07:10 GMT` and generator `2.52.0-alpha+20260921-220706Z.ee117e5`. The lab running code is that same `main` build, on empty `tapuz-lab-data-reset-20260921`.
+A later `main` merge (PR #40, `ee117e5`) auto-deployed both addons because both track `main`. After the **lab-only** TAPUZ_ROOT reset, cyan `GET /` was still **200** with `Last-Modified: Mon, 21 Sep 2026 22:07:10 GMT` and generator `2.52.0-alpha+20260921-220706Z.ee117e5`. The lab running code is that same `main` build, on empty `tapuz-lab-data-reset-20260921-b`.
 
 ## Lab reset (lockout, 2026-09-21)
 
-The first-admin password stopped working and further `POST /admin/login` would trip LoginGuard. **This lab only** was reset: Hostinger Node env for the lab addon was replaced so `TAPUZ_ROOT` points at a **new empty sibling directory** `tapuz-lab-data-reset-20260921` (`NODE_ENV=production`, `TAPUZ_TRUST_PROXY=1` kept), then the **lab** Node process was restarted. Hostname, git auto-deploy (`WhiteNo1s3/tapuz` `main`), and Node 24 / 2.52 were left as they were. The old `tapuz-lab-data` directory was not deleted and is no longer the running root.
+The first-admin password stopped working and further `POST /admin/login` would trip LoginGuard. **This lab only** was reset: Hostinger Node env for the lab addon was replaced so `TAPUZ_ROOT` points at a **new empty sibling directory** (`NODE_ENV=production`, `TAPUZ_TRUST_PROXY=1` kept), then the **lab** Node process was restarted. Hostname, git auto-deploy (`WhiteNo1s3/tapuz` `main`), and Node 24 / 2.52 were left as they were. First empty dir was `tapuz-lab-data-reset-20260921`; a create-account landed there minutes later (not this pass). Running root is now **`tapuz-lab-data-reset-20260921-b`**. Older lab data dirs were not deleted and are not the running root.
 
 **Current owner setup: none.** `GET /admin/login` **302 → `/admin/create-account`**. Runtime log: `אין עדיין חשבון מנהל`. `GET /` is **404** until the wizard. The seed-dev-admin script **refuses** `NODE_ENV=production` and was not run. This pass did **not** create the admin user and did **not** `POST /admin/login`. No password is recorded here. Ben picks a new password (1Password, or type it only in the form — not in chat).
 
