@@ -5,6 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # `ready_for_review` is NOT one of the default types (opened, synchronize,
+    # reopened) — and without it a DRAFT PR can never auto-merge. What happened
+    # on PR #37 (2026-09-20): CI went green while the PR was a draft, automerge
+    # fired on that green run and failed with "Pull Request is still a draft
+    # (mergePullRequest)", and marking it ready afterwards re-ran nothing. The
+    # PR sat green, ready and unmerged until a human re-ran the failed job.
+    # Listing the type here makes marking a draft ready run CI again, which is
+    # what brings automerge back. The cost is one extra run per draft that is
+    # later marked ready; the alternative is a manual click on every one.
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   secrets:
