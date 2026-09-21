@@ -179,6 +179,10 @@ function initialize() {
 
   initializeCrm();
 
+  // The store (v2.53) — catalog, settings, coupons and orders, in this same
+  // file so the .pzn export, the backup shelf and a live restore carry it.
+  require('./store/schema').initializeStore(db);
+
   console.log('Database initialized successfully.');
 }
 

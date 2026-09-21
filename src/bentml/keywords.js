@@ -766,6 +766,49 @@ const KEYWORDS = {
       showheader: { type: 'boolean', default: true }
     }
   },
+  // the store (v2.53) — NO-BODY: a storefront module is its params. They read
+  // the store's own catalog (חנות → מוצרים); the flip writes the shop, cart,
+  // checkout and order pages out of them.
+  SHOP: {
+    body: 'NO-BODY',
+    jsonType: 'shop',
+    params: {
+      shelf: { type: 'string', default: '' },
+      columns: { type: 'integer', default: 3 },
+      limit: { type: 'integer', default: 0 },
+      sort: { type: 'enum', values: ['manual', 'new', 'price-asc', 'price-desc', 'name'], default: 'manual' },
+      filter: { type: 'boolean', default: false },
+      title: { type: 'string', default: '' },
+      exclude: { type: 'string', default: '' },
+      buttons: { type: 'boolean', default: true }
+    }
+  },
+  BUY: {
+    body: 'NO-BODY',
+    jsonType: 'buy',
+    params: {
+      sku: { type: 'string', required: true },
+      gallery: { type: 'boolean', default: true },
+      description: { type: 'boolean', default: true }
+    }
+  },
+  CART: {
+    body: 'NO-BODY',
+    jsonType: 'cart',
+    params: {
+      empty: { type: 'string', default: '' }
+    }
+  },
+  CHECKOUT: {
+    body: 'NO-BODY',
+    jsonType: 'checkout',
+    params: {}
+  },
+  ORDER: {
+    body: 'NO-BODY',
+    jsonType: 'order',
+    params: {}
+  },
   SEARCH: {
     body: 'NO-BODY',
     jsonType: 'search',

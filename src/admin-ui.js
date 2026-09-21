@@ -84,6 +84,19 @@ const ADMIN_NAV_GROUPS = [
     ]
   },
   {
+    // The store (v2.53) — its own family like the CRM: the site runs without
+    // it, it ships CLOSED, and every screen works while closed so an owner can
+    // build the catalog, the shipping and the payment methods before the flip.
+    key: 'store', label: 'חנות', color: '#db2777', desc: 'האתר כחנות — מוצרים, עגלה, קופה והזמנות',
+    items: [
+      { key: 'store', href: '/admin/store', label: 'החנות', icon: '🛍️' },
+      { key: 'store-products', href: '/admin/store/products', label: 'מוצרים', icon: '🏷️' },
+      { key: 'store-orders', href: '/admin/store/orders', label: 'הזמנות', icon: '📦' },
+      { key: 'store-coupons', href: '/admin/store/coupons', label: 'קופונים', icon: '🎟️' },
+      { key: 'store-settings', href: '/admin/store/settings', label: 'משלוח ותשלום', icon: '🚚' }
+    ]
+  },
+  {
     // CRM (v1.77) — its own group because it is its own product: the CMS runs
     // without it, and one flag (config.crm.enabled) turns the whole group off.
     key: 'crm', label: 'לקוחות', color: '#ea580c', desc: 'האנשים מאחורי הפניות — מי הם, מה עשו ואיך לפלח אותם',
@@ -211,7 +224,10 @@ function paletteBootJson() {
     theme: 'theme design colors looks', menus: 'menus navigation', 'site-chrome': 'header footer chrome',
     seo: 'seo google search', sitemap: 'sitemap', analytics: 'analytics stats views visitors',
     integrations: 'integrations ga4 webhooks', chat: 'ai chat copilot key', agent: 'agent token extension bridge',
-    settings: 'settings config site'
+    settings: 'settings config site',
+    store: 'store shop ecommerce open close flip חנות', 'store-products': 'products catalog sku inventory stock מוצרים מלאי',
+    'store-orders': 'orders sales customers הזמנות', 'store-coupons': 'coupons discount קופון הנחה',
+    'store-settings': 'shipping payment vat delivery משלוח תשלום מעמ'
   };
   const commands = [];
   for (const g of ADMIN_NAV_GROUPS) {
@@ -227,7 +243,10 @@ function paletteBootJson() {
     { label: 'צפייה באתר', icon: '🌐', href: '/', hint: 'פעולה', newTab: true, keywords: 'view site preview live' },
     { label: 'ייצוא פניות (CSV)', icon: '⬇', href: '/admin/inbox.csv', hint: 'פעולה', keywords: 'export leads csv excel' },
     { label: 'ייצוא אנליטיקס (CSV)', icon: '⬇', href: '/admin/analytics.csv?what=daily', hint: 'פעולה', keywords: 'export analytics csv excel' },
-    { label: 'חבילת AI להדבקה', icon: '🎮', href: '/admin/inject', hint: 'פעולה', keywords: 'inject roleplay game pack dictionary' }
+    { label: 'חבילת AI להדבקה', icon: '🎮', href: '/admin/inject', hint: 'פעולה', keywords: 'inject roleplay game pack dictionary' },
+    { label: 'מוצר חדש', icon: '🏷️', href: '/admin/store/products/new', hint: 'פעולה', keywords: 'new product add sku מוצר' },
+    { label: 'החנות ב-BenTML', icon: '🧬', href: '/admin/store/bentml', hint: 'פעולה', keywords: 'store bentml catalog import export bent-store' },
+    { label: 'ייצוא הזמנות (CSV)', icon: '⬇', href: '/admin/store/orders.csv', hint: 'פעולה', keywords: 'export orders csv excel' }
   );
   _paletteJson = JSON.stringify(commands);
   return _paletteJson;

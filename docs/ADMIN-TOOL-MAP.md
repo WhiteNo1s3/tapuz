@@ -43,7 +43,7 @@ What the four platforms group their admin into, roughly normalized:
 | **Blog / posts** | Core (Posts) | Wix Blog | CMS collections | Blog | ⚠️ קטגוריות is a seed; no post-type/feed yet |
 | **Users & roles** | Users | Team roles | Team members | Contributors | ❌ single admin account |
 | **Comments** | Core | Members area | — | Comments | ❌ |
-| **E-commerce** | WooCommerce | Wix Stores | Webflow Ecommerce | Commerce | ❌ (deliberately out for now) |
+| **E-commerce** | WooCommerce | Wix Stores | Webflow Ecommerce | Commerce | ✅ חנות (v2.53) — the flip, catalog, cart, checkout, orders, coupons; the whole shop is one `<bent-store>` document ([bent-store.md](bent-store.md)) |
 | **Domains / hosting** | (hosted case) | Domains panel | Publishing/hosting | Domains | ❌ (deploy is dev-side) |
 | **Backups / versioning** | Plugins | Site history | Backups | Version history | ⚠️ page revisions exist; no whole-site snapshots |
 | **Scheduling** | Publish schedule | Schedule posts | — | Scheduled posts | ❌ publish is now-only |
@@ -72,8 +72,10 @@ already have):
 7. **Multilingual** — Hebrew-first is our edge; locale duplication of a page
    tree is the honest version of this, later.
 
-Out of scope on purpose: e-commerce, app market, domains (deploy stays
-dev-side per the Red Hat-style support model).
+Out of scope on purpose: app market, domains (deploy stays dev-side).
+E-commerce left this list in v2.53 — the store ships closed and opens with
+one flip (`/admin/store`); card gateways with an API are still out
+([bent-store.md](bent-store.md) "Not done").
 
 ## The vocabulary engine feed
 

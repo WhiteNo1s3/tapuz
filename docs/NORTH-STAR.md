@@ -45,7 +45,7 @@ Any free-tier agent + docs/agent-free-tier-pack.md
 2. Interactive canvas + style + column resize ✅ edge  
 3. SEO / site / media / menus (shipping Tapuz base) ✅ growing  
 4. Security tier-1 phase (auth, CSRF, uploads, encryption) — pre-beta  
-5. CRM → store — later standards, same “all in package” rule  
+5. CRM → store — ✅ the store (v2.53): one flip opens it, written in BenTML (`<bent-store>`), carried whole by the `.pzn` — the same “all in package” rule ([bent-store.md](bent-store.md))  
 
 ## Success metric
 

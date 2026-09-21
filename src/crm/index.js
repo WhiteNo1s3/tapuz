@@ -205,6 +205,47 @@ const captureForm = safe('captureForm', (input = {}) => {
 });
 
 /**
+ * HOOK — an order was placed in the store (call site: src/store/orders.js,
+ * AFTER the order is saved — a CRM fault must never cost a sale).
+ *
+ * The buyer becomes (or enriches) a person — the same email/phone identity
+ * rules as a form — marked a customer and tagged `store`; the order lands on
+ * their timeline (`store.order`, ref = the order's id) and this browser is
+ * linked to them. No server-side "Purchase" conversion is sent: a purchase
+ * report carries money and items, and that is a separate, reviewed door.
+ *
+ * @param {{ order:object, items?:object[], req?:object, res?:object }} input
+ * @returns {{ contact:object, created:boolean }|null}
+ */
+const captureOrder = safe('captureOrder', (input = {}) => {
+  const o = input.order;
+  if (!o) return null;
+  const up = contacts.upsertContact({
+    email: o.customer_email || '',
+    phone: o.customer_phone || '',
+    name: o.customer_name || '',
+    source: 'store',
+    status: 'customer',
+    tags: 'store'
+  });
+  const contact = up && up.contact;
+  if (!contact) return null;
+  let total = '';
+  try { total = require('../store/money').formatMoney(o.total, o.currency); } catch (e) { total = ''; }
+  const count = Array.isArray(input.items) ? input.items.reduce((a, it) => a + (Number(it.qty) || 0), 0) : 0;
+  events.record({
+    contactId: contact.id,
+    type: 'store.order',
+    path: '/admin/store/orders/' + encodeURIComponent(o.number),
+    title: 'הזמנה #' + o.number + (total ? ' · ' + total : '') + (count ? ' · ' + count + ' פריטים' : ''),
+    refId: o.id
+  });
+  if (input.req && input.res) visitors.link(input.req, input.res, contact.id);
+  contacts.touchActivity(contact.id);
+  return { contact, created: !!up.created };
+});
+
+/**
  * HOOK — a page was viewed (call site: the /_tapuz/collect beacon).
  *
  * With progressive cards (default when CRM is on): open or touch a customer
@@ -302,6 +343,7 @@ module.exports = {
   isEnabled,
   // hooks the CMS may call
   captureForm,
+  captureOrder,
   capturePageview,
   contactIdForRequest,
   note,

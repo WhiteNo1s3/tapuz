@@ -710,6 +710,20 @@
 
   /** Cached article fetch for the article-list canvas preview. */
   var articlesPreviewCache = {}; // key -> { at, articles }
+  /** The store's catalog for the storefront previews (v2.53), cached 15s. */
+  var storeCatalogCache = null;
+  function fetchStoreCatalog(cb) {
+    if (storeCatalogCache && Date.now() - storeCatalogCache.at < 15000) { cb(storeCatalogCache.data); return; }
+    fetch('/admin/api/store/catalog', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var cat = data && data.ok ? data : { products: [] };
+        storeCatalogCache = { at: Date.now(), data: cat };
+        cb(cat);
+      })
+      .catch(function () { cb(storeCatalogCache ? storeCatalogCache.data : { products: [] }); });
+  }
+
   function fetchArticlesPreview(tag, limit, cb) {
     var key = tag + '|' + limit;
     var hit = articlesPreviewCache[key];
@@ -2678,6 +2692,58 @@
           return '<span style="border:1px solid #e2e8f0;border-radius:999px;padding:2px 10px;font-size:.85rem">' + esc(it.label || 'תג') + '</span>';
         }).join('') +
         '</div>';
+      return wrap;
+    }
+
+    // the store (v2.53) — the grid and the buy box preview REAL catalog
+    // products (the admin's own endpoint); cart / checkout / order are filled
+    // in the shopper's browser, so the canvas names them instead
+    if (block.type === 'shop' || block.type === 'buy') {
+      var stGrid = document.createElement('div');
+      stGrid.className = block.type === 'shop' ? 'preview-shop' : '';
+      stGrid.innerHTML = '<div class="preview-store-note">טוען מהקטלוג…</div>';
+      wrap.appendChild(stGrid);
+      fetchStoreCatalog(function (cat) {
+        if (!document.body.contains(stGrid)) return;
+        var items = (cat.products || []).filter(function (p) { return p.status === 'active'; });
+        if (block.type === 'shop') {
+          if (d.shelf) items = items.filter(function (p) { return p.shelf === d.shelf; });
+          if (d.exclude) items = items.filter(function (p) { return p.sku !== d.exclude; });
+          var lim = parseInt(d.limit, 10) || 0;
+          if (lim) items = items.slice(0, lim);
+          var cols = Math.min(Math.max(parseInt(d.columns, 10) || 3, 2), 4);
+          stGrid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+          if (!items.length) {
+            stGrid.innerHTML = '<div class="preview-store-note" style="grid-column:1/-1">🛍 רשת המוצרים — עוד אין מוצרים פעילים' +
+              (d.shelf ? ' במדף "' + esc(d.shelf) + '"' : '') + '. <a href="/admin/store/products/new" target="_blank" rel="noopener">הוספת מוצר</a></div>';
+            return;
+          }
+          stGrid.innerHTML = (d.title ? '<div style="grid-column:1/-1;font-weight:800">' + esc(d.title) + '</div>' : '') +
+            items.slice(0, 12).map(function (p) {
+              return '<div class="preview-shop-card"><div class="preview-shop-img"' +
+                (p.image ? ' style="background-image:url(' + escAttr(p.image) + ')">' : '>🛍️') + '</div>' +
+                '<div class="preview-shop-body"><div>' + esc(p.title) + '</div><div class="preview-shop-price">' + esc(p.priceText) + '</div></div></div>';
+            }).join('');
+          return;
+        }
+        var one = items.filter(function (p) { return p.sku === String(d.sku || '').toLowerCase(); })[0];
+        if (!one) {
+          stGrid.innerHTML = '<div class="preview-store-note">🏷 קנייה — ' + (d.sku ? 'המוצר "' + esc(d.sku) + '" לא נמצא או לא פעיל' : 'בחרו מוצר בשדה "מוצר (מזהה)"') +
+            (items.length ? '<br><span style="font-size:.78rem">מזהים בקטלוג: ' + items.slice(0, 8).map(function (p) { return esc(p.sku); }).join(' · ') + '</span>' : '') + '</div>';
+          return;
+        }
+        stGrid.innerHTML = '<div style="display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center">' +
+          '<div class="preview-shop-img" style="border-radius:10px' + (one.image ? ';background-image:url(' + escAttr(one.image) + ')">' : '">🛍️') + '</div>' +
+          '<div><div style="font-weight:800;font-size:1.05rem">' + esc(one.title) + '</div><div class="preview-shop-price">' + esc(one.priceText) + '</div>' +
+          '<div style="margin-top:6px;display:inline-block;background:#db2777;color:#fff;border-radius:8px;padding:4px 12px;font-weight:700">הוספה לעגלה</div></div></div>';
+      });
+      return wrap;
+    }
+    if (block.type === 'cart' || block.type === 'checkout' || block.type === 'order') {
+      var stLabel = { cart: '🛒 עגלת הקניות — מתמלאת אצל הקונה: שורות, כמויות, סכום ומעבר לקופה',
+        checkout: '💳 הקופה — פרטים, משלוח, תשלום, קופון וסיכום ההזמנה',
+        order: '📦 אישור ההזמנה — הקונה מגיע/ה לכאן אחרי ההזמנה: סטטוס, פריטים ותשלום' }[block.type];
+      wrap.innerHTML = '<div class="preview-store-note">' + stLabel + '</div>';
       return wrap;
     }
 

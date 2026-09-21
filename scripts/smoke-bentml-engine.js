@@ -174,6 +174,12 @@ const VOCAB_DATA = {
   code: { lang: 'css', source: '.hero { color: inherit; }' },
   tags: { items: [{ label: 'עיצוב', url: '/tag/design' }, { label: 'קוד', url: '/tag/code' }] },
   search: { placeholder: 'חיפוש…', action: '/search', name: 'q', submit: 'חיפוש' },
+  // the store (v2.53)
+  shop: { shelf: 'candles', columns: 4, limit: 8, sort: 'price-asc', filter: true, title: 'הנרות', exclude: 'old', buttons: false },
+  buy: { sku: 'נר-לבנדר', gallery: false, description: false },
+  cart: { empty: 'העגלה ריקה' },
+  checkout: {},
+  order: {},
   newsletter: { title: 'הישארו מעודכנים', text: 'קבלו עדכונים למייל.', placeholder: 'האימייל שלכם', submit: 'הרשמה', action: '/api/form' },
   pager: { items: [{ label: '1', url: '/p/1' }, { label: '2' }] },
   consent: { text: 'אתר זה משתמש בעוגיות.', accept: 'אישור', reject: 'סירוב', policy: '/privacy', policyLabel: 'מדיניות פרטיות' },

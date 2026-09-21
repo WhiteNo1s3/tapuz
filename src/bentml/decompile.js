@@ -688,6 +688,43 @@ function decompileBlock(block, indent) {
       uni(params, d, idParams);
       return `${pad}WHATSAPP${paramList(params)} { ${escBody(d.label || '')} }`;
     }
+    // the store (v2.53)
+    case 'shop': {
+      const params = [];
+      if (d.shelf) params.push(`shelf: ${q(d.shelf)}`);
+      if (d.columns && Number(d.columns) !== 3) params.push(`columns: ${Number(d.columns)}`);
+      if (d.limit && Number(d.limit) !== 0) params.push(`limit: ${Number(d.limit)}`);
+      if (d.sort && d.sort !== 'manual') params.push(`sort: ${d.sort}`);
+      if (d.filter === true || d.filter === 'true') params.push('filter: true');
+      if (d.title) params.push(`title: ${q(d.title)}`);
+      if (d.exclude) params.push(`exclude: ${q(d.exclude)}`);
+      if (d.buttons === false || d.buttons === 'false') params.push('buttons: false');
+      uni(params, d, idParams);
+      return `${pad}SHOP${paramList(params)}`;
+    }
+    case 'buy': {
+      const params = [`sku: ${q(d.sku || '')}`];
+      if (d.gallery === false || d.gallery === 'false') params.push('gallery: false');
+      if (d.description === false || d.description === 'false') params.push('description: false');
+      uni(params, d, idParams);
+      return `${pad}BUY${paramList(params)}`;
+    }
+    case 'cart': {
+      const params = [];
+      if (d.empty) params.push(`empty: ${q(d.empty)}`);
+      uni(params, d, idParams);
+      return `${pad}CART${paramList(params)}`;
+    }
+    case 'checkout': {
+      const params = [];
+      uni(params, d, idParams);
+      return `${pad}CHECKOUT${paramList(params)}`;
+    }
+    case 'order': {
+      const params = [];
+      uni(params, d, idParams);
+      return `${pad}ORDER${paramList(params)}`;
+    }
     case 'search': {
       const params = [];
       if (d.placeholder && d.placeholder !== 'חיפוש…') params.push(`placeholder: ${q(d.placeholder)}`);

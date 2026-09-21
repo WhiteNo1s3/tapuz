@@ -9,7 +9,9 @@ const BLOCK_TYPES = [
   'team', 'countdown', 'pricelist', 'progress', 'header', 'footer', 'whatsapp',
   'rating', 'hours', 'toc', 'author', 'compare', 'flipbox', 'products',
   'search', 'newsletter', 'pager', 'consent', 'related', 'comments', 'slot', 'auth',
-  'code', 'tags', 'html'
+  'code', 'tags', 'html',
+  // the store (v2.53)
+  'shop', 'buy', 'cart', 'checkout', 'order'
 ];
 
 function createBlock(type, data = {}) {
