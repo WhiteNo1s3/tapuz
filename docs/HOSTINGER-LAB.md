@@ -26,7 +26,7 @@ The billing subscriptions MCP timed out; capacity above is from `listOrders` + `
 | Git | `WhiteNo1s3/tapuz` **`main`**, auto-deploy on | **same repo, same branch, same GitHub App installation** attached to the second site |
 | Node | 24, `app_type` express, `entry_file` `src/server.js`, `build_script` `build` | identical |
 | Data dir | live `TAPUZ_ROOT` (sibling `tapuz-data` under the hosting home) | **`TAPUZ_ROOT` = sibling `tapuz-lab-data`** so the lab cannot open the live SQLite |
-| First HTTP | homepage 200, generator `2.52.0-alpha+20260920-201525Z.d44c9e7` | homepage **404** until owner setup + a published page; `/admin/login` → `/admin/create-account` |
+| First HTTP | homepage 200, generator `2.52.0-alpha+20260920-201525Z.d44c9e7` | homepage **200** after owner wizard (title `TINKERiNG TApuZ`); `/admin/login` 200; `/admin/create-account` 302 → login |
 | Code | `origin/main` `d44c9e7` (PR #38) | **same commit**, build stamp `2.52.0-alpha+20260921-163623Z.d44c9e7` |
 
 Hostinger **can** attach the same GitHub repo to a second site. This pass did that (`Update Git auto-deployment settings` + `Start Node.js build` with `source_type=git`, branch `main`). A push to `main` will auto-deploy **both** addons. To pin the lab to another branch later, change git settings on the **lab** only.
@@ -42,15 +42,17 @@ tapuziel@2.52.0-alpha build
 
 Commit cloned: `d44c9e7e93c618e3c5242f6fa23c691f4d4775cc` (`Merge pull request #38`).
 
-The first-admin HTML has no `<meta name="generator">` (there is no published homepage yet). The running process is still this build: `/css/admin.css?v=5ab3853112` is the first 10 hex chars of `sha1("2.52.0-alpha+20260921-163623Z.d44c9e7")`.
+Published homepage `<meta name="generator">` is `Tapuziel 2.52.0-alpha+20260921-163623Z.d44c9e7`. The running process is still this build: `/css/admin.css?v=5ab3853112` is the first 10 hex chars of `sha1("2.52.0-alpha+20260921-163623Z.d44c9e7")`. `Last-Modified` on `GET /`: `Mon, 21 Sep 2026 16:58:41 GMT`.
 
 Live cyan generator (GET `/` after the lab create — **unchanged**): `Tapuziel 2.52.0-alpha+20260920-201525Z.d44c9e7`. `Last-Modified: Sun, 20 Sep 2026 20:15:29 GMT`. Cyan git auto-deploy still `WhiteNo1s3/tapuz` `main`. Cyan's latest Node build is still the 2026-09-20 `d44c9e7` deploy. No cyan restart, delete, or deploy was called.
 
-## Owner setup (stop here for Ben)
+## Owner setup (done)
 
-The lab has **no admin**. Runtime log: `אין עדיין חשבון מנהל — היכנס ל־/admin כדי ליצור אותו.` `GET /admin/login` 302 → `/admin/create-account`. The seed-dev-admin script **refuses** `NODE_ENV=production` and was not run. No password was invented.
+The lab **has a first admin**. `GET /admin/create-account` 302 → `/admin/login`. The seed-dev-admin script **refuses** `NODE_ENV=production` and was not run. No password is recorded here.
 
-**Ben:** open the lab URL in the artifacts → `/admin/create-account` → choose username + strong password → then `/admin/setup` if the wizard still asks. After that, `GET /` stays 404 until a page is published (same as any fresh Tapuziel). Optional: import the local-scratch site-package / `.pzn` from the earlier 2026-09-21 artifacts — those are VM scratch files, not a live-cyan export.
+**Wizard done.** `GET /` is **200**. Published homepage title `TINKERiNG TApuZ` (Hebrew-first public pages: דף הבית / אודות / צור קשר / מאמרים). Runtime logs still show the boot-time line `אין עדיין חשבון מנהל` from the 16:36 deploy because Node was **not** restarted after owner setup — setup writes SQLite/config under `TAPUZ_ROOT`; a restart is not required.
+
+A later agent pass (same day) attempted authenticated whole-site save (`GET /admin/api/site-package/export` and `GET /admin/db/export.pzn`) but **did not obtain an admin session**: same-origin Chrome form POST to `/admin/login` returned `?err=1` (`verifyLogin` reject). Not CSRF (no token; Origin matched). No 2FA in this product. Stopped before LoginGuard lockout. Unauthenticated `GET /admin/` 302 → login. Public homepage + login screenshots are in Cloud Agent artifacts, not this repo.
 
 ## Bridge 0.5.5 vs two origins
 
