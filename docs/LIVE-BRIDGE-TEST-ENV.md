@@ -1,6 +1,8 @@
 # Live Hostinger + Bridge V2 — how to test (2026-09-21)
 
-A Cloud Agent pass on 2026-09-21. **No Hostinger terminate, recreate, or deploy.** Recreate of the live addon remains a later turn, and only after Ben has a whole-site `.pzn` **and** an explicit yes in that conversation.
+A Cloud Agent pass on 2026-09-21. **No Hostinger terminate, recreate, or deploy of the live addon.** Recreate of the live addon remains a later turn, and only after Ben has a whole-site `.pzn` **and** an explicit yes in that conversation.
+
+A **second** pass the same day created a **new** Hostinger Node.js lab addon (same Cloud Economy order, free preview hostname, git auto-deploy from `WhiteNo1s3/tapuz` `main` / `d44c9e7` / 2.52). It does not share the live `TAPUZ_ROOT`. Details: [`docs/HOSTINGER-LAB.md`](HOSTINGER-LAB.md). Hostnames live in walkthrough artifacts, not this repo (`.gitleaks.toml`).
 
 The public repo must not name the preview hostname (`.gitleaks.toml`). The live URL is the Hostinger Node addon Ben already uses; walkthrough artifacts from this pass hold the hostname and the files.
 
