@@ -47,6 +47,10 @@ function afterRestore() {
   try { initialize(); } catch (e) { /* additive migrations; a failure surfaces on next boot */ }
   try { db.exec("INSERT INTO crm_contacts_fts(crm_contacts_fts) VALUES('rebuild')"); } catch (e) { /* no FTS = nothing to rebuild */ }
   try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { /* housekeeping */ }
+  // The store (v2.53) lives in this file: a restored .pzn may hold another
+  // shop entirely — its pages and the static storefront follow it (the
+  // live site is the export, and a hot swap must reach the visitors)
+  try { require('./store').afterRestore(); } catch (e) { /* the restore itself already landed */ }
 }
 
 function restoreFromSnapshot(file) {

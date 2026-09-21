@@ -436,6 +436,18 @@ function blockToModuleInner(block) {
       return createModule('carousel', baseOpts(block, pickProps(data, ['height', 'peek']), { children }));
     }
 
+    // the store (v2.53)
+    case 'shop':
+      return createModule('shop', baseOpts(block, pickProps(data, ['shelf', 'columns', 'limit', 'sort', 'filter', 'title', 'exclude', 'buttons'])));
+    case 'buy':
+      return createModule('buy', baseOpts(block, pickProps(data, ['sku', 'gallery', 'description'])));
+    case 'cart':
+      return createModule('cart', baseOpts(block, pickProps(data, ['empty'])));
+    case 'checkout':
+      return createModule('checkout', baseOpts(block, {}));
+    case 'order':
+      return createModule('order', baseOpts(block, {}));
+
     case 'search':
       return createModule('search', baseOpts(block, pickProps(data, ['placeholder', 'action', 'name', 'submit', 'method'])));
 
@@ -1003,6 +1015,18 @@ function moduleToBlockInner(node) {
         .map((c) => pickData(c.props || {}, ['image', 'tag', 'title', 'excerpt', 'href']));
       return finishBlock(node, 'carousel', data);
     }
+
+    // the store (v2.53)
+    case 'shop':
+      return finishBlock(node, 'shop', pickData(props, ['shelf', 'columns', 'limit', 'sort', 'filter', 'title', 'exclude', 'buttons']));
+    case 'buy':
+      return finishBlock(node, 'buy', pickData(props, ['sku', 'gallery', 'description']));
+    case 'cart':
+      return finishBlock(node, 'cart', pickData(props, ['empty']));
+    case 'checkout':
+      return finishBlock(node, 'checkout', {});
+    case 'order':
+      return finishBlock(node, 'order', {});
 
     case 'search':
       return finishBlock(node, 'search', pickData(props, ['placeholder', 'action', 'name', 'submit', 'method']));

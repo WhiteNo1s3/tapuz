@@ -533,6 +533,18 @@ function renderBlock(block, direction = 'rtl') {
     case 'products':
       return renderProductsFromData(block.data || {}, direction, extra);
 
+    // the store (v2.53) — read the catalog at render time, so the static
+    // export carries real products, prices and sold-out marks
+    case 'shop':
+    case 'buy':
+    case 'cart':
+    case 'checkout':
+    case 'order': {
+      const storeRender = require('./store/render');
+      const fn = { shop: 'renderShop', buy: 'renderBuy', cart: 'renderCart', checkout: 'renderCheckout', order: 'renderOrder' }[block.type];
+      return storeRender[fn](block.data || {}, { cls: extraClass, idAttr: extraId, style, dir: direction });
+    }
+
     case 'code':
       return renderCodeFromData(block.data || {}, direction, extra);
 
@@ -1301,7 +1313,14 @@ function renderPage(page, options = {}) {
   // registers itself with `window.tapuzConsent.onGrant()`, so the runtime has
   // to exist first. It also renders for sites with no browser vendor at all —
   // server-side conversions gate on the same answer.
-  const siteExtras = renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
+  // the store (v2.53): while it is open every page carries the cart button
+  // in the header and the storefront script; closed, neither exists
+  let storeSettings = null;
+  try { storeSettings = require('./store/settings').loadSettings(); } catch (e) { storeSettings = null; }
+  const storeRender = storeSettings && storeSettings.open ? require('./store/render') : null;
+  const headerCart = storeRender ? storeRender.renderHeaderCart(storeSettings) : '';
+  const siteExtras = (storeRender ? storeRender.renderStoreTag(storeSettings) : '') +
+    renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
     renderAnalyticsBeacon(config) + require('./crm/consent').renderConsent(config) +
     require('./crm/pixels').renderPixels(config) +
     require('./crm/cs-widget').renderTag(config) +
@@ -1341,7 +1360,7 @@ function renderPage(page, options = {}) {
     // S3 site chrome slots
     '{{header_class}}': chrome.headerClass,
     '{{header_tagline}}': chrome.headerTagline,
-    '{{header_cta}}': chrome.headerCta,
+    '{{header_cta}}': chrome.headerCta + headerCart,
     '{{footer_columns_html}}': chrome.footerColumns,
     '{{footer_text_html}}': chrome.footerText,
     '{{footer_social_html}}': chrome.footerSocial,

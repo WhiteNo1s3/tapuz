@@ -222,6 +222,9 @@ function toMarkdown(dict = buildDictionary()) {
  * mapping, props with enum values. Child-only leaves are included — without the
  * full dictionary a model has no other way to learn `<bent-tab>`/`<bent-trow>`.
  */
+/** Categories the compact grammar leaves to the full dictionary (see the loop). */
+const COMPACT_SKIP = new Set(['store']);
+
 function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
   const he = opts.locale !== 'en';
   const tagOf = {};
@@ -245,6 +248,12 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
     ...Object.keys(dict.categories).filter((c) => !catOrder.includes(c))
   ];
   for (const cat of cats) {
+    // the store's modules (v2.53) stay OUT of the compact grammar: it rides
+    // the lite pack's free-plan gate (LITE_BUDGET_CHARS) and the copilot's 8K
+    // window, both within ~50 characters of their limits before the store
+    // existed. The flip writes the shop's pages itself, the full dictionary
+    // carries every store module, and the catalog pack teaches <bent-store>.
+    if (COMPACT_SKIP.has(cat)) continue;
     lines.push(`### ${cat}`);
     for (const m of dict.categories[cat] || []) {
       // id/class/animate are universal — declared ONCE in the header above.
@@ -284,5 +293,6 @@ module.exports = {
   toMarkdown,
   toCompactMarkdown,
   toAgentTools,
-  HIDDEN
+  HIDDEN,
+  COMPACT_SKIP
 };

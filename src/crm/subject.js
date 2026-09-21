@@ -121,11 +121,20 @@ function exportContact(contactId) {
     }
   }
 
+  // Store orders (v2.53): reached by the contact link AND by email/phone — an
+  // order placed while the CRM was off carries no contact_id, and "all of it"
+  // must still mean all of it.
+  let orders = [];
+  try {
+    orders = require('../store/orders').ordersForSubject({ contactId: contact.id, email: contact.email, phone: contact.phone });
+  } catch (e) { orders = []; }
+
   return {
     exportedAt: new Date().toISOString(),
     subject: contact,
     submissions,
     whatsapp,
+    orders,
     related,
     note:
       'This file contains everything stored about this person in the CRM. ' +
@@ -189,6 +198,15 @@ function eraseContact(contactId, { deleteSubmissions = false } = {}) {
       });
     } catch (e) { /* older database */ }
 
+    // Store orders (v2.53): the person's details leave every order they
+    // placed — by contact link and by email/phone — while the sale itself
+    // (items, sums, date) stays: a business keeps its sales records, and
+    // they are no longer about anyone.
+    try {
+      const n = require('../store/orders').eraseForSubject({ contactId: id, email: contact.email, phone: contact.phone });
+      if (n) removed['store_orders:customer'] = n;
+    } catch (e) { /* older database */ }
+
     if (deleteSubmissions) {
       const ids = db
         .prepare("SELECT ref_id AS id FROM crm_events WHERE contact_id = ? AND type = 'form' AND ref_id IS NOT NULL")
@@ -218,6 +236,10 @@ function eraseContact(contactId, { deleteSubmissions = false } = {}) {
       leftovers.push(spec.table + ':' + spec.column);
     }
   }
+  try {
+    const orders = require('../store/orders').ordersForSubject({ contactId: id, email: contact.email, phone: contact.phone });
+    if (orders.length) leftovers.push('store_orders');
+  } catch (e) { /* older database */ }
 
   const result = {
     ok: leftovers.length === 0,

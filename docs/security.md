@@ -136,6 +136,40 @@ Pinned by `scripts/smoke-ai-html-guard.js`.
 
 Pinned by `scripts/smoke-copilot-tools.js` and the numbered gate in `scripts/smoke-copilot-route.js`.
 
+## 6. The store's public doors (v2.53)
+
+The store adds the one public write a shop needs — placing an order — and
+keeps it narrow (`src/routes/store-public.js`, `docs/bent-store.md`):
+
+- **No price is trusted from a browser.** The cart in `localStorage` is
+  sku + option + qty; the quote, the checkout summary and the order are all
+  computed on the server from the database (`pricing.quote`). A tampered
+  price is ignored — pinned by `smoke-store` and `smoke-store-route`.
+- **Stock and coupon uses cannot be double-spent.** An order is one
+  `BEGIN IMMEDIATE` transaction with guarded `UPDATE … WHERE stock >= qty`
+  and `… WHERE used < max_uses`; two processes racing for the last unit get
+  one order.
+- **Each door has its own 32 KB JSON parser** (mounted before the admin's
+  12 MB one), a per-IP limit (checkout 8/min, quote 120/min, order view
+  60/min, `TAPUZ_STORE_*_MAX` to override), a honeypot on checkout, and
+  replies with no stack or internal id. JSON only: a cross-site form cannot
+  post `application/json` without a preflight, so a foreign page cannot
+  place an order from a visitor's browser.
+- **The order page is a capability link** (a 24-character random token) and
+  shows no phone, email or street — a shared screenshot of it hands out
+  nothing personal. `no-store` + `noindex`.
+- **No payment secret exists to leak.** Payment methods are instructions
+  and the address of the owner's own payment page (`https` only, filled with
+  `{total}` / `{order}` — never personal data); no card number or gateway
+  key is ever held, so the `.pzn` export carries none.
+- **Every store screen and API is `requireAdmin`** — an editor gets 403
+  (prices, and customers' names and addresses). The orders CSV guards against
+  spreadsheet formula injection.
+- **The storefront script writes remote text with `textContent` only**
+  (`public/tz-store.js` has no `innerHTML`, no `eval`) — a product name is
+  data, never markup; the server-rendered modules escape every field and
+  the Product JSON-LD escapes `<`.
+
 ## Operator checklist
 
 - [ ] Serve Tapuz **behind HTTPS** (so `Secure` cookies engage) via a reverse proxy.

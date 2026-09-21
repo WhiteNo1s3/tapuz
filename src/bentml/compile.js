@@ -792,6 +792,40 @@ function buildBlock(node, warnings) {
       applyChrome(data, p);
       return createBlock('tags', data);
     }
+    // the store (v2.53) — only what differs from the defaults is stored, so a
+    // fresh block and a compiled one are the same object (omitDefault)
+    case 'SHOP': {
+      const data = {};
+      if (p.shelf) data.shelf = String(p.shelf);
+      const cols = clampInt(p.columns, 2, 4, 3);
+      if (cols !== 3) data.columns = cols;
+      const lim = clampInt(p.limit, 0, 48, 0);
+      if (lim) data.limit = lim;
+      if (['new', 'price-asc', 'price-desc', 'name'].includes(p.sort)) data.sort = p.sort;
+      if (p.filter === true || p.filter === 'true') data.filter = true;
+      if (p.title) data.title = String(p.title);
+      if (p.exclude) data.exclude = String(p.exclude);
+      if (p.buttons === false || p.buttons === 'false') data.buttons = false;
+      applyChrome(data, p);
+      return createBlock('shop', data);
+    }
+    case 'BUY': {
+      const data = { sku: String(p.sku || '') };
+      if (p.gallery === false || p.gallery === 'false') data.gallery = false;
+      if (p.description === false || p.description === 'false') data.description = false;
+      applyChrome(data, p);
+      return createBlock('buy', data);
+    }
+    case 'CART': {
+      const data = {};
+      if (p.empty) data.empty = String(p.empty);
+      applyChrome(data, p);
+      return createBlock('cart', data);
+    }
+    case 'CHECKOUT':
+      return createBlock('checkout', applyChrome({}, p));
+    case 'ORDER':
+      return createBlock('order', applyChrome({}, p));
     case 'SEARCH': {
       const data = {
         placeholder: p.placeholder || 'חיפוש…',

@@ -2398,6 +2398,117 @@ register({
   }
 });
 
+// ─── The store (v2.53) ─────────────────────────────────────────────
+// Storefront modules: they read the store's catalog at render time (the
+// server's database), so compile() is server-side only — the browser engine
+// bundles the line dialect, never this registry.
+
+function storeRender() {
+  return require('../../store/render');
+}
+
+register({
+  name: 'shop',
+  tag: 'bent-shop',
+  category: 'store',
+  label: { he: 'חנות — רשת מוצרים', en: 'Shop grid' },
+  icon: 'grid',
+  container: false,
+  props: {
+    shelf: { type: 'string', default: '', optional: true, label: { he: 'מדף (קטגוריה)', en: 'Shelf' } },
+    columns: { type: 'integer', min: 2, max: 4, default: 3, optional: true, label: { he: 'עמודות', en: 'Columns' } },
+    limit: { type: 'integer', min: 0, max: 48, default: 0, optional: true, label: { he: 'כמה מוצרים (0 = כולם)', en: 'Limit (0 = all)' } },
+    sort: { type: 'enum', values: ['manual', 'new', 'price-asc', 'price-desc', 'name'], default: 'manual', optional: true, label: { he: 'סדר', en: 'Sort' } },
+    filter: { type: 'boolean', default: false, optional: true, label: { he: 'סינון לפי מדפים', en: 'Shelf filter' } },
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת', en: 'Title' } },
+    exclude: { type: 'string', default: '', optional: true, label: { he: 'להשמיט מוצר', en: 'Exclude SKU' } },
+    buttons: { type: 'boolean', default: true, optional: true, label: { he: 'כפתורי הוספה לעגלה', en: 'Add-to-cart buttons' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return storeRender().renderShop(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'buy',
+  tag: 'bent-buy',
+  category: 'store',
+  label: { he: 'קנייה — מוצר בודד', en: 'Buy box' },
+  icon: 'card',
+  container: false,
+  props: {
+    sku: { type: 'string', label: { he: 'מוצר (מזהה)', en: 'Product SKU' } },
+    gallery: { type: 'boolean', default: true, optional: true, label: { he: 'גלריית תמונות', en: 'Gallery' } },
+    description: { type: 'boolean', default: true, optional: true, label: { he: 'תיאור המוצר', en: 'Description' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return storeRender().renderBuy(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'cart',
+  tag: 'bent-cart',
+  category: 'store',
+  label: { he: 'עגלת קניות', en: 'Cart' },
+  icon: 'list',
+  container: false,
+  props: {
+    empty: { type: 'string', default: '', optional: true, label: { he: 'טקסט לעגלה ריקה', en: 'Empty-cart text' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return storeRender().renderCart(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'checkout',
+  tag: 'bent-checkout',
+  category: 'store',
+  label: { he: 'קופה', en: 'Checkout' },
+  icon: 'form',
+  container: false,
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return storeRender().renderCheckout(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'order',
+  tag: 'bent-order',
+  category: 'store',
+  label: { he: 'אישור ומעקב הזמנה', en: 'Order status' },
+  icon: 'check',
+  container: false,
+  props: {
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return storeRender().renderOrder(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
 register({
   name: 'search',
   tag: 'bent-search',

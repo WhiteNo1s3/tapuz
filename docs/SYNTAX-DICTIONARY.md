@@ -28,7 +28,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (66)
+## Modules (71)
 
 ### תוכן
 
@@ -685,6 +685,90 @@ Shape: `PRODUCTS(params) { nested modules }`
 PRODUCTS {
   …
 }
+```
+
+### חנות
+
+#### `SHOP` → `shop`
+
+🛍 **חנות — רשת מוצרים** — המוצרים מהקטלוג, עם מחיר, מלאי וכפתור הוספה לעגלה
+
+Shape: `SHOP(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `shelf` | `shelf` | string |  | "" |
+| `columns` | `columns` | integer |  | 3 |
+| `limit` | `limit` | integer |  | 0 |
+| `sort` | `sort` | enum manual\|new\|price-asc\|price-desc\|name |  | "manual" |
+| `filter` | `filter` | boolean |  | false |
+| `title` | `title` | string |  | "" |
+| `exclude` | `exclude` | string |  | "" |
+| `buttons` | `buttons` | boolean |  | true |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+SHOP
+```
+
+#### `BUY` → `buy`
+
+🏷 **קנייה — מוצר בודד** — תמונות, מחיר, אפשרויות, כמות והוספה לעגלה — של מוצר אחד
+
+Shape: `BUY(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `sku` | `sku` | string | yes |  |
+| `gallery` | `gallery` | boolean |  | true |
+| `description` | `description` | boolean |  | true |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+BUY(sku: "...")
+```
+
+#### `CART` → `cart`
+
+🛒 **עגלת קניות** — העגלה של הקונה: כמויות, הסרה, סכום ומעבר לקופה
+
+Shape: `CART(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `empty` | `empty` | string |  | "" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+CART
+```
+
+#### `CHECKOUT` → `checkout`
+
+💳 **קופה** — פרטים, משלוח, תשלום, קופון וסיכום — ושליחת ההזמנה
+
+Shape: `CHECKOUT(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+CHECKOUT
+```
+
+#### `ORDER` → `order`
+
+📦 **אישור ומעקב הזמנה** — הדף שהקונה מגיע אליו אחרי ההזמנה: סטטוס, פריטים ותשלום
+
+Shape: `ORDER(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+ORDER
 ```
 
 ### מדיה

@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**295 routes across 38 files.**
+**333 routes across 42 files.**
 
 ## By file (what each module owns)
 
@@ -369,6 +369,56 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/db/upload-restore`
 - `GET /admin/db/backup/:name`
 
+### `src/routes/store-admin.js` — 17 routes
+
+- `GET /admin/store`
+- `POST /admin/api/store/flip`
+- `GET /admin/api/store/summary`
+- `GET /admin/api/store/catalog`
+- `GET /admin/store/settings`
+- `POST /admin/api/store/settings`
+- `GET /admin/store/coupons`
+- `POST /admin/api/store/coupons`
+- `POST /admin/api/store/coupons/:code/delete`
+- `GET /admin/store/bentml`
+- `GET /admin/api/store/export.bent`
+- `POST /admin/api/store/preview`
+- `POST /admin/api/store/apply`
+- `POST /admin/api/store/undo`
+- `GET /admin/api/store/backups`
+- `GET /admin/api/store/backups/:id.bent`
+- `POST /admin/api/store/backups/:id/restore`
+
+### `src/routes/store-orders.js` — 7 routes
+
+- `GET /admin/store/orders`
+- `GET /admin/store/orders.csv`
+- `GET /admin/store/orders/:number`
+- `POST /admin/api/store/orders/:number/status`
+- `POST /admin/api/store/orders/:number/paid`
+- `POST /admin/api/store/orders/:number/tracking`
+- `POST /admin/api/store/orders/:number/note`
+
+### `src/routes/store-products.js` — 10 routes
+
+- `GET /admin/store/products`
+- `GET /admin/store/products/new`
+- `GET /admin/store/products/:id`
+- `GET /admin/api/store/products`
+- `POST /admin/api/store/products`
+- `POST /admin/api/store/products/:id`
+- `POST /admin/api/store/products/:id/delete`
+- `POST /admin/api/store/products/:id/duplicate`
+- `POST /admin/api/store/products/:id/stock`
+- `POST /admin/api/store/shelves`
+
+### `src/routes/store-public.js` — 4 routes
+
+- `GET /api/store/catalog`
+- `POST /api/store/quote`
+- `POST /api/store/checkout`
+- `GET /api/store/order/:token`
+
 ### `src/routes/symbols.js` — 3 routes
 
 - `GET /admin/api/symbols`
@@ -514,6 +564,30 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/site-package/import` | POST | `src/routes/settings.js` |
 | `/admin/api/sitemap` | GET | `src/routes/sitemap.js` |
 | `/admin/api/storage` | GET | `src/routes/storage.js` |
+| `/admin/api/store/apply` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/backups` | GET | `src/routes/store-admin.js` |
+| `/admin/api/store/backups/:id.bent` | GET | `src/routes/store-admin.js` |
+| `/admin/api/store/backups/:id/restore` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/catalog` | GET | `src/routes/store-admin.js` |
+| `/admin/api/store/coupons` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/coupons/:code/delete` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/export.bent` | GET | `src/routes/store-admin.js` |
+| `/admin/api/store/flip` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/orders/:number/note` | POST | `src/routes/store-orders.js` |
+| `/admin/api/store/orders/:number/paid` | POST | `src/routes/store-orders.js` |
+| `/admin/api/store/orders/:number/status` | POST | `src/routes/store-orders.js` |
+| `/admin/api/store/orders/:number/tracking` | POST | `src/routes/store-orders.js` |
+| `/admin/api/store/preview` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/products` | GET | `src/routes/store-products.js` |
+| `/admin/api/store/products` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/products/:id` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/products/:id/delete` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/products/:id/duplicate` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/products/:id/stock` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/settings` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/shelves` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/summary` | GET | `src/routes/store-admin.js` |
+| `/admin/api/store/undo` | POST | `src/routes/store-admin.js` |
 | `/admin/api/symbols` | GET | `src/routes/symbols.js` |
 | `/admin/api/symbols` | POST | `src/routes/symbols.js` |
 | `/admin/api/symbols/delete` | POST | `src/routes/symbols.js` |
@@ -678,6 +752,16 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/site-chrome` | GET | `src/routes/site-chrome.js` |
 | `/admin/sitemap` | GET | `src/routes/sitemap.js` |
 | `/admin/storage` | GET | `src/routes/storage.js` |
+| `/admin/store` | GET | `src/routes/store-admin.js` |
+| `/admin/store/bentml` | GET | `src/routes/store-admin.js` |
+| `/admin/store/coupons` | GET | `src/routes/store-admin.js` |
+| `/admin/store/orders` | GET | `src/routes/store-orders.js` |
+| `/admin/store/orders.csv` | GET | `src/routes/store-orders.js` |
+| `/admin/store/orders/:number` | GET | `src/routes/store-orders.js` |
+| `/admin/store/products` | GET | `src/routes/store-products.js` |
+| `/admin/store/products/:id` | GET | `src/routes/store-products.js` |
+| `/admin/store/products/new` | GET | `src/routes/store-products.js` |
+| `/admin/store/settings` | GET | `src/routes/store-admin.js` |
 | `/admin/team` | GET | `src/routes/team.js` |
 | `/admin/theme` | GET | `src/routes/theme.js` |
 | `/admin/theme/preview/:id` | GET | `src/routes/theme.js` |
@@ -703,6 +787,10 @@ shows where, so editing is navigation, not a grep hunt.
 | `/agent/v1/source` | POST | `src/routes/agent-bridge.js` |
 | `/agent/v1/toolbox` | GET | `src/routes/agent-bridge.js` |
 | `/api/form` | POST | `src/routes/form-capture.js` |
+| `/api/store/catalog` | GET | `src/routes/store-public.js` |
+| `/api/store/checkout` | POST | `src/routes/store-public.js` |
+| `/api/store/order/:token` | GET | `src/routes/store-public.js` |
+| `/api/store/quote` | POST | `src/routes/store-public.js` |
 | `/crm/c/:token/:index` | GET | `src/routes/crm-track.js` |
 | `/crm/cs/v1/config` | GET | `src/routes/crm-track.js` |
 | `/crm/cs/v1/message` | POST | `src/routes/crm-track.js` |

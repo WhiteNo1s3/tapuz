@@ -95,8 +95,13 @@ check('inject bundle reports packSize + packChars',
   buildInjectBundle({ locale: 'he', size: 'lite' }).packSize === 'lite' &&
   buildInjectBundle({ locale: 'he' }).packSize === 'full' &&
   buildInjectBundle({ locale: 'he', size: 'lite' }).packChars <= LITE_BUDGET_CHARS);
-check('toCompactMarkdown covers every module',
-  (() => { const md = toCompactMarkdown(dict); return dict.modules.every((m) => md.includes('`' + m.tag + '`')); })());
+check('toCompactMarkdown covers every module (the store\'s — v2.53 — are the full dictionary\'s; see COMPACT_SKIP)',
+  (() => {
+    const { COMPACT_SKIP } = require('../src/pzn/syntax-dictionary');
+    const md = toCompactMarkdown(dict);
+    return dict.modules.filter((m) => !COMPACT_SKIP.has(m.category)).every((m) => md.includes('`' + m.tag + '`')) &&
+      dict.modules.some((m) => m.tag === 'bent-shop') && toMarkdown(dict).includes('bent-shop');
+  })());
 
 // playerBrief becomes the in-game quest
 const quest = buildRoleplayPack({ locale: 'he', playerBrief: 'דף נחיתה למאפייה' });
