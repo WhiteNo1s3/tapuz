@@ -87,7 +87,13 @@ function currentState() {
       freeOver: m.freeOver === null || m.freeOver === undefined ? '' : major(m.freeOver),
       address: m.address ? '' : 'false', note: m.note
     })),
-    payments: s.payments.map((m) => ({ id: m.id, kind: m.kind, label: m.label, phone: m.phone, url: m.url, details: m.details })),
+    // a card method carries only what the shopper sees and its installments
+    // — the gateway's provider, mode and keys are not part of the store's
+    // description (config/payments.json, never a document)
+    payments: s.payments.map((m) => ({
+      id: m.id, kind: m.kind, label: m.label, phone: m.phone, url: m.url, details: m.details,
+      maxPayments: m.kind === 'card' && m.maxPayments > 1 ? String(m.maxPayments) : ''
+    })),
     coupons: coupons.listCoupons().map((c) => ({
       code: c.code,
       percent: c.kind === 'percent' ? String(c.value) : '',
@@ -264,7 +270,13 @@ function planDocument(text) {
     }));
   }
   if (doc.payments) {
-    patch.payments = doc.payments.map((m) => ({ id: m.id, kind: m.kind || m.id, label: m.label, details: m.details, phone: m.phone, url: m.url }));
+    patch.payments = doc.payments.map((m) => ({ id: m.id, kind: m.kind || m.id, label: m.label, details: m.details, phone: m.phone, url: m.url, maxPayments: m.maxPayments }));
+    // a card method is accepted whether or not a gateway is connected — it
+    // just stays off the checkout until one is (chat and paste both learn why)
+    const wantsCard = doc.payments.some((m) => (m.kind || m.id) === 'card');
+    let gatewayReady = false;
+    try { gatewayReady = require('./gateway').isReady(current); } catch (e) { gatewayReady = false; }
+    if (wantsCard && !gatewayReady) softWarn('CARD_NOT_CONNECTED', 'אמצעי התשלום "כרטיס אשראי" יופיע בקופה אחרי חיבור חברת סליקה (חנות → סליקת אשראי)');
   }
   const check = settingsMod.normalize(patch, current);
   for (const e of check.errors) hardWarn('SETTINGS', e);

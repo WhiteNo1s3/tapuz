@@ -166,11 +166,86 @@ function initializeStore(db) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // A card payment (the gateway, src/store/gateway): one row per hosted-page
+  // session we opened for an order. A provider's callback finds the row by
+  // the provider's own SESSION id (session_id: Cardcom's LowProfileId, Grow's
+  // processId); `reference` is the random value WE hand the provider and get
+  // echoed back — a correlation check, never a lookup key and never a
+  // verdict. Grow's processToken (its callback's only proof) is kept as a
+  // sha256 (session_token_hash — what a callback is checked against) and,
+  // for the inquiry fallback only, SEALED under a per-install key
+  // (session_token, see gateway/config.js): this table travels in the .pzn
+  // like its orders do, and a backup must not carry a usable proof. The row
+  // keeps what a sales record needs (approval, last-4, brand, installments,
+  // the provider's transaction id) and nothing a card thief wants: no card
+  // number, no expiry, no raw provider payload. No credential lives here
+  // either — the keys stay in config/payments.json.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS store_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      provider TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'test' CHECK(mode IN ('test', 'live')),
+      reference TEXT NOT NULL UNIQUE,
+      session_id TEXT NOT NULL DEFAULT '',
+      session_token TEXT NOT NULL DEFAULT '',
+      session_token_hash TEXT NOT NULL DEFAULT '',
+      url TEXT NOT NULL DEFAULT '',
+      amount INTEGER NOT NULL,
+      currency TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending', 'paid', 'failed', 'mismatch', 'refunded')),
+      transaction_id TEXT NOT NULL DEFAULT '',
+      transaction_token TEXT NOT NULL DEFAULT '',
+      account_tail TEXT NOT NULL DEFAULT '',
+      approval TEXT NOT NULL DEFAULT '',
+      card_last4 TEXT NOT NULL DEFAULT '',
+      card_brand TEXT NOT NULL DEFAULT '',
+      installments INTEGER NOT NULL DEFAULT 1,
+      refunded INTEGER NOT NULL DEFAULT 0,
+      refund_unknown INTEGER NOT NULL DEFAULT 0,
+      refund_lock TEXT,
+      set_paid INTEGER NOT NULL DEFAULT 0,
+      error TEXT NOT NULL DEFAULT '',
+      verify_count INTEGER NOT NULL DEFAULT 0,
+      last_verify_at TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES store_orders(id) ON DELETE CASCADE
+    )
+  `);
+  // columns that joined the table while the gateway was being reviewed — a
+  // database created by an earlier build of this branch gets them here
+  const cols = new Set(db.prepare('PRAGMA table_info(store_payments)').all().map((c) => c.name));
+  for (const [name, ddl] of [
+    ['url', "TEXT NOT NULL DEFAULT ''"],
+    ['transaction_token', "TEXT NOT NULL DEFAULT ''"],
+    ['account_tail', "TEXT NOT NULL DEFAULT ''"],
+    ['session_token_hash', "TEXT NOT NULL DEFAULT ''"],
+    // refunds: the sum whose outcome the provider never confirmed (the owner
+    // resolves it), the in-flight lock (one refund per row at a time), and
+    // whether the gateway itself marked the order paid (only then may a full
+    // refund un-mark it — an order paid by hand another way keeps its mark)
+    ['refund_unknown', 'INTEGER NOT NULL DEFAULT 0'],
+    ['refund_lock', 'TEXT'],
+    ['set_paid', 'INTEGER NOT NULL DEFAULT 0']
+  ]) {
+    if (!cols.has(name)) db.exec(`ALTER TABLE store_payments ADD COLUMN ${name} ${ddl}`);
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_store_payments_order ON store_payments(order_id, status)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_store_payments_session ON store_payments(provider, session_id)');
+  // one real transaction settles at most ONE row: a replayed confirmation
+  // cannot mark a second order paid with the same provider transaction.
+  // Per MODE, because Grow's sandbox and production number their
+  // transactions independently (the earlier index without `mode` is dropped)
+  db.exec('DROP INDEX IF EXISTS idx_store_payments_txn');
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_store_payments_transaction ON store_payments(provider, mode, transaction_id) WHERE transaction_id != ''");
 }
 
 const STORE_TABLES = [
   'store_meta', 'store_shelves', 'store_products', 'store_variants', 'store_coupons',
-  'store_orders', 'store_order_items', 'store_order_events', 'store_backups'
+  'store_orders', 'store_order_items', 'store_order_events', 'store_backups', 'store_payments'
 ];
 
 module.exports = { initializeStore, STORE_TABLES };

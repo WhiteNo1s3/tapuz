@@ -3858,6 +3858,8 @@ body.builder-screen[data-btheme="citrus"] .tool-btn:hover .tool-ico { background
 .st-flip-out { margin-top: 8px; font-weight: 600; color: var(--ws-text-soft); min-height: 1.2em; }
 .st-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .st-checks li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* the sentence keeps the row beside its mark and wraps inside itself — a long red line must not drop under its "!" */
+.st-checks li > span:nth-child(2) { flex: 1 1 16rem; min-width: 0; }
 .st-check-mark { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; background: #fef3c7; color: #92400e; flex-shrink: 0; }
 .st-checks li.is-ok .st-check-mark { background: #dcfce7; color: #166534; }
 .st-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px 16px; }
@@ -3896,3 +3898,19 @@ body.builder-screen[data-btheme="citrus"] .tool-btn:hover .tool-ico { background
 .preview-shop-body { padding: 6px 8px; }
 .preview-shop-price { font-weight: 800; color: #db2777; }
 .preview-store-note { border: 2px dashed #f9a8d4; border-radius: 10px; padding: 12px; text-align: center; color: #9d174d; background: #fdf2f8; font-size: 0.85rem; }
+/* the card gateway (src/store/gateway): the "סליקת אשראי" screen, the dashboard's red lines, the order's payment box */
+.st-checks li.is-bad .st-check-mark { background: #fee2e2; color: #991b1b; }
+.st-checks li.is-bad > span:nth-child(2) { color: #b91c1c; font-weight: 600; }
+.st-gw-state { font-weight: 600; margin: 4px 0 12px; }
+.st-gw-provider { border: 1px solid var(--ws-border); border-radius: 10px; padding: 10px 14px 14px; margin: 0 0 12px; }
+.st-gw-provider legend { font-weight: 700; padding: 0 6px; }
+.st-gw-field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-weight: 600; font-size: 0.88rem; }
+.st-gw-input { display: flex; gap: 6px; align-items: center; }
+.st-gw-input .input { flex: 1; }
+.st-gw-hook { margin-top: 10px; padding: 8px 10px; background: var(--ws-panel); border-radius: 8px; }
+.st-gw-hook code { direction: ltr; unicode-bidi: isolate; display: inline-block; word-break: break-all; }
+.st-pay-row.is-paid td:nth-child(3) { color: #166534; font-weight: 700; }
+.st-pay-row.is-mismatch td:nth-child(3), .st-pay-row.is-failed td:nth-child(3) { color: #b91c1c; font-weight: 700; }
+.st-pay-err { color: #b91c1c; font-size: 0.86rem; }
+.st-refund { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.st-refund .input { width: 120px; }

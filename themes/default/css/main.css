@@ -2522,6 +2522,10 @@ a.bent-cart-link:hover { color: var(--color-primary, #0a66c2); }
   .bent-cart-line > .bent-cart-total { grid-area: total; }
   .bent-cart-line > .bent-cart-remove { grid-area: remove; }
   .bent-cart-lines.is-compact .bent-cart-line { grid-template-areas: none; }
+  /* no areas in the compact (read-only) row, so no area names on its cells either —
+     a named area that is not in the template sends every cell to the same implicit
+     track, and the picture, the name and the total are drawn on top of each other */
+  .bent-cart-lines.is-compact .bent-cart-line > * { grid-area: auto; }
 }
 
 /* <bent-checkout> */
@@ -2612,3 +2616,9 @@ a.bent-cart-link:hover { color: var(--color-primary, #0a66c2); }
 @media (prefers-reduced-motion: reduce) {
   .bent-toast, .bent-shop-card, .bent-shop-img { transition: none; }
 }
+
+/* the card gateway: the test-mode banner on the checkout and the order page, the payment's state line */
+.bent-test-banner { margin: 0 0 1rem; padding: 0.6rem 0.9rem; border-radius: 10px; background: #fef3c7; color: #92400e; border: 1px dashed #f59e0b; font-weight: 700; text-align: center; }
+.bent-order-pay-state { margin: 0 0 0.6rem; font-weight: 600; }
+.bent-order-pay-state.is-failed, .bent-order-pay-state.is-mismatch { color: #b91c1c; }
+.bent-order-pay-state.is-paid { color: #166534; }

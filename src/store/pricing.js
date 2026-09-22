@@ -163,11 +163,20 @@ function quote(input = {}, opts = {}) {
   else if (s.pricesIncludeVat) { total = net; vat = money.vatInside(net, vatRate); }
   else { vat = money.vatOnTop(net, vatRate); total = net + vat; }
 
-  const payments = s.payments.map((p) => ({ id: p.id, kind: p.kind, label: p.label, details: p.details, phone: p.phone }));
+  // a `card` method is offered only while the gateway can actually take the
+  // money (a provider connected, its keys present, this currency, https in
+  // live mode) — so placeOrder, which picks from this same list, refuses it too
+  const payments = require('./gateway').offeredPayments(s).map((p) => ({
+    id: p.id, kind: p.kind, label: p.label, details: settingsMod.paymentDetails(p), phone: p.phone,
+    ...(p.kind === 'card' ? { maxPayments: p.maxPayments || 1 } : {})
+  }));
   let payment = '';
   const wantPay = String(input.payment || '');
   if (payments.some((p) => p.id === wantPay)) payment = wantPay;
-  else if (payments.length === 1) payment = payments[0].id;
+  // a single method is picked for a caller who chose nothing — never for one
+  // who chose a method that is not offered (a card method while the gateway
+  // is down must be refused, not quietly turned into a bank transfer)
+  else if (!wantPay && payments.length === 1) payment = payments[0].id;
 
   const blocking = [];
   if (!lines.length) blocking.push('EMPTY');

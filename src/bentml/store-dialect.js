@@ -15,6 +15,7 @@
  *     <bent-ship id="pickup" label="איסוף עצמי" price="0" address="false" />
  *     <bent-ship id="delivery" label="משלוח עד הבית" price="30" free-over="300" />
  *     <bent-pay id="bank" kind="bank" label="העברה בנקאית">בנק לאומי, סניף 800, חשבון 12345</bent-pay>
+ *     <bent-pay id="card" kind="card" label="כרטיס אשראי" max-payments="3" />
  *     <bent-coupon code="WELCOME10" percent="10" min="100" until="2026-12-31" />
  *   </bent-store>
  *
@@ -65,7 +66,7 @@ const ATTR_ALIASES = {
   'bent-variant': { code: 'id', sku: 'id', name: 'label', title: 'label', qty: 'stock', inventory: 'stock' },
   'bent-shelf': { slug: 'id', name: 'label', title: 'label' },
   'bent-ship': { name: 'label', title: 'label', 'free-from': 'free-over', freeover: 'free-over', free: 'free-over' },
-  'bent-pay': { name: 'label', title: 'label', type: 'kind', link: 'url', href: 'url' },
+  'bent-pay': { name: 'label', title: 'label', type: 'kind', link: 'url', href: 'url', installments: 'max-payments', payments: 'max-payments', maxpayments: 'max-payments' },
   'bent-coupon': { name: 'code', id: 'code', from: 'starts', start: 'starts', 'starts-on': 'starts', to: 'until', 'ends-on': 'until', end: 'until', expires: 'until', 'max-uses': 'uses', limit: 'uses', 'min-subtotal': 'min' },
   'bent-store-rules': { 'vat-rate': 'vat', 'prices-include-vat': 'vat-included', exempt: 'vat-exempt' }
 };
@@ -314,6 +315,8 @@ function parseStoreDoc(input) {
           details: String(a.details || '').trim(),
           phone: String(a.phone || '').trim(),
           url: String(a.url || '').trim(),
+          // a card method's installments (kind="card"); provider, mode and keys are never in a document
+          maxPayments: a['max-payments'] !== undefined ? String(a['max-payments']).trim() : '',
           __text: []
         };
         doc.payments.push(pm);
@@ -402,7 +405,7 @@ function serializeStore(st) {
     ])} />`);
   }
   for (const m of s.payments || []) {
-    const head = `  <bent-pay${attrList([['id', m.id], ['kind', m.kind], ['label', m.label], ['phone', m.phone], ['url', m.url]])}`;
+    const head = `  <bent-pay${attrList([['id', m.id], ['kind', m.kind], ['label', m.label], ['phone', m.phone], ['url', m.url], ['max-payments', m.maxPayments]])}`;
     if (!m.details) out.push(head + ' />');
     else if (!m.details.includes('\n')) out.push(head + '>' + escText(m.details) + '</bent-pay>');
     else out.push(head + '>\n' + bodyLines(m.details, '    ') + '\n  </bent-pay>');

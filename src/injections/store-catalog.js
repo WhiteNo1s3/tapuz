@@ -38,7 +38,7 @@ const GRAMMAR_HE = [
   '',
   'שדות: price/was/min/free-over בשקלים עם נקודה ("89.90", בלי ₪ ובלי פסיקים) · was = מחיר לפני (גבוה מ-price) ·',
   'stock = כמה במלאי (unlimited = בלי ספירה; להשמיט = בלי שינוי) · status="hidden" מסתיר · delivery="false" למוצר דיגיטלי/שירות ·',
-  'kind של תשלום: call | bank | bit | paybox | cash | link (ל-link: url="https://…?sum={total}&ref={order}") ·',
+  'kind של תשלום: call | bank | bit | paybox | cash | link | card (ל-link: url="https://…?sum={total}&ref={order}"; card = סליקה בכרטיס אשראי דרך חברת הסליקה שהבעלים חיבר/ה — אפשר max-payments="3" לתשלומים, ובלי מפתחות או שם חברה במסמך) ·',
   'קופון: percent="10" או amount="20" או free-shipping="true"; אופציונלי min, starts, until (YYYY-MM-DD), uses.',
   '',
   'כללים:',
@@ -64,6 +64,7 @@ const GRAMMAR_EN = [
   '  <bent-coupon code="WELCOME10" percent="10" min="50" until="2026-12-31" />',
   '</bent-store>',
   '',
+  'Payment kinds: call | bank | bit | paybox | cash | link (url="https://…?sum={total}&ref={order}") | card (the owner\'s connected card gateway; optional max-payments="3"; never any key or provider name in the document).',
   'Rules: an existing product keeps its exact id; a full <bent-store> is the whole catalog (a product left out is hidden) — use mode="merge" to only add/update;',
   'never invent prices, stock, payment details or image paths; prices are plain decimals ("24.90").'
 ];

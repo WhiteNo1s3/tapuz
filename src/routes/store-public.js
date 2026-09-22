@@ -127,13 +127,22 @@ router.post('/api/store/checkout', gate(orderLimiter, 'order'), jsonOnly, smallJ
   }
 });
 
-router.get('/api/store/order/:token', gate(viewLimiter, 'view'), (req, res) => {
+router.get('/api/store/order/:token', gate(viewLimiter, 'view'), async (req, res) => {
   noStore(res);
   res.setHeader('X-Robots-Tag', 'noindex');
   try {
     const st = store();
-    const order = st.orders.getOrderByToken(req.params.token);
+    let order = st.orders.getOrderByToken(req.params.token);
     if (!order) return res.status(404).json({ ok: false, message: 'ההזמנה לא נמצאה' });
+    // a card order with a pending session: ask the provider (throttled,
+    // bounded — src/store/gateway) before answering, so a missed webhook
+    // still settles the order when the buyer lands back on this page
+    if (!order.paid_at && order.status !== 'cancelled') {
+      try {
+        const r = await require('../store/gateway').verifyForOrder(order);
+        if (r && r.changed) order = st.orders.getOrderByToken(req.params.token) || order;
+      } catch (e) { /* the page still renders; the webhook or the next poll will settle it */ }
+    }
     return res.json({ ok: true, order: st.orders.publicOrder(order) });
   } catch (e) {
     return res.status(500).json({ ok: false, message: 'שגיאה בטעינת ההזמנה' });

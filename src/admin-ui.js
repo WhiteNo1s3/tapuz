@@ -246,7 +246,8 @@ function paletteBootJson() {
     { label: 'חבילת AI להדבקה', icon: '🎮', href: '/admin/inject', hint: 'פעולה', keywords: 'inject roleplay game pack dictionary' },
     { label: 'מוצר חדש', icon: '🏷️', href: '/admin/store/products/new', hint: 'פעולה', keywords: 'new product add sku מוצר' },
     { label: 'החנות ב-BenTML', icon: '🧬', href: '/admin/store/bentml', hint: 'פעולה', keywords: 'store bentml catalog import export bent-store' },
-    { label: 'ייצוא הזמנות (CSV)', icon: '⬇', href: '/admin/store/orders.csv', hint: 'פעולה', keywords: 'export orders csv excel' }
+    { label: 'ייצוא הזמנות (CSV)', icon: '⬇', href: '/admin/store/orders.csv', hint: 'פעולה', keywords: 'export orders csv excel' },
+    { label: 'סליקת אשראי', icon: '💳', href: '/admin/store/gateway', hint: 'פעולה', keywords: 'card gateway payments cardcom grow credit סליקה אשראי תשלום' }
   );
   _paletteJson = JSON.stringify(commands);
   return _paletteJson;

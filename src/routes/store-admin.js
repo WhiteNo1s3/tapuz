@@ -44,6 +44,19 @@ router.get('/admin/store', requireAdmin, (req, res) => {
     [smtpReady, smtpReady ? 'מייל: התראות על הזמנות ואישורים ללקוחות יישלחו' : 'מייל: לא מוגדר — הזמנות יישמרו, אבל לא תקבלו עליהן מייל', '/admin/integrations', 'להגדרת SMTP'],
     [storePages.every((x) => x.live), 'דפי החנות: ' + storePages.map((x) => `<a href="/admin/edit/${encodeURIComponent(x.path)}">${esc(x.path)}</a>${x.live ? '' : ' (חסר)'}`).join(' · '), '', s.open ? '' : 'ייווצרו בפתיחה']
   ];
+  // the card gateway (src/store/gateway): a line whenever a card method exists
+  // or a provider was chosen; RED when the open store cannot take a card, and
+  // RED when the open store runs on test money
+  const gw = require('../store/gateway').status(s);
+  if (gw.hasCardMethod || gw.provider) {
+    const label = gw.providerLabel || 'חברת סליקה';
+    checks.push([gw.ready,
+      gw.ready ? `סליקת אשראי: מחובר ל-${esc(label)} · מצב ${gw.live ? 'אמיתי' : 'בדיקות'}` : `סליקת אשראי: ${esc(gw.reasons.join(' · '))}`,
+      '/admin/store/gateway', 'לחיבור', !gw.ready && gw.hasCardMethod && s.open]);
+    if (s.open && gw.ready && !gw.live) {
+      checks.push([false, 'סליקת אשראי במצב בדיקות בעוד החנות פתוחה — קונים בכרטיס לא יחויבו בכסף אמיתי, והזמנות כאלה לא יסומנו כשולמו', '/admin/store/gateway', 'למצב אמיתי', true]);
+    }
+  }
   const recent = st.orders.listOrders({ limit: 6 });
   const cur = s.currency;
   const recentRows = recent.length ? recent.map((o) =>
@@ -76,8 +89,8 @@ router.get('/admin/store', requireAdmin, (req, res) => {
 
     <section class="card">
       <h3 class="sub-head">✅ מוכנות</h3>
-      <ul class="st-checks">${checks.map(([ok, text, href, cta]) =>
-        `<li class="${ok ? 'is-ok' : 'is-todo'}"><span class="st-check-mark">${ok ? '✓' : '•'}</span><span>${text}</span>${!ok && href ? ` <a class="btn xs secondary" href="${href}">${cta}</a>` : (!ok && cta ? ` <span class="faint">${cta}</span>` : '')}</li>`).join('')}</ul>
+      <ul class="st-checks">${checks.map(([ok, text, href, cta, bad]) =>
+        `<li class="${ok ? 'is-ok' : bad ? 'is-bad' : 'is-todo'}"><span class="st-check-mark">${ok ? '✓' : bad ? '!' : '•'}</span><span>${text}</span>${!ok && href ? ` <a class="btn xs secondary" href="${href}">${cta}</a>` : (!ok && cta ? ` <span class="faint">${cta}</span>` : '')}</li>`).join('')}</ul>
       ${s.open ? `<p class="faint" style="margin:8px 0 0">בחנות: <a href="${esc(urls.shop)}" target="_blank" rel="noopener">${esc(urls.shop)}</a> · העגלה: <a href="${esc(urls.cart)}" target="_blank" rel="noopener">${esc(urls.cart)}</a></p>` : ''}
     </section>
 
@@ -173,6 +186,7 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
       <input class="input" data-k="label" placeholder="שם שהקונה רואה" value="${esc(m.label)}">
       <input class="input" data-k="phone" placeholder="טלפון (ביט / פייבוקס)" dir="ltr" value="${esc(m.phone)}">
       <input class="input" data-k="url" placeholder="https://… דף התשלום שלכם ({total} {order})" dir="ltr" value="${esc(m.url)}">
+      <label class="st-inline" data-card-only${m.kind === 'card' ? '' : ' hidden'}>עד תשלומים <input class="input" data-k="maxPayments" inputmode="numeric" dir="ltr" value="${Number(m.maxPayments) || 1}"></label>
       <textarea class="input" data-k="details" rows="2" placeholder="הוראות תשלום (פרטי חשבון, מה לכתוב בהעברה…)">${esc(m.details)}</textarea>
       <input type="hidden" data-k="id" value="${esc(m.id)}">
       <button type="button" class="btn xs secondary" data-remove title="הסרה">✕</button></div>`;
@@ -215,7 +229,7 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
 
     <section class="card" id="payments">
       <h3 class="sub-head">💳 אמצעי תשלום</h3>
-      <p class="faint">החנות לא מחזיקה כרטיסי אשראי ולא מפתחות של חברות סליקה: הקונה רואה את ההוראות שכתבתם, ו"קישור לתשלום" שולח אותו לדף התשלום שלכם (בכל ספק) עם <code>{total}</code> ו-<code>{order}</code> בכתובת. אחרי שהכסף נכנס — מסמנים "שולם" בהזמנה.</p>
+      <p class="faint">החנות לא מחזיקה כרטיסי אשראי: הקונה רואה את ההוראות שכתבתם, ו"קישור לתשלום" שולח אותו לדף התשלום שלכם (בכל ספק) עם <code>{total}</code> ו-<code>{order}</code> בכתובת. אחרי שהכסף נכנס — מסמנים "שולם" בהזמנה. אמצעי מסוג <b>כרטיס אשראי</b> הוא סליקה של ממש: הוא מופיע בקופה רק כשחברת סליקה (Grow / Cardcom) מחוברת ב<a href="/admin/store/gateway">סליקת אשראי</a>, וההזמנה מסומנת כשולמה אוטומטית אחרי שהשרת אימת את התשלום. המפתחות של החברה לא נשמרים כאן.</p>
       <div id="st-pays">${s.payments.map(payRow).join('')}</div>
       <button type="button" class="btn sm secondary" id="st-add-pay">+ אמצעי תשלום</button>
     </section>
@@ -252,6 +266,14 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
       form.addEventListener('click', function (ev) {
         var b = ev.target.closest && ev.target.closest('[data-remove]');
         if (b) { var row = b.closest('.st-rowed'); if (row) row.remove(); }
+      });
+      // installments belong to a card method only
+      form.addEventListener('change', function (ev) {
+        var sel = ev.target;
+        if (!sel || sel.getAttribute('data-k') !== 'kind') return;
+        var row = sel.closest('.st-rowed');
+        var box = row && row.querySelector('[data-card-only]');
+        if (box) box.hidden = sel.value !== 'card';
       });
       function rows(sel) {
         return Array.prototype.map.call(form.querySelectorAll(sel), function (row) {

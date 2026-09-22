@@ -24,6 +24,7 @@ const pricing = require('./pricing');
 const orders = require('./orders');
 const storePages = require('./pages');
 const document = require('./document');
+const gateway = require('./gateway');
 
 function isOpen() {
   try { return !!settings.loadSettings().open; } catch (e) { return false; }
@@ -122,6 +123,7 @@ module.exports = {
   orders,
   pages: storePages,
   document,
+  gateway,
   isOpen,
   flip,
   refreshNow,

@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**333 routes across 42 files.**
+**344 routes across 44 files.**
 
 ## By file (what each module owns)
 
@@ -389,6 +389,23 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/store/backups/:id.bent`
 - `POST /admin/api/store/backups/:id/restore`
 
+### `src/routes/store-gateway-admin.js` — 8 routes
+
+- `GET /admin/store/gateway`
+- `GET /admin/api/store/gateway`
+- `POST /admin/api/store/gateway`
+- `POST /admin/api/store/gateway/test`
+- `POST /admin/api/store/orders/:number/refund`
+- `POST /admin/api/store/orders/:number/payments/:id/refund-done`
+- `POST /admin/api/store/orders/:number/payments/:id/refund-release`
+- `POST /admin/api/store/orders/:number/payments/:id/verify`
+
+### `src/routes/store-gateway.js` — 3 routes
+
+- `POST /api/store/pay/:token`
+- `POST /api/store/gateway/:provider/hook`
+- `GET /api/store/gateway/:provider/hook`
+
 ### `src/routes/store-orders.js` — 7 routes
 
 - `GET /admin/store/orders`
@@ -573,8 +590,15 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/store/coupons/:code/delete` | POST | `src/routes/store-admin.js` |
 | `/admin/api/store/export.bent` | GET | `src/routes/store-admin.js` |
 | `/admin/api/store/flip` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/gateway` | GET | `src/routes/store-gateway-admin.js` |
+| `/admin/api/store/gateway` | POST | `src/routes/store-gateway-admin.js` |
+| `/admin/api/store/gateway/test` | POST | `src/routes/store-gateway-admin.js` |
 | `/admin/api/store/orders/:number/note` | POST | `src/routes/store-orders.js` |
 | `/admin/api/store/orders/:number/paid` | POST | `src/routes/store-orders.js` |
+| `/admin/api/store/orders/:number/payments/:id/refund-done` | POST | `src/routes/store-gateway-admin.js` |
+| `/admin/api/store/orders/:number/payments/:id/refund-release` | POST | `src/routes/store-gateway-admin.js` |
+| `/admin/api/store/orders/:number/payments/:id/verify` | POST | `src/routes/store-gateway-admin.js` |
+| `/admin/api/store/orders/:number/refund` | POST | `src/routes/store-gateway-admin.js` |
 | `/admin/api/store/orders/:number/status` | POST | `src/routes/store-orders.js` |
 | `/admin/api/store/orders/:number/tracking` | POST | `src/routes/store-orders.js` |
 | `/admin/api/store/preview` | POST | `src/routes/store-admin.js` |
@@ -755,6 +779,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/store` | GET | `src/routes/store-admin.js` |
 | `/admin/store/bentml` | GET | `src/routes/store-admin.js` |
 | `/admin/store/coupons` | GET | `src/routes/store-admin.js` |
+| `/admin/store/gateway` | GET | `src/routes/store-gateway-admin.js` |
 | `/admin/store/orders` | GET | `src/routes/store-orders.js` |
 | `/admin/store/orders.csv` | GET | `src/routes/store-orders.js` |
 | `/admin/store/orders/:number` | GET | `src/routes/store-orders.js` |
@@ -789,7 +814,10 @@ shows where, so editing is navigation, not a grep hunt.
 | `/api/form` | POST | `src/routes/form-capture.js` |
 | `/api/store/catalog` | GET | `src/routes/store-public.js` |
 | `/api/store/checkout` | POST | `src/routes/store-public.js` |
+| `/api/store/gateway/:provider/hook` | GET | `src/routes/store-gateway.js` |
+| `/api/store/gateway/:provider/hook` | POST | `src/routes/store-gateway.js` |
 | `/api/store/order/:token` | GET | `src/routes/store-public.js` |
+| `/api/store/pay/:token` | POST | `src/routes/store-gateway.js` |
 | `/api/store/quote` | POST | `src/routes/store-public.js` |
 | `/crm/c/:token/:index` | GET | `src/routes/crm-track.js` |
 | `/crm/cs/v1/config` | GET | `src/routes/crm-track.js` |
