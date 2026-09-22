@@ -172,14 +172,28 @@
     var out = $('gp-land-result');
     busy(btn, true, mode === 'live' ? 'מכניס חיים…' : 'כותב טיוטות…');
     out.innerHTML = '<span class="gp-busy"></span> מעתיק תמונות, כותב דפים ב‑BenTML, מלביש את ערכת הנושא…';
+    // the landing runs as a background job on the server (a big design can
+    // outlast a proxy's timeout); the screen polls until it is done
+    function poll(job, since) {
+      return api('/admin/api/geppetto/job/' + encodeURIComponent(job)).then(function (d) {
+        if (d && d.ok && d.done === false) {
+          out.innerHTML = '<span class="gp-busy"></span> מעתיק תמונות, כותב דפים ב‑BenTML, מלביש את ערכת הנושא… (' + esc(d.seconds || 0) + ' שניות)';
+          return new Promise(function (r) { setTimeout(r, 1500); }).then(function () { return poll(job, since); });
+        }
+        return d;
+      });
+    }
     api('/admin/api/geppetto/land', {
       planId: plan.id,
       mode: mode,
+      wait: false,
       media: $('gp-c-media').checked,
       theme: $('gp-c-theme').checked,
       menu: $('gp-c-menu').checked,
       homepage: $('gp-c-home').checked,
       siteTitle: $('gp-c-title').checked
+    }).then(function (d) {
+      return d && d.ok && d.job ? poll(d.job, Date.now()) : d;
     }).then(function (d) {
       busy(btn, false);
       if (!d.ok) { out.innerHTML = '<span class="err-text">' + esc(d.error || 'הנחיתה נכשלה') + '</span>'; return; }
@@ -190,7 +204,8 @@
       }).join('');
       var m = d.media || {};
       var lines = [];
-      if (d.theme) lines.push(d.theme.applied ? 'ערכת הנושא הולבשה על האתר (הקודמת נשמרה בספרייה)' : 'ערכת הנושא נשמרה בספריית הערכות');
+      if (d.theme && d.theme.error) lines.push('⚠️ ערכת הנושא לא נשמרה: ' + d.theme.error);
+      else if (d.theme) lines.push(d.theme.applied ? 'ערכת הנושא הולבשה על האתר (הקודמת נשמרה בספרייה)' : 'ערכת הנושא נשמרה בספריית הערכות');
       if (d.menu && d.menu.length) lines.push('התפריט: ' + d.menu.map(function (x) { return x.label; }).join(' · '));
       if (m.found) lines.push('תמונות: ' + m.saved + ' מתוך ' + m.found + ' הועתקו לספריית המדיה' + (m.videos ? ', וגם ' + m.videos + ' סרטונים' : '') + (m.failed && m.failed.length ? ' (' + m.failed.length + ' לא ירדו ונשארו מקושרות)' : ''));
       if (d.homepage) lines.push('דף הבית של האתר: /' + d.homepage);

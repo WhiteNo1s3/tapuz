@@ -90,12 +90,10 @@ function cssUrl(value) {
 
 const ANIMATE_VALUES = new Set(['fade', 'rise', 'zoom']);
 
-/** Neutralize executable URL schemes on any clickable link (public render). */
-function safeHref(url) {
-  const s = String(url == null ? '' : url).trim();
-  if (/^(?:javascript|data|vbscript):/i.test(s)) return '#';
-  return s || '#';
-}
+// Neutralize executable URL schemes on any clickable link (public render) —
+// the PZN escaper's gate, which strips control characters the way a browser
+// does before it tests the scheme (`\x01javascript:` must not slip through).
+const { safeHref } = require('./pzn/language/escape');
 
 /**
  * Expand BenTML inline marks inside already-escaped? No — work on raw, escape segments.
@@ -497,7 +495,7 @@ function renderBlock(block, direction = 'rtl') {
         .map((it) => {
           const img = `<img src="${escapeHtml(it.src || '')}" alt="${escapeHtml(it.alt || '')}" loading="lazy">`;
           return it.url
-            ? `<a class="logo-cell" href="${escapeHtml(it.url)}">${img}</a>`
+            ? `<a class="logo-cell" href="${escapeHtml(safeHref(it.url))}">${img}</a>`
             : `<div class="logo-cell">${img}</div>`;
         })
         .join('');
@@ -838,7 +836,8 @@ function renderMenuItems(items, currentUrl, depth = 0) {
     const kids = depth < 2 && item.children && item.children.length
       ? `<ul class="sub-menu">${renderMenuItems(item.children, currentUrl, depth + 1)}</ul>`
       : '';
-    const url = String(item.url || '');
+    // a menu can come from an imported design, not only the owner's hand
+    const url = item.url ? safeHref(item.url) : '';
     const current = isCurrentUrl(url, currentUrl);
     // the rendered children are the cheapest exact answer to "is the current
     // page below me?" — a label can never fake the marker (it is escaped)
@@ -1256,7 +1255,7 @@ function renderPage(page, options = {}) {
   const currentUrl = options.isHome === true ? '/' : ('/' + String(page.full_path || '') + '.html');
   const menuHtml = renderMainMenu(mainMenu, currentUrl, menuKnobs(overrides), lang);
   const footerMenuHtml = flattenMenu(footerMenu).map(item =>
-    `<a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>`
+    `<a href="${escapeHtml(safeHref(item.url))}">${escapeHtml(item.label)}</a>`
   ).join(' &nbsp;|&nbsp; ');
 
   let layout = loadLayout(theme.dir);

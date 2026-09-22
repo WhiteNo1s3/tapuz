@@ -111,9 +111,14 @@ function uniqueSlug(base, taken) {
   return s;
 }
 
-/** A link the published page may carry (never a script scheme). */
+/**
+ * A link the published page may carry (never a script scheme). A browser
+ * drops ASCII control characters and trims before it reads the scheme, so
+ * `\x01javascript:` and `java\rscript:` run — they are stripped the same way
+ * here first, and the cleaned value is what the page keeps.
+ */
 function safeUrl(href) {
-  const s = String(href || '').trim();
+  const s = String(href || '').replace(/[\x00-\x1F\x7F]/g, '').trim();
   if (!s || /^(?:javascript|data|vbscript):/i.test(s)) return '';
   return s;
 }
@@ -615,10 +620,10 @@ function isShortLine(textNode) {
 
 function firstHref(node) {
   if (!node) return '';
-  if (node.link && node.link.href) return node.link.href;
+  if (node.link && node.link.href) return safeUrl(node.link.href);
   if (node.link && (node.link.page || node.link.anchor)) return gpLink(node.link);
   if (node.type === 'text') {
-    for (const p of node.paragraphs || []) for (const r of p.runs || []) if (r.href) return r.href;
+    for (const p of node.paragraphs || []) for (const r of p.runs || []) if (r.href) return safeUrl(r.href);
   }
   for (const c of node.children || []) {
     const h = firstHref(c);
@@ -1008,9 +1013,9 @@ function flowTree(frame, u, depth) {
 
 // ── emission: tree → Tapuz blocks ─────────────────────────────────────────
 
-/** A bare in-page anchor ('#page-2') made symbolic, like every other design link. */
+/** A bare in-page anchor ('#page-2') made symbolic, like every other design link (and through the gate). */
 function symbolic(href) {
-  const s = String(href || '');
+  const s = safeUrl(href);
   return s.startsWith('#') && s.length > 1 ? 'gp://#' + encodeURIComponent(s.slice(1)) : s;
 }
 
@@ -1519,8 +1524,10 @@ class Emitter {
 
   social(list) {
     const items = list.map((it) => {
-      const network = socialNetwork(it.href) || 'link';
-      return { network, url: it.href, label: (it.label || '').trim() || network };
+      // `javascript://facebook.com/%0a…` has a facebook host: the gate, not the host, decides
+      const url = safeUrl(it.href);
+      const network = (url && socialNetwork(url)) || 'link';
+      return { network, url, label: (it.label || '').trim() || network };
     });
     this.report.patterns.push('social');
     return { type: 'social', id: this.id('social'), data: { items } };
@@ -1864,7 +1871,7 @@ function finish(living, opts = {}) {
   };
   let count = 0;
   const resolve = (href, currentKey) => {
-    const s = String(href || '');
+    const s = safeUrl(href);
     if (s.startsWith('gp://')) {
       const m = /^gp:\/\/([^#]*)#?(.*)$/.exec(s);
       const key = decodeURIComponent(m[1] || '') || currentKey;

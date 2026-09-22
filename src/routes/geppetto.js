@@ -84,22 +84,54 @@ router.get('/admin/api/geppetto/plan/:plan/theme.bent', requireAdmin, (req, res)
   res.type('text/plain; charset=utf-8').send(plan.theme.bent);
 });
 
+// Landing a big design (hundreds of pictures to copy) can outlast a hosting
+// proxy's request timeout: the import would finish while the owner's browser
+// showed "network error". So `wait: false` lands in the background and the
+// screen polls the job; a smoke (or curl) may still wait for the answer.
+const jobs = new Map();
+const JOB_TTL_MS = 30 * 60 * 1000;
+
+function choicesOf(b) {
+  return {
+    mode: b.mode === 'drafts' ? 'drafts' : 'live',
+    media: b.media !== false,
+    theme: b.theme !== false,
+    menu: b.menu !== false,
+    homepage: b.homepage !== false,
+    siteTitle: b.siteTitle !== false
+  };
+}
+
 router.post('/admin/api/geppetto/land', requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  const planId = String(b.planId || '');
+  const gp = require('../geppetto');
+  if (b.wait === false) {
+    if (!gp.loadPlan(planId)) return fail(res, Object.assign(new Error('התוכנית פגה או לא נמצאה — קראו את העיצוב שוב'), { code: 'NO_PLAN' }));
+    for (const [id, j] of jobs) if (Date.now() - j.at > JOB_TTL_MS) jobs.delete(id);
+    if ([...jobs.values()].some((j) => !j.done)) return res.status(409).json({ ok: false, code: 'BUSY', error: 'ייבוא אחר עדיין רץ — חכו שיסתיים' });
+    const id = 'job_' + require('crypto').randomBytes(6).toString('hex');
+    const job = { at: Date.now(), done: false, result: null, error: null };
+    jobs.set(id, job);
+    gp.landPlan(planId, choicesOf(b))
+      .then((r) => { job.result = r; })
+      .catch((e) => { job.error = { code: e.code || 'E_GEPPETTO', error: e.message }; })
+      .finally(() => { job.done = true; });
+    return res.json({ ok: true, job: id });
+  }
   try {
-    const b = req.body || {};
-    const choices = {
-      mode: b.mode === 'drafts' ? 'drafts' : 'live',
-      media: b.media !== false,
-      theme: b.theme !== false,
-      menu: b.menu !== false,
-      homepage: b.homepage !== false,
-      siteTitle: b.siteTitle !== false
-    };
-    const r = await require('../geppetto').landPlan(String(b.planId || ''), choices);
-    res.json(r);
+    res.json(await gp.landPlan(planId, choicesOf(b)));
   } catch (e) {
     fail(res, e);
   }
+});
+
+router.get('/admin/api/geppetto/job/:id', requireAdmin, (req, res) => {
+  const job = jobs.get(String(req.params.id || ''));
+  if (!job) return res.status(404).json({ ok: false, code: 'NOT_FOUND', error: 'המשימה לא נמצאה' });
+  if (!job.done) return res.json({ ok: true, done: false, seconds: Math.round((Date.now() - job.at) / 1000) });
+  if (job.error) return res.status(400).json(Object.assign({ ok: false, done: true }, job.error));
+  res.json(Object.assign({ done: true }, job.result));
 });
 
 router.get('/admin/api/geppetto/imports', requireAdmin, (req, res) => {

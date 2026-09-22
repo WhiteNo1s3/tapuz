@@ -380,6 +380,32 @@ function find(blocks, pred) {
   check('a javascript: link never reaches the page', !/javascript:alert/.test(body));
   check('no CSS smuggled through a gradient or a color', !/position:\s*fixed/.test(body), body.match(/style="[^"]*"/g));
 
+  // a browser drops control characters (and a CR/LF/tab inside the scheme)
+  // before it reads a link's scheme — the smuggled forms must die too, in the
+  // menu the design's band becomes as well as on the page
+  z = 0;
+  const sly = ['\x01javascript:alert(3)', 'java\rscript:alert(4)', '\x00javascript:alert(5)'];
+  const smuggled = P.makePuppet({ source: 'canva', format: 'canva-app', pages: [{ key: 'm', path: '/', title: 'Sly', width: 1366, sections: [
+    { key: 'band', height: 140, fill: { color: '#2f3543' }, nodes: [
+      text('sb', 60, 40, 260, 40, 'Sly Studio', { size: 30, color: '#ffffff', bold: true }),
+      text('sn1', 900, 45, 90, 30, 'About', { size: 18, color: '#ffffff', link: { href: sly[0] } }),
+      text('sn2', 1010, 45, 100, 30, 'Work', { size: 18, color: '#ffffff', link: { href: sly[1] } }),
+      text('sn3', 1130, 45, 100, 30, 'Contact', { size: 18, color: '#ffffff', link: { href: sly[2] } })
+    ] },
+    { key: 'body', height: 500, fill: { color: '#ffffff' }, nodes: [
+      text('sh', 383, 100, 600, 70, 'Hello there', { size: 56, color: '#2f3543', align: 'center' }),
+      text('sl', 383, 200, 600, 30, 'read more', { size: 18, href: sly[1] }),
+      shape('sp', 583, 300, 200, 60, '#f16d82', { radius: 30 }),
+      text('spt', 603, 315, 160, 30, 'GO', { size: 18, color: '#000000', align: 'center', href: sly[0] })
+    ] }] }] });
+  const sp = gp.planFromPuppet(smuggled, {});
+  const shtml = gp.previewHtml(sp, 'm');
+  const decode = (v) => v.replace(/&#x([0-9a-f]+);?/gi, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/&#(\d+);?/g, (_, d) => String.fromCharCode(+d));
+  const runs = (html) => (html.match(/href\s*=\s*"[^"]*"/gi) || []).filter((h) => /^href="(?:javascript|vbscript|data):/i.test(decode(h).replace(/[\x00-\x20\x7f]/g, '')));
+  check('a smuggled scheme (control char, CR inside) dies in the plan', !/script:alert/.test(JSON.stringify(sp)), JSON.stringify(sp).match(/.{40}script:alert.{10}/g));
+  check('…and on the previewed page, menu included', runs(shtml).length === 0, runs(shtml));
+  check('…and in the BenTML source that lands', !/script:alert/.test(JSON.stringify(sp.pages.map((pg) => pg.source || pg.bentml || ''))));
+
   console.log(fail ? 'SMOKE GEPPETTO: FAIL' : 'SMOKE GEPPETTO: PASS');
   process.exit(fail ? 1 : 0);
 })().catch((e) => {

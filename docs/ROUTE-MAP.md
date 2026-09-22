@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**352 routes across 45 files.**
+**353 routes across 45 files.**
 
 ## By file (what each module owns)
 
@@ -211,13 +211,14 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /api/form`
 - `GET /form-sent`
 
-### `src/routes/geppetto.js` — 8 routes
+### `src/routes/geppetto.js` — 9 routes
 
 - `POST /admin/api/geppetto/read`
 - `GET /admin/geppetto/preview/:plan/:page`
 - `GET /admin/api/geppetto/plan/:plan/source/:page`
 - `GET /admin/api/geppetto/plan/:plan/theme.bent`
 - `POST /admin/api/geppetto/land`
+- `GET /admin/api/geppetto/job/:id`
 - `GET /admin/api/geppetto/imports`
 - `POST /admin/api/geppetto/undo`
 - `GET /admin/geppetto`
@@ -535,6 +536,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/categories` | GET | `src/routes/categories.js` |
 | `/admin/api/categories` | POST | `src/routes/categories.js` |
 | `/admin/api/geppetto/imports` | GET | `src/routes/geppetto.js` |
+| `/admin/api/geppetto/job/:id` | GET | `src/routes/geppetto.js` |
 | `/admin/api/geppetto/land` | POST | `src/routes/geppetto.js` |
 | `/admin/api/geppetto/plan/:plan/source/:page` | GET | `src/routes/geppetto.js` |
 | `/admin/api/geppetto/plan/:plan/theme.bent` | GET | `src/routes/geppetto.js` |

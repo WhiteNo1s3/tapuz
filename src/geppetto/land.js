@@ -285,7 +285,8 @@ async function land(plan, choices = {}, opts = {}) {
     mode: record.mode,
     pages: written,
     menu: want.menu ? done.menu : [],
-    theme: record.themeEntryId ? { id: record.themeEntryId, applied: record.themeApplied, error: record.themeError || '' } : null,
+    theme: record.themeEntryId ? { id: record.themeEntryId, applied: record.themeApplied, error: record.themeError || '' }
+      : record.themeError ? { id: null, applied: false, error: record.themeError } : null,
     media: mediaReport,
     homepage: record.homepageSet ? home.fullPath : '',
     rebuildError

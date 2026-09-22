@@ -1055,9 +1055,11 @@ function sitesUrls(origin, versions, assets) {
   return {
     assetUrl: (ref) => (ref ? origin + '/_assets/' + versions.assets + '/' + (file(ref) || ref + '.png') : null),
     videoUrl: (ref) => (ref ? origin + '/_videos/' + versions.videos + '/' + (file(ref) || ref) : null),
-    // A VIDEO fill's imageRef is its poster frame; it is served like any
-    // picture even though the bundle's assets map never lists it.
-    posterUrl: (ref) => (ref ? origin + '/_assets/' + versions.assets + '/' + (file(ref) || ref + '.png') : null),
+    // A VIDEO fill's imageRef names its poster frame, but Figma Sites never
+    // publishes it (checked on live sites: every such URL is a 404, and the
+    // runtime renders its <video> with no poster) — a poster only when the
+    // bundle's assets map really lists the file.
+    posterUrl: (ref) => (ref && file(ref) ? origin + '/_assets/' + versions.assets + '/' + file(ref) : null),
     fontFile: (entry) => {
       if (!isObj(entry) || !entry.url) return null;
       const url = entry.source === 2 ? origin + '/_user_fonts/' + versions.fonts + '/' + entry.url : /^https?:/i.test(entry.url) ? entry.url : origin + entry.url;

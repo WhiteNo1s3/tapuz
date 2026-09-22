@@ -81,6 +81,8 @@ The theme lands in the **theme library** (never straight on the site); landing l
 
 **"רק כטיוטות" (drafts):** the pages are written as drafts and the theme is filed in the library — the live look, the menu, the home page and the title are left alone, because a menu pointing at drafts would send visitors to 404s.
 
+A landing runs as a **background job** the screen follows (a site with dozens of pictures and a few clips takes a while; a proxy would cut a request that long), one landing at a time — a second one waits for the first (`409 BUSY`).
+
 Every landing leaves a record (`config/geppetto/imports.json`). **Undo** removes the pages the import made (only pages still carrying its `meta.geppetto` stamp), deletes its media folder, puts back the look, the menu, the home page and the title it replaced, and rebuilds the site.
 
 ## A new page-builder primitive: the stretch band
@@ -98,7 +100,7 @@ HERO(width: full, height: lg) { HEADING(level: 1) { … } }
 * Reading makes this server fetch a stranger's site: every request goes through the decompiler's SSRF guard (public http(s) hosts only, re-checked on every redirect hop), is size-capped (6 MB of HTML, 16 MB of JSON, 2 MB per font, 8 MB per picture, 80 MB per clip) and timed out; the read route is rate-limited.
 * A Figma token is used for the one request it came with and is never written anywhere.
 * Every route is `requireAdmin`: landing rewrites the theme, the menu, the home page and the site's name.
-* A design's text is untrusted: Geppetto never emits a raw-HTML block, every word goes through the renderer's escaping, a literal `@B{` in design text is defused, links pass the same scheme filter as every door (no `javascript:`), colors reach a `style` attribute only as `#rrggbb`, and a gradient only as a plain `linear-/radial-gradient(…)` of colors and numbers.
+* A design's text is untrusted: Geppetto never emits a raw-HTML block, every word goes through the renderer's escaping, a literal `@B{` in design text is defused, links pass a scheme gate that first strips control characters the way a browser does (`\x01javascript:` and `java⏎script:` run in a browser — they die here, in the plan, in the menu and in the renderer, which shares the PZN escaper's gate), colors reach a `style` attribute only as `#rrggbb`, and a gradient only as a plain `linear-/radial-gradient(…)` of colors and numbers.
 * Pictures pass the media library's magic-byte gate (SVG sanitized as always); clips are saved only as MP4/WebM by their magic bytes.
 
 ## Honest limits
@@ -106,6 +108,7 @@ HERO(width: full, height: lg) { HEADING(level: 1) { … } }
 * Overlap art that only works at 1366px (a word half over a photo, a collage) is reflowed, not reproduced — the page reads in the design's order, and the report names what was dropped.
 * Canva's phone layout is read (order, hidden elements) but a Tapuziel row stacks in its desktop order.
 * Fonts are substituted with their Google cousins, never copied.
+* Figma Sites never publishes a clip's poster frame (the live site shows none either): a clip lands without a poster rather than with a broken one.
 * Figma Make's code components are programs, not designs.
 * Canva's forms and Figma's interactive components land as their visible parts (a form becomes its words) — build the form with the FORM module.
 
@@ -125,4 +128,4 @@ HERO(width: full, height: lg) { HEADING(level: 1) { … } }
 | `integrations/figma-plugin/` | the token-free Figma export (development-mode plugin) |
 | `scripts/smoke-geppetto*.js` | the gates |
 
-**QA:** `smoke-geppetto` (the life pass, the look, landing with a fake network and undo, the stretch band in both dialects, untrusted text), `smoke-geppetto-canva` and `smoke-geppetto-figma` (the decoders over synthetic fixtures), `smoke-geppetto-route` (the screen and its API end to end, no network).
+**QA:** `smoke-geppetto` (the life pass, the look, landing with a fake network and undo, the stretch band in both dialects, untrusted text), `smoke-geppetto-canva` and `smoke-geppetto-figma` (the decoders over synthetic fixtures), `smoke-geppetto-route` (the screen and its API end to end, the background landing job included, no network).

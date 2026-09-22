@@ -119,7 +119,9 @@ const loaf = byName(sites, 'Loaf');
 check('IMAGE fill → image with absolute URL, cover, rounded mask, natural size, alt', !!loaf && loaf.type === 'image' && loaf.src === ORIGIN + '/_assets/v11/1000000000000000000000000000000000000003.png' && loaf.fit === 'cover' && loaf.mask === 'rounded' && loaf.radius === 12 && loaf.natural.w === 1200 && loaf.alt === 'A round loaf on a wooden board');
 check('FIT scale mode → contain', byName(sites, 'Croissants').fit === 'contain');
 const video = byName(sites, 'Oven film');
-check('VIDEO fill → video with src, poster, autoplay/loop/muted', !!video && video.type === 'video' && video.src === ORIGIN + '/_videos/v1/1000000000000000000000000000000000000007' && video.poster === ORIGIN + '/_assets/v11/1000000000000000000000000000000000000006.png' && video.autoplay && video.loop && video.muted);
+// a VIDEO fill's imageRef is never published by Figma Sites (a 404 on live
+// sites): no poster unless the bundle's assets map lists the file
+check('VIDEO fill → video with src, autoplay/loop/muted, and no unpublished poster', !!video && video.type === 'video' && video.src === ORIGIN + '/_videos/v1/1000000000000000000000000000000000000007' && !video.poster && video.autoplay && video.loop && video.muted);
 const gallery = section(sites, 0, 'gallery');
 check('GRID frame → grid layout with columns and gaps', !!gallery && gallery.layout.mode === 'grid' && gallery.layout.columns === 3 && gallery.layout.gap === 40 && gallery.layout.rowGap === 40 && gallery.tag === 'section');
 check('a hidden node is skipped', gallery.nodes.length === 3 && !byName(sites, 'Oven (old)'));
