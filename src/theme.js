@@ -130,6 +130,46 @@ const GOOGLE_FONTS = {
   'Bona Nova': '400;700'
 };
 
+// Latin faces (v2.56) — a design imported from Canva or Figma (src/geppetto)
+// arrives in its own Latin face; with the Hebrew shelf alone that face was
+// dropped at the door and the page fell back to the system font. These load
+// exactly like the shelf; a Hebrew letter set in one falls back to the
+// system's Hebrew face (the browser does that per glyph). '' = the family
+// has one weight — asking Google for a weight it lacks fails the whole request.
+const LATIN_FONTS = {
+  'Abril Fatface': '', 'Alegreya': '400;700', 'Alegreya Sans': '400;700', 'Alex Brush': '', 'Alfa Slab One': '',
+  'Alice': '', 'Allura': '', 'Anton': '', 'Arapey': '', 'Archivo': '400;700', 'Archivo Black': '', 'Arvo': '400;700',
+  'Atkinson Hyperlegible': '400;700', 'Barlow': '400;700', 'Barlow Condensed': '400;700', 'Bebas Neue': '',
+  'Bodoni Moda': '400;700', 'Bricolage Grotesque': '400;700', 'Cabin': '400;700', 'Cardo': '400;700',
+  'Caveat': '400;700', 'Chivo': '400;700', 'Cinzel': '400;700', 'Comfortaa': '400;700', 'Cormorant': '400;700',
+  'Cormorant Garamond': '400;700', 'Courier Prime': '400;700', 'Crimson Pro': '400;700', 'Crimson Text': '400;700',
+  'DM Mono': '', 'DM Sans': '400;700', 'DM Serif Display': '', 'DM Serif Text': '', 'Dancing Script': '400;700',
+  'Didact Gothic': '', 'EB Garamond': '400;700', 'Epilogue': '400;700', 'Exo 2': '400;700', 'Figtree': '400;700',
+  'Fira Code': '400;700', 'Fira Sans': '400;700', 'Fjalla One': '', 'Fraunces': '400;700', 'Fredoka': '400;700',
+  'Geist': '400;700', 'Geist Mono': '400;700', 'Gloock': '', 'Great Vibes': '', 'Gruppo': '', 'Hind': '400;700',
+  'IBM Plex Mono': '400;700', 'IBM Plex Sans': '400;700', 'IBM Plex Serif': '400;700', 'Inconsolata': '400;700',
+  'Instrument Sans': '400;700', 'Instrument Serif': '', 'Inter': '400;700', 'Inter Tight': '400;700',
+  'Josefin Sans': '400;700', 'Josefin Slab': '400;700', 'Jost': '400;700', 'Kalam': '400;700', 'Karla': '400;700',
+  'Kaushan Script': '', 'Lato': '400;700', 'League Gothic': '', 'League Spartan': '400;700', 'Lekton': '400;700',
+  'Libre Baskerville': '400;700', 'Libre Caslon Text': '400;700', 'Libre Franklin': '400;700', 'Lilita One': '',
+  'Lobster': '', 'Lora': '400;700', 'Luckiest Guy': '', 'Lustria': '', 'Manrope': '400;700', 'Marcellus': '',
+  'Merriweather': '400;700', 'Merriweather Sans': '400;700', 'Michroma': '', 'Montserrat': '400;700',
+  'Mulish': '400;700', 'Noto Sans': '400;700', 'Noto Serif': '400;700', 'Nunito': '400;700',
+  'Nunito Sans': '400;700', 'Old Standard TT': '400;700', 'Open Sans': '400;700', 'Oswald': '400;700',
+  'Outfit': '400;700', 'Overpass': '400;700', 'Oxygen': '400;700', 'PT Sans': '400;700', 'PT Serif': '400;700',
+  'Pacifico': '', 'Parisienne': '', 'Passion One': '400;700', 'Permanent Marker': '', 'Philosopher': '400;700',
+  'Pinyon Script': '', 'Playfair Display': '400;700', 'Plus Jakarta Sans': '400;700', 'Poppins': '400;700',
+  'Prata': '', 'Prompt': '400;700', 'Public Sans': '400;700', 'Quattrocento': '400;700',
+  'Quattrocento Sans': '400;700', 'Questrial': '', 'Quicksand': '400;700', 'Raleway': '400;700',
+  'Readex Pro': '400;700', 'Red Hat Display': '400;700', 'Righteous': '', 'Roboto': '400;700',
+  'Roboto Condensed': '400;700', 'Roboto Mono': '400;700', 'Roboto Slab': '400;700', 'Rozha One': '',
+  'Sacramento': '', 'Satisfy': '', 'Shadows Into Light': '', 'Signika': '400;700', 'Sora': '400;700',
+  'Source Code Pro': '400;700', 'Source Sans 3': '400;700', 'Source Serif 4': '400;700', 'Space Grotesk': '400;700',
+  'Space Mono': '400;700', 'Spectral': '400;700', 'Syne': '400;700', 'Tenor Sans': '', 'Titillium Web': '400;700',
+  'Ubuntu': '400;700', 'Unbounded': '400;700', 'Urbanist': '400;700', 'Vollkorn': '400;700', 'Work Sans': '400;700',
+  'Yeseva One': '', 'Zilla Slab': '400;700'
+};
+
 // ── Looks (v0.72) — one-click whole personalities: a curated bundle of
 //    palette + fonts + style knobs. Applying a look = merging its overrides;
 //    everything stays hand-tunable afterwards. 'naki' resets to the default.
@@ -499,7 +539,7 @@ function googleFontsHref(overrides) {
   const families = googleFontFamilies(overrides);
   if (!families.length) return '';
   const parts = families.map((f) => {
-    const weights = GOOGLE_FONTS[f];
+    const weights = Object.prototype.hasOwnProperty.call(GOOGLE_FONTS, f) ? GOOGLE_FONTS[f] : LATIN_FONTS[f];
     return 'family=' + f.replace(/ /g, '+') + (weights ? ':wght@' + weights : '');
   });
   return 'https://fonts.googleapis.com/css2?' + parts.join('&') + '&display=swap';
@@ -969,7 +1009,7 @@ const HEADING_FACES = new Set(['Suez One', 'Secular One', 'Karantina', 'Amatic S
 /** A shelf family named inside a CSS font stack, or ''. */
 function shelfFamilyIn(stack) {
   const s = String(stack || '');
-  for (const f of Object.keys(GOOGLE_FONTS)) {
+  for (const f of Object.keys(GOOGLE_FONTS).concat(Object.keys(LATIN_FONTS))) {
     if (new RegExp('(^|["\'\\s,])' + f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(["\'\\s,]|$)', 'i').test(s)) return f;
   }
   return '';
@@ -990,7 +1030,7 @@ function deriveFonts(fonts, extraGoogle) {
     if (!n || google.some((g) => g.toLowerCase() === n.toLowerCase())) return;
     // hasOwnProperty, not truthiness: a regular-only face (Suez One, Varela
     // Round) is on the shelf with an EMPTY weight list
-    if (!Object.prototype.hasOwnProperty.call(GOOGLE_FONTS, n)) { warnings.push(`הגופן "${n}" אינו במדף הגופנים העבריים — לא ייטען`); return; }
+    if (!Object.prototype.hasOwnProperty.call(GOOGLE_FONTS, n) && !Object.prototype.hasOwnProperty.call(LATIN_FONTS, n)) { warnings.push(`הגופן "${n}" אינו במדף הגופנים — לא ייטען`); return; }
     google.push(n);
   };
   (Array.isArray(f.google) ? f.google : String(f.google || '').split(',')).forEach(add);
@@ -1422,6 +1462,7 @@ module.exports = {
   DEFAULT_OVERRIDES,
   LOOKS,
   GOOGLE_FONTS,
+  LATIN_FONTS,
   THEME_SECTIONS,
   loadOverrides,
   saveOverrides,

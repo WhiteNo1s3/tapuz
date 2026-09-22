@@ -2209,6 +2209,60 @@ a.bent-newspop-text:hover { text-decoration: underline; }
 .tz-section.is-empty.size-lg { min-height: 12rem; }
 .tz-section.is-empty.size-xl { min-height: 20rem; }
 
+/* ── The stretch band (v2.56) — SECTION / BACKDROP / HERO width: wide|full.
+   A design tool's page is a stack of color bands; here the band runs edge
+   to edge while its content keeps the site's column (.sec-inner, the
+   backdrop's inner, the hero's children). Same breakout as
+   .columns.cols-full. The page clips the few pixels a classic scrollbar
+   adds to 100vw, only when such a band is on it. */
+body:has(.sec-w-full, .sec-w-wide, .px-w-full, .px-w-wide, .hero-w-full, .hero-w-wide) { overflow-x: clip; }
+.bent-section.sec-w-full,
+.parallax-section.px-w-full,
+.hero.hero-w-full {
+  width: 100vw;
+  max-width: none;
+  margin-inline: calc(50% - 50vw);
+  margin-block: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+}
+.bent-section.sec-w-wide,
+.parallax-section.px-w-wide,
+.hero.hero-w-wide {
+  width: min(1400px, calc(100vw - 2rem));
+  max-width: none;
+  margin-inline: calc(50% - min(700px, 50vw - 1rem));
+  margin-block: 0;
+  box-sizing: border-box;
+}
+.bent-section.sec-w-full,
+.bent-section.sec-w-wide { padding: clamp(2.5rem, 6vw, 5.5rem) 1.25rem; }
+.bent-section > .sec-inner { max-width: var(--max-width); margin-inline: auto; }
+.bent-section > .sec-inner > :first-child { margin-top: 0; }
+.bent-section > .sec-inner > :last-child { margin-bottom: 0; }
+.parallax-section.px-w-full .parallax-inner,
+.parallax-section.px-w-wide .parallax-inner { max-width: var(--max-width); width: 100%; text-align: inherit; }
+.hero.hero-w-full > *,
+.hero.hero-w-wide > * { max-width: 760px; margin-inline: auto; }
+.hero.hero-w-full,
+.hero.hero-w-wide { padding-block: clamp(3rem, 8vw, 7rem); }
+/* bands butt against the header and the footer, like the design */
+.main-content > .container > :is(.sec-w-full, .px-w-full, .hero-w-full):first-child { margin-top: -2.25rem; }
+.main-content > .container > :is(.sec-w-full, .px-w-full, .hero-w-full):last-child { margin-bottom: -2.25rem; }
+
+/* A menu with no items draws no burger (v2.56 — an imported one-page design
+   has no menu, and a button that opens nothing is a broken promise) */
+/* (!important: the phone collapse rules carry a four-class selector, and no
+   nav with nothing in it should ever show) */
+.main-nav:not(:has(li)) { display: none !important; }
+
+/* Geppetto's helpers (v2.56) — a round portrait (a design's circle frame),
+   and a row of cards whose pictures the design framed in circles */
+.bent-image.gp-circle img { border-radius: 50%; aspect-ratio: 1 / 1; object-fit: cover; }
+.bent-cards.gp-round-media .bent-card-media { background: none; padding: 1rem 1rem 0; aspect-ratio: auto; overflow: visible; }
+.bent-cards.gp-round-media .bent-card-media img { border-radius: 50%; aspect-ratio: 1 / 1; object-fit: cover; width: min(78%, 220px); height: auto; margin-inline: auto; display: block; }
+.bent-cards.gp-round-media .bent-card-body { text-align: center; }
+
 /* ── HTML גולמי (the raw-HTML escape hatch) — v1.49 ──
    Deliberately almost nothing. This block exists so an author can build the
    thing the CMS has no module for, so the theme must not impose a look on

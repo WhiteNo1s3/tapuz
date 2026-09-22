@@ -1,0 +1,1391 @@
+{
+ "format": "tapuz-figma",
+ "version": 1,
+ "fileName": "Example Site",
+ "fileKey": "",
+ "exportedAt": "2026-01-15T10:00:00.000Z",
+ "pages": [
+  {
+   "id": "0:1",
+   "name": "Website",
+   "frames": [
+    {
+     "id": "1:1",
+     "name": "Home",
+     "type": "FRAME",
+     "absoluteBoundingBox": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 1200
+     },
+     "relativeTransform": [
+      [
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       1,
+       0
+      ]
+     ],
+     "size": {
+      "x": 1440,
+      "y": 1200
+     },
+     "fills": [
+      {
+       "type": "SOLID",
+       "visible": true,
+       "opacity": 1,
+       "color": {
+        "r": 1,
+        "g": 1,
+        "b": 1,
+        "a": 1
+       }
+      }
+     ],
+     "clipsContent": true,
+     "layoutMode": "VERTICAL",
+     "children": [
+      {
+       "id": "1:2",
+       "name": "Header",
+       "type": "FRAME",
+       "absoluteBoundingBox": {
+        "x": 0,
+        "y": 0,
+        "width": 1440,
+        "height": 80
+       },
+       "relativeTransform": [
+        [
+         1,
+         0,
+         0
+        ],
+        [
+         0,
+         1,
+         0
+        ]
+       ],
+       "size": {
+        "x": 1440,
+        "y": 80
+       },
+       "fills": [
+        {
+         "type": "SOLID",
+         "visible": true,
+         "opacity": 1,
+         "color": {
+          "r": 1,
+          "g": 1,
+          "b": 1,
+          "a": 1
+         }
+        }
+       ],
+       "layoutMode": "HORIZONTAL",
+       "itemSpacing": 40,
+       "paddingRight": 60,
+       "paddingLeft": 60,
+       "primaryAxisAlignItems": "SPACE_BETWEEN",
+       "counterAxisAlignItems": "CENTER",
+       "children": [
+        {
+         "id": "1:3",
+         "name": "Wordmark",
+         "type": "TEXT",
+         "absoluteBoundingBox": {
+          "x": 60,
+          "y": 26,
+          "width": 160,
+          "height": 28
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           60
+          ],
+          [
+           0,
+           1,
+           26
+          ]
+         ],
+         "size": {
+          "x": 160,
+          "y": 28
+         },
+         "characters": "Example Site",
+         "style": {
+          "fontFamily": "Example Sans",
+          "fontStyle": "Bold",
+          "fontWeight": 700,
+          "fontSize": 22,
+          "italic": false,
+          "textCase": "ORIGINAL",
+          "textDecoration": "NONE",
+          "letterSpacing": 0,
+          "fills": [
+           {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+             "r": 0.1,
+             "g": 0.1,
+             "b": 0.12,
+             "a": 1
+            }
+           }
+          ],
+          "textAlignHorizontal": "LEFT",
+          "textAlignVertical": "TOP",
+          "textAutoResize": "WIDTH_AND_HEIGHT"
+         },
+         "characterStyleOverrides": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "styleOverrideTable": {},
+         "lineTypes": [
+          "NONE"
+         ],
+         "lineIndentations": [
+          0
+         ],
+         "fills": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 1,
+           "color": {
+            "r": 0.1,
+            "g": 0.1,
+            "b": 0.12,
+            "a": 1
+           }
+          }
+         ]
+        },
+        {
+         "id": "1:4",
+         "name": "About link",
+         "type": "TEXT",
+         "absoluteBoundingBox": {
+          "x": 1300,
+          "y": 28,
+          "width": 80,
+          "height": 24
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           1300
+          ],
+          [
+           0,
+           1,
+           28
+          ]
+         ],
+         "size": {
+          "x": 80,
+          "y": 24
+         },
+         "characters": "About",
+         "style": {
+          "fontFamily": "Example Sans",
+          "fontStyle": "Regular",
+          "fontWeight": 400,
+          "fontSize": 16,
+          "italic": false,
+          "textCase": "ORIGINAL",
+          "textDecoration": "NONE",
+          "letterSpacing": 0,
+          "fills": [
+           {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+             "r": 0.1,
+             "g": 0.1,
+             "b": 0.12,
+             "a": 1
+            }
+           }
+          ],
+          "textAlignHorizontal": "LEFT",
+          "textAlignVertical": "TOP",
+          "textAutoResize": "WIDTH_AND_HEIGHT"
+         },
+         "characterStyleOverrides": [
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "styleOverrideTable": {},
+         "lineTypes": [
+          "NONE"
+         ],
+         "lineIndentations": [
+          0
+         ],
+         "fills": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 1,
+           "color": {
+            "r": 0.1,
+            "g": 0.1,
+            "b": 0.12,
+            "a": 1
+           }
+          }
+         ],
+         "interactions": [
+          {
+           "trigger": {
+            "type": "ON_CLICK"
+           },
+           "actions": [
+            {
+             "type": "NODE",
+             "destinationId": "2:1",
+             "navigation": "NAVIGATE"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "1:10",
+       "name": "Hero",
+       "type": "FRAME",
+       "absoluteBoundingBox": {
+        "x": 0,
+        "y": 80,
+        "width": 1440,
+        "height": 600
+       },
+       "relativeTransform": [
+        [
+         1,
+         0,
+         0
+        ],
+        [
+         0,
+         1,
+         80
+        ]
+       ],
+       "size": {
+        "x": 1440,
+        "y": 600
+       },
+       "fills": [],
+       "clipsContent": true,
+       "children": [
+        {
+         "id": "1:11",
+         "name": "Hero photo",
+         "type": "RECTANGLE",
+         "absoluteBoundingBox": {
+          "x": 0,
+          "y": 80,
+          "width": 1440,
+          "height": 600
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           0
+          ],
+          [
+           0,
+           1,
+           80
+          ]
+         ],
+         "size": {
+          "x": 1440,
+          "y": 600
+         },
+         "fills": [
+          {
+           "type": "IMAGE",
+           "visible": true,
+           "opacity": 1,
+           "scaleMode": "FILL",
+           "imageRef": "hash-hero"
+          }
+         ]
+        },
+        {
+         "id": "1:12",
+         "name": "Headline",
+         "type": "TEXT",
+         "absoluteBoundingBox": {
+          "x": 320,
+          "y": 300,
+          "width": 800,
+          "height": 64
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           320
+          ],
+          [
+           0,
+           1,
+           300
+          ]
+         ],
+         "size": {
+          "x": 800,
+          "y": 64
+         },
+         "characters": "Plants for small rooms",
+         "style": {
+          "fontFamily": "Example Sans",
+          "fontStyle": "Bold",
+          "fontWeight": 700,
+          "fontSize": 56,
+          "italic": false,
+          "textCase": "ORIGINAL",
+          "textDecoration": "NONE",
+          "letterSpacing": 0,
+          "fills": [
+           {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+             "r": 1,
+             "g": 1,
+             "b": 1,
+             "a": 1
+            }
+           }
+          ],
+          "textAlignHorizontal": "CENTER",
+          "textAlignVertical": "TOP",
+          "textAutoResize": "WIDTH_AND_HEIGHT"
+         },
+         "characterStyleOverrides": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+         ],
+         "styleOverrideTable": {
+          "1": {
+           "fontFamily": "Example Sans",
+           "fontStyle": "Italic",
+           "fontWeight": 400,
+           "fontSize": 56,
+           "italic": true,
+           "textCase": "ORIGINAL",
+           "textDecoration": "UNDERLINE",
+           "letterSpacing": 0,
+           "hyperlink": {
+            "type": "URL",
+            "url": "https://example.com/rooms"
+           },
+           "fills": [
+            {
+             "type": "SOLID",
+             "visible": true,
+             "opacity": 1,
+             "color": {
+              "r": 1,
+              "g": 1,
+              "b": 1,
+              "a": 1
+             }
+            }
+           ]
+          }
+         },
+         "lineTypes": [
+          "NONE"
+         ],
+         "lineIndentations": [
+          0
+         ],
+         "fills": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 1,
+           "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1,
+            "a": 1
+           }
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "1:20",
+       "name": "Gallery",
+       "type": "FRAME",
+       "absoluteBoundingBox": {
+        "x": 0,
+        "y": 680,
+        "width": 1440,
+        "height": 400
+       },
+       "relativeTransform": [
+        [
+         1,
+         0,
+         0
+        ],
+        [
+         0,
+         1,
+         680
+        ]
+       ],
+       "size": {
+        "x": 1440,
+        "y": 400
+       },
+       "fills": [
+        {
+         "type": "SOLID",
+         "visible": true,
+         "opacity": 1,
+         "color": {
+          "r": 0.98,
+          "g": 0.97,
+          "b": 0.95,
+          "a": 1
+         }
+        }
+       ],
+       "layoutMode": "HORIZONTAL",
+       "itemSpacing": 24,
+       "counterAxisSpacing": 24,
+       "layoutWrap": "WRAP",
+       "paddingTop": 40,
+       "paddingRight": 60,
+       "paddingBottom": 40,
+       "paddingLeft": 60,
+       "children": [
+        {
+         "id": "1:21",
+         "name": "Fern",
+         "type": "RECTANGLE",
+         "absoluteBoundingBox": {
+          "x": 60,
+          "y": 720,
+          "width": 400,
+          "height": 320
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           60
+          ],
+          [
+           0,
+           1,
+           720
+          ]
+         ],
+         "size": {
+          "x": 400,
+          "y": 320
+         },
+         "fills": [
+          {
+           "type": "IMAGE",
+           "visible": true,
+           "opacity": 1,
+           "scaleMode": "FILL",
+           "imageRef": "hash-fern"
+          }
+         ],
+         "cornerRadius": 12,
+         "rectangleCornerRadii": [
+          12,
+          12,
+          12,
+          12
+         ]
+        },
+        {
+         "id": "1:22",
+         "name": "Monstera",
+         "type": "ELLIPSE",
+         "absoluteBoundingBox": {
+          "x": 484,
+          "y": 720,
+          "width": 320,
+          "height": 320
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           484
+          ],
+          [
+           0,
+           1,
+           720
+          ]
+         ],
+         "size": {
+          "x": 320,
+          "y": 320
+         },
+         "fills": [
+          {
+           "type": "IMAGE",
+           "visible": true,
+           "opacity": 1,
+           "scaleMode": "FILL",
+           "imageRef": "hash-monstera"
+          }
+         ]
+        },
+        {
+         "id": "1:23",
+         "name": "Leaf",
+         "type": "VECTOR",
+         "absoluteBoundingBox": {
+          "x": 900,
+          "y": 856,
+          "width": 48,
+          "height": 48
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           900
+          ],
+          [
+           0,
+           1,
+           856
+          ]
+         ],
+         "size": {
+          "x": 48,
+          "y": 48
+         },
+         "fills": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 1,
+           "color": {
+            "r": 0.2,
+            "g": 0.55,
+            "b": 0.35,
+            "a": 1
+           }
+          }
+         ],
+         "svgRef": "1:23"
+        },
+        {
+         "id": "1:24",
+         "name": "Old photo",
+         "type": "RECTANGLE",
+         "visible": false
+        }
+       ]
+      },
+      {
+       "id": "1:30",
+       "name": "Footer",
+       "type": "FRAME",
+       "absoluteBoundingBox": {
+        "x": 0,
+        "y": 1080,
+        "width": 1440,
+        "height": 120
+       },
+       "relativeTransform": [
+        [
+         1,
+         0,
+         0
+        ],
+        [
+         0,
+         1,
+         1080
+        ]
+       ],
+       "size": {
+        "x": 1440,
+        "y": 120
+       },
+       "fills": [
+        {
+         "type": "SOLID",
+         "visible": true,
+         "opacity": 1,
+         "color": {
+          "r": 0.1,
+          "g": 0.1,
+          "b": 0.12,
+          "a": 1
+         }
+        }
+       ],
+       "children": [
+        {
+         "id": "1:31",
+         "name": "Rule",
+         "type": "LINE",
+         "absoluteBoundingBox": {
+          "x": 60,
+          "y": 1080,
+          "width": 1320,
+          "height": 0
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           60
+          ],
+          [
+           0,
+           1,
+           1080
+          ]
+         ],
+         "size": {
+          "x": 1320,
+          "y": 0
+         },
+         "fills": [],
+         "strokes": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 0.3,
+           "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1,
+            "a": 1
+           }
+          }
+         ],
+         "strokeWeight": 1,
+         "strokeAlign": "CENTER"
+        },
+        {
+         "id": "1:32",
+         "name": "Steps",
+         "type": "TEXT",
+         "absoluteBoundingBox": {
+          "x": 60,
+          "y": 1100,
+          "width": 400,
+          "height": 48
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           60
+          ],
+          [
+           0,
+           1,
+           1100
+          ]
+         ],
+         "size": {
+          "x": 400,
+          "y": 48
+         },
+         "characters": "Pick a plant\nWe ship it",
+         "style": {
+          "fontFamily": "Example Sans",
+          "fontStyle": "Regular",
+          "fontWeight": 400,
+          "fontSize": 16,
+          "italic": false,
+          "textCase": "ORIGINAL",
+          "textDecoration": "NONE",
+          "letterSpacing": 0,
+          "fills": [
+           {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+             "r": 1,
+             "g": 1,
+             "b": 1,
+             "a": 1
+            }
+           }
+          ],
+          "textAlignHorizontal": "LEFT",
+          "textAlignVertical": "TOP",
+          "textAutoResize": "WIDTH_AND_HEIGHT"
+         },
+         "characterStyleOverrides": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "styleOverrideTable": {},
+         "lineTypes": [
+          "ORDERED",
+          "ORDERED"
+         ],
+         "lineIndentations": [
+          1,
+          1
+         ],
+         "fills": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 1,
+           "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1,
+            "a": 1
+           }
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "3:1",
+     "name": "Home — Mobile",
+     "type": "FRAME",
+     "absoluteBoundingBox": {
+      "x": 1600,
+      "y": 0,
+      "width": 390,
+      "height": 1400
+     },
+     "relativeTransform": [
+      [
+       1,
+       0,
+       1600
+      ],
+      [
+       0,
+       1,
+       0
+      ]
+     ],
+     "size": {
+      "x": 390,
+      "y": 1400
+     },
+     "fills": [
+      {
+       "type": "SOLID",
+       "visible": true,
+       "opacity": 1,
+       "color": {
+        "r": 1,
+        "g": 1,
+        "b": 1,
+        "a": 1
+       }
+      }
+     ],
+     "layoutMode": "VERTICAL",
+     "children": [
+      {
+       "id": "3:2",
+       "name": "Header",
+       "type": "FRAME",
+       "absoluteBoundingBox": {
+        "x": 1600,
+        "y": 0,
+        "width": 390,
+        "height": 64
+       },
+       "relativeTransform": [
+        [
+         1,
+         0,
+         1600
+        ],
+        [
+         0,
+         1,
+         0
+        ]
+       ],
+       "size": {
+        "x": 390,
+        "y": 64
+       },
+       "fills": [],
+       "layoutMode": "HORIZONTAL",
+       "children": [
+        {
+         "id": "3:3",
+         "name": "Wordmark",
+         "type": "TEXT",
+         "absoluteBoundingBox": {
+          "x": 1620,
+          "y": 20,
+          "width": 140,
+          "height": 24
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           1620
+          ],
+          [
+           0,
+           1,
+           20
+          ]
+         ],
+         "size": {
+          "x": 140,
+          "y": 24
+         },
+         "characters": "Example Site",
+         "style": {
+          "fontFamily": "Example Sans",
+          "fontStyle": "Regular",
+          "fontWeight": 700,
+          "fontSize": 18,
+          "italic": false,
+          "textCase": "ORIGINAL",
+          "textDecoration": "NONE",
+          "letterSpacing": 0,
+          "fills": [
+           {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+             "r": 0.1,
+             "g": 0.1,
+             "b": 0.12,
+             "a": 1
+            }
+           }
+          ],
+          "textAlignHorizontal": "LEFT",
+          "textAlignVertical": "TOP",
+          "textAutoResize": "WIDTH_AND_HEIGHT"
+         },
+         "characterStyleOverrides": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "styleOverrideTable": {},
+         "lineTypes": [
+          "NONE"
+         ],
+         "lineIndentations": [
+          0
+         ],
+         "fills": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 1,
+           "color": {
+            "r": 0.1,
+            "g": 0.1,
+            "b": 0.12,
+            "a": 1
+           }
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "3:10",
+       "name": "Hero",
+       "type": "FRAME",
+       "absoluteBoundingBox": {
+        "x": 1600,
+        "y": 64,
+        "width": 390,
+        "height": 480
+       },
+       "relativeTransform": [
+        [
+         1,
+         0,
+         1600
+        ],
+        [
+         0,
+         1,
+         64
+        ]
+       ],
+       "size": {
+        "x": 390,
+        "y": 480
+       },
+       "fills": [],
+       "children": [
+        {
+         "id": "3:11",
+         "name": "Hero photo",
+         "type": "RECTANGLE",
+         "absoluteBoundingBox": {
+          "x": 1600,
+          "y": 64,
+          "width": 390,
+          "height": 480
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           1600
+          ],
+          [
+           0,
+           1,
+           64
+          ]
+         ],
+         "size": {
+          "x": 390,
+          "y": 480
+         },
+         "fills": [
+          {
+           "type": "IMAGE",
+           "visible": true,
+           "opacity": 1,
+           "scaleMode": "FILL",
+           "imageRef": "hash-hero"
+          }
+         ]
+        },
+        {
+         "id": "3:12",
+         "name": "Headline",
+         "type": "TEXT",
+         "absoluteBoundingBox": {
+          "x": 1620,
+          "y": 240,
+          "width": 350,
+          "height": 96
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           1620
+          ],
+          [
+           0,
+           1,
+           240
+          ]
+         ],
+         "size": {
+          "x": 350,
+          "y": 96
+         },
+         "characters": "Plants for small rooms",
+         "style": {
+          "fontFamily": "Example Sans",
+          "fontStyle": "Regular",
+          "fontWeight": 700,
+          "fontSize": 36,
+          "italic": false,
+          "textCase": "ORIGINAL",
+          "textDecoration": "NONE",
+          "letterSpacing": 0,
+          "fills": [
+           {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+             "r": 1,
+             "g": 1,
+             "b": 1,
+             "a": 1
+            }
+           }
+          ],
+          "textAlignHorizontal": "CENTER",
+          "textAlignVertical": "TOP",
+          "textAutoResize": "WIDTH_AND_HEIGHT"
+         },
+         "characterStyleOverrides": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "styleOverrideTable": {},
+         "lineTypes": [
+          "NONE"
+         ],
+         "lineIndentations": [
+          0
+         ],
+         "fills": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 1,
+           "color": {
+            "r": 1,
+            "g": 1,
+            "b": 1,
+            "a": 1
+           }
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "2:1",
+     "name": "About",
+     "type": "FRAME",
+     "absoluteBoundingBox": {
+      "x": 0,
+      "y": 1400,
+      "width": 1440,
+      "height": 600
+     },
+     "relativeTransform": [
+      [
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       1,
+       1400
+      ]
+     ],
+     "size": {
+      "x": 1440,
+      "y": 600
+     },
+     "fills": [
+      {
+       "type": "SOLID",
+       "visible": true,
+       "opacity": 1,
+       "color": {
+        "r": 1,
+        "g": 1,
+        "b": 1,
+        "a": 1
+       }
+      }
+     ],
+     "layoutMode": "VERTICAL",
+     "children": [
+      {
+       "id": "2:2",
+       "name": "Intro",
+       "type": "FRAME",
+       "absoluteBoundingBox": {
+        "x": 0,
+        "y": 1400,
+        "width": 1440,
+        "height": 600
+       },
+       "relativeTransform": [
+        [
+         1,
+         0,
+         0
+        ],
+        [
+         0,
+         1,
+         1400
+        ]
+       ],
+       "size": {
+        "x": 1440,
+        "y": 600
+       },
+       "fills": [],
+       "children": [
+        {
+         "id": "2:3",
+         "name": "Title",
+         "type": "TEXT",
+         "absoluteBoundingBox": {
+          "x": 320,
+          "y": 1500,
+          "width": 800,
+          "height": 48
+         },
+         "relativeTransform": [
+          [
+           1,
+           0,
+           320
+          ],
+          [
+           0,
+           1,
+           1500
+          ]
+         ],
+         "size": {
+          "x": 800,
+          "y": 48
+         },
+         "characters": "About the nursery",
+         "style": {
+          "fontFamily": "Example Sans",
+          "fontStyle": "Regular",
+          "fontWeight": 700,
+          "fontSize": 40,
+          "italic": false,
+          "textCase": "ORIGINAL",
+          "textDecoration": "NONE",
+          "letterSpacing": 0,
+          "fills": [
+           {
+            "type": "SOLID",
+            "visible": true,
+            "opacity": 1,
+            "color": {
+             "r": 0.1,
+             "g": 0.1,
+             "b": 0.12,
+             "a": 1
+            }
+           }
+          ],
+          "textAlignHorizontal": "LEFT",
+          "textAlignVertical": "TOP",
+          "textAutoResize": "WIDTH_AND_HEIGHT"
+         },
+         "characterStyleOverrides": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+         ],
+         "styleOverrideTable": {},
+         "lineTypes": [
+          "NONE"
+         ],
+         "lineIndentations": [
+          0
+         ],
+         "fills": [
+          {
+           "type": "SOLID",
+           "visible": true,
+           "opacity": 1,
+           "color": {
+            "r": 0.1,
+            "g": 0.1,
+            "b": 0.12,
+            "a": 1
+           }
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "id": "4:1",
+     "name": "Sticker",
+     "type": "FRAME",
+     "absoluteBoundingBox": {
+      "x": 3000,
+      "y": 0,
+      "width": 200,
+      "height": 200
+     },
+     "relativeTransform": [
+      [
+       1,
+       0,
+       3000
+      ],
+      [
+       0,
+       1,
+       0
+      ]
+     ],
+     "size": {
+      "x": 200,
+      "y": 200
+     },
+     "fills": [
+      {
+       "type": "SOLID",
+       "visible": true,
+       "opacity": 1,
+       "color": {
+        "r": 0.2,
+        "g": 0.55,
+        "b": 0.35,
+        "a": 1
+       }
+      }
+     ],
+     "children": []
+    }
+   ]
+  }
+ ],
+ "images": {
+  "hash-hero": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "hash-fern": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "hash-monstera": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "1:23": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCI+PHBhdGggZD0iTTQgNDRDNCAyMCAyMCA0IDQ0IDQgNDQgMjggMjggNDQgNCA0NFoiLz48L3N2Zz4="
+ },
+ "variables": [
+  {
+   "name": "Brand/Green",
+   "hex": "#338c59"
+  }
+ ],
+ "notes": []
+}

@@ -119,6 +119,13 @@ const BLOCK_REGISTRY = [
         name: 'parallax', labelHe: 'רקע קבוע (פרלקסה)', type: 'boolean',
         default: false, omitDefault: true,
         hint: 'הרקע נשאר קבוע והתוכן גולל מעליו'
+      },
+      {
+        // v2.56 — the hero as a band edge to edge (an imported design's
+        // opening screen); its words keep a readable column in the middle
+        name: 'width', labelHe: 'רוחב', type: 'enum',
+        enum: ['content', 'wide', 'full'], default: 'content', omitDefault: true,
+        hint: 'content = קופסה במרכז · wide = עד 1400px · full = כל רוחב המסך'
       }
     ],
     textField: null,
@@ -656,6 +663,13 @@ const BLOCK_REGISTRY = [
         name: 'size', labelHe: 'גובה כשריק', type: 'enum',
         enum: ['sm', 'md', 'lg', 'xl'], default: 'md',
         hint: 'כמה מקום המיכל שומר כשהוא עדיין ריק'
+      },
+      {
+        // v2.56 — the stretch section: a band of color edge to edge while its
+        // content keeps the site's column (Geppetto's Canva/Figma bands)
+        name: 'width', labelHe: 'רוחב המיכל', type: 'enum',
+        enum: ['content', 'wide', 'full'], default: 'content', omitDefault: true,
+        hint: 'content = רוחב התוכן · wide = עד 1400px · full = כל רוחב המסך (התוכן נשאר בעמודה)'
       }
     ],
     textField: null,
@@ -761,6 +775,13 @@ const BLOCK_REGISTRY = [
         name: 'height', labelHe: 'גובה', type: 'enum',
         enum: ['sm', 'md', 'lg', 'full'], default: 'md', omitDefault: true,
         hint: 'full = מסך מלא'
+      },
+      {
+        // v2.56 — edge to edge (the design bands Geppetto imports); the
+        // content inside keeps the site's column and its own alignment
+        name: 'width', labelHe: 'רוחב', type: 'enum',
+        enum: ['content', 'wide', 'full'], default: 'content', omitDefault: true,
+        hint: 'content = בעמודת התוכן · wide = עד 1400px · full = כל רוחב המסך'
       }
     ],
     textField: null,

@@ -521,6 +521,9 @@ app.use(require('./routes/translations'));
 // import wizard (/admin/import + /admin/api/import) — extracted to
 // src/routes/import.js in v1.17 (twelfth route-group extraction).
 app.use(require('./routes/import'));
+// Geppetto (v2.56) — a Canva / Figma site swallowed whole and given a life
+// (src/geppetto/, docs/bent-geppetto.md). Admin-only; reads behind the SSRF guard.
+app.use(require('./routes/geppetto'));
 
 // The AI copilot surface (GET /admin/agent, /admin/ai, /admin/inject,
 // /admin/chat + the inject-pack / syntax-dictionary / ai-settings / ai-chat

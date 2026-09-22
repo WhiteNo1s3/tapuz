@@ -48,6 +48,7 @@ Shape: `HERO(params) { nested modules }`
 | `height` | `height` | enum sm\|md\|lg\|full |  | "md" |
 | `overlay` | `overlay` | integer |  | 0 |
 | `parallax` | `parallax` | boolean |  | false |
+| `width` | `width` | enum content\|wide\|full |  | "content" |
 | `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
@@ -427,6 +428,7 @@ Shape: `SECTION(params) { nested modules }`
 | Param (JSON) | BenTML | Type | Required | Default |
 |---|---|---|---|---|
 | `size` | `size` | enum sm\|md\|lg\|xl |  | "md" |
+| `width` | `width` | enum content\|wide\|full |  | "content" |
 | `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
@@ -487,6 +489,7 @@ Shape: `BACKDROP(params) { nested modules }`
 | `tint` | `tint` | enum none\|dark\|light\|brand |  | "none" |
 | `fade` | `fade` | boolean |  | false |
 | `height` | `height` | enum sm\|md\|lg\|full |  | "md" |
+| `width` | `width` | enum content\|wide\|full |  | "content" |
 | `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml

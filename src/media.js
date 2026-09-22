@@ -245,6 +245,36 @@ function saveBuffer({ filename, buffer, folder }) {
   return { id: result.lastInsertRowid, name: finalName, url: url };
 }
 
+// A video the site keeps for itself (v2.56 — a Canva or Figma design's
+// clips, so the imported page does not die with the design tool's hosting).
+// NOT an upload door: only an import path calls this, and it still trusts
+// nothing — MP4 / WebM by their magic bytes, the extension ours, capped.
+const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
+
+function sniffVideo(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+  if (buf.slice(4, 8).toString('latin1') === 'ftyp') return { ext: '.mp4', mime: 'video/mp4' };
+  if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return { ext: '.webm', mime: 'video/webm' };
+  return null;
+}
+
+function saveVideoBuffer({ filename, buffer, folder }) {
+  ensureSchema();
+  const kind = sniffVideo(buffer);
+  if (!kind) throw new Error('הקובץ אינו וידאו MP4/WebM');
+  if (buffer.length > MAX_VIDEO_BYTES) throw new Error('הווידאו גדול מדי (' + Math.round(MAX_VIDEO_BYTES / 1048576) + 'MB לכל היותר)');
+  folder = cleanFolder(folder);
+  if (folder) createFolder(folder);
+  const base = path.basename(String(filename || 'video').replace(/[^a-zA-Z0-9._\-]/g, '_').slice(0, 60), path.extname(String(filename || ''))) || 'video';
+  let finalName = base + '-' + Date.now() + kind.ext;
+  for (let n = 2; fs.existsSync(path.join(folderDiskPath(folder), finalName)); n++) finalName = base + '-' + Date.now() + '-' + n + kind.ext;
+  fs.writeFileSync(path.join(folderDiskPath(folder), finalName), buffer);
+  const url = '/assets/' + (folder ? folder + '/' : '') + finalName;
+  const result = db.prepare('INSERT INTO media (filename, path, folder, mime, size) VALUES (?, ?, ?, ?, ?)')
+    .run(finalName, url, folder, kind.mime, buffer.length);
+  return { id: result.lastInsertRowid, name: finalName, url };
+}
+
 /** Save a base64 data-URL upload into <assets>/<folder>/ and register it. */
 function saveBase64({ filename, data, folder }) {
   if (String(folder || '').includes(DEMO_FOLDER_KEY)) throw new Error('ספריית הדמו היא לקריאה בלבד — העלו לתיקייה אחרת');
@@ -265,5 +295,7 @@ module.exports = {
   moveFile,
   saveBase64,
   saveBuffer,
+  saveVideoBuffer,
+  sniffVideo,
   ASSETS_DIR
 };

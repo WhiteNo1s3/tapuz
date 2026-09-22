@@ -51,7 +51,9 @@ function buildDictionary() {
         min: schema.min,
         max: schema.max,
         default: schema.default,
-        label: schema.label
+        label: schema.label,
+        // compact:false → full dictionary only (see toCompactMarkdown)
+        ...(schema.compact === false ? { compact: false } : {})
       };
     }
     modules.push({
@@ -260,8 +262,10 @@ function toCompactMarkdown(dict = buildDictionary(), opts = {}) {
       // animate alone repeated its full enum on ~60 lines (~1.7K chars), and
       // the lite pack's free-plan budget (LITE_BUDGET_CHARS) paid for it —
       // Ben's new modules pushed the pack past the gate exactly this way.
+      // a prop marked compact:false (a layout knob like v2.56's band `width`)
+      // lives in the full dictionary only — the free-plan gate pays per char
       const props = Object.entries(m.props || {})
-        .filter(([k]) => k !== 'id' && k !== 'class' && k !== 'animate')
+        .filter(([k, p]) => k !== 'id' && k !== 'class' && k !== 'animate' && !(p && p.compact === false))
         .slice(0, 8).map(([k, p]) => {
         let s = k;
         if (p.values) s += '=' + p.values.slice(0, 4).join('|') + (p.values.length > 4 ? '|…' : '');

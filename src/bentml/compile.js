@@ -201,6 +201,7 @@ function buildBlock(node, warnings) {
       // spec §11.1 overlay/parallax — stored since v0.44 (the drift is closed)
       if (p.overlay != null && Number(p.overlay) > 0) data.overlay = clampInt(p.overlay, 0, 80, 0);
       if (p.parallax === true || p.parallax === 'true') data.parallax = true;
+      if (p.width && p.width !== 'content') data.width = p.width;
       applyChrome(data, p);
       return createBlock('hero', data);
     }
@@ -228,6 +229,7 @@ function buildBlock(node, warnings) {
       if (p.height && p.height !== 'md') data.height = p.height;
       if (p.tint && p.tint !== 'none') data.tint = p.tint;
       if (p.fade === true || p.fade === 'true') data.fade = true;
+      if (p.width && p.width !== 'content') data.width = p.width;
       applyChrome(data, p);
       return createBlock('parallax', data);
     }
@@ -411,6 +413,7 @@ function buildBlock(node, warnings) {
         blocks: (node.children || []).map((c) => blockToJson(c, warnings)).filter(Boolean),
         size: p.size || 'md'
       };
+      if (p.width && p.width !== 'content') data.width = p.width;
       applyChrome(data, p);
       return createBlock('section', data);
     }

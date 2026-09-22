@@ -90,12 +90,10 @@ function cssUrl(value) {
 
 const ANIMATE_VALUES = new Set(['fade', 'rise', 'zoom']);
 
-/** Neutralize executable URL schemes on any clickable link (public render). */
-function safeHref(url) {
-  const s = String(url == null ? '' : url).trim();
-  if (/^(?:javascript|data|vbscript):/i.test(s)) return '#';
-  return s || '#';
-}
+// Neutralize executable URL schemes on any clickable link (public render) —
+// the PZN escaper's gate, which strips control characters the way a browser
+// does before it tests the scheme (`\x01javascript:` must not slip through).
+const { safeHref } = require('./pzn/language/escape');
 
 /**
  * Expand BenTML inline marks inside already-escaped? No — work on raw, escape segments.
@@ -318,10 +316,15 @@ function renderBlock(block, direction = 'rtl') {
       // container-as-tool (v0.75): legitimate empty — publishes as reserved
       // blank space to be filled in a future release
       const d = block.data || {};
-      const inner = (d.blocks || []).map(b => renderBlock(b, direction)).join('');
+      let inner = (d.blocks || []).map(b => renderBlock(b, direction)).join('');
       const size = ['sm', 'md', 'lg', 'xl'].includes(d.size) ? d.size : 'md';
       const empty = inner ? '' : ` is-empty size-${size}`;
-      return `<section class="bent-section tz-section${empty}${extraClass}"${extraId}${style} dir="${direction}">${inner}</section>`;
+      // v2.56 — the stretch section: the band runs edge to edge, its content
+      // keeps the site's column (.sec-inner), so a Canva/Figma band of color
+      // is a band here too without every text line running 1900px wide
+      const w = ['wide', 'full'].includes(d.width) ? ` sec-w-${d.width}` : '';
+      if (w && inner) inner = `<div class="sec-inner">${inner}</div>`;
+      return `<section class="bent-section tz-section${empty}${w}${extraClass}"${extraId}${style} dir="${direction}">${inner}</section>`;
     }
     case 'hero': {
       const d = block.data || {};
@@ -333,6 +336,8 @@ function renderBlock(block, direction = 'rtl') {
       const overlayVal = Math.min(Math.max(parseInt(d.overlay, 10) || 0, 0), 80);
       const overlayCls = overlayVal > 0 ? ' hero-overlaid' : '';
       const parallaxCls = (d.parallax === true || d.parallax === 'true') ? ' hero-parallax' : '';
+      // v2.56 — the hero as a band edge to edge (an imported opening screen)
+      const heroWCls = ['wide', 'full'].includes(d.width) ? ` hero-w-${d.width}` : '';
       // assemble ONE style attribute from parts — no more string-splicing that
       // injected background-image:url('') when overlay was set but image wasn't
       const heroStyle = [];
@@ -345,7 +350,7 @@ function renderBlock(block, direction = 'rtl') {
       const userDecls = styleDecls(d);
       if (userDecls) heroStyle.push(userDecls);
       const heroStyleAttr = heroStyle.length ? ` style="${heroStyle.join(';')}"` : '';
-      let html = `<section class="hero${hClass}${overlayCls}${parallaxCls}${extraClass}"${extraId}${heroStyleAttr} dir="${direction}">`;
+      let html = `<section class="hero${hClass}${overlayCls}${parallaxCls}${heroWCls}${extraClass}"${extraId}${heroStyleAttr} dir="${direction}">`;
       // v2.38: a hero that carries its authored children renders ALL of them,
       // in order — the same page the proposal preview showed. The first
       // heading defaults to <h1> and the first text wears .subtitle, so the
@@ -490,7 +495,7 @@ function renderBlock(block, direction = 'rtl') {
         .map((it) => {
           const img = `<img src="${escapeHtml(it.src || '')}" alt="${escapeHtml(it.alt || '')}" loading="lazy">`;
           return it.url
-            ? `<a class="logo-cell" href="${escapeHtml(it.url)}">${img}</a>`
+            ? `<a class="logo-cell" href="${escapeHtml(safeHref(it.url))}">${img}</a>`
             : `<div class="logo-cell">${img}</div>`;
         })
         .join('');
@@ -779,6 +784,8 @@ function renderBlock(block, direction = 'rtl') {
       const tint = ['dark', 'light', 'brand'].includes(d.tint) ? d.tint : '';
       const tintCls = tint ? ` parallax-tint-${tint}` : '';
       const fadeCls = (d.fade === true || d.fade === 'true') ? ' parallax-fade' : '';
+      // v2.56 — edge to edge; the content keeps the column and its own alignment
+      const widthCls = ['wide', 'full'].includes(d.width) ? ` px-w-${d.width}` : '';
       const pxStyle = [];
       if (overlayVal > 0) pxStyle.push(`--px-overlay:${(overlayVal / 100).toFixed(2)}`);
       if (d.image) pxStyle.push(`background-image:url('${cssUrl(d.image)}')`);
@@ -787,7 +794,7 @@ function renderBlock(block, direction = 'rtl') {
       const pxStyleAttr = pxStyle.length ? ` style="${pxStyle.join(';')}"` : '';
       const inner = (d.blocks || []).map((b) => renderBlock(b, direction)).join('');
       return (
-        `<section class="parallax-section parallax-${height}${overlaidCls}${tintCls}${fadeCls}${extraClass}"${extraId}` +
+        `<section class="parallax-section parallax-${height}${overlaidCls}${tintCls}${fadeCls}${widthCls}${extraClass}"${extraId}` +
         `${pxStyleAttr} dir="${direction}">` +
         `<div class="parallax-inner">${inner}</div></section>`
       );
@@ -829,7 +836,8 @@ function renderMenuItems(items, currentUrl, depth = 0) {
     const kids = depth < 2 && item.children && item.children.length
       ? `<ul class="sub-menu">${renderMenuItems(item.children, currentUrl, depth + 1)}</ul>`
       : '';
-    const url = String(item.url || '');
+    // a menu can come from an imported design, not only the owner's hand
+    const url = item.url ? safeHref(item.url) : '';
     const current = isCurrentUrl(url, currentUrl);
     // the rendered children are the cheapest exact answer to "is the current
     // page below me?" — a label can never fake the marker (it is escaped)
@@ -1226,10 +1234,15 @@ function renderPage(page, options = {}) {
   // CMS-managed static chrome (S3): header tagline/CTA + footer columns/social/credit
   const chrome = renderSiteChrome(config, direction);
 
-  // Logo rendering (config.header.showLogo === false hides it entirely)
+  // Logo rendering (config.header.showLogo === false hides it entirely).
+  // options.previewBrand (v2.56) — an imported design's brand name, shown
+  // in Geppetto's preview instead of the site's own logo/title. Its own
+  // option: other previews pass `siteTitle`, which the header never read.
   let logoHtml = '';
   if (config.header && config.header.showLogo === false) {
     logoHtml = '';
+  } else if (options.previewBrand) {
+    logoHtml = escapeHtml(String(options.previewBrand));
   } else if (config.logo && config.logo.type === 'image' && config.logo.image) {
     const w = config.logo.width || 160;
     const h = config.logo.height || 50;
@@ -1243,7 +1256,7 @@ function renderPage(page, options = {}) {
   const currentUrl = options.isHome === true ? '/' : ('/' + String(page.full_path || '') + '.html');
   const menuHtml = renderMainMenu(mainMenu, currentUrl, menuKnobs(overrides), lang);
   const footerMenuHtml = flattenMenu(footerMenu).map(item =>
-    `<a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>`
+    `<a href="${escapeHtml(safeHref(item.url))}">${escapeHtml(item.label)}</a>`
   ).join(' &nbsp;|&nbsp; ');
 
   let layout = loadLayout(theme.dir);

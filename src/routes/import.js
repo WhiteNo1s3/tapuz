@@ -63,6 +63,15 @@ router.get('/admin/import', (req, res) => {
         לכל מערכת קטע נפרד; אין צורך לנחש איזה קובץ העליתם.
       </p>
       <section class="card lead-card">
+        <div class="card-head"><span class="ico">✨</span>קנבה · Figma — ג׳פטו<span class="pill ok" style="margin-inline-start:auto">חדש</span></div>
+        <p class="muted" style="margin:0 0 12px;font-size:.9rem">
+          אתר שבניתם ב<b>קנבה</b> או ב<b>Figma Sites</b> (או קובץ עיצוב של Figma) — מדביקים קישור, וג׳פטו קורא את כל הדפים
+          ובונה מהם אתר תפוזיאל חי: מודולים אמיתיים, תפריט, ערכת נושא, תמונות אצלכם. תצוגה מקדימה לפני הכול, וביטול בלחיצה.
+        </p>
+        <a class="btn" href="/admin/geppetto">פתח את ג׳פטו</a>
+      </section>
+
+      <section class="card lead-card">
         <div class="card-head"><span class="ico">🔌</span>וורדפרס / Elementor<span class="pill ok" style="margin-inline-start:auto">פעיל</span></div>
         <p class="muted" style="margin:0 0 12px;font-size:.9rem">קובץ ייצוא <b>WXR</b> (ב‑WordPress: כלים ← ייצוא ← כל התוכן).</p>
         <div class="row" style="flex-wrap:nowrap;gap:12px">

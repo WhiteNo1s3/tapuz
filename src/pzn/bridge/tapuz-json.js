@@ -210,7 +210,7 @@ function blockToModuleInner(block) {
       }));
 
     case 'section':
-      return createModule('section', baseOpts(block, pickProps(data, ['size']), {
+      return createModule('section', baseOpts(block, pickProps(data, ['size', 'width']), {
         children: (data.blocks || []).map(blockToModule).filter(Boolean)
       }));
 
@@ -566,12 +566,14 @@ function blockToModuleInner(block) {
       }));
 
     case 'parallax':
-      return createModule('parallax', baseOpts(block, pickProps(data, ['image', 'overlay', 'height']), {
+      // tint/fade were registry params the bridge never carried — every save
+      // through the file dropped them (v2.56, found wiring width)
+      return createModule('parallax', baseOpts(block, pickProps(data, ['image', 'overlay', 'height', 'tint', 'fade', 'width']), {
         children: (data.blocks || []).map(blockToModule).filter(Boolean)
       }));
 
     case 'hero': {
-      const props = pickProps(data, ['image', 'height', 'overlay', 'parallax']);
+      const props = pickProps(data, ['image', 'height', 'overlay', 'parallax', 'width']);
       // v2.38: the authored children, with the builder form's edits applied
       // (src/pzn/hero-children.js); a hero without them keeps the old trio
       const authored = heroChildren(data);
@@ -1172,13 +1174,13 @@ function moduleToBlockInner(node) {
     }
 
     case 'parallax': {
-      const data = pickData(props, ['image', 'overlay', 'height']);
+      const data = pickData(props, ['image', 'overlay', 'height', 'tint', 'fade', 'width']);
       data.blocks = (node.children || []).map(moduleToBlock).filter(Boolean);
       return finishBlock(node, 'parallax', data);
     }
 
     case 'hero': {
-      const data = pickData(props, ['image', 'height', 'overlay', 'parallax']);
+      const data = pickData(props, ['image', 'height', 'overlay', 'parallax', 'width']);
       for (const child of node.children || []) {
         if (child.name === 'heading' && data.title === undefined) {
           data.title = child.text || '';
@@ -1216,7 +1218,7 @@ function moduleToBlockInner(node) {
       // first-class section (v0.75 container-as-tool): size + children.
       // Generic sections authored in .pzn land here too — they ARE sections
       // now (pre-v0.75 they degraded to a card).
-      const data = pickData(props, ['size']);
+      const data = pickData(props, ['size', 'width']);
       data.blocks = (node.children || []).map(moduleToBlock).filter(Boolean);
       return finishBlock(node, 'section', data);
     }
