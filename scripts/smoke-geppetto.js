@@ -697,6 +697,19 @@ function find(blocks, pred) {
   check('an undo while a landing runs never pushes the oldest record out, even when that landing then fails', after2.some((r) => r.id === oldest2) && after2.filter((r) => !r.landing).length === 30, [after2.length, after2[0] && after2[0].id]);
   ownerAgain();
 
+  // thirty landings tried and undone never push out a live import: it stays undoable
+  const imY = await landMini('yankee', '#446622');
+  const tried = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+  tried.imports = tried.imports.filter((r) => r.id === imY.importId);
+  for (let i = 0; i < 30; i++) tried.imports.push({ id: 'gp_tried' + i, at: '2026-09-01T00:00:00.000Z', source: 'canva', mode: 'live', pagesCreated: [], pageMarks: {}, undone: true });
+  fs.writeFileSync(ledgerPath, JSON.stringify(tried));
+  const imZ = await landMini('zulu', '#224422');
+  const kept2 = JSON.parse(fs.readFileSync(ledgerPath, 'utf8')).imports;
+  let uY = null;
+  try { gp.undo(imZ.importId, { rebuild: false }); uY = gp.undo(imY.importId, { rebuild: false }); } catch (e) { uY = { error: e.code }; }
+  check('a live import outlives thirty landings tried and undone — the ledger drops undone ones first', kept2.some((r) => r.id === imY.importId) && !!uY && !uY.error && uY.pagesRemoved.length === imY.pages.length, [kept2.length, uY]);
+  ownerAgain();
+
   // a design far past any real site is refused; a throw in the life pass is a refusal too
   z = 0;
   const huge = [];

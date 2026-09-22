@@ -55,10 +55,11 @@ function saveRecords(d, { trim = true } = {}) {
   const p = recordsPath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
   if (trim) {
-    // the newest 30 finished landings are kept; a landing in flight (or cut
-    // off) is never counted, so it can never push an older record out
+    // past 30 finished landings the oldest UNDONE ones go; a live import
+    // always stays undoable, and a landing in flight (or cut off) is never
+    // counted, so it can never push an older record out
     let drop = d.imports.filter((r) => !r.landing).length - 30;
-    if (drop > 0) d.imports = d.imports.filter((r) => r.landing || drop-- <= 0);
+    if (drop > 0) d.imports = d.imports.filter((r) => r.landing || !r.undone || drop-- <= 0);
   }
   fs.writeFileSync(p, JSON.stringify(d, null, 2), 'utf8');
 }
