@@ -182,8 +182,6 @@ function previewHtml(plan, key) {
   const finished = life.finish(plan.living);
   const done = finished.pages.find((p) => p.key === page.key) || finished.pages[0];
   const { renderPage } = require('../renderer');
-  const { loadConfig } = require('../config');
-  const config = loadConfig();
   const pageLike = {
     title: done.title || done.slug,
     full_path: done.slug,
@@ -196,7 +194,7 @@ function previewHtml(plan, key) {
   return renderPage(pageLike, {
     overrides: plan.theme.overrides,
     menus: { main },
-    siteTitle: (plan.brand && plan.brand.text) || config.title,
+    previewBrand: (plan.brand && plan.brand.text) || '', // none → the site's own logo, as it will stay
     isHome: !!done.home
   });
 }

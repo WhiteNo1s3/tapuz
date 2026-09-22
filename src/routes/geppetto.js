@@ -32,8 +32,9 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':
 
 function fail(res, e, status) {
   const code = (e && e.code) || 'E_GEPPETTO';
-  const known = /^E_(NEED_|NOT_DESIGN|FIGMA_MAKE|EMPTY|JSON|UNKNOWN|AUTH|NOT_FOUND|HTTP|TOO_BIG|REDIRECTS|PUPPET|EMPTY_DESIGN)|^NO_PLAN$|^NOT_FOUND$|^ALREADY$/.test(code);
-  res.status(status || (known ? 400 : 500)).json({ ok: false, code, error: (e && e.message) || 'שגיאה' });
+  const known = /^E_(NEED_|NOT_DESIGN|FIGMA_MAKE|EMPTY|JSON|UNKNOWN|AUTH|NOT_FOUND|HTTP|TOO_BIG|REDIRECTS|PUPPET|EMPTY_DESIGN|DECODE)|^NO_PLAN$|^NOT_FOUND$|^ALREADY$/.test(code);
+  // another landing holds the site: a conflict to wait out, not a bad request
+  res.status(status || (code === 'BUSY' ? 409 : known ? 400 : 500)).json({ ok: false, code, error: (e && e.message) || 'שגיאה' });
 }
 
 router.post('/admin/api/geppetto/read', requireAdmin, async (req, res) => {

@@ -184,6 +184,7 @@ function extractBootstrap(html) {
 // ── 3. a tolerant HTML DOM ────────────────────────────────────────────────
 
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+const MAX_DEPTH = 400; // a real page nests a few dozen deep
 const RAW = new Set(['script', 'style', 'textarea']);
 
 function parseAttrs(s) {
@@ -200,6 +201,12 @@ function parseHtml(html) {
   const root = { tag: '#root', attrs: {}, children: [], parent: null };
   let cur = root;
   let i = 0;
+  // how many of each tag are open on the current path: a close tag nothing
+  // opened is ignored at once instead of walking to the root (a page of
+  // stray close tags under deep nesting was quadratic), and nesting stops
+  // deepening past MAX_DEPTH (every walk of the tree recurses)
+  const open = new Map();
+  let depth = 0;
   const pushText = (t) => { if (t) cur.children.push({ tag: '#text', text: t, parent: cur }); };
   while (i < src.length) {
     const lt = src.indexOf('<', i);
@@ -210,9 +217,15 @@ function parseHtml(html) {
     if (src[lt + 1] === '/') {
       const e = src.indexOf('>', lt);
       const name = src.slice(lt + 2, e < 0 ? src.length : e).trim().toLowerCase();
-      let n = cur;
-      while (n && n.tag !== name) n = n.parent;
-      if (n && n.parent) cur = n.parent; // an unmatched close tag is ignored
+      if (open.get(name)) {
+        for (;;) {
+          const t = cur.tag;
+          open.set(t, open.get(t) - 1);
+          depth--;
+          cur = cur.parent;
+          if (t === name) break;
+        }
+      } // an unmatched close tag is ignored
       i = e < 0 ? src.length : e + 1;
       continue;
     }
@@ -242,7 +255,11 @@ function parseHtml(html) {
       i = cm ? cm.index + cm[0].length : src.length;
       continue;
     }
-    if (!VOID.has(tag) && !selfClosed) cur = el;
+    if (!VOID.has(tag) && !selfClosed && depth < MAX_DEPTH) {
+      cur = el;
+      open.set(tag, (open.get(tag) || 0) + 1);
+      depth++;
+    }
   }
   return root;
 }

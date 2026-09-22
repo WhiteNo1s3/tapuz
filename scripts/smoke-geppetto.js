@@ -26,7 +26,14 @@
  *   7. the stretch band: SECTION/BACKDROP/HERO width in both dialects, the
  *      bridge and the renderer
  *   8. untrusted design text stays text: no script, no javascript: link, no
- *      CSS smuggled through a gradient
+ *      CSS smuggled through a gradient, no mark (any case) on the landed page
+ *   9. undo takes back the import and nothing else: an older import undone
+ *      under a newer one leaves the newer one's chrome (and the newer one's
+ *      undo then brings back the owner's, knobs included), an edited page is
+ *      kept, a tuned look is filed before the old look returns, one landing
+ *      at a time, a landing that fails half-way takes itself back, a crowded
+ *      design breathes fast, other previews keep the site's logo
+ *  10. a design the decoders do not understand is a refusal, never a 500
  */
 
 const fs = require('fs');
@@ -405,6 +412,139 @@ function find(blocks, pred) {
   check('a smuggled scheme (control char, CR inside) dies in the plan', !/script:alert/.test(JSON.stringify(sp)), JSON.stringify(sp).match(/.{40}script:alert.{10}/g));
   check('…and on the previewed page, menu included', runs(shtml).length === 0, runs(shtml));
   check('…and in the BenTML source that lands', !/script:alert/.test(JSON.stringify(sp.pages.map((pg) => pg.source || pg.bentml || ''))));
+
+  // ── 9. undo takes back the import — never what came after it ──
+  const themeLib = require('../src/theme-library');
+  const { saveConfig } = require('../src/config');
+  const { renderPage } = require('../src/renderer');
+  const ZWNJ = String.fromCharCode(0x200c);
+  const mini = (name, color) => {
+    z = 0;
+    const Name = name[0].toUpperCase() + name.slice(1);
+    return P.makePuppet({ source: 'canva', format: 'canva-app', origin: 'https://' + name + '.my.canva.site/',
+      site: { title: Name, lang: 'en', dir: 'ltr' },
+      pages: [{ key: 'h', path: '/', title: Name, name: '', width: 1366, sections: [
+        { key: 'top', height: 140, fill: { color }, nodes: [
+          text('b', 60, 40, 260, 40, Name, { size: 30, color: '#ffffff', bold: true }),
+          text('n1', 900, 45, 90, 30, 'About', { size: 18, color: '#ffffff', link: { anchor: 'a' } }),
+          text('n2', 1010, 45, 100, 30, 'Work', { size: 18, color: '#ffffff', link: { anchor: 'w' } }),
+          text('n3', 1130, 45, 100, 30, 'Contact', { size: 18, color: '#ffffff', link: { anchor: 'c' } })
+        ] },
+        { key: 's1', anchor: 'a', height: 500, fill: { color: '#ffffff' }, nodes: [
+          text('h1', 383, 100, 600, 70, 'About ' + Name, { size: 56, color, align: 'center' }),
+          text('p1', 383, 200, 600, 60, 'Write @b{bold}, @link(url: "https://example.org"){a link}, @BREAK and mail hello@code.org', { size: 18 })
+        ] },
+        { key: 's2', anchor: 'w', height: 400, fill: { color: '#f4f4f4' }, nodes: [text('h2', 383, 100, 600, 70, 'Work of ' + Name, { size: 56, color, align: 'center' })] },
+        { key: 's3', anchor: 'c', height: 400, fill: { color: '#ffffff' }, nodes: [text('h3', 383, 100, 600, 70, 'Contact ' + Name, { size: 56, color, align: 'center' })] }
+      ] }] });
+  };
+  const landMini = async (name, color, choices) => gp.landPlan(gp.planFromPuppet(mini(name, color), {}).id, Object.assign({ mode: 'live' }, choices), { transport, rebuild: false });
+  const homeOf = (r) => r.pages.find((pg) => pg.home).fullPath;
+
+  // other previews pass siteTitle — the header never read it, and must not start to
+  const cfgL = loadConfig(); cfgL.logo = { type: 'image', image: '/assets/owner-logo.png' }; saveConfig(cfgL);
+  const bare = { title: 'x', full_path: 'x', direction: 'ltr', blocks: [], status: 'published' };
+  check('a preview passing siteTitle keeps the site’s image logo', renderPage(bare, { siteTitle: 'My Site' }).includes('/assets/owner-logo.png'));
+  check('Geppetto’s previewBrand shows the design’s brand instead', !renderPage(bare, { previewBrand: 'Alpha' }).includes('/assets/owner-logo.png'));
+  const cfgN = loadConfig(); delete cfgN.logo; saveConfig(cfgN);
+
+  // the owner's site: a crown, a name, a menu, a look with its own menu knobs
+  const ownerHome = 'olive-studio';
+  const cfg0 = loadConfig(); cfg0.homepage = ownerHome; cfg0.title = 'My Site'; saveConfig(cfg0);
+  menus.saveMenus({ main: [{ label: 'דף הבית', url: '/', type: 'custom' }] });
+  theme.saveOverrides(theme.mergeDeep(theme.loadOverrides(), theme.knobsToOverrides({ placement: 'side', fold: 5, align: 'center' }).overrides));
+  const ownerLook = JSON.stringify(theme.loadOverrides());
+  const ownerMenu = JSON.stringify(menus.loadMenus().main.map((m) => [m.label, m.url]));
+  const chromeNow = () => JSON.stringify([loadConfig().homepage, loadConfig().title, theme.loadOverrides(), menus.loadMenus().main.map((m) => [m.label, m.url])]);
+
+  const imA = await landMini('alpha', '#aa3355');
+  const aHtml = pagesLib.getPageByFullPath(homeOf(imA)).blocks.map((b) => renderBlock(b, 'ltr')).join('');
+  check('design text that looks like BenTML stays text on the LANDED page, in any case',
+    aHtml.includes('@' + ZWNJ + 'b{bold}') && aHtml.includes('@' + ZWNJ + 'link(') && aHtml.includes('@' + ZWNJ + 'BREAK') &&
+    !aHtml.includes('<strong>bold') && !aHtml.includes('href="https://example.org"'), aHtml.match(/Write[^<]*/));
+  check('…and an address like hello@code.org is left exactly as written', aHtml.includes('hello@code.org'));
+
+  const imB = await landMini('bravo', '#3355aa');
+  const afterB = chromeNow();
+  const uA = gp.undo(imA.importId, { rebuild: false });
+  check('undoing an OLDER import leaves the newer one’s crown, name, look and menu',
+    chromeNow() === afterB && uA.pagesRemoved.length === imA.pages.length && ['theme', 'menu', 'homepage'].every((k) => uA.left.includes(k)), uA);
+  const uB = gp.undo(imB.importId, { rebuild: false });
+  check('…and undoing the newer one brings back the owner’s — not a ghost of the older import',
+    loadConfig().homepage === ownerHome && loadConfig().title === 'My Site' && JSON.stringify(menus.loadMenus().main.map((m) => [m.label, m.url])) === ownerMenu, [loadConfig().homepage, loadConfig().title, uB]);
+  check('the owner’s look is back exactly, menu knobs included', JSON.stringify(theme.loadOverrides()) === ownerLook, theme.menuKnobs(theme.loadOverrides()));
+
+  const imC = await landMini('charlie', '#118844');
+  const cHome = homeOf(imC);
+  const cRow = pagesLib.getPageByFullPath(cHome);
+  pagesLib.updatePage(cHome, { blocks: cRow.draft_blocks.concat([{ type: 'text', id: 'text_owner', data: { content: 'the owner wrote this' } }]) }); // a draft save, not even published
+  const uC = gp.undo(imC.importId, { rebuild: false });
+  check('an imported page the owner edited since is kept by undo — with the pictures it shows', uC.pagesKept.includes(cHome) && !!pagesLib.getPageByFullPath(cHome) && uC.mediaKept === true && uC.pagesRemoved.length === imC.pages.length - 1, uC);
+  check('…the crown stays on it (it is not going away), the rest is the owner’s again', loadConfig().homepage === cHome && loadConfig().title === 'My Site' && JSON.stringify(theme.loadOverrides()) === ownerLook, [loadConfig().homepage, loadConfig().title]);
+  pagesLib.deletePage(cHome);
+  const cfg1 = loadConfig(); cfg1.homepage = ownerHome; cfg1.title = ''; saveConfig(cfg1);
+
+  const imD = await landMini('delta', '#884411');
+  const tuned = theme.loadOverrides();
+  tuned.colors = Object.assign({}, tuned.colors, { primary: '#00aa88' });
+  theme.saveOverrides(tuned);
+  const uD = gp.undo(imD.importId, { rebuild: false });
+  const filed = themeLib.listThemes().map((t) => themeLib.getTheme(t.id)).find((e) => e && e.overrides && e.overrides.colors && e.overrides.colors.primary === '#00aa88');
+  check('a look tuned after the import is filed in the library before the old look returns', !!uD.themeSaved && !!filed && JSON.stringify(theme.loadOverrides()) === ownerLook, [uD.themeSaved, theme.loadOverrides().colors]);
+  check('a site that had no name before the import has none after undo', loadConfig().title === '', loadConfig().title);
+  if (filed) themeLib.removeTheme(filed.id);
+
+  const first = landMini('echo', '#445566');
+  let busy = '';
+  try { await landMini('foxtrot', '#665544'); } catch (e) { busy = e.code; }
+  const imE = await first;
+  check('one landing at a time: a second one is refused while the first runs', busy === 'BUSY', busy);
+  gp.undo(imE.importId, { rebuild: false });
+
+  const ledger = gp.listImports().length;
+  const realSave = pagesLib.savePageSource;
+  pagesLib.savePageSource = () => { throw new Error('the disk is full'); };
+  let broke = '';
+  try { await landMini('golf', '#556677'); } catch (e) { broke = e.message; }
+  pagesLib.savePageSource = realSave;
+  const golfLeft = pagesLib.listPages().filter((pg) => /^golf/.test(pg.full_path)).map((pg) => pg.full_path);
+  const golfMedia = fs.existsSync(path.join(require('../src/paths').ASSETS_DIR, 'geppetto')) ? fs.readdirSync(path.join(require('../src/paths').ASSETS_DIR, 'geppetto')).filter((f) => /^golf/.test(f)) : [];
+  check('a landing that fails half-way takes itself back: no reserved page, no files, no record', broke === 'the disk is full' && !golfLeft.length && !golfMedia.length && gp.listImports().length === ledger, [broke, golfLeft, golfMedia]);
+  check('…and the site is as it was', loadConfig().homepage === ownerHome && JSON.stringify(theme.loadOverrides()) === ownerLook && JSON.stringify(menus.loadMenus().main.map((m) => [m.label, m.url])) === ownerMenu);
+
+  // a crowded design must not stall the server: the life pass runs in the request
+  z = 0;
+  const crowd = [];
+  for (let i = 0; i < 6000; i++) crowd.push(text('c' + i, (i % 40) * 34, Math.floor(i / 40) * 30, 30, 24, 'Item number ' + i, { size: 20 }));
+  const crowded = P.makePuppet({ source: 'canva', format: 'canva-app', pages: [{ key: 'c', path: '/', title: 'Crowd', width: 1366, sections: [{ key: 's', height: 4600, fill: { color: '#ffffff' }, nodes: crowd }] }] });
+  const t0 = Date.now();
+  life.breathe(crowded);
+  check('6,000 boxes in one section breathe in well under two seconds', Date.now() - t0 < 2000, Date.now() - t0);
+
+  // ── 10. a design the decoders do not understand is a refusal, not a 500 ──
+  const { readDesign } = require('../src/geppetto/fetch');
+  const refusal = async (input) => {
+    try { await readDesign(input, { transport: async () => { throw new Error('no network in this smoke'); } }); return 'ok'; } catch (e) { return e.code || 'uncoded: ' + e.message; }
+  };
+  check('a Figma file with no frame → E_EMPTY_DESIGN', (await refusal({ json: { document: { children: [{ type: 'CANVAS', children: [] }] } } })) === 'E_EMPTY_DESIGN');
+  const FIX = path.join(__dirname, '..', 'test', 'fixtures', 'geppetto');
+  const hostile = JSON.parse(fs.readFileSync(path.join(FIX, 'figma-file.json'), 'utf8'));
+  (function walk(n) {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n.fills)) n.fills.forEach((f) => { if (f && typeof f === 'object') f.type = 7; });
+    for (const k of Object.keys(n)) walk(n[k]);
+  })(hostile);
+  const hostileRead = await refusal({ json: hostile });
+  check('a paint whose type is not a string does not crash the decoder', hostileRead === 'ok' || /^E_/.test(hostileRead), hostileRead);
+  const figmaMod = require('../src/geppetto/figma');
+  const realPlugin = figmaMod.fromPluginExport;
+  const realErr = console.error;
+  figmaMod.fromPluginExport = () => { throw new TypeError('boom'); };
+  console.error = () => {};
+  const dr = await refusal({ json: JSON.parse(fs.readFileSync(path.join(FIX, 'figma-plugin-export.json'), 'utf8')) });
+  console.error = realErr;
+  figmaMod.fromPluginExport = realPlugin;
+  check('a decoder that trips over a design is a refusal (E_DECODE) — the stack goes to the log only', dr === 'E_DECODE', dr);
 
   console.log(fail ? 'SMOKE GEPPETTO: FAIL' : 'SMOKE GEPPETTO: PASS');
   process.exit(fail ? 1 : 0);

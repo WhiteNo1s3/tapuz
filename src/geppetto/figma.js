@@ -181,7 +181,7 @@ function fillOf(n, ctx, box) {
   const out = { color: null, gradient: null, image: null, video: null };
   for (const p of paints) {
     if (p.type === 'SOLID') { if (!out.color) out.color = paintColor(p); continue; }
-    if (p.type.startsWith('GRADIENT')) { out.gradient = gradientCss(p, box ? box.w : 0, box ? box.h : 0); continue; }
+    if (typeof p.type === 'string' && p.type.startsWith('GRADIENT')) { out.gradient = gradientCss(p, box ? box.w : 0, box ? box.h : 0); continue; }
     if (p.type === 'IMAGE') {
       const src = ctx.assetUrl(p.imageRef);
       if (src) out.image = { src, fit: FIT[p.scaleMode] || 'cover', opacity: r2(num(p.opacity, 1)) };
@@ -1455,7 +1455,11 @@ function fromFile(fileJson, { images = {}, key = '', nodeId = null } = {}) {
     pageFrames = [widest];
     site.notes.push('no frame is at least 900 px wide — the widest one, "' + (widest.name || widest.id) + '" (' + Math.round(width(widest)) + ' px), was imported as the page');
   }
-  if (!pageFrames.length) throw new TypeError('fromFile: the file has no frame to import');
+  if (!pageFrames.length) {
+    const e = new Error('בקובץ הזה אין מסגרת (Frame) לייבא — עיצוב לאתר נבנה במסגרות');
+    e.code = 'E_EMPTY_DESIGN';
+    throw e;
+  }
   const usedPaths = new Set();
   const plan = pageFrames.map((f, i) => {
     const path = i === 0 ? '/' : uniqueIn(usedPaths, '/' + slug(f.name, 'page-' + (i + 1)));

@@ -1235,13 +1235,14 @@ function renderPage(page, options = {}) {
   const chrome = renderSiteChrome(config, direction);
 
   // Logo rendering (config.header.showLogo === false hides it entirely).
-  // options.siteTitle (v2.56) — a candidate site name for a preview (an
-  // imported design's brand), shown instead of the site's own logo/title.
+  // options.previewBrand (v2.56) — an imported design's brand name, shown
+  // in Geppetto's preview instead of the site's own logo/title. Its own
+  // option: other previews pass `siteTitle`, which the header never read.
   let logoHtml = '';
   if (config.header && config.header.showLogo === false) {
     logoHtml = '';
-  } else if (options.siteTitle) {
-    logoHtml = escapeHtml(String(options.siteTitle));
+  } else if (options.previewBrand) {
+    logoHtml = escapeHtml(String(options.previewBrand));
   } else if (config.logo && config.logo.type === 'image' && config.logo.image) {
     const w = config.logo.width || 160;
     const h = config.logo.height || 50;

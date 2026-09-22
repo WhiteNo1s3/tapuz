@@ -39,6 +39,21 @@ function refuse(message, code) {
   return e;
 }
 
+/**
+ * A decoder that trips over a design it does not understand (valid JSON of
+ * the wrong shape, a page Canva never published) is a refusal, not a server
+ * error: the owner reads why in Hebrew, the stack goes to the log only.
+ */
+function decoded(door, fn) {
+  try {
+    return fn();
+  } catch (e) {
+    if (e && e.code) throw e;
+    console.error('[geppetto] the ' + door + ' decoder could not read this design:', (e && e.stack) || e);
+    throw refuse('העיצוב נקרא, אבל המבנה שלו אינו כמו של אתר ' + (door === 'canva' ? 'Canva' : 'Figma') + ' שאנחנו מכירים — לא ניתן לייבא אותו', 'E_DECODE');
+  }
+}
+
 /** The real network: guarded, manual redirects, size-capped. */
 async function realTransport(rawUrl, { accept, headers, maxBytes } = {}) {
   const { assertPublicUrl } = require('../pzn/decompile');
@@ -142,7 +157,7 @@ async function swallowCanva(t, first, opts, notes) {
       } catch (e) { /* an unnamed font falls back to its category — never fatal */ }
     }
   }
-  const puppet = canva.decode(docs, { fontNames });
+  const puppet = decoded('canva', () => canva.decode(docs, { fontNames }));
   return { puppet, fetched: docs.map((d) => d.url) };
 }
 
@@ -175,7 +190,7 @@ async function swallowFigmaSites(t, first, hit, opts, notes) {
     }
   }
   if (hit.isFigmake) notes.push('זה אתר Figma Make — רכיבי הקוד שלו אינם עיצוב שאפשר לייבא; מה שנקרא הוא הטקסט והתמונות שמחוץ לקוד');
-  const puppet = figma.fromSites({ origin, index, pages, assetsVersion: hit.assetsVersion, videosVersion: hit.videosVersion });
+  const puppet = decoded('figma-sites', () => figma.fromSites({ origin, index, pages, assetsVersion: hit.assetsVersion, videosVersion: hit.videosVersion }));
   return { puppet, fetched: [first.url, origin + hit.indexPath, ...Object.keys(pages).map((p) => origin + p)] };
 }
 
@@ -196,7 +211,7 @@ async function swallowFigmaFile(t, ref, token, notes) {
   } catch (e) {
     notes.push('כתובות התמונות של הקובץ לא נקראו (' + e.message + ') — התמונות ידלגו');
   }
-  const puppet = figma.fromFile(file, { images, key: ref.key, nodeId: ref.nodeId || null });
+  const puppet = decoded('figma-file', () => figma.fromFile(file, { images, key: ref.key, nodeId: ref.nodeId || null }));
   return { puppet, fetched: ['https://api.figma.com/v1/files/' + ref.key] };
 }
 
@@ -220,15 +235,15 @@ async function readDesign(input = {}, opts = {}) {
     if (typeof json === 'string') {
       try { json = JSON.parse(json); } catch (e) { throw refuse('קובץ ה-JSON אינו תקין', 'E_JSON'); }
     }
-    if (figma.isPluginExport(json)) return { puppet: figma.fromPluginExport(json), fetched: [], notes, door: 'figma-plugin' };
+    if (figma.isPluginExport(json)) return { puppet: decoded('figma-plugin', () => figma.fromPluginExport(json)), fetched: [], notes, door: 'figma-plugin' };
     if (json && json.document && Array.isArray(json.document.children)) {
       notes.push('קובץ Figma שנשמר ידנית — בלי טוקן אין כתובות לתמונות, והן ידלגו');
-      return { puppet: figma.fromFile(json, { images: {}, key: '' }), fetched: [], notes, door: 'figma-file' };
+      return { puppet: decoded('figma-file', () => figma.fromFile(json, { images: {}, key: '' })), fetched: [], notes, door: 'figma-file' };
     }
     if (json && json.nodeById && Array.isArray(json.roots)) {
       const origin = originOf(url);
       if (!origin) notes.push('בלי כתובת האתר אין מאיפה להביא את התמונות — הן ידלגו');
-      return { puppet: figma.fromSites({ origin, index: json, pages: {}, assetsVersion: 'v11', videosVersion: 'v1' }), fetched: [], notes, door: 'figma-sites' };
+      return { puppet: decoded('figma-sites', () => figma.fromSites({ origin, index: json, pages: {}, assetsVersion: 'v11', videosVersion: 'v1' })), fetched: [], notes, door: 'figma-sites' };
     }
     throw refuse('ה-JSON הזה אינו ייצוא של Figma שאנחנו מכירים', 'E_UNKNOWN');
   }

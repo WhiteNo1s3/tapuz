@@ -83,7 +83,15 @@ The theme lands in the **theme library** (never straight on the site); landing l
 
 A landing runs as a **background job** the screen follows (a site with dozens of pictures and a few clips takes a while; a proxy would cut a request that long), one landing at a time — a second one waits for the first (`409 BUSY`).
 
-Every landing leaves a record (`config/geppetto/imports.json`). **Undo** removes the pages the import made (only pages still carrying its `meta.geppetto` stamp), deletes its media folder, puts back the look, the menu, the home page and the title it replaced, and rebuilds the site.
+Every landing leaves a record (`config/geppetto/imports.json`). The pages are reserved (empty drafts wearing the import's stamp) before the slow part begins, and a landing that fails half-way takes itself back — no orphan page, file, look or record.
+
+**Undo** takes back the import and nothing else:
+
+* its pages go — only pages still carrying its `meta.geppetto` stamp, and only while they are as the import left them: a page the owner edited since (even an unpublished draft save) is **kept**, and so is the media folder, because the kept page shows its pictures;
+* the look goes back to the one before the import — a look changed since is first filed in the theme library ("ג׳פטו — המראה לפני ביטול …"), so no tuning is ever lost; the menu's knobs come back with the look (the menu snapshot is taken before the look changes);
+* the menu goes back — the menu as it is goes to the menu backups first;
+* the crown moves only off a page that is going away; the name goes back only if it is still the design's (an empty name comes back empty);
+* **stacked imports:** undoing an older import under a newer one leaves the newer one's look, menu, crown and name on the site, and splices the older one out — the newer one's undo then brings back what the owner had before both, never a ghost of the older import.
 
 ## A new page-builder primitive: the stretch band
 

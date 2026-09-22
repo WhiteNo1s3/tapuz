@@ -163,12 +163,20 @@ function shownText(node) {
 
 /** Marks cannot nest and their body cannot hold a brace. */
 function markBody(s) {
-  return String(s || '').replace(/[{}]/g, '');
+  return guardMarks(String(s || '').replace(/[{}]/g, ''));
 }
 
-/** Literal text that happens to look like a BenTML mark must stay literal. */
+/**
+ * Literal text that happens to look like a BenTML mark must stay literal —
+ * on the live page too, not only in the preview. The renderer reads a mark in
+ * any case (`@link(url: "…"){…}` is a link, `@break` a line break), and the
+ * BenTML extractor strips zero-width spaces on every save, so the guard is a
+ * ZERO WIDTH NON-JOINER (U+200C: a real text character no door strips,
+ * invisible after '@') set exactly where a mark could start — an address
+ * like hello@code.org is left alone.
+ */
 function guardMarks(s) {
-  return String(s || '').replace(/@(?=(B|I|CODE|LINK|BREAK|IMG|LTR|RTL)\b)/g, '@\u200b');
+  return String(s || '').replace(/@(?=break\b|(?:b|i|code|link|img|ltr|rtl)\s*[({])/gi, '@\u200c');
 }
 
 // ── text: runs → BenTML inline marks ──────────────────────────────────────
@@ -402,28 +410,54 @@ function peelBackground(section, width) {
  * echoes, count them.
  */
 function dropEchoes(items, report) {
-  const texts = items.filter((n) => n.type === 'text');
+  // each box's words and style, read once; an echo shares the font and the
+  // first three letters (one text is the other's prefix, both ≥ 3 long), so
+  // only boxes in the same bucket can meet, and only within a y-window
+  const info = new Map();
+  const buckets = new Map();
+  for (const n of items) {
+    if (n.type !== 'text') continue;
+    const t = P.plainText(n).replace(/\s+/g, '').toLowerCase();
+    if (t.length < 3) continue;
+    const st = P.dominantStyle(n);
+    const key = st.font + '\u0000' + t.slice(0, 3);
+    let b = buckets.get(key);
+    if (!b) { b = { list: [], maxH: 0 }; buckets.set(key, b); }
+    const e = { n, t, size: st.size, font: st.font, bucket: b };
+    b.list.push(e);
+    b.maxH = Math.max(b.maxH, n.h || 0);
+    info.set(n, e);
+  }
+  for (const b of buckets.values()) b.list.sort((p, q) => p.n.y - q.n.y); // stable: ties keep the design's order
   const drop = new Set();
-  const norm = (n) => P.plainText(n).replace(/\s+/g, '').toLowerCase();
-  for (const a of texts) {
-    if (drop.has(a)) continue;
-    const ta = norm(a);
-    if (ta.length < 3) continue;
-    const sa = P.dominantStyle(a);
-    const echoes = texts.filter((b) => {
-      if (b === a || drop.has(b)) return false;
-      const tb = norm(b);
-      if (tb.length < 3 || !(ta.startsWith(tb) || tb.startsWith(ta))) return false;
-      const sb = P.dominantStyle(b);
-      if (!sa.size || Math.abs(sb.size - sa.size) > sa.size * 0.06 || sb.font !== sa.font) return false;
-      if (Math.abs(b.x - a.x) > Math.max(12, sa.size * 0.3)) return false; // the same column
-      return Math.abs(b.y - a.y) <= Math.max(a.h, b.h) * 3.2; // stepping close under (or over) it
-    });
+  // a crafted design must not stall the server (this runs in the request):
+  // past the budget the remaining echoes simply stay
+  let budget = 400000;
+  for (const n of items) {
+    const a = info.get(n);
+    if (!a || drop.has(n) || budget <= 0) continue;
+    const list = a.bucket.list;
+    if (list.length < 2 || !a.size) continue;
+    const reach = Math.max(a.n.h || 0, a.bucket.maxH) * 3.2;
+    let lo = 0;
+    let hi = list.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid].n.y < a.n.y - reach) lo = mid + 1; else hi = mid; }
+    const echoes = [];
+    for (let k = lo; k < list.length && list[k].n.y <= a.n.y + reach; k++) {
+      if (--budget <= 0) break;
+      const b = list[k];
+      if (b === a || drop.has(b.n)) continue;
+      if (!(a.t.startsWith(b.t) || b.t.startsWith(a.t))) continue;
+      if (Math.abs(b.size - a.size) > a.size * 0.06 || b.font !== a.font) continue;
+      if (Math.abs(b.n.x - a.n.x) > Math.max(12, a.size * 0.3)) continue; // the same column
+      if (Math.abs(b.n.y - a.n.y) <= Math.max(a.n.h, b.n.h) * 3.2) echoes.push(b.n); // stepping close under (or over) it
+    }
     if (!echoes.length) continue;
     // the original is the solid one, else the topmost
-    const family = [a, ...echoes].sort((p, q) => ((p.effect === 'hollow') - (q.effect === 'hollow')) || (p.y - q.y));
+    const family = [a.n, ...echoes].sort((p, q) => ((p.effect === 'hollow') - (q.effect === 'hollow')) || (p.y - q.y));
     family.slice(1).forEach((e) => { drop.add(e); report.dropped.push('echo'); });
   }
+  if (budget <= 0 && report.notes) report.notes.push('echoes: the design is too crowded to look for hollow copies everywhere');
   return drop.size ? items.filter((n) => !drop.has(n)) : items;
 }
 

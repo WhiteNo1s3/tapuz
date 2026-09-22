@@ -313,6 +313,13 @@ check('font-name: garbage, empty, null, a huge buffer → null and never throws'
 const truncated = woff2.subarray(0, 60);
 check('font-name: a truncated WOFF2 → null (no throw)', familyFromFontBytes(truncated) === null);
 
+// a page of stray close tags under deep nesting used to walk to the root
+// for every one of them — a stranger's page must not stall the server
+const deep = '<html><body>' + '<div>'.repeat(30000) + '</span>'.repeat(30000) + '</div>'.repeat(30000) + '</body></html>';
+const tDeep = Date.now();
+const deepRoot = canva._internals.parseHtml(deep);
+check('parseHtml: 30,000-deep nesting with 30,000 stray close tags parses in linear time, nesting capped', Date.now() - tDeep < 500 && !!deepRoot, (Date.now() - tDeep) + 'ms');
+
 check('smoke runs in < 2 s', Date.now() - t0 < 2000, (Date.now() - t0) + 'ms');
 
 try { fs.rmSync(process.env.TAPUZ_ROOT, { recursive: true, force: true }); } catch (e) { /* best effort */ }

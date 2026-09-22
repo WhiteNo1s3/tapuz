@@ -14,6 +14,18 @@
     });
   }
 
+  // what undo did — and what it kept on purpose
+  var PIECES = { theme: 'המראה', menu: 'התפריט', homepage: 'דף הבית', title: 'שם האתר' };
+  function undoSummary(d) {
+    var t = 'בוטל — ' + (d.pagesRemoved || []).length + ' דפים ו‑' + (d.media || 0) + ' קבצים הוסרו' +
+      (d.theme ? ', ערכת הנושא חזרה' : '') + (d.menu ? ', התפריט חזר' : '') + (d.homepage ? ', דף הבית חזר' : '') + '.';
+    if ((d.pagesKept || []).length) t += ' נשארו ' + d.pagesKept.length + ' דפים שנערכו אחרי הייבוא (' + d.pagesKept.map(esc).join(', ') + ')' + (d.mediaKept ? ' — וגם התמונות שלהם' : '') + '.';
+    if (d.themeSaved) t += ' המראה שהיה באתר לפני הביטול נשמר בספריית ערכות הנושא בשם „' + esc(d.themeSaved) + '”.';
+    if ((d.left || []).length) t += ' ייבוא מאוחר יותר עדיין קובע את ' + d.left.map(function (k) { return PIECES[k] || k; }).join(', ') + ' — הם יחזרו כשיבוטל גם הוא.';
+    if ((d.errors || []).length) t += ' שגיאות: ' + d.errors.map(esc).join('; ');
+    return t;
+  }
+
   function api(url, body) {
     var opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
     return fetch(url, opts).then(function (r) {
@@ -215,6 +227,7 @@
         lines.map(function (l) { return '<div class="gp-note">• ' + esc(l) + '</div>'; }).join('') +
         '<button type="button" class="btn secondary" style="margin-top:10px" data-undo="' + esc(d.importId) + '">↩ ביטול הייבוא הזה</button>';
       wireUndo(out);
+      lastUndo = ''; // a new landing: the last undo's summary is history now
       loadImports();
     }).catch(function () { busy(btn, false); out.innerHTML = '<span class="err-text">שגיאת רשת</span>'; });
   }
@@ -225,23 +238,26 @@
   function wireUndo(root) {
     root.querySelectorAll('[data-undo]').forEach(function (b) {
       b.addEventListener('click', function () {
-        if (!window.confirm('לבטל את הייבוא? הדפים והתמונות שנוצרו יימחקו, וערכת הנושא, התפריט ודף הבית יחזרו למה שהיו.')) return;
+        if (!window.confirm('לבטל את הייבוא? הדפים והתמונות שנוצרו יימחקו (דף שערכתם אחרי הייבוא נשאר), וערכת הנושא, התפריט ודף הבית יחזרו למה שהיו — מה ששיניתם בינתיים נשמר בגיבוי.')) return;
         busy(b, true, 'מבטל…');
         api('/admin/api/geppetto/undo', { importId: b.getAttribute('data-undo') }).then(function (d) {
           busy(b, false);
           if (!d.ok) { window.alert(d.error || 'הביטול נכשל'); return; }
-          b.outerHTML = '<span class="ok-text">בוטל — ' + (d.pagesRemoved || []).length + ' דפים ו‑' + (d.media || 0) + ' קבצים הוסרו' + (d.theme ? ', ערכת הנושא חזרה' : '') + (d.menu ? ', התפריט חזר' : '') + '.</span>';
+          // the history redraws itself: its summary lives above the list, not in the button's place
+          if (b.closest('#gp-imports')) lastUndo = undoSummary(d);
+          else b.outerHTML = '<span class="ok-text">' + undoSummary(d) + '</span>';
           loadImports();
         });
       });
     });
   }
 
+  var lastUndo = '';
   function loadImports() {
     api('/admin/api/geppetto/imports').then(function (d) {
       var box = $('gp-imports');
       if (!d.ok || !d.imports.length) { box.innerHTML = '<span class="faint">עוד לא יובא כלום.</span>'; return; }
-      box.innerHTML = d.imports.slice(0, 10).map(function (r) {
+      box.innerHTML = (lastUndo ? '<div class="ok-text" style="display:block;margin-bottom:10px">' + lastUndo + '</div>' : '') + d.imports.slice(0, 10).map(function (r) {
         var when = new Date(r.at).toLocaleString('he-IL');
         return '<div class="gp-page"><div><b>' + esc(r.title || r.origin || r.source) + '</b> <span class="faint">(' + esc(SOURCE_LABEL[r.format] || r.source) + ')</span>' +
           '<div class="faint" style="font-size:.8rem">' + esc(when) + ' · ' + r.pages.length + ' דפים · ' + (r.mode === 'live' ? 'חי' : 'טיוטות') + '</div></div>' +
