@@ -9,6 +9,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** One event → <article class="bent-event">. props: {time, title, text, image} */
 function renderEvent(props = {}) {
@@ -33,10 +34,9 @@ function renderTimeline(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole timeline from block.data (items array). */
-function renderTimelineFromData(data = {}, dir = '', extra = '') {
+function renderTimelineFromData(data = {}, dir = '', attrs = {}) {
   const items = (data.items || []).map((it) => renderEvent(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderTimeline(data, items, { dir: dirAttr, extra });
+  return renderTimeline(data, items, blockOpts(dir, attrs));
 }
 
 module.exports = { renderEvent, renderTimeline, renderTimelineFromData };

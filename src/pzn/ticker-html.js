@@ -19,6 +19,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 const { safeCssColor } = require('./nav-html');
 
 const SPEEDS = ['slow', 'md', 'fast'];
@@ -59,10 +60,9 @@ function renderTicker(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole ticker from block.data (items array). */
-function renderTickerFromData(data = {}, dir = '', extra = '', decls = '') {
+function renderTickerFromData(data = {}, dir = '', attrs = {}, decls = '') {
   const items = (data.items || []).map((it) => renderTickerItem(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderTicker(data, items, { dir: dirAttr, extra, decls });
+  return renderTicker(data, items, Object.assign(blockOpts(dir, attrs), { decls }));
 }
 
 module.exports = { renderTickerItem, renderTicker, renderTickerFromData, SPEEDS };

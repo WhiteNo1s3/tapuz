@@ -7,10 +7,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
-
-function dirAttr(dir) {
-  return dir ? ` dir="${escapeAttr(dir)}"` : '';
-}
+const { blockOpts } = require('./block-attrs');
 
 function renderCode(props = {}, opts = {}) {
   const lang = String(props.lang || '').replace(/[^\w+#.-]/g, '').slice(0, 24);
@@ -23,8 +20,8 @@ function renderCode(props = {}, opts = {}) {
     `${label}<pre${langAttr}><code>${source}</code></pre></figure>`;
 }
 
-function renderCodeFromData(data = {}, dir = '', extra = '') {
-  return renderCode(data, { dir: dirAttr(dir), extra });
+function renderCodeFromData(data = {}, dir = '', attrs = {}) {
+  return renderCode(data, blockOpts(dir, attrs));
 }
 
 function renderTag(props = {}) {
@@ -40,10 +37,10 @@ function renderTags(props = {}, itemsHtml = '', opts = {}) {
   return `<nav${opts.idAttr || ''} class="bent-tags${opts.cls || ''}" aria-label="${escapeAttr(props.label || 'תגיות')}"${opts.extra || ''}${opts.dir || ''}>${itemsHtml}</nav>`;
 }
 
-function renderTagsFromData(data = {}, dir = '', extra = '') {
+function renderTagsFromData(data = {}, dir = '', attrs = {}) {
   const items = data.items || [];
   const inner = items.map((it) => renderTag(it || {})).join('');
-  return renderTags(data, inner, { dir: dirAttr(dir), extra });
+  return renderTags(data, inner, blockOpts(dir, attrs));
 }
 
 module.exports = {

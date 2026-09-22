@@ -6,7 +6,8 @@
  * rows; a "closed" row is styled muted. Zero JS.
  */
 
-const { escapeHtml, escapeAttr } = require('./language/escape');
+const { escapeHtml } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 // no \b after Hebrew — JS word boundaries are ASCII-only, so `סגור\b` never
 // matches; a following space/punctuation/end is the boundary instead
@@ -30,10 +31,9 @@ function renderHours(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole hours block from block.data (items array). */
-function renderHoursFromData(data = {}, dir = '', extra = '') {
+function renderHoursFromData(data = {}, dir = '', attrs = {}) {
   const items = (data.items || []).map((it) => renderDay(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderHours(data, items, { dir: dirAttr, extra });
+  return renderHours(data, items, blockOpts(dir, attrs));
 }
 
 module.exports = { renderDay, renderHours, renderHoursFromData };

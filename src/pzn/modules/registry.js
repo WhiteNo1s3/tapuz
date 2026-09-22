@@ -2787,8 +2787,11 @@ register({
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
   defaults: {},
-  compile(node) {
-    return renderCode(node.props || {});
+  compile(node, ctx) {
+    // the one top-level module that never read attrsExtra — its id/class/
+    // animate were dropped on the pzn path (v2.54, found by smoke-extra-attrs)
+    const { id, cls } = attrsExtra(node);
+    return renderCode(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
   }
 });
 

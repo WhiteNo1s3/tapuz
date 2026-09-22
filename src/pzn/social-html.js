@@ -7,6 +7,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 function safeNetwork(name) {
   return String(name || 'link').toLowerCase().replace(/[^a-z0-9-]/g, '') || 'link';
@@ -26,11 +27,10 @@ function renderSocial(props = {}, itemsHtml = '', opts = {}) {
     `<ul class="bent-social-list">${itemsHtml}</ul></nav>`;
 }
 
-function renderSocialFromData(data = {}, dir = '', extra = '') {
+function renderSocialFromData(data = {}, dir = '', attrs = {}) {
   const items = data.items || [];
   const inner = items.map((it) => renderHandle(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderSocial(data, inner, { dir: dirAttr, extra });
+  return renderSocial(data, inner, blockOpts(dir, attrs));
 }
 
 module.exports = { safeNetwork, renderHandle, renderSocial, renderSocialFromData };
