@@ -20,6 +20,11 @@
  *   4. --git and the launcher, against a local origin: the build comes from
  *      origin/main — not the clone's branch or its hand-patched working tree,
  *      which stay untouched — and the launcher runs the NEWEST updater
+ *   5. (2026-09-22) the Firefox .xpi beside the folder is the site's own
+ *      Firefox download (Ben zipped the Chrome folder and Firefox refused
+ *      it), kept current without being rewritten; and the default home is
+ *      the platform's app-data folder, not ~/Tapuziel Bridge in the open —
+ *      the old folder's site carried over on the first run
  */
 
 const fs = require('fs');
@@ -117,6 +122,19 @@ try {
     check('install (an admin URL as --site): exit 0, "installed", the Load unpacked step and the folder named',
       r.status === 0 && /Tapuziel Bridge [\d.]+ installed/.test(r.stdout) && r.stdout.includes('Load unpacked → ' + ext));
     check('the folder holds exactly the ZIP the site serves for that host', sameEntries(folderEntries(ext), want));
+    const xpi = path.join(home, 'tapuziel-bridge-firefox.xpi');
+    const ffWant = routeZip(extensionBuild('bridge', 'firefox', SITE));
+    const xpiHas = () => (fs.existsSync(xpi) ? zipEntries(fs.readFileSync(xpi)) : []);
+    const xpiManifest = () => { const e = xpiHas().find((x) => x.rel === 'manifest.json'); return e ? JSON.parse(e.data) : null; };
+    check('beside it, the Firefox .xpi IS the site\'s Firefox download — same entries, same order, same bytes',
+      sameEntries(xpiHas(), ffWant));
+    check('…installable as it is: manifest at the root (no wrapping folder, no __MACOSX), the gecko id, background scripts, the site wired',
+      xpiHas().every((e) => !e.rel.includes('/')) && !!xpiManifest() &&
+      !!(xpiManifest().browser_specific_settings && xpiManifest().browser_specific_settings.gecko.id) &&
+      Array.isArray(xpiManifest().background.scripts) &&
+      xpiManifest().content_scripts[0].matches.join() === '*://' + SITE + '/*');
+    check('the install output says how Firefox takes it (Developer Edition / Nightly / ESR, the about:config switch, Install Add-on From File)',
+      /xpinstall\.signatures\.required = false/.test(r.stdout) && /Install Add-on From File/.test(r.stdout) && /Load Temporary Add-on/.test(r.stdout));
     const launcher = path.join(home, 'Update Bridge.command');
     const inGit = !!spawnSync('git', ['-C', root, 'rev-parse', '--git-common-dir'], { env }).stdout.toString().trim();
     if (inGit) {
@@ -128,11 +146,18 @@ try {
     }
 
     const mtime = fs.statSync(path.join(ext, 'manifest.json')).mtimeMs;
+    const xpiMtime = fs.statSync(xpi).mtimeMs;
     fs.writeFileSync(path.join(ext, '.DS_Store'), 'finder');
     const again = update(['--home', home]);
     check('run again with no --site: "up to date", nothing rewritten, the site read back from the folder (and a Finder .DS_Store is not a change)',
       again.status === 0 && /is up to date/.test(again.stdout) && again.stdout.includes('site:   ' + SITE) &&
       fs.statSync(path.join(ext, 'manifest.json')).mtimeMs === mtime && !fs.existsSync(path.join(home, '.extension-previous')));
+    check('…the .xpi is judged by its CONTENT (the zip stamps today\'s date) and left untouched', fs.statSync(xpi).mtimeMs === xpiMtime);
+    fs.rmSync(xpi);
+    const noXpi = update(['--home', home]);
+    check('a home from before the .xpi existed: the Chrome folder stays as it is, the .xpi is written, and the output says so',
+      noXpi.status === 0 && /Chrome folder was already current; the Firefox add-on is written/.test(noXpi.stdout) &&
+      sameEntries(xpiHas(), ffWant) && fs.statSync(path.join(ext, 'manifest.json')).mtimeMs === mtime);
 
     fs.writeFileSync(path.join(ext, 'background.js'), '// the old bridge\n');
     fs.writeFileSync(path.join(ext, 'stray.js'), '// a file an old version had\n');
@@ -146,6 +171,26 @@ try {
     const ff = update(['--home', path.join(tmp, 'ff'), '--site', SITE, '--browser', 'firefox']);
     check('--browser firefox writes the Firefox build', ff.status === 0 &&
       sameEntries(folderEntries(path.join(tmp, 'ff', 'extension')), byName(routeZip(extensionBuild('bridge', 'firefox', SITE)))));
+
+    // ── the default home is the platform's app-data folder; the old one's site carries over ──
+    if (process.platform !== 'win32') {
+      const fakeHome = path.join(tmp, 'a user');
+      fs.mkdirSync(path.join(fakeHome, 'Tapuziel Bridge', 'extension'), { recursive: true });
+      fs.writeFileSync(path.join(fakeHome, 'Tapuziel Bridge', 'extension', 'manifest.json'), extensionBuild('bridge', 'chrome', SITE).manifestText);
+      const envHome = { ...env, HOME: fakeHome };
+      delete envHome.XDG_DATA_HOME;
+      const dflt = spawnSync(process.execPath, [SCRIPT], { encoding: 'utf8', env: envHome });
+      const expected = process.platform === 'darwin'
+        ? path.join(fakeHome, 'Library', 'Application Support', 'Tapuziel', 'Bridge')
+        : path.join(fakeHome, '.local', 'share', 'tapuziel', 'bridge');
+      check('no --home: the Bridge goes to the platform\'s app-data folder (' + path.relative(fakeHome, expected) + '), not a folder in the open in the home folder',
+        dflt.status === 0 && fs.existsSync(path.join(expected, 'extension', 'manifest.json')) && fs.existsSync(path.join(expected, 'tapuziel-bridge-firefox.xpi')));
+      check('…the site comes over from the old ~/Tapuziel Bridge without retyping it, and the old folder is named as retired',
+        manifestIn(path.join(expected, 'extension')).content_scripts[0].matches.join() === '*://' + SITE + '/*' &&
+        /Tapuziel Bridge is retired/.test(dflt.stdout));
+      check('…and nothing is written into the old folder', fs.readdirSync(path.join(fakeHome, 'Tapuziel Bridge')).join() === 'extension' &&
+        fs.readdirSync(path.join(fakeHome, 'Tapuziel Bridge', 'extension')).join() === 'manifest.json');
+    }
   }
 
   // ── 3. refusals ──
@@ -182,7 +227,7 @@ try {
     const clone = path.join(tmp, 'clone');
     sh(tmp, ['init', '-q', '--bare', '-b', 'main', origin]);
     sh(tmp, ['init', '-q', '-b', 'main', seed]);
-    for (const p of ['src/extension-build.js', 'src/bridge-manifest.js', 'extension-v2a', 'scripts/update-bridge.js']) {
+    for (const p of ['src/extension-build.js', 'src/bridge-manifest.js', 'src/zip-store.js', 'extension-v2a', 'scripts/update-bridge.js']) {
       fs.cpSync(path.join(root, ...p.split('/')), path.join(seed, ...p.split('/')), { recursive: true });
     }
     sh(seed, ['add', '-A']);

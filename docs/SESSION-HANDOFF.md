@@ -50,7 +50,7 @@ The part that makes it different from a page builder: **the owner's own model do
 | Version rule | every shipped session is **+0.01** with a Version Log row; docs-only PRs bump nothing |
 | Premium tier (v2.51, v2.52) | provider `claude` / `openai` / `gemini` / `xai` / `openrouter` with the owner's key, **filed per supplier** (an agent never types, reads or handles a key — the owner sets it in her own shell or pastes it into the setup screen herself) — the CMS fetches it itself. Every chat response carries `spend` (tokens, cache split, money); the price table with its read-date is `src/ai-cost.js`; the Anthropic briefing prefix rides with `cache_control` (a tenth of the input price after the first hop). `docs/CLOUD-LLM.md`, orders in `eval/battery/RUN-CLOUD.md`. **No real key has been run yet** |
 | Local model | provider `local` (a loopback runtime) or `browser` — **Bridge V2 0.5.5**, the extension in `extension-v2a/` |
-| The Bridge, for a developer | `npm run bridge:update -- --site <host>` writes it into a folder **outside** any checkout, with an updater beside it (`scripts/update-bridge.js`) |
+| The Bridge, for a developer | `npm run bridge:update -- --site <host>` writes it into the platform's app-data folder (never a checkout, never the home folder's top level): the Chrome folder, a Firefox `.xpi`, and an updater (`scripts/update-bridge.js`) |
 | QA | a separate tester agent; its logs and letters are git-ignored (`ai-qa/`, `docs/TAPUZ-TESTER-BUGS.md`, `docs/BEYOND-ALPHA-GATES-DRAFT.md`) |
 
 ---
