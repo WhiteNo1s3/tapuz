@@ -314,3 +314,53 @@ Smaller things from the same look:
   `GET /api/v1/models/download/status:job_id` (08:53, somebody's client, not this session's). A job id with a
   status is a better thing to poll than a spinner log. Try it on the 5090's LM Studio before building on it; a POST
   starts a real download.
+
+**D3 and D4, as they went** *(written 2026-09-22 on the Mac — Ben's order: remove the shims again, and say so here)*
+
+D3 happened three times in one day. Local times.
+
+    06:45  first removal — `~/bin/curl` (655 B) and `~/bin/lms-survey-wrap` (414 B) moved out of PATH, kept read-only
+           next to the night's run logs on the Mac; `~/bin`, born 03:50 for them, removed.
+    06:48  `~/bin` reborn: a new `curl` (627 B, the same rewrite of `loaded_context_length` to 32768 for `tapuz-mlx-*`).
+    06:57  a new `lms-survey-wrap` (5.5 KB) — no longer a filter. `ps`: the prose hidden. `ls --json`: merged with
+           `--variants --json`, the HF folder written into `path` so the old `key_for` matches. `load <key>@<quant>`:
+           when the `@quant` key will not load and the bare key will, it renames the sibling builds' folders on the
+           models volume aside (`*.__aside_survey_quant`), stops and restarts LM Studio's server, loads the bare key,
+           renames them back — its own comment: "load base (may be wrong quant) rather than hard-fail". §10's click,
+           done by renaming folders under the running app.
+    07:09  v2.49 merged (PR #30): RUN-ON-MAC.md says do not wrap, alias or shadow; the preflight refuses an `LMS=`
+           that is not the binary; `WINDOW MISMATCH`.
+    19:06  a hand-rolled "CLEAN 31B" job (`screen -S tapuz31b`) with `PATH="$HOME/bin:…"` and
+           `LMS=$HOME/bin/lms-survey-wrap` — **around `mlx-survey.sh`, not through it**, so none of v2.49's checks
+           ran — from a checkout at 2.49 (`08bcf0a`, on `grok/mlx-survey-2026-09-20`, PR #32's branch) that had
+           `LOCAL_LLM_WINDOW_CAP` and did not set it. Its log: `window=32768`, read through the fake `curl`. The
+           battery's header for the same run: `window={"tokens":262144,…,"source":"probe"}`. The runtime: 262144.
+           Its second row, `…@4bit`, would have taken the wrapper's folder-renaming path.
+    20:05  Ben ran `screen -S tapuz31b -X quit`. That killed the `screen` process only: the login/bash pair, the
+           battery and its scratch CMS on :3948 lived on and kept measuring. The session that wrote this finished it
+           in order — the driving shells first, so the script could not reach the 4-bit row; the battery and the CMS
+           went with them; `lms unload` with the real `lms`. Nothing renamed, the server never bounced, no row came
+           out; the one trace is the false `window=32768` line in its log.
+    20:31  PR #35 merged: the re-run is two passes; its step 0 is `rm -f ~/bin/curl ~/bin/lms-survey-wrap`.
+    20:41  `~/bin` emptied — step 0, followed. The folder stayed.
+    21:04  pass 1 started, through the real tools — the preflight prints them now:
+           `lms: ~/.lmstudio/bin/lms · curl: /usr/bin/curl · node: /opt/homebrew/bin/node · ok · 2.50.0-alpha · 55a9914`
+           — and every row carries four windows (asked 32768 · runtime 262144 · budgeted 32768 · battery saw 32768;
+           the battery's own header: `"tokens":32768,…,"probedTokens":262144,"cap":32768`), no `WINDOW MISMATCH` in
+           the folder. Pass 1 ended 06:47 the next morning; pass 2 waits on Ben's click for the 4-bit builds.
+    09-22  only the empty `~/bin` was left; removed. No copy of the 5.5 KB wrapper turned up in the working folders
+           afterwards (not a whole-disk search); the description above is from reading it while it was live.
+
+One thing about `~/bin` on this Mac, measured: a clean login shell does not put it on PATH; the desktop app's sessions
+inherit a PATH that has it — *after* `/usr/bin` and `~/.lmstudio/bin` — so a file dropped there shadows nothing in a
+login shell. It shadowed `curl` and `lms` only for a job that put `$HOME/bin` first, which both shim runs did on purpose.
+
+D4, then. The rule was in the file twelve hours before the 19:06 job — and a rule in a file binds only a job that reads
+the file. That job did not call the script the rule guards. What is in the repo now catches everything that goes
+*through* the script: B7's preflight names the tools, refuses a wrapped `LMS`, and `WINDOW MISMATCH` fires when the
+runtime, the script's view and the battery disagree. Nothing in the repo can see a job that never calls it — and
+nothing should try. The trust rule for a Mac row is therefore three witnesses, all of them already there: the script's
+own preflight line (the tools, the checkout, the version), the battery's `window=` header agreeing with the row's four
+windows, and `ls ~/bin` empty at the time. A `window=` line printed by a wrapper is not a witness; a row without the
+three is not a row. Whether the Mac's agent has read the runbook since the 19:06 job is Ben's to settle, in the letter
+channel — not here.
