@@ -127,7 +127,9 @@ const KEYWORDS = {
     body: 'BLOCK-BODY',
     jsonType: 'section',
     params: {
-      size: { type: 'enum', values: ['sm', 'md', 'lg', 'xl'] }
+      size: { type: 'enum', values: ['sm', 'md', 'lg', 'xl'] },
+      // v2.56 — the stretch section (a full-width band, content in the column)
+      width: { type: 'enum', default: 'content', values: ['content', 'wide', 'full'] }
     }
   },
   HERO: {
@@ -137,7 +139,9 @@ const KEYWORDS = {
       image: { type: 'string' },
       height: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'full'] },
       overlay: { type: 'integer', default: 0 },
-      parallax: { type: 'boolean', default: false }
+      parallax: { type: 'boolean', default: false },
+      // v2.56 — a band edge to edge
+      width: { type: 'enum', default: 'content', values: ['content', 'wide', 'full'] }
     }
   },
   // Alias of MOTION(effect: marquee) — kept so older sources keep compiling.
@@ -246,7 +250,9 @@ const KEYWORDS = {
       overlay: { type: 'integer', default: 0 },
       height: { type: 'enum', default: 'md', values: ['sm', 'md', 'lg', 'full'] },
       tint: { type: 'enum', default: 'none', values: ['none', 'dark', 'light', 'brand'] },
-      fade: { type: 'boolean', default: false }
+      fade: { type: 'boolean', default: false },
+      // v2.56 — edge to edge, the content keeps the column
+      width: { type: 'enum', default: 'content', values: ['content', 'wide', 'full'] }
     }
   },
   HTML: { body: 'HTML', jsonType: 'html', params: {

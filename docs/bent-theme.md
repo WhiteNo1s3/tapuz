@@ -44,7 +44,7 @@
 | תגית | מאפיינים | הערות |
 |---|---|---|
 | `bent-colors` | `primary secondary text muted border bg light-bg surface` | hex. `text` על `bg` ועל `surface` — ניגודיות ≥ 4.5 |
-| `bent-fonts` | `family heading base-size google` | `google` = משפחות Google Fonts (עברית) מופרדות בפסיק; כל גופן שב-`family`/`heading` חייב להופיע בו |
+| `bent-fonts` | `family heading base-size google` | `google` = משפחות Google Fonts מופרדות בפסיק — מהמדף העברי, ולאתר לועזי גם מהמדף הלטיני (v2.56, `LATIN_FONTS` ב-`src/theme.js`; אות עברית בגופן לטיני נופלת לגופן המערכת); כל גופן שב-`family`/`heading` חייב להופיע בו |
 | `bent-style` | `radius=sharp\|soft\|round` `shadow=flat\|soft\|deep` `accent=solid\|gradient` `buttons=filled\|outline\|soft\|glow` | |
 | `bent-layout` | `max-width` `menu=top\|side` `header-width=content\|wide\|full` | `header-width`: כרוחב התוכן · 1140px (ברירת מחדל) · מקצה לקצה |
 | `bent-background` | `kind=solid\|gradient\|glow\|dots\|grid\|lines` `angle` | תבניות נצבעות מהפלטה |

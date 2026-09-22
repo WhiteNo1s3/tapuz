@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tapuziel — send to Geppetto</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 16px; font: 12px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--figma-color-text, #222); background: var(--figma-color-bg, #fff); }
+  h1 { font-size: 14px; margin: 0 0 4px; }
+  p { margin: 0 0 10px; color: var(--figma-color-text-secondary, #666); }
+  .row { display: flex; gap: 8px; margin: 0 0 10px; }
+  button { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--figma-color-border, #ccc); background: var(--figma-color-bg-secondary, #f4f4f4); color: inherit; font: inherit; cursor: pointer; }
+  button.primary { background: var(--figma-color-bg-brand, #0d99ff); border-color: transparent; color: var(--figma-color-text-onbrand, #fff); }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { min-height: 18px; margin: 0 0 8px; color: var(--figma-color-text, #222); }
+  #status.error { color: var(--figma-color-text-danger, #c00); }
+  ul { margin: 0 0 8px; padding-left: 16px; color: var(--figma-color-text-secondary, #666); }
+  textarea { width: 100%; height: 120px; box-sizing: border-box; font: 11px/1.4 ui-monospace, Menlo, monospace; border: 1px solid var(--figma-color-border, #ccc); border-radius: 6px; background: var(--figma-color-bg-secondary, #f4f4f4); color: inherit; resize: vertical; }
+  small { display: block; margin-top: 8px; color: var(--figma-color-text-tertiary, #888); }
+</style>
+</head>
+<body>
+  <h1>Send to Geppetto</h1>
+  <p>Exports this page (or the selected frames) as JSON for Tapuziel's Figma import. Pictures are embedded; the file stops growing at 11 MB.</p>
+  <div class="row">
+    <button id="page" class="primary">Export page</button>
+    <button id="selection">Export selection</button>
+  </div>
+  <div id="status">Ready.</div>
+  <div class="row">
+    <button id="download" disabled>Download JSON</button>
+    <button id="copy" disabled>Copy JSON</button>
+  </div>
+  <ul id="notes"></ul>
+  <textarea id="out" readonly spellcheck="false" placeholder="The export appears here."></textarea>
+  <small>Then in Tapuziel: Import → Figma → paste or upload this file. Nothing leaves your computer until you do.</small>
+  <script>
+    var text = '';
+    var fileName = 'figma.tapuz-figma.json';
+    function $(id) { return document.getElementById(id); }
+    function send(msg) { parent.postMessage({ pluginMessage: msg }, '*'); }
+    function setStatus(s, isError) { $('status').textContent = s; $('status').className = isError ? 'error' : ''; }
+    function busy(on) { $('page').disabled = on; $('selection').disabled = on; }
+    function mb(n) { return (n / 1048576).toFixed(2) + ' MB'; }
+
+    $('page').onclick = function () { busy(true); setStatus('Reading the page…'); send({ type: 'export', scope: 'page' }); };
+    $('selection').onclick = function () { busy(true); setStatus('Reading the selection…'); send({ type: 'export', scope: 'selection' }); };
+
+    $('download').onclick = function () {
+      var blob = new Blob([text], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      setStatus('Saved ' + fileName + '.');
+    };
+
+    $('copy').onclick = function () {
+      var out = $('out');
+      out.focus();
+      out.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      if (!ok && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { setStatus('Copied to the clipboard.'); }, function () { setStatus('Copy failed — use Download instead.', true); });
+        return;
+      }
+      setStatus(ok ? 'Copied to the clipboard.' : 'Copy failed — use Download instead.', !ok);
+    };
+
+    onmessage = function (event) {
+      var msg = event.data && event.data.pluginMessage;
+      if (!msg) return;
+      if (msg.type === 'ready') {
+        setStatus(msg.selection ? msg.selection + ' selected on "' + msg.page + '".' : 'Page "' + msg.page + '" — nothing selected, "Export page" takes every top-level frame.');
+      } else if (msg.type === 'progress') {
+        setStatus(msg.text);
+      } else if (msg.type === 'export') {
+        text = msg.text;
+        fileName = msg.fileName || fileName;
+        var s = msg.stats || {};
+        $('out').value = text.length > 200000 ? text.slice(0, 200000) + '\n… (' + mb(text.length) + ' in total — use Download)' : text;
+        $('download').disabled = false;
+        $('copy').disabled = text.length > 4000000;
+        var notes = $('notes');
+        notes.innerHTML = '';
+        (s.notes || []).forEach(function (n) { var li = document.createElement('li'); li.textContent = n; notes.appendChild(li); });
+        setStatus((s.frames || 0) + ' frame(s), ' + (s.images || 0) + ' picture(s), ' + mb(s.bytes || text.length) + '.');
+        busy(false);
+      } else if (msg.type === 'error') {
+        setStatus(msg.message || 'Export failed.', true);
+        busy(false);
+      }
+    };
+  </script>
+</body>
+</html>

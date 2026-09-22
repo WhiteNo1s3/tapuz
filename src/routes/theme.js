@@ -745,9 +745,9 @@ router.get('/admin/theme', (req, res) => {
         </section>
         <section class="card">
           <h3 class="sub-head">טיפוגרפיה ופריסה</h3>
-          <label class="field-label" for="th-font-google">גופני Google לטעינה (עברית) — מופרדים בפסיק</label>
+          <label class="field-label" for="th-font-google">גופני Google לטעינה (המדף העברי, ולאתר לועזי גם לטיניים) — מופרדים בפסיק</label>
           <input id="th-font-google" value="${escAttr(googleFonts)}" placeholder="Heebo, Suez One" dir="ltr" class="input mb" list="th-font-shelf">
-          <datalist id="th-font-shelf">${Object.keys(require('../theme').GOOGLE_FONTS).map((f) => `<option value="${escAttr(f)}">`).join('')}</datalist>
+          <datalist id="th-font-shelf">${Object.keys(require('../theme').GOOGLE_FONTS).map((f) => `<option value="${escAttr(f)}">`).join('')}${Object.keys(require('../theme').LATIN_FONTS).map((f) => `<option value="${escAttr(f)}" label="לטיני">`).join('')}</datalist>
           <label class="field-label" for="th-font">גופן</label>
           <input id="th-font" value="${escAttr(o.fonts.family)}" dir="ltr" class="input mb">
           <label class="field-label" for="th-font-heading">גופן כותרות</label>

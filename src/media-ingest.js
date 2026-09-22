@@ -33,7 +33,9 @@ function imageRefs(blocks) {
   const refs = [];
   const add = (obj, key) => {
     const v = obj && obj[key];
-    if (typeof v === 'string' && /^https?:\/\//i.test(v)) {
+    // v2.56: an inline data:image/… (a design plugin's export) is an image
+    // that has to become a file too — a 2 MB base64 string in a page is not
+    if (typeof v === 'string' && (/^https?:\/\//i.test(v) || /^data:image\/[a-z0-9.+-]+;base64,/i.test(v))) {
       refs.push({ url: v, set: (nv) => { obj[key] = nv; } });
     }
   };
@@ -43,7 +45,11 @@ function imageRefs(blocks) {
     if (d.image != null) add(d, 'image'); // hero / parallax / backdrop-style
     if (d.poster != null) add(d, 'poster'); // video poster (never the video itself)
     if (d.backdrop) add(d.backdrop, 'image');
-    for (const it of d.items || []) if (it && typeof it === 'object') add(it, 'image');
+    for (const it of d.items || []) {
+      if (!it || typeof it !== 'object') continue;
+      add(it, 'image');
+      if (b.type === 'logos') add(it, 'src'); // a logo strip's pictures (v2.56 — were left hotlinked)
+    }
     for (const im of d.images || []) if (im && typeof im === 'object') add(im, 'src');
   });
   return refs;
@@ -109,7 +115,8 @@ function nameFromUrl(rawUrl) {
  * with three dead images still imports; the report says what failed.
  *
  * @param {object[]} blocks
- * @param {{ folder?: string, limit?: number }} [opts]
+ * @param {{ folder?: string, limit?: number, fetchImage?: (url: string) => Promise<Buffer> }} [opts]
+ *   fetchImage replaces the guarded network (a smoke's fake transport)
  * @returns {Promise<{ found:number, saved:number, failed:{url:string,reason:string}[], skipped:number }>}
  */
 async function ingestBlockImages(blocks, opts = {}) {
@@ -117,6 +124,7 @@ async function ingestBlockImages(blocks, opts = {}) {
   const folder = opts.folder || 'imported';
   const limit = Number(opts.limit) > 0 ? Number(opts.limit) : DEFAULT_LIMIT;
 
+  const getImage = typeof opts.fetchImage === 'function' ? opts.fetchImage : fetchImage;
   const refs = imageRefs(blocks);
   const byUrl = new Map();
   for (const r of refs) {
@@ -137,9 +145,10 @@ async function ingestBlockImages(blocks, opts = {}) {
       if (idx >= work.length) return;
       const url = work[idx];
       try {
-        const master = await fetchImage(url);
+        const inline = /^data:image\/[a-z0-9.+-]+;base64,(.*)$/i.exec(url);
+        const master = inline ? Buffer.from(inline[1], 'base64') : await getImage(url);
         const { buf, ext } = await toWebp(master);
-        const stem = nameFromUrl(url);
+        const stem = inline ? 'design' : nameFromUrl(url);
         const rec = media.saveBuffer({
           filename: ext ? stem + ext : stem,
           buffer: buf,
@@ -157,4 +166,4 @@ async function ingestBlockImages(blocks, opts = {}) {
   return { found: urls.length, saved, failed, skipped: Math.max(0, urls.length - work.length) };
 }
 
-module.exports = { ingestBlockImages, imageRefs };
+module.exports = { ingestBlockImages, imageRefs, fetchImage, toWebp };

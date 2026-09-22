@@ -94,3 +94,6 @@ eval/battery/*
 !eval/battery/RUN-CLOUD.md
 !eval/battery/SCORECARD-*.md
 !eval/battery/BREAKAGE-*.md
+
+# Geppetto (v2.56): pending import plans + the import ledger — site data, never repo data
+config/geppetto/

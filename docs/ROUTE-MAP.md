@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**344 routes across 44 files.**
+**352 routes across 45 files.**
 
 ## By file (what each module owns)
 
@@ -210,6 +210,17 @@ shows where, so editing is navigation, not a grep hunt.
 
 - `POST /api/form`
 - `GET /form-sent`
+
+### `src/routes/geppetto.js` — 8 routes
+
+- `POST /admin/api/geppetto/read`
+- `GET /admin/geppetto/preview/:plan/:page`
+- `GET /admin/api/geppetto/plan/:plan/source/:page`
+- `GET /admin/api/geppetto/plan/:plan/theme.bent`
+- `POST /admin/api/geppetto/land`
+- `GET /admin/api/geppetto/imports`
+- `POST /admin/api/geppetto/undo`
+- `GET /admin/geppetto`
 
 ### `src/routes/homepage.js` — 2 routes
 
@@ -523,6 +534,12 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/bentml/primer` | GET | `src/routes/bentml-api.js` |
 | `/admin/api/categories` | GET | `src/routes/categories.js` |
 | `/admin/api/categories` | POST | `src/routes/categories.js` |
+| `/admin/api/geppetto/imports` | GET | `src/routes/geppetto.js` |
+| `/admin/api/geppetto/land` | POST | `src/routes/geppetto.js` |
+| `/admin/api/geppetto/plan/:plan/source/:page` | GET | `src/routes/geppetto.js` |
+| `/admin/api/geppetto/plan/:plan/theme.bent` | GET | `src/routes/geppetto.js` |
+| `/admin/api/geppetto/read` | POST | `src/routes/geppetto.js` |
+| `/admin/api/geppetto/undo` | POST | `src/routes/geppetto.js` |
 | `/admin/api/homepage` | POST | `src/routes/homepage.js` |
 | `/admin/api/import` | POST | `src/routes/import.js` |
 | `/admin/api/inject` | GET | `src/routes/inject.js` |
@@ -742,6 +759,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/db/upload-restore` | POST | `src/routes/storage.js` |
 | `/admin/delete` | POST | `src/routes/pages-builder.js` |
 | `/admin/edit/:fullPath` | GET | `src/routes/pages-builder.js` |
+| `/admin/geppetto` | GET | `src/routes/geppetto.js` |
+| `/admin/geppetto/preview/:plan/:page` | GET | `src/routes/geppetto.js` |
 | `/admin/homepage` | POST | `src/routes/homepage.js` |
 | `/admin/import` | GET | `src/routes/import.js` |
 | `/admin/inbox` | GET | `src/routes/inbox.js` |

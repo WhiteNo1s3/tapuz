@@ -1,6 +1,6 @@
 # The `.pzn` page format — standard
 
-**Spec version 0.1** · generated from `tapuziel@2.53.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
+**Spec version 0.1** · generated from `tapuziel@2.55.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
 
 `.pzn` is an open, constrained-HTML page format. A `.pzn` file **is** HTML —
 but the body may contain **only registered `bent-*` module tags**, never raw
@@ -304,6 +304,7 @@ from it directly.
   - `animate` · enum · none \| fade \| rise \| zoom · default `none`
   - `kind` · string · default `content`
   - `size` · enum · sm \| md \| lg \| xl · default `md`
+  - `width` · enum · content \| wide \| full · default `content`
 
 #### `<bent-col>` — עמודה / Column · container
 
@@ -325,6 +326,7 @@ from it directly.
   - `height` · enum · sm \| md \| lg \| full · default `md`
   - `overlay` · integer · 0–80 · default `0`
   - `parallax` · boolean · default `false`
+  - `width` · enum · content \| wide \| full · default `content`
 
 #### `<bent-card>` — כרטיס / Card · container
 
@@ -695,6 +697,9 @@ from it directly.
   - `image` · url
   - `overlay` · integer · 0–80 · default `0`
   - `height` · enum · sm \| md \| lg \| full · default `md`
+  - `tint` · enum · none \| dark \| light \| brand · default `none`
+  - `fade` · boolean · default `false`
+  - `width` · enum · content \| wide \| full · default `content`
 
 ### Category: advanced
 

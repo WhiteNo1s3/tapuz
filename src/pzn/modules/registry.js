@@ -462,6 +462,11 @@ register({
       type: 'enum', values: ['sm', 'md', 'lg', 'xl'], default: 'md', optional: true,
       label: { he: 'גובה כשריק', en: 'Empty height' }
     },
+    // v2.56 — the stretch section: edge to edge, the content keeps the column
+    width: {
+      type: 'enum', values: ['content', 'wide', 'full'], default: 'content', optional: true, compact: false,
+      label: { he: 'רוחב המיכל', en: 'Width' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -469,10 +474,12 @@ register({
   compile(node, ctx, compileChild) {
     const kind = node.props.kind || 'content';
     const { id, cls } = attrsExtra(node);
-    const inner = node.children.map((c) => compileChild(c, ctx)).join('');
+    let inner = node.children.map((c) => compileChild(c, ctx)).join('');
     const size = ['sm', 'md', 'lg', 'xl'].includes(String(node.props.size)) ? node.props.size : 'md';
     const empty = (!inner && kind === 'content') ? ` tz-section is-empty size-${size}` : '';
-    return `<section${id} class="bent-section kind-${escapeAttr(kind)}${empty}${cls}"${dirAttr(ctx)}>${inner}</section>`;
+    const w = ['wide', 'full'].includes(node.props.width) ? ` sec-w-${node.props.width}` : '';
+    if (w && inner) inner = `<div class="sec-inner">${inner}</div>`;
+    return `<section${id} class="bent-section kind-${escapeAttr(kind)}${empty}${w}${cls}"${dirAttr(ctx)}>${inner}</section>`;
   }
 });
 
@@ -578,6 +585,11 @@ register({
       type: 'boolean', default: false, optional: true,
       label: { he: 'רקע קבוע', en: 'Parallax' }
     },
+    // v2.56 — a band edge to edge
+    width: {
+      type: 'enum', values: ['content', 'wide', 'full'], default: 'content', optional: true, compact: false,
+      label: { he: 'רוחב', en: 'Width' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -594,7 +606,8 @@ register({
       : '');
     const bg = styleParts ? ` style="${styleParts}"` : '';
     const inner = node.children.map((c) => compileChild(c, ctx)).join('');
-    return `<section${id} class="hero bent-hero${hCls}${overlayCls}${parallaxCls}${cls}"${bg}${dirAttr(ctx)}>${inner}</section>`;
+    const wCls = ['wide', 'full'].includes(node.props.width) ? ` hero-w-${node.props.width}` : '';
+    return `<section${id} class="hero bent-hero${hCls}${overlayCls}${parallaxCls}${wCls}${cls}"${bg}${dirAttr(ctx)}>${inner}</section>`;
   }
 });
 
@@ -1464,6 +1477,16 @@ register({
       type: 'enum', values: ['sm', 'md', 'lg', 'full'], default: 'md', optional: true,
       label: { he: 'גובה', en: 'Height' }
     },
+    tint: {
+      type: 'enum', values: ['none', 'dark', 'light', 'brand'], default: 'none', optional: true, compact: false,
+      label: { he: 'גוון שכבת הרקע', en: 'Tint' }
+    },
+    fade: { type: 'boolean', default: false, optional: true, compact: false, label: { he: 'הופעה הדרגתית', en: 'Fade in' } },
+    // v2.56 — edge to edge, the content keeps the column
+    width: {
+      type: 'enum', values: ['content', 'wide', 'full'], default: 'content', optional: true, compact: false,
+      label: { he: 'רוחב', en: 'Width' }
+    },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -1475,8 +1498,11 @@ register({
     const vars = [`background-image:url('${escapeCssUrl(node.props.image || '')}')`];
     if (overlayVal > 0) vars.unshift(`--px-overlay:${(overlayVal / 100).toFixed(2)}`);
     const overlaidCls = overlayVal > 0 ? ' parallax-overlaid' : '';
+    const tint = ['dark', 'light', 'brand'].includes(node.props.tint) ? ` parallax-tint-${node.props.tint}` : '';
+    const fade = (node.props.fade === true || node.props.fade === 'true') ? ' parallax-fade' : '';
+    const w = ['wide', 'full'].includes(node.props.width) ? ` px-w-${node.props.width}` : '';
     const inner = node.children.map((c) => compileChild(c, ctx)).join('');
-    return `<section${id} class="parallax-section parallax-${height}${overlaidCls} bent-parallax${cls}"` +
+    return `<section${id} class="parallax-section parallax-${height}${overlaidCls}${tint}${fade}${w} bent-parallax${cls}"` +
       ` style="${vars.join(';')}"${dirAttr(ctx)}>` +
       `<div class="parallax-inner">${inner}</div></section>`;
   }

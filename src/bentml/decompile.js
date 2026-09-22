@@ -240,6 +240,7 @@ function decompileBlock(block, indent) {
       if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);
       if (d.overlay != null && Number(d.overlay) > 0) params.push(`overlay: ${d.overlay}`);
       if (d.parallax) params.push('parallax: true');
+      if (d.width && d.width !== 'content') params.push(`width: ${d.width}`);
       uni(params, d, idParams);
       const kids = [];
       if (d.title) kids.push(`${pad}  HEADING(level: 1) { ${escBody(d.title)} }`);
@@ -270,6 +271,7 @@ function decompileBlock(block, indent) {
       if (d.height && d.height !== 'md') params.push(`height: ${d.height}`);
       if (d.tint && d.tint !== 'none') params.push(`tint: ${d.tint}`);
       if (d.fade === true || d.fade === 'true') params.push('fade: true');
+      if (d.width && d.width !== 'content') params.push(`width: ${d.width}`);
       uni(params, d, idParams);
       const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
       return `${pad}BACKDROP${paramList(params)} {\n${kids}\n${pad}}`;
@@ -409,6 +411,7 @@ function decompileBlock(block, indent) {
     case 'section': {
       const params = [];
       if (d.size && d.size !== 'md') params.push(`size: ${d.size}`);
+      if (d.width && d.width !== 'content') params.push(`width: ${d.width}`);
       uni(params, d, idParams);
       const kids = (d.blocks || []).map((b) => decompileBlock(b, indent + 1)).join('\n');
       return `${pad}SECTION${paramList(params)} {\n${kids || pad + '  '}\n${pad}}`;
