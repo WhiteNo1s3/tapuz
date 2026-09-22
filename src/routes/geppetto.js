@@ -32,9 +32,10 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':
 
 function fail(res, e, status) {
   const code = (e && e.code) || 'E_GEPPETTO';
-  const known = /^E_(NEED_|NOT_DESIGN|FIGMA_MAKE|EMPTY|JSON|UNKNOWN|AUTH|NOT_FOUND|HTTP|TOO_BIG|REDIRECTS|PUPPET|EMPTY_DESIGN|DECODE)|^NO_PLAN$|^NOT_FOUND$|^ALREADY$/.test(code);
-  // another landing holds the site: a conflict to wait out, not a bad request
-  res.status(status || (code === 'BUSY' ? 409 : known ? 400 : 500)).json({ ok: false, code, error: (e && e.message) || 'שגיאה' });
+  const known = /^E_(NEED_|NOT_DESIGN|FIGMA_MAKE|EMPTY|JSON|UNKNOWN|AUTH|NOT_FOUND|HTTP|TOO_BIG|REDIRECTS|PUPPET|EMPTY_DESIGN|DECODE|LIFE)|^NO_PLAN$|^NOT_FOUND$|^ALREADY$/.test(code);
+  // another landing holds the site, or newer imports must be undone first:
+  // a conflict to wait out or resolve, not a bad request
+  res.status(status || (code === 'BUSY' || code === 'ORDER' ? 409 : known ? 400 : 500)).json({ ok: false, code, error: (e && e.message) || 'שגיאה' });
 }
 
 router.post('/admin/api/geppetto/read', requireAdmin, async (req, res) => {
@@ -110,7 +111,8 @@ router.post('/admin/api/geppetto/land', requireAdmin, async (req, res) => {
   if (b.wait === false) {
     if (!gp.loadPlan(planId)) return fail(res, Object.assign(new Error('התוכנית פגה או לא נמצאה — קראו את העיצוב שוב'), { code: 'NO_PLAN' }));
     for (const [id, j] of jobs) if (Date.now() - j.at > JOB_TTL_MS) jobs.delete(id);
-    if ([...jobs.values()].some((j) => !j.done)) return res.status(409).json({ ok: false, code: 'BUSY', error: 'ייבוא אחר עדיין רץ — חכו שיסתיים' });
+    // one landing at a time — a job of this screen or a landing through the API
+    if (gp.isLanding() || [...jobs.values()].some((j) => !j.done)) return res.status(409).json({ ok: false, code: 'BUSY', error: 'ייבוא אחר עדיין רץ — חכו שיסתיים' });
     const id = 'job_' + require('crypto').randomBytes(6).toString('hex');
     const job = { at: Date.now(), done: false, result: null, error: null };
     jobs.set(id, job);
@@ -136,10 +138,14 @@ router.get('/admin/api/geppetto/job/:id', requireAdmin, (req, res) => {
 });
 
 router.get('/admin/api/geppetto/imports', requireAdmin, (req, res) => {
-  const list = require('../geppetto').listImports().map((r) => ({
+  const gp = require('../geppetto');
+  const running = gp.isLanding();
+  const list = gp.listImports().map((r) => ({
     id: r.id, at: r.at, source: r.source, format: r.format, origin: r.origin, title: r.title, mode: r.mode,
     pages: r.pagesCreated || [], themeApplied: !!r.themeApplied, menu: !!r.menuBackupId, homepage: !!r.homepageSet,
-    undone: !!r.undone, undoneAt: r.undoneAt || ''
+    undone: !!r.undone, undoneAt: r.undoneAt || '',
+    // a landing still in the ledger's draft: running now, or cut off by a restart
+    landing: r.landing ? (running ? 'running' : 'interrupted') : ''
   }));
   res.json({ ok: true, imports: list });
 });

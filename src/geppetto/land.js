@@ -145,6 +145,23 @@ function markOf(v) {
   return crypto.createHash('sha1').update(JSON.stringify(v == null ? null : v)).digest('hex');
 }
 
+function menuMark(items) {
+  return markOf((items || []).map((it) => [it.label, it.url, (it.children || []).map((c) => [c.label, c.url])]));
+}
+
+/** Who on the site still shows a file of this media folder — a page (kept,
+ *  renamed, or one the owner copied a picture into) or the site's config. */
+function mediaUser(folder) {
+  const needle = '/assets/' + folder + '/';
+  const pagesLib = require('../pages');
+  for (const row of pagesLib.listPages()) {
+    const page = pagesLib.getPageByFullPath(row.full_path);
+    if (page && JSON.stringify([page.blocks, page.draft_blocks, page.meta]).includes(needle)) return row.full_path;
+  }
+  if (JSON.stringify(require('../config').loadConfig()).includes(needle)) return 'config';
+  return '';
+}
+
 function lookInLibrary(lib, live) {
   const j = JSON.stringify(live);
   try {
@@ -156,6 +173,7 @@ function lookInLibrary(lib, live) {
 // same free addresses, and the loser would die half-landed, its files and
 // pages on the site with no record to undo them by
 let landing = false;
+const isLanding = () => landing;
 
 /**
  * Land a plan.
@@ -232,18 +250,32 @@ async function landNow(plan, choices, opts) {
     slugs[p.key] = s;
   }
   const done = life.finish(plan.living, { slugFor: (k) => slugs[k], homeIsRoot: want.homepage });
-  const stampOf = (p) => ({ import: id, source: plan.source, from: p.path || '/' });
+  // the stamp says which import made the page and where it landed — a
+  // renamed page still carries it
+  const stampOf = (p) => ({ import: id, source: plan.source, from: p.path || '/', at: slugs[p.key] });
   try {
     for (const p of done.pages) {
       const fullPath = slugs[p.key];
       pagesLib.createPage({ title: p.title || fullPath, slug: fullPath, direction: p.dir === 'rtl' ? 'rtl' : 'ltr', blocks: [], meta: { geppetto: stampOf(p) }, status: 'draft' });
       record.pagesCreated.push(fullPath);
     }
+    // the ledger knows this landing from now on: a restart during the slow
+    // part leaves pages and files the history can still take back
+    if (want.media) record.mediaFolder = 'geppetto/' + life.slugify(plan.title || plan.living.pages[0].slug || 'design', 'design').slice(0, 30) + '-' + id.slice(3, 7);
+    record.landing = true;
+    const d0 = loadRecords();
+    d0.imports.push(record);
+    saveRecords(d0);
     return await landRest(plan, done, slugs, want, live, record, opts, stampOf);
   } catch (e) {
     // a landing that fails half-way takes itself back: no orphan pages,
-    // files or look — and nothing the history could not undo
+    // files or look — and no record of a landing that never happened
     try { takeBack(record, [], { rollback: true }); } catch (e2) { /* the first failure is the one to report */ }
+    try {
+      const d = loadRecords();
+      d.imports = d.imports.filter((r) => r.id !== record.id);
+      saveRecords(d);
+    } catch (e3) { /* the ledger itself may be what failed */ }
     throw e;
   }
 }
@@ -256,10 +288,8 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
 
   // 2. media — one folder per import, so undo can take it all back
   const mediaReport = { found: 0, saved: 0, failed: [], videos: 0 };
-  const siteSlug = life.slugify(plan.title || plan.living.pages[0].slug || 'design', 'design').slice(0, 30);
-  const folder = 'geppetto/' + siteSlug + '-' + id.slice(3, 7);
+  const folder = record.mediaFolder;
   if (want.media) {
-    record.mediaFolder = folder;
     const all = done.pages.flatMap((p) => p.blocks);
     // the brand picture rides along as a pseudo-block so it becomes a file too
     const brandHolder = plan.living.brand && plan.living.brand.image ? [{ type: 'image', data: { src: plan.living.brand.image } }] : [];
@@ -313,9 +343,15 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
       record.themeEntryId = entry.id;
       if (live) {
         record.themeBefore = theme.loadOverrides();
-        themeLib.applyTheme(entry.id);
-        record.themeApplied = true;
-        record.themeSetTo = markOf(theme.loadOverrides());
+        try {
+          themeLib.applyTheme(entry.id);
+        } finally {
+          // applied is what the site now wears, not whether the call returned:
+          // a throw after the look went on must still let undo take it off
+          const now = theme.loadOverrides();
+          record.themeApplied = markOf(now) !== markOf(record.themeBefore);
+          if (record.themeApplied) record.themeSetTo = markOf(now);
+        }
       }
     } catch (e) {
       record.themeError = e.message;
@@ -326,6 +362,7 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
   //    Canva one-pager must not keep the old site's "דף הבית" in its header
   if (record.menuBefore) {
     menus.saveMenus({ main: done.menu.map((it) => ({ label: it.label, url: it.url, type: 'custom' })) });
+    record.menuSetTo = menuMark(menus.loadMenus().main);
   }
 
   // 7. the crown and the name
@@ -351,8 +388,11 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
   }
   if (record.homepageSet || record.siteTitleSet) saveConfig(config);
 
+  delete record.landing;
   const d = loadRecords();
-  d.imports.push(record);
+  const at = d.imports.findIndex((r) => r.id === id);
+  if (at >= 0) d.imports[at] = record;
+  else d.imports.push(record);
   saveRecords(d);
 
   let rebuildError = '';
@@ -388,47 +428,55 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
  * crown moves only off a page that is going away.
  */
 function takeBack(rec, later, opts = {}) {
-  const out = { pagesRemoved: [], pagesKept: [], media: 0, mediaKept: false, theme: false, themeSaved: '', menu: false, homepage: false, title: false, left: [], errors: [] };
+  const out = { pagesRemoved: [], pagesKept: [], media: 0, mediaKept: false, mediaKeptFor: '', theme: false, themeSaved: '', themeNotRestored: '', menu: false, homepage: false, title: false, left: [], errors: [] };
   const pagesLib = require('../pages');
   const first = (has) => later.find(has) || null;
   // the crown as it is NOW — deleting the crowned page clears it, so it is
   // read before any page goes
   const crownWas = (require('../config').loadConfig().homepage || '');
 
+  // the import's pages: found by their stamp (a renamed or duplicated page
+  // keeps it), taken back only while they are where and as the import left them
+  const paths = [];
+  try {
+    for (const row of pagesLib.listPages()) {
+      let meta = row.meta;
+      if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch (e) { meta = null; } }
+      if (meta && meta.geppetto && meta.geppetto.import === rec.id) paths.push(row.full_path);
+    }
+  } catch (e) { out.errors.push('pages: ' + e.message); }
+  for (const fp of rec.pagesCreated || []) if (!paths.includes(fp)) paths.push(fp);
   const removed = new Set();
-  for (const fp of rec.pagesCreated || []) {
+  for (const fp of paths) {
     try {
       const page = pagesLib.getPageByFullPath(fp);
       // only a page this import made — never a page the owner has since claimed
       if (!page || !page.meta || !page.meta.geppetto || page.meta.geppetto.import !== rec.id) continue;
-      const mark = rec.pageMarks && rec.pageMarks[fp];
-      if (!opts.rollback && mark && pageMark(page) !== mark) { out.pagesKept.push(fp); continue; }
+      if (!opts.rollback) {
+        const at = page.meta.geppetto.at || fp;
+        const mark = rec.pageMarks ? rec.pageMarks[at] : undefined;
+        const moved = at !== fp || (!!rec.pageMarks && mark === undefined);
+        if (moved || (mark && pageMark(page) !== mark)) { out.pagesKept.push(fp); continue; }
+      }
       pagesLib.deletePage(fp);
       removed.add(fp);
       out.pagesRemoved.push(fp);
     } catch (e) { out.errors.push(fp + ': ' + e.message); }
   }
 
-  if (rec.mediaFolder && out.pagesKept.length) out.mediaKept = true; // a kept page still shows them
-  else if (rec.mediaFolder) {
-    try {
-      const media = require('../media');
-      const list = media.listMedia(rec.mediaFolder, { accept: 'all' });
-      for (const f of (list && list.files) || []) {
-        if (f.id == null) continue;
-        try { media.deleteFile(f.id); out.media += 1; } catch (e) { /* already gone */ }
-      }
-      try { media.deleteFolder(rec.mediaFolder); } catch (e) { /* not empty or already gone */ }
-      const parent = rec.mediaFolder.split('/')[0];
-      try { media.deleteFolder(parent); } catch (e) { /* other imports still there */ }
-    } catch (e) { out.errors.push('media: ' + e.message); }
+  // the look. The import's own library entry goes first: it frees the slot
+  // the owner's look may need
+  if (rec.themeEntryId) {
+    try { require('../theme-library').removeTheme(rec.themeEntryId); } catch (e) { /* the owner may have deleted it */ }
   }
-  const mediaGone = !!rec.mediaFolder && !out.mediaKept;
-
   if (rec.themeApplied && rec.themeBefore) {
     const next = first((r) => r.themeApplied && r.themeBefore);
-    if (next) { next.themeBefore = rec.themeBefore; out.left.push('theme'); }
-    else {
+    if (next) {
+      // splice only when the later import landed on THIS import's look — a
+      // look the owner made in between is what the later one must give back
+      if (rec.themeSetTo && markOf(next.themeBefore) === rec.themeSetTo) next.themeBefore = rec.themeBefore;
+      out.left.push('theme');
+    } else {
       try {
         const theme = require('../theme');
         const lib = require('../theme-library');
@@ -436,20 +484,22 @@ function takeBack(rec, later, opts = {}) {
         let safe = !rec.themeSetTo || markOf(live) === rec.themeSetTo || lookInLibrary(lib, live);
         if (!safe) {
           try { out.themeSaved = lib.saveCurrentAsTheme('ג׳פטו — המראה לפני ביטול ' + (rec.title || rec.source || '')).name; safe = true; }
-          catch (e) { out.errors.push('theme: ' + e.message); }
+          catch (e) { out.themeNotRestored = e.message; }
         }
-        if (safe) { theme.saveOverrides(rec.themeBefore); out.theme = true; } else out.left.push('theme');
+        if (safe) { theme.saveOverrides(rec.themeBefore); out.theme = true; }
       } catch (e) { out.errors.push('theme: ' + e.message); }
     }
-  }
-  if (rec.themeEntryId) {
-    try { require('../theme-library').removeTheme(rec.themeEntryId); } catch (e) { /* the owner may have deleted it */ }
   }
 
   if (rec.menuBefore || rec.menuBackupId) {
     const next = first((r) => r.menuBefore || r.menuBackupId);
-    if (next) { next.menuBefore = rec.menuBefore; next.menuBackupId = rec.menuBackupId; out.left.push('menu'); }
-    else {
+    if (next) {
+      if (rec.menuSetTo && next.menuBefore && menuMark(next.menuBefore.main) === rec.menuSetTo) {
+        next.menuBefore = rec.menuBefore;
+        next.menuBackupId = rec.menuBackupId;
+      }
+      out.left.push('menu');
+    } else {
       try {
         const menus = require('../menus');
         if (rec.menuBefore) {
@@ -490,9 +540,7 @@ function takeBack(rec, later, opts = {}) {
             changed = true;
             out.title = true;
           }
-          const logoOurs = rec.logoSetTo === undefined || JSON.stringify(config.logo || null) === JSON.stringify(rec.logoSetTo || null);
-          const logoDead = mediaGone && !!config.logo && !!rec.brandImage && config.logo.image === rec.brandImage;
-          if (logoOurs || logoDead) {
+          if (rec.logoSetTo === undefined || JSON.stringify(config.logo || null) === JSON.stringify(rec.logoSetTo || null)) {
             if (rec.logoBefore) config.logo = rec.logoBefore;
             else delete config.logo;
             changed = true;
@@ -501,6 +549,26 @@ function takeBack(rec, later, opts = {}) {
       }
       if (changed) saveConfig(config);
     } catch (e) { out.errors.push('config: ' + e.message); }
+  }
+
+  // the media go — unless something on the site still shows them (a kept or
+  // renamed page, a picture the owner copied elsewhere, the logo)
+  if (rec.mediaFolder) {
+    try {
+      const user = mediaUser(rec.mediaFolder);
+      if (user) { out.mediaKept = true; out.mediaKeptFor = user; }
+      else {
+        const media = require('../media');
+        const list = media.listMedia(rec.mediaFolder, { accept: 'all' });
+        for (const f of (list && list.files) || []) {
+          if (f.id == null) continue;
+          try { media.deleteFile(f.id); out.media += 1; } catch (e) { /* already gone */ }
+        }
+        try { media.deleteFolder(rec.mediaFolder); } catch (e) { /* not empty or already gone */ }
+        const parent = rec.mediaFolder.split('/')[0];
+        try { media.deleteFolder(parent); } catch (e) { /* other imports still there */ }
+      }
+    } catch (e) { out.errors.push('media: ' + e.message); }
   }
   return out;
 }
@@ -512,8 +580,18 @@ function undo(importId, opts = {}) {
   if (i < 0) { const e = new Error('ייבוא לא נמצא'); e.code = 'NOT_FOUND'; throw e; }
   const rec = d.imports[i];
   if (rec.undone) { const e = new Error('הייבוא הזה כבר בוטל'); e.code = 'ALREADY'; throw e; }
+  // a landing still running in this process is not taken apart under its feet
+  if (rec.landing && landing) { const e = new Error('הייבוא הזה עדיין נוחת — חכו שיסתיים'); e.code = 'BUSY'; throw e; }
   const later = d.imports.slice(i + 1).filter((r) => !r.undone && r.mode === 'live');
-  const out = takeBack(rec, later, opts);
+  // a record from before the undo ledger learned what each import set cannot
+  // be spliced out from under a later import — those go newest first
+  if (rec.pageMarks === undefined && later.length) {
+    const e = new Error('את הייבוא הזה אפשר לבטל רק אחרי שמבטלים את הייבואים החיים שאחריו');
+    e.code = 'ORDER';
+    throw e;
+  }
+  // a landing that was cut off (a restart mid-way) is taken back whole, like a failed one
+  const out = takeBack(rec, later, Object.assign({}, opts, { rollback: !!rec.landing || !!opts.rollback }));
   rec.undone = true;
   rec.undoneAt = new Date().toISOString();
   if (out.pagesKept.length) rec.pagesKept = out.pagesKept;
@@ -522,4 +600,4 @@ function undo(importId, opts = {}) {
   return out;
 }
 
-module.exports = { land, undo, listImports, getImport, blocksToSource };
+module.exports = { land, undo, isLanding, listImports, getImport, blocksToSource };

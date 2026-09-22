@@ -39,6 +39,18 @@
 
 const P = require('./puppet');
 
+// loops, not Math.max(...spread): a spread of 200,000 numbers overflows the stack
+function maxOf(list, f) {
+  let m = -Infinity;
+  for (const v of list) { const x = f ? f(v) : v; if (x > m) m = x; }
+  return m;
+}
+function minOf(list, f) {
+  let m = Infinity;
+  for (const v of list) { const x = f ? f(v) : v; if (x < m) m = x; }
+  return m;
+}
+
 // ── tunables (design px are normalized to a 1366-wide canvas: `u` = 1 at 1366) ──
 
 const T = {
@@ -786,7 +798,7 @@ function splitAxis(items, axis, tol, minGap) {
 
 /** Re-join runs so only the WIDE gaps (≥ ratio × the widest) cut; narrower ones stay inside. */
 function cutAtWidest(runs, ratio) {
-  const widest = Math.max(...runs.gaps);
+  const widest = maxOf(runs.gaps);
   const out = [runs.groups[0].slice()];
   runs.gaps.forEach((g, i) => {
     if (g >= widest * ratio) out.push(runs.groups[i + 1].slice());
@@ -818,8 +830,8 @@ function cut(items, u, depth = 0) {
   const tol = T.bandTol * u;
   const Y = runsAlong(list, 'y', tol, 0.5);
   const X = runsAlong(list, 'x', tol, T.rowGap * u);
-  const yMax = Y.gaps.length ? Math.max(...Y.gaps) : -1;
-  const xMax = X.gaps.length ? Math.max(...X.gaps) : -1;
+  const yMax = Y.gaps.length ? maxOf(Y.gaps) : -1;
+  const xMax = X.gaps.length ? maxOf(X.gaps) : -1;
   if (xMax > yMax && xMax > 0) {
     const cols = cutAtWidest(X, 0.7);
     return { kind: 'row', cols: cols.map((c) => ({ box: boxOf(c), node: cut(c, u, depth + 1) })).filter((c) => c.node) };
@@ -838,19 +850,17 @@ function cut(items, u, depth = 0) {
   const comps = overlapClusters(list, tol);
   if (comps.length >= 2 && comps.some((c) => c.length >= 2)) {
     const units = comps.map((c, i) => (c.length === 1 ? c[0] : Object.assign(
-      { type: 'group', id: 'cluster-' + depth + '-' + i, children: c, z: Math.max(...c.map((n) => n.z || 0)), cluster: true },
+      { type: 'group', id: 'cluster-' + depth + '-' + i, children: c, z: maxOf(c, (n) => n.z || 0), cluster: true },
       P.unionBox(c)
     )));
     return cut(units, u, depth + 1);
   }
   // overlap: something contains the others — a panel (a slab with words on it, a photo with a title over it)
-  const base = list
-    .filter((n) => (n.type === 'shape' || n.type === 'image' || n.type === 'video' || n.type === 'frame') && !(n.type === 'frame' && n.children && n.children.length))
-    .filter((n) => list.some((m) => m !== n && (m.z || 0) >= (n.z || 0) && P.coverage(n, m) >= 0.8))
-    .sort((a, b) => P.area(b) - P.area(a))[0];
+  const base = panelBase(list);
   if (base) {
     const inner = list.filter((m) => m !== base && (m.z || 0) >= (base.z || 0) && P.coverage(base, m) >= 0.8);
-    const outer = list.filter((m) => m !== base && !inner.includes(m));
+    const innerSet = new Set(inner);
+    const outer = list.filter((m) => m !== base && !innerSet.has(m));
     const panel = { kind: 'panel', base, child: cut(inner, u, depth + 1), box: { x: base.x, y: base.y, w: base.w, h: base.h } };
     if (!outer.length) return panel;
     // the panel now acts as one item among the rest
@@ -900,19 +910,40 @@ function anchorCards(list, u) {
   for (const group of byKey.values()) {
     if (group.length < 3) continue;
     // the repeats must not sit on each other (a stack of the same sticker is not a row)
-    const clean = group.every((a) => group.every((b) => a === b || P.coverage(a, b) < 0.25));
-    if (clean && (!anchors || group.length > anchors.length)) anchors = group;
+    if ((!anchors || group.length > anchors.length) && sitApart(group)) anchors = group;
   }
   if (!anchors) return null;
+  // the frames share one size (their key says so): a grid of that size finds,
+  // for any box, the few frames that can hold it — in the frames' own order,
+  // so the nearest wins exactly as a full scan would pick it
+  const W = maxOf(anchors, (a) => a.w) || 1;
+  const H = maxOf(anchors, (a) => a.h) || 1;
+  const grid0 = new Map();
+  anchors.forEach((a, idx) => {
+    const k = Math.floor(a.x / W) + ':' + Math.floor(a.y / H);
+    if (!grid0.has(k)) grid0.set(k, []);
+    grid0.get(k).push(idx);
+  });
+  const isAnchor = new Set(anchors);
   const members = new Map(anchors.map((a) => [a, []]));
   const rest = [];
   for (const n of list) {
-    if (anchors.includes(n)) continue;
+    if (isAnchor.has(n)) continue;
     const cx = n.x + n.w / 2;
     const cy = n.y + n.h / 2;
+    const cands = [];
+    const c0 = Math.floor(cx / W);
+    for (let r = Math.floor((Math.min(cy, n.y) - H * 1.4) / H) - 1; r <= Math.floor(Math.max(cy, n.y) / H) + 1; r++) {
+      for (let c = c0 - 1; c <= c0 + 1; c++) {
+        const hit = grid0.get(c + ':' + r);
+        if (hit) for (const idx of hit) cands.push(idx);
+      }
+    }
+    cands.sort((p, q) => p - q);
     let best = null;
     let bestD = Infinity;
-    for (const a of anchors) {
+    for (const idx of cands) {
+      const a = anchors[idx];
       const inside = cx >= a.x && cx <= a.x + a.w && cy >= a.y && cy <= a.y + a.h;
       const under = n.type === 'text' && cx >= a.x && cx <= a.x + a.w && n.y >= a.y + a.h * 0.5 && n.y <= a.y + a.h * 1.35;
       if (!inside && !under) continue;
@@ -930,31 +961,118 @@ function anchorCards(list, u) {
     const box = P.unionBox(kids);
     return { box, node: Object.assign(cut(kids.slice(1), u, 1) || { kind: 'stack', children: [] }, { frame: a }) };
   });
-  // the cards in rows (by their frames' vertical centers), each row start-to-end
+  // the cards in rows (by their frames' vertical centers), each row start-to-end;
+  // the rows' first frames climb in y, so the first row a card fits is found
+  // by bisection (the same row a scan from the top would find)
   const rows = [];
   for (const c of cells.slice().sort((p, q) => (p.node.frame.y - q.node.frame.y) || (p.node.frame.x - q.node.frame.x))) {
-    const row = rows.find((r) => Math.abs(r[0].node.frame.y - c.node.frame.y) <= c.node.frame.h * 0.5);
+    const fy = c.node.frame.y;
+    const reach = c.node.frame.h * 0.5;
+    let lo = 0;
+    let hi = rows.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (rows[mid][0].node.frame.y < fy - reach) lo = mid + 1; else hi = mid; }
+    const row = lo < rows.length && Math.abs(rows[lo][0].node.frame.y - fy) <= reach ? rows[lo] : null;
     if (row) row.push(c); else rows.push([c]);
   }
   rows.forEach((r) => r.sort((p, q) => p.node.frame.x - q.node.frame.x));
-  const perRow = Math.max(...rows.map((r) => r.length));
+  const perRow = maxOf(rows, (r) => r.length);
   const grid = { kind: 'grid', perRow, cells: rows.flat() };
   if (!rest.length) return grid;
-  const top = Math.min(...cards.map((a) => a.y));
+  const top = minOf(cards, (a) => a.y);
   const above = rest.filter((n) => n.y + n.h / 2 < top);
-  const below = rest.filter((n) => !above.includes(n));
+  const aboveSet = new Set(above);
+  const below = rest.filter((n) => !aboveSet.has(n));
   return { kind: 'stack', children: [cut(above, u, 1), grid, cut(below, u, 1)].filter(Boolean) };
 }
 
-/** Connected groups of boxes that overlap (after shaving `tol` off each side). */
+/**
+ * The biggest slab or picture that holds another box (≥ 80% of it, drawn
+ * over it) — a panel's base; the first in the design's order on a tie. A box
+ * 80% inside another has its center inside it, so each candidate looks only
+ * at the boxes centered within its x-range (by bisection), not the whole list.
+ */
+function panelBase(list) {
+  const byCx = list.map((m) => ({ m, cx: m.x + m.w / 2, cy: m.y + m.h / 2 })).sort((a, b) => a.cx - b.cx);
+  let budget = 3000000; // a crafted design: past it, no panel is read
+  let best = null;
+  for (const n of list) {
+    if (!(n.type === 'shape' || n.type === 'image' || n.type === 'video' || n.type === 'frame') || (n.type === 'frame' && n.children && n.children.length)) continue;
+    if (best && P.area(n) <= P.area(best)) continue; // it could not win
+    let lo = 0;
+    let hi = byCx.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (byCx[mid].cx < n.x) lo = mid + 1; else hi = mid; }
+    for (let k = lo; k < byCx.length && byCx[k].cx <= n.x + n.w; k++) {
+      if (--budget < 0) return best;
+      const e = byCx[k];
+      if (e.m === n || e.cy < n.y || e.cy > n.y + n.h) continue;
+      if ((e.m.z || 0) >= (n.z || 0) && P.coverage(n, e.m) >= 0.8) { best = n; break; }
+    }
+  }
+  return best;
+}
+
+/**
+ * No two repeats of a frame sit on each other (coverage ≥ 25%). They share
+ * one size, so only frames in neighboring cells of a grid of that size can
+ * overlap at all.
+ */
+function sitApart(group) {
+  const W = maxOf(group, (a) => a.w) || 1;
+  const H = maxOf(group, (a) => a.h) || 1;
+  const cells = new Map();
+  for (const a of group) {
+    const k = Math.floor(a.x / W) + ':' + Math.floor(a.y / H);
+    if (!cells.has(k)) cells.set(k, []);
+    cells.get(k).push(a);
+  }
+  for (const a of group) {
+    const cx = Math.floor(a.x / W);
+    const cy = Math.floor(a.y / H);
+    for (let r = cy - 1; r <= cy + 1; r++) {
+      for (let c = cx - 1; c <= cx + 1; c++) {
+        for (const b of cells.get(c + ':' + r) || []) {
+          if (a !== b && P.coverage(a, b) >= 0.25) return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * Connected groups of boxes that overlap (after shaving `tol` off each side).
+ * Boxes meet only when their x-ranges do, so a sweep in x compares only
+ * those; the union-find is iterative (a staircase of 16,000 boxes chained a
+ * recursive find past the stack) and a crafted design has a work budget —
+ * past it the remaining boxes simply stay apart.
+ */
 function overlapClusters(list, tol) {
   const shaved = list.map((n) => ({ n, x: n.x + tol, y: n.y + tol, w: Math.max(0, n.w - 2 * tol), h: Math.max(0, n.h - 2 * tol) }));
   const parent = list.map((_, i) => i);
-  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  for (let i = 0; i < shaved.length; i++) {
-    for (let j = i + 1; j < shaved.length; j++) {
-      if (P.intersection(shaved[i], shaved[j])) parent[find(i)] = find(j);
+  const size = list.map(() => 1);
+  const find = (i) => {
+    while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+    return i;
+  };
+  const union = (a, b) => {
+    a = find(a); b = find(b);
+    if (a === b) return;
+    if (size[a] < size[b]) { const t = a; a = b; b = t; }
+    parent[b] = a;
+    size[a] += size[b];
+  };
+  const order = shaved.map((_, i) => i).sort((a, b) => shaved[a].x - shaved[b].x);
+  let active = [];
+  let budget = 3000000;
+  for (const i of order) {
+    const x = shaved[i].x;
+    if (active.length > 32) active = active.filter((j) => shaved[j].x + shaved[j].w >= x);
+    for (const j of active) {
+      if (--budget < 0) break;
+      if (shaved[j].x + shaved[j].w >= x && P.intersection(shaved[i], shaved[j])) union(i, j);
     }
+    if (budget < 0) break;
+    active.push(i);
   }
   const groups = new Map();
   list.forEach((n, i) => {
@@ -995,13 +1113,25 @@ function collageTree(items, u) {
   const media = items.filter((n) => (n.type === 'image' && n.src && !(n.svg && n.w <= T.iconMax * u)) || (n.type === 'video' && n.src));
   const words = items.filter((n) => n.type === 'text' || n.type === 'button');
   if (media.length < 5 || media.length < words.length * 2) return null;
-  const overlapping = media.filter((a) => media.some((b) => {
-    if (a === b) return false;
-    const i = P.intersection(a, b);
-    return i && P.area(i) > 0.08 * Math.min(P.area(a), P.area(b));
-  }));
-  if (overlapping.length < media.length * 0.3) return null;
-  const rest = items.filter((n) => !media.includes(n) && !words.includes(n));
+  // which pictures lie over another (by more than a sliver): a sweep in x,
+  // with a budget — a wall too crowded to check is not read as a collage
+  const over = new Set();
+  const order = media.slice().sort((a, b) => a.x - b.x);
+  let active = [];
+  let budget = 3000000;
+  for (const a of order) {
+    if (active.length > 32) active = active.filter((b) => b.x + b.w >= a.x);
+    for (const b of active) {
+      if (--budget < 0) return null;
+      if (b.x + b.w < a.x) continue;
+      const i = P.intersection(a, b);
+      if (i && P.area(i) > 0.08 * Math.min(P.area(a), P.area(b))) { over.add(a); over.add(b); }
+    }
+    active.push(a);
+  }
+  if (over.size < media.length * 0.3) return null;
+  const taken = new Set(media.concat(words));
+  const rest = items.filter((n) => !taken.has(n));
   const byReading = (a, b) => (a.y - b.y) || (a.x - b.x);
   const children = words.concat(rest.filter((n) => n.type === 'group' || n.type === 'frame')).sort(byReading).map((n) => leafOrFlow(n, u, 1)).filter(Boolean);
   children.push({ kind: 'wall', items: media.slice().sort(byReading) });
@@ -1115,8 +1245,8 @@ function transposeGrid(cols) {
   const cells = cols.map((c) => c.node.children.map((ch) => ({ node: ch, box: treeBox(ch) })));
   for (let i = 0; i < k; i++) {
     const row = cells.map((col) => col[i]);
-    const top = Math.max(...row.map((r) => r.box.y));
-    const bottom = Math.min(...row.map((r) => r.box.y + r.box.h));
+    const top = maxOf(row, (r) => r.box.y);
+    const bottom = minOf(row, (r) => r.box.y + r.box.h);
     if (bottom <= top) return null; // row i does not line up across the columns
     // a cell is a whole thing (a picture with words), not a lone line of text
     if (!row.every((r) => leafItems(r.node).length >= 2)) return null;

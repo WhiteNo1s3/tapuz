@@ -26,6 +26,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const MAX_NODES = 20000;
+
 const PLAN_TTL_MS = 24 * 60 * 60 * 1000;
 const PLANS_KEEP = 12;
 
@@ -98,6 +100,31 @@ function planFromPuppet(puppet, meta = {}) {
     e.issues = issues;
     throw e;
   }
+  // the life pass runs in the request: a design far past any real site (the
+  // biggest real sample has ~430 boxes) is refused, not breathed
+  const nodes = P.countNodes(puppet);
+  if (nodes > MAX_NODES) {
+    const e = new Error('העיצוב גדול מדי לייבוא (' + nodes.toLocaleString('he-IL') + ' רכיבים; עד ' + MAX_NODES.toLocaleString('he-IL') + ') — פצלו אותו לכמה אתרים או ייבאו דף אחד בכל פעם');
+    e.code = 'E_TOO_BIG';
+    throw e;
+  }
+  return breathed(puppet, meta, P, life, extractLook, blocksToSource);
+}
+
+/** The life pass itself — a throw inside it is a refusal the owner can read, its stack goes to the log. */
+function breathed(puppet, meta, P, life, extractLook, blocksToSource) {
+  try {
+    return breathedNow(puppet, meta, P, life, extractLook, blocksToSource);
+  } catch (err) {
+    if (err && err.code) throw err;
+    console.error('[geppetto] the life pass could not build a site from this design:', (err && err.stack) || err);
+    const e = new Error('העיצוב נקרא, אבל בניית האתר ממנו נכשלה — העיצוב חריג מדי. נסו דף אחד בכל פעם, או ספרו לנו על הכתובת');
+    e.code = 'E_LIFE';
+    throw e;
+  }
+}
+
+function breathedNow(puppet, meta, P, life, extractLook, blocksToSource) {
   const living = life.breathe(puppet);
   if (!living.pages.length || !living.pages.some((p) => p.blocks.length)) {
     // say WHY when a decoder knows (a Figma Make app is code, not a design)
@@ -213,5 +240,6 @@ module.exports = {
   loadPlan,
   landPlan,
   undo: (id, opts) => require('./land').undo(id, opts),
+  isLanding: () => require('./land').isLanding(),
   listImports: () => require('./land').listImports()
 };

@@ -21,6 +21,8 @@
       (d.theme ? ', ערכת הנושא חזרה' : '') + (d.menu ? ', התפריט חזר' : '') + (d.homepage ? ', דף הבית חזר' : '') + '.';
     if ((d.pagesKept || []).length) t += ' נשארו ' + d.pagesKept.length + ' דפים שנערכו אחרי הייבוא (' + d.pagesKept.map(esc).join(', ') + ')' + (d.mediaKept ? ' — וגם התמונות שלהם' : '') + '.';
     if (d.themeSaved) t += ' המראה שהיה באתר לפני הביטול נשמר בספריית ערכות הנושא בשם „' + esc(d.themeSaved) + '”.';
+    if (d.themeNotRestored) t += ' המראה לא הוחזר — לא היה איפה לשמור קודם את המראה הנוכחי (' + esc(d.themeNotRestored) + '); פנו מקום בספרייה והחילו משם את המראה הקודם.';
+    if (d.mediaKept && !(d.pagesKept || []).length) t += ' התמונות נשארו — ' + (d.mediaKeptFor === 'config' ? 'הלוגו של האתר' : 'הדף ' + esc(d.mediaKeptFor)) + ' עדיין מציג אותן.';
     if ((d.left || []).length) t += ' ייבוא מאוחר יותר עדיין קובע את ' + d.left.map(function (k) { return PIECES[k] || k; }).join(', ') + ' — הם יחזרו כשיבוטל גם הוא.';
     if ((d.errors || []).length) t += ' שגיאות: ' + d.errors.map(esc).join('; ');
     return t;
@@ -192,6 +194,11 @@
           out.innerHTML = '<span class="gp-busy"></span> מעתיק תמונות, כותב דפים ב‑BenTML, מלביש את ערכת הנושא… (' + esc(d.seconds || 0) + ' שניות)';
           return new Promise(function (r) { setTimeout(r, 1500); }).then(function () { return poll(job, since); });
         }
+        // the server forgot the job: it restarted in the middle of the landing
+        if (d && d.code === 'NOT_FOUND') {
+          loadImports();
+          return { ok: false, error: 'הנחיתה נקטעה באמצע (השרת הופעל מחדש) — מה שנכתב עד אז מופיע ברשימת הייבואים למטה, ואפשר לבטל אותו משם.' };
+        }
         return d;
       });
     }
@@ -261,7 +268,9 @@
         var when = new Date(r.at).toLocaleString('he-IL');
         return '<div class="gp-page"><div><b>' + esc(r.title || r.origin || r.source) + '</b> <span class="faint">(' + esc(SOURCE_LABEL[r.format] || r.source) + ')</span>' +
           '<div class="faint" style="font-size:.8rem">' + esc(when) + ' · ' + r.pages.length + ' דפים · ' + (r.mode === 'live' ? 'חי' : 'טיוטות') + '</div></div>' +
-          (r.undone ? '<span class="pill">בוטל</span>' : '<button type="button" class="btn secondary" data-undo="' + esc(r.id) + '">↩ ביטול</button>') + '</div>';
+          (r.undone ? '<span class="pill">בוטל</span>'
+            : r.landing === 'running' ? '<span class="pill info">נוחת עכשיו…</span>'
+            : (r.landing === 'interrupted' ? '<span class="pill">נקטע</span> ' : '') + '<button type="button" class="btn secondary" data-undo="' + esc(r.id) + '">↩ ביטול</button>') + '</div>';
       }).join('');
       wireUndo(box);
     });

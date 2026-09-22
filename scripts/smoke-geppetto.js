@@ -434,7 +434,10 @@ function find(blocks, pred) {
           text('h1', 383, 100, 600, 70, 'About ' + Name, { size: 56, color, align: 'center' }),
           text('p1', 383, 200, 600, 60, 'Write @b{bold}, @link(url: "https://example.org"){a link}, @BREAK and mail hello@code.org', { size: 18 })
         ] },
-        { key: 's2', anchor: 'w', height: 400, fill: { color: '#f4f4f4' }, nodes: [text('h2', 383, 100, 600, 70, 'Work of ' + Name, { size: 56, color, align: 'center' })] },
+        { key: 's2', anchor: 'w', height: 400, fill: { color: '#f4f4f4' }, nodes: [
+          text('h2', 383, 60, 600, 70, 'Work of ' + Name, { size: 56, color, align: 'center' }),
+          img('pic', 533, 150, 300, 200, 'https://' + name + '.my.canva.site/_assets/media/work.jpg', { alt: 'work' })
+        ] },
         { key: 's3', anchor: 'c', height: 400, fill: { color: '#ffffff' }, nodes: [text('h3', 383, 100, 600, 70, 'Contact ' + Name, { size: 56, color, align: 'center' })] }
       ] }] });
   };
@@ -479,7 +482,7 @@ function find(blocks, pred) {
   const cRow = pagesLib.getPageByFullPath(cHome);
   pagesLib.updatePage(cHome, { blocks: cRow.draft_blocks.concat([{ type: 'text', id: 'text_owner', data: { content: 'the owner wrote this' } }]) }); // a draft save, not even published
   const uC = gp.undo(imC.importId, { rebuild: false });
-  check('an imported page the owner edited since is kept by undo — with the pictures it shows', uC.pagesKept.includes(cHome) && !!pagesLib.getPageByFullPath(cHome) && uC.mediaKept === true && uC.pagesRemoved.length === imC.pages.length - 1, uC);
+  check('an imported page the owner edited since is kept by undo — with the pictures it shows', uC.pagesKept.includes(cHome) && !!pagesLib.getPageByFullPath(cHome) && uC.mediaKept === true && uC.mediaKeptFor === cHome && uC.pagesRemoved.length === imC.pages.length - 1, uC);
   check('…the crown stays on it (it is not going away), the rest is the owner’s again', loadConfig().homepage === cHome && loadConfig().title === 'My Site' && JSON.stringify(theme.loadOverrides()) === ownerLook, [loadConfig().homepage, loadConfig().title]);
   pagesLib.deletePage(cHome);
   const cfg1 = loadConfig(); cfg1.homepage = ownerHome; cfg1.title = ''; saveConfig(cfg1);
@@ -511,6 +514,121 @@ function find(blocks, pred) {
   const golfMedia = fs.existsSync(path.join(require('../src/paths').ASSETS_DIR, 'geppetto')) ? fs.readdirSync(path.join(require('../src/paths').ASSETS_DIR, 'geppetto')).filter((f) => /^golf/.test(f)) : [];
   check('a landing that fails half-way takes itself back: no reserved page, no files, no record', broke === 'the disk is full' && !golfLeft.length && !golfMedia.length && gp.listImports().length === ledger, [broke, golfLeft, golfMedia]);
   check('…and the site is as it was', loadConfig().homepage === ownerHome && JSON.stringify(theme.loadOverrides()) === ownerLook && JSON.stringify(menus.loadMenus().main.map((m) => [m.label, m.url])) === ownerMenu);
+
+  const { ASSETS_DIR, CONFIG_DIR } = require('../src/paths');
+  const ledgerPath = path.join(CONFIG_DIR, 'geppetto', 'imports.json');
+  const ownerAgain = () => {
+    theme.saveOverrides(JSON.parse(ownerLook));
+    menus.saveMenus({ main: [{ label: 'דף הבית', url: '/', type: 'custom' }] });
+    const cfg = loadConfig(); cfg.homepage = ownerHome; cfg.title = 'My Site'; saveConfig(cfg);
+  };
+  ownerAgain();
+
+  // a page the owner renamed is still the import's (its stamp says so)
+  const imH = await landMini('hotel', '#335577');
+  pagesLib.updatePage(homeOf(imH), { slug: 'hotel-renamed' });
+  const uH = gp.undo(imH.importId, { rebuild: false });
+  const hRow = pagesLib.getPageByFullPath('hotel-renamed');
+  const hPic = hRow ? (JSON.stringify(hRow.draft_blocks || hRow.blocks).match(/\/assets\/geppetto\/[^"\\]+/) || [])[0] : '';
+  check('a page the owner renamed survives undo — and the pictures it shows stay on disk',
+    uH.pagesKept.includes('hotel-renamed') && !!hRow && uH.mediaKept === true && !!hPic && fs.existsSync(path.join(ASSETS_DIR, hPic.replace(/^\/assets\//, ''))), [uH, hPic]);
+  pagesLib.deletePage('hotel-renamed');
+  ownerAgain();
+
+  // what the owner changed between two imports is what the newer one gives back
+  const imJ = await landMini('juliett', '#aa7700');
+  const edited = theme.loadOverrides();
+  edited.colors = Object.assign({}, edited.colors, { primary: '#118811' });
+  theme.saveOverrides(edited);
+  menus.saveMenus({ main: [{ label: 'OwnerMenu', url: '/', type: 'custom' }] });
+  const editedLook = JSON.stringify(theme.loadOverrides());
+  const imK = await landMini('kilo', '#0077aa');
+  gp.undo(imJ.importId, { rebuild: false });
+  gp.undo(imK.importId, { rebuild: false });
+  check('the look and menu the owner made between two imports come back — not the ones before the older import',
+    JSON.stringify(theme.loadOverrides()) === editedLook && menus.loadMenus().main.map((m) => m.label).join('|') === 'OwnerMenu',
+    [theme.loadOverrides().colors.primary, menus.loadMenus().main.map((m) => m.label)]);
+  ownerAgain();
+
+  // a full theme library: the import's own entry goes first and frees the slot
+  const imL = await landMini('lima', '#553311');
+  const tunedL = theme.loadOverrides();
+  tunedL.colors = Object.assign({}, tunedL.colors, { primary: '#abcdef' });
+  theme.saveOverrides(tunedL);
+  const fillers = [];
+  const baseLook = JSON.parse(ownerLook);
+  for (let i = 0; themeLib.listThemes().length < themeLib.MAX_THEMES && i < 100; i++) {
+    fillers.push(themeLib.saveAiTheme('filler ' + i, Object.assign({}, baseLook, { colors: Object.assign({}, baseLook.colors, { primary: '#10' + String(i).padStart(4, '0') }) })).id);
+  }
+  const uL = gp.undo(imL.importId, { rebuild: false });
+  check('undo with a full theme library still files the tuned look and brings the old one back', uL.theme === true && !!uL.themeSaved && !uL.themeNotRestored && JSON.stringify(theme.loadOverrides()) === ownerLook, uL);
+  fillers.forEach((fid) => themeLib.removeTheme(fid));
+  const savedL = themeLib.listThemes().find((t) => t.name === uL.themeSaved);
+  if (savedL) themeLib.removeTheme(savedL.id);
+  ownerAgain();
+
+  // a record from the first v2.56 draft (no marks) is undone newest first
+  const imM = await landMini('mike', '#227744');
+  const led = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+  delete led.imports.find((r) => r.id === imM.importId).pageMarks;
+  fs.writeFileSync(ledgerPath, JSON.stringify(led));
+  const imN = await landMini('november', '#774422');
+  let order = '';
+  try { gp.undo(imM.importId, { rebuild: false }); } catch (e) { order = e.code; }
+  check('an old-format record cannot be spliced out from under a newer import (ORDER)', order === 'ORDER', order);
+  gp.undo(imN.importId, { rebuild: false });
+  const uM = gp.undo(imM.importId, { rebuild: false });
+  check('…newest first, it goes', uM.pagesRemoved.length === imM.pages.length && loadConfig().homepage === ownerHome && JSON.stringify(theme.loadOverrides()) === ownerLook, [uM, loadConfig().homepage]);
+  ownerAgain();
+
+  // the ledger knows a landing while it runs — a restart would leave it undoable
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const slow = async (url) => { await gate; return transport(url); };
+  const flying = gp.landPlan(gp.planFromPuppet(mini('oscar', '#336699'), {}).id, { mode: 'live' }, { transport: slow, rebuild: false });
+  await new Promise((r) => setTimeout(r, 30));
+  const pending = gp.listImports()[0];
+  let early = '';
+  try { gp.undo(pending.id, { rebuild: false }); } catch (e) { early = e.code; }
+  check('a landing in flight is in the ledger (a restart leaves it undoable), and is not undone under its feet', !!pending && pending.landing === true && gp.isLanding() && early === 'BUSY', [pending && pending.landing, early]);
+  release();
+  const imO = await flying;
+  check('…the finished landing replaces its draft record', gp.listImports().filter((r) => r.id === imO.importId).length === 1 && !gp.listImports()[0].landing && !gp.isLanding());
+  const led2 = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+  led2.imports.find((r) => r.id === imO.importId).landing = true; // as a restart would leave it
+  fs.writeFileSync(ledgerPath, JSON.stringify(led2));
+  const oRow = pagesLib.getPageByFullPath(homeOf(imO));
+  pagesLib.updatePage(homeOf(imO), { blocks: oRow.draft_blocks.concat([{ type: 'text', id: 'text_half', data: { content: 'half-written' } }]) });
+  const uO = gp.undo(imO.importId, { rebuild: false });
+  check('a landing cut off by a restart is taken back whole, half-written pages included', uO.pagesRemoved.length === imO.pages.length && !uO.pagesKept.length, uO);
+  ownerAgain();
+
+  // a look that went on before its call threw is still a look undo takes off
+  const realApply = themeLib.applyTheme;
+  themeLib.applyTheme = (tid) => { realApply(tid); throw new Error('the library tripped after applying'); };
+  const imQ = await landMini('quebec', '#772255');
+  themeLib.applyTheme = realApply;
+  const lookedQ = JSON.stringify(theme.loadOverrides()) !== ownerLook;
+  gp.undo(imQ.importId, { rebuild: false });
+  check('a look applied before its call threw is still taken off by undo', lookedQ && !!(imQ.theme && imQ.theme.error) && JSON.stringify(theme.loadOverrides()) === ownerLook, imQ.theme);
+  ownerAgain();
+
+  // a design far past any real site is refused; a throw in the life pass is a refusal too
+  z = 0;
+  const huge = [];
+  for (let i = 0; i < 20001; i++) huge.push(text('x' + i, (i % 100) * 13, Math.floor(i / 100) * 20, 12, 18, 'x' + i, { size: 12 }));
+  let tooBig = '';
+  try { gp.planFromPuppet(P.makePuppet({ source: 'canva', format: 'canva-app', pages: [{ key: 'b', path: '/', title: 'Big', width: 1366, sections: [{ key: 's', height: 4100, fill: { color: '#ffffff' }, nodes: huge }] }] }), {}); } catch (e) { tooBig = e.code; }
+  check('a design past 20,000 boxes is refused (E_TOO_BIG), not breathed', tooBig === 'E_TOO_BIG', tooBig);
+  const realBreathe = life.breathe;
+  const quiet = console.error;
+  life.breathe = () => { throw new TypeError('boom'); };
+  console.error = () => {};
+  let lifeErr = '';
+  try { gp.planFromPuppet(mini('papa', '#123456'), {}); } catch (e) { lifeErr = e.code; }
+  console.error = quiet;
+  life.breathe = realBreathe;
+  check('a throw inside the life pass is a refusal (E_LIFE) — the stack goes to the log only', lifeErr === 'E_LIFE', lifeErr);
 
   // a crowded design must not stall the server: the life pass runs in the request
   z = 0;

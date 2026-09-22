@@ -222,9 +222,15 @@ function contains(a, b, tol = 2) {
 function unionBox(list) {
   const items = (list || []).filter((n) => n && n.w > 0 && n.h > 0);
   if (!items.length) return { x: 0, y: 0, w: 0, h: 0 };
-  const x = Math.min(...items.map((n) => n.x));
-  const y = Math.min(...items.map((n) => n.y));
-  return { x, y, w: Math.max(...items.map(right)) - x, h: Math.max(...items.map(bottom)) - y };
+  // loops, not Math.min(...spread): a spread of 200,000 numbers overflows the stack
+  let x = Infinity; let y = Infinity; let r = -Infinity; let b = -Infinity;
+  for (const n of items) {
+    if (n.x < x) x = n.x;
+    if (n.y < y) y = n.y;
+    if (right(n) > r) r = right(n);
+    if (bottom(n) > b) b = bottom(n);
+  }
+  return { x, y, w: r - x, h: b - y };
 }
 
 // ── text ──────────────────────────────────────────────────────────────────
