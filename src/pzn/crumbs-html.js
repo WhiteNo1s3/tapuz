@@ -7,6 +7,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** One crumb. Last / current items omit the link. props: {label, url, current} */
 function renderCrumb(props = {}, current = false) {
@@ -24,12 +25,11 @@ function renderCrumbs(props = {}, itemsHtml = '', opts = {}) {
     `<ol class="bent-crumbs-list">${itemsHtml}</ol></nav>`;
 }
 
-function renderCrumbsFromData(data = {}, dir = '', extra = '') {
+function renderCrumbsFromData(data = {}, dir = '', attrs = {}) {
   const items = data.items || [];
   const last = items.length - 1;
   const inner = items.map((it, idx) => renderCrumb(it || {}, idx === last)).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderCrumbs(data, inner, { dir: dirAttr, extra });
+  return renderCrumbs(data, inner, blockOpts(dir, attrs));
 }
 
 module.exports = { renderCrumb, renderCrumbs, renderCrumbsFromData };

@@ -58,7 +58,8 @@
  * }
  */
 
-const BLOCK_CATEGORIES = ['תוכן', 'מבנה', 'מדיה', 'אפקטים', 'שילובים'];
+// 'חנות' (v2.53): the storefront modules — they read the store's catalog
+const BLOCK_CATEGORIES = ['תוכן', 'מבנה', 'מדיה', 'אפקטים', 'שילובים', 'חנות'];
 
 const ALIGN_PARAM = {
   name: 'align',
@@ -1072,6 +1073,92 @@ const BLOCK_REGISTRY = [
         { title: 'מוצר שלישי', price: '₪79', image: '/demo/tile-3.svg', url: '/p/3' }
       ]
     }
+  },
+  // ── the store (v2.53) — modules that read the store's catalog and cart.
+  // A page made of these IS the shop: the flip (/admin/store) writes the
+  // shop / cart / checkout / order pages out of them, in BenTML.
+  {
+    type: 'shop',
+    keyword: 'SHOP',
+    labelHe: 'חנות — רשת מוצרים',
+    icon: '🛍',
+    category: 'חנות',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'המוצרים מהקטלוג, עם מחיר, מלאי וכפתור הוספה לעגלה',
+    params: [
+      { name: 'shelf', bentmlParam: 'shelf', labelHe: 'מדף (קטגוריה)', type: 'string', default: '', omitDefault: true, hint: 'ריק = כל המוצרים' },
+      { name: 'columns', bentmlParam: 'columns', labelHe: 'עמודות', type: 'integer', min: 2, max: 4, default: 3, omitDefault: true },
+      { name: 'limit', bentmlParam: 'limit', labelHe: 'כמה מוצרים', type: 'integer', min: 0, max: 48, default: 0, omitDefault: true, hint: '0 = כולם' },
+      {
+        name: 'sort', bentmlParam: 'sort', labelHe: 'סדר', type: 'enum',
+        enum: ['manual', 'new', 'price-asc', 'price-desc', 'name'], default: 'manual', omitDefault: true
+      },
+      { name: 'filter', bentmlParam: 'filter', labelHe: 'סינון לפי מדפים', type: 'boolean', default: false, omitDefault: true },
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת מעל הרשת', type: 'string', default: '', omitDefault: true },
+      { name: 'exclude', bentmlParam: 'exclude', labelHe: 'להשמיט מוצר (מזהה)', type: 'string', default: '', omitDefault: true },
+      { name: 'buttons', bentmlParam: 'buttons', labelHe: 'כפתורי הוספה לעגלה', type: 'boolean', default: true, omitDefault: true }
+    ],
+    textField: null,
+    seed: {}
+  },
+  {
+    type: 'buy',
+    keyword: 'BUY',
+    labelHe: 'קנייה — מוצר בודד',
+    icon: '🏷',
+    category: 'חנות',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'תמונות, מחיר, אפשרויות, כמות והוספה לעגלה — של מוצר אחד',
+    params: [
+      { name: 'sku', bentmlParam: 'sku', labelHe: 'מוצר (מזהה)', type: 'string', required: true, hint: 'המזהה מהקטלוג (חנות → מוצרים)' },
+      { name: 'gallery', bentmlParam: 'gallery', labelHe: 'גלריית תמונות', type: 'boolean', default: true, omitDefault: true },
+      { name: 'description', bentmlParam: 'description', labelHe: 'תיאור המוצר', type: 'boolean', default: true, omitDefault: true }
+    ],
+    textField: null,
+    seed: { sku: '' }
+  },
+  {
+    type: 'cart',
+    keyword: 'CART',
+    labelHe: 'עגלת קניות',
+    icon: '🛒',
+    category: 'חנות',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'העגלה של הקונה: כמויות, הסרה, סכום ומעבר לקופה',
+    params: [
+      { name: 'empty', bentmlParam: 'empty', labelHe: 'טקסט לעגלה ריקה', type: 'string', default: '', omitDefault: true }
+    ],
+    textField: null,
+    seed: {}
+  },
+  {
+    type: 'checkout',
+    keyword: 'CHECKOUT',
+    labelHe: 'קופה',
+    icon: '💳',
+    category: 'חנות',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'פרטים, משלוח, תשלום, קופון וסיכום — ושליחת ההזמנה',
+    params: [],
+    textField: null,
+    seed: {}
+  },
+  {
+    type: 'order',
+    keyword: 'ORDER',
+    labelHe: 'אישור ומעקב הזמנה',
+    icon: '📦',
+    category: 'חנות',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'הדף שהקונה מגיע אליו אחרי ההזמנה: סטטוס, פריטים ותשלום',
+    params: [],
+    textField: null,
+    seed: {}
   },
   {
     type: 'cards',

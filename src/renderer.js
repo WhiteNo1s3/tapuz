@@ -140,8 +140,9 @@ function anchorId(block) {
 
 function renderBlock(block, direction = 'rtl') {
   // animate is universal (v1.97): it rides the same extraClass slot as
-  // className, so every case that interpolates ${extra}/${extraClass}
-  // animates. heading/text keep their own class lists and read it there.
+  // className, so every case that puts ${extraClass} inside its class="" (or
+  // hands `attrs` to a shared helper) animates. heading/text keep their own
+  // class lists and read it there.
   const animClass = ANIMATE_VALUES.has(block.data?.animate) ? ` anim-${block.data.animate}` : '';
   // per-device visibility (v2.12) — class-only chrome, same universal slot
   const hideOn = block.data?.style?.hideOn;
@@ -150,7 +151,12 @@ function renderBlock(block, direction = 'rtl') {
   const anchor = anchorId(block);
   const extraId = anchor ? ` id="${escapeHtml(anchor)}"` : '';
   const style = styleAttr(block.data);
-  const extra = extraClass + extraId + style;
+  // the chrome travels as PIECES, never glued into one string (v2.54): the
+  // class tokens go INSIDE a class="", the id and the style stay attributes.
+  // `attrs` is what every shared *FromData helper takes (src/pzn/block-attrs.js);
+  // a tag with no class of its own (list, divider, a bare link) wears classOnly.
+  const attrs = { cls: extraClass, idAttr: extraId, style };
+  const classOnly = extraClass ? ` class="${extraClass.trim()}"` : '';
 
   switch (block.type) {
     // HTML module — the raw-HTML escape hatch (v0.49 as an importer quarantine
@@ -226,8 +232,14 @@ function renderBlock(block, direction = 'rtl') {
       const seo = require('./pzn/link-attrs').linkSeoAttrs(block.data || {});
       return `<a${btnId}${btnClass}${style} href="${escapeHtml(safeHref(url))}"${seo} dir="${direction}">${escapeHtml(text)}</a>`;
     }
-    case 'spacer': return `<div${extra} class="spacer" style="height:${escapeHtml(block.data.height || '2rem')}"></div>`;
-    case 'divider': return `<hr${extra} dir="${direction}">`;
+    case 'spacer': {
+      // ONE style attribute: a second style="" is dropped by the browser,
+      // and when the paint came first it took the spacer's height with it
+      const decls = styleDecls(block.data);
+      const height = `height:${escapeHtml(block.data.height || '2rem')}`;
+      return `<div${extraId} class="spacer${extraClass}" style="${decls ? height + ';' + decls : height}"></div>`;
+    }
+    case 'divider': return `<hr${classOnly}${extraId}${style} dir="${direction}">`;
     case 'columns': {
       // Support both shapes:
       // - data.columns = [{ blocks: [...] }, ...]
@@ -258,7 +270,7 @@ function renderBlock(block, direction = 'rtl') {
         ? `--cols:${ratios.map((r) => r + 'fr').join(' ')}`
         : '';
       // merge with module style attr (avoid two style= attributes)
-      let colExtra = extra;
+      let colExtra = extraId + style;
       if (gridCss) {
         if (colExtra.includes(' style="')) {
           colExtra = colExtra.replace(' style="', ` style="${gridCss};`);
@@ -291,16 +303,16 @@ function renderBlock(block, direction = 'rtl') {
       // ITEM bodies carry inline marks per the cheatsheet ("Marks only inside
       // TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies") — same contract as
       // the quote case below; renderInlineMarks escapes everything it emits.
-      return `<${tag}${extra} dir="${direction}">${items.map(i => `<li dir="${direction}">${renderInlineMarks(i.text || i)}</li>`).join('')}</${tag}>`;
+      return `<${tag}${classOnly}${extraId}${style} dir="${direction}">${items.map(i => `<li dir="${direction}">${renderInlineMarks(i.text || i)}</li>`).join('')}</${tag}>`;
     }
     case 'quote': {
       const t = renderInlineMarks(block.data.text || '');
       const a = block.data.author ? `<footer>— ${escapeHtml(block.data.author)}</footer>` : '';
-      return `<blockquote class="bent-quote"${extra} dir="${direction}"><p>${t}</p>${a}</blockquote>`;
+      return `<blockquote class="bent-quote${extraClass}"${extraId}${style} dir="${direction}"><p>${t}</p>${a}</blockquote>`;
     }
     case 'card': {
       const inner = (block.data.blocks || []).map(b => renderBlock(b, direction)).join('');
-      return `<div class="card bent-card"${extra} dir="${direction}">${inner}</div>`;
+      return `<div class="card bent-card${extraClass}"${extraId}${style} dir="${direction}">${inner}</div>`;
     }
     case 'section': {
       // container-as-tool (v0.75): legitimate empty — publishes as reserved
@@ -309,7 +321,7 @@ function renderBlock(block, direction = 'rtl') {
       const inner = (d.blocks || []).map(b => renderBlock(b, direction)).join('');
       const size = ['sm', 'md', 'lg', 'xl'].includes(d.size) ? d.size : 'md';
       const empty = inner ? '' : ` is-empty size-${size}`;
-      return `<section class="bent-section tz-section${empty}"${extra} dir="${direction}">${inner}</section>`;
+      return `<section class="bent-section tz-section${empty}${extraClass}"${extraId}${style} dir="${direction}">${inner}</section>`;
     }
     case 'hero': {
       const d = block.data || {};
@@ -368,7 +380,7 @@ function renderBlock(block, direction = 'rtl') {
       const quote = renderInlineMarks(block.data.quote || '');
       const author = escapeHtml(block.data.author || '');
       const role = block.data.role ? `, ${escapeHtml(block.data.role)}` : '';
-      return `<blockquote class="testimonial"${extra} dir="${direction}"><p>“${quote}”</p><footer class="author">${author}${role}</footer></blockquote>`;
+      return `<blockquote class="testimonial${extraClass}"${extraId}${style} dir="${direction}"><p>“${quote}”</p><footer class="author">${author}${role}</footer></blockquote>`;
     }
 
     case 'gallery': {
@@ -381,17 +393,17 @@ function renderBlock(block, direction = 'rtl') {
         const alt = escapeHtml(img.alt || '');
         return `<img src="${src}" alt="${alt}">`;
       }).join('');
-      return `<div class="gallery cols-${cols}"${extra} dir="${direction}">${imgs}</div>`;
+      return `<div class="gallery cols-${cols}${extraClass}"${extraId}${style} dir="${direction}">${imgs}</div>`;
     }
 
     case 'embed': {
       const rawUrl = String(block.data.url || '');
       const yt = rawUrl.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,20})/);
       if (yt) {
-        return `<figure class="video-embed"${extra}><iframe src="https://www.youtube.com/embed/${yt[1]}" allowfullscreen loading="lazy" title="YouTube video"></iframe></figure>`;
+        return `<figure class="video-embed${extraClass}"${extraId}${style}><iframe src="https://www.youtube.com/embed/${yt[1]}" allowfullscreen loading="lazy" title="YouTube video"></iframe></figure>`;
       }
       const url = escapeHtml(safeHref(rawUrl));
-      return `<a href="${url}"${extra} target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
+      return `<a href="${url}"${classOnly}${extraId}${style} target="_blank" rel="noopener" dir="${direction}">${url}</a>`;
     }
 
     case 'article-list': {
@@ -413,7 +425,7 @@ function renderBlock(block, direction = 'rtl') {
           `<div class="cube-media">${media}</div>` +
           `<div class="cube-body"><h3>${escapeHtml(a.title)}</h3>${teaser}</div></a>`;
       }).join('');
-      return `<section${extra} class="article-cubes cols-${cols}" dir="${direction}">${cards}</section>`;
+      return `<section${extraId}${style} class="article-cubes cols-${cols}${extraClass}" dir="${direction}">${cards}</section>`;
     }
 
     case 'map': {
@@ -439,7 +451,7 @@ function renderBlock(block, direction = 'rtl') {
           : `<article class="feature">${inner}</article>`;
       }).join('');
       const cols = Math.min(Math.max(parseInt(block.data.columns, 10) || 3, 1), 4);
-      return `<section class="features cols-${cols}"${extra} dir="${direction}">${list}</section>`;
+      return `<section class="features cols-${cols}${extraClass}"${extraId}${style} dir="${direction}">${list}</section>`;
     }
 
     case 'cta': {
@@ -450,7 +462,7 @@ function renderBlock(block, direction = 'rtl') {
         ? `<a class="btn btn-${escapeHtml(variant)}" href="${escapeHtml(safeHref(d.url || '#'))}">${escapeHtml(d.buttonText)}</a>`
         : '';
       return (
-        `<section class="cta-strip tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +
+        `<section class="cta-strip tone-${escapeHtml(tone)}${extraClass}"${extraId}${style} dir="${direction}">` +
         `<div class="cta-inner">` +
         (d.title ? `<h2>${escapeHtml(d.title)}</h2>` : '') +
         (d.text ? `<p>${escapeHtml(d.text)}</p>` : '') +
@@ -469,7 +481,7 @@ function renderBlock(block, direction = 'rtl') {
             `<div class="stat-label">${escapeHtml(it.label || '')}</div></div>`
         )
         .join('');
-      return `<section class="stats-row cols-${cols}"${extra} dir="${direction}">${cells}</section>`;
+      return `<section class="stats-row cols-${cols}${extraClass}"${extraId}${style} dir="${direction}">${cells}</section>`;
     }
 
     case 'logos': {
@@ -482,11 +494,11 @@ function renderBlock(block, direction = 'rtl') {
             : `<div class="logo-cell">${img}</div>`;
         })
         .join('');
-      return `<section class="logos-strip"${extra} dir="${direction}">${cells}</section>`;
+      return `<section class="logos-strip${extraClass}"${extraId}${style} dir="${direction}">${cells}</section>`;
     }
 
     case 'social':
-      return renderSocialFromData(block.data || {}, direction, extra);
+      return renderSocialFromData(block.data || {}, direction, attrs);
 
     case 'faq': {
       const items = block.data.items || [];
@@ -497,7 +509,7 @@ function renderBlock(block, direction = 'rtl') {
             `<div class="faq-answer">${escapeHtml(it.answer || '')}</div></details>`
         )
         .join('');
-      return `<section class="faq-list"${extra} dir="${direction}">${rows}</section>`;
+      return `<section class="faq-list${extraClass}"${extraId}${style} dir="${direction}">${rows}</section>`;
     }
 
     case 'tabs': {
@@ -512,7 +524,7 @@ function renderBlock(block, direction = 'rtl') {
           `<label for="${tid}" class="bent-tab-label">${escapeHtml(it.label || ('טאב ' + (i + 1)))}</label>` +
           `<div class="bent-tab-panel">${renderInlineMarks(it.content || '')}</div>`;
       });
-      return `<div class="bent-tabs"${extra} dir="${direction}">${inner}</div>`;
+      return `<div class="bent-tabs${extraClass}"${extraId}${style} dir="${direction}">${inner}</div>`;
     }
 
     case 'accordion': {
@@ -524,130 +536,142 @@ function renderBlock(block, direction = 'rtl') {
             `<div class="bent-fold-body">${renderInlineMarks(it.content || '')}</div></details>`
         )
         .join('');
-      return `<div class="bent-accordion"${extra} dir="${direction}">${rows}</div>`;
+      return `<div class="bent-accordion${extraClass}"${extraId}${style} dir="${direction}">${rows}</div>`;
     }
 
     case 'form':
-      return require('./pzn/form-html').renderFormFromData(block.data || {}, direction, extra);
+      return require('./pzn/form-html').renderFormFromData(block.data || {}, direction, attrs);
 
     case 'products':
-      return renderProductsFromData(block.data || {}, direction, extra);
+      return renderProductsFromData(block.data || {}, direction, attrs);
+
+    // the store (v2.53) — read the catalog at render time, so the static
+    // export carries real products, prices and sold-out marks
+    case 'shop':
+    case 'buy':
+    case 'cart':
+    case 'checkout':
+    case 'order': {
+      const storeRender = require('./store/render');
+      const fn = { shop: 'renderShop', buy: 'renderBuy', cart: 'renderCart', checkout: 'renderCheckout', order: 'renderOrder' }[block.type];
+      return storeRender[fn](block.data || {}, { cls: extraClass, idAttr: extraId, style, dir: direction });
+    }
 
     case 'code':
-      return renderCodeFromData(block.data || {}, direction, extra);
+      return renderCodeFromData(block.data || {}, direction, attrs);
 
     case 'tags':
-      return renderTagsFromData(block.data || {}, direction, extra);
+      return renderTagsFromData(block.data || {}, direction, attrs);
 
     case 'cards':
-      return require('./pzn/card-html').renderCardsFromData(block.data || {}, direction, extra);
+      return require('./pzn/card-html').renderCardsFromData(block.data || {}, direction, attrs);
 
     case 'pricing':
       // pricing-table sugar (v1.05) — the module-hunt gap from docs/COMPETITIVE.md
-      return require('./pzn/pricing-html').renderPricingFromData(block.data || {}, direction, extra);
+      return require('./pzn/pricing-html').renderPricingFromData(block.data || {}, direction, attrs);
 
     case 'steps':
       // how-it-works numbered process (module-hunt gap) — CSS counters, zero JS
-      return require('./pzn/steps-html').renderStepsFromData(block.data || {}, direction, extra);
+      return require('./pzn/steps-html').renderStepsFromData(block.data || {}, direction, attrs);
 
     case 'crumbs':
-      return require('./pzn/crumbs-html').renderCrumbsFromData(block.data || {}, direction, extra);
+      return require('./pzn/crumbs-html').renderCrumbsFromData(block.data || {}, direction, attrs);
 
     case 'team':
       // team grid (gap-audit wave 3) — photo, name, role, bio; zero JS
-      return require('./pzn/team-html').renderTeamFromData(block.data || {}, direction, extra);
+      return require('./pzn/team-html').renderTeamFromData(block.data || {}, direction, attrs);
 
     case 'countdown':
       // sale/event timer — server renders real digits, a tiny inline script ticks
-      return require('./pzn/countdown-html').renderCountdownFromData(block.data || {}, direction, extra);
+      return require('./pzn/countdown-html').renderCountdownFromData(block.data || {}, direction, attrs);
 
     case 'pricelist':
       // restaurant menu / service price list — name … dots … price, zero JS
-      return require('./pzn/pricelist-html').renderPricelistFromData(block.data || {}, direction, extra);
+      return require('./pzn/pricelist-html').renderPricelistFromData(block.data || {}, direction, attrs);
 
     case 'progress':
       // skill/measure bars — inline width %, CSS animates, zero JS
-      return require('./pzn/progress-html').renderProgressFromData(block.data || {}, direction, extra);
+      return require('./pzn/progress-html').renderProgressFromData(block.data || {}, direction, attrs);
 
     // gap-audit wave 4 — the rest of the backlog
     case 'rating':
-      return require('./pzn/rating-html').renderRatingFromData(block.data || {}, direction, extra);
+      return require('./pzn/rating-html').renderRatingFromData(block.data || {}, direction, attrs);
 
     case 'hours':
-      return require('./pzn/hours-html').renderHoursFromData(block.data || {}, direction, extra);
+      return require('./pzn/hours-html').renderHoursFromData(block.data || {}, direction, attrs);
 
     case 'toc':
-      return require('./pzn/toc-html').renderTocFromData(block.data || {}, direction, extra);
+      return require('./pzn/toc-html').renderTocFromData(block.data || {}, direction, attrs);
 
     case 'author':
-      return require('./pzn/author-html').renderAuthorFromData(block.data || {}, direction, extra);
+      return require('./pzn/author-html').renderAuthorFromData(block.data || {}, direction, attrs);
 
     case 'compare':
       // before/after slider — inline range script, same static-export contract as countdown
-      return require('./pzn/compare-html').renderCompareFromData(block.data || {}, direction, extra);
+      return require('./pzn/compare-html').renderCompareFromData(block.data || {}, direction, attrs);
 
     case 'flipbox':
-      return require('./pzn/flipbox-html').renderFlipboxFromData(block.data || {}, direction, extra);
+      return require('./pzn/flipbox-html').renderFlipboxFromData(block.data || {}, direction, attrs);
 
     case 'header':
       // page header band (gap-audit wave 4) — nested blocks in a row; its
       // own bent-header class, never the master's .site-header
-      return require('./pzn/chrome-html').renderHeaderFromData(block.data || {}, direction, extra, renderBlock);
+      return require('./pzn/chrome-html').renderHeaderFromData(block.data || {}, direction, attrs, renderBlock);
 
     case 'footer':
       // page footer band — nested blocks + a credit line; never .site-footer
-      return require('./pzn/chrome-html').renderFooterFromData(block.data || {}, direction, extra, renderBlock);
+      return require('./pzn/chrome-html').renderFooterFromData(block.data || {}, direction, attrs, renderBlock);
 
     case 'search':
-      return renderSearchFromData(block.data || {}, direction, extra);
+      return renderSearchFromData(block.data || {}, direction, attrs);
 
     case 'newsletter':
-      return renderNewsletterFromData(block.data || {}, direction, extra);
+      return renderNewsletterFromData(block.data || {}, direction, attrs);
 
     case 'pager':
-      return renderPagerFromData(block.data || {}, direction, extra);
+      return renderPagerFromData(block.data || {}, direction, attrs);
 
     case 'consent':
-      return renderConsentFromData(block.data || {}, direction, extra);
+      return renderConsentFromData(block.data || {}, direction, attrs);
 
     case 'related':
-      return renderRelatedFromData(block.data || {}, direction, extra);
+      return renderRelatedFromData(block.data || {}, direction, attrs);
 
     case 'comments':
-      return renderCommentsFromData(block.data || {}, direction, extra);
+      return renderCommentsFromData(block.data || {}, direction, attrs);
 
     case 'slot':
-      return renderSlotFromData(block.data || {}, direction, extra);
+      return renderSlotFromData(block.data || {}, direction, attrs);
 
     case 'auth':
-      return renderAuthFromData(block.data || {}, direction, extra);
+      return renderAuthFromData(block.data || {}, direction, attrs);
 
     case 'whatsapp':
       // click-to-chat CTA — phone + prepared message → wa.me, styled pill
-      return require('./pzn/whatsapp-html').renderWhatsappFromData(block.data || {}, direction, extra);
+      return require('./pzn/whatsapp-html').renderWhatsappFromData(block.data || {}, direction, attrs);
 
     case 'timeline':
       // company-history rail (module-hunt gap) — CSS line + dots, zero JS
-      return require('./pzn/timeline-html').renderTimelineFromData(block.data || {}, direction, extra);
+      return require('./pzn/timeline-html').renderTimelineFromData(block.data || {}, direction, attrs);
 
     case 'carousel':
       // the cards unit, sliding: zero-JS scroll-snap strip (v0.79)
-      return require('./pzn/carousel-html').renderCarouselFromData(block.data || {}, direction, extra);
+      return require('./pzn/carousel-html').renderCarouselFromData(block.data || {}, direction, attrs);
 
     case 'nav':
-      // pass id/class as `extra` but the generic style decls as `decls` so the
+      // pass id/class as pieces but the generic style decls as `decls` so the
       // nav renders ONE style attribute (its colors + any generic style), never
       // two (which the browser would drop, killing the colors).
-      return require('./pzn/nav-html').renderNavFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
+      return require('./pzn/nav-html').renderNavFromData(block.data || {}, direction, { cls: extraClass, idAttr: extraId }, styleDecls(block.data));
 
     case 'ticker':
       // same ONE-merged-style contract as nav (v0.60 lesson): id/class as
-      // `extra`, generic style decls as `decls` so ticker colors never split.
-      return require('./pzn/ticker-html').renderTickerFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
+      // pieces, generic style decls as `decls` so ticker colors never split.
+      return require('./pzn/ticker-html').renderTickerFromData(block.data || {}, direction, { cls: extraClass, idAttr: extraId }, styleDecls(block.data));
 
     case 'newspop':
       // timestamped news feed (v0.70) — same ONE-merged-style contract.
-      return require('./pzn/newspop-html').renderNewspopFromData(block.data || {}, direction, extraClass + extraId, styleDecls(block.data));
+      return require('./pzn/newspop-html').renderNewspopFromData(block.data || {}, direction, { cls: extraClass, idAttr: extraId }, styleDecls(block.data));
 
     case 'video':
       // cls = className suffix (goes INSIDE class="") ; extra = id + style
@@ -711,7 +735,7 @@ function renderBlock(block, direction = 'rtl') {
           `<div class="contact-line"><span class="contact-k">שעות</span> ${escapeHtml(d.hours)}</div>`
         );
       }
-      return `<section class="contact-info"${extra} dir="${direction}">${lines.join('')}</section>`;
+      return `<section class="contact-info${extraClass}"${extraId}${style} dir="${direction}">${lines.join('')}</section>`;
     }
 
     case 'banner': {
@@ -721,7 +745,7 @@ function renderBlock(block, direction = 'rtl') {
       if (!String(d.text || '').trim()) return '';
       const tone = ['brand', 'dark', 'light', 'warn'].includes(d.tone) ? d.tone : 'brand';
       return (
-        `<div class="site-banner tone-${escapeHtml(tone)}"${extra} dir="${direction}">` +
+        `<div class="site-banner tone-${escapeHtml(tone)}${extraClass}"${extraId}${style} dir="${direction}">` +
         `<p>${escapeHtml(d.text || '')}</p></div>`
       );
     }
@@ -1301,7 +1325,14 @@ function renderPage(page, options = {}) {
   // registers itself with `window.tapuzConsent.onGrant()`, so the runtime has
   // to exist first. It also renders for sites with no browser vendor at all —
   // server-side conversions gate on the same answer.
-  const siteExtras = renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
+  // the store (v2.53): while it is open every page carries the cart button
+  // in the header and the storefront script; closed, neither exists
+  let storeSettings = null;
+  try { storeSettings = require('./store/settings').loadSettings(); } catch (e) { storeSettings = null; }
+  const storeRender = storeSettings && storeSettings.open ? require('./store/render') : null;
+  const headerCart = storeRender ? storeRender.renderHeaderCart(storeSettings) : '';
+  const siteExtras = (storeRender ? storeRender.renderStoreTag(storeSettings) : '') +
+    renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
     renderAnalyticsBeacon(config) + require('./crm/consent').renderConsent(config) +
     require('./crm/pixels').renderPixels(config) +
     require('./crm/cs-widget').renderTag(config) +
@@ -1341,7 +1372,7 @@ function renderPage(page, options = {}) {
     // S3 site chrome slots
     '{{header_class}}': chrome.headerClass,
     '{{header_tagline}}': chrome.headerTagline,
-    '{{header_cta}}': chrome.headerCta,
+    '{{header_cta}}': chrome.headerCta + headerCart,
     '{{footer_columns_html}}': chrome.footerColumns,
     '{{footer_text_html}}': chrome.footerText,
     '{{footer_social_html}}': chrome.footerSocial,

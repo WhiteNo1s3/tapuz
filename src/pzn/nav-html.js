@@ -12,6 +12,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** Keep a CSS color value safe to interpolate (no breakout chars). */
 function safeCssColor(v) {
@@ -43,10 +44,9 @@ function renderNav(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole nav from block.data (items array). */
-function renderNavFromData(data = {}, dir = '', extra = '', decls = '') {
+function renderNavFromData(data = {}, dir = '', attrs = {}, decls = '') {
   const items = (data.items || []).map((it) => renderNavItem(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderNav(data, items, { dir: dirAttr, extra, decls });
+  return renderNav(data, items, Object.assign(blockOpts(dir, attrs), { decls }));
 }
 
 module.exports = { renderNavItem, renderNav, renderNavFromData, safeCssColor };

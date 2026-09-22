@@ -7,7 +7,8 @@
  * leader … price, with an optional description line. Zero JS.
  */
 
-const { escapeHtml, escapeAttr } = require('./language/escape');
+const { escapeHtml } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** One list row → <div class="bent-priceitem">. props: {name, price, desc} */
 function renderPriceItem(props = {}) {
@@ -28,10 +29,9 @@ function renderPricelist(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole price list from block.data (items array). */
-function renderPricelistFromData(data = {}, dir = '', extra = '') {
+function renderPricelistFromData(data = {}, dir = '', attrs = {}) {
   const items = (data.items || []).map((it) => renderPriceItem(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderPricelist(data, items, { dir: dirAttr, extra });
+  return renderPricelist(data, items, blockOpts(dir, attrs));
 }
 
 module.exports = { renderPriceItem, renderPricelist, renderPricelistFromData };

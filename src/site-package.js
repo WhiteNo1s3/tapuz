@@ -45,6 +45,17 @@ function exportSitePackage(name) {
     return entry;
   });
 
+  // The store (v2.53) travels as what it IS — one <bent-store> BenTML
+  // document (catalog, shelves, shipping, payment, coupons). Orders are
+  // records about people, not site content: they travel in the database
+  // .pzn (storage → ייצוא ‎.pzn), never in a package meant to be shared.
+  let store = null;
+  try {
+    const st = require('./store');
+    const counts = st.catalog.countProducts();
+    if (counts.total || st.isOpen()) store = { format: 'bent-store', source: st.document.exportDocument() };
+  } catch (e) { store = null; }
+
   return {
     format: SITE_PACKAGE_FORMAT,
     version: SITE_PACKAGE_VERSION,
@@ -53,7 +64,8 @@ function exportSitePackage(name) {
     config: configSubset,
     theme: loadOverrides(),
     menus: loadMenus(),
-    pages
+    pages,
+    ...(store ? { store } : {})
   };
 }
 
@@ -116,9 +128,25 @@ function importSitePackage(pkg, opts = {}) {
     }
   }
 
+  // the store's document (v2.53): applied through the store's own door —
+  // validated, backed up first — and only ever ADDED to an existing shop
+  // (merge) unless the import overwrites, so a package never hides products
+  let storeResult = null;
+  if (pkg.store && typeof pkg.store === 'object' && typeof pkg.store.source === 'string' && pkg.store.source.trim()) {
+    try {
+      let source = pkg.store.source;
+      if (!overwrite) source = source.replace(/<bent-store\b([^>]*)>/i, (m, attrs) => '<bent-store' + attrs.replace(/\smode="[^"]*"/i, '') + ' mode="merge">');
+      const r = require('./store').document.applyDocument(source, { force: true, reason: 'site-package' });
+      storeResult = r.ok ? { ok: true, products: (r.changed && r.changed.products) || 0, backupId: r.backupId } : { ok: false, error: r.message || r.code };
+    } catch (e) {
+      storeResult = { ok: false, error: e.message };
+    }
+  }
+
   return {
     config: loadConfig(), theme: loadOverrides(), menus: loadMenus(),
-    pagesCreated, pagesUpdated, pagesSkipped
+    pagesCreated, pagesUpdated, pagesSkipped,
+    ...(storeResult ? { store: storeResult } : {})
   };
 }
 

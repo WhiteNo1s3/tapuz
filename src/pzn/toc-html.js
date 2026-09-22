@@ -7,6 +7,7 @@
  */
 
 const { escapeHtml, escapeAttr } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /**
  * A same-page anchor: keep #ids, allow same-site relative paths, and turn
@@ -36,10 +37,9 @@ function renderToc(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole TOC from block.data (items array). */
-function renderTocFromData(data = {}, dir = '', extra = '') {
+function renderTocFromData(data = {}, dir = '', attrs = {}) {
   const items = (data.items || []).map((it) => renderTocItem(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderToc(data, items, { dir: dirAttr, extra });
+  return renderToc(data, items, blockOpts(dir, attrs));
 }
 
 module.exports = { renderTocItem, renderToc, renderTocFromData, safeAnchor };

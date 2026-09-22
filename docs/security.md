@@ -136,6 +136,150 @@ Pinned by `scripts/smoke-ai-html-guard.js`.
 
 Pinned by `scripts/smoke-copilot-tools.js` and the numbered gate in `scripts/smoke-copilot-route.js`.
 
+## 6. The store's public doors (v2.53)
+
+The store adds the one public write a shop needs — placing an order — and
+keeps it narrow (`src/routes/store-public.js`, `docs/bent-store.md`):
+
+- **No price is trusted from a browser.** The cart in `localStorage` is
+  sku + option + qty; the quote, the checkout summary and the order are all
+  computed on the server from the database (`pricing.quote`). A tampered
+  price is ignored — pinned by `smoke-store` and `smoke-store-route`.
+- **Stock and coupon uses cannot be double-spent.** An order is one
+  `BEGIN IMMEDIATE` transaction with guarded `UPDATE … WHERE stock >= qty`
+  and `… WHERE used < max_uses`; two processes racing for the last unit get
+  one order.
+- **Each door has its own 32 KB JSON parser** (mounted before the admin's
+  12 MB one), a per-IP limit (checkout 8/min, quote 120/min, order view
+  60/min, `TAPUZ_STORE_*_MAX` to override), a honeypot on checkout, and
+  replies with no stack or internal id. JSON only: a cross-site form cannot
+  post `application/json` without a preflight, so a foreign page cannot
+  place an order from a visitor's browser.
+- **The order page is a capability link** (a 24-character random token) and
+  shows no phone, email or street — a shared screenshot of it hands out
+  nothing personal. `no-store` + `noindex`.
+- **No card number exists to leak.** Payment methods are instructions
+  and the address of the owner's own payment page (`https` only, filled with
+  `{total}` / `{order}` — never personal data); a card is entered on the
+  gateway's hosted page, never on ours. The gateway's keys are the one
+  payment secret, and §6א says where they live.
+
+### 6א. The card gateway (Grow / Cardcom — `src/store/gateway`, `docs/bent-store.md`)
+
+The gateway is the door that moves money, so its threat model is written
+down, threat by threat:
+
+- **A forged callback ("this order is paid").** Never believed as such. The
+  row is found by the provider's *session id* only, then: *Cardcom* sends
+  no signature, so its callback is a hint and the verdict is our own
+  `GetLpResult` with the stored ids and the terminal's keys — PAID needs the
+  top `ResponseCode` 0 (anything else is inconclusive, whatever sits
+  inside), our `LowProfileId` / terminal / `ReturnValue`, `Operation`
+  "ChargeOnly", `TranzactionInfo.ResponseCode` 0 (700/701 are J5/J2 holds —
+  no money), `IsRefund` false, `DealType` "Debit", a real transaction id
+  from inside `TranzactionInfo`, and the amount and coin of the order.
+  *Grow* asks that inquiries not run per transaction, so its callback is
+  **token-anchored**: the sha256 of `data[processToken]` must equal the
+  hash we stored when Grow gave us the token (constant-time compare of the
+  two digests), plus `processId`, `statusCode` "2", a transaction id that is
+  not "0", and our reference in `cField1` (a correlation check only — Grow
+  shows the cFields to the buyer). *Residual risk, stated:* the anchor is a
+  documented secret that never leaves our server; if it ever reached a
+  buyer, a forged callback could mark that one order paid. Grow's hosted
+  URL does not carry it (and the driver refuses one that does); the owner
+  can cross-check the approval number in Grow's back office. A body with
+  no `processToken` gets a quiet 200 and no action. Keys that are gone do
+  not lose a real callback: Grow's settles by hash (no acknowledgement,
+  noted on the row); Cardcom's is said once on the order and answered 503
+  so Cardcom retries.
+- **The proof at rest.** The database is the `.pzn` the owner downloads and
+  hands around, so a Grow `processToken` is never in it in the clear: the
+  row keeps its sha256 (what a callback is checked against) and a copy
+  sealed with AES-256-GCM — a fresh 12-byte IV per seal, the auth tag
+  stored and verified on open — under `_tokenKey`, 32 random bytes made
+  once in `config/payments.json` and kept through every provider save and
+  "ניתוק"; the seal is cleared the moment the row is settled. The key never
+  appears in the database, an API, the admin view or a log line (asserted
+  by the smoke). A backup restored on another install therefore still
+  verifies callbacks by hash and only loses the inquiry fallback for its
+  old rows, with a clear admin message and no crash.
+- **Amount tampering.** The session is created with the amount *from the
+  database* (`order.total`), never from a request; `settle()` compares the
+  provider's amount and currency to the order in the same transaction, and
+  a difference is `mismatch` — an event, an owner mail, and the order is not
+  marked paid. `mismatch` rows are final: no refund action, because the
+  charged amount is not ours to guess.
+- **Replay and races.** `settle()` is a guarded `UPDATE … WHERE status IN
+  ('pending','failed')` inside `BEGIN IMMEDIATE`, and `UNIQUE (provider,
+  mode, transaction_id)` makes one provider transaction settle at most one
+  row per mode (Grow's sandbox and production number transactions
+  independently): a duplicate callback or a concurrent order-page verify
+  changes nothing, and the same transaction replayed against another order
+  is refused with an owner-visible event and mail ("העסקה כבר נרשמה בתשלום
+  אחר"). The order page checks every unpaid session of the order, newest
+  first, each behind its own throttle (the first poll only starts the clock
+  — Grow's callback gets 20 s, Cardcom's 5 — then ≥ that gap, ≤ 60 times,
+  ≤ 24 h per row) and at most two provider calls per page load; the
+  callback and the admin's own per-row check are bounded per row and per
+  IP.
+- **Refunds cannot double-spend.** The sum is reserved on the row — and
+  the row locked for the call — with one guarded `UPDATE … WHERE refunded
+  + ? <= amount AND (refund_lock IS NULL OR stale)` before the provider is
+  asked, so two clicks — or two processes — cannot both send a refund, and
+  only one refund of a row is ever in flight. The reservation is recorded
+  AS an unknown sum until the provider answers, so a crash mid-call
+  surfaces as a decision for the owner rather than a silent "refunded";
+  a definite refusal releases the reservation, an unknown outcome
+  (timeout, 5xx) keeps it as an
+  "unknown" sum the owner resolves after a look in the provider's panel
+  (no further refund touches the row until then), and a refund names its
+  row. The order's `paid_at` is cleared in the same transaction as the
+  books only when the gateway itself had set it and no live row holds
+  money any more — an order marked paid by hand keeps its mark.
+- **Exfiltration via a redirectable host.** Hosts are constants inside each
+  driver (Cardcom: one host, test = terminal 1000; Grow: sandbox /
+  production), and the transport a driver receives refuses any other host
+  before bytes leave. No setting, env var or request field names a host;
+  the smoke greps the drivers for it. TLS is never relaxed.
+- **Secrets at rest and in transit to the owner.** The keys live in
+  gitignored `config/payments.json` (mode 0600) — never the database (which
+  IS the `.pzn` the owner downloads, restores and hot-swaps), never the site
+  package, never `<bent-store>`. Every admin surface sees readiness and a
+  last-4 tail; a value is typed in and never read back. Provider error text
+  reaches the admin only after every stored key and token is redacted; the
+  shopper gets a Hebrew sentence. Grow's `processId` / `processToken` /
+  `transactionToken` and Cardcom's `LowProfileId` stay on the payment row:
+  no browser JSON, HTML, event, CSV or log line carries them (asserted by
+  the smoke).
+- **The hook door itself.** Mounted before the body parsers with its own
+  `express.raw` (64 KB), parsed by us (JSON whatever the Content-Type,
+  urlencoded, or multipart through the platform's `Response.formData()`),
+  per-IP limited, and uninformative: a refusal, an unknown id and a settled
+  outcome all get the provider's expected 200 "OK"; a 5xx only when *our*
+  inquiry failed for a known pending row, so Cardcom retries. A provider
+  whose keys we do not hold gets 404.
+- **Return addresses.** Built only from an https `config.baseUrl`, in both
+  modes; there is no request-origin fallback, so a spoofed `Host` header can
+  never choose where the provider sends the buyer or the callback.
+- **Test mode is never money.** A test confirmation records the row and an
+  event but never `paid_at`; the storefront says so; the dashboard shows a
+  red line while the store is open in test mode. Cardcom has one host, and
+  only terminal 1000 clears without charging: test mode refuses every
+  other terminal, live mode refuses 1000. Switching test → live needs
+  `confirmLive: true` on the wire (the screen sends it only after its own
+  confirm), and the ₪1 connection test hands back a payable page address in
+  test mode only.
+- **Refunds** are explicit admin actions behind `requireAdmin` and a typed
+  confirmation (the order number); nothing is refunded automatically, and
+  the manual "paid" checkbox cannot un-pay money the gateway still holds.
+- **Every store screen and API is `requireAdmin`** — an editor gets 403
+  (prices, and customers' names and addresses). The orders CSV guards against
+  spreadsheet formula injection.
+- **The storefront script writes remote text with `textContent` only**
+  (`public/tz-store.js` has no `innerHTML`, no `eval`) — a product name is
+  data, never markup; the server-rendered modules escape every field and
+  the Product JSON-LD escapes `<`.
+
 ## Operator checklist
 
 - [ ] Serve Tapuz **behind HTTPS** (so `Secure` cookies engage) via a reverse proxy.

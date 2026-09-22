@@ -3,7 +3,7 @@
   "title": "Tapuziel .pzn page language",
   "description": "Constrained-HTML page format (benTML dialect). Body may contain only registered bent-* module tags.",
   "specVersion": "0.1",
-  "generatedFrom": "tapuziel@2.20.0-alpha",
+  "generatedFrom": "tapuziel@2.53.0-alpha",
   "modules": {
     "heading": {
       "tag": "bent-heading",
@@ -3221,6 +3221,190 @@
         "columns": {
           "type": "integer",
           "default": 3,
+          "optional": true
+        }
+      }
+    },
+    "shop": {
+      "tag": "bent-shop",
+      "label": {
+        "he": "חנות — רשת מוצרים",
+        "en": "Shop grid"
+      },
+      "category": "store",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "shelf": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "columns": {
+          "type": "integer",
+          "min": 2,
+          "max": 4,
+          "default": 3,
+          "optional": true
+        },
+        "limit": {
+          "type": "integer",
+          "min": 0,
+          "max": 48,
+          "default": 0,
+          "optional": true
+        },
+        "sort": {
+          "type": "enum",
+          "enum": [
+            "manual",
+            "new",
+            "price-asc",
+            "price-desc",
+            "name"
+          ],
+          "default": "manual",
+          "optional": true
+        },
+        "filter": {
+          "type": "boolean",
+          "default": false,
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "exclude": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        },
+        "buttons": {
+          "type": "boolean",
+          "default": true,
+          "optional": true
+        }
+      }
+    },
+    "buy": {
+      "tag": "bent-buy",
+      "label": {
+        "he": "קנייה — מוצר בודד",
+        "en": "Buy box"
+      },
+      "category": "store",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "sku": {
+          "type": "string"
+        },
+        "gallery": {
+          "type": "boolean",
+          "default": true,
+          "optional": true
+        },
+        "description": {
+          "type": "boolean",
+          "default": true,
+          "optional": true
+        }
+      }
+    },
+    "cart": {
+      "tag": "bent-cart",
+      "label": {
+        "he": "עגלת קניות",
+        "en": "Cart"
+      },
+      "category": "store",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        },
+        "empty": {
+          "type": "string",
+          "default": "",
+          "optional": true
+        }
+      }
+    },
+    "checkout": {
+      "tag": "bent-checkout",
+      "label": {
+        "he": "קופה",
+        "en": "Checkout"
+      },
+      "category": "store",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
+          "optional": true
+        }
+      }
+    },
+    "order": {
+      "tag": "bent-order",
+      "label": {
+        "he": "אישור ומעקב הזמנה",
+        "en": "Order status"
+      },
+      "category": "store",
+      "container": false,
+      "accept": [],
+      "props": {
+        "animate": {
+          "type": "enum",
+          "enum": [
+            "none",
+            "fade",
+            "rise",
+            "zoom"
+          ],
+          "default": "none",
           "optional": true
         }
       }

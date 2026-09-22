@@ -123,6 +123,15 @@ app.use((err, req, res, next) => {
 // spaced body must verify) on top of asserting the mount position.
 app.use(require('./routes/wa-webhook'));
 
+// The card gateway's public doors (the store — src/store/gateway): the
+// provider's webhook reads its own RAW bytes with a 64 KB express.raw and
+// parses them itself (JSON / urlencoded / multipart, whatever the provider
+// sends), so like the WhatsApp webhook it mounts BEFORE the body parsers —
+// the site's 256 KB extended urlencoded parser must never be the one that
+// reads an unauthenticated callback. The pay door is JSON only with its own
+// 32 KB parser. smoke-store-gateway.js pins the position.
+app.use(require('./routes/store-gateway'));
+
 app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
 
 // Public form capture (POST /api/form + GET /form-sent) — extracted to
@@ -130,6 +139,11 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
 // MOUNTED HERE: after the urlencoded body-parser above (so the POST body is
 // parsed) and before the static mounts. Order is load-bearing.
 app.use(require('./routes/form-capture'));
+
+// The store's public endpoints (v2.53) — catalog, quote, checkout, order
+// status. Same slot as form capture: before the static mounts; each route
+// brings its own 32 KB JSON parser, ahead of the admin's 12 MB one below.
+app.use(require('./routes/store-public'));
 
 // Customer portal (v2.10) — /account/* when crm.portal.enabled (off by default).
 // Mounted before admin so it is never gated by requireAdmin.
@@ -527,6 +541,16 @@ app.use(require('./routes/mission'));
 // it on instead of rendering. The CMS's own paths call the CRM only through
 // the guarded seam in src/crm/index.js, never into these routes.
 app.use(require('./routes/crm'));
+
+// The store's admin (v2.53) — the flip, products, orders, coupons, shipping &
+// payment, and the <bent-store> BenTML door. Behind the admin gate like every
+// /admin route, and requireAdmin inside: prices and customers' orders.
+app.use(require('./routes/store-admin'));
+app.use(require('./routes/store-products'));
+app.use(require('./routes/store-orders'));
+// the card gateway's admin (סליקת אשראי): provider, mode, keys (readiness +
+// last-4 only), the ₪1 connection test, and the explicit refund action
+app.use(require('./routes/store-gateway-admin'));
 
 // Terminal error handler — NEVER leak a stack trace to a client. Without this,
 // a body-parser error (e.g. an oversized/malformed body on the public /agent

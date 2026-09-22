@@ -5,6 +5,8 @@
 #   bash scripts/mlx-survey.sh sanity          # only the instrument check (3 scenarios, ~5 min)
 #   bash scripts/mlx-survey.sh A               # one tier; tiers can be given in any combination
 #   DRY=1 bash scripts/mlx-survey.sh           # print what would run, run nothing
+#   bash scripts/mlx-survey.sh variants        # READ-ONLY: which build of each model LM Studio would load — what to click BEFORE a run
+#   bash scripts/mlx-survey.sh gemma-31b-4bit  # one model by its tag (after a click); tiers and tags can be mixed
 #
 # Per model: find it on disk (or download it, resuming while it grows) → load under tapuz-mlx-<tag> → check WHICH
 # weights and WHICH window really loaded → the copilot DREAMS (D1–D14), the theme dreams, the page dreams, all
@@ -110,6 +112,25 @@ loadable() { # resolved key → "<key lms can load>|<the selected variant, when 
 }
 other_variant_note() { # wanted selected → the sentence for the row
   say "THE OTHER VARIANT IS SELECTED — LM Studio would load ${2:-another build} for this key, and neither lms nor its API can ask for $1. In the app: My Models → this model → choose the ${1##*@} variant, then run this tier again"
+}
+variants_report() { # READ-ONLY — nothing is downloaded, loaded or unloaded. What Ben clicks BEFORE a run, not after a night.
+  local tier tag repo runs gb bits extra key lk sel
+  say "== variants: which build would LM Studio load for each model on the list? (read-only)"
+  printf '%s\n' "$MODELS" | while IFS='|' read -r tier tag repo runs gb bits extra; do
+    [ -n "$tag" ] || continue
+    key="$(resolve_key "$repo")"
+    if [ -z "$key" ]; then say "   $tag — not on disk yet (the run downloads it; a download can move the selection — the row will say)"; continue; fi
+    lk="$(loadable "$key")"; sel="${lk#*|}"
+    if [ -n "$sel" ] && [ "$sel" != "$key" ]; then say "   $tag — CLICK NEEDED: ${sel##*@} is selected, this row needs ${key##*@}. In the app: My Models → the model → choose ${key##*@}"
+    else say "   $tag — ready ($key)"; fi
+  done
+}
+known() { # is this argument a step, a tier or a tag on the list? A typo must not be a run that silently does nothing.
+  case "$1" in sanity|variants) return 0 ;; esac
+  printf '%s\n' "$MODELS" | awk -F'|' -v a="$1" '$1==a || $2==a {f=1} END{exit f?0:1}'
+}
+card_rows() { # the TSV → the rows the card shows: a row that was NOT measured is dropped once a later row of the same tag exists
+  awk -F'\t' 'NR==FNR { last[$1]=FNR; next } !($10=="-" && FNR<last[$1])' "$1" "$1"
 }
 
 # ── download: `lms get` dies with "Timed-out. Please try to resume." every few minutes on a slow link and RESUMES on
@@ -266,7 +287,7 @@ scorecard() {
     say ""
     say "| model | MLX repo | loaded | configured → effective | budgeted | battery saw | copilot dreams D1–D14 | theme /5 | page /5 | note |"
     say "|---|---|---|---|---|---|---|---|---|---|"
-    [ -f "$TSV" ] && awk -F'\t' '{printf "| %s | `%s` | %s · %s | %s → %s | %s | %s | %s | %s | %s | %s |\n", $1, $2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13}' "$TSV"
+    [ -f "$TSV" ] && card_rows "$TSV" | awk -F'\t' '{printf "| %s | `%s` | %s · %s | %s → %s | %s | %s | %s | %s | %s | %s |\n", $1, $2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13}'
     say ""
     say "## Per model — every ✗, with the owner's sentence and what landed"
     say ""
@@ -283,11 +304,17 @@ scorecard() {
 
 mkdir -p "$OUT"
 TIERS="${*:-sanity A B C}"
+for t in $TIERS; do known "$t" || { say "REFUSED: \"$t\" is not a step (sanity, variants), a tier (A B C) or a tag on the list"; exit 2; }; done
+if [ "$TIERS" = "variants" ]; then   # read-only: works while Ben's own model is loaded, needs only the lms CLI
+  [ -x "$LMS" ] || { say "REFUSED: no lms CLI at $LMS (set LMS=/path/to/lms)"; exit 2; }
+  variants_report; exit 0
+fi
 preflight
 for t in $TIERS; do
   if [ "$t" = "sanity" ]; then sanity; unload_mine; continue; fi
+  if [ "$t" = "variants" ]; then variants_report; continue; fi
   printf '%s\n' "$MODELS" | while IFS='|' read -r tier tag repo runs gb bits extra; do
-    [ "$tier" = "$t" ] && one "$tier" "$tag" "$repo" "$runs" "$gb" "$bits" "$extra"
+    { [ "$tier" = "$t" ] || [ "$tag" = "$t" ]; } && one "$tier" "$tag" "$repo" "$runs" "$gb" "$bits" "$extra"
     true
   done
   rc=$?; [ $rc -ne 0 ] && exit $rc

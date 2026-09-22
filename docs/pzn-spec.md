@@ -1,6 +1,6 @@
 # The `.pzn` page format — standard
 
-**Spec version 0.1** · generated from `tapuziel@2.20.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
+**Spec version 0.1** · generated from `tapuziel@2.53.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
 
 `.pzn` is an open, constrained-HTML page format. A `.pzn` file **is** HTML —
 but the body may contain **only registered `bent-*` module tags**, never raw
@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (98)
+## Modules (103)
 
 ### Category: content
 
@@ -704,6 +704,40 @@ from it directly.
   - `content` · text
   - `provisional` · boolean · default `false`
   - `note` · string
+
+### Category: store
+
+#### `<bent-shop>` — חנות — רשת מוצרים / Shop grid · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `shelf` · string
+  - `columns` · integer · 2–4 · default `3`
+  - `limit` · integer · 0–48 · default `0`
+  - `sort` · enum · manual \| new \| price-asc \| price-desc \| name · default `manual`
+  - `filter` · boolean · default `false`
+  - `title` · string
+  - `exclude` · string
+  - `buttons` · boolean · default `true`
+
+#### `<bent-buy>` — קנייה — מוצר בודד / Buy box · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `sku` · string
+  - `gallery` · boolean · default `true`
+  - `description` · boolean · default `true`
+
+#### `<bent-cart>` — עגלת קניות / Cart · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `empty` · string
+
+#### `<bent-checkout>` — קופה / Checkout · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+
+#### `<bent-order>` — אישור ומעקב הזמנה / Order status · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
 
 ## Versioning
 

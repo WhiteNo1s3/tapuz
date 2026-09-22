@@ -13,7 +13,7 @@
  * `peek` leaves the next slide's edge visible so scrollability is obvious.
  */
 
-const { escapeAttr } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 const { renderCard } = require('./card-html');
 
 const HEIGHTS = ['sm', 'md', 'lg'];
@@ -33,15 +33,12 @@ function renderCarouselTrack(slidesHtml, opts = {}) {
 }
 
 /** Convenience for the renderer: whole carousel from block.data. */
-function renderCarouselFromData(data = {}, dir = '', extra = '') {
+function renderCarouselFromData(data = {}, dir = '', attrs = {}) {
   const slides = (data.items || []).map((it) => renderSlide(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderCarouselTrack(slides, {
+  return renderCarouselTrack(slides, Object.assign(blockOpts(dir, attrs), {
     height: data.height,
-    peek: data.peek,
-    dir: dirAttr,
-    extra
-  });
+    peek: data.peek
+  }));
 }
 
 module.exports = { renderSlide, renderCarouselTrack, renderCarouselFromData };

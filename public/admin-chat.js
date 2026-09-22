@@ -47,7 +47,11 @@
   const BRIDGE_MIN = '0.5.0'; // tools (read/create/edit) need the bridge that forwards tool calls
 
   let providers = [];
-  let settings = { provider: 'claude', model: '', hasKey: false, keyTail: '' };
+  let settings = { provider: 'claude', model: '', hasKey: false, keyTail: '', keyTails: {} };
+  /** v2.52 — the key on file for THIS supplier (its last four characters), or ''. Keys are kept per supplier:
+   *  before, one stored key was sent to whichever supplier was picked next. */
+  const tailOf = (p) => ((settings.keyTails || {})[p && p.id]) || '';
+  let sessionUsd = 0; // what the suppliers billed for this conversation, by the turns' own estimates
   let pages = []; // the dropdown's source of truth (GET /admin/api/pages)
   let loadedPath = ''; // the page in the canvas ('' = blank OR the menu — see menuOpen)
   // v2.43 — the canvas's third state. MENU_KEY is the dropdown's value for it.
@@ -227,8 +231,8 @@
       ? '· לא נדרש — המודל אצלכם, דרך התוסף'
       : p.keyOptional
         ? '· לרוב לא נדרש למודל מקומי'
-        : (settings.hasKey ? '· מוגדר (…' + settings.keyTail + ')' : '· לא מוגדר');
-    $('ai-key').placeholder = settings.hasKey
+        : (tailOf(p) ? '· מוגדר (…' + tailOf(p) + ')' : '· לא מוגדר לספק הזה');
+    $('ai-key').placeholder = tailOf(p)
       ? 'להחלפה — הדביקו מפתח חדש'
       : (p.keyHint || 'sk-…');
   }
@@ -244,7 +248,7 @@
       // everything else keeps the key/local rule.
       const ready = p.browserRelay
         ? bridge.present
-        : (p.keyOptional || (p.id === settings.provider && settings.hasKey));
+        : (p.keyOptional || !!tailOf(p));
       const chip = p.browserRelay
         ? (bridge.present ? 'תוסף מחובר ✓' : 'דורש את תוסף Bridge V2')
         : p.keyOptional
@@ -690,6 +694,23 @@
   function noteTurn(d) {
     if (!d) return;
     if (d.notice) bubble('system', esc(d.notice), 'warn');
+    // v2.52 — the premium tier's meter, shown. v2.51 put `spend` on every response (the tokens of THIS response,
+    // the price the CMS holds, the money); the page never said it. One quiet line per response that cost
+    // something, with the cache's share and the conversation so far. An estimate at list price — the supplier's
+    // invoice decides. Nothing for a model on the owner's machine (its `spend` has no price and bills nothing).
+    const sp = d.spend;
+    if (sp && sp.provider !== 'local' && sp.provider !== 'browser' && (sp.prompt_tokens || sp.completion_tokens)) {
+      const n = (v) => Number(v || 0).toLocaleString('en-US');
+      const usd = (v) => '$' + (v < 0.01 ? v.toFixed(4) : v.toFixed(3));
+      const cached = sp.cache_read_tokens ? ' · ' + n(sp.cache_read_tokens) + ' מהמטמון' : '';
+      if (sp.usd != null) {
+        sessionUsd += Number(sp.usd) || 0;
+        bubble('system', 'עלות משוערת: ' + usd(Number(sp.usd)) + ' · ' + n(sp.prompt_tokens) + ' טוקנים נקראו' + cached +
+          ' · בשיחה הזו עד כה ' + usd(sessionUsd) + (sp.priceAsOf ? ' · מחירון ' + esc(sp.priceAsOf) : ''), 'cost');
+      } else {
+        bubble('system', n(sp.prompt_tokens) + ' טוקנים נקראו' + cached + ' · ' + n(sp.completion_tokens) + ' נכתבו · אין בידינו מחירון למודל הזה', 'cost');
+      }
+    }
     if (d.window) {
       // the TURN's own word on the menu tools beats the chip's forecast
       if (d.window.menuTools === false) menuToolsOff = true;

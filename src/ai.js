@@ -28,6 +28,10 @@ const {
 // it, the Hebrew that explains it — one module, so the copilot route, the
 // setup screen and the tool loop can never disagree about the numbers.
 const win = require('./ai-window');
+// What a turn COSTS when the brain is a cloud key (v2.51): the price table,
+// the token accounting and the arithmetic, in one module so the copilot, the
+// battery and the eval runner can never disagree about a bill.
+const cost = require('./ai-cost');
 
 const STORE_PATH = path.join(CONFIG_DIR, 'ai.json');
 
@@ -37,10 +41,35 @@ function load() {
   try {
     if (fs.existsSync(STORE_PATH)) {
       const data = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
-      if (data && typeof data === 'object') return data;
+      if (data && typeof data === 'object') return migrateKeys(data);
     }
   } catch (e) { /* fall through */ }
-  return { provider: 'claude', model: '', apiKey: '', baseUrl: '' };
+  return { provider: 'claude', model: '', keys: {}, baseUrl: '' };
+}
+
+/**
+ * v2.52 — ONE KEY PER PROVIDER. The store held a single `apiKey`, and the
+ * setup card's rule is "an empty key field keeps the stored key": an owner who
+ * switched from Claude to OpenAI and pressed Save sent her Anthropic key to
+ * OpenAI in a Bearer header. With five suppliers that bill on the list that is
+ * no longer a corner. Keys now live under `keys[<provider id>]` and a call only
+ * ever takes the key filed under the provider it is calling (keyFor). A file
+ * from before v2.52 is read as it was meant: its one key belongs to the
+ * provider it was saved with. The old field is dropped on the next save.
+ */
+function migrateKeys(data) {
+  const keys = (data.keys && typeof data.keys === 'object' && !Array.isArray(data.keys)) ? { ...data.keys } : {};
+  const legacy = String(data.apiKey || '').trim();
+  const owner = String(data.provider || 'claude');
+  if (legacy && !keys[owner]) keys[owner] = legacy;
+  const out = { ...data, keys };
+  delete out.apiKey;
+  return out;
+}
+
+/** The key filed under THIS provider — never another supplier's. */
+function keyFor(s, providerId) {
+  return String((s && s.keys && s.keys[providerId]) || '').trim();
 }
 
 function save(data) {
@@ -51,19 +80,25 @@ function save(data) {
 /** Public settings — NEVER includes the key itself. */
 function getSettings() {
   const s = load();
-  const key = String(s.apiKey || '');
+  const id = s.provider || 'claude';
+  const key = keyFor(s, id);
+  // which suppliers have a key on file (last four characters, as keyTail always was) — the setup card marks each row
+  const keyTails = {};
+  Object.keys(s.keys || {}).forEach((k) => { const v = keyFor(s, k); if (v && getProvider(k)) keyTails[k] = v.slice(-4); });
   return {
-    provider: s.provider || 'claude',
+    provider: id,
     model: s.model || '',
     baseUrl: s.baseUrl || '',
     hasKey: !!key,
-    keyTail: key ? key.slice(-4) : ''
+    keyTail: key ? key.slice(-4) : '',
+    keyTails
   };
 }
 
 /**
  * @param {{ provider?, model?, apiKey?, baseUrl? }} patch
- *  apiKey: undefined = keep current; '' = clear; value = replace.
+ *  apiKey: undefined = keep current; '' = clear; value = replace — always the
+ *  key of the provider this same patch selects (or the one already selected).
  *  baseUrl: the local runtime's address — REJECTED here if it is not loopback,
  *  so a non-local address can never be stored, let alone called.
  */
@@ -74,7 +109,12 @@ function saveSettings(patch = {}) {
     s.provider = patch.provider;
   }
   if (patch.model !== undefined) s.model = String(patch.model || '');
-  if (patch.apiKey !== undefined) s.apiKey = String(patch.apiKey || '').trim();
+  if (patch.apiKey !== undefined) {
+    const v = String(patch.apiKey || '').trim();
+    const owner = s.provider || 'claude';
+    s.keys = s.keys || {};
+    if (v) s.keys[owner] = v; else delete s.keys[owner];
+  }
   if (patch.baseUrl !== undefined) {
     const raw = String(patch.baseUrl || '').trim();
     if (raw && !resolveLocalEndpoint(raw)) {
@@ -296,9 +336,32 @@ function readUsage(style, data) {
     const out = { prompt_tokens: num(u.prompt_tokens), completion_tokens: num(u.completion_tokens) };
     const details = u.completion_tokens_details;
     if (details && details.reasoning_tokens != null) out.reasoning_tokens = num(details.reasoning_tokens);
+    // v2.51 — the cached part of the prompt. The two shapes disagree about
+    // where it sits, and the disagreement is resolved HERE, once, so nothing
+    // downstream has to know: openai-chat counts cached tokens INSIDE
+    // prompt_tokens, so the part billed at the full rate is what is left after
+    // taking them out.
+    const pd = u.prompt_tokens_details;
+    if (pd && pd.cached_tokens != null) {
+      out.cache_read_tokens = num(pd.cached_tokens);
+      out.billed_input_tokens = Math.max(0, out.prompt_tokens - out.cache_read_tokens);
+    }
     return out;
   }
-  return { prompt_tokens: num(u.input_tokens), completion_tokens: num(u.output_tokens) };
+  // anthropic-messages: input_tokens is ALREADY only the uncached part — the
+  // cached read and the write that created it are reported beside it. So the
+  // whole prompt is the sum of the three, and the billed-at-full-rate part is
+  // input_tokens as given.
+  const out = { prompt_tokens: num(u.input_tokens), completion_tokens: num(u.output_tokens) };
+  const read = num(u.cache_read_input_tokens);
+  const write = num(u.cache_creation_input_tokens);
+  if (u.cache_read_input_tokens != null || u.cache_creation_input_tokens != null) {
+    out.cache_read_tokens = read;
+    out.cache_write_tokens = write;
+    out.billed_input_tokens = out.prompt_tokens;
+    out.prompt_tokens = out.prompt_tokens + read + write;
+  }
+  return out;
 }
 
 /**
@@ -341,6 +404,106 @@ async function postJson(endpoint, headers, body, timeoutMs) {
     req.on('error', reject);
     req.end(payload);
   });
+}
+
+// ── the cached prefix (v2.51) ───────────────────────────────────────────
+//
+// The local tier pays nothing per token; the premium tier pays for every one,
+// and the copilot's tool loop re-sends the SAME prefix on every hop — the
+// BenTML briefing (thousands of tokens), then the tool schemas. Anthropic
+// serves a marked prefix from its cache at a TENTH of the input price, for the
+// price of writing it once at a quarter more. So a fourteen-hop turn stops
+// paying fourteen times for one briefing, which is most of what a premium
+// turn costs.
+//
+// The mark is `cache_control` on the last system block, and it is applied only
+// where it can take: Anthropic ignores a breakpoint under its minimum
+// cacheable prefix (1,024 tokens on the models this table ships) in silence,
+// so a short system prompt keeps the plain-string shape it has always had —
+// which is also the shape every smoke that pins the request asserts.
+const CACHE_MIN_CHARS = 4700; // ≈ 2,048 tokens at the Hebrew ratio — twice the minimum, so it always takes
+
+// v2.52 — WHERE the mark goes. The copilot's system text is the briefing (the
+// module dictionary — identical call after call) and then the SITUATION: the
+// page that is open, and in the builder drawer the selected item WITH ITS TEXT
+// (routes/copilot.js). One block marked at its end hashes both, so every turn
+// in which the owner selected something else missed the cache and paid the
+// 1.25× write again for a dictionary that had not changed. The text is cut at
+// the situation's head — one constant, shared with the route that writes it —
+// and only the briefing is marked; the situation rides after it, unmarked.
+const SITUATION_MARK = '\n\n---\n\n## המצב עכשיו';
+
+/** The `system` field: a plain string, or the cached briefing (+ the unmarked situation) when it is worth caching. */
+function cacheableSystem(provider, system) {
+  const text = String(system || '');
+  const style = (provider && provider.body && provider.body.style) || 'anthropic-messages';
+  if (style !== 'anthropic-messages' || text.length < CACHE_MIN_CHARS) return text;
+  const cut = text.lastIndexOf(SITUATION_MARK);
+  if (cut >= CACHE_MIN_CHARS) {
+    return [{ type: 'text', text: text.slice(0, cut), cache_control: { type: 'ephemeral' } }, { type: 'text', text: text.slice(cut) }];
+  }
+  return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+}
+
+// ── the wire, for a supplier that bills (v2.52) ─────────────────────────
+//
+// The loop builds ONE body shape per style and everything in this module reads
+// it (`max_tokens`, the `system` cacheableSystem made). What a particular
+// supplier wants on top is added at the last moment, here, so nothing upstream
+// has to know:
+//   • OpenAI renamed the reply budget (`max_completion_tokens`);
+//   • a cloud model that thinks by default is asked for the level the table
+//     names — the copilot wants an answer, and thinking is billed as output;
+//   • Anthropic, when the system is being cached anyway, also gets a top-level
+//     `cache_control`: the API moves a second breakpoint along the growing
+//     conversation, so hops 2..n of a turn read the page the model just read
+//     (3–10K tokens) at a tenth instead of paying for it again every hop.
+//
+// None of it can be tried without a paid key, so each is REVOCABLE: a 400 that
+// NAMES one of these fields drops it for that supplier (this process) and the
+// same call is repeated once. A supplier's refusal must cost one round trip,
+// never the copilot.
+const OPTIONAL_WIRE_FIELDS = ['cache_control', 'reasoning_effort', 'max_completion_tokens'];
+const refused = new Map(); // provider id → Set of the optional fields it refused
+
+function refusedFields(providerId) {
+  return Array.from(refused.get(providerId) || []);
+}
+
+function wireBody(provider, body) {
+  if (!provider || !isCloudProvider(provider) || !body || typeof body !== 'object') return body;
+  const no = refused.get(provider.id) || new Set();
+  const out = { ...body };
+  if (provider.reasoningEffort && !no.has('reasoning_effort') && out.reasoning_effort === undefined) out.reasoning_effort = provider.reasoningEffort;
+  const field = provider.maxTokensField;
+  if (field && field !== 'max_tokens' && !no.has(field) && out.max_tokens != null) { out[field] = out.max_tokens; delete out.max_tokens; }
+  if (Array.isArray(out.system)) {
+    if (no.has('cache_control')) out.system = out.system.map((b) => String((b && b.text) || '')).join('');
+    else out.cache_control = { type: 'ephemeral' };
+  }
+  return out;
+}
+
+/** Which of OUR optional fields does this 400 complain about? ('' = none, or one already dropped.) */
+function refusedField(provider, data) {
+  const d = Array.isArray(data) ? data[0] : data;
+  const err = d && d.error;
+  const text = (err && typeof err === 'object' ? [err.message, err.param, err.code].filter(Boolean).join(' ') : String(err || ''));
+  const no = refused.get(provider.id) || new Set();
+  return OPTIONAL_WIRE_FIELDS.find((f) => !no.has(f) && text.indexOf(f) >= 0) || '';
+}
+
+async function postWire(provider, endpoint, headers, body, timeoutMs) {
+  let res = await postJson(endpoint, headers, wireBody(provider, body), timeoutMs);
+  if (res.status === 400 && isCloudProvider(provider)) {
+    const field = refusedField(provider, res.data);
+    if (field) {
+      refused.set(provider.id, (refused.get(provider.id) || new Set()).add(field));
+      console.warn('[ai] ' + provider.id + ' refused the optional field "' + field + '" — dropped for this process, the call is repeated');
+      res = await postJson(endpoint, headers, wireBody(provider, body), timeoutMs);
+    }
+  }
+  return res;
 }
 
 /**
@@ -390,7 +553,7 @@ function buildRequest(provider, key, system, userText, model, history = [], turn
     body = {
       model: mdl,
       max_tokens: maxTokens,
-      system,
+      system: cacheableSystem(provider, system),
       messages: [...turns, { role: 'user', content: userText }]
     };
   }
@@ -413,8 +576,8 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
   const opts = { maxTokens, timeoutMs };
   const started = Date.now();
   const s = load();
-  const key = String(s.apiKey || '');
   const provider = getProvider(s.provider || 'claude');
+  const key = provider ? keyFor(s, provider.id) : '';
   // The browser-relay provider exists only where a browser does: the owner's
   // copilot (converse via /admin/api/ai/chat). Server-initiated generation —
   // the visitor CS chat, agents, the injection runner — has no bridge to
@@ -464,12 +627,15 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
     const roomy = biggerBudget(body.max_tokens, contextBudget(provider.id), 0);
     if (roomy) body.max_tokens = roomy;
   }
-  const spent = { prompt_tokens: 0, completion_tokens: 0 };
+  let spent = cost.zero();
+  // null until a provider reports the field at all — an absent count and a
+  // zero one are different answers, and the smokes pin both
+  let reasoning = null;
   let thoughtRetry = false;
   for (;;) {
     let res;
     try {
-      res = await postJson(endpoint, headers, body, opts.timeoutMs || (provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS));
+      res = await postWire(provider, endpoint, headers, body, opts.timeoutMs || (provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS));
     } catch (e) {
       // the ceiling passing is its own failure (504 in the runner); anything
       // else is the wire
@@ -488,8 +654,9 @@ async function generateDetailed({ system = '', user = '', history = [], maxToken
       throw coded('שגיאת ספק: ' + msg, 'PROVIDER_ERROR', { status: res.status, providerMessage: String(msg) });
     }
     const usage = readUsage(style, data);
-    spent.prompt_tokens += usage.prompt_tokens; spent.completion_tokens += usage.completion_tokens;
-    if (usage.reasoning_tokens != null) spent.reasoning_tokens = (spent.reasoning_tokens || 0) + usage.reasoning_tokens;
+    if (usage.reasoning_tokens != null) reasoning = (reasoning || 0) + usage.reasoning_tokens;
+    spent = cost.add(spent, usage);
+    if (reasoning != null) spent.reasoning_tokens = reasoning;
     const text = dig(data, provider.responsePath || ['content', 0, 'text']);
     if (text) {
       return { text, usage: spent, ms: Date.now() - started, provider: { id: provider.id, model }, ...(thoughtRetry ? { thoughtRetry: true } : {}) };
@@ -685,7 +852,7 @@ function composeBody(provider, s, system, turns, toolDefs, maxTokens, effort) {
   const max = Math.max(1, Math.round(Number(maxTokens) || provider.maxTokens || 4096));
   const body = style === 'openai-chat'
     ? { model, max_tokens: max, messages: [{ role: 'system', content: system }, ...turns] }
-    : { model, max_tokens: max, system, messages: turns };
+    : { model, max_tokens: max, system: cacheableSystem(provider, system), messages: turns };
   if (style === 'openai-chat' && (provider.id === 'local' || provider.browserRelay)) {
     // hybrid-thinking models must ANSWER (see buildRequest); v2.50 — a model that cannot be switched off is asked
     // for the LOWEST level it allows (ai-window.js probeReasoningEffort), because "none" means its default to it
@@ -1079,6 +1246,7 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     const text = String(user);
     st = {
       effort,
+      spend: cost.zero(), // the premium tier's meter — emptied by every envelope
       systemFor: sysFor,
       sizes: null,           // measured lazily (each tier once)
       sysCache: {},
@@ -1189,6 +1357,13 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     const w = windowFor(provider, st.key);
     const notice = st.notice;
     st.notice = ''; // shown once
+    // v2.51 — the bill of THIS response, then the counter goes back to zero.
+    // A relayed turn answers the page several times from one `st` (modelCall →
+    // step → … → reply), so a cumulative number would be counted again on
+    // every hop. A delta is summable: add up every `spend` a turn produced and
+    // the total is the turn's, exactly once.
+    const spend = cost.report(provider.id, st.model || w.model || '', st.spend);
+    st.spend = cost.zero();
     return {
       reply: '',
       memo: st.memo || '',
@@ -1212,6 +1387,9 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         ...(w.cap ? { probedTokens: w.probedTokens, cap: w.cap } : {})
       },
       notice,
+      // null on the free tier and whenever nothing was spent — the page shows
+      // a cost line only where there is a cost
+      spend,
       truncated: false,
       ...fields
     };
@@ -1305,6 +1483,11 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     // the silent band: a 200 whose prompt count is above the window means
     // the runtime discarded the middle of the prompt and answered anyway
     const usage = readUsage(style, data);
+    // v2.51 — the bill, before any of the paths below decide what to do with
+    // the reply. A discarded answer (the shrink retry) was still BILLED, so it
+    // is counted here and not at the exits: a turn that cost three calls must
+    // say three, whichever way it ended.
+    st.spend = cost.add(st.spend, usage);
     const known = win.getWindow(st.key);
     // (≥, not >: a prompt exactly the size of the window leaves no room to
     // generate — llama.cpp shifts the context to answer, which is the same
@@ -1498,7 +1681,7 @@ function turnCeilingMs() {
  */
 async function callProvider(provider, body) {
   const s = load();
-  const key = String(s.apiKey || '');
+  const key = keyFor(s, provider.id);
   if (!key && !provider.keyOptional) throw coded('לא הוגדר מפתח API — הגדירו אותו בצ׳אט (ההגדרות בצד)', 'NO_PROVIDER');
   let endpoint = provider.endpoint;
   if (provider.id === 'local') {
@@ -1520,7 +1703,7 @@ async function callProvider(provider, body) {
 
   let res;
   try {
-    res = await postJson(endpoint, headers, body, provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS);
+    res = await postWire(provider, endpoint, headers, body, provider.id === 'local' ? LOCAL_TIMEOUT_MS : PUBLIC_TIMEOUT_MS);
   } catch (e) {
     if (e && e.code === 'TIMEOUT') throw e;
     if (provider.id === 'local') {
@@ -1599,6 +1782,11 @@ async function planWindow({ hint = null, sizes = null } = {}) {
 }
 
 module.exports = {
+  keyFor,
+  wireBody,
+  refusedFields,
+  cacheableSystem,
+  SITUATION_MARK,
   getSettings,
   saveSettings,
   generate,

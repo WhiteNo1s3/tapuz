@@ -12,6 +12,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** Keep the time a short plain label (it is content, rendered as text). */
 function cleanTime(t) {
@@ -45,10 +46,9 @@ function renderNewspop(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole feed from block.data (items array). */
-function renderNewspopFromData(data = {}, dir = '', extra = '', decls = '') {
+function renderNewspopFromData(data = {}, dir = '', attrs = {}, decls = '') {
   const items = (data.items || []).map((it) => renderNewspopItem(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderNewspop(data, items, { dir: dirAttr, extra, decls });
+  return renderNewspop(data, items, Object.assign(blockOpts(dir, attrs), { decls }));
 }
 
 module.exports = { renderNewspopItem, renderNewspop, renderNewspopFromData };

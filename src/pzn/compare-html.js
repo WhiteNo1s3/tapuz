@@ -11,6 +11,7 @@
  */
 
 const { escapeHtml, escapeAttr } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 const SLIDE_JS =
   '(function(){var s=document.currentScript,el=s&&s.previousElementSibling;if(!el)return;' +
@@ -38,9 +39,8 @@ function renderCompare(props = {}, opts = {}) {
 }
 
 /** Convenience for the renderer: whole compare block from block.data. */
-function renderCompareFromData(data = {}, dir = '', extra = '') {
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderCompare(data, { dir: dirAttr, extra });
+function renderCompareFromData(data = {}, dir = '', attrs = {}) {
+  return renderCompare(data, blockOpts(dir, attrs));
 }
 
 module.exports = { renderCompare, renderCompareFromData };

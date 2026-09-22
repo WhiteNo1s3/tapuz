@@ -8,10 +8,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
-
-function dirAttr(dir) {
-  return dir ? ` dir="${escapeAttr(dir)}"` : '';
-}
+const { blockOpts } = require('./block-attrs');
 
 function renderSearch(props = {}, opts = {}) {
   const action = safeHref(props.action || '/search');
@@ -25,8 +22,8 @@ function renderSearch(props = {}, opts = {}) {
     `<button class="bent-search-submit" type="submit">${submit}</button></form>`;
 }
 
-function renderSearchFromData(data = {}, dir = '', extra = '') {
-  return renderSearch(data, { dir: dirAttr(dir), extra });
+function renderSearchFromData(data = {}, dir = '', attrs = {}) {
+  return renderSearch(data, blockOpts(dir, attrs));
 }
 
 function renderNewsletter(props = {}, opts = {}) {
@@ -45,8 +42,8 @@ function renderNewsletter(props = {}, opts = {}) {
     `<button type="submit">${submit}</button></form></section>`;
 }
 
-function renderNewsletterFromData(data = {}, dir = '', extra = '') {
-  return renderNewsletter(data, { dir: dirAttr(dir), extra });
+function renderNewsletterFromData(data = {}, dir = '', attrs = {}) {
+  return renderNewsletter(data, blockOpts(dir, attrs));
 }
 
 function renderPageItem(props = {}, current = false) {
@@ -63,13 +60,13 @@ function renderPager(props = {}, itemsHtml = '', opts = {}) {
     `<ol class="bent-pager-list">${itemsHtml}</ol></nav>`;
 }
 
-function renderPagerFromData(data = {}, dir = '', extra = '') {
+function renderPagerFromData(data = {}, dir = '', attrs = {}) {
   const items = data.items || [];
   const inner = items.map((it, idx) => {
     const current = !!(it && it.current) || (idx === items.length - 1 && !(it && (it.url || it.href)));
     return renderPageItem(it || {}, current);
   }).join('');
-  return renderPager(data, inner, { dir: dirAttr(dir), extra });
+  return renderPager(data, inner, blockOpts(dir, attrs));
 }
 
 function renderConsent(props = {}, opts = {}) {
@@ -92,8 +89,8 @@ function renderConsent(props = {}, opts = {}) {
     `${policyLink}</div></aside></div>`;
 }
 
-function renderConsentFromData(data = {}, dir = '', extra = '') {
-  return renderConsent(data, { dir: dirAttr(dir), extra });
+function renderConsentFromData(data = {}, dir = '', attrs = {}) {
+  return renderConsent(data, blockOpts(dir, attrs));
 }
 
 function renderRelcard(props = {}) {
@@ -124,9 +121,9 @@ function renderRelated(props = {}, itemsHtml = '', opts = {}) {
     `${head}<div class="bent-related-grid">${itemsHtml}</div></section>`;
 }
 
-function renderRelatedFromData(data = {}, dir = '', extra = '') {
+function renderRelatedFromData(data = {}, dir = '', attrs = {}) {
   const inner = (data.items || []).map((it) => renderRelcard(it || {})).join('');
-  return renderRelated(data, inner, { dir: dirAttr(dir), extra });
+  return renderRelated(data, inner, blockOpts(dir, attrs));
 }
 
 function renderComment(props = {}) {
@@ -147,13 +144,13 @@ function renderComments(props = {}, itemsHtml = '', opts = {}) {
     `${head}${itemsHtml}</section>`;
 }
 
-function renderCommentsFromData(data = {}, dir = '', extra = '') {
+function renderCommentsFromData(data = {}, dir = '', attrs = {}) {
   const inner = (data.items || []).map((it) => {
     const p = Object.assign({}, it || {});
     if (!p.text && it && it.content) p.text = it.content;
     return renderComment(p);
   }).join('');
-  return renderComments(data, inner, { dir: dirAttr(dir), extra });
+  return renderComments(data, inner, blockOpts(dir, attrs));
 }
 
 function renderSlot(props = {}, opts = {}) {
@@ -172,8 +169,8 @@ function renderSlot(props = {}, opts = {}) {
     `<span class="bent-slot-label">${label}</span>${media}${who}</aside>`;
 }
 
-function renderSlotFromData(data = {}, dir = '', extra = '') {
-  return renderSlot(data, { dir: dirAttr(dir), extra });
+function renderSlotFromData(data = {}, dir = '', attrs = {}) {
+  return renderSlot(data, blockOpts(dir, attrs));
 }
 
 function renderAuth(props = {}, opts = {}) {
@@ -190,8 +187,8 @@ function renderAuth(props = {}, opts = {}) {
     `</nav>`;
 }
 
-function renderAuthFromData(data = {}, dir = '', extra = '') {
-  return renderAuth(data, { dir: dirAttr(dir), extra });
+function renderAuthFromData(data = {}, dir = '', attrs = {}) {
+  return renderAuth(data, blockOpts(dir, attrs));
 }
 
 module.exports = {

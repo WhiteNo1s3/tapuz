@@ -7,6 +7,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** Whole author box. props: {name, image, bio, url, linkLabel, role, time}
  * A post byline is the same module without a bio: name (linked when there
@@ -36,9 +37,8 @@ function renderAuthor(props = {}, opts = {}) {
 }
 
 /** Convenience for the renderer: whole author box from block.data. */
-function renderAuthorFromData(data = {}, dir = '', extra = '') {
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderAuthor(data, { dir: dirAttr, extra });
+function renderAuthorFromData(data = {}, dir = '', attrs = {}) {
+  return renderAuthor(data, blockOpts(dir, attrs));
 }
 
 module.exports = { renderAuthor, renderAuthorFromData };

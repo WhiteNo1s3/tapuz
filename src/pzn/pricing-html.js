@@ -10,6 +10,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** features: newline-separated string → one <li> per non-empty line. */
 function renderFeatures(features) {
@@ -46,10 +47,9 @@ function renderPricing(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole pricing table from block.data (items array). */
-function renderPricingFromData(data = {}, dir = '', extra = '') {
+function renderPricingFromData(data = {}, dir = '', attrs = {}) {
   const items = (data.items || []).map((it) => renderPlan(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderPricing(data, items, { dir: dirAttr, extra });
+  return renderPricing(data, items, blockOpts(dir, attrs));
 }
 
 module.exports = { renderPlan, renderPricing, renderPricingFromData, renderFeatures };

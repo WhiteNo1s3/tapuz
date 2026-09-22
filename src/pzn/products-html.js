@@ -6,6 +6,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 function renderProduct(props = {}) {
   const href = safeHref(props.url || props.href || '');
@@ -33,11 +34,10 @@ function renderProducts(props = {}, itemsHtml = '', opts = {}) {
   return `<div${opts.idAttr || ''} class="bent-products bent-products-cols-${cols}${opts.cls || ''}"${opts.extra || ''}${opts.dir || ''}>${itemsHtml}</div>`;
 }
 
-function renderProductsFromData(data = {}, dir = '', extra = '') {
+function renderProductsFromData(data = {}, dir = '', attrs = {}) {
   const items = data.items || [];
   const inner = items.map((it) => renderProduct(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderProducts(data, inner, { dir: dirAttr, extra });
+  return renderProducts(data, inner, blockOpts(dir, attrs));
 }
 
 module.exports = {

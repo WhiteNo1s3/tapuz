@@ -33,6 +33,10 @@ config/notify-usage.json
 # Same pattern — a long-lived token that can send on the owner's behalf never
 # belongs in the repo.
 config/whatsapp.json
+# Card gateway credentials (the store's Grow / Cardcom keys). Deliberately NOT
+# in the database: the store's settings row travels inside every .pzn export,
+# and a payment key must never ride along with a backup or a hot swap.
+config/payments.json
 
 # SQLite runtime
 *.db
@@ -87,5 +91,6 @@ eval/*
 !eval/battery/
 eval/battery/*
 !eval/battery/RUN-ON-MAC.md
+!eval/battery/RUN-CLOUD.md
 !eval/battery/SCORECARD-*.md
 !eval/battery/BREAKAGE-*.md

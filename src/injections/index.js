@@ -175,5 +175,6 @@ register(require('./menu-organizer'));
 register(require('./theme-designer'));
 register(require('./theme-effects'));
 register(require('./site-builder'));
+register(require('./store-catalog'));
 
 module.exports = { register, get, list, isReady, genericPreviewHtml, FAMILIES };
