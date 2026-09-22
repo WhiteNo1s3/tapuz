@@ -54,7 +54,12 @@ function loadRecords() {
 function saveRecords(d, { trim = true } = {}) {
   const p = recordsPath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  if (trim) d.imports = d.imports.slice(-30); // a landing still in flight never pushes an old record out
+  if (trim) {
+    // the newest 30 finished landings are kept; a landing in flight (or cut
+    // off) is never counted, so it can never push an older record out
+    let drop = d.imports.filter((r) => !r.landing).length - 30;
+    if (drop > 0) d.imports = d.imports.filter((r) => r.landing || drop-- <= 0);
+  }
   fs.writeFileSync(p, JSON.stringify(d, null, 2), 'utf8');
 }
 
@@ -149,6 +154,15 @@ function pageMark(page) {
   if (!page) return '';
   const blocks = page.draft_blocks != null ? page.draft_blocks : page.blocks;
   return markOf([page.title || '', blocks || []]);
+}
+
+function sourceHash(text) {
+  return crypto.createHash('sha1').update(String(text || '')).digest('hex');
+}
+
+/** The hash of a page's draft .pzn file — the exact text its last source save wrote. */
+function draftSourceHash(fullPath) {
+  try { return sourceHash(fs.readFileSync(require('../pzn-store').pznPathFor(fullPath, 'draft'), 'utf8')); } catch (e) { return ''; }
 }
 
 function markOf(v) {
@@ -269,6 +283,7 @@ async function landNow(plan, choices, opts) {
     mode: live ? 'live' : 'drafts',
     pagesCreated: [],
     pageMarks: {},
+    pageSources: {},
     mediaFolder: '',
     videos: [],
     themeEntryId: null,
@@ -366,6 +381,11 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
     if (p.description) meta.description = String(p.description).slice(0, 300);
     if (p.home && record.socialImage) meta.ogImage = record.socialImage;
     meta.geppetto = stampOf(p);
+    // the ledger learns what this page is about to hold BEFORE it holds it:
+    // savePageSource keeps our exact text as the page's draft .pzn file, so a
+    // hard stop anywhere in this write leaves a page undo can still recognize
+    record.pageSources[fullPath] = sourceHash(source);
+    saveProvisional(record);
     try {
       pagesLib.savePageSource(fullPath, source, { publish: live, meta });
     } catch (e) {
@@ -513,7 +533,11 @@ function takeBack(rec, later, opts = {}) {
         const at = page.meta.geppetto.at || fp;
         const mark = rec.pageMarks ? rec.pageMarks[at] : undefined;
         const moved = at !== fp || (!!rec.pageMarks && mark === undefined);
-        if (moved || (mark && pageMark(page) !== mark)) { out.pagesKept.push(fp); continue; }
+        let edited = !!mark && pageMark(page) !== mark;
+        // a landing stopped right after it wrote this page never recorded the
+        // new mark — the page is still its own if its source is what it wrote
+        if (edited && rec.pageSources && rec.pageSources[at] && draftSourceHash(fp) === rec.pageSources[at]) edited = false;
+        if (moved || edited) { out.pagesKept.push(fp); continue; }
       }
       pagesLib.deletePage(fp);
       removed.add(fp);
@@ -657,6 +681,7 @@ function undo(importId, opts = {}) {
   const out = takeBack(rec, later, opts);
   rec.undone = true;
   rec.undoneAt = new Date().toISOString();
+  delete rec.landing;
   if (out.pagesKept.length) rec.pagesKept = out.pagesKept;
   saveRecords(d);
   if (opts.rebuild !== false) out.rebuildError = require('../rebuild').rebuildSite('geppetto undo');

@@ -83,7 +83,7 @@ The theme lands in the **theme library** (never straight on the site); landing l
 
 A landing runs as a **background job** the screen follows (a site with dozens of pictures and a few clips takes a while; a proxy would cut a request that long), one landing at a time — a second one waits for the first (`409 BUSY`).
 
-Every landing leaves a record (`config/geppetto/imports.json`) — from the moment its pages are reserved (empty drafts wearing the import's stamp), before the slow part begins, and the record is written ahead of every change the landing makes (the pages' marks, then the look, the menu, the crown and the name — each with what it was and what it becomes). A landing that fails half-way takes itself back (no orphan page, file, look or record); a landing cut off by a restart or a hard stop stays in the history as "נקטע", and its undo follows the same rules as any other — a page the owner filled since stays theirs.
+Every landing leaves a record (`config/geppetto/imports.json`) — from the moment its pages are reserved (empty drafts wearing the import's stamp), before the slow part begins, and the record is written ahead of every change the landing makes (each page's source before the page is written, then the look, the menu, the crown and the name — each with what it was and what it becomes). Only finished landings count toward the ledger's 30 records, so a landing in flight or cut off never pushes an older one out. A landing that fails half-way takes itself back (no orphan page, file, look or record); a landing cut off by a restart or a hard stop stays in the history as "נקטע", and its undo follows the same rules as any other — a page the owner filled since stays theirs.
 
 **Undo** takes back the import and nothing else:
 

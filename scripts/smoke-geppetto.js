@@ -663,6 +663,40 @@ function find(blocks, pred) {
   check('a look applied before its call threw is still taken off by undo', lookedQ && !!(imQ.theme && imQ.theme.error) && JSON.stringify(theme.loadOverrides()) === ownerLook, imQ.theme);
   ownerAgain();
 
+  // a hard stop right after a page was written: the ledger knew its source first
+  let midLedger = null;
+  const realSave3 = pagesLib.savePageSource;
+  pagesLib.savePageSource = function () { const r = realSave3.apply(this, arguments); if (midLedger === null) midLedger = fs.readFileSync(ledgerPath, 'utf8'); return r; };
+  const imV = await landMini('victor', '#446688');
+  pagesLib.savePageSource = realSave3;
+  fs.writeFileSync(ledgerPath, midLedger); // the ledger exactly as that stop leaves it
+  const recV = gp.listImports().find((r) => r.id === imV.importId);
+  const uV = gp.undo(imV.importId, { rebuild: false });
+  check('a hard stop right after a page was written: undo still knows the page as the landing’s own',
+    !!recV && recV.landing === true && !!(recV.pageSources || {})[homeOf(imV)] && uV.pagesRemoved.includes(homeOf(imV)) && !uV.pagesKept.length, [recV && recV.pageSources, uV]);
+  if (imV.theme && imV.theme.id) themeLib.removeTheme(imV.theme.id); // the stop came before the look, in a real one
+  ownerAgain();
+
+  // an unrelated undo while a landing runs, and the landing then fails: the oldest record stays
+  const imW = await landMini('whiskey', '#664422');
+  const full2 = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+  while (full2.imports.filter((r) => !r.landing).length < 30) full2.imports.unshift({ id: 'gp_older' + full2.imports.length, at: '2026-01-01T00:00:00.000Z', source: 'canva', mode: 'drafts', pagesCreated: [], pageMarks: {}, undone: true });
+  const oldest2 = full2.imports[0].id;
+  fs.writeFileSync(ledgerPath, JSON.stringify(full2));
+  let release2;
+  const gate2 = new Promise((r) => { release2 = r; });
+  const failing = gp.landPlan(gp.planFromPuppet(mini('xray', '#226644'), {}).id, { mode: 'live' }, { transport: async (u) => { await gate2; return transport(u); }, rebuild: false });
+  await new Promise((r) => setTimeout(r, 30));
+  gp.undo(imW.importId, { rebuild: false });
+  const realSave4 = pagesLib.savePageSource;
+  pagesLib.savePageSource = () => { throw new Error('the disk is full'); };
+  release2();
+  try { await failing; } catch (e) { /* expected */ }
+  pagesLib.savePageSource = realSave4;
+  const after2 = JSON.parse(fs.readFileSync(ledgerPath, 'utf8')).imports;
+  check('an undo while a landing runs never pushes the oldest record out, even when that landing then fails', after2.some((r) => r.id === oldest2) && after2.filter((r) => !r.landing).length === 30, [after2.length, after2[0] && after2[0].id]);
+  ownerAgain();
+
   // a design far past any real site is refused; a throw in the life pass is a refusal too
   z = 0;
   const huge = [];
