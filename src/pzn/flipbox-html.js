@@ -8,6 +8,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** Whole flip box. props: {title, icon, backText, buttonText, buttonUrl} */
 function renderFlipbox(props = {}, opts = {}) {
@@ -32,9 +33,8 @@ function renderFlipbox(props = {}, opts = {}) {
 }
 
 /** Convenience for the renderer: whole flip box from block.data. */
-function renderFlipboxFromData(data = {}, dir = '', extra = '') {
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderFlipbox(data, { dir: dirAttr, extra });
+function renderFlipboxFromData(data = {}, dir = '', attrs = {}) {
+  return renderFlipbox(data, blockOpts(dir, attrs));
 }
 
 module.exports = { renderFlipbox, renderFlipboxFromData };

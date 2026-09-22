@@ -18,7 +18,8 @@
  * One renderer for compile (pzn) and renderer.js so they cannot diverge.
  */
 
-const { escapeHtml, escapeAttr } = require('./language/escape');
+const { escapeHtml } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 const HEADER_TONES = ['light', 'dark', 'brand', 'none'];
 const FOOTER_TONES = ['dark', 'light', 'brand', 'none'];
@@ -51,16 +52,14 @@ function renderFooter(props = {}, innerHtml = '', opts = {}) {
  * renderer hands in its own renderBlock so nested blocks render through the
  * same switch (chrome, styling, animation) as top-level ones.
  */
-function renderHeaderFromData(data = {}, dir = '', extra = '', renderChild) {
+function renderHeaderFromData(data = {}, dir = '', attrs = {}, renderChild) {
   const inner = (data.blocks || []).map((b) => renderChild(b, dir)).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderHeader(data, inner, { dir: dirAttr, extra });
+  return renderHeader(data, inner, blockOpts(dir, attrs));
 }
 
-function renderFooterFromData(data = {}, dir = '', extra = '', renderChild) {
+function renderFooterFromData(data = {}, dir = '', attrs = {}, renderChild) {
   const inner = (data.blocks || []).map((b) => renderChild(b, dir)).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderFooter(data, inner, { dir: dirAttr, extra });
+  return renderFooter(data, inner, blockOpts(dir, attrs));
 }
 
 module.exports = {

@@ -8,6 +8,7 @@
  */
 
 const { escapeHtml, escapeAttr } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** Clamp the score to 0..max, keeping one decimal. */
 function clampRating(value, max) {
@@ -34,9 +35,8 @@ function renderRating(props = {}, opts = {}) {
 }
 
 /** Convenience for the renderer: whole rating from block.data. */
-function renderRatingFromData(data = {}, dir = '', extra = '') {
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderRating(data, { dir: dirAttr, extra });
+function renderRatingFromData(data = {}, dir = '', attrs = {}) {
+  return renderRating(data, blockOpts(dir, attrs));
 }
 
 module.exports = { renderRating, renderRatingFromData, clampRating };

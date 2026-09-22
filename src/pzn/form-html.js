@@ -13,6 +13,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 const FIELD_TYPES = ['text', 'email', 'tel', 'textarea', 'select', 'checkbox'];
 
@@ -77,18 +78,17 @@ function renderForm(props = {}, fieldsHtml = '', opts = {}) {
   // honeypot: bots fill every field; humans never see this one. The server
   // pretends success and drops the submission when it arrives non-empty.
   const honeypot = '<input type="text" name="_hp" class="bent-hp" tabindex="-1" autocomplete="off" aria-hidden="true">';
-  // opts.extra is a raw pre-built attr string (block id/class/style) — placed
-  // right after the class, matching how renderer container cases thread it.
+  // opts.extra is the renderer's pre-built style attr (block-attrs.js); the
+  // block's class tokens ride opts.cls INSIDE class="", its id opts.idAttr.
   return `<form${opts.idAttr || ''} class="bent-form${opts.cls || ''}"${opts.extra || ''}${actionAttr} method="${method}"${opts.dir || ''}>` +
     honeypot + fieldsHtml +
     `<button type="submit" class="bent-form-submit">${submit}</button></form>`;
 }
 
 /** Convenience for the renderer: whole form from block.data (fields array). */
-function renderFormFromData(data = {}, dir = '', extra = '') {
+function renderFormFromData(data = {}, dir = '', attrs = {}) {
   const fields = (data.fields || []).map((f) => renderField(f || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderForm(data, fields, { dir: dirAttr, extra });
+  return renderForm(data, fields, blockOpts(dir, attrs));
 }
 
 module.exports = { renderField, renderForm, renderFormFromData, safeName, FIELD_TYPES };

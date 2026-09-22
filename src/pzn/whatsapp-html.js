@@ -17,6 +17,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 const WA_HOST_RE = /(?:^|\/\/)(?:www\.)?(?:wa\.me|api\.whatsapp\.com|web\.whatsapp\.com|chat\.whatsapp\.com|wa\.link)(?=[/?#:]|$)|^whatsapp:/i;
 
@@ -103,9 +104,8 @@ function renderWhatsapp(props = {}, opts = {}) {
 }
 
 /** Convenience for the renderer: the module from block.data. */
-function renderWhatsappFromData(data = {}, dir = '', extra = '') {
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderWhatsapp(data, { dir: dirAttr, extra });
+function renderWhatsappFromData(data = {}, dir = '', attrs = {}) {
+  return renderWhatsapp(data, blockOpts(dir, attrs));
 }
 
 module.exports = {

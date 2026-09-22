@@ -9,6 +9,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** One member → <article class="bent-member">. props: {name, role, image, bio, url} */
 function renderMember(props = {}) {
@@ -37,10 +38,9 @@ function renderTeam(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole team block from block.data (items array). */
-function renderTeamFromData(data = {}, dir = '', extra = '') {
+function renderTeamFromData(data = {}, dir = '', attrs = {}) {
   const items = (data.items || []).map((it) => renderMember(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderTeam(data, items, { dir: dirAttr, extra });
+  return renderTeam(data, items, blockOpts(dir, attrs));
 }
 
 module.exports = { renderMember, renderTeam, renderTeamFromData };

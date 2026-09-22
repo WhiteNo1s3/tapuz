@@ -12,6 +12,7 @@
  */
 
 const { escapeHtml, escapeAttr, safeHref } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** One media card → HTML. item: {image, tag, title, excerpt, href} */
 function renderCard(item = {}) {
@@ -36,10 +37,9 @@ function renderCardsGrid(cardsHtml, opts = {}) {
 }
 
 /** Convenience for the renderer: whole grid from block.data (items array). */
-function renderCardsFromData(data = {}, dir = '', extra = '') {
+function renderCardsFromData(data = {}, dir = '', attrs = {}) {
   const cards = (data.items || []).map((it) => renderCard(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderCardsGrid(cards, { dir: dirAttr, extra });
+  return renderCardsGrid(cards, blockOpts(dir, attrs));
 }
 
 module.exports = { renderCard, renderCardsGrid, renderCardsFromData };

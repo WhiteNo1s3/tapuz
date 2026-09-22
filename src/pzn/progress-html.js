@@ -7,6 +7,7 @@
  */
 
 const { escapeHtml, escapeAttr } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** Clamp to an integer 0–100 (bad input → 0). */
 function clampValue(v) {
@@ -35,10 +36,9 @@ function renderProgress(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole progress block from block.data (items array). */
-function renderProgressFromData(data = {}, dir = '', extra = '') {
+function renderProgressFromData(data = {}, dir = '', attrs = {}) {
   const items = (data.items || []).map((it) => renderBar(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderProgress(data, items, { dir: dirAttr, extra });
+  return renderProgress(data, items, blockOpts(dir, attrs));
 }
 
 module.exports = { renderBar, renderProgress, renderProgressFromData, clampValue };

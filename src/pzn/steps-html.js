@@ -8,6 +8,7 @@
  */
 
 const { escapeHtml, escapeAttr } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 /** One step → <article class="bent-step">. props: {title, text, icon} */
 function renderStep(props = {}) {
@@ -32,10 +33,9 @@ function renderSteps(props = {}, itemsHtml = '', opts = {}) {
 }
 
 /** Convenience for the renderer: whole steps block from block.data (items array). */
-function renderStepsFromData(data = {}, dir = '', extra = '') {
+function renderStepsFromData(data = {}, dir = '', attrs = {}) {
   const items = (data.items || []).map((it) => renderStep(it || {})).join('');
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderSteps(data, items, { dir: dirAttr, extra });
+  return renderSteps(data, items, blockOpts(dir, attrs));
 }
 
 module.exports = { renderStep, renderSteps, renderStepsFromData };

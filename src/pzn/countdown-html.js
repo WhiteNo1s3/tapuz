@@ -10,6 +10,7 @@
  */
 
 const { escapeHtml, escapeAttr } = require('./language/escape');
+const { blockOpts } = require('./block-attrs');
 
 const UNITS = [
   { key: 'days', he: 'ימים', ms: 86400000 },
@@ -70,9 +71,8 @@ function renderCountdown(props = {}, opts = {}) {
 }
 
 /** Convenience for the renderer: whole countdown from block.data. */
-function renderCountdownFromData(data = {}, dir = '', extra = '') {
-  const dirAttr = dir ? ` dir="${escapeAttr(dir)}"` : '';
-  return renderCountdown(data, { dir: dirAttr, extra });
+function renderCountdownFromData(data = {}, dir = '', attrs = {}) {
+  return renderCountdown(data, blockOpts(dir, attrs));
 }
 
 module.exports = { renderCountdown, renderCountdownFromData, remainingTo };
