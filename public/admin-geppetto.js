@@ -16,13 +16,22 @@
 
   // what undo did — and what it kept on purpose
   var PIECES = { theme: 'המראה', menu: 'התפריט', homepage: 'דף הבית', title: 'שם האתר' };
+  var HOLDERS = { store_products: 'מוצר בחנות', page_revisions: 'גרסה שמורה של דף', crm_campaigns: 'דיוור', crm_sequence_steps: 'דיוור אוטומטי', menus: 'תפריט' };
+  function keptFor(who) {
+    var w = String(who || '');
+    if (w.indexOf('page:') === 0) return 'הדף ' + esc(w.slice(5));
+    if (w.indexOf('table:') === 0) return HOLDERS[w.slice(6)] || 'תוכן אחר באתר (' + esc(w.slice(6)) + ')';
+    if (/categories\.json$/.test(w)) return 'קטגוריה';
+    if (w.indexOf('file:config') === 0) return 'הגדרות האתר (למשל הלוגו)';
+    return 'תוכן אחר באתר (' + esc(w.replace(/^file:/, '')) + ')';
+  }
   function undoSummary(d) {
     var t = 'בוטל — ' + (d.pagesRemoved || []).length + ' דפים ו‑' + (d.media || 0) + ' קבצים הוסרו' +
       (d.theme ? ', ערכת הנושא חזרה' : '') + (d.menu ? ', התפריט חזר' : '') + (d.homepage ? ', דף הבית חזר' : '') + '.';
     if ((d.pagesKept || []).length) t += ' נשארו ' + d.pagesKept.length + ' דפים שנערכו אחרי הייבוא (' + d.pagesKept.map(esc).join(', ') + ')' + (d.mediaKept ? ' — וגם התמונות שלהם' : '') + '.';
     if (d.themeSaved) t += ' המראה שהיה באתר לפני הביטול נשמר בספריית ערכות הנושא בשם „' + esc(d.themeSaved) + '”.';
     if (d.themeNotRestored) t += ' המראה לא הוחזר — לא היה איפה לשמור קודם את המראה הנוכחי (' + esc(d.themeNotRestored) + '); פנו מקום בספרייה והחילו משם את המראה הקודם.';
-    if (d.mediaKept && !(d.pagesKept || []).length) t += ' התמונות נשארו — ' + (d.mediaKeptFor === 'config' ? 'הלוגו של האתר' : 'הדף ' + esc(d.mediaKeptFor)) + ' עדיין מציג אותן.';
+    if (d.mediaKept && !(d.pagesKept || []).length) t += ' התמונות נשארו — ' + keptFor(d.mediaKeptFor) + ' עדיין משתמש בהן.';
     if ((d.left || []).length) t += ' ייבוא מאוחר יותר עדיין קובע את ' + d.left.map(function (k) { return PIECES[k] || k; }).join(', ') + ' — הם יחזרו כשיבוטל גם הוא.';
     if ((d.errors || []).length) t += ' שגיאות: ' + d.errors.map(esc).join('; ');
     return t;

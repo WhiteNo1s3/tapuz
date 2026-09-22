@@ -83,12 +83,12 @@ The theme lands in the **theme library** (never straight on the site); landing l
 
 A landing runs as a **background job** the screen follows (a site with dozens of pictures and a few clips takes a while; a proxy would cut a request that long), one landing at a time — a second one waits for the first (`409 BUSY`).
 
-Every landing leaves a record (`config/geppetto/imports.json`) — from the moment its pages are reserved (empty drafts wearing the import's stamp), before the slow part begins. A landing that fails half-way takes itself back (no orphan page, file, look or record); a landing cut off by a restart stays in the history as "נקטע", and its undo takes it back whole.
+Every landing leaves a record (`config/geppetto/imports.json`) — from the moment its pages are reserved (empty drafts wearing the import's stamp), before the slow part begins, and the record is written ahead of every change the landing makes (the pages' marks, then the look, the menu, the crown and the name — each with what it was and what it becomes). A landing that fails half-way takes itself back (no orphan page, file, look or record); a landing cut off by a restart or a hard stop stays in the history as "נקטע", and its undo follows the same rules as any other — a page the owner filled since stays theirs.
 
 **Undo** takes back the import and nothing else:
 
 * its pages go — found by their `meta.geppetto` stamp (a renamed page still carries it), and only while they are where and as the import left them: a page the owner edited or renamed since (even an unpublished draft save) is **kept**;
-* its media folder goes — unless something on the site still shows a file from it (a kept page, a picture the owner copied into another page, the logo);
+* its media folder goes — unless anything the site stores still names a file from it (a kept page, a picture the owner copied into another page, a store product, a category cover, an email, the logo): every text column of the database and every settings and content file is searched, all but the media library's own index and this ledger;
 * the look goes back to the one before the import — a look changed since is first filed in the theme library ("ג׳פטו — המראה לפני ביטול …"), so no tuning is ever lost; the menu's knobs come back with the look (the menu snapshot is taken before the look changes);
 * the menu goes back — the menu as it is goes to the menu backups first;
 * the crown moves only off a page that is going away; the name goes back only if it is still the design's (an empty name comes back empty);

@@ -139,13 +139,13 @@ router.get('/admin/api/geppetto/job/:id', requireAdmin, (req, res) => {
 
 router.get('/admin/api/geppetto/imports', requireAdmin, (req, res) => {
   const gp = require('../geppetto');
-  const running = gp.isLanding();
+  const running = gp.currentLanding();
   const list = gp.listImports().map((r) => ({
     id: r.id, at: r.at, source: r.source, format: r.format, origin: r.origin, title: r.title, mode: r.mode,
     pages: r.pagesCreated || [], themeApplied: !!r.themeApplied, menu: !!r.menuBackupId, homepage: !!r.homepageSet,
     undone: !!r.undone, undoneAt: r.undoneAt || '',
     // a landing still in the ledger's draft: running now, or cut off by a restart
-    landing: r.landing ? (running ? 'running' : 'interrupted') : ''
+    landing: r.landing ? (r.id === running ? 'running' : 'interrupted') : ''
   }));
   res.json({ ok: true, imports: list });
 });

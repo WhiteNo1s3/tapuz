@@ -482,7 +482,7 @@ function find(blocks, pred) {
   const cRow = pagesLib.getPageByFullPath(cHome);
   pagesLib.updatePage(cHome, { blocks: cRow.draft_blocks.concat([{ type: 'text', id: 'text_owner', data: { content: 'the owner wrote this' } }]) }); // a draft save, not even published
   const uC = gp.undo(imC.importId, { rebuild: false });
-  check('an imported page the owner edited since is kept by undo — with the pictures it shows', uC.pagesKept.includes(cHome) && !!pagesLib.getPageByFullPath(cHome) && uC.mediaKept === true && uC.mediaKeptFor === cHome && uC.pagesRemoved.length === imC.pages.length - 1, uC);
+  check('an imported page the owner edited since is kept by undo — with the pictures it shows', uC.pagesKept.includes(cHome) && !!pagesLib.getPageByFullPath(cHome) && uC.mediaKept === true && uC.mediaKeptFor === 'page:' + cHome && uC.pagesRemoved.length === imC.pages.length - 1, uC);
   check('…the crown stays on it (it is not going away), the rest is the owner’s again', loadConfig().homepage === cHome && loadConfig().title === 'My Site' && JSON.stringify(theme.loadOverrides()) === ownerLook, [loadConfig().homepage, loadConfig().title]);
   pagesLib.deletePage(cHome);
   const cfg1 = loadConfig(); cfg1.homepage = ownerHome; cfg1.title = ''; saveConfig(cfg1);
@@ -590,7 +590,7 @@ function find(blocks, pred) {
   const pending = gp.listImports()[0];
   let early = '';
   try { gp.undo(pending.id, { rebuild: false }); } catch (e) { early = e.code; }
-  check('a landing in flight is in the ledger (a restart leaves it undoable), and is not undone under its feet', !!pending && pending.landing === true && gp.isLanding() && early === 'BUSY', [pending && pending.landing, early]);
+  check('a landing in flight is in the ledger (a restart leaves it undoable), and is not undone under its feet', !!pending && pending.landing === true && gp.isLanding() && gp.currentLanding() === pending.id && early === 'BUSY', [pending && pending.landing, early]);
   release();
   const imO = await flying;
   check('…the finished landing replaces its draft record', gp.listImports().filter((r) => r.id === imO.importId).length === 1 && !gp.listImports()[0].landing && !gp.isLanding());
@@ -598,9 +598,59 @@ function find(blocks, pred) {
   led2.imports.find((r) => r.id === imO.importId).landing = true; // as a restart would leave it
   fs.writeFileSync(ledgerPath, JSON.stringify(led2));
   const oRow = pagesLib.getPageByFullPath(homeOf(imO));
-  pagesLib.updatePage(homeOf(imO), { blocks: oRow.draft_blocks.concat([{ type: 'text', id: 'text_half', data: { content: 'half-written' } }]) });
+  pagesLib.updatePage(homeOf(imO), { blocks: oRow.draft_blocks.concat([{ type: 'text', id: 'text_after', data: { content: 'the owner, after the restart' } }]) });
   const uO = gp.undo(imO.importId, { rebuild: false });
-  check('a landing cut off by a restart is taken back whole, half-written pages included', uO.pagesRemoved.length === imO.pages.length && !uO.pagesKept.length, uO);
+  check('a landing cut off by a restart is undone by the same rules — a page the owner filled since stays theirs', uO.pagesKept.includes(homeOf(imO)) && !uO.pagesRemoved.length && JSON.stringify(theme.loadOverrides()) === ownerLook, uO);
+  pagesLib.deletePage(homeOf(imO));
+  ownerAgain();
+
+  // a hard stop right before the name changes: the ledger was written ahead of each change
+  let crashLedger = null;
+  const cfgMod = require('../src/config');
+  const realSaveConfig = cfgMod.saveConfig;
+  cfgMod.saveConfig = (c) => { if (crashLedger === null) crashLedger = fs.readFileSync(ledgerPath, 'utf8'); return realSaveConfig(c); };
+  const imR = await landMini('romeo', '#335511');
+  cfgMod.saveConfig = realSaveConfig;
+  // the site as a kill inside saveConfig leaves it: pages, look and menu on, the name and crown not yet
+  const cfgR = loadConfig(); cfgR.homepage = ownerHome; cfgR.title = 'My Site'; saveConfig(cfgR);
+  fs.writeFileSync(ledgerPath, crashLedger);
+  const recR = gp.listImports().find((r) => r.id === imR.importId);
+  const uR = gp.undo(imR.importId, { rebuild: false });
+  check('a hard stop just before the name changed is undone fully (the ledger was written ahead)',
+    !!recR && recR.landing === true && recR.themeApplied && !!recR.menuSetTo && !!recR.titleSetTo && uR.pagesRemoved.length === imR.pages.length &&
+    JSON.stringify(theme.loadOverrides()) === ownerLook && JSON.stringify(menus.loadMenus().main.map((m) => [m.label, m.url])) === ownerMenu &&
+    loadConfig().title === 'My Site' && loadConfig().homepage === ownerHome, [recR && recR.landing, uR]);
+  ownerAgain();
+
+  // pictures the owner reused beyond pages — a store product, a category cover — stay after undo
+  const imS = await landMini('sierra', '#553377');
+  const sPic = (JSON.stringify(pagesLib.getPageByFullPath(homeOf(imS)).blocks).match(/\/assets\/geppetto\/[^"\\]+/) || [])[0];
+  const { db: rawDb } = require('../src/db');
+  rawDb.prepare('INSERT INTO store_products (slug, title, images, status) VALUES (?, ?, ?, ?)').run('jar-gp', 'Jar', JSON.stringify([sPic]), 'draft');
+  const uS = gp.undo(imS.importId, { rebuild: false });
+  check('an imported picture a store product uses stays on disk after undo', !!sPic && uS.mediaKept === true && uS.mediaKeptFor === 'table:store_products' && fs.existsSync(path.join(ASSETS_DIR, sPic.replace(/^\/assets\//, ''))), [uS, sPic]);
+  rawDb.prepare('DELETE FROM store_products WHERE slug = ?').run('jar-gp');
+  const imT = await landMini('tango', '#775533');
+  const tPic = (JSON.stringify(pagesLib.getPageByFullPath(homeOf(imT)).blocks).match(/\/assets\/geppetto\/[^"\\]+/) || [])[0];
+  const cats = require('../src/categories');
+  const catsBefore = cats.listCategories();
+  cats.saveCategories(catsBefore.concat([{ slug: 'jars', name: 'Jars', image: tPic }]));
+  const uT = gp.undo(imT.importId, { rebuild: false });
+  check('…and so does one a category cover uses', !!tPic && uT.mediaKept === true && /categories\.json$/.test(uT.mediaKeptFor) && fs.existsSync(path.join(ASSETS_DIR, tPic.replace(/^\/assets\//, ''))), [uT, tPic]);
+  cats.saveCategories(catsBefore);
+  ownerAgain();
+
+  // a landing that fails never pushes the oldest record out of a full ledger
+  const full = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+  while (full.imports.length < 30) full.imports.unshift({ id: 'gp_old' + full.imports.length, at: '2026-01-01T00:00:00.000Z', source: 'canva', mode: 'drafts', pagesCreated: [], pageMarks: {}, undone: true });
+  const oldest = full.imports[0].id;
+  fs.writeFileSync(ledgerPath, JSON.stringify(full));
+  const realSave2 = pagesLib.savePageSource;
+  pagesLib.savePageSource = () => { throw new Error('the disk is full'); };
+  try { await landMini('uniform', '#224466'); } catch (e) { /* expected */ }
+  pagesLib.savePageSource = realSave2;
+  const after = JSON.parse(fs.readFileSync(ledgerPath, 'utf8')).imports;
+  check('a landing that fails never pushes the oldest record out of a full ledger', after.length === 30 && after[0].id === oldest, [after.length, after[0] && after[0].id]);
   ownerAgain();
 
   // a look that went on before its call threw is still a look undo takes off

@@ -241,5 +241,6 @@ module.exports = {
   landPlan,
   undo: (id, opts) => require('./land').undo(id, opts),
   isLanding: () => require('./land').isLanding(),
+  currentLanding: () => require('./land').currentLanding(),
   listImports: () => require('./land').listImports()
 };

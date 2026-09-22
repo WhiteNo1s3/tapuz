@@ -51,11 +51,21 @@ function loadRecords() {
   return { imports: [] };
 }
 
-function saveRecords(d) {
+function saveRecords(d, { trim = true } = {}) {
   const p = recordsPath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  d.imports = d.imports.slice(-30);
+  if (trim) d.imports = d.imports.slice(-30); // a landing still in flight never pushes an old record out
   fs.writeFileSync(p, JSON.stringify(d, null, 2), 'utf8');
+}
+
+/** The ledger's copy of a landing in flight, written ahead of each change it makes. */
+function saveProvisional(record) {
+  const d = loadRecords();
+  const at = d.imports.findIndex((r) => r.id === record.id);
+  const copy = JSON.parse(JSON.stringify(record));
+  if (at >= 0) d.imports[at] = copy;
+  else d.imports.push(copy);
+  saveRecords(d, { trim: false });
 }
 
 function listImports() {
@@ -149,16 +159,52 @@ function menuMark(items) {
   return markOf((items || []).map((it) => [it.label, it.url, (it.children || []).map((c) => [c.label, c.url])]));
 }
 
-/** Who on the site still shows a file of this media folder — a page (kept,
- *  renamed, or one the owner copied a picture into) or the site's config. */
+/**
+ * Who on the site still shows a file of this media folder: any stored text
+ * that names it — a page (kept, renamed, or one the owner copied a picture
+ * into), a store product, a category cover, an email, the logo — everything
+ * but the media library's own index, the analytics and Geppetto's own
+ * ledger. A false hit only keeps files; a miss would break a page.
+ * @returns {string} '' when nothing does, else who: 'page:<path>', 'table:<name>', 'file:<path>'
+ */
 function mediaUser(folder) {
   const needle = '/assets/' + folder + '/';
-  const pagesLib = require('../pages');
-  for (const row of pagesLib.listPages()) {
-    const page = pagesLib.getPageByFullPath(row.full_path);
-    if (page && JSON.stringify([page.blocks, page.draft_blocks, page.meta]).includes(needle)) return row.full_path;
+  const { db } = require('../db');
+  const qid = (id) => '"' + String(id).replace(/"/g, '""') + '"';
+  const like = '%' + needle.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+  const page = db.prepare("SELECT full_path FROM pages WHERE blocks LIKE ? ESCAPE '\\' OR draft_blocks LIKE ? ESCAPE '\\' OR meta LIKE ? ESCAPE '\\' LIMIT 1").get(like, like, like);
+  if (page) return 'page:' + page.full_path;
+  const SKIP = /^(?:pages|media|media_folders|sqlite_sequence|pageviews|analytics_salt)$|_fts/;
+  for (const t of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()) {
+    if (SKIP.test(t.name)) continue;
+    let cols = [];
+    try { cols = db.prepare('PRAGMA table_info(' + qid(t.name) + ')').all(); } catch (e) { continue; }
+    for (const c of cols) {
+      if (!/TEXT|CHAR|CLOB|JSON|^$/i.test(c.type || '')) continue;
+      try {
+        if (db.prepare('SELECT 1 FROM ' + qid(t.name) + ' WHERE ' + qid(c.name) + " LIKE ? ESCAPE '\\' LIMIT 1").get(like)) return 'table:' + t.name;
+      } catch (e) { /* a column that will not compare — not a place a picture lives */ }
+    }
   }
-  if (JSON.stringify(require('../config').loadConfig()).includes(needle)) return 'config';
+  const { SITE_ROOT, CONFIG_DIR } = require('../paths');
+  const skip = path.join(CONFIG_DIR, 'geppetto');
+  const stack = [path.join(SITE_ROOT, 'content'), CONFIG_DIR];
+  let files = 0;
+  while (stack.length && files < 5000) {
+    const dir = stack.pop();
+    let list = [];
+    try { list = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { continue; }
+    for (const ent of list) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) { if (full !== skip) stack.push(full); continue; }
+      if (!/\.(?:json|css|md|txt|html?|pzn|bent)$/i.test(ent.name)) continue;
+      files += 1;
+      try {
+        if (fs.statSync(full).size > 5 * 1024 * 1024) continue;
+        if (fs.readFileSync(full, 'utf8').includes(needle)) return 'file:' + path.relative(SITE_ROOT, full);
+      } catch (e) { /* unreadable — not in use by the site either */ }
+    }
+  }
   return '';
 }
 
@@ -173,7 +219,9 @@ function lookInLibrary(lib, live) {
 // same free addresses, and the loser would die half-landed, its files and
 // pages on the site with no record to undo them by
 let landing = false;
+let landingId = '';
 const isLanding = () => landing;
+const currentLanding = () => landingId;
 
 /**
  * Land a plan.
@@ -192,6 +240,7 @@ async function land(plan, choices = {}, opts = {}) {
     return await landNow(plan, choices, opts);
   } finally {
     landing = false;
+    landingId = '';
   }
 }
 
@@ -208,6 +257,7 @@ async function landNow(plan, choices, opts) {
     siteTitle: live && choices.siteTitle !== false
   };
   const id = 'gp_' + crypto.randomBytes(5).toString('hex');
+  landingId = id;
   const record = {
     id,
     at: new Date().toISOString(),
@@ -259,13 +309,14 @@ async function landNow(plan, choices, opts) {
       pagesLib.createPage({ title: p.title || fullPath, slug: fullPath, direction: p.dir === 'rtl' ? 'rtl' : 'ltr', blocks: [], meta: { geppetto: stampOf(p) }, status: 'draft' });
       record.pagesCreated.push(fullPath);
     }
-    // the ledger knows this landing from now on: a restart during the slow
-    // part leaves pages and files the history can still take back
+    // the ledger knows this landing from now on (and what each reserved,
+    // still-empty page looks like): a restart during the slow part leaves
+    // pages and files the history can take back — and a page the owner
+    // fills after the restart is theirs
+    for (const fp of record.pagesCreated) record.pageMarks[fp] = pageMark(pagesLib.getPageByFullPath(fp));
     if (want.media) record.mediaFolder = 'geppetto/' + life.slugify(plan.title || plan.living.pages[0].slug || 'design', 'design').slice(0, 30) + '-' + id.slice(3, 7);
     record.landing = true;
-    const d0 = loadRecords();
-    d0.imports.push(record);
-    saveRecords(d0);
+    saveProvisional(record);
     return await landRest(plan, done, slugs, want, live, record, opts, stampOf);
   } catch (e) {
     // a landing that fails half-way takes itself back: no orphan pages,
@@ -333,8 +384,10 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
     record.menuBefore = { main: menus.loadMenus().main || [] };
     record.menuBackupId = menus.backupMenus('ג׳פטו — לפני ייבוא ' + (plan.title || plan.source)).id;
   }
+  saveProvisional(record); // the written pages' marks, and the menu as it was
 
-  // 5. the look — into the library, and (live) onto the site
+  // 5. the look — into the library, and (live) onto the site; the ledger
+  //    learns the look before it changes (a hard stop mid-way stays undoable)
   if (want.theme && plan.theme && plan.theme.bent) {
     const themeLib = require('../theme-library');
     const theme = require('../theme');
@@ -343,6 +396,8 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
       record.themeEntryId = entry.id;
       if (live) {
         record.themeBefore = theme.loadOverrides();
+        record.themeApplied = true;
+        saveProvisional(record);
         try {
           themeLib.applyTheme(entry.id);
         } finally {
@@ -358,14 +413,11 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
     }
   }
 
-  // 6. the menu — the design's, even when the design has none: an English
-  //    Canva one-pager must not keep the old site's "דף הבית" in its header
-  if (record.menuBefore) {
-    menus.saveMenus({ main: done.menu.map((it) => ({ label: it.label, url: it.url, type: 'custom' })) });
-    record.menuSetTo = menuMark(menus.loadMenus().main);
-  }
-
-  // 7. the crown and the name
+  // 6 + 7. the menu (the design's, even when it has none: an English Canva
+  //    one-pager must not keep the old site's "דף הבית"), the crown and the
+  //    name — what each was and what each becomes goes to the ledger FIRST
+  const menuItems = done.menu ? done.menu.map((it) => ({ label: it.label, url: it.url, type: 'custom' })) : [];
+  if (record.menuBefore) record.menuSetTo = menuMark(menus.normalizeItems(menuItems));
   const config = loadConfig();
   const home = written.find((w) => w.home) || written[0];
   if (want.homepage && home) {
@@ -385,6 +437,11 @@ async function landRest(plan, done, slugs, want, live, record, opts, stampOf) {
     record.titleSetTo = config.title || '';
     record.logoSetTo = config.logo ? JSON.parse(JSON.stringify(config.logo)) : null;
     record.siteTitleSet = true;
+  }
+  saveProvisional(record);
+  if (record.menuBefore) {
+    menus.saveMenus({ main: menuItems });
+    record.menuSetTo = menuMark(menus.loadMenus().main);
   }
   if (record.homepageSet || record.siteTitleSet) saveConfig(config);
 
@@ -481,7 +538,11 @@ function takeBack(rec, later, opts = {}) {
         const theme = require('../theme');
         const lib = require('../theme-library');
         const live = theme.loadOverrides();
-        let safe = !rec.themeSetTo || markOf(live) === rec.themeSetTo || lookInLibrary(lib, live);
+        // a record from the first v2.56 draft knew no "set to"; a landing
+        // stopped inside applyTheme does not either — then only an unchanged
+        // look, or one filed in the library first, may be replaced
+        let safe = (rec.pageMarks === undefined && !rec.themeSetTo) || markOf(live) === markOf(rec.themeBefore) ||
+          (!!rec.themeSetTo && markOf(live) === rec.themeSetTo) || lookInLibrary(lib, live);
         if (!safe) {
           try { out.themeSaved = lib.saveCurrentAsTheme('ג׳פטו — המראה לפני ביטול ' + (rec.title || rec.source || '')).name; safe = true; }
           catch (e) { out.themeNotRestored = e.message; }
@@ -590,8 +651,10 @@ function undo(importId, opts = {}) {
     e.code = 'ORDER';
     throw e;
   }
-  // a landing that was cut off (a restart mid-way) is taken back whole, like a failed one
-  const out = takeBack(rec, later, Object.assign({}, opts, { rollback: !!rec.landing || !!opts.rollback }));
+  // a landing cut off by a restart is taken back by the same rules: the
+  // ledger was written ahead of each change, so a page the owner filled
+  // since is theirs, and the chrome goes back only where it is still the design's
+  const out = takeBack(rec, later, opts);
   rec.undone = true;
   rec.undoneAt = new Date().toISOString();
   if (out.pagesKept.length) rec.pagesKept = out.pagesKept;
@@ -600,4 +663,4 @@ function undo(importId, opts = {}) {
   return out;
 }
 
-module.exports = { land, undo, isLanding, listImports, getImport, blocksToSource };
+module.exports = { land, undo, isLanding, currentLanding, listImports, getImport, blocksToSource };
