@@ -487,6 +487,11 @@
   }
 
   // ── the order page ─────────────────────────────────────────────────
+  // A card order pays from here: the button POSTs the first-party pay
+  // action and follows the hosted page it gets back (never a provider URL
+  // held by the browser); back from the provider (?paid=back) the page
+  // asks the server a few times — the server does the verifying — and then
+  // shows paid / failed / try again.
   function mountOrder(root) {
     var body = root.querySelector('[data-tz-order-body]');
     if (!body) return;
@@ -498,13 +503,65 @@
       body.appendChild(link(root.getAttribute('data-shop') || URLS.shop, 'bent-btn', 'לחנות'));
       return;
     }
-    getJson('/api/store/order/' + encodeURIComponent(token)).then(function (d) {
-      body.textContent = '';
-      var o = d && d.order;
-      if (!o) {
-        body.appendChild(el('p', 'bent-store-closed', 'ההזמנה לא נמצאה.'));
-        return;
+    var back = params.get('paid') === 'back';
+    var autoPay = params.get('pay') === '1';
+    // back from the provider: ask every 3 s, up to 12 times — the server waits
+    // out the provider's own callback first (Grow: ~20 s), and this fits it
+    var polls = 0;
+    var MAX_POLLS = 12;
+    var POLL_MS = 3000;
+    var starting = false;
+
+    function startCardPayment(card, btn, note) {
+      if (starting) return;
+      starting = true;
+      if (btn) { btn.disabled = true; btn.textContent = 'פותחים את דף התשלום…'; }
+      post(card.payUrl, {}).then(function (d) {
+        if (d && d.ok && d.url) { window.location.href = safe(d.url); return; }
+        starting = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'לתשלום בכרטיס אשראי ←'; }
+        if (note) note.textContent = (d && d.message) || 'לא הצלחנו לפתוח את דף התשלום — נסו שוב.';
+      }).catch(function () {
+        starting = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'לתשלום בכרטיס אשראי ←'; }
+        if (note) note.textContent = 'שגיאת רשת — נסו שוב.';
+      });
+    }
+
+    function cardBlock(o) {
+      var card = o.payment.card || {};
+      var pay = el('div', 'bent-order-pay');
+      pay.appendChild(el('h3', '', 'תשלום: ' + o.payment.label));
+      if (card.test) pay.appendChild(el('p', 'bent-test-banner', 'מצב בדיקות — לא יחויב כסף אמיתי'));
+      if (o.payment.details) pay.appendChild(el('p', 'bent-order-pay-details', o.payment.details));
+      var waiting = back && card.status === 'pending' && card.verifying && polls < MAX_POLLS;
+      if (waiting) {
+        polls++;
+        pay.appendChild(el('p', 'bent-store-wait', 'מאמתים את התשלום…'));
+        setTimeout(load, POLL_MS);
+        return pay;
       }
+      if (card.message && card.status !== 'none') pay.appendChild(el('p', 'bent-order-pay-state is-' + card.status, card.message));
+      if (card.canPay) {
+        var note = el('p', 'bent-checkout-error');
+        note.setAttribute('role', 'alert');
+        var btn = el('button', 'bent-btn bent-order-pay-btn', 'לתשלום בכרטיס אשראי ←');
+        btn.type = 'button';
+        btn.addEventListener('click', function () { startCardPayment(card, btn, note); });
+        pay.appendChild(btn);
+        pay.appendChild(note);
+        if (autoPay && !back) {
+          autoPay = false;
+          pay.appendChild(el('p', 'bent-totals-note', 'מעבירים אתכם לדף התשלום…'));
+          setTimeout(function () { startCardPayment(card, btn, note); }, 1200);
+        }
+      } else if (card.status !== 'paid' && card.status !== 'refunded') {
+        pay.appendChild(el('p', 'bent-totals-note', 'תשלום בכרטיס אינו זמין כרגע — צרו איתנו קשר להשלמת התשלום.'));
+      }
+      return pay;
+    }
+
+    function paint(o) {
       var head = el('div', 'bent-order-head');
       head.appendChild(el('p', 'bent-order-check', '✓'));
       head.appendChild(el('h2', 'bent-order-title', 'הזמנה #' + o.number));
@@ -514,7 +571,10 @@
       if (o.tracking) head.appendChild(el('p', 'bent-order-tracking', 'מספר מעקב: ' + o.tracking));
       body.appendChild(head);
 
-      if (o.payment && o.payment.label && !o.paid && o.status !== 'cancelled') {
+      var isCard = o.payment && o.payment.kind === 'card' && o.payment.card;
+      if (isCard && o.status !== 'cancelled' && (!o.paid || o.payment.card.test)) {
+        body.appendChild(cardBlock(o));
+      } else if (o.payment && o.payment.label && !o.paid && o.status !== 'cancelled') {
         var pay = el('div', 'bent-order-pay');
         pay.appendChild(el('h3', '', 'תשלום: ' + o.payment.label));
         if (o.payment.details) pay.appendChild(el('p', 'bent-order-pay-details', o.payment.details));
@@ -556,10 +616,23 @@
       body.appendChild(box);
       body.appendChild(el('p', 'bent-totals-note', 'שמרו את הקישור לדף הזה כדי לעקוב אחרי ההזמנה.'));
       body.appendChild(link(root.getAttribute('data-shop') || URLS.shop, 'bent-btn bent-btn-ghost', 'להמשך קנייה'));
-    }).catch(function () {
-      body.textContent = '';
-      body.appendChild(el('p', 'bent-store-closed', 'לא הצלחנו לטעון את ההזמנה — נסו לרענן.'));
-    });
+    }
+
+    function load() {
+      getJson('/api/store/order/' + encodeURIComponent(token)).then(function (d) {
+        body.textContent = '';
+        var o = d && d.order;
+        if (!o) {
+          body.appendChild(el('p', 'bent-store-closed', 'ההזמנה לא נמצאה.'));
+          return;
+        }
+        paint(o);
+      }).catch(function () {
+        body.textContent = '';
+        body.appendChild(el('p', 'bent-store-closed', 'לא הצלחנו לטעון את ההזמנה — נסו לרענן.'));
+      });
+    }
+    load();
   }
 
   function boot() {

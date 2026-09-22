@@ -125,6 +125,61 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
   const s = st.settings.loadSettings();
   const pay = s.payments.find((p) => p.id === order.payment_method);
   const page = require('../pages').publicUrlFor(s.pages.order) + '?o=' + encodeURIComponent(order.token);
+  // the card gateway: this order's payment rows (never a session id or a token), and whether real money came through it
+  const gateway = require('../store/gateway');
+  const payments = gateway.describePayments(order);
+  const gatewayPaid = gateway.isGatewayPaid(order.id);
+  // one action row per payment: a refund form for a row that holds money (it names its row on the wire),
+  // "בדיקה מול חברת הסליקה" for a row the provider has not settled yet
+  const actionRow = (p) => {
+    if (p.refundInFlight) {
+      return `<tr class="st-pay-actions"><td colspan="9"><div class="st-refund">
+        <span class="st-warn">החזר של ${esc(p.refundUnknownText)} בדרך אל חברת הסליקה — רעננו את המסך בעוד רגע</span>
+      </div></td></tr>`;
+    }
+    if (p.refundUnknown > 0) {
+      return `<tr class="st-pay-actions"><td colspan="9"><div class="st-refund" data-resolve="${p.id}">
+        <span class="st-warn">החזר של ${esc(p.refundUnknownText)} בתוצאה לא ידועה — בדקו בממשק החברה</span>
+        <button type="button" class="btn sm secondary" data-resolve-done>ההחזר בוצע</button>
+        <button type="button" class="btn sm secondary" data-resolve-release>ההחזר לא בוצע — שחרור</button>
+        <span data-resolve-out aria-live="polite"></span>
+        <p class="faint" style="flex-basis:100%;margin:0">עד שתאמרו מה קרה, אי אפשר להחזיר עוד מהשורה הזו. לאישור תתבקשו להקליד את מספר ההזמנה.</p>
+      </div></td></tr>`;
+    }
+    if (p.refundable) {
+      return `<tr class="st-pay-actions"><td colspan="9"><div class="st-refund" data-refund="${p.id}">
+        <label class="st-inline">סכום להחזר (${esc(p.currency)}) <input class="input" data-refund-sum inputmode="decimal" dir="ltr" value="${esc(st.money.fromMinor(p.left))}"></label>
+        <button type="button" class="btn sm secondary" data-refund-btn>↩ החזר כספי דרך ${esc(p.providerLabel)}</button>
+        <span data-refund-out aria-live="polite"></span>
+        <p class="faint" style="flex-basis:100%;margin:0">${p.partialRefund ? 'אפשר להחזיר חלק מהסכום או את כולו.' : 'החברה תומכת בהחזר מלא בלבד.'} ההחזר נעשה מול חברת הסליקה ונרשם כאן — שום החזר לא נעשה אוטומטית. לאישור תתבקשו להקליד את מספר ההזמנה.</p>
+      </div></td></tr>`;
+    }
+    if (p.refundNote) return `<tr class="st-pay-actions"><td colspan="9" class="faint">${esc(p.refundNote)}</td></tr>`;
+    if (p.canVerify) {
+      return `<tr class="st-pay-actions"><td colspan="9"><div class="st-refund" data-verify="${p.id}">
+        <button type="button" class="btn sm secondary" data-verify-btn>🔎 בדיקה מול חברת הסליקה</button>
+        <span data-verify-out aria-live="polite"></span>
+      </div></td></tr>`;
+    }
+    return '';
+  };
+  const paymentRows = payments.map((p) => `<tr class="st-pay-row is-${esc(p.status)}">
+      <td class="faint">${kit.when(p.createdAt)}</td>
+      <td>${esc(p.providerLabel)}${p.mode === 'test' ? ' <span class="pill warn">בדיקות</span>' : ''}</td>
+      <td>${esc(p.statusLabel)}</td>
+      <td>${esc(p.amountText)}</td>
+      <td dir="ltr">${esc(p.approval || '—')}</td>
+      <td dir="ltr">${p.last4 ? '····' + esc(p.last4) : '—'}${p.brand ? ' <span class="faint">' + esc(p.brand) + '</span>' : ''}</td>
+      <td>${p.installments > 1 ? p.installments : '—'}</td>
+      <td dir="ltr" class="faint">${esc(p.transactionId || '—')}</td>
+      <td>${p.refundedText || '—'}</td>
+    </tr>${p.error ? `<tr><td colspan="9" class="st-pay-err">${esc(p.error)}</td></tr>` : ''}${actionRow(p)}`).join('');
+  const paymentsCard = payments.length || (pay && pay.kind === 'card') ? `
+    <section class="card" id="od-payments">
+      <h3 class="sub-head">💳 תשלום בכרטיס אשראי</h3>
+      ${payments.length ? `<table class="tbl"><thead><tr><th>מתי</th><th>חברה</th><th>מצב</th><th>סכום</th><th>אישור</th><th>כרטיס</th><th>תשלומים</th><th>מזהה עסקה</th><th>הוחזר</th></tr></thead><tbody>${paymentRows}</tbody></table>`
+    : '<p class="faint">עוד לא נפתח דף תשלום להזמנה הזו.</p>'}
+    </section>` : '';
   const body = `
     <section class="card">
       <div class="row between">
@@ -146,9 +201,10 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
       <section class="card">
         <h3 class="sub-head">🚚 משלוח ותשלום</h3>
         <p><b>${esc(order.shipping_label || 'בלי משלוח')}</b>${a.street || a.city ? '<br>' + esc([a.street, a.city, a.zip].filter(Boolean).join(', ')) : ''}${a.notes ? '<br><span class="faint">' + esc(a.notes) + '</span>' : ''}</p>
-        <p>תשלום: <b>${esc(order.payment_label || '—')}</b>${pay && pay.kind === 'link' ? ' <span class="faint">(קישור לתשלום)</span>' : ''}</p>
+        <p>תשלום: <b>${esc(order.payment_label || '—')}</b>${pay && pay.kind === 'link' ? ' <span class="faint">(קישור לתשלום)</span>' : ''}${pay && pay.kind === 'card' ? ' <span class="faint">(כרטיס אשראי · חברת סליקה)</span>' : ''}</p>
       </section>
     </div>
+    ${paymentsCard}
     <section class="card">
       <table class="tbl"><thead><tr><th>פריט</th><th>כמות</th><th>מחיר</th><th>סה״כ</th></tr></thead><tbody>
       ${items.map((it) => `<tr><td>${esc(it.title)}${it.variant_label ? ' — ' + esc(it.variant_label) : ''} <span class="faint" dir="ltr">${esc(it.slug)}</span></td><td>${it.qty}</td><td>${f(it.unit_price)}</td><td>${f(it.line_total)}</td></tr>`).join('')}
@@ -167,9 +223,10 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
         <label>סטטוס <select class="input" id="od-status">${O.STATUSES.map((x) => `<option value="${x}"${x === order.status ? ' selected' : ''}>${O.STATUS_LABELS[x]}</option>`).join('')}</select></label>
         <label>מספר מעקב <input class="input" id="od-tracking" dir="ltr" value="${esc(order.tracking)}" placeholder="—"></label>
       </div>
-      <label class="st-inline"><input type="checkbox" id="od-paid"${order.paid_at ? ' checked' : ''}${order.status === 'cancelled' ? ' disabled' : ''}> התשלום התקבל</label>
+      <label class="st-inline"><input type="checkbox" id="od-paid"${order.paid_at ? ' checked' : ''}${order.status === 'cancelled' || gatewayPaid ? ' disabled' : ''}> התשלום התקבל</label>
+      ${gatewayPaid ? '<span class="faint">שולם דרך חברת הסליקה — הסימון לא ניתן לביטול; להחזרת הכסף יש להשתמש בהחזר הכספי למעלה.</span>' : ''}
       <label style="display:block;margin-top:10px">הערה פנימית (רק לכם) <textarea class="input" id="od-note" rows="2">${esc(order.admin_note)}</textarea></label>
-      <p class="faint">"נשלחה" ו"בוטלה" שולחות ללקוח/ה מייל (כשהמייל מוגדר). ביטול מחזיר את הפריטים למלאי.</p>
+      <p class="faint">"נשלחה" ו"בוטלה" שולחות ללקוח/ה מייל (כשהמייל מוגדר). ביטול מחזיר את הפריטים למלאי${gatewayPaid ? ' — אבל <b>לא</b> מחזיר את הכסף: החזר בכרטיס נעשה בנפרד, בהחזר הכספי למעלה' : ''}.</p>
       <div class="row end"><span id="od-out" aria-live="polite"></span><button type="button" class="btn" id="od-save">שמירה</button></div>
     </section>
     <section class="card">
@@ -202,6 +259,51 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
         if (status !== initial.status) chain = chain.then(function () { return post('status', { status: status }); });
         chain.then(function () { out.textContent = 'נשמר ✓'; setTimeout(function () { location.reload(); }, 500); })
           .catch(function (e) { out.textContent = e.message; out.className = 'st-bad'; });
+      });
+      // the refund of ONE row: typed confirmation (the order number), then the provider, then the books
+      document.querySelectorAll('[data-refund]').forEach(function (box) {
+        var btn = box.querySelector('[data-refund-btn]');
+        var rout = box.querySelector('[data-refund-out]');
+        btn.addEventListener('click', function () {
+          var sum = box.querySelector('[data-refund-sum]').value;
+          var typed = prompt('להחזר של ' + sum + ' — הכסף יחזור לכרטיס הקונה דרך חברת הסליקה, ואי אפשר לבטל. לאישור הקלידו את מספר ההזמנה: ' + number);
+          if (typed === null) return;
+          btn.disabled = true;
+          rout.textContent = 'מבצעים החזר…'; rout.className = '';
+          post('refund', { amount: sum, confirm: typed, payment: box.getAttribute('data-refund') })
+            .then(function () { rout.textContent = 'ההחזר בוצע ✓'; rout.className = 'st-ok'; setTimeout(function () { location.reload(); }, 700); })
+            .catch(function (e) { btn.disabled = false; rout.textContent = e.message; rout.className = 'st-bad'; });
+        });
+      });
+      // an unknown refund outcome, resolved after a look in the provider's panel
+      document.querySelectorAll('[data-resolve]').forEach(function (box) {
+        var rout = box.querySelector('[data-resolve-out]');
+        function resolve(action, label) {
+          var typed = prompt(label + ' — לאישור הקלידו את מספר ההזמנה: ' + number);
+          if (typed === null) return;
+          rout.textContent = 'רושמים…'; rout.className = '';
+          post('payments/' + box.getAttribute('data-resolve') + '/' + action, { confirm: typed })
+            .then(function () { rout.textContent = 'נרשם ✓'; rout.className = 'st-ok'; setTimeout(function () { location.reload(); }, 700); })
+            .catch(function (e) { rout.textContent = e.message; rout.className = 'st-bad'; });
+        }
+        box.querySelector('[data-resolve-done]').addEventListener('click', function () { resolve('refund-done', 'ההחזר בוצע אצל חברת הסליקה'); });
+        box.querySelector('[data-resolve-release]').addEventListener('click', function () { resolve('refund-release', 'ההחזר לא בוצע — הסכום ישוחרר להחזר חוזר'); });
+      });
+      // the owner's own check of a row against the provider
+      document.querySelectorAll('[data-verify]').forEach(function (box) {
+        var btn = box.querySelector('[data-verify-btn]');
+        var vout = box.querySelector('[data-verify-out]');
+        btn.addEventListener('click', function () {
+          btn.disabled = true;
+          vout.textContent = 'בודקים…'; vout.className = '';
+          post('payments/' + box.getAttribute('data-verify') + '/verify', {})
+            .then(function (d) {
+              vout.textContent = d.message || '';
+              vout.className = d.changed ? 'st-ok' : '';
+              if (d.changed) setTimeout(function () { location.reload(); }, 900); else btn.disabled = false;
+            })
+            .catch(function (e) { btn.disabled = false; vout.textContent = e.message; vout.className = 'st-bad'; });
+        });
       });
     })();
     </script>`;

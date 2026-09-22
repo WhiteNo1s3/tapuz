@@ -272,11 +272,21 @@ function renderCheckout(props = {}, opts = {}) {
     (m.freeOver ? `<span class="bent-choice-note">חינם בקנייה מעל ${escapeHtml(fmt(m.freeOver))}</span>` : '') +
     (m.note ? `<span class="bent-choice-note">${escapeHtml(m.note)}</span>` : '') +
     '</label>').join('');
-  const pays = s.payments.map((m, i) =>
-    `<label class="bent-choice"><input type="radio" name="payment" value="${escapeAttr(m.id)}" data-kind="${escapeAttr(m.kind)}"${i === 0 ? ' checked' : ''}>` +
-    `<span class="bent-choice-label">${escapeHtml(m.label)}</span>` +
-    (m.details ? `<span class="bent-choice-note">${escapeHtml(m.details)}</span>` : '') +
-    '</label>').join('');
+  // the gateway decides whether a `card` method is offered at all (and the
+  // page is rebuilt whenever its settings change, so the static export agrees)
+  const gateway = require('./gateway');
+  const offered = gateway.offeredPayments(s);
+  const pays = offered.map((m, i) => {
+    const details = S.paymentDetails(m);
+    return `<label class="bent-choice"><input type="radio" name="payment" value="${escapeAttr(m.id)}" data-kind="${escapeAttr(m.kind)}"${i === 0 ? ' checked' : ''}>` +
+      `<span class="bent-choice-label">${escapeHtml(m.label)}</span>` +
+      (details ? `<span class="bent-choice-note">${escapeHtml(details)}</span>` : '') +
+      (m.kind === 'card' && m.maxPayments > 1 ? `<span class="bent-choice-note">עד ${Number(m.maxPayments)} תשלומים</span>` : '') +
+      '</label>';
+  }).join('');
+  // test mode is said out loud: a shopper must never wonder whether the money was real
+  const testBanner = offered.some((m) => m.kind === 'card') && gateway.status(s).mode === 'test'
+    ? '<p class="bent-test-banner" role="status">מצב בדיקות — לא יחויב כסף אמיתי</p>' : '';
   const terms = s.terms
     ? `<p class="bent-field bent-field-check" data-field="terms"><label><input type="checkbox" name="acceptTerms" value="on" required> ` +
       `קראתי ואני מסכים/ה ל<a href="${escapeAttr(require('../pages').publicUrlFor(s.terms))}" target="_blank" rel="noopener">תנאי השימוש</a></label>` +
@@ -284,6 +294,7 @@ function renderCheckout(props = {}, opts = {}) {
     : '';
   return `<section${a.id} class="bent-checkout${a.cls}"${a.style}${a.dir} data-tz-checkout` +
     ` data-order="${escapeAttr(safeHref(props.thanks || u.order))}" data-cart="${escapeAttr(u.cart)}" data-shop="${escapeAttr(u.shop)}">` +
+    testBanner +
     '<form class="bent-checkout-form" novalidate data-tz-checkout-form>' +
     '<div class="bent-checkout-main">' +
     '<fieldset class="bent-checkout-box"><legend>פרטים ליצירת קשר</legend>' +

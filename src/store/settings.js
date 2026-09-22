@@ -12,7 +12,11 @@
  * Nothing secret belongs here: this row travels inside every `.pzn` export.
  * A payment method carries instructions a shopper is meant to read (bank
  * details, a Bit number, the address of the owner's own payment page) —
- * never a gateway key.
+ * never a gateway key. The `card` kind (the gateway, src/store/gateway) is
+ * no exception: the method record says what the shopper sees and how many
+ * installments the hosted page may offer; WHICH provider, in which mode,
+ * with which keys, lives in gitignored config/payments.json and nowhere
+ * near this row.
  */
 
 const { db } = require('../db');
@@ -24,8 +28,14 @@ const PAYMENT_KINDS = {
   bit: { label: 'ביט', details: '' },
   paybox: { label: 'פייבוקס', details: '' },
   cash: { label: 'מזומן במסירה או באיסוף', details: '' },
-  link: { label: 'תשלום מאובטח בכרטיס אשראי', details: 'מיד אחרי ההזמנה נעביר אתכם לדף התשלום.' }
+  link: { label: 'תשלום מאובטח בכרטיס אשראי', details: 'מיד אחרי ההזמנה נעביר אתכם לדף התשלום.' },
+  // the gateway (Grow / Cardcom behind one driver): offered at checkout only
+  // while a provider is connected — see gateway.offeredPayments()
+  card: { label: 'כרטיס אשראי', details: 'התשלום מתבצע בדף המאובטח של חברת הסליקה. פרטי הכרטיס לא עוברים דרכנו.' }
 };
+
+/** Installments a card method may offer: 1 = none, and no provider goes past 36. */
+const MAX_INSTALLMENTS = 36;
 
 const DEFAULTS = Object.freeze({
   open: false,
@@ -121,16 +131,26 @@ function normalizePayments(list, errors) {
     let id = slugId(raw.id, kind);
     while (seen.has(id)) id = id + '-' + (out.length + 1);
     seen.add(id);
+    const maxPayments = parseInt(raw.maxPayments, 10);
     out.push({
       id,
       kind,
       label: clip(raw.label, 60) || PAYMENT_KINDS[kind].label,
       details: clip(raw.details, 600),
       phone: clip(raw.phone, 30).replace(/[^\d+\-\s()]/g, ''),
-      url
+      url,
+      // installments: only a card method has them; 1 = none
+      maxPayments: kind === 'card' && Number.isFinite(maxPayments) ? Math.min(Math.max(maxPayments, 1), MAX_INSTALLMENTS) : 1
     });
   }
   return out;
+}
+
+/** What the shopper reads under a method: the owner's text, else the kind's own sentence (card only — the others say nothing by default). */
+function paymentDetails(method) {
+  if (!method) return '';
+  if (method.details) return method.details;
+  return method.kind === 'card' ? PAYMENT_KINDS.card.details : '';
 }
 
 function normalizePages(p) {
@@ -232,10 +252,12 @@ function storeName(settings) {
 module.exports = {
   DEFAULTS,
   PAYMENT_KINDS,
+  MAX_INSTALLMENTS,
   normalize,
   loadSettings,
   saveSettings,
   replaceSettings,
   storeName,
-  safeHttpUrl
+  safeHttpUrl,
+  paymentDetails
 };

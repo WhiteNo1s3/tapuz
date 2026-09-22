@@ -15,7 +15,8 @@ const path = require('path');
 const { PAGES_DIR, ASSETS_DIR, CONFIG_DIR, SITE_ROOT } = require('./paths');
 
 // config files that hold secrets or throwaway runtime state — never surfaced.
-const HIDDEN_CONFIG = new Set(['auth.json', 'agent-tokens.json', 'missions.json']);
+// payments.json: the card gateway's keys and its token-sealing key (src/store/gateway/config.js)
+const HIDDEN_CONFIG = new Set(['auth.json', 'agent-tokens.json', 'missions.json', 'payments.json']);
 
 function statSafe(p) {
   try { return fs.statSync(p); } catch { return null; }

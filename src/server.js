@@ -123,6 +123,15 @@ app.use((err, req, res, next) => {
 // spaced body must verify) on top of asserting the mount position.
 app.use(require('./routes/wa-webhook'));
 
+// The card gateway's public doors (the store — src/store/gateway): the
+// provider's webhook reads its own RAW bytes with a 64 KB express.raw and
+// parses them itself (JSON / urlencoded / multipart, whatever the provider
+// sends), so like the WhatsApp webhook it mounts BEFORE the body parsers —
+// the site's 256 KB extended urlencoded parser must never be the one that
+// reads an unauthenticated callback. The pay door is JSON only with its own
+// 32 KB parser. smoke-store-gateway.js pins the position.
+app.use(require('./routes/store-gateway'));
+
 app.use(bodyParser.urlencoded({ extended: true, limit: '256kb' }));
 
 // Public form capture (POST /api/form + GET /form-sent) — extracted to
@@ -539,6 +548,9 @@ app.use(require('./routes/crm'));
 app.use(require('./routes/store-admin'));
 app.use(require('./routes/store-products'));
 app.use(require('./routes/store-orders'));
+// the card gateway's admin (סליקת אשראי): provider, mode, keys (readiness +
+// last-4 only), the ₪1 connection test, and the explicit refund action
+app.use(require('./routes/store-gateway-admin'));
 
 // Terminal error handler — NEVER leak a stack trace to a client. Without this,
 // a body-parser error (e.g. an oversized/malformed body on the public /agent

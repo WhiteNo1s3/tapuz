@@ -14,6 +14,7 @@ const TABS = [
   ['store-orders', '/admin/store/orders', '📦 הזמנות'],
   ['store-coupons', '/admin/store/coupons', '🎟️ קופונים'],
   ['store-settings', '/admin/store/settings', '🚚 משלוח ותשלום'],
+  ['store-gateway', '/admin/store/gateway', '💳 סליקת אשראי'],
   ['store-bentml', '/admin/store/bentml', '🧬 BenTML']
 ];
 
@@ -24,7 +25,7 @@ function tabs(active) {
 
 /** One store screen: the admin shell, the store tabs, the body. */
 function screen({ key, title, body, actions = '', width = 1040 }) {
-  const navKey = key === 'store-bentml' ? 'store' : key;
+  const navKey = key === 'store-bentml' ? 'store' : key === 'store-gateway' ? 'store-settings' : key;
   const html = `
     ${adminNav(navKey, title, actions)}
     <div class="container page-body st-page" style="max-width:${width}px">

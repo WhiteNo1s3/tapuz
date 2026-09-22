@@ -73,9 +73,20 @@ function cleanCustomer(input, addressInput, settings, needsAddress, payKind) {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 9 || digits.length > 15) fields.push({ field: 'phone', message: 'נא למלא מספר טלפון תקין' });
   const email = clip(c.email, 200);
-  const needEmail = settings.requireEmail || payKind === 'link';
+  // a payment that happens somewhere else (the owner's page, the gateway's
+  // hosted page) needs a way back to the shopper: the order link by mail
+  const needEmail = settings.requireEmail || payKind === 'link' || payKind === 'card';
   if (email && !/^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]+$/.test(email)) fields.push({ field: 'email', message: 'כתובת המייל אינה תקינה' });
   else if (!email && needEmail) fields.push({ field: 'email', message: 'נא למלא כתובת מייל — אליה יישלח אישור ההזמנה' });
+  // the gateway's provider may have its own rules for the buyer (Grow: two
+  // names and an Israeli mobile) — said here, field by field, not at pay time
+  if (payKind === 'card') {
+    try {
+      for (const f of require('./gateway').customerIssues({ name, phone, email })) {
+        if (f && f.field && !fields.some((x) => x.field === f.field)) fields.push({ field: String(f.field), message: String(f.message || '') });
+      }
+    } catch (e) { /* no gateway, no extra rule */ }
+  }
   const address = {
     city: clip(a.city, 60),
     street: clip(a.street, 120),
@@ -257,7 +268,7 @@ function placeOrder(input = {}, ctx = {}) {
     order: publicOrder(order),
     stockChanged,
     next: ctx.orderUrl ? ctx.orderUrl(order.token) : '',
-    pay: paymentUrl(order, settings)
+    pay: paymentUrl(order, settings) || payAction(order, settings)
   };
 }
 
@@ -271,6 +282,20 @@ function paymentUrl(order, settings) {
     .split('{total}').join(encodeURIComponent(money.fromMinor(order.total)))
     .split('{order}').join(encodeURIComponent(order.number))
     .split('{currency}').join(encodeURIComponent(order.currency));
+}
+
+/**
+ * A card order's "pay" is a FIRST-PARTY action, never a provider URL: the
+ * order page POSTs it (src/routes/store-gateway.js) and follows the hosted
+ * page it gets back. So the checkout reply's `pay` says "there is a payment
+ * step" without a browser ever holding a gateway address.
+ */
+function payAction(order, settings) {
+  const s = settings || settingsMod.loadSettings();
+  const m = s.payments.find((p) => p.id === order.payment_method);
+  if (!m || m.kind !== 'card') return '';
+  if (order.paid_at || order.status === 'cancelled') return '';
+  return '/api/store/pay/' + encodeURIComponent(order.token);
 }
 
 // ── reading ────────────────────────────────────────────────────────────
@@ -386,6 +411,11 @@ function markPaid(number, paid) {
   const order = getOrder(number);
   if (!order) throw new Error('ההזמנה לא נמצאה');
   if (!!order.paid_at === !!paid) return order;
+  // money that came through the gateway cannot be waved away with a
+  // checkbox — it goes back through an explicit refund, recorded
+  if (!paid && require('./gateway').isGatewayPaid(order.id)) {
+    throw new Error('ההזמנה שולמה בכרטיס אשראי דרך חברת הסליקה — אי אפשר לבטל את הסימון. להחזרת הכסף יש להשתמש בפעולת ההחזר');
+  }
   db.prepare('UPDATE store_orders SET paid_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run(paid ? new Date().toISOString() : null, order.id);
   addEvent(order.id, 'payment', paid ? 'סומנה כשולמה' : 'סימון התשלום בוטל');
@@ -463,9 +493,12 @@ function publicOrder(order) {
     payment: pay ? {
       kind: pay.kind,
       label: order.payment_label || pay.label,
-      details: pay.details,
+      details: settingsMod.paymentDetails(pay),
       phone: pay.phone,
-      url: paymentUrl(order, s)
+      url: paymentUrl(order, s),
+      // a card order: the state of its gateway payment and where to POST —
+      // never a provider id, a session id or a key
+      ...(pay.kind === 'card' ? { card: require('./gateway').publicPayment(order, s) } : {})
     } : { kind: '', label: order.payment_label || '', details: '', phone: '', url: '' },
     thanks: s.thanks
   };
@@ -511,8 +544,9 @@ function ordersForSubject({ contactId, email, phone } = {}) {
     if (digits.length >= 9) { where.push("replace(replace(replace(customer_phone, '-', ''), ' ', ''), '+', '') LIKE ?"); args.push('%' + digits.slice(-9)); }
   }
   if (!where.length) return [];
+  const gateway = require('./gateway');
   return db.prepare('SELECT * FROM store_orders WHERE erased = 0 AND (' + where.join(' OR ') + ') ORDER BY id').all(...args)
-    .map((o) => ({ ...o, items: listItems(o.id) }));
+    .map((o) => ({ ...o, items: listItems(o.id), payments: gateway.paymentsForSubject(o.id) }));
 }
 
 /**
@@ -526,9 +560,13 @@ function eraseForSubject(who = {}) {
     UPDATE store_orders SET customer_name = 'נמחק לבקשת הלקוח', customer_email = '', customer_phone = '',
       address = '{}', note = '', contact_id = NULL, erased = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `);
+  const gateway = require('./gateway');
   db.transaction(() => {
     for (const o of orders) {
       run.run(o.id);
+      // the card's last-4 and brand are about the person too; the sums and
+      // the provider's transaction ids are the sale's record and stay
+      gateway.eraseForOrder(o.id);
       addEvent(o.id, 'erased', 'פרטי הלקוח נמחקו לבקשתו');
     }
   })();
@@ -543,6 +581,8 @@ module.exports = {
   cleanCustomer,
   placeOrder,
   paymentUrl,
+  payAction,
+  addEvent,
   getOrder,
   getOrderById,
   getOrderByToken,
