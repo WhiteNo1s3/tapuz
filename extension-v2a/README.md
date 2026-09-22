@@ -43,13 +43,25 @@ permission, לא כפופה לאף אחד מהשניים. לכן: **הדף לע�
 - **Chrome / Edge:** `chrome://extensions` → Developer mode → Load unpacked →
   התיקייה שחילצתם (או גרירת ה-ZIP לחלון).
 - **עם עותק git של הריפו (מפתחים):** `npm run bridge:update -- --site <האתר שלכם>`
-  כותב את אותו ZIP בדיוק ל-`~/Tapuziel Bridge/extension` — מחוץ לריפו — ומניח
-  לידו `Update Bridge.command`. טוענים את `extension` ב-Load unpacked **פעם
-  אחת**; מאז כל עדכון = לחיצה כפולה על `Update Bridge.command` (הוא מושך את
-  `origin/main` בלי לגעת בענף או בקבצים של העותק) ← ↻ Reload.
-- **Firefox (128+):** `about:debugging#/runtime/this-firefox` → Load Temporary
-  Add-on → בחרו את `manifest.json`. טעינה זמנית נעלמת בסגירת הדפדפן — לטעינה
-  קבועה צריך חתימת AMO (שלב בטא, לא עכשיו).
+  כותב את אותו ZIP בדיוק לתיקיית הנתונים של המערכת — ב-Mac
+  `~/Library/Application Support/Tapuziel/Bridge`, ב-Windows
+  `%LOCALAPPDATA%\Tapuziel\Bridge` — מחוץ לריפו ולא באמצע תיקיית הבית. שם:
+  `extension/` ל-Chrome (Load unpacked **פעם אחת**; התיקייה Library מוסתרת
+  בחלון הבחירה — ⌘⇧G והדביקו את הנתיב), `tapuziel-bridge-firefox.xpi`
+  ל-Firefox, ו-`Update Bridge.command`. כל עדכון = `npm run bridge:update`
+  (או הלאנצ׳ר) ← ↻ Reload; הוא מושך את `origin/main` בלי לגעת בענף או בקבצים
+  של העותק.
+- **Firefox:** קובץ ה-`.xpi` (או ה-ZIP מהאתר — אותו קובץ) הוא בניית Firefox
+  מלאה: מזהה התוסף, סקריפט רקע, והמניפסט בשורש. *לא* מכווצים את תיקיית
+  Chrome — אין בה מזהה Firefox, הרקע שלה הוא service worker ש-Firefox לא
+  מריץ, ו-Finder עוטף אותה בתיקייה.
+  - **Developer Edition / Nightly / ESR — התקנה קבועה:** `about:config` →
+    `xpinstall.signatures.required` = `false` (פעם אחת), ואז `about:addons` →
+    ⚙ → Install Add-on From File → ה-`.xpi`. גרסה חדשה מותקנת מעל הישנה
+    ושומרת את ההגדרות.
+  - **Firefox רגיל:** מקבל לתמיד רק תוסף חתום ע״י Mozilla —
+    `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → ה-`.xpi`;
+    נעלם בסגירת הדפדפן.
 - ב-LM Studio: טוענים מודל, ואז Developer → **Start Server**
   (פורט 1234 הוא ברירת המחדל של התוסף).
 
