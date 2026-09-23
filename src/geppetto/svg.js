@@ -1106,7 +1106,7 @@ function walkEl(el, st, ctx, out) {
     }
     if (frame) {
       if (name && !ctx.frameName) ctx.frameName = name;
-      out.push(...kids);
+      for (const k of kids) out.push(k);
       return;
     }
     if (name && kids.length > 1) {
@@ -1115,7 +1115,7 @@ function walkEl(el, st, ctx, out) {
       out.push(newNode('group', el, u, Object.assign({}, s, { opacity: 1 }), ctx, { children: kids }));
       return;
     }
-    out.push(...kids);
+    for (const k of kids) out.push(k);
     return;
   }
   if (tag === 'rect') {
@@ -1162,7 +1162,7 @@ function walkEl(el, st, ctx, out) {
       if (vb.length === 4 && vb[2] > 0 && vb[3] > 0 && num(a.width) > 0 && num(a.height) > 0) s2.m = mul(mul(s2.m, scaleM(num(a.width) / vb[2], num(a.height) / vb[3])), translate(-vb[0], -vb[1]));
       const kids = [];
       walkChildren(target, s2, ctx, kids);
-      if (kids.length) out.push(...kids);
+      for (const k of kids) out.push(k);
     } else walkEl(target, s2, ctx, out);
     ctx.useChain.delete(ref);
   } else if (tag === 'foreignobject') {

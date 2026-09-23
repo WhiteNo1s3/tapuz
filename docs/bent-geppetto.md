@@ -27,6 +27,8 @@ Two settings decide whether the export is worth anything, and the screen says so
 * **"Outline text" must be OFF.** It defaults to ON, and with it every word becomes a vector path: a real export of a real template had **zero `<text>` elements and 62 `<path>`**. Geppetto refuses such a file by name and tells the owner to export again.
 * **"Include 'id' attribute" ON** keeps the layer names, which become section names, anchors and the hints below.
 
+Other tools' SVG works too: **Illustrator**'s default export writes its colours as CSS classes (`<style>.st0{fill:#FFF}</style>`), which are read; **Inkscape** pretty-prints its XML and measures in millimetres, both of which are handled (an A4 page becomes a 794px-wide design). A file that is a genuine illustration — no words, only named vector shapes — is imported with a note instead of being mistaken for outlined text. A file that points at itself again and again (`<use>`) is cut off after 300,000 elements and says so, because the reading happens while the owner waits.
+
 Pictures ride inside an SVG export at full size — one real page weighed **154 MB** because each photo is a 4096px PNG in base64. The screen shrinks every picture in the owner's own browser before anything is sent, and says plainly when even the slimmed design is too heavy (export fewer frames, or use the plugin, which shrinks at the source and also keeps the prototype links an SVG has none of).
 
 ## Layer names, read as intent (v2.57)
@@ -144,6 +146,7 @@ HERO(width: full, height: lg) { HEADING(level: 1) { … } }
 * Overlap art that only works at 1366px (a word half over a photo, a collage) is reflowed, not reproduced — the page reads in the design's order, and the report names what was dropped.
 * Canva's phone layout is read (order, hidden elements) but a Tapuziel row stacks in its desktop order.
 * Fonts are substituted with their Google cousins, never copied.
+* An SVG is read as geometry, not as a browser paints it: text widths are estimated per character (a centred heading's centre is exact, its edges are within about a tenth), a radial gradient becomes a plain circular one, and masks, blurs, drop shadows and blend modes are dropped — the theme's own styling takes over. `textPath`, per-glyph rotation and vertical writing are read as ordinary lines.
 * Figma Sites never publishes a clip's poster frame (the live site shows none either): a clip lands without a poster rather than with a broken one.
 * Figma Make's code components are programs, not designs.
 * Canva's forms and Figma's interactive components land as their visible parts (a form becomes its words) — build the form with the FORM module.
