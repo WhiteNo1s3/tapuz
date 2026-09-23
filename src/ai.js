@@ -1037,6 +1037,35 @@ function readReply(style, data, opts = {}) {
 /** Append the assistant turn + our tool answers, in the provider's shape.
  *  EVERY call id in the assistant turn gets an answer — a call left
  *  unanswered is rejected by both APIs on the next request. */
+/** v2.62 — the model's words, then a user-role line from the page (a nudge
+ *  a text-only reply can be answered with, since it carries no call id). */
+function appendWordsTurn(style, turns, reply, nudge) {
+  if (style === 'openai-chat') {
+    turns.push({ role: 'assistant', content: String((reply.raw && reply.raw.content) || reply.text || '') });
+  } else {
+    turns.push({ role: 'assistant', content: reply.raw || [{ type: 'text', text: String(reply.text || '') }] });
+  }
+  turns.push({ role: 'user', content: String(nudge) });
+  return turns;
+}
+
+// v2.62 — words that claim a change. The page's memo lines («הצעתי: …»,
+// «בוצע: …», «ממתין לאישור») in the model's mouth are the surest sign; a
+// past-tense "I've updated / replaced / added…" or its Hebrew is the other.
+// JS's \b is ASCII-only, so Hebrew words end at a non-Hebrew character.
+const MEMO_ECHO = /(?:^|\n)\s*(?:הצעתי:|בוצע:)|ממתין לאישור/;
+// (a bare "done" is not a claim worth a round trip — the ai-cost smoke's stub says it)
+const CLAIM_EN = /\bI(?:'ve| have|’ve)? (?:just |now |also )?(?:updated|replaced|changed|added|removed|edited|rewrote|rewritten|inserted|moved|swapped|renamed|applied|made the change)\b/i;
+const CLAIM_HE = /(?:^|[^֐-׿])(?:עדכנתי|שיניתי|הוספתי|החלפתי|הסרתי|ערכתי|תיקנתי|העברתי|מחקתי)(?![֐-׿])/;
+function claimsChange(text) {
+  const t = String(text || '');
+  return MEMO_ECHO.test(t) || CLAIM_EN.test(t) || CLAIM_HE.test(t);
+}
+/** The page's memo lines, taken out of a reply that spoke them. */
+function stripMemoEcho(text) {
+  return String(text || '').split('\n').filter((l) => !/^\s*(?:הצעתי:|בוצע:)/.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function appendToolTurn(style, turns, reply, results) {
   if (style === 'openai-chat') {
     turns.push({ role: 'assistant', content: reply.raw.content || null, tool_calls: reply.raw.tool_calls });
@@ -1601,6 +1630,25 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       // it was done. The model's sentence stays; the truth goes beside it.
       if ((st.refusals || 0) > 0 && !st.applied) {
         st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.refusedThenWords;
+      } else if (!st.applied && claimsChange(reply.text)) {
+        // v2.62 — words that CLAIM a change, with no write this turn. Live
+        // (2026-09-24, the dreams page, Gemma 4 26B-A4B through the Bridge):
+        // "make the closing line a little warmer" was answered in six seconds
+        // with the page's own memo line — «הצעתי: לערוך את הדף … ממתין
+        // לאישור» — and "I've updated the closing line…"; no call, nothing
+        // written, the owner told it was done. The memo lines are the page's,
+        // said only when a proposal or a write exists; a reply that speaks
+        // them made none. Once, the model is sent back — do it, or say
+        // plainly that nothing changed; words again, and the truth goes
+        // beside them, with the page's lines taken out of the model's mouth.
+        if (!st.claimAsked) {
+          st.claimAsked = true;
+          st.extra = appendWordsTurn(style, st.extra, reply, win.HE.claimedForModel);
+          st.hop++;
+          continue;
+        }
+        st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.claimedThenWords;
+        return envelope({ reply: stripMemoEcho(reply.text), truncated: reply.finish === 'length' });
       }
       return envelope({ reply: reply.text, truncated: reply.finish === 'length' });
     }

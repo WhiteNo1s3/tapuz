@@ -609,6 +609,9 @@ const HE = {
   memoProposed: (summary) => 'הצעתי: ' + summary + ' — ממתין לאישור',
   // v2.45 — a refused proposal followed by plain words: whatever the model says, nothing changed
   refusedThenWords: 'שימו לב: ההצעה נפסלה בבדיקה והמודל לא הגיש הצעה מתוקנת — שום דבר לא נשמר ושום דבר לא השתנה, גם אם התשובה אומרת אחרת. בקשו שוב.',
+  // v2.62 — words that claim a change, with no write this turn: the model is sent back once, then the truth goes beside its words
+  claimedForModel: 'כתבת שביצעת שינוי, אבל לא קראת ל-edit_page ושום דבר לא נכתב — ובעל/ת האתר קורא/ת «בוצע». השורות «הצעתי: …» ו«בוצע: …» הן של המערכת, לא שלך; אל תכתוב/י אותן. אם התכוונת לשנות — קרא/י עכשיו ל-edit_page עם המסמך המלא. אם לא — אמור/י בפירוש ששום דבר לא שונה.',
+  claimedThenWords: 'שימו לב: התשובה מתארת שינוי, אבל המודל לא ערך את הדף — שום דבר לא נשמר ושום דבר לא השתנה. בקשו שוב.',
   // v2.45 — the model printed the document instead of calling the write tool (ai.js adoptPrintedDocument)
   // v2.50 — a thinking model and the answer's budget
   thoughtOut: 'המודל השתמש בכל תקציב התשובה על חשיבה ולא הגיע לתשובה עצמה — גם אחרי ניסיון נוסף עם תקציב גדול יותר. זה מודל "חושב" (reasoning) שסביבת ההרצה לא מכבה.',
