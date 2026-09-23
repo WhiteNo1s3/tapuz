@@ -898,6 +898,9 @@ async function landDream(chat, c, d, dream) {
     const r = await req('POST', '/admin/api/pzn/create-from-source', { cookie: chat.cookie, json: { source: d.reply } });
     return (r.json && r.json.fullPath) || '';
   }
+  // v2.62 — words that claim a change with no write: the door sends the model back once and then says the
+  // truth beside its words; counted here as the habit it is (live: "I've updated the closing line…", nothing written)
+  c.soft('it did not claim a change it did not make (the door had to say so)', !/לא ערך את הדף/.test(d.notice || ''));
   return '';
 }
 

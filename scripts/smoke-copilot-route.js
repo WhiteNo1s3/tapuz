@@ -577,6 +577,24 @@ function waitUp(tries = 40) {
         quiet.status === 200 && !!(quietD && quietD.ok && !quietD.pending && !quietD.modelCall && quietD.applied && quietD.applied.slug === 'home') &&
         /הטיוטה נשמרה ✓/.test(quietD.reply || '') && /השתתק/.test(quietD.notice || '') && /boom/.test(quietD.notice || ''));
     }
+    {
+      // v2.62 — words that claim a change are not a change. Live (the dreams page): "make the closing line
+      // warmer" was answered in six seconds with the page's own memo line and "I've updated the closing
+      // line…" — no call, nothing written. Sent back once; words again → the truth beside them.
+      const said = (t) => ({ choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: t } }] });
+      const w1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'חמם קצת את שורת הסיום', ...TURN } }));
+      const w2 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: w1 && w1.modelCall ? w1.modelCall.id : 'x', result: said('הצעתי: לערוך את הדף "home" (נשמר כטיוטה) — ממתין לאישור\n\nI\'ve updated the closing line to be warmer.') } } }));
+      const w2last = w2 && w2.modelCall ? (w2.modelCall.body.messages || []).slice(-1)[0] : null;
+      check('a reply that CLAIMS a change with no write this turn (the page\'s memo line in the model\'s mouth) is sent back once — do it, or say plainly that nothing changed',
+        !!(w2 && w2.ok && !w2.pending && w2.modelCall) && !!w2last && w2last.role === 'user' && /edit_page/.test(String(w2last.content || '')) && /הצעתי/.test(String(w2last.content || '')));
+      const w3 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: w2 && w2.modelCall ? w2.modelCall.id : 'x', result: said('בוצע: הדף "home" עודכן כטיוטה\nעדכנתי את שורת הסיום.') } } }));
+      check('…and words again → the turn ends with the truth beside them: nothing changed, the page\'s line taken out of the reply, no card',
+        !!(w3 && w3.ok && !w3.pending && !w3.modelCall && !w3.applied) && /לא ערך את הדף/.test(w3.notice || '') && !/בוצע:/.test(w3.reply || '') && /עדכנתי/.test(w3.reply || ''));
+      const a1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'מה יש בדף?', ...TURN } }));
+      const a2 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: a1 && a1.modelCall ? a1.modelCall.id : 'x', result: said('בדף יש כותרת, שלוש פסקאות וטופס.') } } }));
+      check('…while an answer that describes the page claims nothing and passes untouched (no extra call, no notice)',
+        !!(a2 && a2.ok && !a2.modelCall && !a2.pending) && a2.reply === 'בדף יש כותרת, שלוש פסקאות וטופס.' && !a2.notice);
+    }
     const draftAfter = parse(await req('GET', '/admin/api/pzn/source?fullPath=home', { cookie }));
     const publishedAfter = parse(await req('GET', '/admin/api/pzn/source?fullPath=home&kind=published', { cookie }));
     // the draft is read back through the same serializer that wrote it, so
