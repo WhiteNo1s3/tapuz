@@ -924,12 +924,59 @@ function newNode(type, el, box, st, ctx, extra) {
 }
 
 /** A clip on a group: the shape it cuts, as a crop hint for a lone picture inside. */
+/**
+ * An element's own `d`, `points` or `transform` parses to the same answer every
+ * time — and a fan of `<use>` can look at the same fat leaf thousands of times.
+ * The budget bounds HOW MANY elements are looked at; these bound what each look
+ * costs, so a 20,000-segment path behind 4,096 expansions is parsed once.
+ */
+function boxOf(el) {
+  if (el._box === undefined) el._box = pathBox(el.attrs.d);
+  return el._box;
+}
+
+function kindOf(el) {
+  if (el._kind === undefined) el._kind = pathKind(el.attrs.d);
+  return el._kind;
+}
+
+function matOf(el) {
+  if (el._m === undefined) el._m = parseTransform(el.attrs.transform);
+  return el._m;
+}
+
+function ptsOf(el) {
+  if (el._pts === undefined) el._pts = nums(el.attrs.points);
+  return el._pts;
+}
+
+/**
+ * How much there is to read in this element itself: the length of the data a
+ * look at it has to chew (a path's `d`, a polygon's points, a transform list,
+ * and the words inside a `<text>`). Measured once per element, so charging the
+ * budget by it is free — and a fat element behind a fan of `<use>` then costs
+ * what it really costs instead of counting as one cheap look.
+ */
+function costOf(el) {
+  if (el._weight !== undefined) return el._weight;
+  let n = (el.attrs.d || '').length + (el.attrs.points || '').length + (el.attrs.transform || '').length;
+  if (el.tag === 'text' || el.tag === 'tspan') {
+    const walk = (k) => {
+      if (k.tag === '#text') { n += (k.text || '').length; return; }
+      for (const c of k.children || []) walk(c);
+    };
+    walk(el);
+  }
+  el._weight = n;
+  return n;
+}
+
 function clipHint(id, m, ctx) {
   const cp = ctx.byId.get(id);
   if (!cp || cp.tag !== 'clippath') return null;
   const shape = elements(cp)[0];
   if (!shape) return null;
-  const mm = mul(m, parseTransform(shape.attrs.transform));
+  const mm = mul(m, matOf(shape));
   const k = scaleOf(mm);
   if (shape.tag === 'rect') {
     const box = place({ x: num(shape.attrs.x), y: num(shape.attrs.y), w: num(shape.attrs.width), h: num(shape.attrs.height) }, mm);
@@ -942,9 +989,9 @@ function clipHint(id, m, ctx) {
     return { box: place({ x: num(shape.attrs.cx) - rx, y: num(shape.attrs.cy) - ry, w: 2 * rx, h: 2 * ry }, mm), mask: 'circle' };
   }
   if (shape.tag === 'path') {
-    const b = pathBox(shape.attrs.d);
+    const b = boxOf(shape);
     if (!b) return null;
-    const kind = pathKind(shape.attrs.d);
+    const kind = kindOf(shape);
     return { box: place(b, mm), mask: kind === 'ellipse' ? 'circle' : kind === 'rect' ? undefined : 'shape' };
   }
   return null;
@@ -962,7 +1009,7 @@ function childState(el, st, ctx) {
       m = mul(mul(m, scaleM(w / vb[2], h / vb[3])), translate(-vb[0], -vb[1]));
     }
   }
-  if (el.attrs.transform) m = mul(m, parseTransform(el.attrs.transform));
+  if (el.attrs.transform) m = mul(m, matOf(el));
   const o = { m, style: inheritStyle(el, st.style), opacity: st.opacity, href: st.href, clip: st.clip, depth: st.depth + 1 };
   const op = prop(el, 'opacity');
   if (op != null) o.opacity = st.opacity * Math.max(0, Math.min(1, num(op, 1)));
@@ -1085,7 +1132,8 @@ function walkEl(el, st, ctx, out) {
   // the work budget counts every element LOOKED AT, <use> expansions included:
   // a tree of empty groups behind a fan of <use> emits nothing, so a budget on
   // emitted nodes alone would let it run branch^depth in the request thread
-  if (!ctx.budgetHit && ++ctx.visits > MAX_VISITS) { ctx.budgetHit = true; ctx.budgetWhy = 'visits'; }
+  ctx.visits += 1 + (costOf(el) >> 6); // a look at a 20,000-character path is not one look
+  if (!ctx.budgetHit && ctx.visits > MAX_VISITS) { ctx.budgetHit = true; ctx.budgetWhy = 'visits'; }
   if (ctx.budgetHit) return;
   const tag = el.tag;
   if (SKIP_TAGS.has(tag)) return;
@@ -1131,15 +1179,15 @@ function walkEl(el, st, ctx, out) {
   } else if (tag === 'line') {
     lineNode(el, s, ctx, [num(a.x1), num(a.y1)], [num(a.x2), num(a.y2)], out);
   } else if (tag === 'path') {
-    const b = pathBox(a.d);
+    const b = boxOf(el);
     if (!b) return;
-    const kind = pathKind(a.d);
+    const kind = kindOf(el);
     const thin = Math.min(b.w, b.h) < 0.5;
     if (thin && kind !== 'path' && !colorOf(s.style.fill, 1)) return;
     if (thin) { lineNode(el, s, ctx, [b.x, b.y], [b.x + b.w, b.y + b.h], out); return; }
     emitFilled(el, s, ctx, b, { kind, mask: kind === 'ellipse' ? 'circle' : undefined }, out);
   } else if (tag === 'polygon' || tag === 'polyline') {
-    const pts = nums(a.points);
+    const pts = ptsOf(el);
     if (pts.length < 4) return;
     let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
     for (let i = 0; i + 1 < pts.length; i += 2) { if (pts[i] < x0) x0 = pts[i]; if (pts[i] > x1) x1 = pts[i]; if (pts[i + 1] < y0) y0 = pts[i + 1]; if (pts[i + 1] > y1) y1 = pts[i + 1]; }

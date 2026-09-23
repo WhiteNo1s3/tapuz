@@ -302,6 +302,28 @@ check('LOW: three files called Home → names, paths, keys and anchors all disti
     code === 'E_SVG_TOO_BIG' && /כבד/.test(msg) && Date.now() - tDeep < 1500, [code, (Date.now() - tDeep) + 'ms']);
 }
 
+// H1, second half: the budget counts elements, so what each look COSTS must be
+// bounded too — a fat leaf behind a fan of <use>, and a fat clip path reused by
+// thousands of groups, were minutes of blocked event loop
+{
+  const fatD = 'M0 0 ' + Array.from({ length: 6000 }, (_, i) => 'L' + (i % 700) + ' ' + ((i * 7) % 900)).join(' ') + ' Z';
+  let defs = '<defs><clipPath id="fat"><path d="' + fatD + '"/></clipPath><g id="L0"><path d="' + fatD + '" fill="#345"/></g>';
+  for (let i = 1; i <= 6; i++) defs += '<g id="L' + i + '">' + ('<use xlink:href="#L' + (i - 1) + '"/>').repeat(4) + '</g>';
+  defs += '</defs>';
+  const fanFat = '<svg width="800" height="900" viewBox="0 0 800 900" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">' +
+    defs + '<g id="Page"><use xlink:href="#L6"/><text font-family="Inter" font-size="40"><tspan x="40" y="80">Hello</tspan></text></g></svg>';
+  const tFan = Date.now();
+  try { svg.fromSvg([{ name: 'FanFat', text: fanFat }], {}); } catch (e) { /* refused is fine, slow is not */ }
+  check('H1: a fat path behind 4,096 <use> expansions costs what it costs — seconds, not minutes', Date.now() - tFan < 1500, (Date.now() - tFan) + 'ms');
+
+  let many = '';
+  for (let i = 0; i < 20000; i++) many += '<g clip-path="url(#fat)"><rect x="' + (i % 700) + '" y="' + ((i * 3) % 900) + '" width="8" height="8" fill="#345"/></g>';
+  const reused = '<svg width="800" height="900" viewBox="0 0 800 900" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="fat"><path d="' + fatD + '"/></clipPath></defs><g id="Page">' + many + '<text font-family="Inter" font-size="40"><tspan x="40" y="80">Hi</tspan></text></g></svg>';
+  const tClip = Date.now();
+  try { svg.fromSvg([{ name: 'Clips', text: reused }], {}); } catch (e) { /* refused is fine */ }
+  check('H1: one fat clip path reused by 20,000 groups is parsed once', Date.now() - tClip < 1500, (Date.now() - tClip) + 'ms');
+}
+
 check('smoke runs in < 2 s', Date.now() - t0 < 2000, (Date.now() - t0) + 'ms');
 console.log('SMOKE GEPPETTO-SVG: ' + (fail ? 'FAIL' : 'PASS'));
 process.exit(fail ? 1 : 0);
