@@ -38,8 +38,11 @@
  *   - text, when "Outline text" was UNTICKED: `<text fill font-family font-size
  *     font-weight letter-spacing>` with one `<tspan x y>` per line, x/y being
  *     the line's BASELINE, and Figma's `&#10;` at the end of a broken line;
- *   - text, by default, is OUTLINED: zero `<text>`, dozens of `<path id="…">`.
- *     detect() refuses that with E_SVG_OUTLINED — the owner exports again;
+ *   - text, by default, is OUTLINED: zero `<text>`, dozens of `<path id="…">`
+ *     that kept the text layers' names ("Section heading") and hold a subpath
+ *     per glyph. detect() refuses that with E_SVG_OUTLINED — the owner exports
+ *     again — but only on evidence of words: a text-free illustration or an
+ *     icon sheet ("Vector_7", "leaf-left") goes through with a note;
  *   - images are pattern fills, not `<image>` in place: `fill="url(#patternN)"`
  *     → `<pattern><use xlink:href="#imageN" transform="translate scale"/>` →
  *     `<image data-name="photo.png" width height xlink:href="data:…"/>`. The
@@ -51,6 +54,16 @@
  *   - the real file was 154 MB (every photo at full resolution): the reader
  *     refuses over MAX_TEXT_BYTES and skips a single picture over
  *     MAX_IMAGE_BASE64 with a note instead of dying.
+ *
+ * Other exporters, as far as the reader goes: Illustrator's default writes every
+ * fill and font as a <style> class rule (read here — inline style, then the
+ * sheet, then the attribute, as CSS ranks them) and font faces as PostScript
+ * names ('Inter-Bold'); Inkscape sizes the page in mm (scaled to px) and, like
+ * any hand-edited file, pretty-prints, so whitespace between tags is layout,
+ * never words. A file is untrusted input read in the request thread: a work
+ * budget counts every element LOOKED AT (MAX_VISITS), not only the nodes it
+ * yields — a fan of <use> over empty groups emits nothing and would otherwise
+ * run branch^depth — beside the text cap, the picture cap and the node cap.
  *
  * Coordinates: the walk keeps a current transform (matrix / translate / scale /
  * rotate / skew nest through groups and <use>), so every node comes out
@@ -80,6 +93,7 @@ const MAX_TEXT_BYTES = 24 * 1024 * 1024;
 const MAX_IMAGE_BASE64 = 8 * 1024 * 1024;
 const MAX_NODES = 20000; // the life pass refuses more (index.js) — stop walking there
 const MAX_USE_DEPTH = 12;
+const MAX_VISITS = 300000; // elements looked at in one file, <use> expansions included — see walkEl
 const OUTLINED_MIN_PATHS = 5;
 const SOURCE = 'figma';
 const FORMAT = 'figma-file';
@@ -93,6 +107,16 @@ const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const compact = (o) => { for (const k of Object.keys(o)) if (o[k] === undefined || o[k] === null || o[k] === '' || o[k] === false) delete o[k]; return o; };
 /** 1440.004 → 1440 (a scale undone leaves float dust on round design sizes). */
 const snap = (n) => (Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : r2(n));
+
+const UNIT_PX = { px: 1, pt: 96 / 72, pc: 16, mm: 96 / 25.4, cm: 96 / 2.54, in: 96, q: 96 / 101.6 };
+/** A length with a unit → px ('210mm' → 793.7, '1440px' → 1440, '12' → 12); a percentage or nothing → NaN. */
+function lengthPx(v) {
+  const m = /^\s*(-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)\s*([a-z%]*)\s*$/i.exec(String(v == null ? '' : v));
+  if (!m) return NaN;
+  const unit = m[2].toLowerCase();
+  const f = unit ? UNIT_PX[unit] : 1;
+  return f ? parseFloat(m[1]) * f : NaN;
+}
 
 // Built with fromCharCode so no editor ever turns an escape into a raw byte.
 const RTL_LETTERS = new RegExp('[' + String.fromCharCode(0x0590) + '-' + String.fromCharCode(0x08ff) + ']', 'g');
@@ -116,13 +140,21 @@ function uniqueIn(used, base) {
   used.add(s);
   return s;
 }
+/** 'Home' → 'Home', then 'Home 2', 'Home 3' — pages that share a name stay apart. */
+function uniqueName(used, base) {
+  let s = base;
+  let i = 2;
+  while (used.has(s.toLowerCase())) s = base + ' ' + i++;
+  used.add(s.toLowerCase());
+  return s;
+}
 /** 'Subheading_2' → 'Subheading' (Figma's suffix on a duplicate layer name). */
 function stripSuffix(id) {
   return String(id || '').replace(/_\d+$/, '').trim();
 }
 /** A name that says nothing about a picture: Figma's own ('Rectangle 12', 'Vector', 'Frame 3') or a generic 'Photo'. */
 function isDefaultName(name) {
-  return /^(rectangle|ellipse|vector|frame|group|image|img|photo|picture|pic|line|polygon|star|text|arrow|union|subtract|intersect|exclude|mask group)(\s*\d+)?$/i.test(String(name || '').trim());
+  return /^(rectangle|ellipse|vector|frame|group|layer|image|img|photo|picture|pic|line|polygon|star|text|arrow|union|subtract|intersect|exclude|mask group)(\s*\d+)?$/i.test(String(name || '').trim());
 }
 function coded(code, message) {
   const e = new Error(message);
@@ -149,16 +181,58 @@ function detect(text) {
     return { ok: false, code: 'E_SVG_TOO_BIG', message: 'קובץ ה-SVG גדול מדי (' + mb(s.length) + ' MB, המגבלה ' + mb(MAX_TEXT_BYTES) + ' MB) — הקטינו את התמונות המוטמעות או ייצאו כל מסגרת בנפרד' };
   }
   if (/<text[\s>/]/i.test(s)) return { ok: true };
-  // no <text> at all: outlined words are paths that kept the text layer's name
-  let named = 0;
-  for (const m of s.matchAll(/<path\b[^>]*?\sid\s*=\s*"([^"]*)"/gi)) {
-    if (!DEFS_ID.test(m[1])) named++;
-    if (named >= OUTLINED_MIN_PATHS) break;
-  }
-  if (named >= OUTLINED_MIN_PATHS) {
+  // no <text> at all. Outlined words are paths that kept the TEXT layer's name
+  // (Figma names a text by its words: "Section heading") and hold one subpath
+  // per glyph in a wide, short box; an illustration's paths are "Vector_7",
+  // "leaf-left", "Cloud", a few subpaths each. Refuse only on evidence of
+  // words; otherwise the file goes through and the note says what was seen.
+  const ev = outlineEvidence(s);
+  if ((ev.strong >= 3 && ev.shaped >= 1) || (ev.strong + ev.weak >= OUTLINED_MIN_PATHS && ev.shaped >= 3) || ev.shaped >= 6) {
     return { ok: false, code: 'E_SVG_OUTLINED', message: 'הטקסט בקובץ הומר לקווי מתאר (Outline text) — ייצאו שוב מ-Figma עם האפשרות "Outline text" כבויה כדי שהמילים יישמרו' };
   }
+  if (ev.named >= OUTLINED_MIN_PATHS) return { ok: true, note: 'בקובץ אין טקסט, רק ' + ev.named + ' צורות ווקטוריות עם שמות — אם אלה מילים שיוצאו כקווי מתאר, ייצאו שוב מ-Figma עם "Outline text" כבוי; אם זה איור, הכול בסדר' };
   return { ok: true, note: 'בקובץ אין טקסט — יובאו צורות ותמונות בלבד' };
+}
+
+// a vector layer's default name (Figma, Illustrator, Inkscape): a path so named says nothing about words
+const VECTOR_NAME = /^(vector|path|shape|layer|boolean|compound path|mask|clip|icon|logo|stroke|fill|outline|artwork|symbol|group|frame|rectangle|ellipse|polygon|star|line|arrow|union|subtract|intersect|exclude|image)(\s*\d+)?$/i;
+
+/** How much a path's id reads like a text layer's name: 2 = several words, 1 = one word, 0 = a vector's name. */
+function wordsInName(id) {
+  const s = stripSuffix(id).trim();
+  if (!s || VECTOR_NAME.test(s)) return 0;
+  if (s.split(/\s+/).filter((w) => /\p{L}{2,}/u.test(w)).length >= 2) return 2;
+  return /^\p{Lu}?\p{Ll}{3,}$/u.test(s) || /^\p{L}{4,}$/u.test(s) ? 1 : 0;
+}
+
+/** A path shaped like a line of glyphs: many subpaths (one per letter) in a wide, short box. */
+function textShaped(d) {
+  if (!d || d.length > 400000) return false;
+  const moves = (d.match(/[Mm]/g) || []).length;
+  if (moves < 6) return false;
+  const b = pathBox(d);
+  if (!b || !(b.h > 0)) return false;
+  const aspect = b.w / b.h;
+  return aspect >= 2.5 || (moves >= 20 && aspect >= 1.2);
+}
+
+/** The evidence of outlined words among a text-free file's named paths (the first 60 read closely, 2,000 tags at most). */
+function outlineEvidence(s) {
+  const ev = { named: 0, strong: 0, weak: 0, shaped: 0 };
+  let seen = 0;
+  for (const m of s.matchAll(/<path\b([^>]*)>/gi)) {
+    if (++seen > 2000) break;
+    const id = /\sid\s*=\s*"([^"]*)"/i.exec(m[1]);
+    if (!id || DEFS_ID.test(id[1])) continue;
+    ev.named++;
+    if (ev.named > 60) continue;
+    const w = wordsInName(id[1]);
+    if (w === 2) ev.strong++;
+    else if (w === 1) ev.weak++;
+    const d = /\sd\s*=\s*"([^"]*)"/i.exec(m[1]);
+    if (d && textShaped(d[1])) ev.shaped++;
+  }
+  return ev;
 }
 
 // ── 2. transforms ─────────────────────────────────────────────────────────
@@ -259,11 +333,12 @@ function parseStyle(s) {
   }
   return out;
 }
-/** A presentation property of an element: the inline style wins over the attribute (CSS does). */
+/** A presentation property of an element: the inline style wins over a stylesheet rule, which wins over the attribute (CSS does). */
 function prop(el, name) {
   if (!el._style) el._style = el.attrs && el.attrs.style ? parseStyle(el.attrs.style) : {};
-  const v = el._style[name];
+  let v = el._style[name];
   if (v != null && v !== '') return v;
+  if (el._css && (v = el._css[name]) != null && v !== '') return v;
   const a = el.attrs ? el.attrs[name] : undefined;
   return a == null || a === '' ? undefined : a;
 }
@@ -285,6 +360,79 @@ function indexIds(root) {
     }
   }
   return byId;
+}
+
+/**
+ * The file's <style> sheets → the declarations each element gets from them.
+ * Illustrator's default export ("CSS Properties: Style Elements") writes every
+ * fill and font as a class rule (`.st0{fill:#FFF}` + class="st0"), so a reader
+ * that only sees attributes paints a black page. Simple selectors only —
+ * `.class`, `#id`, `tag`, grouped with commas; at-rules and anything nested
+ * are skipped — and a sheet is read up to a budget.
+ */
+function readStylesheet(root) {
+  const sheet = { cls: new Map(), id: new Map(), tag: new Map() };
+  const texts = [];
+  const stack = [root];
+  while (stack.length) {
+    const n = stack.pop();
+    for (const c of n.children || []) {
+      if (c.tag === 'style') texts.push((c.children || []).map((t) => t.text || '').join(''));
+      else if (c.tag !== '#text') stack.push(c);
+    }
+  }
+  if (!texts.length) return null;
+  const css = texts.join('\n').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/\/\*[\s\S]*?\*\//g, '').slice(0, 200000);
+  const merge = (map, key, decls) => map.set(key, Object.assign(map.get(key) || {}, decls));
+  let k = 0;
+  let rules = 0;
+  while (k < css.length && rules++ < 5000) {
+    const open = css.indexOf('{', k);
+    if (open < 0) break;
+    const head = css.slice(k, open).trim();
+    let depth = 0;
+    let close = open;
+    for (; close < css.length; close++) {
+      if (css[close] === '{') depth++;
+      else if (css[close] === '}') { depth--; if (!depth) break; }
+    }
+    const body = css.slice(open + 1, close);
+    k = close + 1;
+    if (!head || head[0] === '@') continue;
+    const decls = parseStyle(body.replace(/\s*!important/gi, ''));
+    if (!Object.keys(decls).length) continue;
+    for (const sel of head.split(',')) {
+      const t = sel.trim();
+      let m;
+      if ((m = /^\.([A-Za-z_][\w-]*)$/.exec(t))) merge(sheet.cls, m[1], decls);
+      else if ((m = /^#([A-Za-z_][\w:.-]*)$/.exec(t))) merge(sheet.id, m[1], decls);
+      else if ((m = /^([A-Za-z][\w-]*)$/.exec(t))) merge(sheet.tag, m[1].toLowerCase(), decls);
+    }
+  }
+  return sheet.cls.size || sheet.id.size || sheet.tag.size ? sheet : null;
+}
+
+/** Give every element the declarations its tag, classes and id select (tag < class < id). */
+function applyStylesheet(root, sheet) {
+  const stack = [root];
+  while (stack.length) {
+    const n = stack.pop();
+    for (const c of n.children || []) {
+      if (c.tag === '#text') continue;
+      stack.push(c);
+      const d = {};
+      let any = false;
+      const byTag = sheet.tag.get(c.tag);
+      if (byTag) { Object.assign(d, byTag); any = true; }
+      for (const cls of String(c.attrs.class || '').split(/\s+/)) {
+        const r = cls ? sheet.cls.get(cls) : null;
+        if (r) { Object.assign(d, r); any = true; }
+      }
+      const byIdRule = c.attrs.id != null ? sheet.id.get(String(c.attrs.id)) : null;
+      if (byIdRule) { Object.assign(d, byIdRule); any = true; }
+      if (any) c._css = d;
+    }
+  }
 }
 
 // ── 5. paint servers: gradients and pattern pictures ──────────────────────
@@ -553,6 +701,20 @@ function weightOf(v) {
 function firstFamily(v) {
   return String(v || '').split(',')[0].trim().replace(/^['"]|['"]$/g, '').trim();
 }
+
+const FACE_WEIGHT = { thin: 100, hairline: 100, extralight: 200, ultralight: 200, light: 300, regular: 400, book: 400, medium: 500, semibold: 600, demibold: 600, bold: 700, extrabold: 800, ultrabold: 800, heavy: 900, black: 900 };
+/**
+ * A font-family value → { family, weight, italic }. Illustrator writes the
+ * PostScript name ('Inter-Bold', 'PlayfairDisplay-SemiBoldItalic'): the style
+ * words after the dash are the weight and the slant, the head is the family.
+ */
+function fontFace(v) {
+  const fam = firstFamily(v);
+  const m = /^([A-Za-z][A-Za-z0-9]*)-((?:Extra|Ultra|Semi|Demi)?(?:Thin|Hairline|Light|Regular|Book|Medium|Bold|Heavy|Black)?(?:Italic|Oblique)?)$/.exec(fam);
+  if (!m || !m[2]) return { family: fam, weight: 0, italic: false };
+  const style = m[2].toLowerCase();
+  return { family: m[1].replace(/([a-z])([A-Z])/g, '$1 $2'), weight: FACE_WEIGHT[style.replace(/italic|oblique/, '')] || 0, italic: /italic|oblique/.test(style) };
+}
 /** letter-spacing → em: '-0.02em' as is, '1.5' / '1.5px' against the size, 'normal' → 0. */
 function letterSpacingEm(value, size) {
   const s = String(value == null ? '' : value).trim().toLowerCase();
@@ -572,12 +734,17 @@ function inheritStyle(el, st) {
   const o = Object.assign({}, st);
   const pick = (name) => prop(el, name);
   let v;
-  if ((v = pick('fill')) != null) o.fill = v;
+  if ((v = pick('fill')) != null) { o.fill = v; o.fillExplicit = true; }
   if ((v = pick('fill-opacity')) != null) o.fillOpacity = Math.max(0, Math.min(1, num(v, 1)));
   if ((v = pick('stroke')) != null) o.stroke = v;
   if ((v = pick('stroke-opacity')) != null) o.strokeOpacity = Math.max(0, Math.min(1, num(v, 1)));
   if ((v = pick('stroke-width')) != null) o.strokeWidth = num(v, 1);
-  if ((v = pick('font-family'))) o.fontFamily = firstFamily(v);
+  if ((v = pick('font-family'))) {
+    const face = fontFace(v);
+    o.fontFamily = face.family;
+    if (face.weight && pick('font-weight') == null) o.fontWeight = face.weight;
+    if (face.italic && !pick('font-style')) o.italic = true;
+  }
   if ((v = pick('font-size')) != null) o.fontSize = num(v, o.fontSize);
   if ((v = pick('font-weight')) != null) o.fontWeight = weightOf(v);
   if ((v = pick('font-style'))) o.italic = /italic|oblique/i.test(v);
@@ -666,20 +833,23 @@ function textNode(el, st, ctx) {
   const ty = firstNum(el.attrs.y, 0);
   const lines = [];
   let cur = null;
-  const startLine = (x, y, style, auto) => {
-    if (cur && auto === false && cur.auto && !cur.runs.length) { cur.x = x; cur.y = y; cur.style = style; cur.auto = false; return; }
-    cur = { x, y, style, runs: [], auto: !!auto };
+  const startLine = (x, y, style) => {
+    cur = { x, y, style, runs: [] };
     lines.push(cur);
   };
   const pushText = (raw, style) => {
-    const parts = decodeEntities(raw).split('\n');
-    parts.forEach((part, i) => {
-      if (i > 0) startLine(cur ? cur.x : tx, (cur ? cur.y : ty) + (num(style.fontSize) || 16) * 1.2, style, true);
-      const t = style.pre ? part : part.replace(/\s+/g, ' ');
-      if (!t) return;
-      if (!cur) startLine(tx, ty, style, false);
-      cur.runs.push({ text: t, style });
-    });
+    // lines come from the tspans, never from a newline: Figma's &#10; at a
+    // line's end and a pretty-printer's indentation both fold into spaces (SVG
+    // renders them so), and whitespace between tags is layout, not words —
+    // kept as ONE space only inside a line that already holds words
+    const text = decodeEntities(raw);
+    const t = style.pre ? text.replace(/[\r\n\t]+/g, ' ') : text.replace(/\s+/g, ' ');
+    if (!t.trim()) {
+      if (cur && cur.runs.length) cur.runs.push({ text: ' ', style });
+      return;
+    }
+    if (!cur) startLine(tx, ty, style);
+    cur.runs.push({ text: t, style });
   };
   const visit = (node, style) => {
     for (const c of node.children || []) {
@@ -688,12 +858,18 @@ function textNode(el, st, ctx) {
       const s2 = inheritStyle(c, style);
       const hasX = c.attrs.x != null && c.attrs.x !== '';
       const hasY = c.attrs.y != null && c.attrs.y !== '';
-      if (hasX || hasY) startLine(hasX ? firstNum(c.attrs.x) : cur ? cur.x : tx, hasY ? firstNum(c.attrs.y) : cur ? cur.y : ty, s2, false);
-      else if (cur && (c.attrs.dy != null || c.attrs.dx != null)) startLine(cur.x + firstNum(c.attrs.dx), cur.y + firstNum(c.attrs.dy), s2, false);
+      if (hasX || hasY) startLine(hasX ? firstNum(c.attrs.x) : cur ? cur.x : tx, hasY ? firstNum(c.attrs.y) : cur ? cur.y : ty, s2);
+      else if (cur && (c.attrs.dy != null || c.attrs.dx != null)) startLine(cur.x + firstNum(c.attrs.dx), cur.y + firstNum(c.attrs.dy), s2);
       visit(c, s2);
     }
   };
   visit(el, st.style);
+  for (const ln of lines) {
+    if (!ln.runs.length) continue;
+    ln.runs[0].text = ln.runs[0].text.replace(/^\s+/, '');
+    ln.runs[ln.runs.length - 1].text = ln.runs[ln.runs.length - 1].text.replace(/\s+$/, '');
+    ln.runs = ln.runs.filter((r) => r.text);
+  }
   while (lines.length && !lines[lines.length - 1].runs.length) lines.pop();
   while (lines.length && !lines[0].runs.length) lines.shift();
   if (!lines.length) return null;
@@ -857,7 +1033,9 @@ function emitFilled(el, st, ctx, local, info, out) {
   }
   if (!fill && !stroke) { ctx.count('empty'); return; }
   ctx.count('shape');
-  out.push(newNode('shape', el, box, st, ctx, { shape: info.kind, fill: fill || undefined, stroke, radius: info.radius }));
+  const node = newNode('shape', el, box, st, ctx, { shape: info.kind, fill: fill || undefined, stroke, radius: info.radius });
+  if (fill && !st.style.fillExplicit) ctx.implicit.add(node); // painted by SVG's default black, not by the file
+  out.push(node);
 }
 
 function lineNode(el, st, ctx, p1, p2, out) {
@@ -896,13 +1074,19 @@ function imageNode(el, st, ctx, out) {
 
 function walkChildren(el, st, ctx, out) {
   for (const c of el.children || []) {
-    if (ctx.emitted >= MAX_NODES) { ctx.budgetHit = true; return; }
+    if (!ctx.budgetHit && ctx.emitted >= MAX_NODES) { ctx.budgetHit = true; ctx.budgetWhy = 'nodes'; }
+    if (ctx.budgetHit) return;
     if (c.tag !== '#text') walkEl(c, st, ctx, out);
   }
 }
 
 /** One element → puppet nodes appended to `out` (a group's members, flattened or grouped). */
 function walkEl(el, st, ctx, out) {
+  // the work budget counts every element LOOKED AT, <use> expansions included:
+  // a tree of empty groups behind a fan of <use> emits nothing, so a budget on
+  // emitted nodes alone would let it run branch^depth in the request thread
+  if (!ctx.budgetHit && ++ctx.visits > MAX_VISITS) { ctx.budgetHit = true; ctx.budgetWhy = 'visits'; }
+  if (ctx.budgetHit) return;
   const tag = el.tag;
   if (SKIP_TAGS.has(tag)) return;
   if (/none/i.test(prop(el, 'display') || '') || /hidden|collapse/i.test(prop(el, 'visibility') || '')) return;
@@ -990,7 +1174,7 @@ function walkEl(el, st, ctx, out) {
 
 // ── 9. a file → primitives ────────────────────────────────────────────────
 
-const DEFAULT_STYLE = { fill: 'black', fillOpacity: 1, stroke: 'none', strokeOpacity: 1, strokeWidth: 1, fontFamily: '', fontSize: 16, fontWeight: 400, italic: false, letterSpacing: 'normal', textAnchor: 'start', underline: false, strike: false, upper: false, rtl: false, pre: false };
+const DEFAULT_STYLE = { fill: 'black', fillOpacity: 1, stroke: 'none', strokeOpacity: 1, strokeWidth: 1, fontFamily: '', fontSize: 16, fontWeight: 400, italic: false, letterSpacing: 'normal', textAnchor: 'start', underline: false, strike: false, upper: false, rtl: false, pre: false, fillExplicit: false };
 
 /** A matrix that only scales, uniformly and not by 1 (b = c = 0, a = d) → a, else 0. */
 function uniformScale(m) {
@@ -1065,27 +1249,41 @@ function contentExtent(nodes, vbW, vbH) {
   return { right, bottom };
 }
 
-/** One SVG file → { name, slug, width, height, nodes } in design px. */
+/** One SVG file → { name, slug, width, height, nodes, fill } in design px. */
 function decodeSvgFile(file, index, shared) {
   const fileName = String((file && file.name) || 'page-' + (index + 1));
   const dom = parseHtml(file.text);
   const svg = elements(dom).find((c) => c.tag === 'svg') || null;
   if (!svg) throw coded('E_SVG_NOT_SVG', fileName + ': הקובץ אינו SVG — ייצאו את המסגרת מ-Figma בפורמט SVG (Export → SVG) וטענו אותו שוב');
+  const sheet = readStylesheet(svg);
+  if (sheet) applyStylesheet(svg, sheet);
+  // the viewport: the viewBox in user units, the width/height in px — a physical
+  // size (210mm: an Inkscape A4) scales the user units to px; a percentage says nothing
   const vb = nums(svg.attrs.viewbox);
+  const wPx = lengthPx(svg.attrs.width);
+  const hPx = lengthPx(svg.attrs.height);
   let vbX = 0; let vbY = 0; let vbW = 0; let vbH = 0;
   if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) [vbX, vbY, vbW, vbH] = vb;
-  else { vbW = num(svg.attrs.width); vbH = num(svg.attrs.height); }
+  else { vbW = wPx > 0 ? wPx : 0; vbH = hPx > 0 ? hPx : 0; }
+  let unit = 1;
+  if (vbW > 0 && wPx > 0 && Math.abs(wPx / vbW - 1) > 0.005) unit = wPx / vbW;
+  else if (vbH > 0 && hPx > 0 && Math.abs(hPx / vbH - 1) > 0.005) unit = hPx / vbH;
+  const viewW = vbW * unit;
+  const viewH = vbH * unit;
   const ctx = {
     byId: indexIds(svg),
-    viewport: { w: vbW, h: vbH },
+    viewport: { w: viewW, h: viewH },
     counts: shared.counts,
     seq: 0,
     ids: new Set(),
     emitted: 0,
+    visits: 0,
+    budgetHit: false,
+    budgetWhy: '',
     useChain: new Set(),
     frameName: '',
-    budgetHit: false,
     byEl: new Map(),
+    implicit: new Set(),
     count(k) { this.counts[k] = (this.counts[k] || 0) + 1; },
     skip(msg) { shared.skipped[msg] = (shared.skipped[msg] || 0) + 1; },
     nodeId(el) {
@@ -1096,7 +1294,7 @@ function decodeSvgFile(file, index, shared) {
       return id;
     }
   };
-  const root = { m: translate(-vbX, -vbY), style: inheritStyle(svg, DEFAULT_STYLE), opacity: 1, href: null, clip: null, depth: 0 };
+  const root = { m: mul(scaleM(unit, unit), translate(-vbX, -vbY)), style: inheritStyle(svg, DEFAULT_STYLE), opacity: 1, href: null, clip: null, depth: 0 };
   // the frame is the first top-level group; what sits at the top level before
   // or after it is not the page (Figma's canvas backdrop lives there)
   const frame = elements(svg).find((c) => c.tag === 'g') || null;
@@ -1105,25 +1303,31 @@ function decodeSvgFile(file, index, shared) {
   const after = [];
   let bucket = frame ? before : inside;
   for (const c of elements(svg)) {
-    if (ctx.emitted >= MAX_NODES) { ctx.budgetHit = true; break; }
+    if (!ctx.budgetHit && ctx.emitted >= MAX_NODES) { ctx.budgetHit = true; ctx.budgetWhy = 'nodes'; }
+    if (ctx.budgetHit) break;
     if (SKIP_TAGS.has(c.tag)) continue;
     if (c === frame) { walkEl(c, root, ctx, inside); bucket = after; continue; }
     walkEl(c, root, ctx, bucket);
   }
   const all = before.concat(inside, after);
-  if (ctx.budgetHit) shared.notes.push(fileName + ': העיצוב מחזיק יותר מ-' + MAX_NODES.toLocaleString('he-IL') + ' רכיבים — נקראו הראשונים בלבד');
+  if (ctx.budgetHit) {
+    shared.budgetHit = true; // a file that spent its budget has a reason of its own to give
+    shared.notes.push(fileName + (ctx.budgetWhy === 'visits'
+      ? ': מבנה הקובץ כבד מכדי לקרוא אותו עד הסוף (יותר מ-' + MAX_VISITS.toLocaleString('he-IL') + ' רכיבים והפניות) — נקראו הראשונים בלבד'
+      : ': העיצוב מחזיק יותר מ-' + MAX_NODES.toLocaleString('he-IL') + ' רכיבים — נקראו הראשונים בלבד'));
+  }
   // the design's own size: the scaled background's LOCAL size (1440×4811 under
-  // scale(0.851382)); without a scale, the viewBox
+  // scale(0.851382)); without a scale, the viewport
   const scaled = designScale(svg, frame, vbW, vbH);
   const s = scaled ? scaled.s : 1;
   let k = scaled ? 1 / s : 1;
-  let width = scaled ? snap(scaled.w) : vbW > 0 ? snap(vbW) : 0;
-  let height = scaled ? snap(scaled.h) : vbH > 0 ? snap(vbH) : 0;
+  let width = scaled ? snap(scaled.w * unit) : viewW > 0 ? snap(viewW) : 0;
+  let height = scaled ? snap(scaled.h * unit) : viewH > 0 ? snap(viewH) : 0;
   if (scaled) {
     // a file whose content already sits in design px next to a scaled backdrop
     // (no export renders that right, a hand-made file may): not scaled twice
-    const ext = contentExtent(all, vbW, vbH);
-    if (ext.right > vbW * 1.02 || ext.bottom > vbH * 1.02) {
+    const ext = contentExtent(all, viewW, viewH);
+    if (ext.right > viewW * 1.02 || ext.bottom > viewH * 1.02) {
       k = 1;
       shared.notes.push(fileName + ': התוכן כבר בגודל העיצוב (' + width + '×' + height + ') — לא הוקטן שוב');
     } else shared.notes.push(fileName + ': הקובץ יוצא מוקטן (×' + r2(s) + ') — הגאומטריה הוחזרה לגודל העיצוב, ' + width + '×' + height);
@@ -1133,22 +1337,33 @@ function decodeSvgFile(file, index, shared) {
   // the page's background, by PLACE in the tree: the first node inside the frame,
   // when it is a full-bleed colour or gradient rect, is the frame's own fill; a
   // full-bleed colour rect OUTSIDE the frame is Figma's canvas backdrop — dropped
-  // (unless it is the one that carried the root scale: a background drawn outside)
+  // (unless it is the one that carried the root scale: a background drawn outside);
+  // a full-bleed rect the file never coloured (SVG's default black) is nobody's
+  // background — an artboard left behind — and goes, with a note
   const box = { x: 0, y: 0, w: width, h: height };
   const fill = { color: null, gradient: null };
   const takeFill = (n) => { if (n.fill.color) fill.color = n.fill.color; else fill.gradient = n.fill.gradient; };
-  if (inside.length && isBackdrop(inside[0], box)) takeFill(inside.shift());
+  let unpainted = 0;
+  while (inside.length && isBackdrop(inside[0], box)) {
+    const n = inside.shift();
+    if (ctx.implicit.has(n)) { unpainted++; continue; }
+    takeFill(n);
+    break;
+  }
   const bgNode = scaled && scaled.el ? ctx.byEl.get(scaled.el) : null;
   const canvas = [];
   const keep = (list) => list.filter((n) => {
     if (!isBackdrop(n, box)) return true;
+    if (ctx.implicit.has(n)) { unpainted++; return false; }
     if (n === bgNode && !fill.color && !fill.gradient) { takeFill(n); return false; }
     canvas.push(n.fill.color || n.fill.gradient);
     return false;
   });
   const nodes = keep(before).concat(inside, keep(after));
   for (const c of canvas) shared.notes.push(fileName + ': רקע הקנבס של Figma (' + c + ', מלבן בגודל הייצוא מחוץ למסגרת) הושמט');
-  return { name: ctx.frameName || humanize(fileName) || 'Page ' + (index + 1), slug: fileName, width, height, nodes, fill };
+  if (unpainted) shared.notes.push(fileName + ': מלבן בגודל הדף בלי צבע מוגדר הושמט (ברירת המחדל של SVG הייתה צובעת אותו שחור)' + (unpainted > 1 ? ' ×' + unpainted : ''));
+  const frameName = ctx.frameName && !isDefaultName(ctx.frameName) ? ctx.frameName : '';
+  return { name: frameName || humanize(fileName) || 'Page ' + (index + 1), slug: fileName, width, height, nodes, fill };
 }
 
 // ── 10. primitives → puppet ───────────────────────────────────────────────
@@ -1193,6 +1408,7 @@ function primitivesToPuppet(pages, meta = {}) {
   const counts = isObj(meta.counts) ? meta.counts : {};
   const usedPaths = new Set(['/']);
   const usedKeys = new Set();
+  const usedNames = new Set();
   const fonts = {};
   const tally = new Map();
   const addColor = (c, w) => { const hex = toHex(c); if (hex) tally.set(hex, (tally.get(hex) || 0) + w); };
@@ -1226,7 +1442,7 @@ function primitivesToPuppet(pages, meta = {}) {
     });
     addColor(fill.color, 5);
     if (fill.color || fill.gradient || fill.image) any = true;
-    const name = String(pg.name || '').trim() || (i === 0 ? 'Home' : 'Page ' + (i + 1));
+    const name = uniqueName(usedNames, String(pg.name || '').trim() || (i === 0 ? 'Home' : 'Page ' + (i + 1)));
     const path = i === 0 ? '/' : uniqueIn(usedPaths, '/' + slug(pg.slug || name, 'page-' + (i + 1)));
     const key = uniqueIn(usedKeys, String(pg.key || slug(pg.slug || name, 'page-' + (i + 1))));
     return {
@@ -1239,6 +1455,9 @@ function primitivesToPuppet(pages, meta = {}) {
       sections: [{ key: 's0', anchor: slug(name, 'page'), name, height, fill, layout: null, nodes }]
     };
   });
+  // a file whose budget ran out before it drew anything is heavy, not empty:
+  // sending the owner to check their frame would be a lie
+  if (!any && meta.budgetHit) throw coded('E_SVG_TOO_BIG', 'מבנה הקובץ כבד מכדי לקרוא אותו — הוא מפנה את עצמו שוב ושוב (<use>), ולא נותר ממנו תוכן לייבא');
   if (!any) throw coded('E_SVG_EMPTY', 'לא נמצא בקובץ תוכן לייבא — ודאו שייצאתם מסגרת (Frame) עם התוכן ולא שכבה ריקה');
   // the notes speak to the owner (Hebrew), with the technical handle in parentheses
   if (counts.nopicture) notes.push('מילוי תמונה בלי תמונה מוטמעת — הצורה נשמרה בלי תמונה' + (counts.nopicture > 1 ? ' ×' + counts.nopicture : ''));
@@ -1282,7 +1501,7 @@ function fromSvg(files, opts = {}) {
     if (d.note) shared.notes.push((many ? label + ': ' : '') + d.note);
     return decodeSvgFile(f, i, shared);
   });
-  return primitivesToPuppet(pages, { title: opts.title, lang: opts.lang, notes: shared.notes, counts: shared.counts, skipped: shared.skipped });
+  return primitivesToPuppet(pages, { title: opts.title, lang: opts.lang, notes: shared.notes, counts: shared.counts, skipped: shared.skipped, budgetHit: shared.budgetHit });
 }
 
 module.exports = {
@@ -1292,5 +1511,5 @@ module.exports = {
   MAX_TEXT_BYTES,
   MAX_IMAGE_BASE64,
   // exposed for the smoke and the lead's harnesses
-  _internals: { parseTransform, mul, apply, place, rotationOf, scaleOf, pathBox, pathKind, gradientCss, patternImage, textNode, estimateWidth, stripSuffix, isDefaultName, designScale, uniformScale, colorOf, inheritStyle, decodeSvgFile, isBackdrop, DEFAULT_STYLE }
+  _internals: { parseTransform, mul, apply, place, rotationOf, scaleOf, pathBox, pathKind, gradientCss, patternImage, textNode, estimateWidth, stripSuffix, isDefaultName, designScale, uniformScale, colorOf, wordsInName, textShaped, outlineEvidence, lengthPx, fontFace, readStylesheet, inheritStyle, decodeSvgFile, isBackdrop, DEFAULT_STYLE }
 };

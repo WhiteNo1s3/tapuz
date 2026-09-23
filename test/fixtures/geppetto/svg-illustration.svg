@@ -1,0 +1,12 @@
+<svg width="640" height="400" viewBox="0 0 640 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- An illustration: no words anywhere, six named vector paths — a file that must NOT be refused as "outlined text". Content invented. -->
+<g id="Scene">
+<rect id="Sky" width="640" height="400" fill="#DCEBF7"/>
+<path id="Hill" d="M0 300C120 220 260 220 400 300C480 340 560 340 640 300V400H0Z" fill="#7BAE6B"/>
+<path id="Sun rays" d="M520 60L540 20L560 60ZM520 60L480 40L520 80ZM520 60L560 80L520 100Z" fill="#F2B84B"/>
+<path id="Cloud" d="M120 120C120 100 150 90 165 105C175 85 210 90 210 115C230 115 235 145 210 145H125C105 145 105 120 120 120Z" fill="#FFFFFF"/>
+<path id="leaf-left" d="M300 260C260 230 260 180 300 150C310 190 310 230 300 260Z" fill="#3E7C4F"/>
+<path id="Vector" d="M340 260C380 230 380 180 340 150C330 190 330 230 340 260Z" fill="#3E7C4F"/>
+<path id="Vector_2" d="M320 262V320" stroke="#3E7C4F" stroke-width="4"/>
+</g>
+</svg>

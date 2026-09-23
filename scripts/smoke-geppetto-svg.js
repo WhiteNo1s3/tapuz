@@ -27,7 +27,10 @@
  *     per-image cap skipped with a note, the 20,000-node budget in time;
  *   - primitivesToPuppet on bare primitives (the PDF reader's way in), several
  *     files → several pages, validatePuppet clean, and the whole thing through
- *     planFromPuppet → BenTML with no errors.
+ *     planFromPuppet → BenTML with no errors;
+ *   - the review's findings: a <use> fan-out bomb cut by the visits budget,
+ *     pretty-printed text, Illustrator class rules, an illustration not
+ *     refused as outlined text, physical units, colliding page names.
  * No network. Runs on a throwaway TAPUZ_ROOT.
  */
 
@@ -237,6 +240,67 @@ check('the BenTML carries the heading, a card title and the embedded picture; th
 check('the plan says where it came from', plan.source === 'figma' && plan.format === 'figma-file' && plan.title === 'Ferngrove', [plan.source, plan.format, plan.title]);
 const realPlan = gp.planFromPuppet(real, {});
 check('the real-shape fixture also builds BenTML with no errors', Object.keys(realPlan.pages[0].blocks).length > 0 && realPlan.pages[0].errors.length === 0 && /What we make|Quiet rooms/.test(realPlan.pages[0].source), [realPlan.pages[0].blocks, realPlan.pages[0].errors]);
+
+// ── 11. the review's findings ─────────────────────────────────────────────
+// H1: a <use> fan-out bomb — 8 levels × 8 branches of EMPTY groups (16.7 M visits, nothing emitted)
+const tBomb = Date.now();
+const bombed = svg.fromSvg([{ name: 'bomb.svg', text: read('svg-use-bomb.svg') }]);
+const bombMs = Date.now() - tBomb;
+check('H1: a 1.7 KB <use> fan-out bomb is cut by the visits budget — back in well under two seconds, the page kept, a Hebrew note naming the budget', bombMs < 1500 && validatePuppet(bombed).length === 0 && !!byText(bombed, 'Still here') && bombed.notes.some((n) => HEBREW.test(n) && /300,000|300000/.test(n)), bombMs + 'ms ' + JSON.stringify(bombed.notes));
+check('H1: the node budget still says nodes and the visits budget says visits — two causes, two notes', big.notes.some((n) => /20,000|20000/.test(n)) && !big.notes.some((n) => /300,000|300000/.test(n)) && !bombed.notes.some((n) => /20,000|20000/.test(n)));
+
+// M1: pretty-printed text
+const pretty = svg.fromSvg([{ name: 'pretty.svg', text: read('svg-pretty-text.svg') }]);
+const ph = byName(pretty, 'Heading');
+check('M1: a pretty-printed <text> (whitespace around its tspan, the place on a transform) is ONE paragraph at its place — not three lines from (0,0)', !!ph && ph.paragraphs.length === 1 && plainText(ph) === 'A heading' && near(ph.x, 400, 0.05) && near(ph.y, 300 - 56 * 0.8, 0.05) && ph.h < 56 * 1.3, ph);
+const pw = byName(pretty, 'Plain');
+check('M1: bare words on their own lines inside <text> stay one line at x/y, trimmed', !!pw && plainText(pw) === 'Hello world' && pw.paragraphs.length === 1 && pw.x === 80 && near(pw.y, 120 - 20 * 0.8, 0.05), pw);
+const pair = byName(pretty, 'Pair');
+check('M1: whitespace between two tspans on one line is one space, the bold run kept apart', !!pair && plainText(pair) === 'Hello world' && pair.paragraphs[0].runs.length === 2 && pair.paragraphs[0].runs[1].bold === true, pair);
+check('M1: Figma\'s own &#10; line ends still read as before', plainText(h1) === 'Gardens that\ngrow with you' && plainText(body).split('\n').length === 2);
+
+// M2: Illustrator's default export — every fill and font a class rule in <style>
+const ai = svg.fromSvg([{ name: 'flyer.svg', text: read('svg-illustrator-classes.svg') }]);
+const aiSec = ai.pages[0].sections[0];
+const aiTitle = byText(ai, 'Quiet rooms');
+check('M2: class rules paint the page — the .st0 artboard is the white fill, nothing is black by default', validatePuppet(ai).length === 0 && aiSec.fill.color === '#ffffff' && !find(ai, (n) => n.fill && n.fill.color === '#000000') && !find(ai, (n) => n.type === 'text' && n.paragraphs[0].runs[0].color === '#000000'), [aiSec.fill, ai.notes]);
+check('M2: a heading styled by three classes: 64 px, #1c1b1f, bold Inter from the PostScript name Inter-Bold, placed by its matrix', !!aiTitle && aiTitle.paragraphs[0].runs[0].size === 64 && aiTitle.paragraphs[0].runs[0].color === '#1c1b1f' && aiTitle.paragraphs[0].runs[0].font === 'Inter' && aiTitle.paragraphs[0].runs[0].bold === true && aiTitle.paragraphs[0].runs[0].weight === 700 && aiTitle.x === 80 && near(aiTitle.y, 420 - 64 * 0.8, 0.05), aiTitle);
+const aiSub = byText(ai, 'Interiors for people who read.');
+check('M2: a multi-property class and grouped selectors (.st4,.st5)', !!aiSub && aiSub.paragraphs[0].runs[0].size === 20 && aiSub.paragraphs[0].runs[0].color === '#4a4a4a' && aiSub.paragraphs[0].runs[0].font === 'Inter' && all(ai, (n) => n.type === 'shape' && n.fill && n.fill.color === '#c8553d').length === 2, all(ai, (n) => n.type === 'shape').map((n) => n.fill));
+check('M2: a full-bleed rect the file never coloured is not the page background — dropped with a note', !byName(ai, 'Artboard') && ai.notes.some((n) => HEBREW.test(n) && /שחור/.test(n)) && ai.pages[0].name === 'flyer', [ai.notes, ai.pages[0].name]);
+check('M2: the inline style beats a class rule, a class rule beats the attribute (CSS order)', (() => { const p = svg.fromSvg([{ name: 'o.svg', text: '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><style>.a{fill:#00ff00}</style><rect id="A" class="a" fill="#ff0000" width="10" height="10"/><rect id="B" class="a" style="fill:#0000ff" fill="#ff0000" x="20" width="10" height="10"/><text x="0" y="90" font-size="9">t</text></svg>' }]); return byName(p, 'A').fill.color === '#00ff00' && byName(p, 'B').fill.color === '#0000ff'; })());
+
+// M3: an illustration is not "outlined text"
+const illo = read('svg-illustration.svg');
+const dIllo = svg.detect(illo);
+check('M3: an illustration with six named vector paths and no text is NOT refused — it passes with a Hebrew note that counts them', dIllo.ok === true && HEBREW.test(dIllo.note) && /6/.test(dIllo.note), dIllo);
+const illoPuppet = svg.fromSvg([{ name: 'illo.svg', text: illo }]);
+check('M3: …and decodes into its shapes (five filled paths, one stroked line)', all(illoPuppet, (n) => n.type === 'shape').length >= 5 && all(illoPuppet, (n) => n.type === 'line').length === 1 && illoPuppet.pages[0].sections[0].fill.color === '#dcebf7', all(illoPuppet, (n) => n.type !== 'group').map((n) => [n.type, n.name]));
+const evOut = svg._internals.outlineEvidence(outlinedSvg);
+check('M3: the outlined fixture is still refused — multi-word names AND glyph-shaped paths', svg.detect(outlinedSvg).code === 'E_SVG_OUTLINED' && evOut.strong >= 3 && evOut.shaped >= 3, evOut);
+check('M3: the evidence pieces — "Section heading" reads as words, "Vector_7" / "leaf-left" do not; a glyph run is text-shaped, a leaf is not', svg._internals.wordsInName('Section heading') === 2 && svg._internals.wordsInName('Subheading_2') === 1 && svg._internals.wordsInName('Vector_7') === 0 && svg._internals.wordsInName('leaf-left') === 0 && svg._internals.textShaped('M0 0h5v8h-5zM8 0h5v8h-5zM16 0h5v8h-5zM24 0h5v8h-5zM32 0h5v8h-5zM40 0h5v8h-5z') === true && svg._internals.textShaped('M0 0C10 -10 20 10 30 0C20 20 10 20 0 0Z') === false);
+
+// LOW: physical units and colliding names
+const a4 = svg.fromSvg([{ name: 'a4.svg', text: '<svg width="210mm" height="297mm" viewBox="0 0 210 297" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="190" height="50" fill="#123456"/><text x="10" y="100" font-size="8">Hi</text></svg>' }]);
+check('LOW: an Inkscape A4 page (width="210mm") is 793.7 px wide, its units scaled to px (x 10 → 37.8, 8 → 30.24)', near(a4.pages[0].width, 793.7, 0.1) && near(find(a4, (n) => n.type === 'shape').x, 37.8, 0.1) && near(find(a4, (n) => n.type === 'text').paragraphs[0].runs[0].size, 30.24, 0.05), [a4.pages[0].width, find(a4, (n) => n.type === 'shape')]);
+check('LOW: width="100%" says nothing — the viewBox is the page', svg.fromSvg([{ name: 'p.svg', text: '<svg width="100%" height="100%" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg"><rect width="640" height="480" fill="#eeeeee"/><rect x="10" y="10" width="100" height="100" fill="#112233"/></svg>' }]).pages[0].width === 640);
+const homes = svg.fromSvg([{ name: 'Home.svg', text: pageSvg }, { name: 'Home.svg', text: pageSvg }, { name: 'Home.svg', text: pageSvg }]);
+check('LOW: three files called Home → names, paths, keys and anchors all distinct (no home-2-2)', homes.pages.map((p) => p.name).join('|') === 'Landing page|Landing page 2|Landing page 3' && homes.pages.map((p) => p.path).join('|') === '/|/home|/home-2' && new Set(homes.pages.map((p) => p.key)).size === 3 && new Set(homes.pages.map((p) => p.sections[0].anchor)).size === 3, homes.pages.map((p) => [p.name, p.path, p.key]));
+
+// a file that spends its whole budget before it draws anything is HEAVY, not
+// empty: the refusal must not send the owner to go and check their frame
+{
+  let defs = '<defs><g id="L0"><rect width="4" height="4" fill="#123"/></g>';
+  for (let i = 1; i <= 14; i++) defs += '<g id="L' + i + '">' + ('<use xlink:href="#L' + (i - 1) + '"/>').repeat(8) + '</g>';
+  const deep = '<svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">' +
+    defs + '</defs><g id="Page"><use xlink:href="#L14"/><text font-family="Inter" font-size="40"><tspan x="40" y="80">Hello</tspan></text></g></svg>';
+  const tDeep = Date.now();
+  let code = '';
+  let msg = '';
+  try { svg.fromSvg([{ name: 'Bomb', text: deep }], {}); } catch (e) { code = e.code; msg = e.message; }
+  check('H1: a fan-out that eats the budget before drawing is refused as HEAVY (not "empty"), fast',
+    code === 'E_SVG_TOO_BIG' && /כבד/.test(msg) && Date.now() - tDeep < 1500, [code, (Date.now() - tDeep) + 'ms']);
+}
 
 check('smoke runs in < 2 s', Date.now() - t0 < 2000, (Date.now() - t0) + 'ms');
 console.log('SMOKE GEPPETTO-SVG: ' + (fail ? 'FAIL' : 'PASS'));
