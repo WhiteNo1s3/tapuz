@@ -1,0 +1,34 @@
+<svg width="1226" height="4096" viewBox="0 0 1226 4096" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- The exact tree and numbers of a real Figma SVG export of a 1440×4811 frame, with invented content:
+     the export is capped to 1226×4096 (scale 0.851382); Figma's canvas backdrop comes first, OUTSIDE the frame, at export size;
+     the frame's own background is the FIRST child INSIDE the frame group and carries the scale; every child of the group carries
+     that same scale, so every number inside is design px; the clipPath's rect is the export size; defs come last. -->
+<rect width="1225.99" height="4096" fill="#1E1E1E"/>
+<g id="Landing page" clip-path="url(#clip0_0_1)">
+<rect width="1440" height="4811" transform="scale(0.851382)" fill="white"/>
+<rect id="Header" width="1440" height="120" transform="scale(0.851382)" fill="#F4F1EC"/>
+<g id="Navigation" transform="scale(0.851382)">
+<text fill="#000000" xml:space="preserve" style="white-space: pre" font-family="Inter" font-size="20" font-weight="500" letter-spacing="0em"><tspan x="80" y="82">Harbor Lane</tspan></text>
+<text fill="#000000" xml:space="preserve" style="white-space: pre" font-family="Inter" font-size="20" font-weight="500" letter-spacing="0em"><tspan x="1180" y="82">Work</tspan></text>
+<text fill="#000000" xml:space="preserve" style="white-space: pre" font-family="Inter" font-size="20" font-weight="500" letter-spacing="0em"><tspan x="1280" y="82">About</tspan></text>
+</g>
+<line id="Rule" x1="0" y1="120" x2="1440" y2="120" transform="scale(0.851382)" stroke="#DDD6CC"/>
+<text id="Heading" fill="#000000" xml:space="preserve" style="white-space: pre" font-family="Inter" font-size="64" font-weight="700" letter-spacing="-0.02em" transform="scale(0.851382)"><tspan x="80" y="420">Quiet rooms, loud ideas</tspan></text>
+<text id="Subheading" fill="#4A4A4A" xml:space="preserve" style="white-space: pre" font-family="Inter" font-size="28" font-weight="600" letter-spacing="-0.02em" transform="scale(0.851382)"><tspan x="80" y="490.4">Interiors for people who read.</tspan></text>
+<text id="Section heading" fill="#000000" xml:space="preserve" style="white-space: pre" font-family="Inter" font-size="48" font-weight="600" letter-spacing="-0.02em" transform="scale(0.851382)"><tspan x="80" y="1400">What we make</tspan></text>
+<rect id="Photo" x="80" y="1500" width="600" height="600" rx="24" transform="scale(0.851382)" fill="url(#pattern0_0_1)"/>
+<text id="Body" fill="#4A4A4A" xml:space="preserve" style="white-space: pre" font-family="Inter" font-size="20" font-weight="400" letter-spacing="0em" transform="scale(0.851382)"><tspan x="760" y="1540">Shelves first, then the sofa,&#10;</tspan><tspan x="760" y="1570">then the light to read it by.</tspan></text>
+<circle id="Mark" cx="1300" cy="300" r="60" transform="scale(0.851382)" fill="#C8553D" fill-opacity="0.4"/>
+<rect id="Footer" y="4611" width="1440" height="200" transform="scale(0.851382)" fill="#1C1B1F"/>
+<text id="Footer text" fill="#B9B3AC" xml:space="preserve" style="white-space: pre" font-family="Inter" font-size="14" font-weight="400" letter-spacing="0em" transform="scale(0.851382)"><tspan x="80" y="4720">Harbor Lane Studio</tspan></text>
+</g>
+<defs>
+<pattern id="pattern0_0_1" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#image0_0_1" transform="translate(-0.0809929) scale(0.000283688)"/>
+</pattern>
+<clipPath id="clip0_0_1">
+<rect width="1226" height="4096" fill="white"/>
+</clipPath>
+<image id="image0_0_1" data-name="harbor-morning.jpg" width="4096" height="3525" preserveAspectRatio="none" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="/>
+</defs>
+</svg>

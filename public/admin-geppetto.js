@@ -89,19 +89,118 @@
   });
   $('gp-url').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('gp-read-url').click(); } });
 
+  // A Figma SVG export carries every photo inside it at full size — one real
+  // export of a single page was 154MB. Shrink each picture HERE, in the owner's
+  // browser, so what travels is a few megabytes of design instead.
+  function shrinkPicture(uri) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1600;
+        var scale = Math.min(1, max / Math.max(img.width || 1, img.height || 1));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round((img.width || 1) * scale));
+        c.height = Math.max(1, Math.round((img.height || 1) * scale));
+        try {
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          resolve(c.toDataURL('image/webp', 0.82));
+        } catch (e) { resolve(''); }
+      };
+      img.onerror = function () { resolve(''); };
+      img.src = uri;
+    });
+  }
+
+  // photographs only: an inline SVG icon has no pixel size to speak of, and
+  // redrawing it through a canvas would flatten it to a 1×1 dot
+  var PIC_RE = /(xlink:href|href)="(data:image\/(?!svg)[a-z+]+;base64,[^"]+)"/g;
+  function slimSvg(text, say) {
+    var uris = [];
+    var m;
+    PIC_RE.lastIndex = 0;
+    while ((m = PIC_RE.exec(text))) uris.push(m[2]);
+    if (!uris.length) return Promise.resolve({ text: text, shrunk: 0, total: 0 });
+    say('מכווץ ' + uris.length + ' תמונות…');
+    var small = new Array(uris.length);
+    var next = 0;
+    var shrunk = 0;
+    // three at a time: a real export holds ten 4096px photographs, and decoding
+    // them all at once is a gigabyte of bitmaps in the owner's tab
+    function worker() {
+      if (next >= uris.length) return Promise.resolve();
+      var i = next++;
+      var uri = uris[i];
+      return shrinkPicture(uri).then(function (s) {
+        if (s && s.length < uri.length) { small[i] = s; shrunk += 1; }
+        uris[i] = ''; // let the big string go before the next picture is decoded
+        say('מכווץ תמונות… (' + Math.min(next, small.length) + '/' + small.length + ')');
+        return worker();
+      });
+    }
+    var pool = [];
+    for (var k = 0; k < Math.min(3, uris.length); k++) pool.push(worker());
+    return Promise.all(pool).then(function () {
+      var i = 0;
+      PIC_RE.lastIndex = 0;
+      var out = text.replace(PIC_RE, function (whole, attr) {
+        var s = small[i++];
+        return s ? attr + '="' + s + '"' : whole;
+      });
+      return { text: out, shrunk: shrunk, total: small.length };
+    });
+  }
+
   $('gp-read-file').addEventListener('click', function () {
     var btn = this;
-    var f = $('gp-file').files && $('gp-file').files[0];
-    if (!f) { $('gp-read-status').innerHTML = '<span class="err-text">בחרו קובץ קודם.</span>'; return; }
+    var files = Array.prototype.slice.call($('gp-file').files || []);
+    if (!files.length) { $('gp-read-status').innerHTML = '<span class="err-text">בחרו קובץ קודם.</span>'; return; }
+    var url = $('gp-file-url').value.trim();
+    var say = function (t) { $('gp-read-status').innerHTML = '<span class="gp-busy"></span> ' + esc(t); };
+    var svgs = files.filter(function (f) { return /\.svg$/i.test(f.name) || f.type === 'image/svg+xml'; });
+    var readText = function (f) {
+      return new Promise(function (resolve, reject) {
+        var r = new FileReader();
+        r.onload = function () { resolve(String(r.result || '')); };
+        r.onerror = function () { reject(new Error(f.name)); };
+        r.readAsText(f);
+      });
+    };
+
+    if (svgs.length) {
+      if (svgs.length > 12) { $('gp-read-status').innerHTML = '<span class="err-text">בחרתם ' + svgs.length + ' קבצים; ג׳פטו קורא עד 12 בבת אחת.</span>'; return; }
+      var heavy = svgs.reduce(function (n, f) { return n + f.size; }, 0);
+      if (heavy > 300 * 1024 * 1024) { $('gp-read-status').innerHTML = '<span class="err-text">הקבצים גדולים מדי (' + Math.round(heavy / 1048576) + 'MB). ייצאו פחות מסגרות בבת אחת.</span>'; return; }
+      busy(btn, true, 'קורא…');
+      say(heavy > 40 * 1024 * 1024 ? 'קורא קבצים גדולים (' + Math.round(heavy / 1048576) + 'MB) — זה ייקח רגע…' : 'קורא…');
+      Promise.all(svgs.map(function (f) {
+        return readText(f).then(function (text) {
+          return slimSvg(text, say).then(function (slim) { return { name: f.name.replace(/\.svg$/i, ''), text: slim.text, shrunk: slim.shrunk, total: slim.total }; });
+        });
+      })).then(function (out) {
+        var total = out.reduce(function (n, f) { return n + f.text.length; }, 0);
+        if (total > 11 * 1024 * 1024) {
+          busy(btn, false);
+          var pics = out.reduce(function (n, f) { return n + f.total; }, 0);
+          var did = out.reduce(function (n, f) { return n + f.shrunk; }, 0);
+          // say the real reason: "we compressed and it is still heavy" and "the
+          // browser could not compress at all" are different problems
+          $('gp-read-status').innerHTML = '<span class="err-text">' + (pics && !did
+            ? 'הדפדפן לא הצליח לכווץ אף אחת מ‑' + pics + ' התמונות שבקובץ, והעיצוב שוקל ' + Math.round(total / 1048576) + 'MB. נסו דפדפן אחר, ייצאו פחות מסגרות, או השתמשו בתוסף של Figma שמכווץ אצלו.'
+            : 'גם אחרי שכווצנו ' + did + ' תמונות העיצוב שוקל ' + Math.round(total / 1048576) + 'MB. ייצאו פחות מסגרות בבת אחת, או השתמשו בתוסף של Figma.') + '</span>';
+          return;
+        }
+        say('ג׳פטו קורא את העיצוב…');
+        read({ svg: out, url: url }, btn);
+      }).catch(function () { busy(btn, false); $('gp-read-status').innerHTML = '<span class="err-text">קובץ אחד לא נקרא.</span>'; });
+      return;
+    }
+
+    var f = files[0];
     if (f.size > 11 * 1024 * 1024) { $('gp-read-status').innerHTML = '<span class="err-text">הקובץ גדול מ‑11MB.</span>'; return; }
-    var reader = new FileReader();
-    reader.onload = function () {
-      var text = String(reader.result || '');
-      var url = $('gp-file-url').value.trim();
+    readText(f).then(function (text) {
       var body = /\.json$/i.test(f.name) || /^\s*[{[]/.test(text) ? { json: text, url: url } : { html: text, url: url };
       read(body, btn);
-    };
-    reader.readAsText(f);
+    });
   });
 
   $('gp-read-figma').addEventListener('click', function () {
@@ -151,6 +250,9 @@
     }).join('') || '<span class="faint">גופני המערכת</span>';
     var notes = (plan.notes || []).slice(0, 12);
     if (dropped) notes.unshift('הושמטו ' + dropped + ' קישוטים שאין להם חיים באתר (' + Object.keys(r.dropped).map(function (k) { return (DROPPED_HE[k] || k) + ' ×' + r.dropped[k]; }).join(', ') + ')');
+    // what the designer's own layer names decided, and the words a template ships with
+    if (r.named) notes.unshift('שמות השכבות של המעצב עזרו ב‑' + r.named + ' מקומות (תפריט, כפתורים, רשתות, מפרידים, דרגות כותרת)');
+    if (r.placeholders) notes.unshift('‏' + r.placeholders + ' טקסטים נראים כמו מלל ברירת המחדל של התבנית ("Body text…", "שם", "תיאור") — שווה להחליף אותם אחרי הייבוא');
     $('gp-notes').innerHTML = notes.length ? notes.map(function (n) { return '<div class="gp-note">• ' + esc(n) + '</div>'; }).join('') : '<span class="faint">אין הערות</span>';
 
     $('gp-pages').innerHTML = plan.pages.map(function (p) {

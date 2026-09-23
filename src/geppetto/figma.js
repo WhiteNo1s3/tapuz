@@ -714,7 +714,8 @@ function mapNode(n, ctx, st) {
     ctx.count('nobox');
     return null;
   }
-  const base = { id: String(n.id), type: '', x: box.x, y: box.y, w: box.w, h: box.h, z: ctx.z++ };
+  // the layer's own name travels with the box: the life pass reads names as hints
+  const base = { id: String(n.id), type: '', x: box.x, y: box.y, w: box.w, h: box.h, z: ctx.z++, name: String(n.name || '') };
   let node = null;
   const paints = visiblePaints(n.fills);
   const topImage = paints.filter((p) => p.type === 'IMAGE').pop() || null;

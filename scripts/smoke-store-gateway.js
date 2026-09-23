@@ -731,7 +731,10 @@ function paidResult(lp, over = {}) {
       'data[payerEmail]': 'dana@example.com', 'data[firstPaymentSum]': '0', 'data[periodicalPaymentSum]': '0', ...over
     });
     const forgedGrow = [
-      ['a wrong processToken of the same length', { 'data[processToken]': GROW_TOKEN.slice(0, -1) + '1' }],
+      // the last character must be CHANGED, never set: GROW_TOKEN is random hex, so
+      // one run in sixteen already ended in '1' and this "forged" token WAS the real
+      // one — the order settled (correctly) and six checks failed, about once a day
+      ['a wrong processToken of the same length', { 'data[processToken]': GROW_TOKEN.slice(0, -1) + (GROW_TOKEN.endsWith('1') ? '2' : '1') }],
       ['a processToken of another length', { 'data[processToken]': 'short' }],
       ['a wrong cField1', { 'data[customFields][cField1]': 'deadbeefdeadbeefdead' }],
       ['statusCode 0 (not paid)', { 'data[statusCode]': '0' }],

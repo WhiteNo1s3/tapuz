@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- A pretty-printed SVG (Inkscape always, Illustrator optionally, a hand-edited file every time):
+     the whitespace between the tags is layout, never words. Content invented. -->
+<svg
+   width="800"
+   height="600"
+   viewBox="0 0 800 600"
+   xmlns="http://www.w3.org/2000/svg">
+  <g id="Page">
+    <rect
+       width="800"
+       height="600"
+       fill="#FFFFFF" />
+    <text
+       id="Heading"
+       transform="translate(400 300)"
+       font-family="Inter"
+       font-size="56"
+       font-weight="700"
+       fill="#1C1B1F">
+      <tspan
+         x="0"
+         y="0">A heading</tspan>
+    </text>
+    <text
+       id="Plain"
+       x="80"
+       y="120"
+       font-family="Inter"
+       font-size="20"
+       fill="#4A4A4A">
+      Hello world
+    </text>
+    <text id="Pair" x="80" y="200" font-family="Inter" font-size="16" fill="#4A4A4A"><tspan>Hello</tspan> <tspan font-weight="700">world</tspan></text>
+  </g>
+</svg>

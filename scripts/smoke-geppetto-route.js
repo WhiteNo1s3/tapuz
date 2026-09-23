@@ -143,6 +143,16 @@ const INDEX = {
     const csrf = await req('POST', '/admin/api/geppetto/read', { cookie, body: { json: INDEX }, origin: 'https://evil.example' });
     check('a cross-origin post is refused (CSRF gate)', csrf.status === 403, csrf.status);
 
+    // the SVG door: files the screen slimmed, one per page
+    const svgText = fs.readFileSync(path.join(__dirname, '..', 'test', 'fixtures', 'geppetto', 'figma-page.svg'), 'utf8');
+    const svgRead = await req('POST', '/admin/api/geppetto/read', { cookie, body: { svg: [{ name: 'Home', text: svgText }] } });
+    check('an SVG exported from a design tool is read through the screen', svgRead.status === 200 && svgRead.json.ok && svgRead.json.plan && svgRead.json.plan.pages.length === 1 && svgRead.json.plan.door === 'figma-svg', svgRead.json && (svgRead.json.error || Object.keys(svgRead.json.plan || {})));
+    const outlinedText = fs.readFileSync(path.join(__dirname, '..', 'test', 'fixtures', 'geppetto', 'figma-outlined.svg'), 'utf8');
+    const outlined = await req('POST', '/admin/api/geppetto/read', { cookie, body: { svg: [{ name: 'Outlined', text: outlinedText }] } });
+    check('an export whose words became outlines is refused with the fix in the message', outlined.status === 400 && outlined.json.code === 'E_SVG_OUTLINED' && /Outline text/.test(outlined.json.error), outlined.json);
+    const mixed = await req('POST', '/admin/api/geppetto/read', { cookie, body: { svg: [{ name: 'Home', text: svgText }, { name: 'Contact', text: outlinedText }] } });
+    check('…and with several files it says WHICH one to export again', mixed.status === 400 && mixed.json.code === 'E_SVG_OUTLINED' && /Contact/.test(mixed.json.error), mixed.json);
+
     const read = await req('POST', '/admin/api/geppetto/read', { cookie, body: { json: INDEX, url: 'https://studio-juniper.figma.site/' } });
     const plan = read.json && read.json.plan;
     check('the Figma bundle becomes a plan', read.status === 200 && plan && plan.format === 'figma-sites' && plan.pages.length === 1, read.json);

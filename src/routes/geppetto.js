@@ -32,7 +32,7 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':
 
 function fail(res, e, status) {
   const code = (e && e.code) || 'E_GEPPETTO';
-  const known = /^E_(NEED_|NOT_DESIGN|FIGMA_MAKE|EMPTY|JSON|UNKNOWN|AUTH|NOT_FOUND|HTTP|TOO_BIG|REDIRECTS|PUPPET|EMPTY_DESIGN|DECODE|LIFE)|^NO_PLAN$|^NOT_FOUND$|^ALREADY$/.test(code);
+  const known = /^E_(NEED_|NOT_DESIGN|FIGMA_MAKE|EMPTY|JSON|UNKNOWN|AUTH|NOT_FOUND|HTTP|TOO_BIG|REDIRECTS|PUPPET|EMPTY_DESIGN|DECODE|LIFE|SVG_)|^NO_PLAN$|^NOT_FOUND$|^ALREADY$/.test(code);
   // another landing holds the site, or newer imports must be undone first:
   // a conflict to wait out or resolve, not a bad request
   res.status(status || (code === 'BUSY' || code === 'ORDER' ? 409 : known ? 400 : 500)).json({ ok: false, code, error: (e && e.message) || 'שגיאה' });
@@ -47,6 +47,21 @@ router.post('/admin/api/geppetto/read', requireAdmin, async (req, res) => {
     if (typeof b.url === 'string' && b.url.trim()) input.url = b.url.trim().slice(0, 2000);
     if (typeof b.html === 'string' && b.html.trim()) input.html = b.html;
     if (b.json && (typeof b.json === 'string' || typeof b.json === 'object')) input.json = b.json;
+    // SVG files: one per page, already slimmed by the screen (a raw Figma export
+    // embeds every photo at full size — 150 MB and up)
+    if (Array.isArray(b.svg) && b.svg.length) {
+      const all = b.svg.filter((f) => f && typeof f.text === 'string');
+      // a file is never silently cut in half: a truncated SVG reads as a whole
+      // design that quietly lost its footer
+      const heavy = all.find((f) => f.text.length > 8 * 1024 * 1024);
+      if (heavy) {
+        return fail(res, Object.assign(new Error('‏' + (heavy.name || 'הקובץ') + ' שוקל ' + Math.round(heavy.text.length / 1048576) + 'MB אחרי הכיווץ — ייצאו אותו שוב עם פחות תמונות, או ייצאו פחות מסגרות בבת אחת'), { code: 'E_SVG_TOO_BIG' }));
+      }
+      if (all.length > 12) {
+        return fail(res, Object.assign(new Error('נשלחו ' + all.length + ' קבצים; ג׳פטו קורא עד 12 בבת אחת — בחרו את הדפים שאתם רוצים'), { code: 'E_SVG_TOO_MANY' }));
+      }
+      input.svg = all.map((f) => ({ name: String(f.name || ''), text: f.text }));
+    }
     if (typeof b.token === 'string' && b.token.trim()) input.token = b.token.trim().slice(0, 200); // used for this request only
     const gp = require('../geppetto');
     const plan = await gp.swallow(input, { crawl: b.crawl !== false, maxPages: Number(b.maxPages) || undefined });
@@ -208,8 +223,9 @@ router.get('/admin/geppetto', requireAdmin, (req, res) => {
             <p class="faint" style="margin:8px 0 0">ג׳פטו עוקב אחרי הקישורים של העיצוב לדפים האחרים באתר ומביא את כולם (עד 12 דפים).</p>
           </div>
           <div class="gp-pane" id="gp-pane-file" hidden>
+            <p class="faint" style="margin:0 0 8px">דף שמור (HTML), ייצוא של התוסף (JSON) — או <b>קובצי SVG מ‑Figma</b>: אפשר לבחור כמה, כל קובץ הוא דף. בייצוא מ‑Figma כבו את <b dir="ltr">Outline text</b> (אחרת המילים הופכות לציור) והשאירו <b dir="ltr">Include "id" attribute</b> דלוק (השמות של השכבות הופכים לאזורים ולעוגנים). התמונות מכווצות כאן בדפדפן לפני השליחה.</p>
             <div class="gp-row">
-              <input type="file" id="gp-file" class="input" accept=".html,.htm,.json">
+              <input type="file" id="gp-file" class="input" accept=".html,.htm,.json,.svg" multiple>
               <input type="url" id="gp-file-url" class="input" dir="ltr" placeholder="הכתובת המקורית (כדי שהתמונות והדפים המקושרים יגיעו)">
               <button type="button" class="btn" id="gp-read-file">קרא את הקובץ</button>
             </div>
