@@ -884,6 +884,9 @@ async function landDream(chat, c, d, dream) {
     // the memo is the CMS's own (Hebrew) line — only the MODEL's words are judged for their language
     c.soft('the copilot tells the owner what it did, in ' + (LANG === 'en' ? 'English' : 'Hebrew'), !String(ok.reply || '').trim() ? speaks(ok.memo) || LANG === 'en' : speaks(ok.reply));
     c.soft('…and shows the owner no machinery — no template token (<|channel>…) in the reply', !TEMPLATE_TOKEN.test(ok.reply || ''));
+    // v2.60 — the write it just had approved must not come back as a second card (the door drops an identical one;
+    // a DIFFERENT proposal is a new change and may show — counted here as the habit it is)
+    c.soft('the closing turn opens no second card after the approval', !ok.pending);
     return (ok.applied && ok.applied.slug) || '';
   }
   if (!d.pending && PRINTED_PAGE(d.reply)) {

@@ -531,8 +531,17 @@ function waitUp(tries = 40) {
     check('approve → applied.edited on the page "home"',
       !!(ok1 && ok1.ok && ok1.applied && ok1.applied.edited === true && ok1.applied.slug === 'home'));
     if (ok1 && ok1.modelCall) {
-      // the model gets to comment after its write — finish that hop
-      await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: ok1.modelCall.id, result: { choices: [{ message: { content: 'עודכן.' } }] } } } });
+      // v2.60 — the model's closing turn proposes the SAME edit it just had approved (seen live and in
+      // the battery): no second card — the call is answered "already saved", the owner is told once,
+      // and the model then closes in words
+      const again = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: ok1.modelCall.id, result: toolCall('again', 'edit_page', { slug: 'home', source: PROPOSED }) } } }));
+      const answered = again && again.modelCall ? (again.modelCall.body.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'again').pop() : null;
+      check('the closing turn repeating the write it just saved opens NO second card — the call is answered "already saved" and the owner is told once',
+        !!(again && again.ok && !again.pending && again.modelCall) && !!answered && /"alreadySaved":true/.test(String(answered.content || '')) && /הצעה הכפולה/.test(again.notice || ''));
+      // a proposal that DIFFERS is a new change and gets its card, as ever
+      const differs = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: again && again.modelCall ? again.modelCall.id : 'x', result: toolCall('diff', 'edit_page', { slug: 'home', source: PROPOSED.replace('</body>', '  <bent-text id="more">עוד שורה</bent-text>\n</body>') }) } } }));
+      check('…while a closing-turn proposal that DIFFERS from the saved draft still gets its card', !!(differs && differs.pending && differs.pending.tool === 'edit_page'));
+      await req('POST', '/admin/api/ai/chat', { cookie, json: { approve: { id: differs && differs.pending ? differs.pending.id : 'x', ok: false } } });
     }
     const draftAfter = parse(await req('GET', '/admin/api/pzn/source?fullPath=home', { cookie }));
     const publishedAfter = parse(await req('GET', '/admin/api/pzn/source?fullPath=home&kind=published', { cookie }));
