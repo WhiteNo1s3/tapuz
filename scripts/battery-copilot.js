@@ -881,7 +881,8 @@ async function landDream(chat, c, d, dream) {
       dream.publishedBefore = site.published(String((d.pending.input || {}).slug || ''));
     }
     const ok = await chat.answer(d.pending, true);
-    c.soft('the copilot tells the owner what it did, in ' + (LANG === 'en' ? 'English' : 'Hebrew'), speaks(ok.reply || ok.memo));
+    // the memo is the CMS's own (Hebrew) line — only the MODEL's words are judged for their language
+    c.soft('the copilot tells the owner what it did, in ' + (LANG === 'en' ? 'English' : 'Hebrew'), !String(ok.reply || '').trim() ? speaks(ok.memo) || LANG === 'en' : speaks(ok.reply));
     c.soft('…and shows the owner no machinery — no template token (<|channel>…) in the reply', !TEMPLATE_TOKEN.test(ok.reply || ''));
     return (ok.applied && ok.applied.slug) || '';
   }
@@ -1207,7 +1208,7 @@ const ENGLISH = [
       const dream = { words: ['ceramic', 'Jaffa', 'workshop', 'studio'] };
       const d = await dreamTurn(chat, c, 'Hi! I am opening a small ceramics studio in Jaffa. I want a page that feels warm and homely, so people understand who I am and want to come to a workshop.');
       c.hard('the turn completes', !!d.ok);
-      c.soft('it speaks English to an English owner', speaks(d.reply || d.memo));
+      c.soft('it speaks English to an English owner', !String(d.reply || '').trim() || speaks(d.reply));
       const slug = await landDream(chat, c, d, dream);
       c.hard('the dream became a page proposal', !!slug);
       if (slug) await judgeLandedPage(chat, c, slug, dream);
@@ -1261,7 +1262,7 @@ const ENGLISH = [
       const contactElsewhere = live.find((p) => roads(site.draft(p)) > roadsBefore.get(p));
       c.hard('contact is now easier to reach: near the front, at the top level of a row that now fits, in the footer, on the page, on another live page — or the contact page itself now offers a way to reach out',
         contactUp || contactVisible || contactInFooter || contactOnPage || !!contactElsewhere || contactPageBetter);
-      c.soft('it speaks English to an English owner', speaks(ok.reply || ok.memo || d.reply));
+      c.soft('it speaks English to an English owner', !String(ok.reply || d.reply || '').trim() || speaks(ok.reply || d.reply));
       resetMenus();
     }
   },
