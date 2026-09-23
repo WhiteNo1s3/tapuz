@@ -50,7 +50,7 @@ function decoded(door, fn) {
   } catch (e) {
     if (e && e.code) throw e;
     console.error('[geppetto] the ' + door + ' decoder could not read this design:', (e && e.stack) || e);
-    throw refuse('העיצוב נקרא, אבל המבנה שלו אינו כמו של אתר ' + (door === 'canva' ? 'Canva' : 'Figma') + ' שאנחנו מכירים — לא ניתן לייבא אותו', 'E_DECODE');
+    throw refuse('העיצוב נקרא, אבל המבנה שלו אינו כמו של ' + (door === 'canva' ? 'אתר Canva' : door === 'svg' ? 'קובץ SVG של כלי עיצוב' : 'אתר Figma') + ' שאנחנו מכירים — לא ניתן לייבא אותו', 'E_DECODE');
   }
 }
 
@@ -227,6 +227,24 @@ async function readDesign(input = {}, opts = {}) {
   const t = transportOf(opts);
   const notes = [];
   const url = String(input.url || '').trim();
+
+  // SVG files exported from a design tool: one file per page, the first is home
+  if (Array.isArray(input.svg) && input.svg.length) {
+    const svg = require('./svg');
+    const files = input.svg
+      .filter((f) => f && typeof f.text === 'string' && f.text.trim())
+      .map((f) => ({ name: String(f.name || '').slice(0, 120), text: f.text }));
+    if (!files.length) throw refuse('לא נמצא קובץ SVG לקרוא', 'E_NOT_DESIGN');
+    // every file must be readable: an export whose words became outlines is the
+    // owner's to fix in Figma, and saying which file it was saves the guesswork
+    for (const f of files) {
+      const seen = svg.detect(f.text);
+      if (!seen.ok) throw refuse((files.length > 1 ? '‏' + (f.name || 'הקובץ') + ': ' : '') + seen.message, seen.code);
+      if (seen.note) notes.push((files.length > 1 ? (f.name || '') + ': ' : '') + seen.note);
+    }
+    const puppet = decoded('svg', () => svg.fromSvg(files, { origin: url }));
+    return { puppet, fetched: [], notes, door: puppet.door || 'figma-svg' };
+  }
 
   // a JSON file: the plugin's export, a saved REST file, a saved Sites bundle
   if (input.json) {

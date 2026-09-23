@@ -1,0 +1,78 @@
+<svg width="1226" height="1362" viewBox="0 0 1226 1362" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Synthetic Figma-style export for the smoke: an invented 1440×1600 landing page capped to 1226×1362 (scale 0.851382).
+     The tree is the real export's: first Figma's canvas backdrop at export size, OUTSIDE the frame; then the frame group,
+     whose first child is the frame's own background carrying the scale, and whose every child carries that same scale,
+     so the numbers inside are design px; the text was exported OUTLINED (paths that kept the layer names). -->
+<rect width="1225.99" height="1362.21" fill="#1E1E1E"/>
+<g id="Landing page" clip-path="url(#clip0_0_1)">
+<rect width="1440" height="1600" transform="scale(0.851382)" fill="white"/>
+  <rect id="Header" width="1440" height="96" transform="scale(0.851382)" fill="#F7F3EE"/>
+  <path id="Brand" d="M60 39.92H168V57.2H60Z" fill="#1C1B1F" transform="scale(0.851382)"/>
+  <g id="Nav" transform="scale(0.851382)">
+    <path id="Nav label" d="M1096 42.28H1128V53.8H1096Z" fill="#1C1B1F"/>
+    <path id="Nav label_2" d="M1186 42.28H1234V53.8H1186Z" fill="#1C1B1F"/>
+    <path id="Nav label_3" d="M1284 42.28H1340V53.8H1284Z" fill="#1C1B1F"/>
+  </g>
+  <line id="Rule" x1="0" y1="96" x2="1440" y2="96" transform="scale(0.851382)" stroke="#E4DED6"/>
+  <rect id="Hero backdrop" y="96" width="1440" height="664" transform="scale(0.851382)" fill="url(#paint0_linear_0_1)"/>
+  <rect id="Leaf mark" x="160" y="180" width="40" height="40" transform="scale(0.851382) rotate(45 180 200)" fill="#F2B84B"/>
+  <circle id="Sun" cx="1240" cy="220" r="60" transform="scale(0.851382)" fill="#F2B84B" fill-opacity="0.35"/>
+  <path id="Heading" d="M504 300.96H936V352.8H504ZM486 380.96H954V432.8H486Z" fill="white" transform="scale(0.851382)"/>
+  <path id="Subheading" d="M434 488.16H1006V504H434Z" fill="#D8E6DC" transform="scale(0.851382)"/>
+  <g id="Button" transform="scale(0.851382)" filter="url(#filter0_d_0_1)">
+    <rect id="Pill" x="632" y="560" width="176" height="56" rx="28" fill="#F2B84B"/>
+    <path id="Pill label" d="M666 581.54H774V594.5H666Z" fill="#1C1B1F"/>
+  </g>
+  <g id="Card" transform="scale(0.851382)">
+    <rect id="Card base" x="60" y="820" width="400" height="480" rx="16" fill="white" stroke="#E4DED6"/>
+    <rect id="Photo" x="60" y="820" width="400" height="240" rx="16" fill="url(#pattern0_0_1)"/>
+    <path id="Card title" d="M84 1093.12H228V1110.4H84Z" fill="#1C1B1F"/>
+    <path id="Card body" d="M84 1138.28H332V1149.8H84ZM84 1162.28H284V1173.8H84Z" fill="#4A4A4A"/>
+  </g>
+  <g id="Card_2" transform="scale(0.851382) translate(460 0)">
+    <rect id="Card base_2" x="60" y="820" width="400" height="480" rx="16" fill="white" stroke="#E4DED6"/>
+    <rect id="Photo_2" x="60" y="820" width="400" height="240" rx="16" fill="url(#pattern1_0_1)"/>
+    <path id="Card title_2" d="M84 1093.12H264V1110.4H84Z" fill="#1C1B1F"/>
+    <path id="Card body_2" d="M84 1138.28H228V1149.8H84ZM84 1162.28H284V1173.8H84Z" fill="#4A4A4A"/>
+  </g>
+  <g id="Card_3" transform="scale(0.851382) translate(920 0)">
+    <rect id="Card base_3" x="60" y="820" width="400" height="480" rx="16" fill="white" stroke="#E4DED6"/>
+    <rect id="Photo_3" x="60" y="820" width="400" height="240" rx="16" fill="url(#pattern2_0_1)"/>
+    <path id="Card title_3" d="M84 1093.12H228V1110.4H84Z" fill="#1C1B1F"/>
+    <path id="Card body_3" d="M84 1138.28H236V1149.8H84ZM84 1162.28H228V1173.8H84Z" fill="#4A4A4A"/>
+  </g>
+  <rect id="Footer" y="1380" width="1440" height="220" transform="scale(0.851382)" fill="#1C1B1F"/>
+  <path id="Footer text" d="M60 1484.22H319V1494.3H60Z" fill="#B9B3AC" transform="scale(0.851382)"/>
+  <ellipse id="Dot" cx="1380" cy="1490" rx="6" ry="6" transform="scale(0.851382)" fill="#F2B84B"/>
+</g>
+<defs>
+<filter id="filter0_d_0_1" x="620" y="552" width="200" height="80" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="6"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.18 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+</filter>
+<pattern id="pattern0_0_1" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#image0_0_1" transform="scale(0.000833333 0.00138889)"/>
+</pattern>
+<pattern id="pattern1_0_1" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#image1_0_1" transform="translate(0 -0.333333) scale(0.000833333 0.00138889)"/>
+</pattern>
+<pattern id="pattern2_0_1" patternContentUnits="objectBoundingBox" width="1" height="1">
+<use xlink:href="#image2_0_1" transform="translate(-0.166667) scale(0.000833333 0.00138889)"/>
+</pattern>
+<linearGradient id="paint0_linear_0_1" x1="720" y1="96" x2="720" y2="760" gradientUnits="userSpaceOnUse">
+<stop stop-color="#1F3A2E"/>
+<stop offset="1" stop-color="#0B1F17"/>
+</linearGradient>
+<clipPath id="clip0_0_1">
+<rect width="1226" height="1362" fill="white"/>
+</clipPath>
+<image id="image0_0_1" data-name="image.png" width="1200" height="720" preserveAspectRatio="none" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="/>
+<image id="image1_0_1" data-name="image.png" width="1200" height="1200" preserveAspectRatio="none" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="/>
+<image id="image2_0_1" data-name="greenhouse-morning.jpg" width="1600" height="720" preserveAspectRatio="none" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="/>
+</defs>
+</svg>

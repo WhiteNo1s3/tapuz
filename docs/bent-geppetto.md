@@ -18,6 +18,32 @@ A site built in **Canva** (Canva Websites, `*.my.canva.site` or the owner's doma
 
 Canva publishes a site in two shapes, and both occur on the same live site: the older **app** export (an empty `<div id="root">` and the whole design as a JSON literal in `window['bootstrap']`) and the newer **static** export (server-rendered sections placed by a CSS grid per breakpoint). Figma Sites always publishes the bundle JSON — the same node schema as Figma's REST API, which is why one Figma decoder serves the Sites door, the file door and the plugin door. A **Figma Make** site is a React program, not a design: its code components are skipped with a note, and what is read is the text and pictures outside the code.
 
+### An SVG exported from a design tool (v2.57)
+
+A bought template is usually a **Figma file**, not a published site — and a free Figma account cannot publish one (Figma Sites is a paid feature). What it *can* do is export: select the frames, **SVG**, one file per page, and drop them on the "קובץ שמור" tab (several at once — each file becomes a page, the first is the home).
+
+Two settings decide whether the export is worth anything, and the screen says so:
+
+* **"Outline text" must be OFF.** It defaults to ON, and with it every word becomes a vector path: a real export of a real template had **zero `<text>` elements and 62 `<path>`**. Geppetto refuses such a file by name and tells the owner to export again.
+* **"Include 'id' attribute" ON** keeps the layer names, which become section names, anchors and the hints below.
+
+Pictures ride inside an SVG export at full size — one real page weighed **154 MB** because each photo is a 4096px PNG in base64. The screen shrinks every picture in the owner's own browser before anything is sent, and says plainly when even the slimmed design is too heavy (export fewer frames, or use the plugin, which shrinks at the source and also keeps the prototype links an SVG has none of).
+
+## Layer names, read as intent (v2.57)
+
+A designer names layers: `Navigation`, `Site name`, `Customer Quote`, `Icons / Social / facebook`, `Secondary button`, `Divider`, `Section heading`. Those names are the designer's own word for what each box IS, and they arrive through every Figma door (the SVG's `id`, the plugin, the REST file, Figma Sites).
+
+The life pass reads geometry; `src/geppetto/names.js` reads the names — as **hints, never overrides**. A name breaks a tie, picks the module and its variant, and rescues what geometry alone would drop; it never overrules what the boxes plainly say, and a design with no names (every Canva export) behaves exactly as before. What they buy:
+
+* a header the designer named becomes the **menu** even though a design export links nothing at all — each label points at the section that wears it, and a label the design never wired is reported instead of dropped;
+* the box called "Site name" is the **brand**;
+* a pill called "Button" is a **button** waiting for its destination, not a styled label — "Secondary button" wears the secondary look;
+* icons named after networks are the **social row**, links or no links;
+* a hairline called "Divider" is a **divider**;
+* "Landing page title" is an **h1** and "Section heading" an **h2**.
+
+Hebrew and English both (`תפריט`, `לוגו`, `כפתור משני`, `קו מפריד`). A name the tool made up (`Frame 1321317456`, `Rectangle 2`) says nothing. The report counts the hints it used and how many texts still carry the template's own placeholder words ("Body text for whatever…", "Name"), so the owner knows what to sweep after the import.
+
 ## The pipeline
 
 ```

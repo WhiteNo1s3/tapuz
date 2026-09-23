@@ -89,19 +89,90 @@
   });
   $('gp-url').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('gp-read-url').click(); } });
 
+  // A Figma SVG export carries every photo inside it at full size — one real
+  // export of a single page was 154MB. Shrink each picture HERE, in the owner's
+  // browser, so what travels is a few megabytes of design instead.
+  function shrinkPicture(uri) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1600;
+        var scale = Math.min(1, max / Math.max(img.width || 1, img.height || 1));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round((img.width || 1) * scale));
+        c.height = Math.max(1, Math.round((img.height || 1) * scale));
+        try {
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          resolve(c.toDataURL('image/webp', 0.82));
+        } catch (e) { resolve(''); }
+      };
+      img.onerror = function () { resolve(''); };
+      img.src = uri;
+    });
+  }
+
+  var PIC_RE = /(xlink:href|href)="(data:image\/[a-z+]+;base64,[^"]+)"/g;
+  function slimSvg(text, say) {
+    var uris = [];
+    var m;
+    PIC_RE.lastIndex = 0;
+    while ((m = PIC_RE.exec(text))) uris.push(m[2]);
+    if (!uris.length) return Promise.resolve(text);
+    say('מכווץ ' + uris.length + ' תמונות…');
+    return Promise.all(uris.map(shrinkPicture)).then(function (small) {
+      var i = 0;
+      PIC_RE.lastIndex = 0;
+      return text.replace(PIC_RE, function (whole, attr, uri) {
+        var s = small[i++];
+        return s && s.length < uri.length ? attr + '="' + s + '"' : whole;
+      });
+    });
+  }
+
   $('gp-read-file').addEventListener('click', function () {
     var btn = this;
-    var f = $('gp-file').files && $('gp-file').files[0];
-    if (!f) { $('gp-read-status').innerHTML = '<span class="err-text">בחרו קובץ קודם.</span>'; return; }
+    var files = Array.prototype.slice.call(($('gp-file').files || []), 0, 12);
+    if (!files.length) { $('gp-read-status').innerHTML = '<span class="err-text">בחרו קובץ קודם.</span>'; return; }
+    var url = $('gp-file-url').value.trim();
+    var say = function (t) { $('gp-read-status').innerHTML = '<span class="gp-busy"></span> ' + esc(t); };
+    var svgs = files.filter(function (f) { return /\.svg$/i.test(f.name) || f.type === 'image/svg+xml'; });
+    var readText = function (f) {
+      return new Promise(function (resolve, reject) {
+        var r = new FileReader();
+        r.onload = function () { resolve(String(r.result || '')); };
+        r.onerror = function () { reject(new Error(f.name)); };
+        r.readAsText(f);
+      });
+    };
+
+    if (svgs.length) {
+      var heavy = svgs.reduce(function (n, f) { return n + f.size; }, 0);
+      if (heavy > 300 * 1024 * 1024) { $('gp-read-status').innerHTML = '<span class="err-text">הקבצים גדולים מדי (' + Math.round(heavy / 1048576) + 'MB). ייצאו פחות מסגרות בבת אחת.</span>'; return; }
+      busy(btn, true, 'קורא…');
+      say(heavy > 40 * 1024 * 1024 ? 'קורא קבצים גדולים (' + Math.round(heavy / 1048576) + 'MB) — זה ייקח רגע…' : 'קורא…');
+      Promise.all(svgs.map(function (f) {
+        return readText(f).then(function (text) {
+          return slimSvg(text, say).then(function (slim) { return { name: f.name.replace(/\.svg$/i, ''), text: slim }; });
+        });
+      })).then(function (out) {
+        var total = out.reduce(function (n, f) { return n + f.text.length; }, 0);
+        if (total > 11 * 1024 * 1024) {
+          busy(btn, false);
+          $('gp-read-status').innerHTML = '<span class="err-text">גם אחרי הכיווץ העיצוב שוקל ' + Math.round(total / 1048576) + 'MB. ייצאו פחות מסגרות, או השתמשו בתוסף של Figma שמכווץ אצלו.</span>';
+          return;
+        }
+        say('ג׳פטו קורא את העיצוב…');
+        read({ svg: out, url: url }, btn);
+      }).catch(function () { busy(btn, false); $('gp-read-status').innerHTML = '<span class="err-text">קובץ אחד לא נקרא.</span>'; });
+      return;
+    }
+
+    var f = files[0];
     if (f.size > 11 * 1024 * 1024) { $('gp-read-status').innerHTML = '<span class="err-text">הקובץ גדול מ‑11MB.</span>'; return; }
-    var reader = new FileReader();
-    reader.onload = function () {
-      var text = String(reader.result || '');
-      var url = $('gp-file-url').value.trim();
+    readText(f).then(function (text) {
       var body = /\.json$/i.test(f.name) || /^\s*[{[]/.test(text) ? { json: text, url: url } : { html: text, url: url };
       read(body, btn);
-    };
-    reader.readAsText(f);
+    });
   });
 
   $('gp-read-figma').addEventListener('click', function () {
