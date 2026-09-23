@@ -975,6 +975,18 @@ function adoptPrintedDocument(text, o = {}) {
  * A non-streaming LM Studio reply carries `tool_calls: []` (empty, not
  * absent) beside `reasoning_content` — that is "no calls", not an error.
  */
+/** A chat template's own tokens, leaked into the words meant for the owner
+ *  (v2.58 — seen from Gemma 4 through the Bridge: a closing reply that opened
+ *  with `<|channel>thought\n<channel|>` and then said, in good English, what
+ *  it had built). The words stay; the machinery goes. Only the reply text —
+ *  a document, a tool call and the raw message are never touched. */
+const TEMPLATE_TOKENS = /<\|[a-z_]+\|?>|<\/?channel\|?>|<\|\/?[a-z_]+\|>/gi;
+function stripTemplateTokens(text) {
+  const t = String(text || '');
+  if (!/<\||\|>|<channel/.test(t)) return t;
+  return t.replace(TEMPLATE_TOKENS, '').replace(/^\s*thought\s*\n/i, '').trim();
+}
+
 function readReply(style, data, opts = {}) {
   const toolNames = Array.isArray(opts.toolNames) ? opts.toolNames : [];
   if (style === 'openai-chat') {
@@ -986,7 +998,7 @@ function readReply(style, data, opts = {}) {
       try { input = JSON.parse((c.function && c.function.arguments) || '{}'); } catch (e) { /* malformed */ }
       return { id: c.id, name: (c.function || {}).name, input };
     });
-    let text = typeof m.content === 'string' ? m.content : '';
+    let text = stripTemplateTokens(typeof m.content === 'string' ? m.content : '');
     let raw = m;
     let dropped = false;
     if (!calls.length) {
@@ -1005,7 +1017,7 @@ function readReply(style, data, opts = {}) {
     return { text, calls, raw, finish, dropped };
   }
   const content = ((data || {}).content) || [];
-  const text = content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+  const text = stripTemplateTokens(content.filter((c) => c.type === 'text').map((c) => c.text).join('\n'));
   const calls = content.filter((c) => c.type === 'tool_use')
     .map((c) => ({ id: c.id, name: c.name, input: c.input || {} }));
   const stop = String((data || {}).stop_reason || '');
@@ -1782,6 +1794,7 @@ async function planWindow({ hint = null, sizes = null } = {}) {
 }
 
 module.exports = {
+  stripTemplateTokens,
   keyFor,
   wireBody,
   refusedFields,

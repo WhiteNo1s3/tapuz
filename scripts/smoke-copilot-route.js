@@ -663,6 +663,13 @@ function waitUp(tries = 40) {
       check('the ↩ the chat offers (POST /admin/api/menus/restore with that id) puts the old order back, and is itself undoable (pre-restore backup)',
         !!(undo && undo.ok) && targets(await getMenus()) === 'home,about,contact' && (await getBackups())[0].reason === 'pre-restore');
 
+      // v2.58 — a chat template's own tokens leaked into the reply (Gemma 4 through the Bridge:
+      // "<|channel>thought\n<channel|>I've created a draft…") never reach the owner; the words do
+      const tk1 = parse(await say({ message: 'שלום', history: [], context: { canvas: 'blank', surface: 'copilot' }, window: big }));
+      const tk2 = parse(await say({ step: { id: tk1 && tk1.modelCall ? tk1.modelCall.id : 'x', result: { choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: '<|channel>thought\n<channel|>שלום! במה אפשר לעזור?' } }] } } }));
+      check('a leaked chat-template token (<|channel>thought<channel|>) is stripped from the reply — the owner reads only the words',
+        !!(tk2 && tk2.ok) && tk2.reply === 'שלום! במה אפשר לעזור?');
+
       // GATE 3 on the wire — the weaker mode: no tool call, the menu PRINTED
       const w1 = parse(await say({ message: 'סדר את התפריט', history: [], context: { canvas: 'menu', surface: 'copilot' }, window: big }));
       const rawMid = JSON.stringify(await getMenus());
