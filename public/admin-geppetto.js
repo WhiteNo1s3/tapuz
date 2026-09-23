@@ -151,6 +151,9 @@
     }).join('') || '<span class="faint">גופני המערכת</span>';
     var notes = (plan.notes || []).slice(0, 12);
     if (dropped) notes.unshift('הושמטו ' + dropped + ' קישוטים שאין להם חיים באתר (' + Object.keys(r.dropped).map(function (k) { return (DROPPED_HE[k] || k) + ' ×' + r.dropped[k]; }).join(', ') + ')');
+    // what the designer's own layer names decided, and the words a template ships with
+    if (r.named) notes.unshift('שמות השכבות של המעצב עזרו ב‑' + r.named + ' מקומות (תפריט, כפתורים, רשתות, מפרידים, דרגות כותרת)');
+    if (r.placeholders) notes.unshift('‏' + r.placeholders + ' טקסטים נראים כמו מלל ברירת המחדל של התבנית ("Body text…", "שם", "תיאור") — שווה להחליף אותם אחרי הייבוא');
     $('gp-notes').innerHTML = notes.length ? notes.map(function (n) { return '<div class="gp-note">• ' + esc(n) + '</div>'; }).join('') : '<span class="faint">אין הערות</span>';
 
     $('gp-pages').innerHTML = plan.pages.map(function (p) {

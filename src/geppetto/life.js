@@ -38,6 +38,39 @@
  */
 
 const P = require('./puppet');
+const NAMES = require('./names');
+
+/**
+ * Layer names, stamped down the tree before anything reads the boxes: a box wears
+ * its own name's role when it has one (`hintOwn`), and otherwise inherits the
+ * nearest named ancestor's — the three texts inside a group called "Navigation"
+ * are nav, though each is only called "Page". A design with no names stamps
+ * nothing and every pass behaves exactly as it did before names existed.
+ */
+function stampHints(nodes, inherited) {
+  for (const n of nodes || []) {
+    if (!n || typeof n !== 'object') continue;
+    let own = NAMES.roleOf(n.name);
+    // a box's own name can be vaguer than its frame's: the picture inside
+    // "Icons / Social / facebook" is called "Icon", and the frame is the one
+    // that knows it is a facebook link
+    if (own && inherited && own.role === 'icon' && inherited.role !== 'icon') own = inherited;
+    else if (own && inherited && inherited.network && !own.network) own = Object.assign({}, own, { network: inherited.network });
+    n.hint = own || inherited || null;
+    n.hintOwn = !!own;
+    if (n.children) stampHints(n.children, n.hint);
+  }
+}
+
+/** What this box was named, when it was named itself (never the ancestor's word). */
+function ownRole(n) {
+  return n && n.hintOwn && n.hint ? n.hint.role : '';
+}
+
+/** What this box was named or sits inside. */
+function anyRole(n) {
+  return n && n.hint ? n.hint.role : '';
+}
 
 // loops, not Math.max(...spread): a spread of 200,000 numbers overflows the stack
 function maxOf(list, f) {
@@ -689,8 +722,14 @@ function makeButton(shape, text, extraLink) {
   let fill = bg;
   let ring = strokeColor;
   if (fill && st.color && P.colorDistance(fill, st.color) < 40) { ring = ring || fill; fill = null; }
+  // the pill's own name travels with it: a frame the designer called "Button"
+  // is still a button after the shape and its word became one box
+  const named = [shape, text].find((k) => ownRole(k) === 'button') || [shape, text].find((k) => k && k.hint) || shape || text;
   return {
     type: 'button',
+    name: (named && named.name) || '',
+    hint: (named && named.hint) || null,
+    hintOwn: !!(named && named.hintOwn),
     id: (shape || text).id + '-btn',
     x: shape ? shape.x : text.x,
     y: shape ? shape.y : text.y,
@@ -1300,9 +1339,14 @@ class Emitter {
       if (st.color && ctx.sectionText && P.toHex(st.color) && P.colorDistance(P.toHex(st.color), P.toHex(ctx.sectionText) || '#000000') > 48 && safeColor(st.color)) style.color = safeColor(st.color);
       const fact = { kind: kind.kind, level: 0, size: st.size, color: st.color, font: st.font, chars: txt.length, upper: st.upper, weight: st.weight, section: ctx.sectionIndex, page: ctx.pageIndex };
       ctx.facts.texts.push(fact);
+      if (NAMES.looksPlaceholder(txt)) this.report.placeholders += 1; // the template's own words, waiting to be replaced
+      // "Landing page title" is an h1 and "Section heading" an h2 because the
+      // designer said so; a vague name ("Subheading") only breaks a tie
+      const namedHeading = n.hintOwn && n.hint && n.hint.role === 'heading' && n.hint.level && !n.hint.weak ? n.hint : null;
       let block;
       if (kind.kind === 'heading') {
-        let level = kind.level;
+        let level = namedHeading ? namedHeading.level : kind.level;
+        if (namedHeading) this.report.named += 1;
         if (level === 1) { if (this.h1Done) level = 2; else this.h1Done = true; }
         fact.level = level;
         const text = headingText(n, linkOf);
@@ -1326,6 +1370,22 @@ class Emitter {
     }
     if (n.type === 'button') {
       if (!n.label) return [];
+      if ((!n.href || n.href === '#') && ownRole(n) === 'button') {
+        // …unless the designer called it a Button: a design tool's export links
+        // nothing, so the owner gets the button and points it afterwards
+        const style = {};
+        if (safeColor(n.bg)) style.background = safeColor(n.bg);
+        if (safeColor(n.fg)) style.color = safeColor(n.fg);
+        if (n.radius) style.radius = n.radius;
+        this.report.buttons += 1;
+        this.report.named += 1;
+        ctx.facts.buttons.push({ bg: n.bg, fg: n.fg, radius: n.radius, outline: n.outline, h: n.h });
+        const named = { type: 'button', id: this.id('button'), data: { text: n.label, url: '', variant: (n.hint && n.hint.variant) === 'secondary' ? 'outline' : n.outline ? 'outline' : 'primary' } };
+        if (Object.keys(style).length) named.data.style = style;
+        const alignNamed = ctx.alignFor(n);
+        if (alignNamed !== 'start') named.data.align = alignNamed;
+        return [chrome(named, n)];
+      }
       if (!n.href || n.href === '#') {
         // a pill with no link is a LABEL (a badge, a tag) — a button that goes
         // nowhere would be a lie; the words keep the pill's look
@@ -1394,6 +1454,12 @@ class Emitter {
       return [];
     }
     if (n.type === 'shape') {
+      // a hairline rectangle the designer called "Divider" (a line in everything
+      // but the tool's node type) is the divider it says it is
+      if (ownRole(n) === 'divider' && n.w >= n.h * 4 && n.h <= 8 * ctx.u) {
+        this.report.named += 1;
+        return [{ type: 'divider', id: this.id('divider'), data: { bentStyle: n.h >= 3 ? 'thick' : 'line', style: 'solid' } }];
+      }
       this.report.dropped.push('shape');
       return [];
     }
@@ -1464,6 +1530,20 @@ class Emitter {
   // a slab with words on it / a photo with a title over it
   panel(tree, depth, colW) {
     const base = tree.base;
+    // a filled frame the designer called "Button" with one short word in it is a
+    // button, though nothing links anywhere yet — the owner points it afterwards
+    const buttonName = ownRole(base) === 'button' ? base : (tree.frame && ownRole(tree.frame) === 'button' ? tree.frame : null);
+    if (buttonName) {
+      const words = leafItems(tree.child).filter((it) => it.type === 'text');
+      const label = words.length === 1 ? P.plainText(words[0]).replace(/\s+/g, ' ').trim() : '';
+      if (label && label.length <= 40) {
+        const href = symbolic(nodeHref(base) || nodeHref(words[0]) || firstHref(words[0]));
+        const variant = (buttonName.hint && buttonName.hint.variant) === 'secondary' ? 'outline' : 'primary';
+        this.report.buttons += 1;
+        this.report.named += 1;
+        return [chrome({ type: 'button', id: this.id('button'), data: { text: label, url: href || '', variant } }, base)];
+      }
+    }
     const isImage = base.type === 'image' || (base.fill && base.fill.image && base.fill.image.src);
     const baseSrc = base.type === 'image' ? base.src : isImage ? base.fill.image.src : '';
     // a glyph stacked on itself (a sticker with a smaller copy inside) is decoration
@@ -1585,6 +1665,13 @@ class Emitter {
       const small = flat.every((it) => it.w <= 200 * ctx.u && it.h <= 120 * ctx.u);
       const linkedSocial = flat.every((it) => it.link && socialNetwork(it.link.href));
       if (linkedSocial && small) return [this.social(flat.map((it) => ({ href: it.link.href, label: it.alt || '' })))];
+      // a design tool's icons carry no links; their NAMES carry the networks
+      // ("Icons / Social / facebook") — a row of them is the social row it says it is
+      const named = flat.map((it) => (it.hint && it.hint.network) || '');
+      if (small && named.every(Boolean)) {
+        this.report.named += 1;
+        return [this.social(flat.map((it, i) => ({ href: (it.link && it.link.href) || '', label: it.alt || '', network: named[i] })))];
+      }
       if (small && flat.length >= 4 && !flat.some((it) => it.svg && it.w < 40 * ctx.u)) {
         this.report.patterns.push('logos');
         return [{ type: 'logos', id: this.id('logos'), data: { items: flat.map((it) => ({ src: it.src, alt: it.alt || '', url: nodeHref(it) })) } }];
@@ -1690,7 +1777,7 @@ class Emitter {
     const items = list.map((it) => {
       // `javascript://facebook.com/%0a…` has a facebook host: the gate, not the host, decides
       const url = safeUrl(it.href);
-      const network = (url && socialNetwork(url)) || 'link';
+      const network = (url && socialNetwork(url)) || it.network || 'link';
       return { network, url, label: (it.label || '').trim() || network };
     });
     this.report.patterns.push('social');
@@ -1706,13 +1793,18 @@ function alignOf(n, ctx) {
 
 // ── the menu: the row of links at the top of the home page ────────────────
 
-function isNavCandidate(n, bandBottom) {
+function isNavCandidate(n, bandBottom, inNamedNav) {
   if (n.y + n.h > bandBottom) return false;
+  // inside a band the designer called a menu, a label needs no link to be a menu
+  // item — a design tool's export carries none. The brand is never one of them,
+  // and the header's own CTA ("Contact") is simply the last item.
+  const named = !!inNamedNav || anyRole(n) === 'nav';
+  if (ownRole(n) === 'brand') return false;
   if (n.type === 'text') {
     const t = P.plainText(n);
-    return t && t.length <= T.navItemMax && t.split('\n').length <= 2 && !!(firstHref(n) || n.link);
+    return t && t.length <= T.navItemMax && t.split('\n').length <= 2 && !!(firstHref(n) || n.link || named);
   }
-  if (n.type === 'button') return n.label && n.label.length <= T.navItemMax && !!n.href;
+  if (n.type === 'button') return n.label && n.label.length <= T.navItemMax && !!(n.href || named);
   return false;
 }
 
@@ -1724,26 +1816,58 @@ function takeNav(items, box, u, siteTitle, opts = {}) {
   // a thin band on top of the page (the design's own header) is chrome as a
   // whole: even ONE link in it is the menu ("Submit a website")
   const bandBottom = opts.thin ? box.h + 1 : Math.min(T.navBandMax * u, box.h * 0.34 + 1);
-  const cands = items.filter((n) => isNavCandidate(n, bandBottom));
+  // a design tool groups its header: the labels sit inside a frame called
+  // "Navigation", not loose on the page. Look inside such a frame — and when its
+  // words become the menu, the whole frame leaves the page with them.
+  const navGroups = items.filter((n) => n.type === 'group' && n.children && n.children.length && anyRole(n) === 'nav');
+  const pool = items.filter((n) => navGroups.indexOf(n) < 0);
+  const holder = new Map();
+  for (const g of navGroups) {
+    P.eachNode(g.children, (k) => {
+      if (k.type === 'text' || k.type === 'button' || k.type === 'image') { pool.push(k); holder.set(k, g); }
+    });
+  }
+  // the brand is settled BEFORE the items, or it becomes one of them: in a band
+  // that only its name marks as a menu, nothing else tells the site's own name
+  // apart from a link label
+  const namedBand = opts.role === 'nav' || navGroups.length > 0 || pool.some((n) => anyRole(n) === 'nav');
+  const inBandEarly = pool.filter((n) => n.y + n.h <= bandBottom + 20 * u);
+  let preBrand = inBandEarly.find((n) => ownRole(n) === 'brand');
+  if (!preBrand && namedBand) {
+    // only an UNLINKED name: a brand that links home is a menu item and always was
+    const first = inBandEarly.filter((n) => n.type === 'text' && shownText(n).length <= 48 && !firstHref(n) && !n.link).sort((a, b) => a.x - b.x)[0];
+    const sameAsTitle = first && siteTitle && shownText(first).replace(/\s+/g, ' ').trim().toLowerCase() === String(siteTitle).replace(/\s+/g, ' ').trim().toLowerCase();
+    if (first && (sameAsTitle || looksLikeName(shownText(first)))) preBrand = first;
+  }
+  let cands = pool.filter((n) => n !== preBrand && isNavCandidate(n, bandBottom, holder.has(n)));
+  // a brand taken out must never be what empties the menu
+  if (!cands.length && preBrand) { cands = pool.filter((n) => isNavCandidate(n, bandBottom, holder.has(n))); preBrand = null; }
   if (cands.length < (opts.thin ? 1 : 2)) return null;
   // the links must sit on one line (or one column for a side bar)
   const mids = cands.map((n) => n.y + n.h / 2);
   const oneLine = Math.max(...mids) - Math.min(...mids) <= 26 * u;
   if (!oneLine) return null;
   const sorted = cands.slice().sort((a, b) => a.x - b.x);
+  const usedGroups = new Set(cands.map((n) => holder.get(n)).filter(Boolean));
+  // a design tool's export has no links at all (an SVG carries none, a Figma frame
+  // may simply not be wired): when the band is NAMED a menu, its labels are menu
+  // items even with nowhere to point yet — finish() matches them to the sections
+  const namedNav = opts.role === 'nav' || cands.some((n) => anyRole(n) === 'nav');
   const navItems = sorted.map((n) => ({
     label: cleanLabel(n.type === 'button' ? n.label : shownText(n)),
     href: symbolic(n.type === 'button' ? n.href : (nodeHref(n) || firstHref(n)))
-  })).filter((it) => it.label && it.href);
-  const removed = new Set(cands);
+  })).filter((it) => it.label && (it.href || namedNav));
+  const removed = new Set([...cands, ...usedGroups]);
   // the brand: a short text or a small picture at the start of the same band
   const navTop = Math.min(...cands.map((n) => n.y));
-  let brandCand = items
-    .filter((n) => !removed.has(n) && n.y + n.h <= bandBottom + 20 * u && (opts.thin || n.y <= navTop + 40 * u))
-    .filter((n) => (n.type === 'text' && shownText(n).length <= 48) || (n.type === 'image' && n.h <= 120 * u))
-    .sort((a, b) => a.x - b.x)[0];
+  const inBand = pool.filter((n) => !removed.has(n) && n.y + n.h <= bandBottom + 20 * u && (opts.thin || n.y <= navTop + 40 * u));
+  // the designer's own word wins: a layer called "Site name" or "לוגו" IS the brand
+  let brandCand = preBrand || inBand.find((n) => ownRole(n) === 'brand')
+    || inBand
+      .filter((n) => (n.type === 'text' && shownText(n).length <= 48) || (n.type === 'image' && n.h <= 120 * u))
+      .sort((a, b) => a.x - b.x)[0];
   let brand = null;
-  if (brandCand && brandCand.type === 'text' && !looksLikeName(shownText(brandCand))) brandCand = null;
+  if (brandCand && brandCand.type === 'text' && ownRole(brandCand) !== 'brand' && !looksLikeName(shownText(brandCand))) brandCand = null;
   if (brandCand) {
     removed.add(brandCand);
     brand = brandCand.type === 'text'
@@ -1787,7 +1911,7 @@ function breathe(puppet, opts = {}) {
   const report = {
     source: puppet.source, format: puppet.format,
     pages: 0, sections: 0, headings: 0, buttons: 0, images: 0, videos: 0, embeds: 0,
-    rows: 0, cards: 0, backdrops: 0, patterns: [], dropped: [], links: 0, notes: (puppet.notes || []).slice()
+    rows: 0, cards: 0, backdrops: 0, patterns: [], dropped: [], links: 0, placeholders: 0, named: 0, notes: (puppet.notes || []).slice()
   };
   const facts = { texts: [], buttons: [], panels: [], images: 0, fills: [], sectionsText: [], widths: [], nav: null, footer: null, fonts: puppet.fonts || {} };
   const origin = puppet.origin || '';
@@ -1837,12 +1961,13 @@ function breathe(puppet, opts = {}) {
       report.sections += 1;
       const box = sectionBox(section, width);
       const peeled = peelBackground(section, width);
+      stampHints(peeled.items, NAMES.roleOf(section.name));
       let items = tidy(peeled.items, report, scale);
 
       // the menu lives in the home page's first sections — take it out of the content
       const thin = box.h <= T.navBandMax * u;
       if (pi === 0 && si <= 1 && !menu) {
-        const nav = takeNav(items, box, u, puppet.site.title, { thin: thin && si === 0 });
+        const nav = takeNav(items, box, u, puppet.site.title, { thin: thin && si === 0, role: (NAMES.roleOf(section.name) || {}).role });
         if (nav && nav.items.length >= (thin && si === 0 ? 1 : 2)) {
           menu = nav.items;
           brand = nav.brand;
@@ -2096,9 +2221,34 @@ function finish(living, opts = {}) {
   const notes = [];
   let menu = [];
   if (living.menuRaw && living.menuRaw.length) {
-    menu = living.menuRaw.map((it) => ({ label: it.label, url: resolve(it.href, homeKey) }))
-      .map((it) => (it.url.startsWith('#') ? { label: it.label, url: (homeIsRoot ? '/' : urlForPage(homeKey)) + it.url } : it))
+    // a design tool's header carries labels but no links — an SVG has none, and a
+    // Figma frame may never have been wired. Point each label at the section that
+    // wears it; keep the rest as a menu item going nowhere yet and SAY so, because
+    // the designer's menu is worth more to the owner than our silence.
+    const bands = (pages[0] ? pages[0].blocks : []).filter((b) => ['section', 'parallax', 'hero'].includes(b.type) && b.id);
+    const anchorFor = (label) => {
+      const want = String(label || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (!want) return '';
+      const hit = bands.find((b) => {
+        if (String(b.id).toLowerCase() === slugify(want, '')) return true;
+        const h = findBlock(b.data.blocks || [], (k) => k.type === 'heading');
+        return !!h && cleanLabel(stripMarks(h.data.text)).toLowerCase() === want;
+      });
+      return hit ? hit.id : '';
+    };
+    let loose = 0;
+    menu = living.menuRaw.map((it) => {
+      let url = resolve(it.href, homeKey);
+      if (!url) {
+        const a = anchorFor(it.label);
+        url = a ? '#' + a : '#';
+        if (!a) loose += 1;
+      }
+      return { label: it.label, url };
+    })
+      .map((it) => (it.url.startsWith('#') && it.url.length > 1 ? { label: it.label, url: (homeIsRoot ? '/' : urlForPage(homeKey)) + it.url } : it))
       .filter((it) => it.label && it.url);
+    if (loose) notes.push('בתפריט של העיצוב ' + loose + ' פריטים בלי יעד — העיצוב עצמו לא קישר אותם; כוונו אותם במסך התפריטים');
   } else if (pages.length > 1) {
     menu = pages.map((p) => ({ label: p.title || p.slug, url: urlForPage(p.key) }));
     notes.push('לעיצוב לא היה תפריט — נבנה תפריט מהדפים שלו');

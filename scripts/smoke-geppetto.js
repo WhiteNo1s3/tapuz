@@ -761,6 +761,79 @@ function find(blocks, pred) {
   figmaMod.fromPluginExport = realPlugin;
   check('a decoder that trips over a design is a refusal (E_DECODE) — the stack goes to the log only', dr === 'E_DECODE', dr);
 
+  // ── 11. layer names, read as intent ──
+  const NAMES = require('../src/geppetto/names');
+  check('the vocabulary reads a template’s own words, in both languages',
+    NAMES.roleOf('Navigation').role === 'nav' && NAMES.roleOf('Site name').role === 'brand' &&
+    NAMES.roleOf('Secondary button').variant === 'secondary' && NAMES.roleOf('Icons / Social / facebook').network === 'facebook' &&
+    NAMES.roleOf('Section heading').level === 2 && NAMES.roleOf('תפריט').role === 'nav' && NAMES.roleOf('לוגו').role === 'brand' &&
+    NAMES.roleOf('כפתור משני').variant === 'secondary', [NAMES.roleOf('תפריט'), NAMES.roleOf('Icons / Social / facebook')]);
+  check('a name the tool made up says nothing', !NAMES.roleOf('Frame 1321317456') && !NAMES.roleOf('Rectangle 12') && !NAMES.roleOf('Vector') && !NAMES.roleOf('image.png'));
+  check('the template’s own placeholder words are recognised, a real sentence is not',
+    NAMES.looksPlaceholder('Body text for whatever you’d like to add.') && NAMES.looksPlaceholder('Name') && NAMES.looksPlaceholder('טקסט לדוגמה') &&
+    !NAMES.looksPlaceholder('A terrific piece of praise') && !NAMES.looksPlaceholder('Design that feels like home'));
+
+  z = 0;
+  const named = (name, node) => Object.assign(node, { name });
+  const grp = (name, x, y, w, h, children) => ({ id: 'g' + (++z), type: 'group', name, x, y, w, h, z, children });
+  const namedDesign = () => {
+    z = 0;
+    return P.makePuppet({ source: 'figma', format: 'figma-file', origin: '',
+      site: { title: 'Untitled', lang: 'en', dir: 'ltr' },
+      pages: [{ key: 'p', path: '/', title: 'Landing page', name: 'Landing page', width: 1440, sections: [
+        { key: 's', anchor: '', name: 'Landing page', height: 3000, fill: { color: '#ffffff' }, nodes: [
+          grp('Navigation', 0, 0, 1440, 140, [
+            named('Site name', text('b', 60, 55, 160, 30, 'Juniper', { size: 22, bold: true })),
+            grp('Items', 900, 55, 460, 40, [
+              named('Page', text('n1', 900, 55, 90, 30, 'Work', { size: 18 })),
+              named('Page', text('n2', 1010, 55, 90, 30, 'Studio', { size: 18 })),
+              grp('Button', 1140, 48, 120, 48, [
+                named('Button', shape('nb', 1140, 48, 120, 48, '#111111', { radius: 8 })),
+                named('Button', text('nbt', 1164, 60, 72, 24, 'Contact', { size: 16, color: '#ffffff' }))
+              ])
+            ])
+          ]),
+          named('Landing page title', text('h1', 80, 300, 900, 80, 'A studio for quiet brands', { size: 64, bold: true })),
+          named('Body text for whatever', text('lead', 80, 400, 900, 60, 'Body text for whatever you’d like to add.', { size: 22 })),
+          grp('Secondary button', 80, 500, 200, 64, [
+            named('Secondary button', shape('sb', 80, 500, 200, 64, '#e6e6e6', { radius: 8 })),
+            named('Secondary button', text('sbt', 104, 518, 152, 28, 'Read more', { size: 20 }))
+          ]),
+          named('Section heading', text('sh', 80, 700, 600, 60, 'What we make', { size: 40, bold: true })),
+          grp('Footer', 0, 2600, 1440, 400, [
+            named('Divider', shape('dv', 80, 2620, 1280, 1, '#e6e6e6')),
+            grp('Social Icons', 80, 2700, 200, 40, [
+              grp('Icons / Social / facebook', 80, 2700, 40, 40, [named('Icon', img('sf', 88, 2708, 24, 24, A + 'fb.svg', { svg: true }))]),
+              grp('Icons / Social / instagram', 128, 2700, 40, 40, [named('Icon', img('si', 136, 2708, 24, 24, A + 'ig.svg', { svg: true }))]),
+              grp('Icons / Social / linkedin', 176, 2700, 40, 40, [named('Icon', img('sl', 184, 2708, 24, 24, A + 'li.svg', { svg: true }))]),
+              grp('Icons / Social / youtube', 224, 2700, 40, 40, [named('Icon', img('sy', 232, 2708, 24, 24, A + 'yt.svg', { svg: true }))])
+            ])
+          ])
+        ] }] }] });
+  };
+  const strip = (pup) => { P.eachNode(pup.pages[0].sections[0].nodes, (n) => { delete n.name; }); pup.pages[0].sections[0].name = ''; return pup; };
+  const withNames = gp.planFromPuppet(namedDesign(), {});
+  const without = gp.planFromPuppet(strip(namedDesign()), {});
+  check('a header the designer named becomes the menu, though the export links nothing',
+    JSON.stringify(withNames.menu.map((m) => m.label)) === JSON.stringify(['Work', 'Studio', 'Contact']) && !without.menu.length, [withNames.menu, without.menu]);
+  check('…and the box called "Site name" is the brand', withNames.brand && withNames.brand.text === 'Juniper', withNames.brand);
+  check('a pill the designer called a Button is a button, not a styled label',
+    /<bent-button[^>]*>Read more<\/bent-button>/.test(withNames.pages[0].source) && /<bent-text[^>]*>Read more</.test(without.pages[0].source),
+    [withNames.pages[0].source.match(/<bent-\w+[^>]*>Read more[^<]*</g), without.pages[0].source.match(/<bent-\w+[^>]*>Read more[^<]*</g)]);
+  check('…and "Secondary button" wears the secondary look', /<bent-button[^>]*variant="outline"[^>]*>Read more/.test(withNames.pages[0].source), withNames.pages[0].source.match(/<bent-button[^>]*>/g));
+  check('icons named after networks are the social row (no links anywhere in the design)',
+    /<bent-social/.test(withNames.pages[0].source) && /network="facebook"/.test(withNames.pages[0].source) && /network="instagram"/.test(withNames.pages[0].source) && !/<bent-social/.test(without.pages[0].source),
+    withNames.pages[0].source.match(/network="[a-z]+"/g));
+  check('a hairline called "Divider" is a divider, not a dropped rectangle',
+    /<bent-divider/.test(withNames.pages[0].source) && !/<bent-divider/.test(without.pages[0].source));
+  check('the designer’s own words set the heading levels',
+    /<bent-heading[^>]*level="1"[^>]*>A studio for quiet brands/.test(withNames.pages[0].source) && /<bent-heading[^>]*level="2"[^>]*>What we make/.test(withNames.pages[0].source),
+    withNames.pages[0].source.match(/<bent-heading[^>]*>[^<]*/g));
+  check('the report counts the template’s placeholder words and the hints it used',
+    withNames.report.placeholders >= 1 && withNames.report.named >= 4 && without.report.named === 0,
+    [withNames.report.placeholders, withNames.report.named, without.report.named]);
+  check('a menu item the design never wired says so in the notes', withNames.notes.some((n) => /בלי יעד/.test(n)), withNames.notes);
+
   console.log(fail ? 'SMOKE GEPPETTO: FAIL' : 'SMOKE GEPPETTO: PASS');
   process.exit(fail ? 1 : 0);
 })().catch((e) => {
