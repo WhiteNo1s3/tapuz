@@ -91,13 +91,16 @@ function createPage({
   title,
   slug,
   path_prefix = '',
-  direction = 'rtl',
+  direction,
   blocks = [],
   tags = [],
   meta = {},
   status = 'draft'
 }) {
   const full_path = generateFullPath(path_prefix, slug);
+  // v2.58 — a page that does not say which way it reads is born the SITE's
+  // way (an English site makes ltr pages); 'rtl' used to be hard-wired here
+  if (direction !== 'ltr' && direction !== 'rtl') direction = require('./site-language').siteDirection();
   adoptAnchorIds(blocks);
   const blocksJson = JSON.stringify(blocks);
   // New pages: draft holds content; published blocks only if status is published
@@ -288,6 +291,28 @@ function publishPage(full_path) {
 function getPageByFullPath(full_path) {
   const row = db.prepare('SELECT * FROM pages WHERE full_path = ?').get(full_path);
   return parsePageRow(row);
+}
+
+/**
+ * v2.58 — the site changed its language: every page that read the OLD site's
+ * way now reads the new one (its canonical .pzn is re-serialized with the
+ * new head, the way a builder save writes it). A page that declares its own
+ * language (meta.lang — the translations screen) is somebody's deliberate
+ * other-language page and keeps its direction. Returns the paths flipped.
+ * @param {'rtl'|'ltr'} from
+ * @param {'rtl'|'ltr'} to
+ */
+function flipSiteDirection(from, to) {
+  if (from === to) return [];
+  const flipped = [];
+  for (const p of listPages()) {
+    const full = getPageByFullPath(p.full_path);
+    if (!full || full.direction !== from) continue;
+    if (full.meta && (full.meta.lang === 'he' || full.meta.lang === 'en')) continue;
+    updatePage(full.full_path, { direction: to });
+    flipped.push(full.full_path);
+  }
+  return flipped;
 }
 
 function listPages({ q, status } = {}) {
@@ -578,7 +603,9 @@ function savePageSource(full_path, source, { publish = false, repair = false, me
   }
   const saved = updatePage(full_path, {
     title: view.title || existing.title,
-    direction: view.direction || existing.direction,
+    // v2.58 — the head's direction counts only when the head SAYS one; a
+    // document that never says keeps the page's own (born the site's way)
+    direction: /<html\b[^>]*\sdir\s*=/i.test(source) ? (view.direction || existing.direction) : existing.direction,
     tags: view.tags,
     meta: { ...(existing.meta || {}), ...(view.meta || {}), ...metaFromLine },
     draft_blocks: view.blocks,
@@ -676,4 +703,6 @@ module.exports = {
   getPageSource,
   savePageSource,
   applyPageOps
+,
+  flipSiteDirection
 };

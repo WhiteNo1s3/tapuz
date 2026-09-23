@@ -20,8 +20,9 @@ function fromTapuzPage(page = {}) {
   const doc = createDocument({
     title: page.title || '',
     slug: page.slug || '',
-    lang: page.lang || 'he',
-    dir: page.direction || page.dir || 'rtl',
+    // v2.58 — a page with no language or direction of its own is the site's
+    lang: page.lang || require('../../site-language').siteLanguage(),
+    dir: page.direction || page.dir || require('../../site-language').siteDirection(),
     tags: page.tags || [],
     meta: {
       teaser: page.meta?.teaser || '',
@@ -612,8 +613,8 @@ function toTapuzPage(doc) {
   const page = {
     title: doc.title || '',
     slug: doc.slug || '',
-    direction: doc.dir || 'rtl',
-    lang: doc.lang || 'he',
+    direction: doc.dir || require('../../site-language').siteDirection(),
+    lang: doc.lang || require('../../site-language').siteLanguage(),
     tags: (doc.tags || []).slice(),
     meta: {},
     blocks: (doc.body || []).map(moduleToBlock).filter(Boolean)

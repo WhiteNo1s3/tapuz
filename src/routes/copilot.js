@@ -765,7 +765,7 @@ router.post('/admin/api/ai/chat', async (req, res) => {
     const systemFor = (tier, o) => {
       const menus = !o || o.menus !== false;
       const menuLine = canvas === 'menu' ? (menus ? MENU_ON : MENU_OFF) : '';
-      return buildCopilotBriefing({ locale: 'he', media, siteTitle, tier, canvas, menus }).text + situation + menuLine + situationTail;
+      return buildCopilotBriefing({ locale: 'he', media, siteTitle, tier, canvas, menus, siteLanguage: require('../site-language').siteLanguage() }).text + situation + menuLine + situationTail;
     };
     // v2.44 — server.js drops a socket that says nothing for 30 s (S4), and on
     // a server-side courier (מודל מקומי, a cloud key) this socket says nothing

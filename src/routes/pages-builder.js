@@ -149,7 +149,7 @@ router.post('/admin/create', (req, res) => {
   const result = createPage({
     title,
     slug: candidate,
-    direction: 'rtl',
+    direction: require('../site-language').siteDirection(),
     // starter templates (v0.93) — unknown/missing key falls back to 'basic',
     // which is exactly the old single-hero seed (behavior preserved)
     blocks: require('../templates').templateBlocks(req.body.template, title),

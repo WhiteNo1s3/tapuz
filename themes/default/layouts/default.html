@@ -13,7 +13,7 @@
   {{head}}
 </head>
 <body>
-  <a class="skip-link" href="#main">דלג לתוכן</a>
+  <a class="skip-link" href="#main">{{t.skip}}</a>
   <header class="site-header {{header_class}}">
     <div class="container">
       <div class="header-inner">
@@ -24,9 +24,9 @@
           {{header_tagline}}
         </div>
 
-        <nav class="main-nav" aria-label="ניווט ראשי">
+        <nav class="main-nav" aria-label="{{t.mainNav}}">
           <input type="checkbox" id="nav-toggle" class="nav-toggle">
-          <label for="nav-toggle" class="nav-burger" aria-label="תפריט"><span></span><span></span><span></span></label>
+          <label for="nav-toggle" class="nav-burger" aria-label="{{t.menu}}"><span></span><span></span><span></span></label>
           <ul>
             {{menu_html}}
           </ul>
@@ -52,7 +52,7 @@
           {{footer_credit_html}}
         </div>
         <div class="footer-end">
-          <nav class="footer-nav" aria-label="ניווט תחתון">
+          <nav class="footer-nav" aria-label="{{t.footerNav}}">
             {{footer_menu_html}}
           </nav>
           {{footer_social_html}}

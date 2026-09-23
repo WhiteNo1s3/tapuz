@@ -127,7 +127,12 @@ router.post('/admin/api/settings', requireAdmin, (req, res) => {
     if (b.title !== undefined) config.title = String(b.title || '').trim() || config.title;
     if (b.description !== undefined) config.description = String(b.description || '');
     if (b.baseUrl !== undefined) config.baseUrl = String(b.baseUrl || '').trim();
-    if (b.language !== undefined) config.language = b.language === 'en' ? 'en' : 'he';
+    let langChanged = false;
+    if (b.language !== undefined) {
+      const want = b.language === 'en' ? 'en' : 'he';
+      langChanged = want !== (config.language === 'en' ? 'en' : 'he');
+      config.language = want;
+    }
     let homeChanged = false;
     if (b.homepage !== undefined) {
       const want = String(b.homepage || '').trim();
@@ -136,9 +141,17 @@ router.post('/admin/api/settings', requireAdmin, (req, res) => {
       config.homepage = want;
     }
     saveConfig(config);
-    // a homepage change moves index.html — rebuild so '/' is right immediately
-    if (homeChanged) exportAll();
-    res.json({ ok: true });
+    // v2.58 — a language change turns the site around: the pages that read
+    // the old site's way now read the new one (pages.flipSiteDirection), and
+    // every page's chrome moved with it — so the export is rebuilt, like a
+    // homepage change rebuilds it for '/'
+    let flipped = [];
+    if (langChanged) {
+      const sl = require('../site-language');
+      flipped = require('../pages').flipSiteDirection(sl.directionFor(config.language === 'en' ? 'he' : 'en'), sl.directionFor(config.language));
+    }
+    if (homeChanged || langChanged) exportAll();
+    res.json({ ok: true, flipped });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }

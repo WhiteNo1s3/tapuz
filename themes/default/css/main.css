@@ -363,6 +363,18 @@ p { margin-bottom: 1.1rem; }
   border-color: var(--color-border);
 }
 
+/* v2.58 — the third variant the dictionary has always offered (primary |
+   secondary | outline) finally has a rule: it used to render as a bare link */
+.btn-outline {
+  background: transparent;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-outline:hover {
+  background: var(--color-light-bg);
+}
+
 /* ===== Cards ===== */
 .card {
   border: 1px solid var(--color-border);

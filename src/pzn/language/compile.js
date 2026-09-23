@@ -59,7 +59,7 @@ function compile(doc, context = {}) {
     themeLink.trimEnd() ? themeLink.replace(/\n$/, '') : null,
     '</head>',
     '<body>',
-    '  <a class="skip-link" href="#main">דלג לתוכן</a>',
+    `  <a class="skip-link" href="#main">${escapeHtml(require('../../site-language').strings(doc.lang).skip)}</a>`,
     '  <main id="main">',
     indentBlock(bodyHtml, 4),
     '  </main>',

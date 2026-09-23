@@ -28,12 +28,22 @@
 const CONSENT_KEY = 'tz_consent';
 const MODES = ['auto', 'always', 'off'];
 
-const DEFAULTS = {
-  text: 'האתר משתמש בכלי מדידה כדי להבין מה עוזר לכם. אפשר לאשר או לדחות — האתר עובד אותו דבר.',
-  grantLabel: 'אישור',
-  denyLabel: 'דחייה',
-  policyLabel: 'מדיניות הפרטיות'
+// v2.58 — the bar's own words follow the SITE's language; an owner's text wins either way
+const DEFAULTS_BY_LANG = {
+  he: {
+    text: 'האתר משתמש בכלי מדידה כדי להבין מה עוזר לכם. אפשר לאשר או לדחות — האתר עובד אותו דבר.',
+    grantLabel: 'אישור',
+    denyLabel: 'דחייה',
+    policyLabel: 'מדיניות הפרטיות'
+  },
+  en: {
+    text: 'This site uses measurement tools to learn what helps you. Accept or decline — the site works the same either way.',
+    grantLabel: 'Accept',
+    denyLabel: 'Decline',
+    policyLabel: 'Privacy policy'
+  }
 };
+const DEFAULTS = new Proxy({}, { get: (_, k) => DEFAULTS_BY_LANG[require('../site-language').siteLanguage()][k] });
 
 /** A link we are willing to put in front of a visitor: same-site or https. */
 function safeUrl(raw) {
