@@ -975,6 +975,15 @@ function adoptPrintedDocument(text, o = {}) {
  * A non-streaming LM Studio reply carries `tool_calls: []` (empty, not
  * absent) beside `reasoning_content` — that is "no calls", not an error.
  */
+/** Two BenTML documents that say the same page (v2.60): ids and whitespace
+ *  are the serializer's, not the author's — a model that re-emits a page it
+ *  just saved regenerates both. */
+function sameDocument(a, b) {
+  const norm = (s) => String(s || '').replace(/\s+id="[^"]*"/g, '').replace(/\s+/g, ' ').trim();
+  const x = norm(a);
+  return !!x && x === norm(b);
+}
+
 /** A chat template's own tokens, leaked into the words meant for the owner
  *  (v2.58 — seen from Gemma 4 through the Bridge: a closing reply that opened
  *  with `<|channel>thought\n<channel|>` and then said, in good English, what
@@ -1674,6 +1683,22 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         const fix = (tools.getTool(write.name) || {}).fixHint || win.HE.proposalFixForModel;
         results.push({ id: write.id, output: { error: refusal, proposed: false, fix }, isError: true });
         st.notice = win.HE.proposalRefused(refusal);
+        st.extra = appendToolTurn(style, st.extra, reply, results);
+        st.hop++;
+        continue;
+      }
+      // v2.60 — the SAME write again, after it was approved and saved this turn.
+      // Seen live (2026-09-24, Gemma 4 26B-A4B through the Bridge) and once in
+      // 24 measured approvals: the model's closing turn, told its edit landed,
+      // proposed the identical edit on a second card. An owner who has just
+      // pressed ✓ reads "did it do it, or not?". A proposal that repeats the
+      // draft it just saved is answered — "already saved, say so in words" —
+      // and never shown; a proposal that DIFFERS is a new change and gets its
+      // card, as ever. Ids and whitespace do not make two documents different.
+      if (st.applied && st.applied.slug && write.name === 'edit_page' && String(write.input.slug || '').trim() === String(st.applied.slug)
+        && sameDocument(write.input.source, require('./pages').getPageSource(st.applied.slug, 'draft'))) {
+        results.push({ id: write.id, output: { done: true, alreadySaved: true, slug: st.applied.slug, instruction: win.HE.repeatForModel } });
+        st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.repeatDropped;
         st.extra = appendToolTurn(style, st.extra, reply, results);
         st.hop++;
         continue;
