@@ -49,13 +49,9 @@ const path = require('path');
 const http = require('http');
 const { spawn, execSync } = require('child_process');
 
-function findChrome() {
-  if (process.env.CHROME) return process.env.CHROME;
-  for (const name of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome']) {
-    try { return execSync('command -v ' + name, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() || null; } catch (e) { /* next */ }
-  }
-  return null;
-}
+// v2.58 — one finder for every script that needs a real Chrome (the Mac's
+// /Applications copy included; this smoke used to skip on every Mac)
+const { findChrome } = require('./battery-bridge-courier');
 const CHROME = findChrome();
 if (!CHROME) {
   console.log('SMOKE BRIDGE-RELOAD: SKIPPED (no Chrome found — set CHROME=/path/to/chrome to run the Reload scenario in a real browser)');

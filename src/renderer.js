@@ -94,6 +94,9 @@ const ANIMATE_VALUES = new Set(['fade', 'rise', 'zoom']);
 // the PZN escaper's gate, which strips control characters the way a browser
 // does before it tests the scheme (`\x01javascript:` must not slip through).
 const { safeHref } = require('./pzn/language/escape');
+// v2.58 — the site's language decides the default direction and the words of
+// the chrome; a page keeps its own direction when it says one
+const siteLanguage = require('./site-language');
 
 /**
  * Expand BenTML inline marks inside already-escaped? No — work on raw, escape segments.
@@ -137,6 +140,9 @@ function anchorId(block) {
 }
 
 function renderBlock(block, direction = 'rtl') {
+  // the words a module writes on its own (a contact card's labels, a tab's
+  // default name) follow the page's direction — an LTR page speaks English
+  const T = siteLanguage.strings(direction === 'ltr' ? 'en' : 'he');
   // animate is universal (v1.97): it rides the same extraClass slot as
   // className, so every case that puts ${extraClass} inside its class="" (or
   // hands `attrs` to a shared helper) animates. heading/text keep their own
@@ -439,7 +445,7 @@ function renderBlock(block, direction = 'rtl') {
       const height = ['sm', 'md', 'lg'].includes(block.data?.height) ? block.data.height : 'md';
       const src = `https://www.google.com/maps?q=${encodeURIComponent(address)}&z=${zoom}&output=embed&hl=he`;
       return `<figure class="map-embed map-${height}${extraClass}"${extraId}${style}>` +
-        `<iframe src="${escapeHtml(src)}" loading="lazy" title="מפה: ${escapeHtml(address)}" allowfullscreen></iframe>` +
+        `<iframe src="${escapeHtml(src)}" loading="lazy" title="${escapeHtml(T.map)}: ${escapeHtml(address)}" allowfullscreen></iframe>` +
         `</figure>`;
     }
 
@@ -526,7 +532,7 @@ function renderBlock(block, direction = 'rtl') {
         const tid = escapeHtml(gid + '-' + i);
         inner +=
           `<input type="radio" name="${escapeHtml(gid)}" id="${tid}" class="bent-tab-radio"${i === 0 ? ' checked' : ''}>` +
-          `<label for="${tid}" class="bent-tab-label">${escapeHtml(it.label || ('טאב ' + (i + 1)))}</label>` +
+          `<label for="${tid}" class="bent-tab-label">${escapeHtml(it.label || (T.tab + ' ' + (i + 1)))}</label>` +
           `<div class="bent-tab-panel">${renderInlineMarks(it.content || '')}</div>`;
       });
       return `<div class="bent-tabs${extraClass}"${extraId}${style} dir="${direction}">${inner}</div>`;
@@ -720,24 +726,24 @@ function renderBlock(block, direction = 'rtl') {
       const lines = [];
       if (d.phone) {
         lines.push(
-          `<div class="contact-line"><span class="contact-k">טלפון</span> ` +
+          `<div class="contact-line"><span class="contact-k">${escapeHtml(T.phone)}</span> ` +
             `<a href="tel:${escapeHtml(String(d.phone).replace(/\s/g, ''))}">${escapeHtml(d.phone)}</a></div>`
         );
       }
       if (d.email) {
         lines.push(
-          `<div class="contact-line"><span class="contact-k">אימייל</span> ` +
+          `<div class="contact-line"><span class="contact-k">${escapeHtml(T.email)}</span> ` +
             `<a href="mailto:${escapeHtml(d.email)}">${escapeHtml(d.email)}</a></div>`
         );
       }
       if (d.address) {
         lines.push(
-          `<div class="contact-line"><span class="contact-k">כתובת</span> ${escapeHtml(d.address)}</div>`
+          `<div class="contact-line"><span class="contact-k">${escapeHtml(T.address)}</span> ${escapeHtml(d.address)}</div>`
         );
       }
       if (d.hours) {
         lines.push(
-          `<div class="contact-line"><span class="contact-k">שעות</span> ${escapeHtml(d.hours)}</div>`
+          `<div class="contact-line"><span class="contact-k">${escapeHtml(T.hours)}</span> ${escapeHtml(d.hours)}</div>`
         );
       }
       return `<section class="contact-info${extraClass}"${extraId}${style} dir="${direction}">${lines.join('')}</section>`;
@@ -913,15 +919,16 @@ function renderWhatsappFloat(config) {
  * static export the same way the GA4/analytics snippets do — export.js only
  * strips <style>, never <script>.
  */
-function renderSearchWidget(config) {
+function renderSearchWidget(config, lang) {
   const s = config && config.integrations && config.integrations.search;
   if (!s || !s.enabled) return '';
-  return `<div class="tapuz-search-float" id="tapuz-search-btn" role="button" tabindex="0" aria-label="חיפוש באתר" title="חיפוש">` +
+  const T = siteLanguage.strings(lang);
+  return `<div class="tapuz-search-float" id="tapuz-search-btn" role="button" tabindex="0" aria-label="${escapeHtml(T.search)}" title="${escapeHtml(T.searchTitle)}">` +
     `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 5L20.49 19l-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>` +
     `</div>
 <div class="tapuz-search-panel" id="tapuz-search-panel">
   <div class="tapuz-search-box">
-    <input class="tapuz-search-input" id="tapuz-search-input" type="text" placeholder="חיפוש באתר…" autocomplete="off">
+    <input class="tapuz-search-input" id="tapuz-search-input" type="text" placeholder="${escapeHtml(T.searchPlaceholder)}" autocomplete="off">
     <div class="tapuz-search-results" id="tapuz-search-results"></div>
   </div>
 </div>
@@ -941,7 +948,7 @@ function renderSearchWidget(config) {
   }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   function render(items) {
-    if (!items.length) { results.innerHTML = '<div class="tapuz-search-empty">אין תוצאות</div>'; return; }
+    if (!items.length) { results.innerHTML = '<div class="tapuz-search-empty">' + ${JSON.stringify(escapeHtml(T.noResults))} + '</div>'; return; }
     results.innerHTML = items.slice(0, 20).map(function (it) {
       return '<a class="tapuz-search-result" href="' + esc(it.url) + '"><div class="t">' + esc(it.title)
         + '</div><div class="e">' + esc(it.excerpt) + '</div></a>';
@@ -1037,7 +1044,7 @@ function renderAnalyticsBeacon(config) {
  * site with no chrome configured renders exactly like today (no regression).
  * Styling lives in the theme CSS so it survives export (which strips <style>).
  */
-function renderSiteChrome(config, direction) {
+function renderSiteChrome(config, direction, lang) {
   const header = (config && config.header) || {};
   const footer = (config && config.footer) || {};
 
@@ -1087,7 +1094,7 @@ function renderSiteChrome(config, direction) {
   // --- Footer: CMS credit (on by default; a toggle turns it off) ---
   const footerCredit = footer.showCredit === false
     ? ''
-    : `<p class="footer-credit">נבנה עם Tapuziel</p>`;
+    : `<p class="footer-credit">${escapeHtml(siteLanguage.strings(lang || siteLanguage.languageFor(direction)).credit)}</p>`;
 
   return { headerTagline, headerClass, headerCta, footerColumns, footerText, footerSocial, footerCredit };
 }
@@ -1184,15 +1191,20 @@ function renderPage(page, options = {}) {
   // Redirect pages: meta.redirect = target URL → tiny instant-redirect document
   if (page.meta && page.meta.redirect) {
     const to = escapeHtml(String(page.meta.redirect));
-    return `<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8">` +
+    const rl = siteLanguage.siteLanguage();
+    return `<!DOCTYPE html><html lang="${rl}" dir="${siteLanguage.directionFor(rl)}"><head><meta charset="UTF-8">` +
       `<meta http-equiv="refresh" content="0;url=${to}"><link rel="canonical" href="${to}">` +
       `<title>${escapeHtml(page.title || '')}</title></head>` +
       `<body><p style="font-family:system-ui;text-align:center;margin-top:3rem">` +
-      `<a href="${to}">ממשיכים לדף החדש…</a></p></body></html>`;
+      `<a href="${to}">${escapeHtml(siteLanguage.strings(rl).redirecting)}</a></p></body></html>`;
   }
 
-  const direction = page.direction || 'rtl';
-  const lang = direction === 'rtl' ? 'he' : 'en';
+  // v2.58 — a page reads its own way; a page that never said which way
+  // reads the SITE's way, and its language follows (site-language.js)
+  const direction = page.direction === 'ltr' || page.direction === 'rtl' ? page.direction : siteLanguage.siteDirection();
+  const pageLang = page.meta && (page.meta.lang === 'en' || page.meta.lang === 'he') ? page.meta.lang : '';
+  const lang = pageLang || siteLanguage.languageFor(direction);
+  const T = siteLanguage.strings(lang);
   const theme = loadTheme(page.theme || 'default');
   const useDraft = !!options.useDraft;
 
@@ -1232,7 +1244,7 @@ function renderPage(page, options = {}) {
   const footerMenu = menuFor('footer');
 
   // CMS-managed static chrome (S3): header tagline/CTA + footer columns/social/credit
-  const chrome = renderSiteChrome(config, direction);
+  const chrome = renderSiteChrome(config, direction, lang);
 
   // Logo rendering (config.header.showLogo === false hides it entirely).
   // options.previewBrand (v2.56) — an imported design's brand name, shown
@@ -1345,7 +1357,7 @@ function renderPage(page, options = {}) {
   const storeRender = storeSettings && storeSettings.open ? require('./store/render') : null;
   const headerCart = storeRender ? storeRender.renderHeaderCart(storeSettings) : '';
   const siteExtras = (storeRender ? storeRender.renderStoreTag(storeSettings) : '') +
-    renderWhatsappFloat(config) + renderSearchWidget(config) + langSwitcherHtml +
+    renderWhatsappFloat(config) + renderSearchWidget(config, lang) + langSwitcherHtml +
     renderAnalyticsBeacon(config) + require('./crm/consent').renderConsent(config) +
     require('./crm/pixels').renderPixels(config) +
     require('./crm/cs-widget').renderTag(config) +
@@ -1369,6 +1381,11 @@ function renderPage(page, options = {}) {
   const replacements = {
     '{{lang}}': lang,
     '{{direction}}': direction,
+    // v2.58 — the layout's own words, in the page's language
+    '{{t.skip}}': escapeHtml(T.skip),
+    '{{t.mainNav}}': escapeHtml(T.mainNav),
+    '{{t.menu}}': escapeHtml(T.menu),
+    '{{t.footerNav}}': escapeHtml(T.footerNav),
     '{{title}}': escapeHtml(pageTitle),
     '{{head}}': head,
     '{{content}}': content,

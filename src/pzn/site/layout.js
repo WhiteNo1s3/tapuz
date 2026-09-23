@@ -89,7 +89,7 @@ function wrapPage(doc, bodyHtml, manifest, opts = {}) {
     `  <link rel="stylesheet" href="${escapeAttr(cssHref)}">`,
     '</head>',
     '<body class="pzn-site">',
-    '  <a class="skip-link" href="#main">דלג לתוכן</a>',
+    `  <a class="skip-link" href="#main">${escapeHtml(require('../../site-language').strings(lang).skip)}</a>`,
     indent(header, 2),
     '  <main id="main" class="site-main">',
     indent(bodyHtml, 4),

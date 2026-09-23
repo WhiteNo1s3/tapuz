@@ -239,7 +239,7 @@ LOCAL_LLM_BASE=… LOCAL_LLM_MODEL=… node scripts/battery-copilot.js --only=T3
 
 The smokes pin the tool loop with canned tool calls and the eval (§4) judges one-shot packs. Neither answers what an owner wants to know: *I typed a sentence in Hebrew — did the right thing happen?* The battery runs that, end to end, on a scratch CMS seeded with the ten-page live menu: a spawned server, a login, `POST /admin/api/ai/chat` with the page's own envelopes (`message` / `approve` / `step`) — and a verdict read from the **pages and menus tables**, never from the model's words. Needs a model, so it is not part of `test:smoke`; it skips with exit 0 when `LOCAL_LLM_BASE` is unset. One GPU job at a time (§1ד).
 
-Two couriers: `local` — the server calls the runtime itself; `relay` — the `browser` provider: every `{modelCall}` comes back to the battery, is POSTed to the runtime unchanged and returns as `{step}`, which is what Bridge V2 does minus the extension (`--window=8192` sends the hint an 8K bridge would).
+Three couriers: `local` — the server calls the runtime itself; `relay` — the `browser` provider: every `{modelCall}` comes back to the battery, is POSTed to the runtime unchanged and returns as `{step}`, which is what Bridge V2 does minus the extension (`--window=8192` sends the hint an 8K bridge would); `extension` (v2.58, §3ג) — the extension itself, in a real headless Chrome, typed into the copilot's screen.
 
 | | the owner says | what must be true afterwards |
 |---|---|---|
@@ -292,6 +292,27 @@ Ben, reading the first scorecards: *"the prompts given to the llm are not struct
 
 Checks are **hard** (site state) or **soft** (wording); a scenario passes on its hard checks and lists its soft misses. Every turn — what was sent, what the card held, the reply, the seconds — is written to `eval/battery/<stamp>-<model>-<courier>.json` (+ `.md`); `eval/` is git-ignored. Results: §5.
 
+### The English track — the same owner, on an English site (v2.58)
+
+```bash
+LOCAL_LLM_BASE=… LOCAL_LLM_MODEL=… node scripts/battery-copilot.js --track=english [--courier=extension]     # E1–E10
+```
+
+Ben (2026-09-23): *"our system is supporting english even in menu … lets make it not rtl automatically when it selects english."* The scratch site is seeded in English — `config.language en`, the live-10 fixture translated at seed time (English slugs, titles and menu labels; the same ten pages, the same menu shape, so every judge that counts pages holds) — and the owner asks in English. Each dream reuses the dreams track's judges and adds the English site's own questions: **it answers me in English**, **the page reads left to right** (`direction ltr`, `<html lang="en" dir="ltr">`), **no Hebrew slipped in**, the menu's group names are English words.
+
+| | the owner says | what a person would expect afterwards |
+|---|---|---|
+| E1 | "Hi! I am opening a small ceramics studio in Jaffa…" | an English page proposal that passes the builder's questions, reads ltr, speaks about her studio |
+| E2 | "This page looks dry and boring to me. Give it some life, but do not delete what I wrote." | an edit of THIS page; her sentence still there; the page grew; still ltr; published untouched |
+| E3 | "People tell me they cannot find how to contact me. Can you help?" | something DONE on a card; contact easier to reach (D4's rule, English slugs) |
+| E4 | "My menu became a mess… Tidy it up so it is pleasant to look at." | a menu card; one row; no page lost; English group names |
+| E5 | "I have a holiday sale — 20% off everything… Put it on this page wherever you think is right." | the sale on the page; the rest survived; published untouched |
+| E6 | "hey please add to the builder page some sentence about it being free and that no credit card is needed thanks" | it finds "the builder page" by name; free · credit card on it |
+| E7 | "Add to this page a recommendation from my customer, Dana from Ramat Gan. She wrote me: «…»" | Dana's sentence verbatim; who said it |
+| E8 | a banner, approved — then "Oh no… Put the page back the way it was before." | the banner gone; what she had is back |
+| E9 | "Our opening hours changed: Sunday to Thursday 9:00 to 18:00… Update it wherever it belongs." | a page card; the hours as given; nothing live; soft: the contact page, edited not created |
+| E10 | "I am not happy with the site, it does not feel like "me"… What do you suggest?" | a conversation in English; no card; nothing written |
+
 ## 3ב. What the door does for a model that is almost right (v2.45)
 
 The family run (§5) showed that a 12B or a 4B-active MoE is *nearly* able to drive the copilot — and loses whole scenarios to a few small habits, none of which is about understanding the owner. Each now has an answer in the tool loop; all three keep the rule that **nothing is written without ✓**.
@@ -317,6 +338,19 @@ Never adopted: a reply that hit `max_tokens` (half a document), a tool the reque
 And one honesty guard: when the door refused a proposal this turn and the model's last word is plain words — seen live: *"עדכנתי את כותרת ההירו"* with nothing proposed and nothing saved — the model's sentence stays and the truth goes beside it: **«ההצעה נפסלה בבדיקה… שום דבר לא נשמר ושום דבר לא השתנה, גם אם התשובה אומרת אחרת»**.
 
 The battery helps find these: with `--courier=relay` it sees every body the CMS composes, so its transcript keeps **what the door told the model** about each refused proposal (`↩` lines, `refusals` in the JSON) — that is how `</bent/heading>` and `bent-priceitem` were found.
+
+## 3ג. The extension courier — the Bridge itself, typed into the copilot's screen (v2.58)
+
+```bash
+LOCAL_LLM_BASE=http://127.0.0.1:1234/v1 LOCAL_LLM_MODEL=… node scripts/battery-copilot.js --track=dreams --courier=extension
+CHROME=/path/to/chrome … --courier=extension      # when Chrome is not on PATH or in /Applications
+```
+
+Ben (2026-09-23): *"make the check for the functionality of the provided extension for the lm studio bridge to happen."* The relay courier plays the Bridge in twelve lines of Node — it proves the protocol, not the extension. The extension courier (`scripts/battery-bridge-courier.js`) proves the extension: the **wired Chrome build** (the bytes `/admin/ai-setup` serves, wired to `site.test` the way the ZIP is wired to the owner's host) is loaded over the CDP pipe into a **real headless Chrome** (branded Chrome 137+ ignores `--load-extension`; `Extensions.loadUnpacked` does not), the scratch CMS is reached as `http://site.test:<port>` — a non-loopback host, like the hosted site — and every owner sentence is **typed into /admin/chat and sent with the page's own button**. The page glue hands each model call to the content script, the worker streams it from LM Studio on loopback, the page posts the step back, and the approval is a **click on the card**. The judges do not change: the site's tables decide.
+
+A recorder installed in the page keeps every envelope the page received from `/admin/api/ai/chat` (so the transcript's `used`, `notices` and `↩ refusals` read as they do on the relay), and per relayed call: **which model answered** (the guard below), how many **progress frames** the bridge streamed (proof it streamed rather than buffered), seconds and completion tokens — `turns[].bridge` in the JSON, `bridge` at the top with the Chrome and Bridge versions. One scenario = one fresh chat page (a new conversation); the canvas is chosen through the page's own dropdown (or the URL, for a page made mid-scenario), the way the owner does it.
+
+**The battery refuses a stranger (v2.58).** Measured on LM Studio 0.4.24: a request naming an identifier that is **not loaded** is answered HTTP 200 by **whatever model is loaded**, and only the reply's `model` field says so. The first baseline of 2026-09-23 ran D1 on the 31B; two minutes in another agent loaded a 26B under the survey's name and evicted the 31B, and D2–D14 would have run on the 26B with every row still titled 31B — the instrument measuring itself again. The relay and extension couriers now compare every answer's `model` with the one the run names (loosely, the way the CMS matches a setting: a prefix or suffix counts) and **stop the run** — `BATTERY COPILOT: REFUSED`, exit 2, nothing written — the moment they differ; the card records `answeredBy`. Two machines share one LM Studio on this Mac (§ "Two machines, one LM Studio"): before a night run, `lms ps`, and name the model that is loaded.
 
 ## 4. The eval — the 99.9% instrument
 
@@ -345,6 +379,19 @@ Every run goes through `src/ai.js` (the same code path the admin buttons use) an
 Non-passing replies are saved verbatim under `eval/failures/<pack>/` — each one becomes a canned reply in the pack's drift matrix (`test/fixtures/inject/<id>/replies/`) so the door never fails the same way twice. The 99.9% headline is written only after ≥ 3,000 scored runs with ≤ 3 non-passes; until then the report states "N runs, X pass".
 
 ## 5. What was measured (2026-09-13, qwen3.6-35b-a3b at 24K, `--gpu 0.6`)
+
+### The Mac, through the real Bridge (2026-09-23, v2.58, LM Studio 0.4.24 MLX, `--parallel 1`, 262,144 window)
+
+The model on the Mac that night was the one another agent had loaded — `lmstudio-community/gemma-4-26B-A4B-it-MLX-8bit` (27.99 GB), the Mac's own recommendation from the survey card — so the rows are the 26B-A4B 8-bit, uncapped (`+autofit`, § the survey card), and the guard confirmed it answered every call.
+
+| track | courier | result | time | what it proves |
+|---|---|---|---|---|
+| dreams D1–D14 | relay | **14/14** · 1 soft miss (D11: "still her page — her name, her street") · 830 s | 2.4 owner turns per dream on average | the copilot on this Mac, the protocol the Bridge speaks |
+| dreams D1 | **extension** | **1/1** · 84 s · 5 relayed calls, 12/37/6/21 frames streamed, answered by the named model | the sentence typed, two shrugs, the card clicked | the Bridge V2 0.5.5 Chrome build in Chrome 153, through the copilot's own screen |
+| dreams D1–D14 | **extension** | **14/14** · 1 soft miss (D11: "still her page — her name, her street") · 540 s · 63 relayed calls, 515 streamed frames, 0 bridge errors, every call answered by `tapuz-mlx-gemma-26b-a4b-8bit` | 2.4 owner turns per dream (typed and clicked on the real screen) | the whole track through the extension |
+| english E1–E10 | **extension** | **10/10** · 2 soft misses, both the judge's (E1, E3: "it speaks English" was asked of a card turn, which carries no words — fixed after the run; the replies themselves were English) · 308 s · 45 relayed calls, 272 streamed frames, every call answered by the named model | 2.5 owner turns per dream. The FIRST run scored 7/10 — all three the judge's own: the seed's Hebrew marker was the only Hebrew on two edited pages, and the model wrote "Sat: Closed" where the judge wanted "Saturday"; a person would have accepted both, so the judges changed and the model did not. What that run did find and fix: a closing reply that opened with the template's own `<|channel>thought<channel|>` — stripped at the reply reader since | the same owner in English, on an English site (config.language en, English slugs and menu) |
+
+"Owner turns" count what a person typed or clicked: the wish, a shrug when the model asked ("you decide"), a yes to a plan, the approval. The Mac's dreams page on the English site is generated from these JSONs.
 
 Organizer, final prompt: 27 runs → 25 PASS (92.6%), 24 strict, avg 23 s, p95 50 s, ~3,166 prompt tokens (lite pack); the first prompt scored 7/16 before the fold-tag rule and the scorer's home-as-URL fix. Non-passes on the final prompt: both on nested-existing — a "רק סדר" brief on a nested menu that already fits one row: one reply echoed the menu (NO_CHANGE after the repair round), one dissolved a group (7 top items against the fixture's 6) — the one fixture still under 3/3; every other fixture scored 3/3. Theme-designer: 10/10 PASS, avg 137 s. The live route smoke: PASS — one round, 29 s, the door accepted a fold after 7 items (669px of 880px), nothing applied. The full tables are in `docs/INJECTION-EVAL.md` and the Version Log row for v2.28 in `docs/ROADMAP.md`.
 

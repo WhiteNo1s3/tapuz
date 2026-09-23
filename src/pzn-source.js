@@ -37,11 +37,18 @@ function lineToPzn(lineSource) {
   const r = compile(lineSource);
   const pznApi = require('./pzn/index');
   const page = r.page || {};
+  // v2.58 — the keyword parser (bundled for the browser, so it knows no site)
+  // defaults a silent META to Hebrew/rtl; here, at the door, a document that
+  // never SAID its direction is the site's
+  const sl = require('./site-language');
+  const saidDir = /^\s*direction\s*:\s*["']?(rtl|ltr)\b/im.test(lineSource);
+  const saidLang = /^\s*lang\s*:\s*["']?(he|en)\b/im.test(lineSource);
+  const direction = saidDir ? page.direction : sl.siteDirection();
   const doc = pznApi.fromTapuzPage({
     title: page.title || '',
     slug: page.slug || '',
-    lang: page.lang || 'he',
-    direction: page.direction || 'rtl',
+    lang: saidLang ? page.lang : (saidDir ? sl.languageFor(direction) : sl.siteLanguage()),
+    direction,
     tags: page.tags || [],
     meta: page.meta || {},
     blocks: r.blocks
@@ -73,7 +80,8 @@ function toPznSource(raw) {
 function fragmentShell(source) {
   const s = String(source || '');
   if (/<html[\s>]/i.test(s)) return s;
-  return '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8" /><title></title></head>\n<body>\n' + s + '\n</body>\n</html>';
+  const sl = require('./site-language');
+  return '<!DOCTYPE html>\n<html lang="' + sl.siteLanguage() + '" dir="' + sl.siteDirection() + '" bent-version="0.1">\n<head><meta charset="utf-8" /><title></title></head>\n<body>\n' + s + '\n</body>\n</html>';
 }
 
 /**
@@ -123,6 +131,14 @@ function pznSourceToBlocks(rawSource) {
   // the denominator. Guarded inside; can never affect the parse.
   require('./pzn-repair-stats').record({ changes, repaired });
   const view = pznApi.toTapuzPage(doc);
+  // v2.58 — a pasted document that never says which way it reads is the
+  // site's (the parser's own default is Hebrew/rtl; only a head that SAYS
+  // `dir` speaks for the page)
+  if (!/<html\b[^>]*\sdir\s*=/i.test(source)) {
+    const sl = require('./site-language');
+    view.direction = sl.siteDirection();
+    if (!/<html\b[^>]*\slang\s*=/i.test(source)) view.lang = sl.siteLanguage();
+  }
   return { view, doc, repaired, changes, dialect: ex.dialect, extracted: ex.changes };
 }
 

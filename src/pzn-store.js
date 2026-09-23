@@ -64,8 +64,11 @@ function pageToPzn(page, blocks) {
   const doc = fromTapuzPage({
     title: page.title || '',
     slug: page.full_path || page.slug || '',
-    direction: page.direction || 'rtl',
-    lang: page.lang || 'he',
+    // v2.58 — a page with no direction of its own is the site's, and its
+    // language follows its direction (a page turned around with the site
+    // gets the head the site now speaks)
+    direction: page.direction || require('./site-language').siteDirection(),
+    lang: page.lang || require('./site-language').languageFor(page.direction || require('./site-language').siteDirection()),
     tags: Array.isArray(page.tags) ? page.tags : [],
     meta: page.meta || {},
     blocks: blocks || []
