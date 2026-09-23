@@ -855,7 +855,12 @@
       if (ok) await showApplied(d.applied);
       renderTurn(d);
     } catch (e) {
-      errorBubble(e);
+      // v2.61 — the draft already landed this turn (the continuation carried
+      // it); whatever stopped the model's closing words is not an error to
+      // the owner. Live: the Bridge's two silent minutes ended in red, eight
+      // minutes after ✓ had saved the page.
+      if (appliedShown) bubble('system', esc('המודל השתתק לפני שסיכם במילים (' + (e && e.message ? e.message : e) + ') — זה לא משנה דבר: השינוי כבר בדף.'), 'warn');
+      else errorBubble(e);
     } finally {
       setInflight(false);
     }
