@@ -670,6 +670,29 @@ function waitUp(tries = 40) {
       check('a leaked chat-template token (<|channel>thought<channel|>) is stripped from the reply — the owner reads only the words',
         !!(tk2 && tk2.ok) && tk2.reply === 'שלום! במה אפשר לעזור?');
 
+      // v2.59 — the reply budget follows the page the turn READ, and a document cut at the
+      // budget gets ONE more call with a larger one (measured live: a 67-module page, "add one
+      // paragraph", cut at 4,096 tokens with a 262K window and the owner told to grow the window)
+      {
+        const para = '<bent-text>' + 'שורה של טקסט ארוך למדי כדי שהדף יהיה גדול מתקציב התשובה הרגיל, עם מספיק מילים בעברית. '.repeat(2) + '</bent-text>';
+        const longSource = '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/><title>דף ארוך</title><meta name="bent-slug" content="long-page"/></head>\n<body>\n' + Array.from({ length: 70 }, (_, i) => '  <bent-heading level="2">פרק ' + (i + 1) + '</bent-heading>\n  ' + para).join('\n') + '\n</body></html>';
+        const made = parse(await req('POST', '/admin/api/pzn/create-from-source', { cookie, json: { source: longSource } }));
+        const longSlug = (made && made.fullPath) || 'long-page';
+        const l1 = parse(await say({ message: 'הוסף שורה בסוף הדף', history: [], context: { canvas: 'page', surface: 'copilot', page: longSlug }, window: big }));
+        const before = l1 && l1.modelCall ? l1.modelCall.body.max_tokens : 0;
+        const l2 = parse(await say({ step: { id: l1 && l1.modelCall ? l1.modelCall.id : 'x', result: toolCall('rl', 'read_page', { slug: longSlug }) } }));
+        const after = l2 && l2.modelCall ? l2.modelCall.body.max_tokens : 0;
+        const need = Math.ceil(longSource.length / 3 * 1.25) + 512;
+        check('the reply budget grows with the page the turn read (' + before + ' → ' + after + ' tokens for a ' + longSource.length + '-char page; ' + need + ' needed)',
+          before > 0 && after >= need && after > before);
+        const cut = { choices: [{ finish_reason: 'length', message: { role: 'assistant', content: '', tool_calls: [{ id: 'cut1', type: 'function', function: { name: 'edit_page', arguments: JSON.stringify({ slug: longSlug, source: longSource.slice(0, 400) }) } }] } }] };
+        const l3 = parse(await say({ step: { id: l2 && l2.modelCall ? l2.modelCall.id : 'x', result: cut } }));
+        check('a document cut at the budget is sent ONCE more with a larger budget, and the owner is told (' + after + ' → ' + (l3 && l3.modelCall ? l3.modelCall.body.max_tokens : '-') + ')',
+          !!(l3 && l3.ok && l3.modelCall) && l3.modelCall.body.max_tokens > after && /תקציב תשובה גדול יותר/.test(l3.notice || ''));
+        const l4 = parse(await say({ step: { id: l3 && l3.modelCall ? l3.modelCall.id : 'x', result: cut } }));
+        check('…and a second cut is the honest error, REPLY_CUT, with no pending and nothing written', !!(l4 && l4.ok === false && l4.code === 'REPLY_CUT') && !(l4 && l4.pending));
+      }
+
       // GATE 3 on the wire — the weaker mode: no tool call, the menu PRINTED
       const w1 = parse(await say({ message: 'סדר את התפריט', history: [], context: { canvas: 'menu', surface: 'copilot' }, window: big }));
       const rawMid = JSON.stringify(await getMenus());
