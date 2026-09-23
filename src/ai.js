@@ -1274,6 +1274,10 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       page: context && typeof context === 'object' && context.page ? String(context.page).slice(0, 200) : '',
       used: [],
       reads: [],
+      // v2.59 — the largest page this turn READ, in chars: an edit rewrites the
+      // whole page, so the reply budget must at least hold it (plan)
+      readChars: 0,
+      cut: false,            // v2.59 — the one retry a cut document gets
       hop: 0,
       shrinks: 0,
       blind: 0,
@@ -1343,8 +1347,17 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     const extraChars = win.turnsChars(st.extra);
     const turns = win.fitTurns(st.base, pt.roomChars === Infinity ? Infinity : pt.roomChars - extraChars).concat(st.extra);
     const reserve = w.tokens === Infinity ? Math.max(4096, provider.maxTokens || 4096) : win.replyReserve(w.tokens);
+    // v2.59 — an edit rewrites the WHOLE page. The reserve is a quarter of the
+    // window capped at 4,096 tokens, and a 67-module page read this turn is
+    // more than that: measured on the English site, "add one paragraph, touch
+    // nothing else" came back cut at 4,096 with the owner told to grow a
+    // 262K window. So the budget grows with the largest page the turn read
+    // (≈ 3 chars a token for a BenTML page, a quarter more for the change),
+    // bounded by what the window has left after the prompt.
+    const fromRead = st.readChars ? Math.min(THINK_MAX_TOKENS, Math.ceil(st.readChars / 3 * 1.25) + 512) : 0;
+    const roomForReply = w.tokens === Infinity ? Infinity : Math.max(reserve, w.tokens - pt.promptTokens - win.TEMPLATE_HEADROOM_TOKENS);
     // v2.50 — a model that thought its budget away this turn gets the larger one for the retry (st.replyBudget)
-    const maxTokens = Math.max(reserve, st.replyBudget || 0);
+    const maxTokens = Math.max(reserve, st.replyBudget || 0, Math.min(fromRead, roomForReply));
     st.lastReplyBudget = maxTokens;
     const body = composeBody(provider, s, sys, turns, defs, maxTokens, st.effort);
     const tChars = win.turnsChars(turns);
@@ -1534,7 +1547,16 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     }
     if (reply.finish === 'length' && reply.calls.length) {
       // a document cut mid-way must never become a pending: approving it
-      // would save half a page over a whole one
+      // would save half a page over a whole one. v2.59 — but it gets ONE more
+      // call with a larger budget first, the way a thinker does: the page it
+      // rewrites may simply be bigger than the reserve
+      const next = st.cut ? 0 : biggerBudget(st.replyBudget || st.lastReplyBudget, known.tokens || windowFor(provider, st.key).tokens, usage.prompt_tokens);
+      if (next) {
+        st.cut = true;
+        st.replyBudget = next;
+        st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.cutRetry;
+        continue; // like a shrink: it does not consume a hop
+      }
       throw coded(win.HE.replyCut, 'REPLY_CUT');
     }
     if (!reply.calls.length) {
@@ -1598,7 +1620,10 @@ async function converse({ system = '', systemFor = null, user = '', history = []
         const out = t.run(c.input, { maxSourceChars: allowance });
         // reads[] = pages the model actually READ; a refused read (tooLong,
         // source '') is not one — the canvas follows what the robot saw
-        if (c.name === 'read_page' && out && out.slug && !out.tooLong) st.reads.push(out.slug);
+        if (c.name === 'read_page' && out && out.slug && !out.tooLong) {
+          st.reads.push(out.slug);
+          st.readChars = Math.max(st.readChars, String(out.source || '').length);
+        }
         results.push({ id: c.id, output: out });
       } catch (e) {
         results.push({ id: c.id, output: { error: e.message }, isError: true });

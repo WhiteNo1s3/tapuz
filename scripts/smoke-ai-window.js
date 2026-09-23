@@ -460,9 +460,13 @@ require('../src/pages').savePageSource('home', PZN('הבית', 'שלום', 'home
 
   // (e) reply hygiene
   ai.saveSettings({ model: 'm-e' });
-  scripted = [ok({ choices: [{ message: { content: 'חצי מסמך', tool_calls: [{ id: 'k1', type: 'function', function: { name: 'edit_page', arguments: '{"slug":"home","source":"<!DOCTYPE' } }] }, finish_reason: 'length' }] })];
+  // v2.59 — a document cut at the budget gets ONE more call with a larger budget before REPLY_CUT
+  const cutReply = () => ok({ choices: [{ message: { content: 'חצי מסמך', tool_calls: [{ id: 'k1', type: 'function', function: { name: 'edit_page', arguments: '{"slug":"home","source":"<!DOCTYPE' } }] }, finish_reason: 'length' }] });
+  scripted = [cutReply(), cutReply()];
+  seen = [];
   const e1 = await rejects(() => ai.converse({ systemFor, user: 'ערוך' }), 'REPLY_CUT');
-  check('(e) finish "length" WITH tool_calls → REPLY_CUT (never a pending)', e1 && /נחתכה/.test(e1.message));
+  check('(e) finish "length" WITH tool_calls → one more call with a larger budget, then REPLY_CUT (never a pending)',
+    e1 && /נחתכה/.test(e1.message) && seen.length === 2 && Number(seen[1].max_tokens) > Number(seen[0].max_tokens));
   scripted = [ok({ choices: [{ message: { content: 'טקסט שנחתך' }, finish_reason: 'length' }] })];
   const e2 = await ai.converse({ systemFor, user: 'ספר' });
   check('(e) finish "length" with text → the text + truncated:true', e2.reply === 'טקסט שנחתך' && e2.truncated === true);
