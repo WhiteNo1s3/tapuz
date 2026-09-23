@@ -292,6 +292,27 @@ Ben, reading the first scorecards: *"the prompts given to the llm are not struct
 
 Checks are **hard** (site state) or **soft** (wording); a scenario passes on its hard checks and lists its soft misses. Every turn — what was sent, what the card held, the reply, the seconds — is written to `eval/battery/<stamp>-<model>-<courier>.json` (+ `.md`); `eval/` is git-ignored. Results: §5.
 
+### The English track — the same owner, on an English site (v2.58)
+
+```bash
+LOCAL_LLM_BASE=… LOCAL_LLM_MODEL=… node scripts/battery-copilot.js --track=english [--courier=extension]     # E1–E10
+```
+
+Ben (2026-09-23): *"our system is supporting english even in menu … lets make it not rtl automatically when it selects english."* The scratch site is seeded in English — `config.language en`, the live-10 fixture translated at seed time (English slugs, titles and menu labels; the same ten pages, the same menu shape, so every judge that counts pages holds) — and the owner asks in English. Each dream reuses the dreams track's judges and adds the English site's own questions: **it answers me in English**, **the page reads left to right** (`direction ltr`, `<html lang="en" dir="ltr">`), **no Hebrew slipped in**, the menu's group names are English words.
+
+| | the owner says | what a person would expect afterwards |
+|---|---|---|
+| E1 | "Hi! I am opening a small ceramics studio in Jaffa…" | an English page proposal that passes the builder's questions, reads ltr, speaks about her studio |
+| E2 | "This page looks dry and boring to me. Give it some life, but do not delete what I wrote." | an edit of THIS page; her sentence still there; the page grew; still ltr; published untouched |
+| E3 | "People tell me they cannot find how to contact me. Can you help?" | something DONE on a card; contact easier to reach (D4's rule, English slugs) |
+| E4 | "My menu became a mess… Tidy it up so it is pleasant to look at." | a menu card; one row; no page lost; English group names |
+| E5 | "I have a holiday sale — 20% off everything… Put it on this page wherever you think is right." | the sale on the page; the rest survived; published untouched |
+| E6 | "hey please add to the builder page some sentence about it being free and that no credit card is needed thanks" | it finds "the builder page" by name; free · credit card on it |
+| E7 | "Add to this page a recommendation from my customer, Dana from Ramat Gan. She wrote me: «…»" | Dana's sentence verbatim; who said it |
+| E8 | a banner, approved — then "Oh no… Put the page back the way it was before." | the banner gone; what she had is back |
+| E9 | "Our opening hours changed: Sunday to Thursday 9:00 to 18:00… Update it wherever it belongs." | a page card; the hours as given; nothing live; soft: the contact page, edited not created |
+| E10 | "I am not happy with the site, it does not feel like "me"… What do you suggest?" | a conversation in English; no card; nothing written |
+
 ## 3ב. What the door does for a model that is almost right (v2.45)
 
 The family run (§5) showed that a 12B or a 4B-active MoE is *nearly* able to drive the copilot — and loses whole scenarios to a few small habits, none of which is about understanding the owner. Each now has an answer in the tool loop; all three keep the rule that **nothing is written without ✓**.
@@ -367,7 +388,7 @@ The model on the Mac that night was the one another agent had loaded — `lmstud
 |---|---|---|---|---|
 | dreams D1–D14 | relay | **14/14** · 1 soft miss (D11: "still her page — her name, her street") · 830 s | 2.4 owner turns per dream on average | the copilot on this Mac, the protocol the Bridge speaks |
 | dreams D1 | **extension** | **1/1** · 84 s · 5 relayed calls, 12/37/6/21 frames streamed, answered by the named model | the sentence typed, two shrugs, the card clicked | the Bridge V2 0.5.5 Chrome build in Chrome 153, through the copilot's own screen |
-| dreams D1–D14 | **extension** | EXT_DREAMS_RESULT | | the whole track through the extension |
+| dreams D1–D14 | **extension** | **14/14** · 1 soft miss (D11: "still her page — her name, her street") · 540 s · 63 relayed calls, 515 streamed frames, 0 bridge errors, every call answered by `tapuz-mlx-gemma-26b-a4b-8bit` | 2.4 owner turns per dream (typed and clicked on the real screen) | the whole track through the extension |
 | english E1–E10 | **extension** | EXT_ENGLISH_RESULT | | the same owner in English, on an English site (config.language en, English slugs and menu) |
 
 "Owner turns" count what a person typed or clicked: the wish, a shrug when the model asked ("you decide"), a yes to a plan, the approval. The Mac's dreams page on the English site is generated from these JSONs.
