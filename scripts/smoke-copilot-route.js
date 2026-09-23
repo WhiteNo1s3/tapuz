@@ -531,17 +531,51 @@ function waitUp(tries = 40) {
     check('approve → applied.edited on the page "home"',
       !!(ok1 && ok1.ok && ok1.applied && ok1.applied.edited === true && ok1.applied.slug === 'home'));
     if (ok1 && ok1.modelCall) {
-      // v2.60 — the model's closing turn proposes the SAME edit it just had approved (seen live and in
-      // the battery): no second card — the call is answered "already saved", the owner is told once,
-      // and the model then closes in words
+      // v2.60/v2.61 — the model's closing turn proposes the SAME edit it just had approved (seen live and
+      // in the battery): no second card, and the TURN ENDS with the page's closing word — the owner is told
+      // once that the double proposal was skipped. (v2.60 answered the model instead; live that cost three
+      // more copies of the page, the input locked for eight minutes, and a red error after ✓ had saved it.)
       const again = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: ok1.modelCall.id, result: toolCall('again', 'edit_page', { slug: 'home', source: PROPOSED }) } } }));
-      const answered = again && again.modelCall ? (again.modelCall.body.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'again').pop() : null;
-      check('the closing turn repeating the write it just saved opens NO second card — the call is answered "already saved" and the owner is told once',
-        !!(again && again.ok && !again.pending && again.modelCall) && !!answered && /"alreadySaved":true/.test(String(answered.content || '')) && /הצעה הכפולה/.test(again.notice || ''));
-      // a proposal that DIFFERS is a new change and gets its card, as ever
-      const differs = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: again && again.modelCall ? again.modelCall.id : 'x', result: toolCall('diff', 'edit_page', { slug: 'home', source: PROPOSED.replace('</body>', '  <bent-text id="more">עוד שורה</bent-text>\n</body>') }) } } }));
-      check('…while a closing-turn proposal that DIFFERS from the saved draft still gets its card', !!(differs && differs.pending && differs.pending.tool === 'edit_page'));
+      check('the closing turn repeating the write it just saved opens NO second card and ENDS the turn — no further model call, the draft named as saved, the owner told once',
+        !!(again && again.ok && !again.pending && !again.modelCall && again.applied && again.applied.slug === 'home') && /הצעה הכפולה/.test(again.notice || '') && /הטיוטה נשמרה ✓/.test(again.reply || ''));
+    }
+    const TURN = { history: [], context: { page: 'home', canvas: 'page', surface: 'copilot' }, window: { tokens: 8192, source: 'bridge' } };
+    const PROPOSED_B = PROPOSED.replace('</body>', '  <bent-text id="b">שורה ב</bent-text>\n</body>');
+    {
+      // a closing-turn proposal that DIFFERS from the saved draft is a new change and gets its card, as ever
+      const u1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'הוסף שורה ב', ...TURN } }));
+      const u2 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: u1 && u1.modelCall ? u1.modelCall.id : 'x', result: toolCall('b1', 'edit_page', { slug: 'home', source: PROPOSED_B }) } } }));
+      const okB = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { approve: { id: u2 && u2.pending ? u2.pending.id : 'x', ok: true } } }));
+      const differs = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: okB && okB.modelCall ? okB.modelCall.id : 'x', result: toolCall('diff', 'edit_page', { slug: 'home', source: PROPOSED_B.replace('</body>', '  <bent-text id="more">עוד שורה</bent-text>\n</body>') }) } } }));
+      check('…while a closing-turn proposal that DIFFERS from the saved draft still gets its card',
+        !!(okB && okB.applied && okB.applied.slug === 'home') && !!(differs && differs.pending && differs.pending.tool === 'edit_page'));
       await req('POST', '/admin/api/ai/chat', { cookie, json: { approve: { id: differs && differs.pending ? differs.pending.id : 'x', ok: false } } });
+    }
+    {
+      // v2.61 — an edit that changes nothing is not a card. Live (the dreams page): asked to change the last
+      // line, the model proposed the page exactly as it was; the card showed, ✓, "applied" — nothing changed.
+      // The first unchanged page goes back to the model as a refusal; the second ends the turn with the reason.
+      const cur = parse(await req('GET', '/admin/api/pzn/source?fullPath=home', { cookie }));
+      const n1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'שנה את השורה האחרונה', ...TURN } }));
+      const n2 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: n1 && n1.modelCall ? n1.modelCall.id : 'x', result: toolCall('n1', 'edit_page', { slug: 'home', source: cur && cur.source }) } } }));
+      const n2ans = n2 && n2.modelCall ? (n2.modelCall.body.messages || []).filter((m) => m.role === 'tool' && m.tool_call_id === 'n1').pop() : null;
+      check('an edit_page identical to the current draft opens NO card — the call is answered "nothing would change: do the change, or say so in words" and the owner is told',
+        !!(n2 && n2.ok && !n2.pending && n2.modelCall) && !!n2ans && /שום דבר לא ישתנה/.test(String(n2ans.content || '')) && /בלי שום שינוי/.test(n2.notice || ''));
+      const n3 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: n2 && n2.modelCall ? n2.modelCall.id : 'x', result: toolCall('n2', 'edit_page', { slug: 'home', source: cur && cur.source }) } } }));
+      check('…and a second unchanged page ends the turn with the reason — no card, no further call, the draft untouched',
+        !!(n3 && n3.ok && !n3.pending && !n3.modelCall && !n3.applied) && /לא מצא מה לשנות/.test(n3.memo || ''));
+    }
+    {
+      // v2.61 — nothing that happens AFTER the draft landed is an error: the closing turn's model call fails →
+      // 200, the draft named as saved, the reason in one quiet line (live: a red "check LM Studio" eight minutes after ✓)
+      const q1 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { message: 'ערוך שוב', ...TURN } }));
+      const q2 = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: q1 && q1.modelCall ? q1.modelCall.id : 'x', result: toolCall('q1', 'edit_page', { slug: 'home', source: PROPOSED }) } } }));
+      const okQ = parse(await req('POST', '/admin/api/ai/chat', { cookie, json: { approve: { id: q2 && q2.pending ? q2.pending.id : 'x', ok: true } } }));
+      const quiet = await req('POST', '/admin/api/ai/chat', { cookie, json: { step: { id: okQ && okQ.modelCall ? okQ.modelCall.id : 'x', result: { error: { message: 'boom' } } } } });
+      const quietD = parse(quiet);
+      check('a provider error in the closing turn AFTER the draft landed → 200 with applied, the closing word, and the reason in the notice — never a red error',
+        quiet.status === 200 && !!(quietD && quietD.ok && !quietD.pending && !quietD.modelCall && quietD.applied && quietD.applied.slug === 'home') &&
+        /הטיוטה נשמרה ✓/.test(quietD.reply || '') && /השתתק/.test(quietD.notice || '') && /boom/.test(quietD.notice || ''));
     }
     const draftAfter = parse(await req('GET', '/admin/api/pzn/source?fullPath=home', { cookie }));
     const publishedAfter = parse(await req('GET', '/admin/api/pzn/source?fullPath=home&kind=published', { cookie }));

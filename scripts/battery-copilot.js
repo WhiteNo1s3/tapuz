@@ -887,6 +887,10 @@ async function landDream(chat, c, d, dream) {
     // v2.60 — the write it just had approved must not come back as a second card (the door drops an identical one;
     // a DIFFERENT proposal is a new change and may show — counted here as the habit it is)
     c.soft('the closing turn opens no second card after the approval', !ok.pending);
+    // v2.61 — the door ENDS the turn on a repeated proposal; the habit is still counted, so a model that
+    // re-sends the page it just saved shows here as the habit it is (the owner saw one quiet line)
+    c.soft('…and the model did not re-send the page it just saved (the door had to close the turn for it)', !/הצעה הכפולה/.test(ok.notice || ''));
+    c.soft('…and the turn ended in words, not in a stall after the draft (the door had to speak for it)', !/השתתק/.test(ok.notice || ''));
     return (ok.applied && ok.applied.slug) || '';
   }
   if (!d.pending && PRINTED_PAGE(d.reply)) {

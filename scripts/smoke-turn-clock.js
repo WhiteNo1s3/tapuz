@@ -71,12 +71,20 @@ function harness() {
   t.h.progress({ chars: 5400, tokens: 0, started: true, tool: 'edit_page' });
   t.tick(45);
   check('a count in characters when the text went into a tool call (tokens 0)', t.posted[5] === '✍ המודל כותב — 5,400 תווים עד עכשיו · 4:30');
+  // v2.61 — the count stands still INSIDE a tool call: the page is coming whole, not "gone quiet"
+  // (live: four tokens of text, then edit_page for two minutes, and the line said "check LM Studio")
   t.tick(45);
-  check('no growth for a whole tick → "gone quiet, check LM Studio"',
-    /^⏸ המודל לא כתב כלום ב-45 השניות האחרונות — 5:15\./.test(t.posted[6]) && /LM Studio/.test(t.posted[6]));
+  check('no growth while a tool call is open → "still writing the page, it arrives whole" — not "check LM Studio"',
+    /^✍ המודל כותב את השינויים בדף — 5:15\./.test(t.posted[6]) && /בבת אחת/.test(t.posted[6]) && !/LM Studio/.test(t.posted[6]));
+  t.tick(45);
+  check('…and the short form after that', t.posted[7] === '✍ עדיין כותב את השינויים בדף — 6:00');
+  t.h.progress({ chars: 5400, tokens: 0, started: true, tool: '' }); // plain text, and it stopped growing
+  t.tick(45);
+  check('no growth with NO tool call open → "gone quiet, check LM Studio"',
+    /^⏸ המודל לא כתב כלום ב-45 השניות האחרונות — 6:45\./.test(t.posted[8]) && /LM Studio/.test(t.posted[8]));
   t.h.progress({ chars: 0, tokens: 0, started: false, tool: '' }); // the next relayed call of the same turn
   t.tick(45);
-  check('the next call (count dropped, not started) → reading again, explained again', /^⏳ המודל עדיין קורא את התדריך והשיחה — 6:00\./.test(t.posted[7]));
+  check('the next call (count dropped, not started) → reading again, explained again', /^⏳ המודל עדיין קורא את התדריך והשיחה — 7:30\./.test(t.posted[9]));
   t.h.stop();
   t.h.stop();
   check('stop clears the interval exactly once (twice is harmless)', t.cleared === 1);
@@ -100,6 +108,8 @@ check('status: started into create_page → writing the page, arriving whole', T
 check('status: an older bridge (no started) → only "working"', TC.status({ chars: 0, tokens: 0 }) === '⏳ המודל שלכם עובד…');
 check('status: writing counts tokens, or characters when the text goes into a tool call',
   TC.status({ chars: 900, tokens: 240 }) === '✍ המודל שלכם כותב… 240 טוקנים' && TC.status({ chars: 5400, tokens: 0 }) === '✍ המודל שלכם כותב… 5,400 תווים');
+check('status (v2.61): a few words of text and then edit_page → the page is what is coming, not "4 tokens"',
+  TC.status({ chars: 4, tokens: 4, started: true, tool: 'edit_page' }) === '✍ המודל שלכם כותב את השינויים בדף… (מגיע בבת אחת בסוף)');
 
 // ── a server-side call: no progress channel, no invented detail ──
 {

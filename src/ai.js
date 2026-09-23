@@ -1429,9 +1429,12 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     };
   };
 
+  // v2.61 — the closing word when the draft has landed and the model has none
+  const closingFor = (a) => (a && a.organized ? win.HE.organizedClosing : win.HE.savedClosing);
+  try {
   for (;;) {
     if (st.hop >= MAX_TOOL_HOPS) {
-      return envelope({ reply: 'עצרתי אחרי יותר מדי צעדים — נסחו את הבקשה מחדש בבקשה.' });
+      return envelope({ reply: st.applied ? closingFor(st.applied) : 'עצרתי אחרי יותר מדי צעדים — נסחו את הבקשה מחדש בבקשה.' });
     }
     let data;
     let status = 200;
@@ -1695,10 +1698,34 @@ async function converse({ system = '', systemFor = null, user = '', history = []
       // draft it just saved is answered — "already saved, say so in words" —
       // and never shown; a proposal that DIFFERS is a new change and gets its
       // card, as ever. Ids and whitespace do not make two documents different.
-      if (st.applied && st.applied.slug && write.name === 'edit_page' && String(write.input.slug || '').trim() === String(st.applied.slug)
-        && sameDocument(write.input.source, require('./pages').getPageSource(st.applied.slug, 'draft'))) {
-        results.push({ id: write.id, output: { done: true, alreadySaved: true, slug: st.applied.slug, instruction: win.HE.repeatForModel } });
+      const editSlug = write.name === 'edit_page' ? String(write.input.slug || '').trim() : '';
+      const current = editSlug ? require('./pages').getPageSource(editSlug, 'draft') : null;
+      const unchanged = !!editSlug && typeof current === 'string' && !!current && sameDocument(write.input.source, current);
+      if (unchanged && st.applied && st.applied.slug && editSlug === String(st.applied.slug)) {
+        // v2.61 — and the turn ENDS here, with the page's own closing word.
+        // Measured live (2026-09-24, the dreams page, Gemma 4 26B-A4B through
+        // the Bridge): answered "already saved, say so in words", the model
+        // sent the same document again, and again, and again — two minutes
+        // of the owner's GPU per copy, the input locked for eight minutes
+        // after the draft had landed, and a red "check LM Studio" when the
+        // fourth copy stalled. An owner who pressed ✓ is done.
         st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.repeatDropped;
+        return envelope({ reply: (reply.text ? String(reply.text).trim() + '\n\n' : '') + win.HE.savedClosing });
+      }
+      if (unchanged) {
+        // v2.61 — an edit that changes nothing is not a card. Live, the same
+        // night: asked to change the page's last line, the model read the page
+        // and proposed it exactly as it was; the card showed, ✓ was pressed,
+        // "applied" — and nothing had changed. The call is answered like any
+        // refusal (do the change, or say in words what you could not find),
+        // once; a second unchanged page ends the turn with the reason.
+        st.noChange = (st.noChange || 0) + 1;
+        if (st.noChange > 1) {
+          st.memo = win.HE.noChangeGaveUp;
+          return envelope({ reply: reply.text || '' });
+        }
+        results.push({ id: write.id, output: { error: win.HE.noChange, proposed: false, fix: win.HE.noChangeFix }, isError: true });
+        st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.noChangeNotice;
         st.extra = appendToolTurn(style, st.extra, reply, results);
         st.hop++;
         continue;
@@ -1720,6 +1747,19 @@ async function converse({ system = '', systemFor = null, user = '', history = []
     }
     st.extra = appendToolTurn(style, st.extra, reply, results);
     st.hop++;
+  }
+  } catch (e) {
+    // v2.61 — nothing that happens AFTER the draft landed is an error to the
+    // owner. Live: the closing turn's fourth copy of the page stalled, the
+    // Bridge gave up after two silent minutes, and the chat ended in red —
+    // "the local model did not answer in time, check LM Studio" — eight
+    // minutes after ✓ had saved the draft. The draft is saved; the owner is
+    // told so, and why the summary is missing, in one quiet line.
+    if (st.applied) {
+      st.notice = (st.notice ? st.notice + ' ' : '') + win.HE.savedButQuiet(e && e.message ? e.message : String(e));
+      return envelope({ reply: closingFor(st.applied) });
+    }
+    throw e;
   }
 }
 

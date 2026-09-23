@@ -74,6 +74,16 @@
       var count = st.tokens > 0 ? fmt(st.tokens) + ' טוקנים' : fmt(st.chars) + ' תווים';
       return '✍ המודל כותב — ' + count + ' עד עכשיו · ' + t;
     }
+    // v2.61 — a count that stands still because the model is writing INTO a
+    // tool call (LM Studio delivers that text whole, at the end). Measured
+    // live: four tokens of text, then edit_page for two minutes, and this
+    // line said "wrote nothing — check LM Studio" while the page was coming.
+    if (st.started === true && st.tool) {
+      var into = TOOL_WORDS[st.tool] || 'לתוך ' + st.tool;
+      return st.saidWriting
+        ? '✍ עדיין כותב ' + into + ' — ' + t
+        : '✍ המודל כותב ' + into + ' — ' + t + '. דף כזה מגיע בבת אחת כשהוא גמור, ולכן המונה עומד.';
+    }
     return '⏸ המודל לא כתב כלום ב-45 השניות האחרונות — ' + t + '. אם זה נמשך, בדקו את LM Studio.';
   }
 
@@ -90,6 +100,8 @@
       if (p && p.started === false) return '⏳ המודל שלכם קורא את התדריך…';
       return '⏳ המודל שלכם עובד…';
     }
+    // v2.61 — a few words of text, then a page into a tool call: the page is what is coming
+    if (p && p.started === true && p.tool) return '✍ המודל שלכם כותב ' + (TOOL_WORDS[p.tool] || p.tool) + '… (מגיע בבת אחת בסוף)';
     return '✍ המודל שלכם כותב… ' + (tokens > 0 ? fmt(tokens) + ' טוקנים' : fmt(chars) + ' תווים');
   }
 
@@ -108,7 +120,7 @@
     var timer = every(function () {
       var text = line(st, now() - t0);
       if (st.relayed && st.chars === 0 && st.started !== true) st.saidReading = true;
-      if (st.relayed && st.chars === 0 && st.started === true && st.tool) st.saidWriting = true;
+      if (st.relayed && st.started === true && st.tool && st.chars <= st.lastChars) st.saidWriting = true;
       st.lastChars = st.chars;
       try { post(text); } catch (e) { /* a UI that throws must not stop the turn */ }
     }, opts.tickMs || TICK_MS);
@@ -121,11 +133,14 @@
         // next relayed call of the same turn (after a tool hop or an
         // approval): the model is reading again
         if (chars < st.chars || (st.started === true && started === false)) { st.lastChars = 0; st.saidReading = false; st.saidWriting = false; }
+        var tool = (p && typeof p.tool === 'string') ? p.tool : '';
+        // a different tool call is a new page on its way: explain it once more
+        if (tool && tool !== st.tool) st.saidWriting = false;
         st.relayed = true;
         st.chars = chars;
         st.tokens = tokens;
         st.started = started;
-        st.tool = (p && typeof p.tool === 'string') ? p.tool : '';
+        st.tool = tool;
       },
       stop: function () {
         if (timer === null) return;
