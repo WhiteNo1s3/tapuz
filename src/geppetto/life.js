@@ -1819,7 +1819,7 @@ function takeNav(items, box, u, siteTitle, opts = {}) {
   // a design tool groups its header: the labels sit inside a frame called
   // "Navigation", not loose on the page. Look inside such a frame — and when its
   // words become the menu, the whole frame leaves the page with them.
-  const navGroups = items.filter((n) => n.type === 'group' && n.children && n.children.length && anyRole(n) === 'nav');
+  const navGroups = items.filter((n) => n.type === 'group' && n.children && n.children.length && anyRole(n) === 'nav' && n.y + n.h <= bandBottom + 20 * u);
   const pool = items.filter((n) => navGroups.indexOf(n) < 0);
   const holder = new Map();
   for (const g of navGroups) {
@@ -1830,7 +1830,10 @@ function takeNav(items, box, u, siteTitle, opts = {}) {
   // the brand is settled BEFORE the items, or it becomes one of them: in a band
   // that only its name marks as a menu, nothing else tells the site's own name
   // apart from a link label
-  const namedBand = opts.role === 'nav' || navGroups.length > 0 || pool.some((n) => anyRole(n) === 'nav');
+  // "this band is a menu" may come from a group inside it, or from the band's
+  // own name — but only when the band is a thin strip, never from a page-sized
+  // section that merely happens to be called "Header"
+  const namedBand = (opts.role === 'nav' && opts.thin === true) || navGroups.length > 0 || pool.some((n) => anyRole(n) === 'nav');
   const inBandEarly = pool.filter((n) => n.y + n.h <= bandBottom + 20 * u);
   let preBrand = inBandEarly.find((n) => ownRole(n) === 'brand');
   if (!preBrand && namedBand) {
@@ -1852,7 +1855,7 @@ function takeNav(items, box, u, siteTitle, opts = {}) {
   // a design tool's export has no links at all (an SVG carries none, a Figma frame
   // may simply not be wired): when the band is NAMED a menu, its labels are menu
   // items even with nowhere to point yet — finish() matches them to the sections
-  const namedNav = opts.role === 'nav' || cands.some((n) => anyRole(n) === 'nav');
+  const namedNav = namedBand || cands.some((n) => anyRole(n) === 'nav');
   const navItems = sorted.map((n) => ({
     label: cleanLabel(n.type === 'button' ? n.label : shownText(n)),
     href: symbolic(n.type === 'button' ? n.href : (nodeHref(n) || firstHref(n)))
@@ -1874,7 +1877,9 @@ function takeNav(items, box, u, siteTitle, opts = {}) {
       ? { text: shownText(brandCand).replace(/\s+/g, ' ').trim() }
       : { image: brandCand.src, alt: brandCand.alt || siteTitle || '' };
   }
-  return { items: navItems, brand, removed };
+  // the report credits a name only when a name is what produced this menu
+  const byName = namedNav && navItems.some((it) => !it.href);
+  return { items: navItems, brand, removed, named: byName || (!!preBrand && ownRole(preBrand) === 'brand') };
 }
 
 // ── section containers ────────────────────────────────────────────────────
@@ -1961,7 +1966,11 @@ function breathe(puppet, opts = {}) {
       report.sections += 1;
       const box = sectionBox(section, width);
       const peeled = peelBackground(section, width);
-      stampHints(peeled.items, NAMES.roleOf(section.name));
+      // the section's name is NOT stamped onto its boxes: a whole page called
+      // "Header" (a frame name, a file name) would make every word in it a menu
+      // item. A band's name is handed to takeNav instead, and only when the band
+      // is thin enough to be a header at all.
+      stampHints(peeled.items, null);
       let items = tidy(peeled.items, report, scale);
 
       // the menu lives in the home page's first sections — take it out of the content
@@ -1971,6 +1980,7 @@ function breathe(puppet, opts = {}) {
         if (nav && nav.items.length >= (thin && si === 0 ? 1 : 2)) {
           menu = nav.items;
           brand = nav.brand;
+          if (nav.named) report.named += 1;
           for (const it of menu) {
             const m = /^gp:\/\/[^#]*#(.+)$/.exec(it.href || '');
             if (m && !navLabels.has(decodeURIComponent(m[1]))) navLabels.set(decodeURIComponent(m[1]), it.label);

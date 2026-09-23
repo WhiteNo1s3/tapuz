@@ -50,9 +50,17 @@ router.post('/admin/api/geppetto/read', requireAdmin, async (req, res) => {
     // SVG files: one per page, already slimmed by the screen (a raw Figma export
     // embeds every photo at full size — 150 MB and up)
     if (Array.isArray(b.svg) && b.svg.length) {
-      input.svg = b.svg.slice(0, 12)
-        .filter((f) => f && typeof f.text === 'string')
-        .map((f) => ({ name: String(f.name || ''), text: f.text.slice(0, 8 * 1024 * 1024) }));
+      const all = b.svg.filter((f) => f && typeof f.text === 'string');
+      // a file is never silently cut in half: a truncated SVG reads as a whole
+      // design that quietly lost its footer
+      const heavy = all.find((f) => f.text.length > 8 * 1024 * 1024);
+      if (heavy) {
+        return fail(res, Object.assign(new Error('‏' + (heavy.name || 'הקובץ') + ' שוקל ' + Math.round(heavy.text.length / 1048576) + 'MB אחרי הכיווץ — ייצאו אותו שוב עם פחות תמונות, או ייצאו פחות מסגרות בבת אחת'), { code: 'E_SVG_TOO_BIG' }));
+      }
+      if (all.length > 12) {
+        return fail(res, Object.assign(new Error('נשלחו ' + all.length + ' קבצים; ג׳פטו קורא עד 12 בבת אחת — בחרו את הדפים שאתם רוצים'), { code: 'E_SVG_TOO_MANY' }));
+      }
+      input.svg = all.map((f) => ({ name: String(f.name || ''), text: f.text }));
     }
     if (typeof b.token === 'string' && b.token.trim()) input.token = b.token.trim().slice(0, 200); // used for this request only
     const gp = require('../geppetto');

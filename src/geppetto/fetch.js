@@ -240,9 +240,10 @@ async function readDesign(input = {}, opts = {}) {
     for (const f of files) {
       const seen = svg.detect(f.text);
       if (!seen.ok) throw refuse((files.length > 1 ? '‏' + (f.name || 'הקובץ') + ': ' : '') + seen.message, seen.code);
-      if (seen.note) notes.push((files.length > 1 ? (f.name || '') + ': ' : '') + seen.note);
+      // the decoder keeps its own notes; repeating them here would say each twice
     }
     const puppet = decoded('svg', () => svg.fromSvg(files, { origin: url }));
+    if (url) puppet.origin = url; // the owner's "where it came from", for the record
     return { puppet, fetched: [], notes, door: puppet.door || 'figma-svg' };
   }
 

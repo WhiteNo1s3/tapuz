@@ -773,6 +773,26 @@ function find(blocks, pred) {
     NAMES.looksPlaceholder('Body text for whatever you’d like to add.') && NAMES.looksPlaceholder('Name') && NAMES.looksPlaceholder('טקסט לדוגמה') &&
     !NAMES.looksPlaceholder('A terrific piece of praise') && !NAMES.looksPlaceholder('Design that feels like home'));
 
+  // a page or file called "Header" must not turn its words into a menu: a name
+  // only speaks for the box that wears it, never for everything inside a section
+  z = 0;
+  const innocent = (sectionName) => {
+    z = 0;
+    return P.makePuppet({ source: 'figma', format: 'figma-file', origin: '', site: { title: 'Bakery', lang: 'en', dir: 'ltr' },
+      pages: [{ key: 'p', path: '/', title: 'Bakery', name: sectionName, width: 1440, sections: [
+        { key: 's', anchor: '', name: sectionName, height: 1400, fill: { color: '#ffffff' }, nodes: [
+          text('e1', 80, 60, 300, 40, 'Est. 1998', { size: 26 }),
+          text('e2', 600, 60, 200, 40, '4 chefs', { size: 22 }),
+          text('e3', 900, 60, 200, 40, 'One oven', { size: 22 }),
+          text('e4', 80, 300, 900, 80, 'Bread baked at dawn', { size: 56 }),
+          text('e5', 80, 420, 900, 60, 'We open at six, every day of the week.', { size: 20 })
+        ] }] }] });
+  };
+  const plans = ['Bakery page', 'Header', 'Navigation', 'תפריט', 'Menu'].map((n) => gp.planFromPuppet(innocent(n), {}));
+  check('a section called "Header" (a frame name, a file name) changes nothing at all',
+    plans.every((pl) => JSON.stringify(pl.pages[0].blocks) === JSON.stringify(plans[0].pages[0].blocks) && !pl.menu.length && pl.report.named === 0 && /4 chefs/.test(pl.pages[0].source)),
+    plans.map((pl) => [pl.menu.length, pl.report.named, pl.brand && pl.brand.text]));
+
   z = 0;
   const named = (name, node) => Object.assign(node, { name });
   const grp = (name, x, y, w, h, children) => ({ id: 'g' + (++z), type: 'group', name, x, y, w, h, z, children });
