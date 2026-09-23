@@ -446,7 +446,23 @@ function applyStylesheet(root, sheet) {
  * (objectBoundingBox handles are fractions of it); `m` its transform (a turned
  * element turns its gradient too).
  */
+// A design gradient has two to five stops. Past a dozen the extra stops say
+// nothing the eye can see — and the life pass rejects any gradient string over
+// 400 characters, so a long one would be built and then thrown away, leaving
+// the band with no gradient at all. Twelve keeps even rgba stops inside that.
+const MAX_STOPS = 12;
+
 function gradientCss(g, box, m, ctx) {
+  // the STOPS depend only on the gradient (so they are read once, however many
+  // shapes point at it); the angle depends on the shape's own box and
+  // transform, so that part is worked out per call — it is arithmetic
+  const stops = g._stops !== undefined ? g._stops : (g._stops = gradientStops(g, ctx));
+  if (!stops.length) return null;
+  if (g.tag === 'radialgradient') return 'radial-gradient(circle, ' + stops.join(', ') + ')';
+  return linearGradientCss(g, stops, box, m);
+}
+
+function gradientStops(g, ctx) {
   let holder = g;
   let hops = 0;
   while (holder && !elements(holder).some((c) => c.tag === 'stop') && hops++ < 4) {
@@ -456,6 +472,7 @@ function gradientCss(g, box, m, ctx) {
   const stops = [];
   for (const s of elements(holder || g)) {
     if (s.tag !== 'stop') continue;
+    if (stops.length >= MAX_STOPS) break;
     const c = parseColor(prop(s, 'stop-color') || '#000000');
     if (!c) continue;
     const alpha = c.alpha * num(prop(s, 'stop-opacity'), 1);
@@ -465,9 +482,11 @@ function gradientCss(g, box, m, ctx) {
     const off = Math.max(0, Math.min(100, /%$/.test(raw) ? parseFloat(raw) : parseFloat(raw) * 100));
     stops.push(color + ' ' + r2(Number.isFinite(off) ? off : 0) + '%');
   }
-  if (!stops.length) return null;
   if (stops.length === 1) stops.push(stops[0]);
-  if (g.tag === 'radialgradient') return 'radial-gradient(circle, ' + stops.join(', ') + ')';
+  return stops;
+}
+
+function linearGradientCss(g, stops, box, m) {
   const user = String(g.attrs.gradientunits || '').toLowerCase() === 'userspaceonuse';
   const pct = (v, d) => { const s = String(v == null ? '' : v).trim(); if (!s) return d; return /%$/.test(s) ? parseFloat(s) / 100 : parseFloat(s); };
   let p1 = [pct(g.attrs.x1, 0), pct(g.attrs.y1, 0)];
@@ -495,7 +514,13 @@ const IMAGE_FILE = /^image\.(png|jpe?g|webp|gif|avif)$/i;
  * the picture overflows the box (Figma's FILL: cover) and the translate says
  * which window shows; under 1 on an axis is a letterbox (contain).
  */
+/** The picture a pattern paints — resolved once, however many shapes point at it. */
 function patternImage(pat, ctx) {
+  if (pat._pic === undefined) pat._pic = patternImageNow(pat, ctx);
+  return pat._pic;
+}
+
+function patternImageNow(pat, ctx) {
   let holder = pat;
   let use = null;
   let img = null;
@@ -974,7 +999,7 @@ function costOf(el) {
 function clipHint(id, m, ctx) {
   const cp = ctx.byId.get(id);
   if (!cp || cp.tag !== 'clippath') return null;
-  const shape = elements(cp)[0];
+  const shape = cp._shape !== undefined ? cp._shape : (cp._shape = elements(cp)[0] || null);
   if (!shape) return null;
   const mm = mul(m, matOf(shape));
   const k = scaleOf(mm);

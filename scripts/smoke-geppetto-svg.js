@@ -324,6 +324,29 @@ check('LOW: three files called Home → names, paths, keys and anchors all disti
   check('H1: one fat clip path reused by 20,000 groups is parsed once', Date.now() - tClip < 1500, (Date.now() - tClip) + 'ms');
 }
 
+// a paint server is read once, however many shapes point at it: 20,000 stops
+// behind 2,000 rects used to cost 6.5 s and 680 MB of heap, and a bigger one
+// took the process out with an OOM
+{
+  let stops = '';
+  for (let i = 0; i < 20000; i++) stops += '<stop offset="' + (i / 20000) + '" stop-color="#' + (i % 9) + '3' + (i % 7) + 'a' + (i % 5) + 'f"/>';
+  let rects = '';
+  for (let i = 0; i < 2000; i++) rects += '<rect x="' + (i % 700) + '" y="' + ((i * 3) % 900) + '" width="60" height="40" fill="url(#g)"/>';
+  const fat = '<svg width="800" height="900" viewBox="0 0 800 900" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' +
+    stops + '</linearGradient></defs><g id="Page">' + rects + '<text font-family="Inter" font-size="40"><tspan x="40" y="80">Hi</tspan></text></g></svg>';
+  const tG = Date.now();
+  const heap0 = process.memoryUsage().heapUsed;
+  let grad = '';
+  try {
+    const p = svg.fromSvg([{ name: 'Gradients', text: fat }], {});
+    const node = (p.pages[0].sections[0].nodes || []).find((n) => n.fill && n.fill.gradient);
+    grad = node ? node.fill.gradient : '';
+  } catch (e) { /* refused is fine, slow or fat is not */ }
+  const spentMb = (process.memoryUsage().heapUsed - heap0) / 1048576;
+  check('H1: one gradient is read once however many shapes point at it — fast, and not a heap', Date.now() - tG < 1500 && spentMb < 120, [(Date.now() - tG) + 'ms', Math.round(spentMb) + 'MB']);
+  check('…and the gradient it builds is short enough for the life pass to keep (under 400 chars)', !grad || grad.length < 400, grad.length + ' chars');
+}
+
 check('smoke runs in < 2 s', Date.now() - t0 < 2000, (Date.now() - t0) + 'ms');
 console.log('SMOKE GEPPETTO-SVG: ' + (fail ? 'FAIL' : 'PASS'));
 process.exit(fail ? 1 : 0);
