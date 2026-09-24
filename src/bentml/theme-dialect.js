@@ -63,7 +63,9 @@ const SECTIONS = {
     // the menu's geometry (v2.28)
     ['menu-overflow', 'menuOverflow'], ['menu-align', 'menuAlign'], ['menu-gap', 'menuGap'], ['menu-size', 'menuSize'],
     // v2.28b — the fold ("עוד"), the drawer breakpoint, the current-page mark
-    ['menu-fold', 'menuFold'], ['menu-collapse', 'menuCollapse'], ['menu-current', 'menuCurrent']]
+    ['menu-fold', 'menuFold'], ['menu-collapse', 'menuCollapse'], ['menu-current', 'menuCurrent'],
+    // v2.63 — the header's shape and what the ☰ opens
+    ['header-layout', 'headerLayout'], ['drawer', 'menuDrawer']]
 };
 
 function pairs(section) {
