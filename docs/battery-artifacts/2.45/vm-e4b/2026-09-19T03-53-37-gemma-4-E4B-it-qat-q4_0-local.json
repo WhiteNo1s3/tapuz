@@ -1,0 +1,93 @@
+{
+  "model": "gemma-4-E4B-it-qat-q4_0",
+  "courier": "local",
+  "window": {
+    "ok": true,
+    "provider": "local",
+    "model": "gemma-4-E4B-it-qat-q4_0",
+    "window": {
+      "tokens": 32768,
+      "maxTokens": 32768,
+      "source": "probe",
+      "jit": false
+    },
+    "tier": "full",
+    "tierHe": "מלא",
+    "message": "המודל gemma-4-E4B-it-qat-q4_0 טעון עם 32,768 טוקנים — הקופיילוט עובד עם המילון המלא.",
+    "recommended": 32768,
+    "editMaxChars": 15713,
+    "menuTools": true
+  },
+  "passed": 1,
+  "total": 1,
+  "softMisses": 0,
+  "seconds": 375,
+  "results": [
+    {
+      "id": "T1",
+      "run": 1,
+      "name": "a hello is answered in Hebrew and writes nothing",
+      "pass": true,
+      "seconds": 375.2,
+      "tools": [],
+      "checks": [
+        {
+          "kind": "hard",
+          "name": "the turn completes",
+          "ok": true
+        },
+        {
+          "kind": "hard",
+          "name": "no approval card for a greeting",
+          "ok": true
+        },
+        {
+          "kind": "hard",
+          "name": "nothing was written",
+          "ok": true
+        },
+        {
+          "kind": "soft",
+          "name": "the reply is Hebrew",
+          "ok": true
+        },
+        {
+          "kind": "soft",
+          "name": "the reply is words, not a BenTML document",
+          "ok": true
+        }
+      ],
+      "notes": [],
+      "crashed": "",
+      "turns": [
+        {
+          "sent": {
+            "message": "שלום! מה אתה יודע לעשות באתר שלי?"
+          },
+          "seconds": 375.2,
+          "ok": true,
+          "error": "",
+          "code": "",
+          "reply": "שלום! אני **העוזר האישי שלך בתוך Tapuziel**, ואני כאן כדי לעזור לך לבנות ולערוך את **EXPLOIT · 80**.\n\nתפקידי המרכזי הוא לעבוד עם מערכת ניהול התוכן (CMS) באמצעות שפת **BenTML** (השפה המוגבלת של התגיות `bent-*`).\n\nבמילים פשוטות, אני יכול:\n\n1.  **לבנות דפים חדשים:** אם תרצה להוסיף עמוד חדש לאתר, אני יכול ליצור את מבנה הדף המלא עבורך.\n2.  **לערוך דפים קיימים:** אני יכול לקרוא את הקוד הקיים של דף כלשהו, לשנות אותו בהתאם לבקשתך, ולהציג לך את הגרסה המעודכנת כטיוטה.\n3.  **לנהל את התפריטים:** אני יכול לסדר, להוסיף או להסיר פריטים מהתפריט הראשי או התפריט בתחתית האתר.\n\n**מה אני לא עושה:**\n*   אני לא בוט תמיכה כללי או מנוע חיפוש.\n*   איני יכול לבצע שינויים ישירות באתר החי בלי אישור מפורש שלך, אלא אם כן מדובר בהגדרות תפריט שמוחלבות אוטומטית.\n\n**כדי שנתחיל, מה תרצה לעשות?**\n\n*   האם יש דף שאת/ה רוצה שנבדוק או נשנה? (אם כן, אני צריך את ה-slug שלו)\n*   האם את/ה רוצה ליצור דף חדש?\n*   האם תרצה שנראה מה התפריטים הנוכחיים באתר?",
+          "memo": "",
+          "used": [],
+          "reads": [],
+          "notices": [],
+          "refusals": [],
+          "window": {
+            "tokens": 32768,
+            "source": "probe",
+            "tier": "full",
+            "menuTools": true,
+            "promptTokens": 17450,
+            "model": "gemma-4-E4B-it-qat-q4_0",
+            "ratio": 2.9259598853868196,
+            "jit": false
+          },
+          "pending": null,
+          "applied": null
+        }
+      ]
+    }
+  ]
+}
