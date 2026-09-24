@@ -2785,6 +2785,11 @@ html body.nav-overlay .nav-toggle:checked ~ ul {
   z-index: 150;
   margin: 0;
   padding: 4.5rem 1.25rem 1.5rem !important;
+  /* measured on the Hebrew site (v2.64): the list inherits the bar's flex-wrap,
+     and a column list with a fixed height wraps its overflow into a SECOND
+     column instead of scrolling — a 17-row menu put "אודות" and "צרו קשר"
+     beside the panel, over the page. A panel scrolls; it never wraps. */
+  flex-wrap: nowrap;
   overflow-y: auto;
   background: var(--color-surface, #fff);
   border-inline-start: 1px solid var(--color-border);

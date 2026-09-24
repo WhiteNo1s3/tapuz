@@ -93,8 +93,10 @@ check('…the bottom bar: fixed along the bottom edge, no burger, sub-menus upwa
   /body\.menu-bottom \.nav-toggle, body\.menu-bottom \.nav-burger \{ display: none; \}/.test(main) &&
   /body\.menu-bottom \.main-nav \.sub-menu \{ top: auto; bottom: calc\(100% \+ 0\.4rem\); \}/.test(main) &&
   /body\.menu-bottom \.site-header \{ backdrop-filter: none;/.test(main));
-check('…the overlay drawer: off-canvas at the inline end, a backdrop over the page, the burger above it, the header blur lifted while open',
+check('…the overlay drawer: off-canvas at the inline end, scrolls and never wraps (v2.64), a backdrop over the page, the burger above it, the header blur lifted while open',
   /html body\.nav-overlay \.nav-toggle:checked ~ ul \{[^}]*position: fixed;[^}]*inset-inline-end: 0;[^}]*width: min\(320px, 86vw\);\s*box-sizing: border-box;/.test(main) &&
+  // v2.64 — measured on the Hebrew site: a 17-row list in the fixed-height panel wrapped into a second column over the page
+  /html body\.nav-overlay \.nav-toggle:checked ~ ul \{[^}]*flex-wrap: nowrap;\s*overflow-y: auto;/.test(main) &&
   /html body\.nav-overlay \.main-nav:has\(\.nav-toggle:checked\)::after \{ content: '';[^}]*position: fixed; inset: 0;/.test(main) &&
   /html body\.nav-overlay \.nav-burger \{ position: relative; z-index: 160; \}/.test(main) &&
   /html body\.nav-overlay \.site-header:has\(\.nav-toggle:checked\) \{ backdrop-filter: none;/.test(main));
