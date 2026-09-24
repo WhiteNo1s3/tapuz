@@ -46,9 +46,9 @@
 | `bent-colors` | `primary secondary text muted border bg light-bg surface` | hex. `text` על `bg` ועל `surface` — ניגודיות ≥ 4.5 |
 | `bent-fonts` | `family heading base-size google` | `google` = משפחות Google Fonts מופרדות בפסיק — מהמדף העברי, ולאתר לועזי גם מהמדף הלטיני (v2.56, `LATIN_FONTS` ב-`src/theme.js`; אות עברית בגופן לטיני נופלת לגופן המערכת); כל גופן שב-`family`/`heading` חייב להופיע בו |
 | `bent-style` | `radius=sharp\|soft\|round` `shadow=flat\|soft\|deep` `accent=solid\|gradient` `buttons=filled\|outline\|soft\|glow` | |
-| `bent-layout` | `max-width` `menu=top\|side` `header-width=content\|wide\|full` | `header-width`: כרוחב התוכן · 1140px (ברירת מחדל) · מקצה לקצה |
+| `bent-layout` | `max-width` `menu=top\|side\|side-end\|bottom` `header-width=content\|wide\|full` | `header-width`: כרוחב התוכן · 1140px (ברירת מחדל) · מקצה לקצה. `menu`: `side-end` = המסילה בצד השני, `bottom` = בר תחתון קבוע כמו באפליקציה (v2.63) |
 | `bent-background` | `kind=solid\|gradient\|glow\|dots\|grid\|lines` `angle` | תבניות נצבעות מהפלטה |
-| `bent-chrome` | `menu-hover=color\|underline\|pill\|glow` `menu-hover-color` `menu-weight=normal\|bold` `header-bg` `header-text` `header-glass=true\|false` `footer-bg` `footer-text` `menu-overflow=wrap\|scroll\|drawer` `menu-align=start\|center\|end\|between` `menu-gap=sm\|md\|lg` `menu-size=sm\|md\|lg` `menu-fold=0..12` `menu-collapse=sm\|md\|lg\|never` `menu-current=underline\|pill\|bold\|none` | ריק = ברירת המחדל; התפריט — ראו למטה |
+| `bent-chrome` | `header-layout=bar\|centered\|floating` `drawer=inline\|overlay` `menu-hover=color\|underline\|pill\|glow` `menu-hover-color` `menu-weight=normal\|bold` `header-bg` `header-text` `header-glass=true\|false` `footer-bg` `footer-text` `menu-overflow=wrap\|scroll\|drawer` `menu-align=start\|center\|end\|between` `menu-gap=sm\|md\|lg` `menu-size=sm\|md\|lg` `menu-fold=0..12` `menu-collapse=sm\|md\|lg\|never` `menu-current=underline\|pill\|bold\|none` | ריק = ברירת המחדל; התפריט — ראו למטה |
 | `bent-skin` | `note` + `<style>` | CSS חופשי על השלד (`.site-header`, `.main-nav a`, `.main-nav .sub-menu`, `.nav-more-sum`, `.nav-burger`, `body.menu-side`, `.hero`, `.btn-primary`, `.card`, `.bent-*`, `.site-footer`) |
 | `bent-effect` | `note` + `<style>` + `<script>` | ה-JS מקומפל לפני שהוא נקלט; רץ מוגן על האתר |
 | `bent-canvas` | — | הבנץ׳: מודולי `bent-*` (הדקדוק המלא ב-[SYNTAX-DICTIONARY.md](SYNTAX-DICTIONARY.md)); נשמר לצד הערכה, לא בתוכה |
@@ -67,6 +67,9 @@
 | `menu-fold` | `0..12` | כמה פריטים עליונים לפני קיפול "עוד" (`<details>`); `0` = בלי, `1` = בלי (קיפול מסתיר שניים ומעלה) |
 | `menu-collapse` | `sm\|md\|lg\|never` | מאיזה רוחב מסך התפריט הופך למגירה ☰ — 560px · 720px (ברירת מחדל) · 1024px · אף פעם |
 | `menu-current` | `underline\|pill\|bold\|none` | איך הדף הנוכחי מסומן (`aria-current="page"`) |
+| `header-layout` | `bar\|centered\|floating` | צורת הכותרת (v2.63, לתפריט עליון): `bar` לוגו בצד אחד ותפריט בצד השני · `centered` לוגו מעל תפריט ממורכז (מאסטהד) · `floating` גלולה צפה — כותרת מנותקת, מעוגלת, מזכוכית, שמרחפת מעל הדף (`body.header-floating`; המשטח מ-`header-bg` או מצבע ה-surface ב-84%) |
+| `drawer` | `inline\|overlay` | מה ☰ פותח (v2.63): הרשימה בתוך הכותרת, או פאנל צד קבוע מעל הדף עם רקע כהה (`body.nav-overlay`; הטשטוש של כותרת זכוכית נכבה בזמן שהפאנל פתוח — `backdrop-filter` הוא containing block ל-`position: fixed`) |
+| `menu` (ב-`bent-layout`) | `top\|side\|side-end\|bottom` | `side-end` = אותה מסילה בצד השני (`body.menu-side.menu-side-end`) · `bottom` = בר קבוע לאורך הקצה התחתון, בלי ☰ באף רוחב (`body.menu-bottom nav-collapse-never`), תפריטי משנה נפתחים למעלה; עד 6 פריטים (v2.63) |
 
 ערך לא מוכר מוחזר לברירת המחדל עם הערה בעברית (`warnings`) — אותו
 מאמת (`theme.knobsToOverrides`) משרת גם את מסדר/ת התפריטים

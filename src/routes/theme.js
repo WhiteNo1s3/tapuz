@@ -758,8 +758,10 @@ router.get('/admin/theme', (req, res) => {
           <input id="th-maxw" value="${escAttr(o.layout.maxWidth)}" class="input mb">
           <label class="field-label" for="th-menu-place">מיקום תפריט</label>
           <select id="th-menu-place" class="input mb">
-            ${opt('top', 'עליון (אופקי)', o.layout.menuPlacement !== 'side')}
+            ${opt('top', 'עליון (אופקי)', !['side', 'side-end', 'bottom'].includes(o.layout.menuPlacement))}
             ${opt('side', 'צד (אנכי)', o.layout.menuPlacement === 'side')}
+            ${opt('side-end', 'הצד השני (אנכי)', o.layout.menuPlacement === 'side-end')}
+            ${opt('bottom', 'בר תחתון — כמו באפליקציה (עד 6 פריטים)', o.layout.menuPlacement === 'bottom')}
           </select>
           <label class="field-label" for="th-header-width">רוחב הכותרת העליונה (תפריט ארוך צריך מקום)</label>
           <select id="th-header-width" class="input">
@@ -824,6 +826,17 @@ router.get('/admin/theme', (req, res) => {
           </div>
           <label class="field-label" for="th-ch-fold">קיפול: כמה פריטים לפני "עוד" (0 = בלי)</label>
           <input type="number" id="th-ch-fold" min="0" max="12" step="1" value="${escAttr(String(Number.isFinite(Number(ch.menuFold)) ? Number(ch.menuFold) : 0))}" class="input mb" title="מעבר למספר הזה הפריטים מתקפלים תחת &quot;עוד&quot; — בלי JavaScript, נפתח בלחיצה">
+          <label class="field-label" for="th-ch-header">צורת הכותרת העליונה (v2.63)</label>
+          <select id="th-ch-header" class="input mb" title="חל על תפריט עליון">
+            ${opt('bar', 'שורה — לוגו בצד אחד, תפריט בצד השני (ברירת מחדל)', !ch.headerLayout || ch.headerLayout === 'bar')}
+            ${opt('centered', 'מאסטהד — לוגו מעל תפריט ממורכז', ch.headerLayout === 'centered')}
+            ${opt('floating', 'גלולה צפה — כותרת מעוגלת מזכוכית שמרחפת מעל הדף', ch.headerLayout === 'floating')}
+          </select>
+          <label class="field-label" for="th-ch-drawer">מה ☰ פותח</label>
+          <select id="th-ch-drawer" class="input mb">
+            ${opt('inline', 'הרשימה בתוך הכותרת (ברירת מחדל)', !ch.menuDrawer || ch.menuDrawer === 'inline')}
+            ${opt('overlay', 'פאנל צד מעל הדף', ch.menuDrawer === 'overlay')}
+          </select>
           <label class="field-label" for="th-ch-collapse">מתי התפריט הופך למגירה ☰</label>
           <select id="th-ch-collapse" class="input mb">
             ${opt('sm', 'רק בטלפון (עד 560px)', ch.menuCollapse === 'sm')}

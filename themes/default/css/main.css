@@ -2317,9 +2317,17 @@ body.menu-side .site-header {
 body.menu-side .main-content {
   grid-column: 2;
   grid-row: 1;
-  /* no explicit width: the minmax(0,1fr) column sizes it; width:100% would
-     add the padding on top of the column width (content-box) and overflow */
+  /* v2.63 — the item used to be centred by its auto margins, so it was sized
+     by its content, not the track: a 900px column plus padding is 943px, and
+     a 745px track (a 1024px screen beside a 264px rail) overflowed. Measured
+     with the mirrored rail, where the overflow ran UNDER the rail. The item
+     now fills the track (stretch counts the padding); the reading width
+     lives on the container inside it. */
+  max-width: none;
+  min-width: 0;
+  margin: 0;
 }
+body.menu-side .main-content > .container { max-width: var(--max-width); margin: 0 auto; }
 body.menu-side .site-footer {
   grid-column: 2;
   grid-row: 2;
@@ -2688,3 +2696,107 @@ a.bent-cart-link:hover { color: var(--color-primary, #0a66c2); }
 .bent-order-pay-state { margin: 0 0 0.6rem; font-weight: 600; }
 .bent-order-pay-state.is-failed, .bent-order-pay-state.is-mismatch { color: #b91c1c; }
 .bent-order-pay-state.is-paid { color: #166534; }
+
+/* ===== The header's shape (v2.63) — chrome.headerLayout, chrome.menuDrawer,
+   layout.menuPlacement side-end / bottom. Ben: "let the user move the menu …
+   more modern, less typecast". The body classes come from
+   theme.menuBodyClasses; CSS only — published pages still ship no JavaScript.
+   ===== */
+
+/* centered (header-layout="centered"): the brand above a centered menu */
+body.header-centered .site-header .header-inner { flex-direction: column; align-items: center; gap: 0.6rem; text-align: center; }
+body.header-centered .header-brand { flex-direction: column; gap: 0.3rem; }
+body.header-centered .main-nav { flex: 0 1 auto; width: 100%; justify-content: center; }
+body.header-centered .main-nav ul { justify-content: center; }
+body.header-centered .nav-burger { margin-inline: auto; }
+
+/* floating (header-layout="floating"): a detached, rounded glass pill that
+   hovers over the page. Sticky like the bar, but with air around it; the
+   surface colour is emitted by theme.js (header-bg or the surface, 84%). */
+body.header-floating .site-header {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 100;
+  width: min(var(--header-max-width, 1140px), calc(100% - 1.5rem));
+  margin: 0.75rem auto 0;
+  padding: 0.45rem 0;
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: 999px;
+  box-shadow: var(--shadow-2, 0 10px 30px rgba(2, 8, 23, 0.12));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+body.header-floating .site-header .container { max-width: none; padding: 0; }
+body.header-floating .site-header .header-inner { max-width: none; padding-inline: 1.25rem 0.6rem; }
+body.header-floating .site-header .site-logo img { max-height: 40px; }
+body.header-floating .site-header.site-header--nosticky { position: relative; }
+/* the pill opens (the ☰ list inside it): corners, not a circle */
+body.header-floating .site-header:has(.nav-toggle:checked) { border-radius: var(--radius-lg, 18px); }
+
+/* the rail on the other side (menu="side-end") — the same rail, mirrored */
+@media (min-width: 901px) {
+  body.menu-side-end { grid-template-columns: minmax(0, 1fr) 264px; }
+  body.menu-side-end .site-header { grid-column: 2; border-inline-end: none; border-inline-start: 1px solid var(--color-border); }
+  body.menu-side-end .main-content, body.menu-side-end .site-footer { grid-column: 1; }
+  body.menu-side-end > :not(.site-header):not(.main-content):not(.site-footer) { grid-column: 1; }
+}
+
+/* the bar at the bottom (menu="bottom"): the brand keeps the top, the menu is
+   a bar fixed along the bottom edge, the way an app does it. Best with up to
+   six items — more wrap to a second row. Sub-menus open upward. The body
+   also carries nav-collapse-never (theme.js), so no breakpoint ever folds
+   this bar into a ☰. A blurred header would position the fixed bar by
+   itself (backdrop-filter is a containing block), so the glass steps aside. */
+body.menu-bottom { padding-bottom: 4.25rem; }
+body.menu-bottom .site-header { backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.menu-bottom .main-nav {
+  position: fixed;
+  bottom: 0;
+  inset-inline: 0;
+  z-index: 110;
+  background: var(--color-surface, #fff);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -8px 24px rgba(2, 8, 23, 0.08);
+  padding: 0.35rem 0.75rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+}
+body.menu-bottom .main-nav ul { justify-content: space-around; column-gap: 0.5rem; row-gap: 0.2rem; }
+body.menu-bottom .main-nav a { padding: 0.45rem 0.7rem; border-radius: 999px; }
+body.menu-bottom .main-nav a::after { display: none; }
+body.menu-bottom .main-nav a[aria-current="page"] { background: color-mix(in srgb, var(--color-primary) 14%, transparent); color: var(--color-primary); }
+body.menu-bottom .main-nav .sub-menu { top: auto; bottom: calc(100% + 0.4rem); }
+/* no ☰ at any width (the body also carries nav-collapse-never, so this only says it beside the bar) */
+body.menu-bottom .nav-toggle, body.menu-bottom .nav-burger { display: none; }
+
+/* the ☰ opens a panel over the page (drawer="overlay") instead of the list
+   inside the header. Rides on the breakpoint drawer rules above: they still
+   decide WHEN the ☰ shows and toggle the list; this only moves the open list
+   off-canvas. `html body` lifts these above the drawer's own list rules; the
+   padding is the one property both set, so it is marked. The burger stays
+   above the backdrop so a second tap closes the panel. */
+html body.nav-overlay .nav-burger { position: relative; z-index: 160; }
+html body.nav-overlay .nav-toggle:checked ~ ul {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  inset-inline-end: 0;
+  width: min(320px, 86vw);
+  box-sizing: border-box; /* measured: content-box made a 320px panel 364px wide on a 375px phone */
+  z-index: 150;
+  margin: 0;
+  padding: 4.5rem 1.25rem 1.5rem !important;
+  overflow-y: auto;
+  background: var(--color-surface, #fff);
+  border-inline-start: 1px solid var(--color-border);
+  box-shadow: 0 0 48px rgba(2, 8, 23, 0.28);
+}
+html body.nav-overlay .nav-toggle:checked ~ ul a,
+html body.nav-overlay .nav-toggle:checked ~ ul .nav-more-sum { display: block; padding: 0.7rem 0.5rem; font-size: 1.05rem; white-space: normal; }
+html body.nav-overlay .main-nav:has(.nav-toggle:checked)::after { content: ''; position: fixed; inset: 0; z-index: 140; background: rgba(2, 8, 23, 0.45); }
+/* a fixed panel inside a blurred header would be positioned by the header (backdrop-filter is a containing block): the blur steps aside while the panel is open */
+html body.nav-overlay .site-header:has(.nav-toggle:checked) { backdrop-filter: none; -webkit-backdrop-filter: none; }
+@media (prefers-reduced-motion: no-preference) {
+  html body.nav-overlay .nav-toggle:checked ~ ul { animation: nav-overlay-in 0.22s ease-out; }
+}
+@keyframes nav-overlay-in { from { transform: translateX(var(--nav-overlay-from, 100%)); } to { transform: none; } }
+[dir="rtl"] body.nav-overlay { --nav-overlay-from: -100%; }

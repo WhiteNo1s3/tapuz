@@ -340,7 +340,7 @@ function menuGrammar(opts = {}) {
   const wrapper = '- `<bent-menus version="1" note="משפט אחד לבעל האתר">` — העוטף, פעם אחת.';
   const layout = opts.compact
     ? '- `<bent-menu-layout fold="0..12" width="content|wide|full" />` — 0..1; `fold="N"` = מה שאחרי N הפריטים נכנס תחת "עוד".'
-    : '- `<bent-menu-layout placement="top|side" flow="wrap|scroll|drawer" fold="0..12" collapse="sm|md|lg|never" width="content|wide|full" align="start|center|end|between" gap="sm|md|lg" size="sm|md|lg" current="underline|pill|bold|none" />` — 0..1, אותו תג כמו במסמך הערכה; מאפיין שלא כתבתם = ידית שלא משתנה.';
+    : '- `<bent-menu-layout placement="top|side|side-end|bottom" flow="wrap|scroll|drawer" fold="0..12" collapse="sm|md|lg|never" width="content|wide|full" align="start|center|end|between" gap="sm|md|lg" size="sm|md|lg" current="underline|pill|bold|none" />` — 0..1, אותו תג כמו במסמך הערכה; מאפיין שלא כתבתם = ידית שלא משתנה.';
   const menu = '- `<bent-menu name="main|footer" location="main|footer">` — תפריט לכל שם; `main` = הכותרת, `footer` = התחתית.';
   const link = '- `<bent-link label="…" page="…" />` — קישור לדף; `page` = ' + pageSource + ', מועתק מילה במילה.';
   const free = '- `<bent-link label="…" url="…" />` · `tel="…"` · `mailto="…"` · `anchor="id"` — קישור חופשי / חיוג / מייל / עוגן. בדיוק מאפיין יעד אחד.';

@@ -38,7 +38,7 @@ const DEFAULT_OVERRIDES = {
   },
   layout: {
     maxWidth: '900px',
-    menuPlacement: 'top', // top | side
+    menuPlacement: 'top', // top | side | side-end (the rail on the other side, v2.63) | bottom (an app-style bar, v2.63)
     // the header may be wider than the content column (v2.28): a ten-item
     // Hebrew menu needs ~1130px; 'content' = the column, 'wide' = 1140px,
     // 'full' = edge to edge
@@ -77,7 +77,14 @@ const DEFAULT_OVERRIDES = {
     // page is marked. Every default is what the theme css already does.
     menuFold: 0,            // 0..12
     menuCollapse: 'md',     // sm | md | lg | never
-    menuCurrent: 'underline' // underline | pill | bold | none
+    menuCurrent: 'underline', // underline | pill | bold | none
+    // v2.63 — the header's SHAPE (Ben: "let the user move the menu … more
+    // modern, less typecast"): bar = the logo one side, the menu the other;
+    // centered = the logo above a centered menu; floating = a detached,
+    // rounded glass pill that hovers over the page. Top placement only.
+    headerLayout: 'bar',    // bar | centered | floating
+    // v2.63 — what the ☰ opens: the list inside the header, or a panel over the page
+    menuDrawer: 'inline'    // inline | overlay
   },
   // Theme SKIN (v2.24) — free-form CSS against the theme's documented
   // skeleton (see theme-roleplay.js skeletonSelectors): what makes a theme a
@@ -196,7 +203,8 @@ const LOOKS = {
     overrides: {
       colors: { primary: '#dc2626', secondary: '#0f172a', text: '#0a0a0a', muted: '#525252', border: '#e5e5e5', bg: '#ffffff', lightBg: '#fafafa', surface: '#ffffff' },
       fonts: { headingFamily: '"Arial Black", "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif' },
-      style: { radius: 'sharp', shadow: 'flat', accent: 'solid' }
+      style: { radius: 'sharp', shadow: 'flat', accent: 'solid' },
+      chrome: { headerLayout: 'centered' } // v2.63 — a masthead: the name above a centered menu
     }
   },
   yam: {
@@ -252,7 +260,7 @@ const LOOKS = {
       colors: { primary: '#e11d90', secondary: '#a3e635', text: '#f3f0ff', muted: '#9089b0', border: '#312a52', bg: '#120f24', lightBg: '#181336', surface: '#1c1740' },
       fonts: { headingFamily: '' },
       style: { radius: 'sharp', shadow: 'deep', accent: 'gradient' },
-      chrome: { menuHover: 'glow', menuHoverColor: '#a3e635', menuWeight: 'bold', headerGlass: true, headerBg: '', footerBg: '#0c0a1a', footerText: '#9089b0' }
+      chrome: { menuHover: 'glow', menuHoverColor: '#a3e635', menuWeight: 'bold', headerGlass: true, headerBg: '', footerBg: '#0c0a1a', footerText: '#9089b0', headerLayout: 'floating' } // v2.63 — the neon look floats
     }
   },
   hitech: {
@@ -357,6 +365,10 @@ const MENU_OVERFLOW = ['wrap', 'scroll', 'drawer'];
 const MENU_COLLAPSE = ['sm', 'md', 'lg', 'never'];
 const MENU_CURRENT = ['underline', 'pill', 'bold', 'none'];
 const MENU_FOLD = { min: 0, max: 12 };
+// v2.63 — where the menu lives, the header's shape, what the ☰ opens
+const MENU_PLACEMENT = ['top', 'side', 'side-end', 'bottom'];
+const HEADER_LAYOUT = ['bar', 'centered', 'floating'];
+const MENU_DRAWER = ['inline', 'overlay'];
 
 /**
  * The menu's geometry as ONE flat object (v2.28b) — what the organizer's
@@ -373,7 +385,9 @@ function menuKnobs(overrides) {
   const pick = (v, list, fallback) => (list.indexOf(v) >= 0 ? v : fallback);
   const fold = Math.max(MENU_FOLD.min, Math.min(MENU_FOLD.max, parseInt(c.menuFold, 10) || 0));
   return {
-    placement: l.menuPlacement === 'side' ? 'side' : 'top',
+    placement: pick(l.menuPlacement, MENU_PLACEMENT, 'top'),
+    header: pick(c.headerLayout, HEADER_LAYOUT, 'bar'),     // v2.63
+    drawer: pick(c.menuDrawer, MENU_DRAWER, 'inline'),      // v2.63
     width: pick(l.headerWidth, Object.keys(HEADER_WIDTH), d.layout.headerWidth),
     flow: pick(c.menuOverflow, MENU_OVERFLOW, d.chrome.menuOverflow),
     fold: fold === 1 ? 0 : fold,             // a fold that hides one item is no fold
@@ -399,7 +413,9 @@ function knobsToOverrides(knobs) {
     out[section][key] = d[section][key];
     warnings.push(`ערך לא מוכר ל-${label}: "${String(value).slice(0, 20)}" — הוחזר לברירת המחדל (${d[section][key]}).`);
   };
-  put('layout', 'menuPlacement', k.placement, ['top', 'side'], 'placement');
+  put('layout', 'menuPlacement', k.placement, MENU_PLACEMENT, 'placement');
+  put('chrome', 'headerLayout', k.header, HEADER_LAYOUT, 'header');
+  put('chrome', 'menuDrawer', k.drawer, MENU_DRAWER, 'drawer');
   put('layout', 'headerWidth', k.width, Object.keys(HEADER_WIDTH), 'width');
   put('chrome', 'menuOverflow', k.flow, MENU_OVERFLOW, 'flow');
   put('chrome', 'menuCollapse', k.collapse, MENU_COLLAPSE, 'collapse');
@@ -420,14 +436,26 @@ function knobsToOverrides(knobs) {
 }
 
 /** Body classes the theme css keys on (v2.28): [] for an untouched site.
- *  Order: placement, flow, collapse, current. */
+ *  Order: placement, header shape, flow, drawer, collapse, current.
+ *  v2.63 — a bottom bar is its own flow and never collapses into a ☰ (the
+ *  breakpoint drawer rules would hide it on the very phones it is for), so
+ *  it stamps `nav-collapse-never` and no flow class; the header's shape
+ *  applies to the top placement only (a rail has no bar to shape). */
 function menuBodyClasses(overrides) {
   const k = menuKnobs(overrides);
   const out = [];
   if (k.placement === 'side') out.push('menu-side');
-  if (k.flow === 'drawer') out.push('menu-drawer');
-  else if (k.flow === 'scroll') out.push('menu-scroll');
-  if (k.collapse !== 'md') out.push('nav-collapse-' + k.collapse);
+  else if (k.placement === 'side-end') out.push('menu-side', 'menu-side-end');
+  else if (k.placement === 'bottom') out.push('menu-bottom');
+  if (k.placement === 'top' && k.header !== 'bar') out.push('header-' + k.header);
+  if (k.placement === 'bottom') {
+    out.push('nav-collapse-never');
+  } else {
+    if (k.flow === 'drawer') out.push('menu-drawer');
+    else if (k.flow === 'scroll') out.push('menu-scroll');
+    if (k.drawer === 'overlay') out.push('nav-overlay');
+    if (k.collapse !== 'md') out.push('nav-collapse-' + k.collapse);
+  }
   if (k.current !== 'underline') out.push('nav-current-' + k.current);
   return out;
 }
@@ -436,7 +464,7 @@ function menuBodyClasses(overrides) {
 // through ONE validator (knobsToOverrides) — never a second list of enums
 const MENU_KNOB_KEYS = {
   layout: { menuPlacement: 'placement', headerWidth: 'width' },
-  chrome: { menuOverflow: 'flow', menuFold: 'fold', menuCollapse: 'collapse', menuAlign: 'align', menuGap: 'gap', menuSize: 'size', menuCurrent: 'current' }
+  chrome: { menuOverflow: 'flow', menuFold: 'fold', menuCollapse: 'collapse', menuAlign: 'align', menuGap: 'gap', menuSize: 'size', menuCurrent: 'current', headerLayout: 'header', menuDrawer: 'drawer' }
 };
 
 /**
@@ -652,6 +680,12 @@ function overridesToCss(overrides) {
   if (headerBg) css += `.site-header { background: ${headerBg}; }\n`;
   if (ch.headerGlass === true || ch.headerGlass === 'true') {
     css += `.site-header { background: color-mix(in srgb, ${headerBg || 'var(--color-surface, #fff)'} 78%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }\n`;
+  }
+  // v2.63 — a floating header is glass by nature: the pill's surface comes
+  // from header-bg when set, the theme's surface otherwise (the shape itself
+  // — position, radius, shadow, blur — is the theme css, body.header-floating)
+  if (ch.headerLayout === 'floating') {
+    css += `body.header-floating .site-header { background: color-mix(in srgb, ${headerBg || 'var(--color-surface, #fff)'} 84%, transparent); }\n`;
   }
   // v2.28b: the fold's "עוד" is a <summary class="nav-more-sum">, not an <a>
   // — every rule that dresses a menu link dresses it too, or the last item
