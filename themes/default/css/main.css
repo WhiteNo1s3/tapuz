@@ -2775,6 +2775,13 @@ body.menu-bottom .nav-toggle, body.menu-bottom .nav-burger { display: none; }
    padding is the one property both set, so it is marked. The burger stays
    above the backdrop so a second tap closes the panel. */
 html body.nav-overlay .nav-burger { position: relative; z-index: 160; }
+/* v2.65 — the close button belongs to the panel. Measured on the Hebrew site
+   under the centered masthead: the burger sits BELOW the logo (y 53–91 on a
+   375px phone) and the panel's first item started at y 40 — the ✕ covered
+   "הבית". While the panel is open the burger is pinned to the panel's top
+   corner, whatever shape the header has; the panel's 4.5rem top padding
+   clears it. */
+html body.nav-overlay .main-nav:has(.nav-toggle:checked) .nav-burger { position: fixed; top: 1rem; inset-inline-end: 1.25rem; margin: 0; }
 html body.nav-overlay .nav-toggle:checked ~ ul {
   position: fixed;
   top: 0;
@@ -2791,6 +2798,9 @@ html body.nav-overlay .nav-toggle:checked ~ ul {
      beside the panel, over the page. A panel scrolls; it never wraps. */
   flex-wrap: nowrap;
   overflow-y: auto;
+  /* v2.65 — a panel's list starts at the top: the centered masthead's
+     menu-align=center would float a short list mid-panel */
+  justify-content: flex-start;
   background: var(--color-surface, #fff);
   border-inline-start: 1px solid var(--color-border);
   box-shadow: 0 0 48px rgba(2, 8, 23, 0.28);
