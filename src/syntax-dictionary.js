@@ -80,12 +80,19 @@ function buildDictionary() {
       marks: [
         { syntax: '@B{…}', meaning: 'bold' },
         { syntax: '@I{…}', meaning: 'italic' },
+        { syntax: '@U{…}', meaning: 'underline' },
+        { syntax: '@S{…}', meaning: 'strikethrough' },
         { syntax: '@LINK(url: "…"){…}', meaning: 'link' },
         { syntax: '@CODE{…}', meaning: 'monospace' },
+        { syntax: '@COLOR(name: "primary|secondary|text|muted|bg|light-bg|surface|border|#hex"){…}', meaning: 'text color from the site palette (a theme variable, re-tints with the look)' },
+        { syntax: '@HIGHLIGHT(name: "…"){…}', meaning: 'background highlight, same names' },
+        { syntax: '@FONT(name: "body|heading|serif|sans|mono|Heebo"){…}', meaning: 'font: the site font, the heading font, a generic stack, or a shelf family' },
+        { syntax: '@SIZE(size: "xs|sm|lg|xl|2xl|3xl"){…}', meaning: 'text size, in named steps' },
         { syntax: '@BREAK', meaning: 'line break' }
       ],
       rules: [
         'Blank line = new paragraph',
+        'Marks nest: @B{@U{x}} — names, never CSS values',
         'Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies',
         'No Markdown ** or [x](url)'
       ]

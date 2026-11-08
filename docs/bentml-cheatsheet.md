@@ -55,8 +55,10 @@ HTML {{{             ← the ONLY raw-HTML door; no params; {{{ ends the keyword
   raw html, verbatim
 }}}                  ← the closing fence sits ALONE on its own line
 
-INSIDE TEXT: @B{bold} @I{italic} @LINK(url: "/x" REQUIRED){text} @IMG(src: "/x.jpg" REQUIRED, alt: "...")
-  @LTR{English} @RTL{עברית} (optional lang: "en") @CODE{mono} @BREAK — no nesting.
+INSIDE TEXT: @B{bold} @I{italic} @U{underline} @S{strike} @LINK(url: "/x" REQUIRED){text} @IMG(src: "/x.jpg" REQUIRED, alt: "...")
+  @LTR{English} @RTL{עברית} (optional lang: "en") @CODE{mono} @BREAK — marks nest: @B{@U{x}}.
+  @COLOR(name: "primary|secondary|text|muted|bg|light-bg|surface|border|#hex"){x} @HIGHLIGHT(name: "…"){x}
+  @FONT(name: "body|heading|serif|sans|mono|Heebo"){x} @SIZE(size: "xs|sm|lg|xl|2xl|3xl"){x} — names, never CSS.
   Inline markup works ONLY in TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies —
   BUTTON, FEATURE, MOTION and HERO children are plain text.
   NO Markdown: never ** or [x](url) or # headings or "- " bullets outside LIST ITEMs.

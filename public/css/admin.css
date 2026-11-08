@@ -1848,8 +1848,8 @@ body.builder-screen .canvas-header {
   pointer-events: none;
   transition: opacity var(--dur);
 }
-.builder.live-page .canvas-block:hover .block-label,
-.builder.live-page .canvas-block.selected .block-label { opacity: 1; }
+.builder.live-page .canvas-block:hover:not(:has(.canvas-block:hover)) > .block-label,
+.builder.live-page .canvas-block.selected > .block-label { opacity: 1; }
 .builder.live-page .canvas-block {
   border: 1px solid transparent;
   margin-bottom: 8px;
@@ -1907,7 +1907,7 @@ body.builder-screen .canvas-header {
   transition: color var(--dur);
 }
 .block-handle:active { cursor: grabbing; }
-.canvas-block:hover .block-handle { color: var(--select); }
+.canvas-block:hover:not(:has(.canvas-block:hover)) > .block-handle { color: var(--select); }
 
 /* The action bar lives INSIDE the block's top corner (label row), not poking
    above it — the old top:-11px pill sat on the previous block's content and
@@ -1930,8 +1930,8 @@ body.builder-screen .canvas-header {
   z-index: 10;
   box-shadow: 0 3px 10px rgba(154, 52, 18, 0.12);
 }
-.canvas-block:hover .block-toolbar,
-.canvas-block.selected .block-toolbar { opacity: 1; }
+.canvas-block:hover:not(:has(.canvas-block:hover)) > .block-toolbar,
+.canvas-block.selected > .block-toolbar { opacity: 1; }
 .block-toolbar button {
   background: none;
   border: none;
@@ -2666,6 +2666,55 @@ details.agent-snip-details summary { cursor: pointer; }
   line-height: 1.6;
 }
 .text-editor-box .te-preview p { margin: 0 0 .5em; }
+/* the Word bar (v2.66) — groups of tools, selects, palette swatches and one
+   popover row (link / color / highlight) that opens UNDER the bar, inside the
+   window, instead of a browser prompt */
+.text-editor-box .te-toolbar { flex-wrap: wrap; row-gap: 6px; }
+.text-editor-box .te-toolbar.te-plain { justify-content: flex-start; }
+.text-editor-box .te-toolbar.te-plain .te-hint { margin-inline-start: 0; }
+.text-editor-box .te-group {
+  display: flex; align-items: center; gap: 4px;
+  padding-inline-end: 8px; border-inline-end: 1px solid #e2e8f0;
+}
+.text-editor-box .te-group:last-of-type { border-inline-end: none; }
+.text-editor-box .te-toolbar button.active {
+  background: #e0ecff; border-color: var(--select, #0a66c2); color: var(--select, #0a66c2);
+}
+.text-editor-box .te-toolbar button small { font-size: .7em; vertical-align: super; }
+.text-editor-box .te-toolbar select {
+  height: 30px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff;
+  color: #1e293b; font-size: .85rem; padding: 0 6px; max-width: 150px;
+}
+.text-editor-box .te-swatch-btn { position: relative; font-weight: 700; padding-bottom: 6px; }
+.text-editor-box .te-swatch-bar {
+  position: absolute; inset-inline: 6px; bottom: 3px; height: 4px; border-radius: 2px; background: #1c1917;
+}
+.text-editor-box .te-align svg { width: 16px; height: 14px; display: block; fill: currentColor; }
+.text-editor-box .te-pop {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid #fde68a; background: #fffbeb;
+}
+.text-editor-box .te-pop[hidden] { display: none; }
+.text-editor-box .te-pop-title { flex-basis: 100%; font-size: .78rem; color: #92400e; font-weight: 600; }
+.text-editor-box .te-pop label {
+  display: flex; flex-direction: column; gap: 3px; flex: 1 1 160px; font-size: .78rem; color: #64748b;
+}
+.text-editor-box .te-pop input[type="text"], .text-editor-box .te-pop input[type="url"] {
+  height: 32px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 0 10px; font-size: .9rem; background: #fff;
+}
+.text-editor-box .te-pop input.is-missing { border-color: var(--danger, #dc2626); }
+.text-editor-box .te-pop-actions { display: flex; gap: 6px; }
+.text-editor-box .te-pop .btn { padding: 6px 12px; font-size: .85rem; }
+.text-editor-box .te-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.text-editor-box .te-swatch {
+  width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; padding: 0; cursor: pointer;
+  box-shadow: 0 0 0 1px #cbd5e1;
+}
+.text-editor-box .te-swatch:hover { transform: scale(1.1); }
+.text-editor-box .te-swatch.active { box-shadow: 0 0 0 2px var(--select, #0a66c2); }
+.text-editor-box .te-swatch-custom { width: 32px; height: 28px; padding: 0; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; cursor: pointer; }
+.text-editor-box .te-preview mark, .inline-text mark, .canvas-block mark { border-radius: 3px; padding: 0 2px; }
+.text-format-bar .fmt-open { margin-inline-start: auto; font-weight: 600; }
 /* canvas link preview — looks like a link, never navigates */
 .preview-link {
   color: #0a66c2;

@@ -99,9 +99,65 @@ const { safeHref } = require('./pzn/language/escape');
 const siteLanguage = require('./site-language');
 
 /**
- * Expand BenTML inline marks inside already-escaped? No — work on raw, escape segments.
- * @B{…} @I{…} @LINK(url: "…"){…} @CODE{…} @BREAK
+ * BenTML inline marks (docs/bentml-v0.md §8.2), expanded on the RAW string
+ * with every text leaf escaped — never on markup. v1.76 rendered the five of
+ * v0.1 (@B @I @CODE @LINK @BREAK). v2.66 adds the row the editor window grew
+ * — Ben: "even underline we don't have … it now requires html" — @U, @S,
+ * @COLOR, @HIGHLIGHT, @FONT, @SIZE — and lets marks NEST: the loop swallows
+ * the innermost mark first (its body holds no braces once its own children
+ * became placeholders), so `@B{@U{x}}` is bold-underline, not literal text.
+ *
+ * Nothing an author writes reaches a style attribute as written. A color is
+ * a palette TOKEN (a CSS variable, so the words re-tint with the theme) or a
+ * hex; a font is a token or a bare family name from the theme's shelf; a
+ * size is a named step. An unknown value keeps the words and drops the paint.
  */
+const INLINE_PALETTE = {
+  primary: 'var(--color-primary)', secondary: 'var(--color-secondary)',
+  text: 'var(--color-text)', muted: 'var(--color-muted)',
+  bg: 'var(--color-bg)', 'light-bg': 'var(--color-light-bg)',
+  surface: 'var(--color-surface)', border: 'var(--color-border)'
+};
+const INLINE_SIZES = { xs: '0.8em', sm: '0.9em', lg: '1.2em', xl: '1.45em', '2xl': '1.8em', '3xl': '2.3em' };
+const INLINE_FONTS = {
+  body: 'var(--font-family)',
+  heading: 'var(--font-heading)',
+  serif: 'Georgia, "Times New Roman", "Noto Serif Hebrew", serif',
+  sans: 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif',
+  mono: 'ui-monospace, Consolas, "Courier New", monospace'
+};
+const INLINE_TAGS = { B: 'strong', I: 'em', U: 'u', S: 's', CODE: 'code' };
+
+/** A palette token → its CSS variable; a #hex → itself; anything else → ''. */
+function inlineColor(name) {
+  const n = String(name || '').trim().toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(INLINE_PALETTE, n)) return INLINE_PALETTE[n];
+  if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(n)) return n;
+  return '';
+}
+
+/** A font token → its stack; a bare family name (letters, digits, spaces —
+ *  the theme's shelf) → quoted, falling back to the site font; else ''. */
+function inlineFont(name) {
+  const n = String(name || '').trim();
+  const k = n.toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(INLINE_FONTS, k)) return INLINE_FONTS[k];
+  if (/^[A-Za-z][A-Za-z0-9 ]{0,39}$/.test(n)) return `"${n}", var(--font-family)`;
+  return '';
+}
+
+/** The style declaration one valued mark paints — '' when the value is unknown. */
+function inlineDecl(kw, value) {
+  const v = String(value || '').trim();
+  switch (kw) {
+    case 'COLOR': { const c = inlineColor(v); return c ? `color:${c}` : ''; }
+    case 'HIGHLIGHT': { const c = inlineColor(v); return c ? `background:${c};color:inherit` : ''; }
+    case 'FONT': { const f = inlineFont(v); return f ? `font-family:${f}` : ''; }
+    case 'SIZE': { const s = INLINE_SIZES[v.toLowerCase()]; return s ? `font-size:${s}` : ''; }
+    default: return '';
+  }
+}
+
 function renderInlineMarks(raw) {
   let s = String(raw ?? '');
   const tokens = [];
@@ -111,17 +167,36 @@ function renderInlineMarks(raw) {
     return `§§TAPUZ${i}§§`;
   };
   s = s.replace(/@BREAK\b/gi, () => hold('<br>'));
-  s = s.replace(/@B\{([^{}]*)\}/gi, (_, inner) => hold(`<strong>${escapeHtml(inner)}</strong>`));
-  s = s.replace(/@I\{([^{}]*)\}/gi, (_, inner) => hold(`<em>${escapeHtml(inner)}</em>`));
-  s = s.replace(/@CODE\{([^{}]*)\}/gi, (_, inner) => hold(`<code>${escapeHtml(inner)}</code>`));
-  s = s.replace(
-    /@LINK\s*\(\s*url\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi,
-    (_, url, label) =>
-      hold(`<a href="${escapeHtml(safeHref(url))}" rel="noopener">${escapeHtml(label)}</a>`)
-  );
-  let out = escapeHtml(s);
-  out = out.replace(/§§TAPUZ(\d+)§§/g, (_, i) => tokens[Number(i)] || '');
-  return out;
+  // innermost first: a body matches only once it holds no braces, i.e. once
+  // every mark inside it has already become a placeholder
+  let prev;
+  let guard = 0;
+  do {
+    prev = s;
+    s = s.replace(/@(B|I|U|S|CODE)\{([^{}]*)\}/gi, (_, kw, inner) => {
+      const tag = INLINE_TAGS[kw.toUpperCase()];
+      return hold(`<${tag}>${escapeHtml(inner)}</${tag}>`);
+    });
+    s = s.replace(
+      /@LINK\s*\(\s*url\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi,
+      (_, url, label) =>
+        hold(`<a href="${escapeHtml(safeHref(url))}" rel="noopener">${escapeHtml(label)}</a>`)
+    );
+    s = s.replace(
+      /@(COLOR|HIGHLIGHT|FONT|SIZE)\s*\(\s*(?:name|size)\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi,
+      (_, kw, value, inner) => {
+        const k = kw.toUpperCase();
+        const decl = inlineDecl(k, value);
+        const text = escapeHtml(inner);
+        if (!decl) return hold(text);
+        const tag = k === 'HIGHLIGHT' ? 'mark' : 'span';
+        return hold(`<${tag} style="${escapeHtml(decl)}">${text}</${tag}>`);
+      }
+    );
+  } while (s !== prev && ++guard < 16);
+  // a held mark may hold placeholders of its own (nesting) — resolve inward
+  const resolve = (h) => h.replace(/§§TAPUZ(\d+)§§/g, (_, i) => resolve(tokens[Number(i)] || ''));
+  return resolve(escapeHtml(s));
 }
 
 /**
@@ -1430,4 +1505,4 @@ function renderPageToFile(page, outputPath) {
   return outputPath;
 }
 
-module.exports = { renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderSearchWidget, renderLangSwitcher, renderGa4Snippet, renderAnalyticsBeacon, pageBackgroundStyle, renderMenuItems, renderMainMenu };
+module.exports = { renderInlineMarks, INLINE_PALETTE, INLINE_SIZES, INLINE_FONTS, renderPage, renderBlock, renderPageToFile, renderWhatsappFloat, renderSearchWidget, renderLangSwitcher, renderGa4Snippet, renderAnalyticsBeacon, pageBackgroundStyle, renderMenuItems, renderMainMenu };

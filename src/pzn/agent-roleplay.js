@@ -177,9 +177,14 @@ function buildRoleplayPack(opts = {}) {
   lines.push(he
     ? '4. מהלכים לא חוקיים: HTML חופשי, `<style>`/`<script>`/CSS, מודולים או מאפיינים שלא במילון, מסמך חצוי.'
     : '4. Illegal moves: free HTML, `<style>`/`<script>`/CSS, modules or attributes not in the dictionary, incomplete documents.');
-  lines.push(he
-    ? '5. בלי תגיות HTML בטקסט (`<b>` `<i>` `<a>` `<br>`) — במקומן: `@B{מודגש}` · `@I{נטוי}` · `@LINK(url: "/דף"){טקסט}` · `@BREAK`.'
-    : '5. No HTML tags inside text (`<b>` `<i>` `<a>` `<br>`) — instead: `@B{bold}` · `@I{italic}` · `@LINK(url: "/page"){text}` · `@BREAK`.');
+  // the Word row (v2.66): the lite pack names underline — its free-plan
+  // budget has room for one word; the full pack also names the paint marks
+  const paint = he
+    ? ' צבע, סימון, גופן וגודל: `@COLOR(name: "primary"){…}` · `@HIGHLIGHT(name: "light-bg"){…}` · `@FONT(name: "heading"){…}` · `@SIZE(size: "xl"){…}` — שמות מהפלטה, לא CSS; הסימונים מקננים (`@B{@U{x}}`).'
+    : ' Color, highlight, font and size: `@COLOR(name: "primary"){…}` · `@HIGHLIGHT(name: "light-bg"){…}` · `@FONT(name: "heading"){…}` · `@SIZE(size: "xl"){…}` — palette names, never CSS; marks nest (`@B{@U{x}}`).';
+  lines.push((he
+    ? '5. בלי תגיות HTML בטקסט (`<b>` `<i>` `<a>` `<br>`) — במקומן: `@B{מודגש}` · `@I{נטוי}` · `@U{קו}` · `@LINK(url: "/דף"){טקסט}` · `@BREAK`.'
+    : '5. No HTML tags inside text (`<b>` `<i>` `<a>` `<br>`) — instead: `@B{bold}` · `@I{italic}` · `@U{underline}` · `@LINK(url: "/page"){text}` · `@BREAK`.') + (lite ? '' : paint));
   lines.push(he
     ? '6. **המהלך הוא המסמך.** שום פרוזה מסביב ל-fence: בלי "הנה הדף", בלי סיכום, בלי הצעות. ההדבקה כמו-שהיא חייבת לקמפל.'
     : '6. **The move IS the document.** No prose around the fence: no "here is your page", no summary, no offers. Pasted as-is, it must compile.');

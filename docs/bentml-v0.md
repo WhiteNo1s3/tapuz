@@ -463,7 +463,7 @@ warning **W402** and renders the text literally: the page compiles, the agent ge
 Unknown inline constructs are never forgiven by version skew (§17). Inline markup in a
 plain-text body renders literally with warning **W407** (§8).
 
-### 8.2 The eight inline constructs of v0.1
+### 8.2 The inline constructs (eight in v0.1, six more since v2.66)
 
 | Construct | Body | Params | Meaning |
 |---|---|---|---|
@@ -475,6 +475,12 @@ plain-text body renders literally with warning **W407** (§8).
 | `@RTL{ ... }` | text | `lang` string optional | right-to-left isolation span → `<bdi dir="rtl">` |
 | `@CODE{ ... }` | text | — | monospace, always rendered LTR → `<code dir="ltr">` |
 | `@BREAK` | none | — | hard line break within a paragraph → `<br>` |
+| `@U{ ... }` | text | — | underline → `<u>` (v2.66) |
+| `@S{ ... }` | text | — | strikethrough → `<s>` (v2.66) |
+| `@COLOR(name: "..."){ ... }` | text | `name` string **required**: a palette token `primary`\|`secondary`\|`text`\|`muted`\|`bg`\|`light-bg`\|`surface`\|`border` — rendered as the theme's CSS variable, so the words re-tint with the look — or a `#hex` | text color → `<span style="color: …">` (v2.66) |
+| `@HIGHLIGHT(name: "..."){ ... }` | text | `name` as in `@COLOR` | background highlight → `<mark style="background: …">` (v2.66) |
+| `@FONT(name: "..."){ ... }` | text | `name` string **required**: `body`\|`heading`\|`serif`\|`sans`\|`mono`, or a family from the theme's font shelf (`"Heebo"`) | font → `<span style="font-family: …">` (v2.66) |
+| `@SIZE(size: "..."){ ... }` | text | `size` enum `xs`\|`sm`\|`lg`\|`xl`\|`2xl`\|`3xl` **required** | text size in named steps → `<span style="font-size: …em">` (v2.66) |
 
 - `@LTR`/`@RTL` accept an optional `lang` parameter — `@LTR(lang: "en"){MacBook Pro}` — which
   emits `lang="en"` on the span for SEO and screen readers. Prefer the `lang` form whenever the
@@ -488,9 +494,12 @@ plain-text body renders literally with warning **W407** (§8).
   line and the paragraph is not split.
 - `@IMG` deliberately has **no `lg`** and a different default than the block `IMAGE`
   (`md` vs `full`): inline images are guests inside text, not layout.
-- **Inline constructs do not nest** in v0.1: `@B{@I{x}}` is error **E107**. A blank line
-  inside an inline construct's body is not a paragraph break — it collapses to a single
-  space.
+- **Inline constructs nest** since v2.66: `@B{@U{x}}` is bold-underline — the renderer expands the
+  innermost construct first, and the parser counts depth. (v0.1 forbade nesting as **E107**; a
+  document that nests is valid from v2.66 on.) An unknown value on a valued construct
+  (`@COLOR(name: "nope")`, `@SIZE(size: "99px")`) keeps the words and drops the paint, without an
+  error — no author value ever reaches a style attribute as written. A blank line inside an inline
+  construct's body is not a paragraph break — it collapses to a single space.
 - **The tail shape is fixed per keyword** by the table above, and once the trigger fires a
   wrong tail is an error, never literal text: a forbidden param-list (`@B(x: 1){...}`), a
   forbidden body (`@IMG{...}` — `@IMG` takes params only), or a missing required body
@@ -1350,7 +1359,7 @@ Codes are stable across versions. Ranges: `E0xx` document/version · `E1xx` stru
 | **E104** | child not allowed here (ROW→COL, LIST→ITEM, FEATURES→FEATURE, GALLERY→IMAGE; child-only keyword outside its container) |
 | **E105** | nesting deeper than the limit (a block enclosed by five or more blocks, §6.1) |
 | **E106** | wrong HTML fence (anything other than `{{{` as the last token after `HTML`) |
-| **E107** | inline construct shape violation: nested inline markup, a forbidden param-list or body, or a missing required body (§8.2; a missing required inline *parameter* is E306) |
+| **E107** | inline construct shape violation: a forbidden param-list or body, or a missing required body (§8.2; nesting is legal since v2.66; a missing required inline *parameter* is E306) |
 | **E108** | HERO body constraint violated (wrong/duplicate child, or a disallowed param on a child) |
 | **E109** | unescaped `{` in prose (Fix: `\{`) |
 | **E110** | unexpected token in block context (text after `}`, `//` inside parentheses, a comment between a keyword and its `{`, a TEXT-BODY/BLOCK-BODY keyword with no `{` at all, stray characters). When prose continues on the same line after a `}`, the message adds the hint that an unescaped `}` may have closed the body early (Fix: `\}`) |
@@ -1445,8 +1454,7 @@ WARNING W403 [line 31, col 6] TEXT: "**" looks like Markdown bold, which BenTML 
   where each unclosed block opened — append them innermost-first. E102/E104 include the
   corrected block shape verbatim — replace the offending lines with the `Fix:` snippet. E103:
   delete the braces (the keyword takes none). E107: make the inline construct match its fixed
-  tail shape (§8.2) — flatten nesting, remove a forbidden param-list or body, add the missing
-  body. E109: escape the brace (`\{`). E110: delete the stray text. E111: keep exactly one
+  tail shape (§8.2) — remove a forbidden param-list or body, add the missing body. E109: escape the brace (`\{`). E110: delete the stray text. E111: keep exactly one
   META block, placed immediately after the version line.
 - **E2xx (keywords):** the keyword does not exist in the declared version. Take the
   did-you-mean suggestion, or pick from the valid-keyword list in the message. Never invent a
@@ -1677,8 +1685,10 @@ HTML {{{             ← the ONLY raw-HTML door; no params; {{{ ends the keyword
   raw html, verbatim
 }}}                  ← the closing fence sits ALONE on its own line
 
-INSIDE TEXT: @B{bold} @I{italic} @LINK(url: "/x" REQUIRED){text} @IMG(src: "/x.jpg" REQUIRED, alt: "...")
-  @LTR{English} @RTL{עברית} (optional lang: "en") @CODE{mono} @BREAK — no nesting.
+INSIDE TEXT: @B{bold} @I{italic} @U{underline} @S{strike} @LINK(url: "/x" REQUIRED){text} @IMG(src: "/x.jpg" REQUIRED, alt: "...")
+  @LTR{English} @RTL{עברית} (optional lang: "en") @CODE{mono} @BREAK — marks nest: @B{@U{x}}.
+  @COLOR(name: "primary|secondary|text|muted|bg|light-bg|surface|border|#hex"){x} @HIGHLIGHT(name: "…"){x}
+  @FONT(name: "body|heading|serif|sans|mono|Heebo"){x} @SIZE(size: "xs|sm|lg|xl|2xl|3xl"){x} — names, never CSS.
   Inline markup works ONLY in TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies —
   BUTTON, FEATURE, MOTION and HERO children are plain text.
   NO Markdown: never ** or [x](url) or # headings or "- " bullets outside LIST ITEMs.

@@ -148,7 +148,8 @@ check('no smooth scrolling remains', !/behavior: 'smooth'/.test(builderSrc));
 check('single click no longer starts inline editing (startInlineEdit is gone)', !/startInlineEdit/.test(builderSrc));
 check('dblclick opens the centered editor window', /openTextEditor\(block\.id, key\)/.test(builderSrc));
 check('the HTML block gets the raw code editor', /isHtml = block\.type === 'html' && key === 'content'/.test(builderSrc));
-check('editor saves through history + dirty', /function save\(\) \{[\s\S]{0,200}?pushHistory\(\);[\s\S]{0,120}?markDirty\(\);/.test(builderSrc));
+// (v2.66: save() also lands the bar's alignment between the two calls)
+check('editor saves through history + dirty', /function save\(\) \{[\s\S]{0,300}?pushHistory\(\);[\s\S]{0,400}?markDirty\(\);/.test(builderSrc));
 check('editor modal styled as fixed overlay', /\.text-editor-modal \{[^}]*position: fixed/.test(css.replace(/\n/g, ' ')) && /\.text-editor-box\.is-code/.test(css));
 
 // ---- 9. Word tools in the editor window (v1.76) ----------------------------
@@ -173,9 +174,12 @@ check('admin.css animates the yield + draws the labeled ghost',
 
 check('editor window has the Word tools row (B/I/CODE/LINK)',
   /te-toolbar/.test(builderSrc) && /data-fmt="B"/.test(builderSrc) && /data-fmt="LINK"/.test(builderSrc));
+// v2.66: one helper writes every mark (`@KW{…}` / `@KW(param: "value"){…}`), and
+// the link prompt writes the address it asked for — never a bare https://
 check('tools emit BenTML marks, not raw HTML',
-  /'@B\{' \+ sel \+ '\}'/.test(builderSrc) && /@LINK\(url: "https:\/\/"\)/.test(builderSrc));
-check('the code editor keeps no word options', /\(isHtml \? '' :\s*'<div class="te-toolbar">/.test(builderSrc));
+  /var open = '@' \+ kw \+ \(param \? '\(' \+ param \+ ': "' \+ value \+ '"\)' : ''\) \+ '\{'/.test(builderSrc) &&
+  /'@LINK\(url: "' \+ url \+ '"\)\{' \+ label \+ '\}'/.test(builderSrc));
+check('the code editor keeps no word options', /var hasBar = !isHtml && fieldTakesMarks/.test(builderSrc) && /: isHtml \? ''/.test(builderSrc));
 check('editor shows a live rendered preview', /te-preview/.test(builderSrc) && /refreshPreview/.test(builderSrc));
 check('client marks renderer mirrors the server, escaped', /function renderMarksPreview/.test(builderSrc) && /§§TAPUZ/.test(builderSrc));
 check('canvas link previews never navigate (span, not anchor)', /preview-link/.test(builderSrc) && !/<a href.*preview-link/.test(builderSrc));
