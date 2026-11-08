@@ -328,7 +328,7 @@ class Parser {
   collectTextBody(firstChunk) {
     const parts = [];
     let inlineStart = false;
-    const scan = { inMark: false }; // a mark split across lines must not close the body
+    const scan = { markDepth: 0 }; // a mark split across lines must not close the body
     if (firstChunk) {
       const close = findUnescapedClose(firstChunk, scan);
       if (close !== -1) {
@@ -510,38 +510,38 @@ function findMatchingParen(s, openIdx) {
 
 /**
  * Find the body-closing `}` — skipping inline-mark spans (`@B{…}`, `@I{…}`,
- * `@CODE{…}`, `@LINK(url: "…"){…}`), whose own closing brace must never
- * terminate the body: `TEXT { @B{כותרת} — המשך }` ends at the LAST brace.
- * Marks are flat (renderInlineMarks forbids braces inside them), so one
- * boolean of nesting suffices. Pass `state` ({inMark}) to carry a mark that
- * a line break split in half; stateless calls scan a fresh single line.
+ * `@CODE{…}`, `@LINK(url: "…"){…}`, the v2.66 row), whose own closing brace
+ * must never terminate the body: `TEXT { @B{כותרת} — המשך }` ends at the LAST
+ * brace. Marks nest since v2.66 (`@B{@U{x}}`), so this counts DEPTH rather
+ * than one boolean. Pass `state` ({markDepth}) to carry marks that a line
+ * break split in half; stateless calls scan a fresh single line.
  */
 function findUnescapedClose(s, state) {
-  let inMark = state ? !!state.inMark : false;
+  let depth = state ? (state.markDepth | 0) : 0;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (c === '\\') {
       i++;
       continue;
     }
-    if (inMark) {
-      if (c === '}') inMark = false;
-      continue;
-    }
     if (c === '@') {
       const m = /^@[A-Za-z]+(\([^)]*\))?\{/.exec(s.slice(i));
       if (m) {
-        inMark = true;
+        depth++;
         i += m[0].length - 1;
       }
       continue;
     }
     if (c === '}') {
-      if (state) state.inMark = inMark;
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
+      if (state) state.markDepth = depth;
       return i;
     }
   }
-  if (state) state.inMark = inMark;
+  if (state) state.markDepth = depth;
   return -1;
 }
 

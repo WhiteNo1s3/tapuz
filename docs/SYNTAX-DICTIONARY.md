@@ -20,11 +20,18 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 
 - `@B{…}` — bold
 - `@I{…}` — italic
+- `@U{…}` — underline
+- `@S{…}` — strikethrough
 - `@LINK(url: "…"){…}` — link
 - `@CODE{…}` — monospace
+- `@COLOR(name: "primary|secondary|text|muted|bg|light-bg|surface|border|#hex"){…}` — text color from the site palette (a theme variable, re-tints with the look)
+- `@HIGHLIGHT(name: "…"){…}` — background highlight, same names
+- `@FONT(name: "body|heading|serif|sans|mono|Heebo"){…}` — font: the site font, the heading font, a generic stack, or a shelf family
+- `@SIZE(size: "xs|sm|lg|xl|2xl|3xl"){…}` — text size, in named steps
 - `@BREAK` — line break
 
 - Blank line = new paragraph
+- Marks nest: @B{@U{x}} — names, never CSS values
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 

@@ -227,10 +227,100 @@
     return String(s).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
   }
 
-  /** Client mirror of the server's renderInlineMarks (v1.76) — the BenTML
-   *  inline language (@B/@I/@CODE/@LINK/@BREAK) rendered SAFELY for canvas
-   *  and editor previews: everything escaped, marks become real tags, links
-   *  become styled spans (the canvas must never navigate). */
+  // ── Inline marks on the canvas (v2.66) ─────────────────────────────────
+  // Which fields the SITE renders marks in (src/renderer.js renderInlineMarks:
+  // heading, text, hero, quote, testimonial, list items, tab/fold bodies).
+  // Everywhere else a mark would reach the live page as literal text, so the
+  // Word bar shows only where the words will really dress up — and the canvas
+  // previews of these fields render the marks instead of showing them raw.
+  var MARK_FIELDS = {
+    text: /^content$/,
+    heading: /^text$/,
+    hero: /^(title|subtitle)$/,
+    quote: /^text$/,
+    testimonial: /^quote$/,
+    list: /^items\.\d+(\.text)?$/,
+    tabs: /^items\.\d+\.content$/,
+    accordion: /^items\.\d+\.content$/
+  };
+  function fieldTakesMarks(type, key) {
+    var re = MARK_FIELDS[type];
+    return !!(re && re.test(String(key || '')));
+  }
+  /** Whole-block text fields — the bar's alignment buttons set data.align. */
+  function fieldIsWholeBlock(type, key) {
+    return (type === 'text' && key === 'content') || (type === 'heading' && key === 'text');
+  }
+
+  // The site's palette and fonts for the bar's swatches and font list —
+  // fetched once from the theme API. A mark stores the NAME ("primary"), so
+  // the words re-tint with the theme; the hex only paints the swatch and the
+  // preview. The defaults below are the תפוז look, until the fetch lands.
+  var INLINE_PALETTE_NAMES = ['primary', 'secondary', 'text', 'muted', 'bg', 'light-bg', 'surface', 'border'];
+  var INLINE_PALETTE_LABELS = { primary: 'ראשי', secondary: 'משני', text: 'טקסט', muted: 'עמום', bg: 'רקע הדף', 'light-bg': 'רקע בהיר', surface: 'משטח', border: 'מסגרת' };
+  var sitePalette = { primary: '#ea580c', secondary: '#f59e0b', text: '#1c1917', muted: '#78716c', bg: '#fffbf7', 'light-bg': '#fdf1e6', surface: '#ffffff', border: '#ece5df' };
+  var siteFonts = { family: '', headingFamily: '', google: [] };
+  var sitePaletteLoaded = false;
+  function loadSitePalette(cb) {
+    if (sitePaletteLoaded) { if (cb) cb(); return; }
+    fetch('/admin/api/theme', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var o = (j && j.overrides) || {};
+        var c = o.colors || {};
+        INLINE_PALETTE_NAMES.forEach(function (n) {
+          var k = n === 'light-bg' ? 'lightBg' : n;
+          if (c[k]) sitePalette[n] = String(c[k]);
+        });
+        var f = o.fonts || {};
+        siteFonts = {
+          family: f.family || '',
+          headingFamily: f.headingFamily || '',
+          google: Array.isArray(f.google) ? f.google.filter(function (x) { return typeof x === 'string'; }) : []
+        };
+        sitePaletteLoaded = true;
+      })
+      .catch(function () {})
+      .then(function () { if (cb) cb(); });
+  }
+
+  var PREVIEW_SIZES = { xs: '0.8em', sm: '0.9em', lg: '1.2em', xl: '1.45em', '2xl': '1.8em', '3xl': '2.3em' };
+  var PREVIEW_FONTS = {
+    serif: 'Georgia, "Times New Roman", "Noto Serif Hebrew", serif',
+    sans: 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif',
+    mono: 'ui-monospace, Consolas, "Courier New", monospace'
+  };
+  var PREVIEW_TAGS = { B: 'strong', I: 'em', U: 'u', S: 's', CODE: 'code' };
+  /** A palette name → the site's hex; a #hex → itself; else ''. */
+  function previewColor(name) {
+    var n = String(name || '').trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(sitePalette, n)) return sitePalette[n];
+    if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(n)) return n;
+    return '';
+  }
+  function previewFont(name) {
+    var n = String(name || '').trim();
+    var k = n.toLowerCase();
+    if (k === 'body') return siteFonts.family || 'inherit';
+    if (k === 'heading') return siteFonts.headingFamily || siteFonts.family || 'inherit';
+    if (PREVIEW_FONTS[k]) return PREVIEW_FONTS[k];
+    if (/^[A-Za-z][A-Za-z0-9 ]{0,39}$/.test(n)) return '"' + n + '", ' + (siteFonts.family || 'inherit');
+    return '';
+  }
+  function previewDecl(kw, value) {
+    var v = String(value || '').trim();
+    if (kw === 'COLOR') { var c = previewColor(v); return c ? 'color:' + c : ''; }
+    if (kw === 'HIGHLIGHT') { var h = previewColor(v); return h ? 'background:' + h + ';color:inherit' : ''; }
+    if (kw === 'FONT') { var f = previewFont(v); return f ? 'font-family:' + f : ''; }
+    if (kw === 'SIZE') { var s = PREVIEW_SIZES[v.toLowerCase()]; return s ? 'font-size:' + s : ''; }
+    return '';
+  }
+
+  /** Client mirror of the server's renderInlineMarks (v1.76; the v2.66 row
+   *  and nesting too) — the BenTML inline language rendered SAFELY for
+   *  canvas and editor previews: everything escaped, marks become real tags,
+   *  links become styled spans (the canvas must never navigate). Innermost
+   *  mark first: a body matches only once it holds no braces. */
   function renderMarksPreview(raw) {
     var s = String(raw == null ? '' : raw);
     var tokens = [];
@@ -239,15 +329,30 @@
       return '§§TAPUZ' + (tokens.length - 1) + '§§';
     };
     s = s.replace(/@BREAK\b/gi, function () { return hold('<br>'); });
-    s = s.replace(/@B\{([^{}]*)\}/gi, function (_, inner) { return hold('<strong>' + esc(inner) + '</strong>'); });
-    s = s.replace(/@I\{([^{}]*)\}/gi, function (_, inner) { return hold('<em>' + esc(inner) + '</em>'); });
-    s = s.replace(/@CODE\{([^{}]*)\}/gi, function (_, inner) { return hold('<code>' + esc(inner) + '</code>'); });
-    s = s.replace(/@LINK\s*\(\s*url\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi, function (_, url, label) {
-      return hold('<span class="preview-link" title="' + escAttr(url) + '">' + esc(label) + '</span>');
-    });
-    var out = esc(s);
-    out = out.replace(/§§TAPUZ(\d+)§§/g, function (_, i) { return tokens[Number(i)] || ''; });
-    return out;
+    var prev;
+    var guard = 0;
+    do {
+      prev = s;
+      s = s.replace(/@(B|I|U|S|CODE)\{([^{}]*)\}/gi, function (_, kw, inner) {
+        var tag = PREVIEW_TAGS[kw.toUpperCase()];
+        return hold('<' + tag + '>' + esc(inner) + '</' + tag + '>');
+      });
+      s = s.replace(/@LINK\s*\(\s*url\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi, function (_, url, label) {
+        return hold('<span class="preview-link" title="' + escAttr(url) + '">' + esc(label) + '</span>');
+      });
+      s = s.replace(/@(COLOR|HIGHLIGHT|FONT|SIZE)\s*\(\s*(?:name|size)\s*:\s*"([^"]*)"\s*\)\s*\{([^{}]*)\}/gi, function (_, kw, value, inner) {
+        var k = kw.toUpperCase();
+        var decl = previewDecl(k, value);
+        var text = esc(inner);
+        if (!decl) return hold(text);
+        var tag = k === 'HIGHLIGHT' ? 'mark' : 'span';
+        return hold('<' + tag + ' style="' + escAttr(decl) + '">' + text + '</' + tag + '>');
+      });
+    } while (s !== prev && ++guard < 16);
+    var resolve = function (h) {
+      return h.replace(/§§TAPUZ(\d+)§§/g, function (_, i) { return resolve(tokens[Number(i)] || ''); });
+    };
+    return resolve(esc(s));
   }
 
   function uid(type) {
@@ -1057,6 +1162,9 @@
 
   function init(config) {
     blocks = config.blocks || [];
+    // the site's palette for colored marks on the canvas (v2.66) — repaint
+    // once it lands, unless the owner is already working on a block
+    loadSitePalette(function () { if (sitePaletteLoaded && blocks.length && !selectedId) renderCanvas(); });
     (function walk(list) {
       list.forEach(function (b) {
         if (!b.id) b.id = uid(b.type || 'block');
@@ -1826,8 +1934,8 @@
         : '';
       wrap.innerHTML =
         '<div class="preview-hero">' +
-        '<h1 data-inline-key="title">' + esc(d.title || 'כותרת ראשית') + '</h1>' +
-        '<p data-inline-key="subtitle">' + esc(d.subtitle || 'תת כותרת — לחצו לעריכה') + '</p>' +
+        '<h1 data-inline-key="title">' + renderMarksPreview(d.title || 'כותרת ראשית') + '</h1>' +
+        '<p data-inline-key="subtitle">' + renderMarksPreview(d.subtitle || 'תת כותרת — לחצו לעריכה') + '</p>' +
         heroMoreLine +
         '</div>';
       wireInlineEditable(wrap, block);
@@ -1838,7 +1946,7 @@
       var level = Math.min(Math.max(d.level || 2, 1), 6);
       wrap.innerHTML =
         '<h' + level + ' data-inline-key="text" style="margin:4px 0">' +
-        esc(d.text || 'כותרת') +
+        renderMarksPreview(d.text || 'כותרת') +
         '</h' + level + '>';
       wireInlineEditable(wrap, block);
       return wrap;
@@ -1915,7 +2023,7 @@
     if (block.type === 'testimonial') {
       wrap.innerHTML =
         '<div class="preview-testimonial">' +
-        '<div data-inline-key="quote" style="font-style:italic">' + esc(d.quote || 'ציטוט...') + '</div>' +
+        '<div data-inline-key="quote" style="font-style:italic">' + renderMarksPreview(d.quote || 'ציטוט...') + '</div>' +
         '<div data-inline-key="author" style="margin-top:8px;font-size:0.9rem;font-weight:600">' +
         esc(d.author || 'שם') +
         '</div>' +
@@ -1956,7 +2064,7 @@
             // string items edit items.N itself; object items edit items.N.text
             var liKey = typeof it === 'string' ? 'items.' + i : 'items.' + i + '.text';
             return '<li data-inline-key="' + escAttr(liKey) + '" style="min-height:1.2em">' +
-              esc(typeof it === 'string' ? it : (it.text || '')) + '</li>';
+              renderMarksPreview(typeof it === 'string' ? it : (it.text || '')) + '</li>';
           })
           .join('') +
         '</' + listTag + '>';
@@ -2045,7 +2153,7 @@
     if (block.type === 'quote') {
       wrap.innerHTML =
         '<blockquote class="preview-quote">' +
-        '<p data-inline-key="text">' + esc(d.text || 'ציטוט…') + '</p>' +
+        '<p data-inline-key="text">' + renderMarksPreview(d.text || 'ציטוט…') + '</p>' +
         (d.author ? '<footer data-inline-key="author">— ' + esc(d.author) + '</footer>' : '<footer data-inline-key="author">— מקור</footer>') +
         '</blockquote>';
       wireInlineEditable(wrap, block);
@@ -2217,7 +2325,7 @@
           return '<span class="preview-tab-chip' + (i === 0 ? ' active' : '') + '">' + esc(it.label || ('טאב ' + (i + 1))) + '</span>';
         }).join('') +
         '</div>' +
-        '<div class="preview-tab-body">' + esc((tItems[0] && tItems[0].content) || 'תוכן הלשונית — ערכו במאפיינים') + '</div>' +
+        '<div class="preview-tab-body">' + renderMarksPreview((tItems[0] && tItems[0].content) || 'תוכן הלשונית — ערכו במאפיינים').replace(/\n/g, '<br>') + '</div>' +
         '</div>';
       return wrap;
     }
@@ -2229,7 +2337,7 @@
         (aItems.length ? aItems : [{ title: 'מגירה 1' }, { title: 'מגירה 2' }]).map(function (it, i) {
           return '<div class="preview-fold">' +
             '<div class="preview-fold-head">' + (i === 0 ? '▾ ' : '▸ ') + esc(it.title || 'כותרת') + '</div>' +
-            (i === 0 ? '<div class="preview-fold-body">' + esc(it.content || 'תוכן — ערכו במאפיינים') + '</div>' : '') +
+            (i === 0 ? '<div class="preview-fold-body">' + renderMarksPreview(it.content || 'תוכן — ערכו במאפיינים').replace(/\n/g, '<br>') + '</div>' : '') +
             '</div>';
         }).join('') +
         '</div>';
@@ -3476,11 +3584,13 @@
     var nodes = document.querySelectorAll(
       '[data-inline-id="' + cssEsc(id) + '"][data-inline-key="' + cssEsc(key) + '"]'
     );
+    var blk = getBlock(id);
+    var withMarks = !!blk && fieldTakesMarks(blk.type, key);
     nodes.forEach(function (target) {
       if (target.isContentEditable) return;
-      if (key === 'content') {
-        // marks render in the preview too (v1.76) — Word-like means you see
-        // the bold, not the @B{} mark
+      if (withMarks) {
+        // marks render in the preview too (v1.76; every mark-bearing field
+        // since v2.66) — Word-like means you see the bold, not the @B{} mark
         target.innerHTML = renderMarksPreview(val || '').replace(/\n/g, '<br>');
       } else {
         target.textContent = val || '';
@@ -3575,36 +3685,258 @@
     });
   }
 
+  // ── The Word bar (v2.66) ────────────────────────────────────────────────
+  // Ben: "we don't include tools for advanced editing and even underline we
+  // don't have, we need a bar with the basic text function of word with
+  // hyperlink option … a coloring scheme for the site, fonts … raising the
+  // size, it now requires html". The window stays a text box with the live
+  // preview under it (v1.75); the bar now writes every mark the renderer
+  // knows (src/renderer.js renderInlineMarks), the marks nest, and the link
+  // button asks — for the address when words are selected, for the words
+  // first when nothing is.
+  var TE_STEPS = ['xs', 'sm', '', 'lg', 'xl', '2xl', '3xl'];
+  var TE_SIZE_LABELS = { xs: 'קטן מאוד', sm: 'קטן', '': 'גודל רגיל', lg: 'גדול', xl: 'גדול מאוד', '2xl': 'ענק', '3xl': 'ענק במיוחד' };
+
+  /** Index of the `}` that closes a mark whose body starts at `from`. */
+  function teMatchClose(s, from) {
+    var depth = 0;
+    for (var i = from; i < s.length; i++) {
+      var ch = s[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') { if (depth === 0) return i; depth--; }
+    }
+    return -1;
+  }
+
+  /** Every mark in `s`: {kw, value, start, bodyStart, end} — end = its `}`. */
+  function teMarks(s) {
+    var out = [];
+    var re = /@([A-Za-z]+)(?:\(\s*[a-z]+\s*:\s*"([^"]*)"\s*\))?\{/g;
+    var m;
+    while ((m = re.exec(s))) {
+      var close = teMatchClose(s, m.index + m[0].length);
+      if (close < 0) continue;
+      out.push({ kw: m[1].toUpperCase(), value: m[2] == null ? '' : m[2], start: m.index, bodyStart: m.index + m[0].length, end: close });
+    }
+    return out;
+  }
+
+  /** The innermost mark of kind `kw` that applies to the selection: with a
+   *  caret, the mark it sits in; with a selection, the mark the selection IS,
+   *  every mark that fills that mark's whole body (inward), and every mark
+   *  whose whole body is the selection (outward) — so with @B{@FONT{word}}
+   *  selected from the @FONT, the bar shows bold, the font and the size. */
+  function teEnclosing(ta, kw) {
+    var a = ta.selectionStart || 0;
+    var b = ta.selectionEnd || 0;
+    var marks = teMarks(ta.value);
+    var best = null;
+    if (a === b) {
+      marks.forEach(function (mk) {
+        if (mk.kw === kw && a > mk.start && a <= mk.end && (!best || mk.start >= best.start)) best = mk;
+      });
+      return best;
+    }
+    var s = a;
+    var e = b;
+    var guard = 0;
+    while (guard++ < 32) {
+      var hit = null;
+      for (var i = 0; i < marks.length; i++) {
+        if (marks[i].start === s && marks[i].end + 1 === e) { hit = marks[i]; break; }
+      }
+      if (!hit) break;
+      if (hit.kw === kw) best = hit;
+      s = hit.bodyStart;
+      e = hit.end;
+    }
+    s = a;
+    e = b;
+    guard = 0;
+    while (!best && guard++ < 32) {
+      var wrap = null;
+      for (var j = 0; j < marks.length; j++) {
+        if (marks[j].bodyStart === s && marks[j].end === e) { wrap = marks[j]; break; }
+      }
+      if (!wrap) break;
+      if (wrap.kw === kw) best = wrap;
+      s = wrap.start;
+      e = wrap.end + 1;
+    }
+    return best;
+  }
+
+  function teSetValue(ta, start, end, text, selA, selB) {
+    ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+    ta.setSelectionRange(selA, selB);
+    ta.focus();
+  }
+
+  /** Nothing selected → the word under the caret (never a mark's own keyword). */
+  function teTargetRange(ta) {
+    var a = ta.selectionStart || 0;
+    var b = ta.selectionEnd || 0;
+    if (a !== b) return { start: a, end: b };
+    var v = ta.value;
+    var word = function (ch) { return !!ch && !/[\s{}()@"]/.test(ch); };
+    var s = a;
+    var e = b;
+    while (s > 0 && word(v[s - 1])) s--;
+    while (e < v.length && word(v[e])) e++;
+    if (s > 0 && v[s - 1] === '@') return { start: a, end: a };
+    return { start: s, end: e };
+  }
+
+  /** Remove every mark of kind `kw` (all marks when kw is null); the words stay. */
+  function teUnwrapKind(s, kw) {
+    var guard = 0;
+    for (;;) {
+      var marks = teMarks(s).filter(function (mk) { return !kw || mk.kw === kw; });
+      if (!marks.length || ++guard > 64) return s;
+      var mk = marks[marks.length - 1];
+      s = s.slice(0, mk.start) + s.slice(mk.bodyStart, mk.end) + s.slice(mk.end + 1);
+    }
+  }
+
+  /** Wrap / toggle / re-value one mark around the selection or the caret's word.
+   *  A plain mark (B, I, U, S, CODE) toggles; a valued mark (SIZE, FONT,
+   *  COLOR, HIGHLIGHT) takes the new value, and '' takes it off. */
+  function teApplyMark(ta, kw, param, value) {
+    var open = '@' + kw + (param ? '(' + param + ': "' + value + '")' : '') + '{';
+    var enc = teEnclosing(ta, kw);
+    if (enc) {
+      var body = ta.value.slice(enc.bodyStart, enc.end);
+      if (!param || !value) {
+        teSetValue(ta, enc.start, enc.end + 1, body, enc.start, enc.start + body.length);
+      } else {
+        var rep = open + body + '}';
+        teSetValue(ta, enc.start, enc.end + 1, rep, enc.start, enc.start + rep.length);
+      }
+      return;
+    }
+    if (param && !value) {
+      var a = ta.selectionStart || 0;
+      var b = ta.selectionEnd || 0;
+      if (a !== b) {
+        var stripped = teUnwrapKind(ta.value.slice(a, b), kw);
+        teSetValue(ta, a, b, stripped, a, a + stripped.length);
+      }
+      return;
+    }
+    var r = teTargetRange(ta);
+    var sel = ta.value.slice(r.start, r.end);
+    if (!sel) {
+      var ph = 'טקסט';
+      teSetValue(ta, r.start, r.end, open + ph + '}', r.start + open.length, r.start + open.length + ph.length);
+      return;
+    }
+    var out = open + sel + '}';
+    teSetValue(ta, r.start, r.end, out, r.start, r.start + out.length);
+  }
+
+  /** The link the selection sits in, if any. */
+  function teLinkAt(ta) {
+    var a = ta.selectionStart || 0;
+    var b = ta.selectionEnd || 0;
+    var hit = null;
+    teMarks(ta.value).forEach(function (mk) {
+      if (mk.kw === 'LINK' && a >= mk.start && b <= mk.end + 1) hit = mk;
+    });
+    return hit;
+  }
+  /** An address the mark can carry: no quotes, braces, parens or spaces raw;
+   *  a bare domain becomes https://. The server still runs safeHref on it. */
+  function teCleanUrl(u) {
+    var s = String(u || '').trim().replace(/["{}()\s]/g, function (ch) { return encodeURIComponent(ch); });
+    if (!s) return '';
+    if (!/^(?:[a-z][a-z0-9+.-]*:|\/|#|\?)/i.test(s)) s = 'https://' + s;
+    return s;
+  }
+  function teCleanLabel(t) {
+    return String(t || '').replace(/[{}]/g, function (ch) { return ch === '{' ? '(' : ')'; }).replace(/\s+/g, ' ').trim();
+  }
+
+  function teFontOptions() {
+    return '<option value="">גופן האתר</option><option value="heading">גופן הכותרות</option>' +
+      (siteFonts.google || []).map(function (f) {
+        return '<option value="' + escAttr(f) + '">' + esc(f) + '</option>';
+      }).join('') +
+      '<option value="serif">סריף</option><option value="sans">סאנס-סריף</option><option value="mono">מונו (קוד)</option>';
+  }
+
+  function teToolbarHtml(wholeBlock, align) {
+    var btn = function (fmt, title, label) {
+      return '<button type="button" data-fmt="' + fmt + '" title="' + escAttr(title) + '">' + label + '</button>';
+    };
+    var rtl = pageDirection !== 'ltr';
+    // three lines hugging the start, the middle or the end — drawn for the
+    // PAGE's direction, so "start" points where the page's text starts
+    var alignSvg = function (where) {
+      return '<svg viewBox="0 0 16 14" aria-hidden="true">' + [16, 10, 13].map(function (len, i) {
+        var x = where === 'center' ? (16 - len) / 2 : ((where === 'start') === rtl ? 16 - len : 0);
+        return '<rect x="' + x + '" y="' + (i * 5) + '" width="' + len + '" height="2" rx="1"></rect>';
+      }).join('') + '</svg>';
+    };
+    return '<div class="te-toolbar" role="toolbar" aria-label="עיצוב טקסט">' +
+      '<div class="te-group">' +
+      btn('B', 'מודגש (Ctrl+B)', '<strong>B</strong>') +
+      btn('I', 'נטוי (Ctrl+I)', '<em>I</em>') +
+      btn('U', 'קו תחתון (Ctrl+U)', '<u>U</u>') +
+      btn('S', 'קו חוצה', '<s>S</s>') +
+      '</div><div class="te-group">' +
+      btn('LINK', 'קישור (Ctrl+K)', '🔗') +
+      btn('CODE', 'קוד', '&lt;/&gt;') +
+      '</div><div class="te-group">' +
+      '<button type="button" data-size-step="-1" title="הקטן טקסט (Ctrl+[)">A<small>−</small></button>' +
+      '<select class="te-size" title="גודל טקסט">' +
+      TE_STEPS.map(function (s) { return '<option value="' + s + '">' + TE_SIZE_LABELS[s] + '</option>'; }).join('') +
+      '</select>' +
+      '<button type="button" data-size-step="1" title="הגדל טקסט (Ctrl+])">A<small>+</small></button>' +
+      '</div><div class="te-group">' +
+      '<select class="te-font" title="גופן">' + teFontOptions() + '</select>' +
+      '</div><div class="te-group">' +
+      '<button type="button" data-pop="color" class="te-swatch-btn" title="צבע טקסט — מצבעי האתר">A<span class="te-swatch-bar"></span></button>' +
+      '<button type="button" data-pop="highlight" class="te-swatch-btn" title="סימון רקע — מצבעי האתר">🖍<span class="te-swatch-bar"></span></button>' +
+      '</div>' +
+      (wholeBlock
+        ? '<div class="te-group te-align">' + ['start', 'center', 'end'].map(function (a) {
+          var title = a === 'start' ? 'יישור להתחלה' : a === 'center' ? 'מרכז' : 'יישור לסוף';
+          return '<button type="button" data-align="' + a + '" title="' + title + '"' + (align === a ? ' class="active"' : '') + '>' + alignSvg(a) + '</button>';
+        }).join('') + '</div>'
+        : '') +
+      '<div class="te-group">' + btn('CLEAR', 'נקה עיצוב — הסר את כל הסימונים מהבחירה', '🧹') + '</div>' +
+      '<span class="te-hint">שורה ריקה = פסקה חדשה</span>' +
+      '</div>';
+  }
+
   /** Centered editor window (v1.75). The modal is FIXED — opening it never
    *  scrolls the page. type 'html' + content → raw code editor, no word
-   *  options; everything else → a clean document-like textbox. */
-  function openTextEditor(blockId, key) {
+   *  options; a field the site renders marks in → the Word bar (v2.66);
+   *  any other field → a clean box, because a mark there would reach the
+   *  live page as literal text. opts.pop = 'link' opens the link prompt. */
+  function openTextEditor(blockId, key, opts) {
+    opts = opts || {};
     var block = getBlock(blockId);
     if (!block) return;
     if (!block.data) block.data = {};
     selectBlock(blockId); // calm path — highlight + panel follow, no jump
     var isHtml = block.type === 'html' && key === 'content';
+    var hasBar = !isHtml && fieldTakesMarks(block.type, key);
+    var wholeBlock = hasBar && fieldIsWholeBlock(block.type, key);
     var curVal = getDataPath(block.data, key);
     var original = curVal != null ? String(curVal) : '';
+    var pendingAlign = block.data.align || 'start';
     var overlay = document.createElement('div');
     overlay.className = 'text-editor-modal';
-    // The Word tools (v1.76, Ben: "there are no tools in text box like word
-    // that I requested") — buttons emit the BenTML inline marks the server
-    // already renders (@B/@I/@CODE/@LINK): real formatting, zero new attack
-    // surface. The code editor keeps NO word options, by design.
     overlay.innerHTML =
-      '<div class="text-editor-box' + (isHtml ? ' is-code' : '') + '">' +
+      '<div class="text-editor-box' + (isHtml ? ' is-code' : '') + (hasBar ? ' has-bar' : '') + '">' +
       '<div class="te-head"><span>' +
       (isHtml ? '🧾 עורך HTML — קוד בלבד' : '📝 עריכת טקסט') +
       '</span><button type="button" class="te-close" aria-label="סגור">✕</button></div>' +
-      (isHtml ? '' :
-        '<div class="te-toolbar">' +
-        '<button type="button" data-fmt="B" title="מודגש (Ctrl+B)"><strong>B</strong></button>' +
-        '<button type="button" data-fmt="I" title="נטוי (Ctrl+I)"><em>I</em></button>' +
-        '<button type="button" data-fmt="CODE" title="קוד">&lt;/&gt;</button>' +
-        '<button type="button" data-fmt="LINK" title="קישור (Ctrl+K)">🔗</button>' +
-        '<span class="te-hint">שורה ריקה = פסקה חדשה</span>' +
-        '</div>') +
+      (hasBar ? teToolbarHtml(wholeBlock, pendingAlign)
+        : isHtml ? ''
+          : '<div class="te-toolbar te-plain"><span class="te-hint">שדה פשוט — טקסט בלבד, בלי עיצוב פנימי</span></div>') +
+      '<div class="te-pop" hidden></div>' +
       '<textarea class="te-input" dir="' + (isHtml ? 'ltr' : 'auto') + '"' +
       (isHtml ? ' spellcheck="false"' : '') + '></textarea>' +
       (isHtml ? '' : '<div class="te-preview" dir="auto"></div>') +
@@ -3615,42 +3947,208 @@
     document.body.appendChild(overlay);
     var ta = overlay.querySelector('.te-input');
     ta.value = original;
+    var pop = overlay.querySelector('.te-pop');
+    var pv = overlay.querySelector('.te-preview');
 
     // live rendered preview — the "Word" half: you SEE the bold, not the mark
-    var pv = overlay.querySelector('.te-preview');
     function refreshPreview() {
       if (!pv) return;
       var parts = String(ta.value || '').split(/\n\n+/);
       pv.innerHTML = parts.map(function (p) {
         return '<p>' + renderMarksPreview(p).replace(/\n/g, '<br>') + '</p>';
       }).join('');
+      pv.style.textAlign = wholeBlock ? (pendingAlign === 'center' ? 'center' : pendingAlign === 'end' ? 'end' : '') : '';
     }
-    refreshPreview();
-    ta.addEventListener('input', refreshPreview);
 
-    function wrapMark(fmt) {
-      var start = ta.selectionStart || 0;
-      var end = ta.selectionEnd || 0;
-      var sel = ta.value.slice(start, end) || 'טקסט';
-      var ins = fmt === 'B' ? '@B{' + sel + '}'
-        : fmt === 'I' ? '@I{' + sel + '}'
-        : fmt === 'CODE' ? '@CODE{' + sel + '}'
-        : '@LINK(url: "https://"){' + sel + '}';
-      ta.value = ta.value.slice(0, start) + ins + ta.value.slice(end);
-      var pos = start + ins.length;
-      ta.setSelectionRange(pos, pos);
-      ta.focus();
-      refreshPreview();
+    // the bar follows the caret: a pressed button means "you are inside this"
+    function syncBar() {
+      if (!hasBar) return;
+      ['B', 'I', 'U', 'S', 'CODE', 'LINK'].forEach(function (kw) {
+        var b = overlay.querySelector('[data-fmt="' + kw + '"]');
+        if (b) b.classList.toggle('active', !!teEnclosing(ta, kw));
+      });
+      var sz = teEnclosing(ta, 'SIZE');
+      var sizeSel = overlay.querySelector('.te-size');
+      if (sizeSel) sizeSel.value = sz && TE_STEPS.indexOf(sz.value.toLowerCase()) >= 0 ? sz.value.toLowerCase() : '';
+      var ft = teEnclosing(ta, 'FONT');
+      var fontSel = overlay.querySelector('.te-font');
+      if (fontSel) {
+        var fv = ft ? ft.value : '';
+        var known = Array.prototype.some.call(fontSel.options, function (o) { return o.value === fv; });
+        fontSel.value = known ? fv : '';
+      }
+      var col = teEnclosing(ta, 'COLOR');
+      var bar = overlay.querySelector('[data-pop="color"] .te-swatch-bar');
+      if (bar) bar.style.background = col ? (previewColor(col.value) || sitePalette.text) : sitePalette.text;
+      var hl = teEnclosing(ta, 'HIGHLIGHT');
+      var hbar = overlay.querySelector('[data-pop="highlight"] .te-swatch-bar');
+      if (hbar) hbar.style.background = hl ? (previewColor(hl.value) || 'transparent') : 'transparent';
     }
+    function afterEdit() { refreshPreview(); syncBar(); }
+    refreshPreview();
+    syncBar();
+    ta.addEventListener('input', afterEdit);
+    ta.addEventListener('keyup', syncBar);
+    ta.addEventListener('mouseup', syncBar);
+    // the palette may land after the window opened — repaint swatches and fonts
+    loadSitePalette(function () {
+      if (!overlay.isConnected) return;
+      var fontSel = overlay.querySelector('.te-font');
+      if (fontSel) { var keep = fontSel.value; fontSel.innerHTML = teFontOptions(); fontSel.value = keep; }
+      afterEdit();
+    });
+
+    function closePop() { pop.hidden = true; pop.innerHTML = ''; pop.dataset.kind = ''; }
+
+    // 🔗 — words selected: ask for the address. Nothing selected: ask for the
+    // words first, then the address, and write the sentence in. Caret inside a
+    // link: edit that link (or take it off).
+    function openLinkPop() {
+      var existing = teLinkAt(ta);
+      var a = ta.selectionStart || 0;
+      var b = ta.selectionEnd || 0;
+      var selText = existing ? ta.value.slice(existing.bodyStart, existing.end) : ta.value.slice(a, b);
+      var needText = !existing && a === b;
+      pop.dataset.kind = 'link';
+      pop.innerHTML =
+        (needText ? '<label>טקסט הקישור<input type="text" class="te-link-text" placeholder="המילים שיהפכו לקישור"></label>' : '') +
+        '<label>כתובת<input type="url" class="te-link-url" dir="ltr" placeholder="https://… או /דף"></label>' +
+        '<div class="te-pop-actions">' +
+        '<button type="button" class="btn te-pop-ok">' + (existing ? 'עדכן קישור' : 'הוסף קישור') + '</button>' +
+        (existing ? '<button type="button" class="btn secondary te-pop-unlink">הסר קישור</button>' : '') +
+        '<button type="button" class="btn secondary te-pop-cancel">ביטול</button>' +
+        '</div>';
+      pop.hidden = false;
+      var urlIn = pop.querySelector('.te-link-url');
+      var textIn = pop.querySelector('.te-link-text');
+      if (existing) urlIn.value = existing.value;
+      function apply() {
+        var url = teCleanUrl(urlIn.value);
+        if (!url) { urlIn.classList.add('is-missing'); urlIn.focus(); return; }
+        var label = teCleanLabel(textIn ? textIn.value : selText) || url;
+        var mark = '@LINK(url: "' + url + '"){' + label + '}';
+        var r = existing ? { start: existing.start, end: existing.end + 1 } : { start: a, end: b };
+        teSetValue(ta, r.start, r.end, mark, r.start, r.start + mark.length);
+        closePop();
+        afterEdit();
+      }
+      pop.querySelector('.te-pop-ok').addEventListener('click', apply);
+      pop.querySelector('.te-pop-cancel').addEventListener('click', function () { closePop(); ta.focus(); });
+      var unlink = pop.querySelector('.te-pop-unlink');
+      if (unlink) unlink.addEventListener('click', function () {
+        var body = ta.value.slice(existing.bodyStart, existing.end);
+        teSetValue(ta, existing.start, existing.end + 1, body, existing.start, existing.start + body.length);
+        closePop();
+        afterEdit();
+      });
+      pop.querySelectorAll('input').forEach(function (inp) {
+        inp.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); apply(); }
+          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePop(); ta.focus(); }
+        });
+      });
+      (textIn || urlIn).focus();
+    }
+
+    // 🎨 / 🖍 — the site's palette as swatches, a custom color, and "none"
+    function openColorPop(kind) {
+      var kw = kind === 'color' ? 'COLOR' : 'HIGHLIGHT';
+      var enc = teEnclosing(ta, kw);
+      var cur = enc ? enc.value.toLowerCase() : '';
+      pop.dataset.kind = kind;
+      pop.innerHTML =
+        '<span class="te-pop-title">' + (kind === 'color' ? 'צבע טקסט' : 'סימון רקע') + ' · צבעי האתר</span>' +
+        '<div class="te-swatches">' +
+        INLINE_PALETTE_NAMES.map(function (n) {
+          return '<button type="button" class="te-swatch' + (cur === n ? ' active' : '') + '" data-color="' + n + '" title="' +
+            escAttr(INLINE_PALETTE_LABELS[n]) + '" style="background:' + escAttr(sitePalette[n]) + '"></button>';
+        }).join('') +
+        '<input type="color" class="te-swatch-custom" title="צבע מותאם אישית" value="' + escAttr(/^#[0-9a-f]{6}$/.test(cur) ? cur : '#334155') + '">' +
+        '</div>' +
+        '<div class="te-pop-actions">' +
+        '<button type="button" class="btn secondary te-pop-none">' + (kind === 'color' ? 'בלי צבע' : 'בלי סימון') + '</button>' +
+        '<button type="button" class="btn secondary te-pop-cancel">סגור</button>' +
+        '</div>';
+      pop.hidden = false;
+      pop.querySelectorAll('[data-color]').forEach(function (sw) {
+        sw.addEventListener('click', function () { teApplyMark(ta, kw, 'name', sw.dataset.color); closePop(); afterEdit(); });
+      });
+      pop.querySelector('.te-swatch-custom').addEventListener('change', function (e) {
+        teApplyMark(ta, kw, 'name', e.target.value); closePop(); afterEdit();
+      });
+      pop.querySelector('.te-pop-none').addEventListener('click', function () { teApplyMark(ta, kw, 'name', ''); closePop(); afterEdit(); });
+      pop.querySelector('.te-pop-cancel').addEventListener('click', function () { closePop(); ta.focus(); });
+    }
+
+    function stepSize(dir) {
+      var enc = teEnclosing(ta, 'SIZE');
+      var cur = enc ? enc.value.toLowerCase() : '';
+      var i = TE_STEPS.indexOf(cur);
+      if (i < 0) i = TE_STEPS.indexOf('');
+      var next = TE_STEPS[Math.max(0, Math.min(TE_STEPS.length - 1, i + dir))];
+      if (next === cur) return;
+      teApplyMark(ta, 'SIZE', 'size', next);
+      afterEdit();
+    }
+
+    function clearFormatting() {
+      var a = ta.selectionStart || 0;
+      var b = ta.selectionEnd || 0;
+      if (a === b) {
+        // nothing chosen: the outermost mark around the caret, words kept
+        var around = teMarks(ta.value).filter(function (mk) { return a > mk.start && a <= mk.end; });
+        if (!around.length) return;
+        var outer = around[0];
+        var plain = teUnwrapKind(ta.value.slice(outer.start, outer.end + 1), null);
+        teSetValue(ta, outer.start, outer.end + 1, plain, outer.start, outer.start + plain.length);
+      } else {
+        var stripped = teUnwrapKind(ta.value.slice(a, b), null);
+        teSetValue(ta, a, b, stripped, a, a + stripped.length);
+      }
+      afterEdit();
+    }
+
     overlay.querySelectorAll('[data-fmt]').forEach(function (b) {
-      b.addEventListener('click', function () { wrapMark(b.dataset.fmt); });
+      b.addEventListener('click', function () {
+        var f = b.dataset.fmt;
+        if (f === 'LINK') { if (pop.dataset.kind === 'link') { closePop(); ta.focus(); } else openLinkPop(); return; }
+        if (f === 'CLEAR') { clearFormatting(); return; }
+        teApplyMark(ta, f);
+        afterEdit();
+      });
+    });
+    overlay.querySelectorAll('[data-size-step]').forEach(function (b) {
+      b.addEventListener('click', function () { stepSize(parseInt(b.dataset.sizeStep, 10)); });
+    });
+    var sizeSel = overlay.querySelector('.te-size');
+    if (sizeSel) sizeSel.addEventListener('change', function () { teApplyMark(ta, 'SIZE', 'size', sizeSel.value); afterEdit(); });
+    var fontSel = overlay.querySelector('.te-font');
+    if (fontSel) fontSel.addEventListener('change', function () { teApplyMark(ta, 'FONT', 'name', fontSel.value); afterEdit(); });
+    overlay.querySelectorAll('[data-pop]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (pop.dataset.kind === b.dataset.pop) { closePop(); ta.focus(); } else openColorPop(b.dataset.pop);
+      });
+    });
+    overlay.querySelectorAll('[data-align]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        pendingAlign = b.dataset.align;
+        overlay.querySelectorAll('[data-align]').forEach(function (x) { x.classList.toggle('active', x === b); });
+        refreshPreview();
+        ta.focus();
+      });
     });
 
     function close() { overlay.remove(); }
     function save() {
-      if (ta.value !== original) {
+      var changed = ta.value !== original;
+      var alignChanged = wholeBlock && pendingAlign !== (block.data.align || 'start');
+      if (changed || alignChanged) {
         pushHistory();
-        setDataPath(block.data, key, ta.value);
+        if (changed) setDataPath(block.data, key, ta.value);
+        if (alignChanged) {
+          if (pendingAlign && pendingAlign !== 'start') block.data.align = pendingAlign;
+          else delete block.data.align;
+        }
         markDirty();
         renderCanvas(); // scroll-pinned since v1.74 — repaint without a jump
         renderProperties();
@@ -3662,17 +4160,20 @@
     overlay.querySelector('.te-close').addEventListener('click', close);
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
     ta.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { e.preventDefault(); close(); }
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
-      if (!isHtml && (e.ctrlKey || e.metaKey)) {
-        var k = String(e.key || '').toLowerCase();
-        if (k === 'b') { e.preventDefault(); wrapMark('B'); }
-        else if (k === 'i') { e.preventDefault(); wrapMark('I'); }
-        else if (k === 'k') { e.preventDefault(); wrapMark('LINK'); }
-      }
+      if (e.key === 'Escape') { e.preventDefault(); if (!pop.hidden) closePop(); else close(); return; }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); return; }
+      if (!hasBar || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+      var k = String(e.key || '').toLowerCase();
+      if (k === 'b') { e.preventDefault(); teApplyMark(ta, 'B'); afterEdit(); }
+      else if (k === 'i') { e.preventDefault(); teApplyMark(ta, 'I'); afterEdit(); }
+      else if (k === 'u') { e.preventDefault(); teApplyMark(ta, 'U'); afterEdit(); }
+      else if (k === 'k') { e.preventDefault(); openLinkPop(); }
+      else if (k === ']') { e.preventDefault(); stepSize(1); }
+      else if (k === '[') { e.preventDefault(); stepSize(-1); }
     });
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
+    if (hasBar && opts.pop === 'link') openLinkPop();
   }
 
   function field(label, inputHtml) {
@@ -4204,10 +4705,12 @@
     } else if (block.type === 'text') {
       html +=
         '<div class="text-format-bar">' +
-        '<span class="prop-hint">מיכל מתקדם — סימון בתוך הטקסט:</span> ' +
         '<button type="button" class="btn secondary fmt-btn" data-fmt="B" title="מודגש">B</button>' +
         '<button type="button" class="btn secondary fmt-btn" data-fmt="I" title="נטוי"><em>I</em></button>' +
-        '<button type="button" class="btn secondary fmt-btn" data-fmt="LINK" title="קישור">🔗</button>' +
+        '<button type="button" class="btn secondary fmt-btn" data-fmt="U" title="קו תחתון"><u>U</u></button>' +
+        '<button type="button" class="btn secondary fmt-btn" data-fmt="S" title="קו חוצה"><s>S</s></button>' +
+        '<button type="button" class="btn secondary fmt-btn" data-fmt="LINK" title="קישור — נפתח בחלון העריכה">🔗</button>' +
+        '<button type="button" class="btn secondary fmt-btn fmt-open" data-fmt="OPEN" title="חלון העריכה — צבע, גופן, גודל, יישור">✎ עורך</button>' +
         '</div>';
       html += field(
         'תוכן',
@@ -4216,7 +4719,7 @@
           '</textarea>'
       );
       html +=
-        '<div class="prop-hint">@B{מודגש} · @I{נטוי} · @LINK(url: "/x"){טקסט} · שורה ריקה = פסקה</div>';
+        '<div class="prop-hint">@B · @I · @U · @S · @LINK · @COLOR · @HIGHLIGHT · @FONT · @SIZE — הסימונים מקננים · שורה ריקה = פסקה · לחיצה כפולה על הטקסט בקנבס = חלון העריכה</div>';
       html += field(
         'גודל',
         '<select data-key="size">' +
@@ -4635,26 +5138,23 @@
       });
     }
 
-    // TEXT format chips → insert BenTML marks into content field
+    // TEXT format chips → the same marks the editor window writes (v2.66);
+    // the link prompt and the full bar live in the window, so those chips open it
     panel.querySelectorAll('[data-fmt]').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        var f = btn.dataset.fmt;
+        if (f === 'LINK' || f === 'OPEN') {
+          openTextEditor(block.id, 'content', f === 'LINK' ? { pop: 'link' } : {});
+          return;
+        }
         var ta = panel.querySelector('textarea[data-key="content"]');
         if (!ta) return;
         pushHistory();
-        var start = ta.selectionStart || 0;
-        var end = ta.selectionEnd || 0;
-        var val = ta.value;
-        var selected = val.slice(start, end) || 'טקסט';
-        var ins = '';
-        if (btn.dataset.fmt === 'B') ins = '@B{' + selected + '}';
-        else if (btn.dataset.fmt === 'I') ins = '@I{' + selected + '}';
-        else if (btn.dataset.fmt === 'LINK') ins = '@LINK(url: "https://"){' + selected + '}';
-        ta.value = val.slice(0, start) + ins + val.slice(end);
+        teApplyMark(ta, f);
         if (!block.data) block.data = {};
         block.data.content = ta.value;
         markDirty();
         liveUpdatePreview(block.id, 'content', ta.value);
-        ta.focus();
       });
     });
 

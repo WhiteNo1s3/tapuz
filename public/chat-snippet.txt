@@ -32,7 +32,7 @@ You are helping me build a **website page** for Tapuz CMS using **BenTML only**.
 ```
 META { title, slug, direction, description, tags, status, lang }
 HEADING(level: 1-6) { text }
-TEXT(size: sm|md|lg, lead: true|false, dropcap: true|false, maxwidth: sm|md|lg|full) { paragraphs; @B{bold} @I{italic} @LINK(url:"/x"){label} }
+TEXT(size: sm|md|lg, lead: true|false, dropcap: true|false, maxwidth: sm|md|lg|full) { paragraphs; @B{bold} @I{italic} @U{underline} @LINK(url:"/x"){label} @COLOR(name:"primary"){x} @SIZE(size:"xl"){x} — marks nest }
 BUTTON(url: "...", style: primary|secondary|ghost) { label }
 IMAGE(src: "...", alt: "...", caption: "...", width: sm|md|lg|full)
 EMBED(url: "...")
