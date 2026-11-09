@@ -130,10 +130,14 @@ function waitUp(tries = 40) {
       badPost = await req('POST', '/admin/db/backup', { cookie });
       badPage = await req('GET', badPost.headers.location || '', { cookie });
     } finally { fs.chmodSync(shelf, 0o700); }
-    const canWriteAnyway = process.getuid && process.getuid() === 0; // root ignores the mode bits — the negative case is void there
-    check('…on a shelf that cannot be written → redirect ?db=backupfail&why=…, a WARN pill naming the reason, no ✓, no new file',
-      canWriteAnyway || (badPost.status === 302 && /db=backupfail&why=/.test(badPost.headers.location || '') &&
-        /הגיבוי נכשל — לא נוסף קובץ למדף/.test(badPage.text) && !/✓ גיבוי נוצר/.test(badPage.text) && count() === n1));
+    if (process.getuid && process.getuid() === 0) {
+      // root ignores the mode bits, so the shelf cannot be made unwritable this way — say so, never pretend
+      console.log('SKIP …unwritable-shelf case: running as root, chmod cannot refuse the write (run the smoke as a normal user to exercise it)');
+    } else {
+      check('…on a shelf that cannot be written → redirect ?db=backupfail&why=…, a WARN pill naming the reason, no ✓, no new file',
+        badPost.status === 302 && /db=backupfail&why=/.test(badPost.headers.location || '') &&
+          /הגיבוי נכשל — לא נוסף קובץ למדף/.test(badPage.text) && !/✓ גיבוי נוצר/.test(badPage.text) && count() === n1);
+    }
     check('…and the page never echoes the reason unescaped (a <script> in ?why= is text)',
       !/<script>x<\/script>/.test((await req('GET', '/admin/storage?db=backupfail&why=' + encodeURIComponent('<script>x</script>'), { cookie })).text));
   } finally {
