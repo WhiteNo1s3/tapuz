@@ -110,7 +110,9 @@ function dbCard(req) {
     : req.query.db === 'restored'
       ? '<div class="pill ok">✓ שוחזר — התוכן הוחלף; גיבוי בטיחות מהרגע שלפני נוסף למדף</div>'
       : req.query.db === 'restorefail'
-        ? '<div class="pill warn">השחזור נכשל — התוכן לא נגע (הכול-או-כלום)</div>' : '';
+        ? '<div class="pill warn">השחזור נכשל — התוכן לא נגע (הכול-או-כלום)</div>'
+        : req.query.db === 'backupfail'
+          ? `<div class="pill warn">הגיבוי נכשל — לא נוסף קובץ למדף. ${escapeAdmin(String(req.query.why || '').slice(0, 120))}</div>` : '';
 
   const shelf = h.backups.length
     ? h.backups.map((b) =>
@@ -176,7 +178,18 @@ function dbCard(req) {
 }
 
 router.post('/admin/db/backup', requireAdmin, (req, res) => {
-  try { require('../db').backupNow(); } catch (e) { /* absence on the shelf is the signal */ }
+  // A backup that failed must SAY so: before v2.67 any error here was
+  // swallowed and the page still showed "✓ גיבוי נוצר" — an owner about to do
+  // something risky believed a snapshot existed when the shelf had refused
+  // (seen live: two clicks, no new file, no word). The reason travels in the
+  // query (escaped on render, no paths beyond what the card already prints).
+  try {
+    require('../db').backupNow();
+  } catch (e) {
+    console.error('[db] backup failed: ' + (e && e.message));
+    const why = String((e && (e.code ? e.code + ': ' : '')) + (e && e.message || 'unknown')).slice(0, 120);
+    return res.redirect('/admin/storage?db=backupfail&why=' + encodeURIComponent(why));
+  }
   res.redirect('/admin/storage?db=backed');
 });
 

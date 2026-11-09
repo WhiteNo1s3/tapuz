@@ -112,6 +112,30 @@ function waitUp(tries = 40) {
 
     const noAuth = await req('POST', '/admin/db/upload-restore', { body: fs.readFileSync(snap.file) });
     check('upload-restore without a session is refused', noAuth.status !== 200);
+
+    // ── v2.67: "גבה עכשיו" tells the truth. Before, any failure in backupNow
+    // was swallowed and the page still said "✓ גיבוי נוצר" (seen live: two
+    // clicks, no new file, no word) ──
+    const shelf = path.join(ROOT, 'db', 'backups');
+    const count = () => fs.readdirSync(shelf).filter((f) => /\.sqlite$/.test(f)).length;
+    const n0 = count();
+    const okPost = await req('POST', '/admin/db/backup', { cookie });
+    const okPage = await req('GET', okPost.headers.location || '', { cookie });
+    check('POST /admin/db/backup on a writable shelf → redirect ?db=backed, the ✓ pill, and ONE new file',
+      okPost.status === 302 && /db=backed$/.test(okPost.headers.location || '') && /✓ גיבוי נוצר/.test(okPage.text) && count() === n0 + 1);
+    const n1 = count();
+    fs.chmodSync(shelf, 0o500); // the shelf refuses writes (quota, permissions, a read-only mount — the live shapes)
+    let badPost, badPage;
+    try {
+      badPost = await req('POST', '/admin/db/backup', { cookie });
+      badPage = await req('GET', badPost.headers.location || '', { cookie });
+    } finally { fs.chmodSync(shelf, 0o700); }
+    const canWriteAnyway = process.getuid && process.getuid() === 0; // root ignores the mode bits — the negative case is void there
+    check('…on a shelf that cannot be written → redirect ?db=backupfail&why=…, a WARN pill naming the reason, no ✓, no new file',
+      canWriteAnyway || (badPost.status === 302 && /db=backupfail&why=/.test(badPost.headers.location || '') &&
+        /הגיבוי נכשל — לא נוסף קובץ למדף/.test(badPage.text) && !/✓ גיבוי נוצר/.test(badPage.text) && count() === n1));
+    check('…and the page never echoes the reason unescaped (a <script> in ?why= is text)',
+      !/<script>x<\/script>/.test((await req('GET', '/admin/storage?db=backupfail&why=' + encodeURIComponent('<script>x</script>'), { cookie })).text));
   } finally {
     child.kill();
   }
