@@ -139,6 +139,35 @@ const draftOf = async (cookie, slug) => (await req('GET', '/admin/api/pzn/source
       // the live file has the site's own scripts — look for the PAYLOAD's fingerprints
       !/admin\/api\/ai\/settings|onerror=|javascript:alert|evil\.example/.test(fs.existsSync(path.join(ROOT, 'public', 'paste-new.html')) ? fs.readFileSync(path.join(ROOT, 'public', 'paste-new.html'), 'utf8') : 'MISSING admin/api/ai/settings'));
 
+    // ── 2b′. raw HTML written IN THE OPEN, beside the modules (not inside a
+    // bent-html) — the document does not parse, so the first scrub skips it
+    // and the repair quarantines the run into a provisional bent-html: the
+    // door must scrub AGAIN after the repair (BREAKAGE-2.45 §1) ──
+    const RAW_BESIDE = '<script>fetch("/admin/api/ai/settings")</script><img src=x onerror="alert(1)"><a href="javascript:alert(2)">א</a>';
+    const openDoc = (slug, raw) =>
+      '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/><title>בדיקה</title><meta name="bent-slug" content="' + slug + '"/></head>\n<body>\n' +
+      '<bent-heading id="h" level="1">שלום</bent-heading>\n' + raw + '\n<bent-text id="t">פסקה</bent-text>\n</body></html>';
+    // the repair turns the raw <a href> into a @LINK mark; inside a bent-html
+    // that mark is literal text (the renderer expands marks in text leaves
+    // only, never in raw HTML), so what must be gone is anything EXECUTABLE:
+    // the script, the handler, and a javascript: href on a real element
+    const armed = (s) => /<script|onerror|href="javascript:|href='javascript:/i.test(s);
+    const cr = await req('POST', '/admin/api/pzn/create-from-source', { cookie, json: { source: openDoc('raw-beside', RAW_BESIDE), publish: true } });
+    const crDraft = await draftOf(cookie, 'raw-beside');
+    const crPreview = await req('GET', '/admin/preview/raw-beside', { cookie });
+    check('admin create-from-source, script in the open beside modules: repaired AND scrubbed (≥1), a notice, draft only, nothing executable in the draft',
+      cr.status === 200 && cr.json.repaired === true && cr.json.scrubbed >= 1 && /הוסרו קטעי קוד/.test(cr.json.notice || '') &&
+      cr.json.published === false && crDraft.ok && !armed(crDraft.source) && /שלום/.test(crDraft.source));
+    check('…and the rendered draft preview carries none of the payload (no fetch script, no onerror, no javascript: href)',
+      crPreview.status === 200 && !/admin\/api\/ai\/settings|onerror=|href="javascript:/.test(crPreview.text));
+    const ar = await req('POST', '/agent/v1/create-from-source', { token: writeTok, json: { source: openDoc('raw-beside-agent', RAW_BESIDE) } });
+    check('agent create-from-source, script in the open beside modules: repaired AND scrubbed, nothing executable in the draft',
+      ar.status === 200 && ar.json.repaired === true && ar.json.scrubbed >= 1 && !armed((await draftOf(cookie, 'raw-beside-agent')).source));
+    const harmless = await req('POST', '/admin/api/pzn/create-from-source', { cookie, json: { source: openDoc('raw-harmless', '<p>פסקה <b>מודגשת</b></p>') } });
+    const harmlessHtml = htmlOf((await draftOf(cookie, 'raw-harmless')).source).join('');
+    check('…harmless raw HTML beside modules is still only repaired: scrubbed=0, no notice, the words and the <p> stay (the <b> became @B{})',
+      harmless.status === 200 && harmless.json.repaired === true && harmless.json.scrubbed === 0 && !harmless.json.notice && /@B\{מודגשת\}/.test(harmlessHtml) && /<p>/.test(harmlessHtml));
+
     // ── 2c. the paste flow's update of an existing page (from:'ai') ──
     const u = await req('POST', '/admin/api/pzn/source', { cookie, json: { fullPath: 'paste-new', source: doc('paste-new', EVIL), from: 'ai' } });
     check('paste flow update (from:"ai"): scrubbed and saved clean', u.status === 200 && u.json.scrubbed === 1 && !dirty((await draftOf(cookie, 'paste-new')).source));

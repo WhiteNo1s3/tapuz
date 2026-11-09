@@ -240,8 +240,10 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
     const ex = toPznSource(source);
     // v2.39: this door takes a MODEL's reply (the chat's button, the paste
     // flow) — raw HTML loses its script before anything is saved or published
-    const guard = require('../ai-html-guard').scrubAiSource(ex.source);
+    const { scrubAiSource, scrubNotice } = require('../ai-html-guard');
+    const guard = scrubAiSource(ex.source);
     source = guard.source;
+    let scrubbed = guard.scrubbed;
     const pznApi = require('../pzn/index');
     // repair-first (v2.19.1): this is the route the copilot chat's "צור דף"
     // calls, and it was the ONE create path with no forgiveness — a model
@@ -265,7 +267,13 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
           issues: r.remaining || parseErr.issues || []
         });
       }
-      source = r.source;
+      // the repair QUARANTINES raw HTML it found beside the modules into
+      // provisional <bent-html> blocks — blocks the first scrub never saw,
+      // because an unparseable document skips it. A <script> the model
+      // wrote in the open would land in the draft untouched; scrub again.
+      const again = scrubAiSource(r.source);
+      source = again.source;
+      scrubbed += again.scrubbed;
       doc = pznApi.parse(source);
       repaired = true;
       changes = r.changes;
@@ -293,8 +301,8 @@ router.post('/admin/api/pzn/create-from-source', (req, res) => {
     res.json({
       ok: true, fullPath: slug, created: true, blocks: result.blocks,
       warnings: result.warnings, repaired, changes, published: doPublish,
-      dialect: ex.dialect, extracted: ex.extracted, scrubbed: guard.scrubbed,
-      notice: guard.scrubbed ? require('../ai-html-guard').scrubNotice(guard.scrubbed) : ''
+      dialect: ex.dialect, extracted: ex.extracted, scrubbed,
+      notice: scrubbed ? scrubNotice(scrubbed) : ''
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, column: e.column, fix: e.fix });
