@@ -123,5 +123,52 @@ const leftBackups = fs.readdirSync(path.join(ROOT, 'config')).filter((f) => /^me
 check('backup chain pruned to the newest one', leftBackups.length === 1 && /pre-current/.test(leftBackups[0]));
 check('revision history trimmed to keep', pages.listRevisions('seed-check').length === 2);
 
+// 7. v2.67 — a PIN-armed seed never rewrites a living site. The root now
+//    holds pages (and we add an admin): a new package with replace:true,
+//    armed only by the root pin (the upgrade-by-archive shape), must refuse —
+//    no marker, page and menu untouched — and apply only when TAPUZ_SEED=1
+//    says so. The pin itself is a file in the package root, which this smoke
+//    must not write, so the arming mode is injected.
+delete process.env.TAPUZ_SEED;
+require('../src/auth').createAdmin('owner', 'seed-' + require('crypto').randomBytes(6).toString('hex'));
+fs.writeFileSync(path.join(SEED, 'pages', 'p.pzn'), PAGE.replace('נזרע', 'דריסה-מפין'), 'utf8');
+writeManifest({
+  id: 'smoke-seed-pin-over-site',
+  pages: [{ file: 'pages/p.pzn', replace: true }],
+  menus: { main: [{ label: 'דורס', type: 'page', target: 'seed-check' }] },
+  site: { title: 'אתר נדרס' }
+});
+check('seedArmedBy: TAPUZ_SEED=1 → explicit, 0 → false, unset without a pin → false', (() => {
+  process.env.TAPUZ_SEED = '1'; const a = seed.seedArmedBy();
+  process.env.TAPUZ_SEED = '0'; const b = seed.seedArmedBy();
+  delete process.env.TAPUZ_SEED; const c = seed.seedArmedBy();
+  return a === 'explicit' && b === false && c === false;
+})());
+check('rootHasSite is true for this root (it has an admin and pages)', seed.rootHasSite() === true);
+const blocksBefore = JSON.stringify(pages.getPageByFullPath('seed-check').blocks);
+const r7 = seed.maybeSeed({ armedBy: 'pin' });
+check('pin-armed package over a living site is REFUSED, with the reason', r7.ran === false && /already holds a site/.test(r7.reason || ''));
+check('…the page is byte-identical to before', JSON.stringify(pages.getPageByFullPath('seed-check').blocks) === blocksBefore);
+check('…the menu was not touched', !require('../src/menus').getMenu('main').some((i) => i.label === 'דורס'));
+check('…the site title was not patched', require('../src/config').loadConfig().title !== 'אתר נדרס');
+check('…and no marker was written for it (a later explicit run can still apply it)',
+  !(JSON.parse(fs.readFileSync(seed.MARKER_PATH, 'utf8'))['smoke-seed-pin-over-site']));
+const r8 = seed.maybeSeed({ armedBy: 'explicit' });
+check('the same package applies when armed EXPLICITLY (TAPUZ_SEED=1)', r8.ran === true && r8.results.replaced === 1);
+check('…and the page now carries the package words (a revision of the old ones kept)',
+  JSON.stringify(pages.getPageByFullPath('seed-check').blocks).includes('דריסה-מפין') && pages.listRevisions('seed-check').length >= 1);
+
+// 8. …while a pin-armed seed still fills an EMPTY root (the fresh-site deploy):
+//    simulated by the decision inputs — rootHasSite() is the only gate between
+//    the two paths, and step 2 above already proved the apply path itself.
+check('an empty root reports no site', (() => {
+  const EMPTY = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-seed-empty-'));
+  const probe = require('child_process').spawnSync(process.execPath, ['-e',
+    'process.env.TAPUZ_ROOT=process.argv[1];console.log(String(require(process.argv[2]).rootHasSite()))',
+    EMPTY, path.join(__dirname, '..', 'src', 'seed-content')], { encoding: 'utf8' });
+  try { fs.rmSync(EMPTY, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+  return probe.stdout.trim().split('\n').pop() === 'false';
+})());
+
 console.log('\nSMOKE SEED: ' + (fail ? 'FAIL' : 'PASS'));
 process.exit(fail ? 1 : 0);
