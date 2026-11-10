@@ -1034,7 +1034,7 @@ function describePayments(order) {
     const expired = r.status === 'pending' && ageMs(r.created_at) > SESSION_FRESH_MS;
     const left = r.amount - r.refunded;
     return {
-      id: r.id, provider: r.provider, providerLabel: d ? d.label : r.provider, mode: r.mode, status: r.status,
+      id: r.id, provider: r.provider, providerLabel: d ? d.label : (r.provider === 'paypal' ? 'PayPal' : r.provider), mode: r.mode, status: r.status,
       statusLabel: r.mode === 'test' && r.status === 'paid' ? 'אושר (בדיקה — לא התקבל כסף)' : expired ? 'פג תוקף' : (STATUS_LABELS[r.status] || r.status),
       amount: r.amount, amountText: money.formatMoney(r.amount, r.currency), currency: r.currency,
       transactionId: r.transaction_id, approval: r.approval, last4: r.card_last4, brand: r.card_brand,
@@ -1045,7 +1045,9 @@ function describePayments(order) {
       refundInFlight: r.refund_unknown > 0 && refundInFlight(r),
       refundable: r.status === 'paid' && left > 0 && r.refund_unknown === 0 && !!(d && typeof d.refund === 'function') && !unavailable,
       refundNote: r.status === 'paid' && left > 0 && r.refund_unknown === 0 ? unavailable : '', partialRefund: !!(d && d.partialRefund),
-      canVerify: UNPAID.has(r.status) && !!r.session_id && r.verify_count < HOOK_MAX,
+      // the inquiry button talks to a card driver. A PayPal row (or any
+      // provider this registry does not know) has nothing to ask.
+      canVerify: !!d && UNPAID.has(r.status) && !!r.session_id && r.verify_count < HOOK_MAX,
       error: r.error, verifyCount: r.verify_count, createdAt: r.created_at, updatedAt: r.updated_at
     };
   });

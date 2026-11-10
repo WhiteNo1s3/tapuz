@@ -561,6 +561,73 @@
       return pay;
     }
 
+    function paypalSdkOk(pp) {
+      if (!pp || !pp.sdk) return false;
+      if (pp.sandbox && /^https:\/\/www\.sandbox\.paypal\.com\/sdk\/js\?client-id=[A-Za-z0-9_%.-]+&currency=[A-Z]{3}&intent=capture&components=buttons$/.test(pp.sdk)) return true;
+      if (pp.live === true && pp.sandbox === false && /^https:\/\/www\.paypal\.com\/sdk\/js\?client-id=[A-Za-z0-9_%.-]+&currency=[A-Z]{3}&intent=capture&components=buttons$/.test(pp.sdk)) return true;
+      return false;
+    }
+
+    function paypalBlock(o) {
+      var pp = o.payment.paypal || {};
+      var pay = el('div', 'bent-order-pay bent-paypal');
+      pay.appendChild(el('h3', '', 'תשלום: ' + o.payment.label));
+      if (pp.sandbox) pay.appendChild(el('p', 'bent-test-banner', 'ארגז חול של PayPal — לא יחויב כסף אמיתי'));
+      if (o.payment.details) pay.appendChild(el('p', 'bent-order-pay-details', o.payment.details));
+      if (pp.message) pay.appendChild(el('p', 'bent-order-pay-state is-' + (pp.status || 'none'), pp.message));
+      var note = el('p', 'bent-checkout-error');
+      note.setAttribute('role', 'alert');
+      if (pp.canPay && paypalSdkOk(pp)) {
+        var slot = el('div', 'bent-paypal-buttons');
+        slot.id = 'tz-paypal-buttons';
+        pay.appendChild(slot);
+        pay.appendChild(note);
+        var s = document.createElement('script');
+        s.src = pp.sdk;
+        s.onload = function () {
+          if (!window.paypal || !window.paypal.Buttons) {
+            note.textContent = 'כפתור PayPal לא נטען. אפשר לרענן ולנסות שוב.';
+            return;
+          }
+          window.paypal.Buttons({
+            createOrder: function () {
+              return post('/api/store/paypal/create', { token: o.token }).then(function (d) {
+                if (!d || !d.ok || !d.orderId) {
+                  note.textContent = (d && d.message) || 'לא הצלחנו לפתוח תשלום. לא חויב כלום.';
+                  throw new Error('create');
+                }
+                return d.orderId;
+              });
+            },
+            onApprove: function (data) {
+              return post('/api/store/paypal/capture', { token: o.token, orderId: data && data.orderID }).then(function (d) {
+                if (!d || !d.ok) {
+                  note.textContent = (d && d.message) || 'התשלום לא הושלם. לא חויב כלום — אפשר לנסות שוב.';
+                  return;
+                }
+                load();
+              });
+            },
+            onCancel: function () {
+              note.textContent = 'התשלום בוטל. לא חויב כלום — ההזמנה שמורה ואפשר לנסות שוב.';
+              post('/api/store/paypal/cancel', { token: o.token });
+            },
+            onError: function () {
+              if (!note.textContent) note.textContent = 'התשלום נכשל. לא חויב כלום — אפשר לנסות שוב.';
+            }
+          }).render('#tz-paypal-buttons');
+        };
+        s.onerror = function () {
+          note.textContent = 'כפתור PayPal לא נטען. אין מפתח ארגז חול זמין, או שהרשת חסמה אותו.';
+        };
+        document.head.appendChild(s);
+      } else if (pp.canPay) {
+        note.textContent = 'כפתור PayPal לא זמין. לא חויב כלום.';
+        pay.appendChild(note);
+      }
+      return pay;
+    }
+
     function paint(o) {
       var head = el('div', 'bent-order-head');
       head.appendChild(el('p', 'bent-order-check', '✓'));
@@ -572,7 +639,10 @@
       body.appendChild(head);
 
       var isCard = o.payment && o.payment.kind === 'card' && o.payment.card;
-      if (isCard && o.status !== 'cancelled' && (!o.paid || o.payment.card.test)) {
+      var isPaypal = o.payment && o.payment.kind === 'paypal' && o.payment.paypal;
+      if (isPaypal && o.status !== 'cancelled' && (!o.paid || o.payment.paypal.sandbox)) {
+        body.appendChild(paypalBlock(o));
+      } else if (isCard && o.status !== 'cancelled' && (!o.paid || o.payment.card.test)) {
         body.appendChild(cardBlock(o));
       } else if (o.payment && o.payment.label && !o.paid && o.status !== 'cancelled') {
         var pay = el('div', 'bent-order-pay');

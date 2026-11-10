@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**353 routes across 45 files.**
+**356 routes across 46 files.**
 
 ## By file (what each module owns)
 
@@ -428,6 +428,12 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/store/orders/:number/tracking`
 - `POST /admin/api/store/orders/:number/note`
 
+### `src/routes/store-paypal.js` — 3 routes
+
+- `POST /api/store/paypal/create`
+- `POST /api/store/paypal/capture`
+- `POST /api/store/paypal/cancel`
+
 ### `src/routes/store-products.js` — 10 routes
 
 - `GET /admin/store/products`
@@ -839,6 +845,9 @@ shows where, so editing is navigation, not a grep hunt.
 | `/api/store/gateway/:provider/hook` | POST | `src/routes/store-gateway.js` |
 | `/api/store/order/:token` | GET | `src/routes/store-public.js` |
 | `/api/store/pay/:token` | POST | `src/routes/store-gateway.js` |
+| `/api/store/paypal/cancel` | POST | `src/routes/store-paypal.js` |
+| `/api/store/paypal/capture` | POST | `src/routes/store-paypal.js` |
+| `/api/store/paypal/create` | POST | `src/routes/store-paypal.js` |
 | `/api/store/quote` | POST | `src/routes/store-public.js` |
 | `/crm/c/:token/:index` | GET | `src/routes/crm-track.js` |
 | `/crm/cs/v1/config` | GET | `src/routes/crm-track.js` |

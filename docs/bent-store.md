@@ -59,7 +59,7 @@ The grid and the buy box are rendered on the server at publish time — the stat
 | `bent-sku` | `id` (the SKU — identity), `title`, `price`, `was`, `stock`, `shelf`, `status=active\|hidden\|draft`, `image`, `images` (space-separated), `badge`, `summary`, `delivery="false"` (digital / service), `max` (per order) | body text = the description (a blank line starts a paragraph) |
 | `bent-variant` | `id`, `label`, `price` (absent = the product's), `stock` | an option, inside its product; with options, stock is counted per option |
 | `bent-ship` | `id`, `label`, `price`, `free-over`, `address="false"`, `note` | any `<bent-ship>` replaces the list; none = unchanged |
-| `bent-pay` | `id`, `kind=call\|bank\|bit\|paybox\|cash\|link\|card`, `label`, `phone`, `url` (https, `{total}` `{order}` `{currency}`), `max-payments` (1–36, `card` only) | body text = the instructions the shopper reads. `card` = the [card gateway](#the-card-gateway--grow-and-cardcom): the document says only what the shopper sees and how many installments; the provider, the mode and the keys are never in it. A `card` method in a document while no gateway is connected is accepted with the note `CARD_NOT_CONNECTED` and stays off the checkout until one is |
+| `bent-pay` | `id`, `kind=call\|bank\|bit\|paybox\|cash\|link\|card\|paypal`, `label`, `phone`, `url` (https, `{total}` `{order}` `{currency}`), `max-payments` (1–36, `card` only) | body text = the instructions the shopper reads. `card` = the [card gateway](#the-card-gateway--grow-and-cardcom). `paypal` = the [PayPal sandbox](#paypal-sandbox): the document says only the label; the client id and the secret are never in it. Either method is accepted while its keys are missing (`CARD_NOT_CONNECTED`, `PAYPAL_NOT_CONNECTED`) and stays off the checkout until they are present |
 | `bent-coupon` | `code`, `percent` \| `amount` \| `free-shipping="true"`, `min`, `starts`, `until` (YYYY-MM-DD, inclusive), `uses`, `active="false"`, `note` | |
 
 Money is written as a person writes it (`89.90`, no symbol). The serializer is deterministic and `serialize(parse(serialize(x))) === serialize(x)`. Default rules stay out of an exported document.
@@ -123,6 +123,14 @@ With the CRM on, a buyer becomes (or enriches) a person — status `customer`, t
 ## Mail
 
 Through the site's SMTP (`src/notify.js`): the owner hears about every order (`notifyEmail`, else the site's notification address); the shopper gets a confirmation and, when the order ships or is cancelled, a note. Nothing is sent before the order is saved, and a mail failure never costs an order.
+
+## PayPal sandbox
+
+A `kind="paypal"` method is the demo checkout. The shopper's order is stored first, at the server's totals. The order page then shows PayPal's button. `POST /api/store/paypal/create` builds the PayPal order from `store_orders` and its lines — a price in the browser is ignored — and `POST /api/store/paypal/capture` marks the `store_payments` row only when the amount PayPal reports equals the order. A second capture is a no-op.
+
+Sandbox is the default (`https://api-m.sandbox.paypal.com`, the SDK from `https://www.sandbox.paypal.com`). A test capture is recorded and told to the shopper as a test; `paid_at` stays empty, so it is not revenue. Live mode calls `https://api-m.paypal.com` only when `PAYPAL_MODE=live` **and** `TAPUZ_PAYPAL_LIVE=1`. Anything else refuses, and does not silently use the live host.
+
+Keys: `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in the environment, or `paypal.clientId` / `paypal.clientSecret` in gitignored `config/payments.json`. The secret is never in a page, a log line, or an API response. The demo catalog (`scripts/seed-demo-store.js --apply`) fills a **new empty** `TAPUZ_ROOT` only. A pin, `TAPUZ_SEED=1`, and boot do not run it, and a root that already has site files is refused before the database is opened.
 
 ## The card gateway — Grow and Cardcom
 

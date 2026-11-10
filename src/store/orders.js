@@ -498,7 +498,9 @@ function publicOrder(order) {
       url: paymentUrl(order, s),
       // a card order: the state of its gateway payment and where to POST —
       // never a provider id, a session id or a key
-      ...(pay.kind === 'card' ? { card: require('./gateway').publicPayment(order, s) } : {})
+      ...(pay.kind === 'card' ? { card: require('./gateway').publicPayment(order, s) } : {}),
+      // lazy: paypal.js loads orders.js (this file) once both modules are up
+      ...(pay.kind === 'paypal' ? { paypal: require('./paypal').publicPayment(order) } : {})
     } : { kind: '', label: order.payment_label || '', details: '', phone: '', url: '' },
     thanks: s.thanks
   };

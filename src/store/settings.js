@@ -31,7 +31,10 @@ const PAYMENT_KINDS = {
   link: { label: 'תשלום מאובטח בכרטיס אשראי', details: 'מיד אחרי ההזמנה נעביר אתכם לדף התשלום.' },
   // the gateway (Grow / Cardcom behind one driver): offered at checkout only
   // while a provider is connected — see gateway.offeredPayments()
-  card: { label: 'כרטיס אשראי', details: 'התשלום מתבצע בדף המאובטח של חברת הסליקה. פרטי הכרטיס לא עוברים דרכנו.' }
+  card: { label: 'כרטיס אשראי', details: 'התשלום מתבצע בדף המאובטח של חברת הסליקה. פרטי הכרטיס לא עוברים דרכנו.' },
+  // PayPal (sandbox unless the owner arms live mode). Offered at checkout
+  // only while src/store/paypal.js is ready — the keys are not in the document.
+  paypal: { label: 'PayPal', details: 'התשלום נפתח בכפתור של PayPal. במצב בדיקות זה ארגז חול — לא נגבה כסף אמיתי.' }
 };
 
 /** Installments a card method may offer: 1 = none, and no provider goes past 36. */
@@ -150,7 +153,8 @@ function normalizePayments(list, errors) {
 function paymentDetails(method) {
   if (!method) return '';
   if (method.details) return method.details;
-  return method.kind === 'card' ? PAYMENT_KINDS.card.details : '';
+  if (method.kind === 'card' || method.kind === 'paypal') return PAYMENT_KINDS[method.kind].details;
+  return '';
 }
 
 function normalizePages(p) {

@@ -166,7 +166,9 @@ function quote(input = {}, opts = {}) {
   // a `card` method is offered only while the gateway can actually take the
   // money (a provider connected, its keys present, this currency, https in
   // live mode) — so placeOrder, which picks from this same list, refuses it too
-  const payments = require('./gateway').offeredPayments(s).map((p) => ({
+  // paypal.js drops a paypal method while PayPal is not connected, the same
+  // way the gateway drops a card method. placeOrder reads this list.
+  const payments = require('./paypal').offeredPayments(s).map((p) => ({
     id: p.id, kind: p.kind, label: p.label, details: settingsMod.paymentDetails(p), phone: p.phone,
     ...(p.kind === 'card' ? { maxPayments: p.maxPayments || 1 } : {})
   }));

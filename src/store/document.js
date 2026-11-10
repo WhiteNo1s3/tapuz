@@ -277,6 +277,10 @@ function planDocument(text) {
     let gatewayReady = false;
     try { gatewayReady = require('./gateway').isReady(current); } catch (e) { gatewayReady = false; }
     if (wantsCard && !gatewayReady) softWarn('CARD_NOT_CONNECTED', 'אמצעי התשלום "כרטיס אשראי" יופיע בקופה אחרי חיבור חברת סליקה (חנות → סליקת אשראי)');
+    const wantsPaypal = doc.payments.some((m) => (m.kind || m.id) === 'paypal');
+    let paypalReady = false;
+    try { paypalReady = require('./paypal').isReady(current); } catch (e) { paypalReady = false; }
+    if (wantsPaypal && !paypalReady) softWarn('PAYPAL_NOT_CONNECTED', 'אמצעי התשלום PayPal יופיע בקופה אחרי שמפתחות ארגז החול יישמרו ב-config/payments.json או במשתני הסביבה');
   }
   const check = settingsMod.normalize(patch, current);
   for (const e of check.errors) hardWarn('SETTINGS', e);

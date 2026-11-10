@@ -18,6 +18,7 @@
 
 const { escapeHtml, escapeAttr, safeHref } = require('../pzn/language/escape');
 const money = require('./money');
+const paypal = require('./paypal');
 
 function store() {
   return {
@@ -275,7 +276,7 @@ function renderCheckout(props = {}, opts = {}) {
   // the gateway decides whether a `card` method is offered at all (and the
   // page is rebuilt whenever its settings change, so the static export agrees)
   const gateway = require('./gateway');
-  const offered = gateway.offeredPayments(s);
+  const offered = paypal.offeredPayments(s);
   const pays = offered.map((m, i) => {
     const details = S.paymentDetails(m);
     return `<label class="bent-choice"><input type="radio" name="payment" value="${escapeAttr(m.id)}" data-kind="${escapeAttr(m.kind)}"${i === 0 ? ' checked' : ''}>` +
@@ -285,8 +286,14 @@ function renderCheckout(props = {}, opts = {}) {
       '</label>';
   }).join('');
   // test mode is said out loud: a shopper must never wonder whether the money was real
-  const testBanner = offered.some((m) => m.kind === 'card') && gateway.status(s).mode === 'test'
-    ? '<p class="bent-test-banner" role="status">מצב בדיקות — לא יחויב כסף אמיתי</p>' : '';
+  const cardTest = offered.some((m) => m.kind === 'card') && gateway.status(s).mode === 'test';
+  const paypalTest = offered.some((m) => m.kind === 'paypal') && paypal.status(s).sandbox;
+  const testBanner = (cardTest || paypalTest)
+    ? '<p class="bent-test-banner" role="status">' + (cardTest
+      ? 'מצב בדיקות — לא יחויב כסף אמיתי'
+      : 'ארגז חול של PayPal — לא יחויב כסף אמיתי') + '</p>'
+      + (cardTest && paypalTest ? '<p class="bent-test-banner" role="status">ארגז חול של PayPal — לא יחויב כסף אמיתי</p>' : '')
+    : '';
   const terms = s.terms
     ? `<p class="bent-field bent-field-check" data-field="terms"><label><input type="checkbox" name="acceptTerms" value="on" required> ` +
       `קראתי ואני מסכים/ה ל<a href="${escapeAttr(require('../pages').publicUrlFor(s.terms))}" target="_blank" rel="noopener">תנאי השימוש</a></label>` +

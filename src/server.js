@@ -145,6 +145,11 @@ app.use(require('./routes/form-capture'));
 // brings its own 32 KB JSON parser, ahead of the admin's 12 MB one below.
 app.use(require('./routes/store-public'));
 
+// PayPal sandbox (v2.68) — create / capture / cancel. JSON only, its own
+// 32 KB parser, same slot as the other shopper doors. No webhook: capture
+// is the shopper's button calling us, and the amount is recomputed here.
+app.use(require('./routes/store-paypal'));
+
 // Customer portal (v2.10) — /account/* when crm.portal.enabled (off by default).
 // Mounted before admin so it is never gated by requireAdmin.
 app.use(require('./routes/portal'));
