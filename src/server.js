@@ -587,6 +587,9 @@ const server = app.listen(PORT, () => {
   // package (seed/). Applied through the product's own page APIs, once per
   // package id, and never allowed to block or break boot.
   try { require('./seed-content').maybeSeed(); } catch (e) { console.error('[seed] failed: ' + e.message); }
+  // Demo shop (v2.68): opt-in with TAPUZ_DEMO_STORE=1. A .tapuz-root pin
+  // only names the data root; it does not arm this. Empty root, once.
+  try { require('./store/demo-seed').maybeDemoStore(); } catch (e) { console.error('[demo-store] failed: ' + e.message); }
   // a deploy must reach the visitors: the export on disk is rebuilt when it
   // was produced by a different build than the one now running (v2.26)
   try {

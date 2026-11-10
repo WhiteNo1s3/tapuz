@@ -130,7 +130,11 @@ A `kind="paypal"` method is the demo checkout. The shopper's order is stored fir
 
 Sandbox is the default (`https://api-m.sandbox.paypal.com`, the SDK from `https://www.sandbox.paypal.com`). A test capture is recorded and told to the shopper as a test; `paid_at` stays empty, so it is not revenue. Live mode calls `https://api-m.paypal.com` only when `PAYPAL_MODE=live` **and** `TAPUZ_PAYPAL_LIVE=1`. Anything else refuses, and does not silently use the live host.
 
-Keys: `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in the environment, or `paypal.clientId` / `paypal.clientSecret` in gitignored `config/payments.json`. The secret is never in a page, a log line, or an API response. The demo catalog (`scripts/seed-demo-store.js --apply`) fills a **new empty** `TAPUZ_ROOT` only. A pin, `TAPUZ_SEED=1`, and boot do not run it, and a root that already has site files is refused before the database is opened.
+Keys: `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` in the environment, or `paypal.clientId` / `paypal.clientSecret` in gitignored `config/payments.json`. The secret is never in a page, a log line, or an API response. Leave `PAYPAL_MODE` unset or `sandbox`. Do not set `TAPUZ_PAYPAL_LIVE` for the demo.
+
+The demo catalog runs on boot when `TAPUZ_DEMO_STORE=1` and the data root is confidently empty — the path a Hostinger archive deploy can take, because that host has environment variables and no shell. A `.tapuz-root` pin only names the data directory; it does not arm the demo. A second boot sees `demo-store` in `config/seeded.json` and does not seed again. Any sign of a site, or an inventory that fails, is logged and left untouched. `node scripts/seed-demo-store.js --apply` is the same catalog for a machine that has a shell; it still requires `TAPUZ_ROOT` and `--apply`.
+
+The checkout page is exported with whatever PayPal keys the process already has. If the keys arrive on a later restart, that boot republishes `checkout.html`. The storefront script also rebuilds the payment choices from the live quote, so a copy of the page exported before the keys existed still offers PayPal once the server has them.
 
 ## The card gateway — Grow and Cardcom
 

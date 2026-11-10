@@ -168,9 +168,12 @@ function quote(input = {}, opts = {}) {
   // live mode) — so placeOrder, which picks from this same list, refuses it too
   // paypal.js drops a paypal method while PayPal is not connected, the same
   // way the gateway drops a card method. placeOrder reads this list.
-  const payments = require('./paypal').offeredPayments(s).map((p) => ({
+  const paypalMod = require('./paypal');
+  const paypalStatus = paypalMod.status(s);
+  const payments = paypalMod.offeredPayments(s).map((p) => ({
     id: p.id, kind: p.kind, label: p.label, details: settingsMod.paymentDetails(p), phone: p.phone,
-    ...(p.kind === 'card' ? { maxPayments: p.maxPayments || 1 } : {})
+    ...(p.kind === 'card' ? { maxPayments: p.maxPayments || 1 } : {}),
+    ...(p.kind === 'paypal' ? { sandbox: !!paypalStatus.sandbox, live: !!paypalStatus.live } : {})
   }));
   let payment = '';
   const wantPay = String(input.payment || '');

@@ -368,10 +368,59 @@
         if (f) f.required = need;
       });
     }
+    function syncPayments(q) {
+      var box = root.querySelector('[data-tz-pay-choices]');
+      if (!box || !q || !Array.isArray(q.payments)) return;
+      var want = checked('payment');
+      var sig = q.payments.map(function (p) {
+        return [p.id, p.kind || '', p.label || '', p.details || '', p.sandbox ? '1' : '0'].join('\t');
+      }).join('\n');
+      if (box.getAttribute('data-tz-sig') !== sig) {
+        var chosen = '';
+        q.payments.forEach(function (p) { if (p.id === want) chosen = p.id; });
+        if (!chosen && q.payment) chosen = q.payment;
+        if (!chosen && q.payments.length) chosen = q.payments[0].id;
+        box.textContent = '';
+        q.payments.forEach(function (p) {
+          var label = el('label', 'bent-choice');
+          var input = document.createElement('input');
+          input.type = 'radio';
+          input.name = 'payment';
+          input.value = String(p.id || '');
+          if (p.kind) input.setAttribute('data-kind', String(p.kind));
+          if (p.id === chosen) input.checked = true;
+          label.appendChild(input);
+          label.appendChild(el('span', 'bent-choice-label', p.label || p.id || ''));
+          if (p.details) label.appendChild(el('span', 'bent-choice-note', p.details));
+          if (p.kind === 'card' && (p.maxPayments | 0) > 1) {
+            label.appendChild(el('span', 'bent-choice-note', 'עד ' + (p.maxPayments | 0) + ' תשלומים'));
+          }
+          box.appendChild(label);
+        });
+        box.setAttribute('data-tz-sig', sig);
+      }
+      var sandbox = q.payments.some(function (p) { return p.kind === 'paypal' && p.sandbox; });
+      var banners = root.querySelectorAll('.bent-test-banner');
+      var paypalBanner = null;
+      for (var i = 0; i < banners.length; i++) {
+        if (banners[i].textContent.indexOf('ארגז חול של PayPal') !== -1) paypalBanner = banners[i];
+      }
+      if (sandbox && !paypalBanner) {
+        paypalBanner = el('p', 'bent-test-banner', 'ארגז חול של PayPal — לא יחויב כסף אמיתי');
+        paypalBanner.setAttribute('role', 'status');
+        paypalBanner.setAttribute('data-tz-paypal-banner', 'js');
+        var formEl = root.querySelector('[data-tz-checkout-form]');
+        if (formEl) root.insertBefore(paypalBanner, formEl);
+        else root.insertBefore(paypalBanner, root.firstChild);
+      } else if (!sandbox && paypalBanner) {
+        paypalBanner.remove();
+      }
+    }
     function paint(q) {
       summary.textContent = '';
       if (!q) { summary.appendChild(el('p', 'bent-store-closed', 'לא הצלחנו לטעון את העגלה — נסו לרענן.')); return; }
       last = q;
+      syncPayments(q);
       adopt(q);
       renderIssues(summary, q.issues);
       if (!q.lines.length) {

@@ -5,11 +5,13 @@
  *
  *   TAPUZ_ROOT=/path/to/new/empty/data node scripts/seed-demo-store.js --apply
  *
- * This is not the boot seed. A .tapuz-root pin does not arm it, TAPUZ_SEED=1
- * does not arm it, and it is not in seed/manifest.json. Without TAPUZ_ROOT
- * the script exits before it reads a pin, so it cannot follow one to a
- * living site. Without --apply it exits before it writes. A root that
- * already has site files is refused BEFORE the database is opened.
+ * The same catalog also runs on boot when TAPUZ_DEMO_STORE=1 and the root
+ * is confidently empty (src/store/demo-seed.js maybeDemoStore). This script
+ * is the shell path. A .tapuz-root pin does not arm either path by itself,
+ * TAPUZ_SEED=1 does not arm the demo, and the catalog is not in
+ * seed/manifest.json. Without TAPUZ_ROOT the script exits before it reads
+ * a pin. Without --apply it exits before it writes. A root that already
+ * has site files is refused BEFORE the database is opened.
  */
 
 if (!process.env.TAPUZ_ROOT) {
@@ -17,7 +19,7 @@ if (!process.env.TAPUZ_ROOT) {
   process.exit(2);
 }
 if (!process.argv.includes('--apply')) {
-  console.error('REFUSED: pass --apply. The demo store is never applied on boot.');
+  console.error('REFUSED: pass --apply. This script does not write unless asked.');
   process.exit(2);
 }
 

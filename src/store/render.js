@@ -316,7 +316,7 @@ function renderCheckout(props = {}, opts = {}) {
     field('zip', 'מיקוד', 'text', 'postal-code', false, ' maxlength="10" inputmode="numeric" dir="ltr"') +
     field('notes', 'הערות לשליח (קומה, דירה, קוד כניסה)', 'text', '', false, ' maxlength="200"') +
     '</div></fieldset>' +
-    `<fieldset class="bent-checkout-box"><legend>תשלום</legend><div class="bent-choices">${pays}</div></fieldset>` +
+    `<fieldset class="bent-checkout-box"><legend>תשלום</legend><div class="bent-choices" data-tz-pay-choices>${pays}</div></fieldset>` +
     '<p class="bent-field" data-field="note"><label for="tzc-note">הערה להזמנה</label>' +
     '<textarea id="tzc-note" name="note" rows="3" maxlength="1000"></textarea></p>' +
     terms +

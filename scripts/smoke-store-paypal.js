@@ -76,6 +76,8 @@ store.settings.saveSettings({
 store.catalog.createProduct({ slug: 'widget', title: 'פריט בדיקה', price: '10', stock: 40, status: 'active', delivery: true });
 store.catalog.createProduct({ slug: 'note', title: 'פתק', price: '5', stock: 5, status: 'active', delivery: false });
 store.coupons.saveCoupon({ code: 'TEN', kind: 'percent', value: 10 });
+const quotedPay = (store.pricing.quote({ items: [{ sku: 'note', qty: 1 }], payment: 'paypal' }).payments || []).find((p) => p.id === 'paypal');
+check('a ready paypal method is marked sandbox on the quote', quotedPay && quotedPay.sandbox === true && quotedPay.live !== true);
 pages.createPage({ title: 'דף שאינו חנות', slug: 'about', blocks: [], status: 'published' });
 
 const buyer = { name: 'דנה דמו', phone: '0501234567', email: 'dana@example.com' };
@@ -296,8 +298,11 @@ function placePaypal() {
   const serverSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'server.js'), 'utf8');
   const seedSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'seed-content.js'), 'utf8');
   const manifest = fs.readFileSync(path.join(__dirname, '..', 'seed', 'manifest.json'), 'utf8');
-  check('boot does not load the demo seed', !serverSrc.includes('demo-seed') && !serverSrc.includes('seed-demo-store'));
-  check('the pin seed does not know the demo catalog', !seedSrc.includes('demo-seed') && !manifest.includes('חנות הדברים'));
+  check('boot arms the demo only through maybeDemoStore', serverSrc.includes("require('./store/demo-seed').maybeDemoStore()"));
+  check('the content seed does not know the demo catalog', !seedSrc.includes('demo-seed') && !seedSrc.includes('TAPUZ_DEMO_STORE') && !manifest.includes('חנות הדברים'));
+  const storeJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'tz-store.js'), 'utf8');
+  check('the checkout script rebuilds payment choices from the quote as text',
+    storeJs.includes('[data-tz-pay-choices]') && storeJs.includes("el('span', 'bent-choice-label', p.label || p.id || '')"));
 
   function runSeed(env, args) {
     const childEnv = Object.assign({}, process.env);
@@ -380,6 +385,124 @@ function placePaypal() {
     && !fs.existsSync(path.join(__dirname, '..', 'public', 'assets', 'demo-left-sock.svg')));
   const second = runSeed({ TAPUZ_ROOT: fresh }, ['--apply']);
   check('a second apply refuses now that the root is a site', second.status === 2);
+
+  function hashFile(p) {
+    return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+  }
+  function bootDemo(env) {
+    const childEnv = Object.assign({}, process.env);
+    for (const k of ['TAPUZ_ROOT', 'TAPUZ_DEMO_STORE', 'TAPUZ_PIN_FILE', 'TAPUZ_SEED', 'PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_MODE', 'TAPUZ_PAYPAL_LIVE', 'TAPUZ_PAYPAL_FAKE']) {
+      delete childEnv[k];
+    }
+    for (const [k, v] of Object.entries(env)) {
+      if (v == null) delete childEnv[k];
+      else childEnv[k] = v;
+    }
+    return spawnSync(process.execPath, ['-e', `
+      const r = require('./src/store/demo-seed').maybeDemoStore();
+      console.log('BOOT ' + JSON.stringify(r));
+    `], { cwd: path.join(__dirname, '..'), env: childEnv, encoding: 'utf8' });
+  }
+
+  const quiet = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-demo-quiet-'));
+  extras.push(quiet);
+  const noFlag = bootDemo({ TAPUZ_ROOT: quiet });
+  check('boot without the flag writes nothing', noFlag.status === 0 && noFlag.stdout.includes('"reason":"not armed"')
+    && !fs.existsSync(path.join(quiet, 'db')) && !fs.existsSync(path.join(quiet, 'config')));
+
+  const pinBare = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-demo-pinbare-'));
+  extras.push(pinBare);
+  fs.writeFileSync(path.join(pinBare, 'SENTINEL'), 'do-not-touch', 'utf8');
+  const pinBareFile = path.join(os.tmpdir(), 'tapuz-demo-pinbare-file-' + process.pid);
+  fs.writeFileSync(pinBareFile, pinBare + '\n', 'utf8');
+  const pinOnly = bootDemo({ TAPUZ_PIN_FILE: pinBareFile });
+  check('a pin without the flag does not seed', pinOnly.status === 0 && pinOnly.stdout.includes('"reason":"not armed"')
+    && fs.readFileSync(path.join(pinBare, 'SENTINEL'), 'utf8') === 'do-not-touch'
+    && !fs.existsSync(path.join(pinBare, 'db')));
+  fs.rmSync(pinBareFile, { force: true });
+
+  const once = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-demo-once-'));
+  extras.push(once);
+  const firstBoot = bootDemo({ TAPUZ_ROOT: once, TAPUZ_DEMO_STORE: '1' });
+  const checkoutPath = path.join(once, 'public', 'checkout.html');
+  const dbPath = path.join(once, 'db', 'tapuz.db');
+  const markerPath = path.join(once, 'config', 'seeded.json');
+  check('an empty root with the flag seeds once', firstBoot.status === 0 && firstBoot.stdout.includes('"ran":true'));
+  const checkoutBefore = fs.readFileSync(checkoutPath, 'utf8');
+  const dbBefore = hashFile(dbPath);
+  const markerBefore = fs.readFileSync(markerPath, 'utf8');
+  const homeHtml = fs.readFileSync(path.join(once, 'public', 'index.html'), 'utf8');
+  check('the marker is written, PayPal waits for keys, and the showcase copy is on the shop',
+    markerBefore.includes('"demo-store"') && !checkoutBefore.includes('value="paypal"') && homeHtml.includes('מחירים מומצאים'));
+  const secondBoot = bootDemo({ TAPUZ_ROOT: once, TAPUZ_DEMO_STORE: '1' });
+  check('a second boot is a no-op', secondBoot.status === 0 && secondBoot.stdout.includes('"reason":"already applied"')
+    && hashFile(dbPath) === dbBefore
+    && fs.readFileSync(markerPath, 'utf8') === markerBefore
+    && fs.readFileSync(checkoutPath, 'utf8') === checkoutBefore);
+
+  const withKeys = bootDemo({
+    TAPUZ_ROOT: once,
+    TAPUZ_DEMO_STORE: '1',
+    PAYPAL_CLIENT_ID: 'AWdemoSandboxClientId0001',
+    PAYPAL_CLIENT_SECRET: 'sandbox-demo-not-a-real-secret'
+  });
+  const checkoutAfter = fs.readFileSync(checkoutPath, 'utf8');
+  const demoDb = new Database(dbPath, { readonly: true, fileMustExist: true });
+  const stillSock = demoDb.prepare("SELECT price FROM store_products WHERE slug = 'left-sock'").get();
+  demoDb.close();
+  check('a later boot with PayPal env republishes checkout and leaves the catalog',
+    withKeys.status === 0 && withKeys.stdout.includes('"reason":"already applied"')
+    && withKeys.stdout.includes('"refreshed":true')
+    && checkoutAfter.includes('value="paypal"') && checkoutAfter.includes('ארגז חול של PayPal')
+    && stillSock && stillSock.price === 13
+    && !fs.existsSync(path.join(once, 'config', 'payments.json')));
+
+  const armedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-demo-armed-'));
+  extras.push(armedRoot);
+  const armedBoot = bootDemo({
+    TAPUZ_ROOT: armedRoot,
+    TAPUZ_DEMO_STORE: '1',
+    PAYPAL_CLIENT_ID: 'AWdemoSandboxClientId0001',
+    PAYPAL_CLIENT_SECRET: 'sandbox-demo-not-a-real-secret'
+  });
+  const armedHtml = fs.readFileSync(path.join(armedRoot, 'public', 'checkout.html'), 'utf8');
+  check('a first boot that already has the PayPal env exports the button',
+    armedBoot.status === 0 && armedBoot.stdout.includes('"ran":true')
+    && armedHtml.includes('value="paypal"') && armedHtml.includes('ארגז חול של PayPal'));
+
+  const pinEmpty = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-demo-pinempty-'));
+  extras.push(pinEmpty);
+  const pinEmptyFile = path.join(os.tmpdir(), 'tapuz-demo-pinempty-file-' + process.pid);
+  fs.writeFileSync(pinEmptyFile, pinEmpty + '\n', 'utf8');
+  const pinSeed = bootDemo({ TAPUZ_PIN_FILE: pinEmptyFile, TAPUZ_DEMO_STORE: '1' });
+  check('the flag seeds a pinned empty root, and the pin alone is not the arm',
+    pinSeed.status === 0 && pinSeed.stdout.includes('"ran":true')
+    && fs.existsSync(path.join(pinEmpty, 'config', 'seeded.json')));
+  fs.rmSync(pinEmptyFile, { force: true });
+
+  const occupied = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-demo-occupied-'));
+  extras.push(occupied);
+  fs.mkdirSync(path.join(occupied, 'config'));
+  fs.writeFileSync(path.join(occupied, 'config', 'site.json'), '{"title":"אתר קיים"}\n', 'utf8');
+  fs.mkdirSync(path.join(occupied, 'db'));
+  fs.writeFileSync(path.join(occupied, 'db', 'tapuz.db'), 'not-a-database-but-do-not-touch', 'utf8');
+  const siteBefore = hashFile(path.join(occupied, 'config', 'site.json'));
+  const dbOccupied = hashFile(path.join(occupied, 'db', 'tapuz.db'));
+  const refusedBoot = bootDemo({ TAPUZ_ROOT: occupied, TAPUZ_DEMO_STORE: '1' });
+  check('an existing site with the flag is refused and byte-identical',
+    refusedBoot.status === 0 && refusedBoot.stdout.includes('NOT applied')
+    && hashFile(path.join(occupied, 'config', 'site.json')) === siteBefore
+    && hashFile(path.join(occupied, 'db', 'tapuz.db')) === dbOccupied
+    && !fs.existsSync(path.join(occupied, 'config', 'seeded.json')));
+
+  const unreadable = fs.mkdtempSync(path.join(os.tmpdir(), 'tapuz-demo-unreadable-'));
+  extras.push(unreadable);
+  fs.writeFileSync(path.join(unreadable, 'pages'), 'keep-me', 'utf8');
+  const badBoot = bootDemo({ TAPUZ_ROOT: unreadable, TAPUZ_DEMO_STORE: '1' });
+  check('an inventory that fails refuses and writes nothing',
+    badBoot.status === 0 && badBoot.stdout.includes('NOT applied')
+    && fs.readFileSync(path.join(unreadable, 'pages'), 'utf8') === 'keep-me'
+    && !fs.existsSync(path.join(unreadable, 'db')));
 
   console.log(fail ? '\nSMOKE STORE-PAYPAL: FAIL (' + fail + ')' : '\nSMOKE STORE-PAYPAL: PASS');
   process.exit(fail ? 1 : 0);

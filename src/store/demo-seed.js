@@ -1,18 +1,28 @@
 'use strict';
 
 /**
- * The demo shop, applied only when a caller has already decided this is a
- * new empty root AND set TAPUZ_DEMO_STORE=1 (scripts/seed-demo-store.js does
- * both, and only after --apply). Importing the module does nothing. Boot
- * does not import it. A pin does not set the flag.
+ * The demo shop (חנות הדברים שאינם).
+ *
+ * Two callers, one catalog:
+ *   - scripts/seed-demo-store.js --apply, for a machine with a shell
+ *   - maybeDemoStore() on boot, only when TAPUZ_DEMO_STORE=1
+ *
+ * A .tapuz-root pin chooses WHERE the data root is (the same way every boot
+ * finds it). It does not arm this seed. TAPUZ_DEMO_STORE=1 is the only arm.
+ * The root must be confidently empty (the same inspection as the pin seed).
+ * A sign of a site, or an inventory that fails, is logged and nothing is
+ * written. A marker in config/seeded.json ("demo-store") makes the next boot
+ * a no-op. payments.json is never written — sandbox keys stay the owner's.
  *
  * Copy and pictures are original. Nothing here is a third-party mark.
- * payments.json is not written — sandbox keys stay the owner's.
  */
 
 const fs = require('fs');
 const path = require('path');
-const { ASSETS_DIR } = require('../paths');
+const { ASSETS_DIR, CONFIG_DIR, SITE_ROOT, PUBLIC_DIR } = require('../paths');
+
+const DEMO_MARKER_ID = 'demo-store';
+const FILE_SIGNS = ['auth.json', 'site.json', 'menus.json', 'theme-overrides.json', 'seeded.json'];
 
 const CATALOG = `
 <bent-store version="1" name="חנות הדברים שאינם" currency="ILS">
@@ -84,8 +94,8 @@ function svg(body, bg) {
 }
 
 const ARTS = {
-  'demo-left-sock.svg': svg('<path d="M78 36h46v62h-18l-10 46H74l-8-46H56V36h22z" fill="#6d28d9"/><circle cx="168" cy="58" r="22" fill="#e8b84a"/>', '#f4e9ff'),
-  'demo-named-cloud.svg': svg('<ellipse cx="120" cy="100" rx="70" ry="28" fill="#fff"/><ellipse cx="92" cy="86" rx="28" ry="22" fill="#fff"/><ellipse cx="140" cy="80" rx="36" ry="26" fill="#fff"/><circle cx="120" cy="52" r="8" fill="#e8b84a"/>', '#6d28d9'),
+  'demo-left-sock.svg': svg('<path d="M78 36h46v62h-18l-10 46H74l-8-46H56V36h22z" fill="#6d28d9"/><path d="M86 48h30v8H86z" fill="#e8b84a"/><circle cx="168" cy="58" r="22" fill="#e8b84a"/><circle cx="168" cy="58" r="8" fill="#fff8ee"/>', '#f4e9ff'),
+  'demo-named-cloud.svg': svg('<ellipse cx="120" cy="100" rx="70" ry="28" fill="#fff"/><ellipse cx="92" cy="86" rx="28" ry="22" fill="#fff"/><ellipse cx="140" cy="80" rx="36" ry="26" fill="#fff"/><circle cx="120" cy="52" r="8" fill="#e8b84a"/><path d="M108 118h24" stroke="#e8b84a" stroke-width="4" stroke-linecap="round"/>', '#6d28d9'),
   'demo-mountain-air.svg': svg('<path d="M24 150 L90 48 L130 110 L168 70 L220 150 Z" fill="#1c1430"/><circle cx="188" cy="40" r="16" fill="#e8b84a"/>', '#fff8ee'),
   'demo-pet-stone.svg': svg('<ellipse cx="120" cy="108" rx="54" ry="36" fill="#6b6280"/><ellipse cx="100" cy="96" rx="16" ry="10" fill="#eadfce"/><circle cx="92" cy="92" r="3" fill="#1c1430"/><circle cx="108" cy="92" r="3" fill="#1c1430"/>', '#f4e9ff'),
   'demo-bottled-quiet.svg': svg('<path d="M104 28h32v18h-8l-6 18v78a22 22 0 0 1-44 0V64l-6-18h-8V28h40z" fill="#1c1430" fill-opacity="0.85"/><rect x="108" y="20" width="24" height="12" rx="3" fill="#e8b84a"/>', '#fff8ee'),
@@ -149,8 +159,14 @@ function applyDemo() {
   const shop = pages.getPageByFullPath('shop');
   if (!shop) return { ok: false, code: 'NO_SHOP', message: 'דף החנות לא נוצר' };
   pages.savePageSource('shop', [
+    '<bent-banner tone="brand">הדגמה של חנות תפוזיאל — המחירים מומצאים, ו-PayPal כאן הוא ארגז חול</bent-banner>',
     '<bent-heading level="1" align="center">חנות הדברים שאינם</bent-heading>',
     '<bent-text align="center">חנות הדגמה של תפוזיאל. המחירים מומצאים בכוונה, והתשלום הוא ארגז חול של PayPal — לא כסף אמיתי.</bent-text>',
+    '<bent-features columns="3">',
+    '<bent-feature title="מחירים מומצאים">שקל וקצת, או מיליון ועוד שקל. אף מחיר כאן אינו מחיר של חנות אמיתית.</bent-feature>',
+    '<bent-feature title="ארגז חול">הכפתור של PayPal רץ מול ארגז החול. אישור בדף הזה לא מעביר כסף.</bent-feature>',
+    '<bent-feature title="בלי מותגים">הציורים והמשפטים נכתבו לחנות הזו. אין כאן סימן של חנות אחרת.</bent-feature>',
+    '</bent-features>',
     '<bent-shop filter="true" columns="3"></bent-shop>'
   ].join('\n'), { publish: true });
 
@@ -164,4 +180,109 @@ function applyDemo() {
   return { ok: true, products: store.catalog.countProducts().total, homepage: 'shop' };
 }
 
-module.exports = { applyDemo, CATALOG };
+function readMarkerFile() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, 'seeded.json'), 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) {
+    return null;
+  }
+}
+
+function markerApplied() {
+  const marker = readMarkerFile();
+  return !!(marker && marker[DEMO_MARKER_ID]);
+}
+
+function writeMarker() {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  const marker = readMarkerFile() || {};
+  marker[DEMO_MARKER_ID] = new Date().toISOString();
+  fs.writeFileSync(path.join(CONFIG_DIR, 'seeded.json'), JSON.stringify(marker, null, 2), 'utf8');
+}
+
+/** Filesystem half of inspectRoot, without opening the database. */
+function filesystemProbe() {
+  const signs = [];
+  const errors = [];
+  try {
+    for (const f of FILE_SIGNS) if (fs.existsSync(path.join(CONFIG_DIR, f))) signs.push('config/' + f);
+    for (const d of ['pages', 'content']) {
+      const p = path.join(SITE_ROOT, d);
+      if (fs.existsSync(p) && fs.readdirSync(p).length) signs.push(d + '/');
+    }
+  } catch (e) { errors.push('filesystem: ' + e.message); }
+  if (errors.length) return { empty: false, confident: false, reason: 'could not establish that the root is empty (' + errors.join('; ') + ')' };
+  if (signs.length) return { empty: false, confident: true, reason: 'the root already holds a site (' + signs.join(', ') + ')' };
+  return { empty: true, confident: true, reason: 'empty root' };
+}
+
+function checkoutOffersPaypal() {
+  try {
+    const html = fs.readFileSync(path.join(PUBLIC_DIR, 'checkout.html'), 'utf8');
+    return /name="payment"[^>]*value="paypal"/.test(html) || /value="paypal"[^>]*name="payment"/.test(html);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * The static checkout is baked at export time. A later boot that has the
+ * PayPal env vars, and a checkout page that was exported before they
+ * existed, republishes that one page. The shopper's script also rebuilds
+ * the payment choices from the live quote, so a cached copy of the old
+ * page still offers PayPal once the server has the keys.
+ */
+function refreshDemoCheckout() {
+  if (checkoutOffersPaypal()) return { refreshed: false, reason: 'checkout already offers paypal' };
+  const id = String(process.env.PAYPAL_CLIENT_ID || '');
+  const secret = String(process.env.PAYPAL_CLIENT_SECRET || '');
+  if (!id || !secret) return { refreshed: false, reason: 'paypal not configured' };
+  if (!require('./paypal').isReady()) return { refreshed: false, reason: 'paypal not ready' };
+  try {
+    require('../export').exportPage('checkout');
+    console.log('[demo-store] checkout republished so PayPal is on the page');
+    return { refreshed: checkoutOffersPaypal() };
+  } catch (e) {
+    console.error('[demo-store] checkout export failed: ' + e.message);
+    return { refreshed: false, reason: e.message };
+  }
+}
+
+/**
+ * Boot entry. TAPUZ_DEMO_STORE=1 is the only arm. A pin is not an arm.
+ * Never throws.
+ * @returns {{ ran: boolean, reason?: string, products?: number, homepage?: string, checkout?: object }}
+ */
+function maybeDemoStore() {
+  if (process.env.TAPUZ_DEMO_STORE !== '1') return { ran: false, reason: 'not armed' };
+  try {
+    if (markerApplied()) {
+      const checkout = refreshDemoCheckout();
+      return { ran: false, reason: 'already applied', checkout };
+    }
+    const files = filesystemProbe();
+    if (!files.empty || !files.confident) {
+      console.log('[demo-store] NOT applied: ' + files.reason);
+      return { ran: false, reason: files.reason };
+    }
+    const probe = require('../seed-content').inspectRoot();
+    if (!probe.empty || !probe.confident) {
+      console.log('[demo-store] NOT applied: ' + probe.reason);
+      return { ran: false, reason: probe.reason };
+    }
+    const result = applyDemo();
+    if (!result.ok) {
+      console.log('[demo-store] NOT applied: ' + (result.message || result.code));
+      return { ran: false, reason: result.message || result.code };
+    }
+    writeMarker();
+    console.log('[demo-store] applied products=' + result.products + ' homepage=' + result.homepage);
+    return { ran: true, products: result.products, homepage: result.homepage };
+  } catch (e) {
+    console.error('[demo-store] failed: ' + e.message);
+    return { ran: false, reason: e.message };
+  }
+}
+
+module.exports = { applyDemo, maybeDemoStore, CATALOG, DEMO_MARKER_ID };
