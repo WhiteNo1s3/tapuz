@@ -31,6 +31,10 @@
  *   any other root           → nothing is written, byte for byte. A sign of
  *                              a site, or an inventory that fails, is logged
  *
+ * A deploy may also carry an ORDER to rebuild the demo (`.demo-rebuild`, one
+ * id): on a root that is a demo, once per id, everything the seed writes is
+ * written again whatever the owner changed — see rebuildDemo().
+ *
  * housekeeping() is what keeps a public fake shop presentable: orders older
  * than a day are cancelled (their stock comes back) and forget who placed
  * them, and a demo product that sold out is put back on the shelf.
@@ -40,7 +44,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ASSETS_DIR, CONFIG_DIR, SITE_ROOT, PUBLIC_DIR, DB_DIR } = require('../paths');
+const { ASSETS_DIR, CONFIG_DIR, SITE_ROOT, PUBLIC_DIR, DB_DIR, PACKAGE_ROOT } = require('../paths');
 
 const DEMO_MARKER_ID = 'demo-store';
 const DEMO_V2_MARKER_ID = 'demo-store-v2';
@@ -806,6 +810,102 @@ function upgradeDemo() {
   return { ok: true, parts };
 }
 
+// ── a rebuild, ordered by the deploy ───────────────────────────────────
+
+/**
+ * Where a deploy leaves its order to rebuild the demo: `.demo-rebuild` at
+ * the package root, one line, an id. Like the pin (.tapuz-root) the file is
+ * gitignored — it exists only because whoever built the archive put it
+ * there — so a clone, a git deploy and a test never carry one.
+ * TAPUZ_DEMO_REBUILD_FILE exists for hermetic tests only.
+ */
+const REBUILD_FILE = process.env.TAPUZ_DEMO_REBUILD_FILE
+  ? path.resolve(process.env.TAPUZ_DEMO_REBUILD_FILE)
+  : path.join(PACKAGE_ROOT, '.demo-rebuild');
+const REBUILD_MARKER = 'demo-rebuild:';
+
+/** @returns {null | { id: string, bad?: boolean }} */
+function rebuildOrder() {
+  let text = '';
+  try { text = fs.readFileSync(REBUILD_FILE, 'utf8'); } catch (e) { return null; }
+  const id = String(text.split(/\r?\n/)[0] || '').trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id)) return { id: '', bad: true };
+  return { id };
+}
+
+/** A copy of a config file beside it, before the rebuild replaces what has no history of its own. */
+function keepCopy(name, tag) {
+  try {
+    const src = path.join(CONFIG_DIR, name + '.json');
+    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(CONFIG_DIR, name + '.pre-' + tag + '.json'));
+  } catch (e) { /* a missing copy must not block the rebuild */ }
+}
+
+/**
+ * The demo, put back the way a fresh seed writes it — on a root that IS a
+ * demo shop, whatever was changed on it since. upgradeDemo() keeps every
+ * part an owner touched and writes its marker even when it kept them all,
+ * so a demo that was edited once never reaches the next version by itself
+ * (the live demo shop: a catalog pasted through its admin under 2.68 was
+ * "the owner's", and 2.69 kept all of it). This is the way back, and it is
+ * opened from outside the site: by the order a deploy carries, never by
+ * the upgrade.
+ *
+ * It writes the pictures, the look (the theme's settings become the demo's
+ * palette and nothing else: a hand-written effect is dropped, a copy of the
+ * file is kept beside it), the catalog (replaced; the store keeps its own
+ * backup, and "ביטול החלה אחרונה" undoes it), the home page and the shop
+ * page (their old text stays in the page history), the menu (a backup
+ * first), the description and the footer line. Every OTHER published page
+ * the store does not own is taken down to a draft — kept, never deleted.
+ * Orders, customers, accounts and uploaded pictures are not touched.
+ *
+ * Planned first: a catalog that would not land whole leaves the root as it
+ * was.
+ * @returns {{ ok: boolean, code?: string, message?: string, version?: number, products?: number, homepage?: string, takenDown?: string[] }}
+ */
+function rebuildDemo(orderId) {
+  if (!isDemoSite()) return { ok: false, code: 'NOT_DEMO', message: 'האתר הזה אינו חנות הדגמה — אין מה לבנות מחדש' };
+  const store = require('./index');
+  const plan = planV2(store);
+  if (!plan.ok) return { ok: false, code: 'CATALOG', message: plan.message || 'הקטלוג לא נקלט' };
+  const pages = require('../pages');
+  const tag = 'demo-rebuild' + (orderId ? '-' + orderId : '');
+  const takenDown = [];
+  seedingNow = true;
+  try {
+    keepCopy('theme-overrides', tag);
+    keepCopy('site', tag);
+    writeArt(artFiles());
+    require('../theme').saveOverrides(JSON.parse(JSON.stringify(PALETTE)));
+    saveLook(DESCRIPTION);
+    const applied = applyV2(store, true);
+    if (!applied.ok) return applied;
+    if (!store.isOpen()) store.flip(true);
+    const built = writePagesV2(store);
+    if (!built.ok) return built;
+    writeMenuV2(store);
+    saveFooterLine();
+    // what is published and is neither the demo's home page nor a page the
+    // store owns (its four pages, a product's, a category's) is not part of
+    // the demo: it leaves the site, and stays in the admin as a draft
+    for (const row of pages.listPages()) {
+      if (row.status !== 'published' || row.full_path === HOME_PATH) continue;
+      const page = pages.getPageByFullPath(row.full_path);
+      if (page && page.meta && page.meta.store) continue;
+      pages.updatePage(row.full_path, { status: 'draft' });
+      takenDown.push(row.full_path);
+    }
+    writeMarkers([DEMO_MARKER_ID, DEMO_V2_MARKER_ID].concat(orderId ? [REBUILD_MARKER + orderId] : []));
+  } finally {
+    seedingNow = false;
+  }
+  require('../export').exportAll();
+  // what the shop sells now — a product the document did not name is hidden, not counted
+  const selling = store.catalog.listProducts({ status: 'active', limit: 100000 }).length;
+  return { ok: true, version: DEMO_VERSION, products: selling, homepage: HOME_PATH, takenDown };
+}
+
 // ── an unmarked version 1 demo ─────────────────────────────────────────
 
 // a database larger than this is not looked into (the look copies it whole);
@@ -1057,6 +1157,24 @@ function maybeDemoStore() {
   if (process.env.TAPUZ_DEMO_STORE !== '1') return { ran: false, reason: 'not armed' };
   try {
     const markers = readMarkers();
+    // an order the deploy carries comes before everything else, and is
+    // carried out once: its id is written beside the demo's own markers
+    const order = rebuildOrder();
+    if (order && order.bad) {
+      console.log('[demo-store] rebuild order ignored: .demo-rebuild must hold one id (letters, digits, . _ -)');
+    } else if (order && markers.state !== 'corrupt' && !markers.data[REBUILD_MARKER + order.id]) {
+      if (!markers.data[DEMO_MARKER_ID] && !markers.data[DEMO_V2_MARKER_ID]) {
+        console.log('[demo-store] rebuild order ' + order.id + ' ignored: this site is not a demo shop');
+      } else {
+        const rebuilt = rebuildDemo(order.id);
+        if (rebuilt.ok) {
+          console.log('[demo-store] rebuilt (order ' + order.id + '): version=' + rebuilt.version + ' products=' + rebuilt.products + ' homepage=' + rebuilt.homepage
+            + (rebuilt.takenDown.length ? ' — taken down to drafts: ' + rebuilt.takenDown.join(', ') : ''));
+          return { ran: true, rebuilt: true, order: order.id, version: rebuilt.version, products: rebuilt.products, homepage: rebuilt.homepage, takenDown: rebuilt.takenDown };
+        }
+        console.log('[demo-store] rebuild order ' + order.id + ' NOT carried out: ' + (rebuilt.message || rebuilt.code));
+      }
+    }
     if (markers.data[DEMO_V2_MARKER_ID]) {
       return { ran: false, reason: 'already applied', checkout: refreshDemoCheckout() };
     }
@@ -1098,6 +1216,8 @@ module.exports = {
   applyDemo,
   applyDemoV1,
   upgradeDemo,
+  rebuildDemo,
+  rebuildOrder,
   maybeDemoStore,
   housekeeping,
   isDemoSite,
@@ -1106,5 +1226,6 @@ module.exports = {
   CATALOG_V1,
   DEMO_VERSION,
   DEMO_MARKER_ID,
-  DEMO_V2_MARKER_ID
+  DEMO_V2_MARKER_ID,
+  REBUILD_MARKER
 };

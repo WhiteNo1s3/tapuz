@@ -71,7 +71,7 @@ function tree(root) {
   return out.join('\n');
 }
 
-const STRIP = ['TAPUZ_ROOT', 'TAPUZ_DEMO_STORE', 'TAPUZ_DEMO_RESET_HOURS', 'TAPUZ_PIN_FILE', 'TAPUZ_SEED',
+const STRIP = ['TAPUZ_ROOT', 'TAPUZ_DEMO_STORE', 'TAPUZ_DEMO_RESET_HOURS', 'TAPUZ_DEMO_REBUILD_FILE', 'TAPUZ_PIN_FILE', 'TAPUZ_SEED',
   'PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_MODE', 'TAPUZ_PAYPAL_LIVE', 'TAPUZ_PAYPAL_FAKE'];
 const FLAG = { TAPUZ_DEMO_STORE: '1' };
 const KEYS = { PAYPAL_CLIENT_ID: 'AWdemoSandboxClientId0001', PAYPAL_CLIENT_SECRET: 'sandbox-demo-not-a-real-secret' };
@@ -132,6 +132,7 @@ const INSPECT = `
   out.orders = db().prepare('SELECT * FROM store_orders ORDER BY id').all();
   out.version = seed.demoVersion();
   out.isDemo = seed.isDemoSite();
+  out.theme = JSON.stringify(require('./src/theme').loadOverrides());
 }
 `;
 
@@ -526,6 +527,107 @@ const upgraded = copyRoot(v1, 'v1-upgraded');
   const kept = child(words, FLAG, BOOT + INSPECT);
   ok(kept.out.r.parts.description === 'kept' && kept.out.r.parts.footer === 'kept' && kept.out.description === 'התיאור של בעל האתר' && kept.out.footer === 'שורת הפוטר שלו' && kept.out.r.parts.catalog === 'upgraded',
     'an owner\'s own site description and footer line are kept');
+}
+
+// ── 6b. a rebuild, ordered by the deploy ───────────────────────────────
+//
+// The live demo shop, the day 2.69 reached it: under 2.68 somebody had put a
+// catalog of his own, pages of his own, a menu and a theme effect on it, so
+// the upgrade kept every part and wrote its marker — that demo could never
+// become version 2 by itself. A deploy can now carry an order to rebuild it.
+
+{
+  const pristine = newRoot('rebuild-pristine');
+  child(pristine, FLAG, BOOT);
+  const want = child(pristine, {}, INSPECT).out;
+
+  const root = copyRoot(v1, 'rebuild-edited');
+  const EFFECT = '.bent-shop-price::after { content: ""; display: block; height: 1.35rem; }';
+  const edits = child(root, {}, [
+    'const st = store(); const pages = require("./src/pages"); const menus = require("./src/menus");',
+    "const p = st.catalog.getProductBySlug('pet-stone'); st.afterProductChange(st.catalog.updateProduct(p.id, { title: 'אבן מחמד, בשם שבעל האתר נתן' }));",
+    "out.added = st.document.applyDocument('<bent-store mode=\"merge\">\\n  <bent-sku id=\"owner-thing\" title=\"דבר של בעל האתר\" price=\"5\" stock=\"3\" shelf=\"small\">נוסף ביד.</bent-sku>\\n</bent-store>', { force: true, reason: 'smoke' }).ok;",
+    "pages.savePageSource('shop', pages.getPageSource('shop', 'draft') + '\\n<bent-text>שורה שבעל האתר הוסיף</bent-text>', { publish: true });",
+    "pages.createPage({ title: 'דברים גדולים מדי', slug: 'cat-huge', blocks: [], status: 'draft' });",
+    "pages.savePageSource('cat-huge', '<bent-heading level=\"1\">דברים גדולים מדי</bent-heading>\\n<bent-shop shelf=\"huge\" columns=\"4\"></bent-shop>', { publish: true });",
+    "menus.saveMenu('main', menus.getMenu('main').concat([{ label: 'גדולים', type: 'page', target: 'cat-huge' }]));",
+    'require("./src/theme").saveThemeSettings({ overrides: { effects: { css: ' + JSON.stringify(EFFECT) + ' } } });',
+    'require("./src/export").exportAll();'
+  ].join('\n'));
+  const kept = child(root, FLAG, BOOT);
+  const before = child(root, {}, INSPECT).out;
+  ok(edits.status === 0 && edits.out.added === true && kept.out.r.upgraded === true && kept.out.r.parts.catalog === 'kept' && kept.out.r.parts.pages === 'kept' && kept.out.r.parts.menu === 'kept'
+    && before.version === 2 && before.products.length === 9 && before.pages.includes('cat-huge:published') && before.theme.includes('1.35rem') && fs.existsSync(path.join(root, 'public', 'cat-huge.html')),
+    'the fixture: an edited version 1 demo that the upgrade kept whole — and marked as version 2 all the same');
+  const wasTree = tree(root);
+  const plain = child(root, FLAG, BOOT);
+  ok(plain.out.r.reason === 'already applied' && tree(root) === wasTree, 'with no order, nothing can bring that demo to version 2: the next boot writes nothing');
+
+  const orderFile = path.join(HOME, 'order-t1.txt');
+  fs.writeFileSync(orderFile, 't1\n');
+  const ORDER = { TAPUZ_DEMO_REBUILD_FILE: orderFile };
+
+  const unarmed = child(root, ORDER, BOOT);
+  ok(unarmed.out.r.reason === 'not armed' && tree(root) === wasTree, 'an order without TAPUZ_DEMO_STORE=1 is not read');
+
+  const badFile = path.join(HOME, 'order-bad.txt');
+  fs.writeFileSync(badFile, 'two words; and a semicolon\n');
+  const bad = child(root, Object.assign({}, FLAG, { TAPUZ_DEMO_REBUILD_FILE: badFile }), BOOT);
+  ok(bad.stdout.includes('[demo-store] rebuild order ignored') && bad.out.r.reason === 'already applied' && tree(root) === wasTree, 'an order that is not one plain id is ignored, and says so');
+
+  // somebody's real shop: a page, a product, an open store — and no demo marker
+  const stranger = newRoot('rebuild-not-a-demo');
+  child(stranger, {}, "const st = store(); require('./src/pages').createPage({ title: 'אודות', slug: 'about', blocks: [], status: 'published' }); st.catalog.createProduct({ title: 'נר שעווה', price: '49.90', stock: 3 }); st.flip(true);");
+  const strangerWas = tree(stranger);
+  const refused = child(stranger, Object.assign({}, FLAG, ORDER), BOOT);
+  ok(refused.stdout.includes('rebuild order t1 ignored: this site is not a demo shop') && tree(stranger) === strangerWas && !refused.out.r.rebuilt,
+    'an order on a site that is not a demo shop is ignored: not one byte of it changes');
+  const direct = child(stranger, {}, 'out.r = seed.rebuildDemo("x");');
+  ok(direct.out.r.ok === false && direct.out.r.code === 'NOT_DEMO' && tree(stranger) === strangerWas, 'rebuildDemo() itself refuses a site that is not a demo, and writes nothing');
+
+  const boot = child(root, Object.assign({}, FLAG, ORDER), BOOT);
+  const got = child(root, {}, INSPECT).out;
+  const m = markers(root) || {};
+  ok(boot.status === 0 && boot.out.r.rebuilt === true && boot.out.r.order === 't1' && boot.out.r.products === 24 && (boot.out.r.takenDown || []).join() === 'cat-huge'
+    && boot.stdout.includes('[demo-store] rebuilt (order t1): version=2 products=24 homepage=home — taken down to drafts: cat-huge'),
+    'the order is carried out, and one log line says what it did');
+  // by address: the eight products version 1 already had keep their rows, so the two roots number them differently
+  const active = (list) => (list || []).filter((p) => p.status === 'active').map((p) => [p.slug, p.title, p.price, p.shelf, p.brand, p.tags, p.featured, p.image, p.max, p.options])
+    .sort((x, y) => (x[0] < y[0] ? -1 : 1));
+  ok(JSON.stringify(active(got.products)) === JSON.stringify(active(want.products)) && active(got.products).length === 24
+    && bySlug(got.products, 'owner-thing').status !== 'active' && bySlug(got.products, 'pet-stone').title === bySlug(want.products, 'pet-stone').title,
+    'the catalog is the demo\'s again: the same twenty-four products a fresh seed sells, and the owner\'s extra one is off the shelf');
+  ok(JSON.stringify(got.shelves) === JSON.stringify(want.shelves) && got.coupons.join() === want.coupons.join() && got.payments.join() === want.payments.join()
+    && got.offered.join() === want.offered.join() && got.shipping.join() === want.shipping.join() && got.open === true,
+    '…with its categories, coupons, shipping and the demo payment');
+  ok(got.homepage === 'home' && got.source.home === want.source.home && got.source.shop === want.source.shop && !String(got.source.shop).includes('שורה שבעל האתר הוסיף')
+    && JSON.stringify(got.menu) === JSON.stringify(want.menu) && got.description === want.description && got.footer === want.footer,
+    'the home page, the shop page, the menu, the description and the footer line are a fresh seed\'s');
+  ok(got.theme === want.theme && !got.theme.includes('1.35rem')
+    && fs.readFileSync(path.join(root, 'config', 'theme-overrides.pre-demo-rebuild-t1.json'), 'utf8').includes('1.35rem'),
+    'the look is the demo\'s (the hand-written effect is gone), and a copy of the old theme file is kept beside it');
+  ok(got.pages.includes('cat-huge:draft') && !fs.existsSync(path.join(root, 'public', 'cat-huge.html')) && got.pages.includes('home:published')
+    && got.pages.filter((x) => /:published$/.test(x)).sort().join() === want.pages.filter((x) => /:published$/.test(x)).sort().join(),
+    'the owner\'s own page is taken down to a draft — kept, not deleted — and what is published is exactly a fresh seed\'s set of pages');
+  // "newest first" follows the order the products were created in, and eight of them are older here:
+  // each card's age differs, and so does the one section that lists the newest ("חדשים בחנות")
+  const NEWEST = '<h2 class="bent-shop-title">חדשים בחנות</h2>';
+  const upToNewest = (x) => { const page = x.replace(/ data-new="\d+"/g, ''); const at = page.lastIndexOf('<section', page.indexOf(NEWEST)); return at > 0 ? page.slice(0, at) : ''; };
+  const cards = (x) => count(x, '<article class="bent-shop-card');
+  ok(upToNewest(html(root, 'index.html')).length > 5000 && upToNewest(html(root, 'index.html')) === upToNewest(html(pristine, 'index.html'))
+    && cards(html(root, 'index.html')) === cards(html(pristine, 'index.html'))
+    && cards(html(root, 'shop.html')) === 24 && fs.existsSync(path.join(root, 'public', 'shelf-small.html')),
+    'the exported home page is a fresh seed\'s to the byte down to its "newest" section, the shop shows twenty-four cards, and the category pages exist');
+  ok(got.orders.length === before.orders.length && got.orders.length === 1 && got.orders[0].number === before.orders[0].number && got.orders[0].customer_name === before.orders[0].customer_name,
+    'the order that was already there is untouched');
+  ok(!!m['demo-store'] && !!m['demo-store-v2'] && !!m['demo-rebuild:t1'] && got.isDemo === true && got.version === 2, 'the order\'s id is written beside the demo\'s own markers');
+
+  const afterTree = tree(root);
+  const again = child(root, Object.assign({}, FLAG, ORDER), BOOT);
+  ok(again.out.r.reason === 'already applied' && tree(root) === afterTree, 'the same order on the next boot does nothing: database, markers and exported pages byte-identical');
+
+  ok(fs.readFileSync(path.join(REPO, '.gitignore'), 'utf8').split('\n').includes('.demo-rebuild') && !fs.existsSync(path.join(REPO, '.demo-rebuild')),
+    'the order file is gitignored and the repository carries none: only an archive somebody built on purpose can hold one');
 }
 
 // ── 7. nothing, byte for byte ──────────────────────────────────────────
