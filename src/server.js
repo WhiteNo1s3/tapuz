@@ -904,6 +904,17 @@ const server = app.listen(PORT, () => {
       console.log(`   ↳ קוד הקמה: ${auth.setupCode()}  (${typeof auth.interactiveRun === 'function' && auth.interactiveRun() ? 'נדרש ליצירת החשבון הראשון מדפדפן שאינו על המכונה הזאת' : 'נדרש ליצירת החשבון הראשון'}; מתחלף בכל הפעלה)`);
     }
   }
+  // Did a new build arrive? Asked HERE, before anything in this boot writes
+  // the export again: the demo step below re-exports the whole site when it
+  // changes one word of it, and the export it leaves carries this build's
+  // stamp. Asked after it, the answer was "no" — and the store's generated
+  // pages never followed the build (seen on the live demo shop, whose only
+  // upgraded part was the footer line).
+  let newBuild = false;
+  try {
+    const exp = require('./export');
+    newBuild = typeof exp.exportIsStale === 'function' && exp.exportIsStale();
+  } catch (e) { newBuild = false; }
   // Demo shop (v2.68): opt-in with TAPUZ_DEMO_STORE=1. A .tapuz-root pin
   // only names the data root; it does not arm this. Empty root, once.
   // BEFORE the content seed (v2.69): a pin arms that one, and a root it had
@@ -919,14 +930,20 @@ const server = app.listen(PORT, () => {
   // below. A 2.68 shop upgraded in place used to keep its old product pages
   // and have no category pages until the owner happened to save something.
   try {
-    const exp = require('./export');
-    if (typeof exp.exportIsStale === 'function' && exp.exportIsStale()) {
+    if (newBuild) {
       const st = require('./store');
       if (st.isOpen()) {
         const synced = st.pages.syncCatalogPages();
         const n = (list) => (list || []).filter((x) => x && x.action && x.action !== 'kept' && x.action !== 'none' && x.action !== 'foreign').length;
         const moved = n(synced.products) + n(synced.shelves);
-        if (moved) console.log('[store] ' + moved + ' generated page(s) follow the new build');
+        if (moved) {
+          console.log('[store] ' + moved + ' generated page(s) follow the new build');
+          // the rebuild below runs only while the export is still the old
+          // build's; when a step above has already rebuilt it, these pages
+          // would wait for the owner's next save to reach a visitor
+          const exp = require('./export');
+          if (!exp.exportIsStale()) exp.exportAll();
+        }
       }
     }
   } catch (e) { console.error('[store] page sync after deploy failed: ' + e.message); }

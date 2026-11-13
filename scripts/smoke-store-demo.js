@@ -460,6 +460,45 @@ const upgraded = copyRoot(v1, 'v1-upgraded');
     'a kept catalog whose checkout DOES offer a payment is given nothing');
 }
 
+// The same kind of root, booted by the REAL server after a deploy. The demo
+// step re-exports the whole site when it writes anything (here: the demo
+// payment and the footer line), so an export that was the old build's a
+// moment ago carries this build's stamp by the time the server asks whether
+// a new build arrived. Asked then, the answer was "no": the product pages
+// kept 2.68's shape and no category page was ever made — seen on the live
+// demo shop, the day 2.69 was deployed to it. The server asks FIRST.
+{
+  const root = copyRoot(v1, 'v1-renamed-real-boot');
+  child(root, {}, "const st = store(); const p = st.catalog.getProductBySlug('pet-stone'); st.afterProductChange(st.catalog.updateProduct(p.id, { title: 'אבן מחמד, בשם שבעל האתר נתן' }));");
+  // 2.68 made no category pages; the fixture root was built by today's code, which does
+  child(root, {}, "const pages = require('./src/pages'); for (const p of pages.listPages()) if (/^shelf-/.test(p.full_path)) pages.deletePage(p.full_path); require('./src/export').exportAll();");
+  for (const f of fs.readdirSync(path.join(root, 'public'))) if (/^shelf-.*\.html$/.test(f)) fs.unlinkSync(path.join(root, 'public', f));
+  fs.writeFileSync(path.join(root, 'public', '.built-by'), '2.68.0-alpha+dev\n');
+  const was = child(root, {}, INSPECT).out;
+  const wasFile = fs.existsSync(path.join(root, 'public', 'shelf-small.html'));
+  const env = Object.assign({}, process.env);
+  for (const k of STRIP) delete env[k];
+  Object.assign(env, FLAG, { TAPUZ_ROOT: root, PORT: '3948' });
+  // the server never ends by itself: it is given seven seconds, then asked to close
+  const run = spawnSync(process.execPath, ['src/server.js'], { cwd: REPO, env, encoding: 'utf8', timeout: 7000, killSignal: 'SIGTERM' });
+  const log = (run.stdout || '') + (run.stderr || '');
+  const seen = child(root, {}, INSPECT).out;
+  const serverSrc = fs.readFileSync(path.join(REPO, 'src', 'server.js'), 'utf8');
+  ok(serverSrc.indexOf('exp.exportIsStale()') > 0 && serverSrc.indexOf('exp.exportIsStale()') < serverSrc.indexOf("require('./store/demo-seed').maybeDemoStore()"),
+    'the server asks whether a new build arrived BEFORE the demo step rewrites the export');
+  ok(was.hashed === 0 && !was.pages.some((x) => /^shelf-/.test(x)) && !wasFile && /title="עוד מהחנות"/.test(was.source['shop-left-sock'] || ''),
+    'before the boot: 2.68\'s product pages, no category page');
+  ok(log.includes('[demo-store] v2: catalog kept') && log.includes('footer upgraded') && /\[store\] \d+ generated page\(s\) follow the new build/.test(log),
+    'a real boot on a kept catalog: the demo step writes (and re-exports), and the generated pages STILL follow the build');
+  ok(seen.products.length === 8 && bySlug(seen.products, 'pet-stone').title === 'אבן מחמד, בשם שבעל האתר נתן' && seen.homepage === 'shop',
+    '…the owner\'s catalog and home page are still his');
+  ok(seen.hashed === 8 && !/title="עוד מהחנות"/.test(seen.source['shop-left-sock'] || '') && ['shelf-small', 'shelf-huge', 'shelf-quiet'].every((x) => seen.pages.includes(x + ':published')),
+    '…every product page is today\'s shape, and each category has its page');
+  ok(fs.existsSync(path.join(root, 'public', 'shelf-small.html')) && !html(root, 'shop-left-sock.html').includes('עוד מהחנות')
+    && fs.readFileSync(path.join(root, 'public', '.built-by'), 'utf8').trim() !== '2.68.0-alpha+dev',
+    '…and they reached the exported files, not only the database');
+}
+
 {
   const root = copyRoot(v1, 'v1-home-edited');
   child(root, {}, "const pages = require('./src/pages'); pages.savePageSource('shop', pages.getPageSource('shop', 'draft') + '\\n<bent-text>שורה שבעל האתר הוסיף</bent-text>', { publish: true });");
