@@ -446,6 +446,10 @@ function gridOf(html) {
     check('css: the rule that beat the button\'s margin on every card is gone', !/\+\s*\.bent-shop-add/.test(css));
     check('css: the subgrid enhancement is in, with the flex fallback under it',
       /@supports \(grid-template-rows: subgrid\)/.test(block) && /grid-template-rows: subgrid; grid-row: span 7/.test(block) && /\.bent-shop-body \.bent-shop-price \{\s*margin: auto 0 0/.test(block));
+    // a long price on a phone's two-column card ("החל מ-₪333,333") broke after its first word, and a fixed one-line row hid the number
+    const priceRule = (/\.bent-shop-body \.bent-shop-price \{([^}]*)\}/.exec(block) || [])[1] || '';
+    check('css: the price row of a card may grow — one line is its floor, and nothing of a price is ever cut off',
+      /min-height: calc\(1\.5em \+ 0\.6rem\)/.test(priceRule) && !/[^-]height:/.test(priceRule.replace(/min-height:[^;]*;/, '')) && !/overflow:\s*hidden/.test(priceRule));
     check('css: names and summaries are clamped to two lines, reserved in em with a line-height of their own',
       (block.match(/-webkit-line-clamp: 2/g) || []).length >= 2 && /\.bent-shop-name \{[^}]*line-height: 1\.35; min-height: calc\(2 \* 1\.35em\)/.test(block));
     check('css: one background for every picture box of the store', (block.match(/background: var\(--media-bg\)/g) || []).length >= 5 && !/--tz-media-bg/.test(block));

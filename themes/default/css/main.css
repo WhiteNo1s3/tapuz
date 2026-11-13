@@ -2831,9 +2831,16 @@ body.menu-side .main-nav a:hover {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
 }
 .bent-shop-body .bent-shop-price {
-  margin: auto 0 0; padding-top: 0.6rem; box-sizing: border-box; height: calc(1.5em + 0.6rem); font-size: 1.05rem; line-height: 1.5;
-  display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.45rem; overflow: hidden;
+  margin: auto 0 0; padding-top: 0.6rem; box-sizing: border-box; min-height: calc(1.5em + 0.6rem); font-size: 1.05rem; line-height: 1.5;
+  display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.45rem;
 }
+/* One line is the row's FLOOR, never its ceiling. It used to be a fixed
+   height with the overflow hidden: on a phone's two-column card a long
+   price ("החל מ-₪333,333") broke after its first word, and the number — the
+   second line — was cut off; the card said "החל" and nothing else. A price
+   that needs two lines now takes them. With subgrid the whole row of cards
+   grows with it and stays level; without it the buttons still share one
+   line, because the price is pushed down from above (margin: auto). */
 .bent-shop-price .bent-price-was { margin-inline-start: 0; font-size: 0.9em; }
 .bent-shop-note { margin: 0.15rem 0 0; min-height: 1.5em; font-size: 0.85rem; line-height: 1.5; font-weight: 600; }
 .bent-shop-note.is-low { color: #b45309; }
