@@ -12,6 +12,15 @@
  * The prompt carries "the store today" so the model EDITS instead of
  * rebuilding (every existing product keeps its id), and the site's real
  * pictures so it never invents an image path.
+ *
+ * v2.69 — a store that does not fit the prompt is shown as a PARTIAL view,
+ * and says so in the one place a model copies from: the root tag. The view
+ * is rooted <bent-store mode="merge" keep="description,…"> (the attributes
+ * it left out), so a reply that echoes it changes nothing — it used to
+ * blank every description, and hide the products the view had no room for.
+ * Three nets, one under the other: the root, a line that says "return only
+ * what you change", and the door's own BLANKED warning (src/store/document.js)
+ * for a reply that ignored both.
  */
 
 const dialect = require('../bentml/store-dialect');
@@ -38,7 +47,9 @@ const GRAMMAR_HE = [
   '',
   'שדות: price/was/min/free-over בשקלים עם נקודה ("89.90", בלי ₪ ובלי פסיקים) · was = מחיר לפני (גבוה מ-price) ·',
   'stock = כמה במלאי (unlimited = בלי ספירה; להשמיט = בלי שינוי) · status="hidden" מסתיר · delivery="false" למוצר דיגיטלי/שירות ·',
-  'kind של תשלום: call | bank | bit | paybox | cash | link | card (ל-link: url="https://…?sum={total}&ref={order}"; card = סליקה בכרטיס אשראי דרך חברת הסליקה שהבעלים חיבר/ה — אפשר max-payments="3" לתשלומים, ובלי מפתחות או שם חברה במסמך) ·',
+  'מוצר, רשות: brand · tags="סויה, מתנה" · featured="true" (מומלץ) · barcode · weight (גרם) · seo-title · seo-description · אין cost: מחיר עלות לא נכתב במסמך ·',
+  'קטגוריה, רשות: parent="candles" (תת-קטגוריה, רמה אחת) · image · summary · hidden="true" ·',
+  'kind של תשלום: call | bank | bit | paybox | cash | link | card | paypal | demo (ל-link: url="https://…?sum={total}&ref={order}"; card = סליקה בכרטיס אשראי דרך חברת הסליקה שהבעלים חיבר/ה — אפשר max-payments="3" לתשלומים, ובלי מפתחות או שם חברה במסמך; paypal = גם בלי מפתחות; demo = תשלום לדוגמה, רק באתר הדגמה) ·',
   'קופון: percent="10" או amount="20" או free-shipping="true"; אופציונלי min, starts, until (YYYY-MM-DD), uses.',
   '',
   'כללים:',
@@ -64,7 +75,8 @@ const GRAMMAR_EN = [
   '  <bent-coupon code="WELCOME10" percent="10" min="50" until="2026-12-31" />',
   '</bent-store>',
   '',
-  'Payment kinds: call | bank | bit | paybox | cash | link (url="https://…?sum={total}&ref={order}") | card (the owner\'s connected card gateway; optional max-payments="3"; never any key or provider name in the document).',
+  'Payment kinds: call | bank | bit | paybox | cash | link (url="https://…?sum={total}&ref={order}") | card (the owner\'s connected card gateway; optional max-payments="3"; never any key or provider name in the document) | paypal (no keys here either) | demo (offered on a demo site only).',
+  'Optional — product: brand, tags="soy, gift", featured="true", barcode, weight (grams), seo-title, seo-description; there is no cost attribute. Shelf: parent="candles" (one level), image, summary, hidden="true".',
   'Rules: an existing product keeps its exact id; a full <bent-store> is the whole catalog (a product left out is hidden) — use mode="merge" to only add/update;',
   'never invent prices, stock, payment details or image paths; prices are plain decimals ("24.90").'
 ];
@@ -75,21 +87,72 @@ function mediaLines(ctx, max) {
   return media.map((m) => '- ' + m.url + (m.alt ? '  (' + m.alt + ')' : ''));
 }
 
-/** The store today, trimmed to fit a budget: descriptions go first, then product lines from the bottom. */
-function storeToday(budget) {
+// What a view of the store can do without, one field at a time, cheapest
+// loss first: [stage, the field as the store's state spells it, the
+// attribute a tag spells it (what the root's keep="…" lists), and whether a
+// category loses its field of that name too].
+const TRIMS = [
+  ['descriptions', 'description', 'description', false],
+  ['details', 'seoDescription', 'seo-description', true],
+  ['details', 'seoTitle', 'seo-title', true],
+  ['details', 'images', 'images', false],
+  ['details', 'barcode', 'barcode', false],
+  ['details', 'weight', 'weight', false],
+  ['summaries', 'image', 'image', true],
+  ['summaries', 'badge', 'badge', false],
+  ['summaries', 'tags', 'tags', false],
+  ['summaries', 'brand', 'brand', false],
+  ['summaries', 'summary', 'summary', true]
+];
+
+/**
+ * The store today, to fit a budget. A store that fits is its own export:
+ * the whole catalog under a whole-catalog root. One that does not becomes a
+ * partial view — first without descriptions, then without the back-office
+ * details, then field by field down to what a price list holds (id, title,
+ * prices, stock, category, options), and only then without the last
+ * products. EVERY product is worth a line before any product's summary is:
+ * a model that cannot see that a product exists writes it again under a
+ * new id.
+ *
+ * A partial view is rooted mode="merge" keep="<what it left out>", so the
+ * text a model copies from is already a document that changes nothing. The
+ * thank-you sentence goes with the descriptions and needs no keep: a rule a
+ * document does not state is left alone in either mode.
+ * @param {number} budget  characters the whole store may take
+ * @param {number} [room]  characters a partial view may take (it shares the
+ *                         prompt with the line that says it is partial)
+ * @returns {{ text: string, trimmed: string[], keep: string[], shown: number, total: number }}
+ */
+function storeToday(budget, room = budget) {
   const doc = store().document;
-  let text = doc.exportDocument();
-  if (text.length <= budget) return { text, trimmed: [] };
+  const whole = doc.exportDocument();
   const st = doc.currentState();
-  st.products = st.products.map((p) => ({ ...p, description: '' }));
-  text = dialect.serializeStore(st);
-  const trimmed = ['descriptions'];
-  while (text.length > budget && st.products.length > 3) {
-    st.products.pop();
+  const total = st.products.length;
+  if (whole.length <= budget) return { text: whole, trimmed: [], keep: [], shown: total, total };
+  st.mode = 'merge';
+  st.keep = [];
+  const trimmed = [];
+  if (st.rules) st.rules.thanks = '';
+  let text = whole;
+  for (const [stage, key, attr, shelfToo] of TRIMS) {
+    let had = false;
+    for (const p of st.products) if (p[key]) { p[key] = ''; had = true; }
+    if (shelfToo) for (const sh of st.shelves) if (sh[key]) { sh[key] = ''; had = true; }
+    if (!had) continue;
+    st.keep.push(attr);
+    if (!trimmed.includes(stage)) trimmed.push(stage);
     text = dialect.serializeStore(st);
-    if (trimmed[trimmed.length - 1] !== 'products') trimmed.push('products');
+    if (text.length <= room) break;
   }
-  return { text, trimmed };
+  if (text.length > room && st.products.length > 3) {
+    trimmed.push('products');
+    while (text.length > room && st.products.length > 3) {
+      st.products.pop();
+      text = dialect.serializeStore(st);
+    }
+  }
+  return { text, trimmed, keep: st.keep.slice(), shown: st.products.length, total };
 }
 
 function buildPrompt({ brief = '', size = 'lite', locale = 'he', ctx } = {}) {
@@ -100,13 +163,22 @@ function buildPrompt({ brief = '', size = 'lite', locale = 'he', ctx } = {}) {
     (he ? '(אין בקשה מיוחדת — סדרו וטייבו את הקטלוג הקיים: כותרות ברורות, תקצירים קצרים, מדפים הגיוניים. לא לשנות מחירים.)'
       : '(No specific request — tidy the existing catalog: clear titles, short summaries, sensible shelves. Do not change prices.)');
   const media = mediaLines(ctx, size === 'full' ? 60 : 25).join('\n');
-  const fixed = head.length + wish.length + media.length + 200;
-  const today = storeToday(Math.max(1200, budget - fixed));
-  const text = [
+  // the one line a partial view adds: WHAT is missing is already in the
+  // root's keep list, so the line only has to say what to send back
+  const partialNote = (unseen) => (he
+    ? 'תצוגה חלקית: השדות שב-keep לא מוצגים כאן (באתר הם קיימים)' + (unseen ? `, וגם ${unseen} מוצרים קיימים נוספים` : '') +
+      '. החזירו את אותו תג פתיחה, ובתוכו רק מה שמוסיפים או משנים — כל מה שלא תכתבו נשאר כמו שהוא.'
+    : 'Partial view: the fields listed in keep are not shown here (the store has them)' + (unseen ? `, and neither are ${unseen} more existing products` : '') +
+      '. Return the same opening tag with only what you add or change inside it — whatever you leave out stays as it is.');
+  // the prompt around the store view. The view gets exactly what the rest
+  // leaves of the budget — measured, not estimated: every character of
+  // slack is a product the model was not shown
+  const frame = (view, partial, unseen) => [
     head,
     '',
     he ? '── החנות היום ──' : '── The store today ──',
-    today.text.trim(),
+    ...(partial ? [partialNote(unseen)] : []),
+    view,
     '',
     he ? '── תמונות באתר ──' : '── Pictures on the site ──',
     media,
@@ -114,9 +186,15 @@ function buildPrompt({ brief = '', size = 'lite', locale = 'he', ctx } = {}) {
     he ? '── מה הבעלים ביקש/ה ──' : '── What the owner asked ──',
     wish,
     '',
-    he ? 'החזירו עכשיו את מסמך <bent-store> בלבד.' : 'Now return the <bent-store> document only.'
+    partial
+      ? (he ? 'החזירו עכשיו את מסמך <bent-store mode="merge"> בלבד — רק מה שהשתנה.' : 'Now return the <bent-store mode="merge"> document only — just what changed.')
+      : (he ? 'החזירו עכשיו את מסמך <bent-store> בלבד.' : 'Now return the <bent-store> document only.')
   ].join('\n');
-  return { text, chars: text.length, meta: { degraded: today.trimmed, budget } };
+  // a store never gets less than 1200 characters, however long the wish is;
+  // 99999 = the longest the partial line can be
+  const today = storeToday(Math.max(1200, budget - frame('', false, 0).length), Math.max(1200, budget - frame('', true, 99999).length));
+  const text = frame(today.text.trim(), today.trimmed.length > 0, today.total - today.shown);
+  return { text, chars: text.length, meta: { degraded: today.trimmed, keep: today.keep, shown: today.shown, products: today.total, budget } };
 }
 
 function previewOf(planned) {
@@ -152,6 +230,10 @@ const descriptor = {
   title: '🛍 כותב/ת הקטלוג',
   blurb: 'ה-AI שלכם מקבל את החנות כפי שהיא היום ומה שביקשתם — מחירון, רשימת מוצרים, מבצע — ומחזיר מסמך <bent-store>. רואים מה ישתנה, ורק אז מחילים (עם גיבוי).',
   budget: { lite: 9000, full: 16000 },
+  // its prompt IS the store — payment details, coupon codes, drafts, exact
+  // stock — and its preview is a diff against the live prices: the routes
+  // (src/routes/inject.js) open this pack to a manager only, like every store screen
+  adminOnly: true,
 
   buildPrompt,
 
@@ -207,7 +289,7 @@ const descriptor = {
     repairable: ['NO_STORE', 'PAGE_NOT_STORE', 'NO_VALID_PRODUCTS', 'MENU_NOT_STORE', 'THEME_NOT_STORE']
   },
 
-  hardCodes: ['PRODUCT_INVALID', 'EMPTY_STORE', 'MANY_HIDDEN', 'COUPON_INVALID', 'SETTINGS', 'CURRENCY_CHANGE'],
+  hardCodes: ['PRODUCT_INVALID', 'EMPTY_STORE', 'MANY_HIDDEN', 'BLANKED', 'TAG_SKIPPED', 'COUPON_INVALID', 'SETTINGS', 'CURRENCY_CHANGE'],
 
   ui: {
     briefPlaceholder: 'למשל: הנה המחירון שלי (הדביקו) — צרו מוצר לכל שורה, עם מדפים. או: מבצע 15% על כל הנרות עד סוף החודש.',

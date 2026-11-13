@@ -50,16 +50,15 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
           <span id="int-status" class="ok-text"></span>
           <button type="button" class="btn" id="int-save">שמור אינטגרציות</button>
         </div>
-        <div class="faint" style="margin-top:10px">השינוי נכנס לתוקף באתר אחרי "בנה אתר" (או פרסום + בנייה מהבונה).</div>
+        <div class="faint" style="margin-top:10px">"שמור אינטגרציות" שומר את כל הכרטיסים בעמוד הזה (חוץ מהמייל) ומעדכן את האתר מיד.</div>
       </section>
 
       <section class="card">
         <h3 class="sub-head">🔎 חיפוש באתר</h3>
-        <p class="lead">כפתור חיפוש צף שמופיע בכל דפי האתר — מחפש בכותרות ובתקצירים של כל הדפים המפורסמים, בצד הלקוח, בלי שרת נוסף. אין ייצוא סטטי? החיפוש לא יעבוד עד ל"בנה אתר" הבא.</p>
+        <p class="lead">כפתור חיפוש צף שמופיע בכל דפי האתר — מחפש בכותרות ובתקצירים של כל הדפים המפורסמים, בצד הלקוח, בלי שרת נוסף. אינדקס החיפוש נכתב מחדש בכל שמירה ובכל פרסום.</p>
         <label class="check-row">
           <input type="checkbox" id="srch-enabled" ${srch.enabled ? 'checked' : ''}> הפעל כפתור חיפוש באתר
         </label>
-        <div class="faint" style="margin-top:10px">השינוי נכנס לתוקף באתר אחרי "בנה אתר" (או פרסום + בנייה מהבונה) — זה הרגע שבו אינדקס החיפוש נכתב.</div>
       </section>
 
       <section class="card">
@@ -120,7 +119,7 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
 
       <section class="card">
         <h3 class="sub-head">📊 Google Analytics 4</h3>
-        <p class="lead">מזהה מדידה (Measurement ID) בפורמט <code dir="ltr">G-XXXXXXXXXX</code>. הוא ציבורי (לא סוד), ומוזרק לכל דפי האתר הציבורי — כך Google אוסף נתונים. השינוי נכנס לתוקף אחרי "בנה אתר".</p>
+        <p class="lead">מזהה מדידה (Measurement ID) בפורמט <code dir="ltr">G-XXXXXXXXXX</code>. הוא ציבורי (לא סוד), ומוזרק לכל דפי האתר הציבורי — כך Google אוסף נתונים.</p>
         <label class="field-label">Measurement ID</label>
         <input id="ga4-id" dir="ltr" value="${escapeAdmin(ga4.measurementId || '')}" placeholder="G-XXXXXXXXXX" class="input">
         <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:4px">להשארה ריק — לא מוזרק שום קוד מעקב.</div>
@@ -179,8 +178,10 @@ router.get('/admin/integrations', requireAdmin, (req, res) => {
             }
           })
         }).then(function (r) { return r.json(); }).then(function (d) {
-          document.getElementById('int-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
-        });
+          var st = document.getElementById('int-status');
+          if (!d.ok) { st.textContent = d.error || 'שגיאה'; return; }
+          st.textContent = d.rebuildError ? ('נשמר, אבל האתר לא נבנה מחדש: ' + d.rebuildError) : 'נשמר ✓ האתר עודכן';
+        }).catch(function () { document.getElementById('int-status').textContent = 'שגיאת רשת'; });
       });
       document.getElementById('nf-save').addEventListener('click', function () {
         fetch('/admin/api/notify/settings', {
@@ -287,7 +288,12 @@ router.post('/admin/api/integrations', requireAdmin, (req, res) => {
       }
     }
     saveConfig(config);
-    res.json({ ok: true, integrations: config.integrations, analytics: config.analytics });
+    // the WhatsApp button, the search widget (and its index file) and the GA4
+    // snippet are all written into the exported pages: the save reaches
+    // visitors only through a rebuild, which the screen used to leave to a
+    // line of small print (v2.69)
+    const rebuildError = require('../rebuild').rebuildSite('an integrations save');
+    res.json({ ok: true, integrations: config.integrations, analytics: config.analytics, rebuildError });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }

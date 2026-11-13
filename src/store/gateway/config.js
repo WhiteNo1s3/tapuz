@@ -62,7 +62,7 @@ function load() {
 function save(data) {
   if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
   // owner-only on disk: the file is a terminal key, not a setting
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), { encoding: 'utf8', mode: 0o600 });
+  require('../../json-file').writeAtomic(STORE_PATH, JSON.stringify(data, null, 2), { mode: 0o600 });
   try { fs.chmodSync(STORE_PATH, 0o600); } catch (e) { /* not every filesystem has modes */ }
 }
 

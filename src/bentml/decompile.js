@@ -702,8 +702,30 @@ function decompileBlock(block, indent) {
       if (d.title) params.push(`title: ${q(d.title)}`);
       if (d.exclude) params.push(`exclude: ${q(d.exclude)}`);
       if (d.buttons === false || d.buttons === 'false') params.push('buttons: false');
+      if (d.empty) params.push(`empty: ${q(d.empty)}`);
+      if (d.media && d.media !== 'square') params.push(`media: ${d.media}`);
+      if (d.fit && d.fit !== 'cover') params.push(`fit: ${d.fit}`);
+      if (d.justify && d.justify !== 'start') params.push(`justify: ${d.justify}`);
+      if (d.sorter === true || d.sorter === 'true') params.push('sorter: true');
+      if (d.search === true || d.search === 'true') params.push('search: true');
+      if (d.pageSize && Number(d.pageSize) !== 0) params.push(`page-size: ${Number(d.pageSize)}`);
+      if (d.tag) params.push(`tag: ${q(d.tag)}`);
+      if (d.brand) params.push(`brand: ${q(d.brand)}`);
+      if (d.featured === true || d.featured === 'true') params.push('featured: true');
+      if (d.skus) params.push(`skus: ${q(d.skus)}`);
       uni(params, d, idParams);
       return `${pad}SHOP${paramList(params)}`;
+    }
+    case 'shelves': {
+      const params = [];
+      if (d.parent) params.push(`parent: ${q(d.parent)}`);
+      if (d.columns && Number(d.columns) !== 3) params.push(`columns: ${Number(d.columns)}`);
+      if (d.title) params.push(`title: ${q(d.title)}`);
+      if (d.counts === false || d.counts === 'false') params.push('counts: false');
+      if (d.summaries === true || d.summaries === 'true') params.push('summaries: true');
+      if (d.justify && d.justify !== 'start') params.push(`justify: ${d.justify}`);
+      uni(params, d, idParams);
+      return `${pad}SHELVES${paramList(params)}`;
     }
     case 'buy': {
       const params = [`sku: ${q(d.sku || '')}`];

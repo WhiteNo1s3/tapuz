@@ -241,12 +241,19 @@ function buildBlock(node, warnings) {
       }, p));
     }
     case 'GALLERY': {
+      // a picture's caption is kept (v2.69): the decompiler has always
+      // written it and this case dropped it on the way back in. Only when
+      // one was written — a gallery without captions compiles as before.
       const images = (node.children || [])
         .filter((c) => c.name === 'IMAGE')
-        .map((c) => ({
-          src: c.params.src || '',
-          alt: c.params.alt || ''
-        }));
+        .map((c) => {
+          const image = {
+            src: c.params.src || '',
+            alt: c.params.alt || ''
+          };
+          if (c.params.caption) image.caption = c.params.caption;
+          return image;
+        });
       return createBlock('gallery', applyChrome({
         images,
         columns: clampInt(p.columns, 1, 4, 3)
@@ -809,8 +816,34 @@ function buildBlock(node, warnings) {
       if (p.title) data.title = String(p.title);
       if (p.exclude) data.exclude = String(p.exclude);
       if (p.buttons === false || p.buttons === 'false') data.buttons = false;
+      // v2.69 — the look of a card, the shopper's toolbar, who is on the grid
+      if (p.empty) data.empty = String(p.empty);
+      if (['portrait', 'landscape'].includes(p.media)) data.media = p.media;
+      if (p.fit === 'contain') data.fit = 'contain';
+      if (p.justify === 'center') data.justify = 'center';
+      if (p.sorter === true || p.sorter === 'true') data.sorter = true;
+      if (p.search === true || p.search === 'true') data.search = true;
+      // 0 = everything at once; a batch is 4–48 (the block's JSON key is pageSize)
+      const size = clampInt(p['page-size'], 0, 48, 0);
+      if (size) data.pageSize = Math.max(4, size);
+      if (p.tag) data.tag = String(p.tag);
+      if (p.brand) data.brand = String(p.brand);
+      if (p.featured === true || p.featured === 'true') data.featured = true;
+      if (p.skus) data.skus = String(p.skus);
       applyChrome(data, p);
       return createBlock('shop', data);
+    }
+    case 'SHELVES': {
+      const data = {};
+      if (p.parent) data.parent = String(p.parent);
+      const cols = clampInt(p.columns, 2, 6, 3);
+      if (cols !== 3) data.columns = cols;
+      if (p.title) data.title = String(p.title);
+      if (p.counts === false || p.counts === 'false') data.counts = false;
+      if (p.summaries === true || p.summaries === 'true') data.summaries = true;
+      if (p.justify === 'center') data.justify = 'center';
+      applyChrome(data, p);
+      return createBlock('shelves', data);
     }
     case 'BUY': {
       const data = { sku: String(p.sku || '') };

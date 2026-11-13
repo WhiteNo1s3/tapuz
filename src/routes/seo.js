@@ -12,8 +12,9 @@
  */
 
 const express = require('express');
-const { loadConfig, saveConfig } = require('../config');
+const { loadConfig, saveConfig, normalizeBaseUrl } = require('../config');
 const { layout, adminNav, accentFor, escapeAdmin } = require('../admin-ui');
+const { requestOrigin, logError } = require('../http-util');
 
 const router = express.Router();
 
@@ -69,8 +70,11 @@ router.get('/admin/seo', (req, res) => {
             baseUrl: document.getElementById('seo-base').value
           })
         }).then(function (r) { return r.json(); }).then(function (d) {
-          document.getElementById('seo-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
-        });
+          var st = document.getElementById('seo-status');
+          if (!d.ok) { st.textContent = d.error || 'שגיאה'; return; }
+          if (typeof d.baseUrl === 'string') document.getElementById('seo-base').value = d.baseUrl;
+          st.textContent = d.rebuildError ? ('נשמר, אבל האתר לא נבנה מחדש: ' + d.rebuildError) : 'נשמר ✓ האתר עודכן';
+        }).catch(function () { document.getElementById('seo-status').textContent = 'שגיאת רשת'; });
       });
     </script>
   `;
@@ -98,24 +102,62 @@ router.post('/admin/api/seo', (req, res) => {
     // sitemap <loc>. Stored at config level (robots/sitemap already read it).
     // Forgiving: a schemeless domain gets https:// ; anything unparseable is
     // rejected — a broken base would corrupt canonicals sitewide.
+    // (v2.69: the rule itself lives in config.normalizeBaseUrl — the site
+    // settings screen saves the same field and now goes through the same door.)
     if (b.baseUrl !== undefined) {
-      const raw = String(b.baseUrl || '').trim();
-      if (!raw) {
-        config.baseUrl = '';
-      } else {
-        let u;
-        try { u = new URL(raw.includes('://') ? raw : 'https://' + raw); } catch (e) { u = null; }
-        if (!u || !/^https?:$/.test(u.protocol)) {
-          return res.status(400).json({ ok: false, error: 'כתובת האתר אינה תקינה — צורה תקינה: https://www.example.co.il' });
-        }
-        config.baseUrl = (u.origin + u.pathname).replace(/\/+$/, '');
-      }
+      const base = normalizeBaseUrl(b.baseUrl);
+      if (!base.ok) return res.status(400).json({ ok: false, error: base.error });
+      config.baseUrl = base.value;
     }
     saveConfig(config);
-    res.json({ ok: true, seo: config.seo });
+    // The title pattern, the default share image and the base URL are printed
+    // into every exported page's <head>; without a rebuild "נשמר ✓" was true
+    // of site.json and of nothing a visitor or a search engine could see.
+    const rebuildError = require('../rebuild').rebuildSite('an SEO save');
+    res.json({ ok: true, seo: config.seo, baseUrl: config.baseUrl || '', rebuildError });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
 });
+
+// The dashboard's one-click answer to "the site address was never set"
+// (routes/dashboard.js prints the line): save the origin the owner is
+// browsing from — https only, through the same validated door — and rebuild.
+// A form POST, so it works from a plain button and returns to the dashboard.
+router.post('/admin/seo/base-url-here', (req, res) => {
+  const back = (flag) => res.redirect('/admin/dashboard?base=' + flag);
+  try {
+    const config = loadConfig();
+    if (config.baseUrl) return back('kept');
+    const origin = browsingOrigin(req);
+    if (!origin) return back('http');
+    const base = normalizeBaseUrl(origin);
+    if (!base.ok || !base.value) return back('http');
+    config.baseUrl = base.value;
+    saveConfig(config);
+    const rebuildError = require('../rebuild').rebuildSite('the base URL');
+    return back(rebuildError ? 'norebuild' : 'saved');
+  } catch (e) {
+    logError(req, e);
+    return back('failed');
+  }
+});
+
+/**
+ * The https origin the owner's browser is on, or '' when it is not https.
+ * The browser's own Origin header says it exactly (the admin gate already
+ * proved it matches this host); requestOrigin is the fallback for a browser
+ * that sent only a Referer.
+ */
+function browsingOrigin(req) {
+  const candidates = [String(req.headers.origin || ''), requestOrigin(req)];
+  for (const c of candidates) {
+    try {
+      const u = new URL(c);
+      if (u.protocol === 'https:' && u.host === req.headers.host) return u.origin;
+    } catch (e) { /* not an address */ }
+  }
+  return '';
+}
 
 module.exports = router;

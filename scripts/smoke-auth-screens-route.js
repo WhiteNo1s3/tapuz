@@ -71,7 +71,13 @@ function waitUp(tries = 40) {
   });
   // NOTE: no createAdmin here — we exercise the first-admin bootstrap flow.
 
-  const child = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], {
+  // v2.69: only a server somebody started in a terminal lets a browser on its
+  // own machine past the setup code. This child has no terminal, so a
+  // preload says it has one — a test's way in that no hosted site can trip
+  // over (there is no environment switch for it).
+  const asTerminal = path.join(ROOT, 'as-terminal.js');
+  fs.writeFileSync(asTerminal, 'process.stdout.isTTY = true;\n');
+  const child = spawn(process.execPath, ['--require', asTerminal, path.join(__dirname, '..', 'src', 'server.js')], {
     env: { ...process.env, TAPUZ_ROOT: ROOT, PORT: String(PORT) },
     stdio: 'ignore'
   });

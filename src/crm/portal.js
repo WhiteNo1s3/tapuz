@@ -290,7 +290,9 @@ function readSession(req) {
   return { account, contactId: data.cid, username: data.u, payload: data };
 }
 
-function setSessionCookie(res, token) {
+// `secure` (v2.69): the route passes true when the customer is on https, so
+// the session never travels over a plain connection. Absent = as before.
+function setSessionCookie(res, token, secure) {
   const maxAge = Math.floor(IDLE_MS / 1000);
   res.setHeader(
     'Set-Cookie',
@@ -298,7 +300,8 @@ function setSessionCookie(res, token) {
       '=' +
       encodeURIComponent(token) +
       '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' +
-      maxAge
+      maxAge +
+      (secure ? '; Secure' : '')
   );
 }
 

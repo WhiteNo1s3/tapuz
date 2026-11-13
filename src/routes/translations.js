@@ -84,7 +84,6 @@ router.get('/admin/translations', (req, res) => {
           <span id="tr-status" style="font-size:0.85rem"></span>
           <button type="button" class="btn" id="tr-link">קשר כתרגומים</button>
         </div>
-        <div class="faint" style="margin-top:10px">השינוי נכנס לתוקף באתר אחרי "בנה אתר".</div>
       </section>
     </div>
     <script>
@@ -100,18 +99,25 @@ router.get('/admin/translations', (req, res) => {
             langB: document.getElementById('tr-lang-b').value
           })
         }).then(function (r) { return r.json(); }).then(function (d) {
-          if (d.ok) { status.style.color = '#166534'; status.textContent = 'קושר ✓'; location.reload(); }
+          // a rebuild that failed stays on screen (no reload) so it can be read
+          if (d.ok && d.rebuildError) { status.style.color = '#b45309'; status.textContent = 'קושר, אבל האתר לא נבנה מחדש: ' + d.rebuildError; }
+          else if (d.ok) { status.style.color = '#166534'; status.textContent = 'קושר ✓ האתר עודכן'; location.reload(); }
           else { status.style.color = '#b91c1c'; status.textContent = d.error || 'שגיאה'; }
         }).catch(function () { status.style.color = '#b91c1c'; status.textContent = 'שגיאת רשת'; });
       });
       document.querySelectorAll('.tr-unlink').forEach(function (btn) {
         btn.addEventListener('click', function () {
           if (!confirm('להסיר את הדף מקבוצת התרגום?')) return;
+          var status = document.getElementById('tr-status');
           fetch('/admin/api/translations/unlink', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ path: btn.dataset.path })
-          }).then(function () { location.reload(); });
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok && d.rebuildError) { status.style.color = '#b45309'; status.textContent = 'הוסר, אבל האתר לא נבנה מחדש: ' + d.rebuildError; }
+            else if (d.ok) { location.reload(); }
+            else { status.style.color = '#b91c1c'; status.textContent = d.error || 'שגיאה'; }
+          }).catch(function () { status.style.color = '#b91c1c'; status.textContent = 'שגיאת רשת'; });
         });
       });
     </script>
@@ -123,7 +129,10 @@ router.post('/admin/api/translations/link', (req, res) => {
   try {
     const b = req.body || {};
     const group = linkTranslations(String(b.pathA || ''), String(b.langA || ''), String(b.pathB || ''), String(b.langB || ''));
-    res.json({ ok: true, group });
+    // the language switcher and the hreflang pairs are written into both
+    // pages' exported HTML — a link that does not rebuild shows nowhere (v2.69)
+    const rebuildError = require('../rebuild').rebuildSite('linking translations');
+    res.json({ ok: true, group, rebuildError });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -132,7 +141,8 @@ router.post('/admin/api/translations/link', (req, res) => {
 router.post('/admin/api/translations/unlink', (req, res) => {
   try {
     unlinkTranslation(String((req.body || {}).path || ''));
-    res.json({ ok: true });
+    const rebuildError = require('../rebuild').rebuildSite('unlinking a translation');
+    res.json({ ok: true, rebuildError });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }

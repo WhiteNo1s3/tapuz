@@ -80,6 +80,40 @@ function parseJson(text, fallback) {
   }
 }
 
+// ─── fixed blocks (v2.69) ────────────────────────────────────────────
+// The site database holds only what its owner happened to build, so a shape
+// no page uses yet is never checked by it. These few always run — before the
+// database is opened, so they hold on a machine that has no site at all.
+
+const FIXED = [
+  // a clickable, centred picture: the bridge picked only src / alt / title /
+  // caption / width, so every source save and every copilot edit handed the
+  // picture back unlinked and start-aligned
+  { type: 'image', id: 'fixed-image', data: { src: '/uploads/hero.jpg', alt: 'נוף', link: '/shop', align: 'center', width: 'md' } }
+];
+
+let fixedFailed = 0;
+for (const block of FIXED) {
+  const page = { title: 'fixed', slug: 'fixed', direction: 'rtl', lang: 'he', tags: [], meta: {}, blocks: [block] };
+  try {
+    const reparsed = parse(serialize(fromTapuzPage(page)));
+    const errors = validate(reparsed, { strict: false }).filter((i) => i.severity === 'error');
+    const diffs = [];
+    if (!errors.length) diff(page.blocks, toTapuzPage(reparsed).blocks, 'blocks', diffs);
+    if (errors.length || diffs.length) {
+      fixedFailed++;
+      console.log(`FAIL fixed ${block.type} — ${errors.length ? 'does not validate' : diffs.length + ' diff(s)'}:`);
+      for (const e of errors) console.log(`     ${e.code} ${e.message} (${e.path || ''})`);
+      for (const d of diffs.slice(0, 10)) console.log(`     ${d}`);
+    } else {
+      console.log(`OK   fixed ${block.type} — lossless (${Object.keys(block.data).join(', ')})`);
+    }
+  } catch (e) {
+    fixedFailed++;
+    console.log(`FAIL fixed ${block.type} — threw: ${e.message}`);
+  }
+}
+
 // ─── run ─────────────────────────────────────────────────────────────
 
 let db;
@@ -151,8 +185,8 @@ for (const row of rows) {
 console.log('');
 console.log(`pages checked: ${rows.length} | block sets: ${checked} | blocks: ${blockCount}`);
 console.log(`block types seen: ${Object.entries(typeCounts).map(([t, n]) => `${t}×${n}`).join(', ') || '(none)'}`);
-if (failed) {
-  console.log(`SMOKE PZN ROUNDTRIP: FAIL (${failed})`);
+if (failed || fixedFailed) {
+  console.log(`SMOKE PZN ROUNDTRIP: FAIL (${failed + fixedFailed})`);
   process.exit(1);
 }
 console.log('SMOKE PZN ROUNDTRIP: PASS');

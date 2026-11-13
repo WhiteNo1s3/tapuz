@@ -218,6 +218,9 @@ function req(method, url, body, cookie) {
         : null;
       const headers = {
         Host: '127.0.0.1:' + port,
+        // v2.69: the portal's POSTs are same-origin only (auth.sameOrigin),
+        // like the admin's — a browser always sends this on a form post
+        Origin: 'http://127.0.0.1:' + port,
         Accept: 'text/html'
       };
       if (cookie) headers.Cookie = cookie;

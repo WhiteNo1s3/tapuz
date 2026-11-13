@@ -474,10 +474,16 @@ function renderBlock(block, direction = 'rtl') {
       const images = (block.data.images || [])
         .filter(img => String(typeof img === 'string' ? img : (img && img.src) || '').trim());
       const cols = Math.min(Math.max(parseInt(block.data.columns, 10) || 3, 1), 4);
+      // v2.69 — each picture is a <figure>, and a caption is finally drawn:
+      // the builder offered the field and the bridge carried it, and this
+      // branch dropped it. Lazy + async decoding: a gallery is the heaviest
+      // thing on a page and most of it starts below the fold.
       const imgs = images.map(img => {
         const src = escapeHtml(typeof img === 'string' ? img : img.src);
         const alt = escapeHtml(img.alt || '');
-        return `<img src="${src}" alt="${alt}">`;
+        const caption = typeof img === 'string' ? '' : String(img.caption || '').trim();
+        const cap = caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : '';
+        return `<figure class="gallery-item"><img src="${src}" alt="${alt}" loading="lazy" decoding="async">${cap}</figure>`;
       }).join('');
       return `<div class="gallery cols-${cols}${extraClass}"${extraId}${style} dir="${direction}">${imgs}</div>`;
     }
@@ -634,12 +640,13 @@ function renderBlock(block, direction = 'rtl') {
     // the store (v2.53) — read the catalog at render time, so the static
     // export carries real products, prices and sold-out marks
     case 'shop':
+    case 'shelves':
     case 'buy':
     case 'cart':
     case 'checkout':
     case 'order': {
       const storeRender = require('./store/render');
-      const fn = { shop: 'renderShop', buy: 'renderBuy', cart: 'renderCart', checkout: 'renderCheckout', order: 'renderOrder' }[block.type];
+      const fn = { shop: 'renderShop', shelves: 'renderShelves', buy: 'renderBuy', cart: 'renderCart', checkout: 'renderCheckout', order: 'renderOrder' }[block.type];
       return storeRender[fn](block.data || {}, { cls: extraClass, idAttr: extraId, style, dir: direction });
     }
 
@@ -1452,6 +1459,18 @@ function renderPage(page, options = {}) {
   if (seoHeadTags) head += '\n  ' + seoHeadTags;
   if (hreflangTags) head += '\n  ' + hreflangTags;
   if (seoJsonLd) head += '\n  ' + seoJsonLd;
+  // a store product page (v2.69) tells a link preview it IS a product, with
+  // its price and whether it can be had; any other page stays what it was
+  let ogType = isArticle ? 'article' : 'website';
+  if (page.meta && page.meta.store === 'product' && page.meta.storeSku) {
+    try {
+      const productTags = require('./store/render').productHeadTags(page.meta.storeSku, storeSettings);
+      if (productTags) {
+        ogType = 'product';
+        head += '\n  ' + productTags;
+      }
+    } catch (e) { /* the page still renders, as an ordinary page */ }
+  }
 
   const replacements = {
     '{{lang}}': lang,
@@ -1468,7 +1487,7 @@ function renderPage(page, options = {}) {
     '{{currentYear}}': currentYear,
     '{{meta.description}}': escapeHtml(pageDesc),
     '{{meta.ogImage}}': escapeHtml(ogAbs),
-    '{{meta.ogType}}': isArticle ? 'article' : 'website',
+    '{{meta.ogType}}': ogType,
     '{{meta.robots}}': escapeHtml(pageRobots),
     '{{logo_html}}': logoHtml,
     '{{menu_html}}': menuHtml,
@@ -1491,6 +1510,10 @@ function renderPage(page, options = {}) {
   layout = layout.replace(/\{\{[\w.]+\}\}/g, (token) =>
     Object.prototype.hasOwnProperty.call(replacements, token) ? String(replacements[token]) : token
   );
+  // a page with no share picture says nothing, not og:image="" (the layout
+  // prints the tag for every page; a site's own copy of the layout does too,
+  // so the empty one is taken out here rather than moved out of the layout)
+  if (!ogAbs) layout = layout.replace(/^[ \t]*<meta property="og:image" content="">\r?\n/m, '');
 
   // Fallback for theme layouts without a {{site_extras}} slot
   if (siteExtras && !hasExtrasSlot) {

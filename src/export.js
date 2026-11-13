@@ -12,6 +12,20 @@ function ensureDir(dir) {
 }
 
 /**
+ * Every file of the export is written whole or not at all (v2.69): to a
+ * sibling temp file, then renamed over the live one. These files ARE the
+ * live site — express.static serves them as they sit — and a bare
+ * writeFileSync truncates first, so a process killed mid-export (a deploy, a
+ * host restart) left a half-written page, or half a stylesheet, serving
+ * until someone rebuilt. No fsync here, unlike the config stores: an export
+ * can always be produced again, and flushing every page of a large catalog
+ * to disk on each product save would make the owner wait for it.
+ */
+function writeWhole(file, text) {
+  require('./json-file').writeAtomic(file, text, { durable: false });
+}
+
+/**
  * Static export externalizes the theme's inline styles (they already live in
  * /css/main.css) — but PAGE-specific styles (e.g. the page splash background)
  * can't go in the shared stylesheet, so they must survive the strip.
@@ -63,7 +77,7 @@ function copyThemeAssets(themeSlug = 'default') {
     const overrides = overridesToCss(live);
     const out = base + '\n\n/* Tapuz theme overrides */\n' + overrides;
     themeCssVersion = require('crypto').createHash('sha1').update(out).digest('hex').slice(0, 10);
-    fs.writeFileSync(destFile, out, 'utf8');
+    writeWhole(destFile, out);
     // v2.27 wrote an admin copy here (the base + the palette and fonts). The
     // admin links nothing of the theme any more (v2.31, admin-ui.js layout),
     // so a copy left by an earlier build is removed rather than kept around.
@@ -86,9 +100,15 @@ function publicHtmlName(fullPath) {
     .replace(/^\.+/, '') + '.html';
 }
 
-function writePageHtml(page, outputDir, isHome) {
+/**
+ * @param {string} [themeAlreadyCopied] the theme whose stylesheet this pass
+ *   already wrote. exportAll passes it so the 115 KB stylesheet is read,
+ *   hashed and written once per build instead of once per page (v2.69); a
+ *   single-page export passes nothing and copies as it always did.
+ */
+function writePageHtml(page, outputDir, isHome, themeAlreadyCopied) {
   ensureDir(outputDir);
-  copyThemeAssets(page.theme || 'default');
+  if ((page.theme || 'default') !== themeAlreadyCopied) copyThemeAssets(page.theme || 'default');
 
   const filename = publicHtmlName(page.full_path);
 
@@ -98,12 +118,12 @@ function writePageHtml(page, outputDir, isHome) {
   // canonical '/', og:url '/' and the WebSite JSON-LD object.
   let html = renderPage(page, { siteTitle: siteConfig.title, isHome: isHome === true });
   html = externalizeStyles(html);
-  fs.writeFileSync(outputPath, html, 'utf8');
+  writeWhole(outputPath, html);
   // Home also becomes index.html — but keep its named file so menu links
   // (/<full_path>.html) never 404
   if (isHome) {
     const indexPath = path.join(outputDir, 'index.html');
-    fs.writeFileSync(indexPath, html, 'utf8');
+    writeWhole(indexPath, html);
     return indexPath;
   }
   return outputPath;
@@ -178,6 +198,16 @@ function exportBuiltBy(outputDir = PUBLIC_DIR) {
  * pages is left alone (exportAll fails closed on zero pages anyway).
  * @returns {{ rebuilt: boolean, from: string, to: string }}
  */
+/**
+ * Was the export on disk produced by a different build than the one running
+ * (or does it carry no stamp)? The boot asks before it lets the store write
+ * its generated pages again — the same question refreshAfterDeploy answers
+ * for the export itself.
+ */
+function exportIsStale(outputDir = PUBLIC_DIR) {
+  return exportBuiltBy(outputDir) !== require('./build-info').buildId();
+}
+
 function refreshAfterDeploy(outputDir = PUBLIC_DIR) {
   const to = require('./build-info').buildId();
   const from = exportBuiltBy(outputDir);
@@ -197,7 +227,7 @@ function exportAll(outputDir = PUBLIC_DIR) {
   copyThemeAssets('default');
   // which code produced this export — refreshAfterDeploy compares it to the
   // running build so a deploy never keeps serving the previous code's pages
-  try { ensureDir(outputDir); fs.writeFileSync(path.join(outputDir, BUILT_BY), require('./build-info').buildId() + '\n', 'utf8'); } catch (e) { /* the stamp is advisory */ }
+  try { ensureDir(outputDir); writeWhole(path.join(outputDir, BUILT_BY), require('./build-info').buildId() + '\n'); } catch (e) { /* the stamp is advisory */ }
 
   // One homepage wins index.html — same crowning as exportPage/sitemap:
   // the user's explicit choice first, ranked pick as fallback, or none.
@@ -213,7 +243,7 @@ function exportAll(outputDir = PUBLIC_DIR) {
       // Ensure we export published blocks only
       const exportPageData = { ...full, blocks: full.blocks || [] };
       const isHome = homePath !== null && p.full_path === homePath;
-      const out = writePageHtml(exportPageData, outputDir, isHome);
+      const out = writePageHtml(exportPageData, outputDir, isHome, 'default');
       results.push({ full_path: p.full_path, output: out, isHome });
     } catch (err) {
       console.error('Failed to export', p.full_path, err.message);
@@ -250,6 +280,15 @@ function exportAll(outputDir = PUBLIC_DIR) {
   if (homePath !== null) keep.add('index.html');
   try {
     for (const f of fs.readdirSync(outputDir)) {
+      // a temp file a killed export left behind (writeWhole: <page>.html.<pid>.tmp)
+      // — older than a minute, so never one another process is still writing
+      if (/\.html\.\d+\.tmp$/.test(f)) {
+        try {
+          const leftover = path.join(outputDir, f);
+          if (Date.now() - fs.statSync(leftover).mtimeMs > 60 * 1000) fs.unlinkSync(leftover);
+        } catch (e) { /* best-effort */ }
+        continue;
+      }
       if (!f.endsWith('.html') || keep.has(f)) continue;
       const stale = path.join(outputDir, f);
       try {
@@ -281,7 +320,7 @@ function writeSearchIndex(outputDir) {
       return;
     }
     const index = require('./pages').listSearchable();
-    fs.writeFileSync(indexPath, JSON.stringify(index), 'utf8');
+    writeWhole(indexPath, JSON.stringify(index));
   } catch (e) {
     console.error('Failed to write search-index.json', e.message);
   }
@@ -291,8 +330,10 @@ module.exports = {
   exportPage,
   exportAll,
   refreshAfterDeploy,
+  exportIsStale,
   exportBuiltBy,
   BUILT_BY,
+  crownedHomePath,
   removePageHtml,
   publicHtmlName,
   copyThemeAssets,

@@ -20,6 +20,23 @@
  * Takes the handle as an argument instead of requiring ../db — db.js calls
  * this from inside its own initialize(), before its require cycle settles.
  */
+
+/**
+ * Columns that joined a table after its first release. CREATE TABLE IF NOT
+ * EXISTS does nothing on a database that already has the table (every live
+ * site), so each new column is listed twice: at the END of the CREATE, and
+ * here in the same order — a fresh database and an upgraded one end with the
+ * same columns in the same order. Every one is nullable or NOT NULL DEFAULT:
+ * a `.pzn` restore copies the column intersection, so an older snapshot must
+ * still be insertable.
+ */
+function addColumns(db, table, columns) {
+  const have = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+  for (const [name, ddl] of columns) {
+    if (!have.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${ddl}`);
+  }
+}
+
 function initializeStore(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS store_meta (
@@ -29,14 +46,40 @@ function initializeStore(db) {
     )
   `);
 
+  // The store's CATEGORIES. They stay in `store_shelves` and are "shelves"
+  // in code: the document's <bent-shelf>, the `shelf` prop of <bent-shop> and
+  // every page already shipped say "shelf", and a rename would orphan them
+  // all. The owner's screens call them קטגוריות. v2.69 gives a shelf a
+  // parent (ONE level of nesting — a child's parent is a top-level shelf), a
+  // line of text, a picture, a hidden switch and its own search-result text.
   db.exec(`
     CREATE TABLE IF NOT EXISTS store_shelves (
       slug TEXT PRIMARY KEY,
       label TEXT NOT NULL,
-      sort INTEGER NOT NULL DEFAULT 0
+      sort INTEGER NOT NULL DEFAULT 0,
+      parent TEXT NOT NULL DEFAULT '',
+      summary TEXT NOT NULL DEFAULT '',
+      image TEXT NOT NULL DEFAULT '',
+      hidden INTEGER NOT NULL DEFAULT 0,
+      seo_title TEXT NOT NULL DEFAULT '',
+      seo_description TEXT NOT NULL DEFAULT ''
     )
   `);
+  addColumns(db, 'store_shelves', [
+    ['parent', "TEXT NOT NULL DEFAULT ''"],
+    ['summary', "TEXT NOT NULL DEFAULT ''"],
+    ['image', "TEXT NOT NULL DEFAULT ''"],
+    ['hidden', 'INTEGER NOT NULL DEFAULT 0'],
+    ['seo_title', "TEXT NOT NULL DEFAULT ''"],
+    ['seo_description', "TEXT NOT NULL DEFAULT ''"]
+  ]);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_store_shelves_parent ON store_shelves(parent, sort)');
 
+  // v2.69 product fields: brand, tags (a JSON array of strings), featured,
+  // barcode, weight (grams) and the search-result text. `cost` is the
+  // OWNER's number — what the product costs them. It never reaches a
+  // shopper, a public API or the <bent-store> document (the site package is
+  // a file people share, and it carries the document verbatim).
   db.exec(`
     CREATE TABLE IF NOT EXISTS store_products (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,9 +98,34 @@ function initializeStore(db) {
       max_per_order INTEGER,
       sort INTEGER NOT NULL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      brand TEXT NOT NULL DEFAULT '',
+      tags TEXT NOT NULL DEFAULT '[]',
+      featured INTEGER NOT NULL DEFAULT 0,
+      barcode TEXT NOT NULL DEFAULT '',
+      weight INTEGER,
+      cost INTEGER,
+      seo_title TEXT NOT NULL DEFAULT '',
+      seo_description TEXT NOT NULL DEFAULT ''
     )
   `);
+  addColumns(db, 'store_products', [
+    ['brand', "TEXT NOT NULL DEFAULT ''"],
+    ['tags', "TEXT NOT NULL DEFAULT '[]'"],
+    ['featured', 'INTEGER NOT NULL DEFAULT 0'],
+    ['barcode', "TEXT NOT NULL DEFAULT ''"],
+    ['weight', 'INTEGER'],
+    ['cost', 'INTEGER'],
+    ['seo_title', "TEXT NOT NULL DEFAULT ''"],
+    ['seo_description', "TEXT NOT NULL DEFAULT ''"]
+  ]);
+
+  // 2.68 took a picture address "//host/x.png"; 2.69 reads that as another
+  // site wearing a path's clothes and drops it the next time the row is
+  // written (a save, an undo). Said in full, once, it stays. Only a row that
+  // holds such an address is written; after that none does.
+  db.exec("UPDATE store_products SET images = replace(images, '\"//', '\"https://') WHERE images LIKE '%\"//%'");
+
   db.exec('CREATE INDEX IF NOT EXISTS idx_store_products_shelf ON store_products(shelf, status)');
 
   db.exec(`
@@ -123,9 +191,16 @@ function initializeStore(db) {
       contact_id INTEGER,
       erased INTEGER NOT NULL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      payment_kind TEXT NOT NULL DEFAULT ''
     )
   `);
+  // the KIND of the payment method the order was placed with (bank / bit /
+  // card / …), beside the id and the label it already keeps — orders.js
+  // writes and reads it; an order from before v2.69 has ''
+  addColumns(db, 'store_orders', [
+    ['payment_kind', "TEXT NOT NULL DEFAULT ''"]
+  ]);
   db.exec('CREATE INDEX IF NOT EXISTS idx_store_orders_status ON store_orders(status, id)');
 
   db.exec(`
@@ -163,9 +238,29 @@ function initializeStore(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       reason TEXT NOT NULL DEFAULT '',
       source TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      costs TEXT,
+      state TEXT
     )
   `);
+  // What each product COST the owner the moment the backup was taken, as
+  // JSON { sku: minor units } — beside the document, never inside it (the
+  // document is a file people share; see document.js). NULL is a backup
+  // from before v2.69: it knows no costs, so restoring it moves none.
+  if (!db.prepare('PRAGMA table_info(store_backups)').all().some((c) => c.name === 'costs')) {
+    db.exec('ALTER TABLE store_backups ADD COLUMN costs TEXT');
+  }
+  // What the document leaves UNSAID, said outright: every rule with its
+  // value (a default too), the name, the shipping and payment lists even
+  // when empty, and which coupons existed and were on — JSON, beside the
+  // document like `costs` (see document.js). The document drops a rule at
+  // its default and a section with nothing in it, and to an apply "absent"
+  // means "leave it", so without this an undo left such things as the
+  // undone document had set them. NULL is a backup from before this column:
+  // restoring it puts back what its document says and no more.
+  if (!db.prepare('PRAGMA table_info(store_backups)').all().some((c) => c.name === 'state')) {
+    db.exec('ALTER TABLE store_backups ADD COLUMN state TEXT');
+  }
 
   // A card payment (the gateway, src/store/gateway): one row per hosted-page
   // session we opened for an order. A provider's callback finds the row by
@@ -212,6 +307,7 @@ function initializeStore(db) {
       last_verify_at TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      capture_tried_at TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (order_id) REFERENCES store_orders(id) ON DELETE CASCADE
     )
   `);
@@ -229,7 +325,15 @@ function initializeStore(db) {
     // refund un-mark it — an order paid by hand another way keeps its mark)
     ['refund_unknown', 'INTEGER NOT NULL DEFAULT 0'],
     ['refund_lock', 'TEXT'],
-    ['set_paid', 'INTEGER NOT NULL DEFAULT 0']
+    ['set_paid', 'INTEGER NOT NULL DEFAULT 0'],
+    // PayPal: when a capture was last ATTEMPTED for this row, stamped just
+    // before the call leaves. While the row is still `pending` that stamp
+    // means "money may have moved and we do not know" — the row is in doubt
+    // (src/store/paypal.js) until PayPal has been asked and answered clearly.
+    // Never cleared: the row leaves the state by its status leaving
+    // `pending`. '' is a row nobody tried to capture — and every row from
+    // before v2.69, which is treated as it always was.
+    ['capture_tried_at', "TEXT NOT NULL DEFAULT ''"]
   ]) {
     if (!cols.has(name)) db.exec(`ALTER TABLE store_payments ADD COLUMN ${name} ${ddl}`);
   }

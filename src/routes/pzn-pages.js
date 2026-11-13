@@ -175,10 +175,11 @@ router.post('/admin/api/pzn/decompile', async (req, res) => {
 
     let fullPath = null;
     if (create) {
-      const { createPage, getPageByFullPath, savePageSource } = require('../pages');
-      // never clobber — suffix until free (same rule as /admin/create)
+      const { createPage, getPageByFullPath, isReservedPath, savePageSource } = require('../pages');
+      // never clobber — suffix until free (same rule as /admin/create, and
+      // like it an address the system keeps counts as taken)
       let candidate = r.meta.slug;
-      for (let n = 2; getPageByFullPath(candidate); n++) candidate = r.meta.slug + '-' + n;
+      for (let n = 2; getPageByFullPath(candidate) || isReservedPath(candidate); n++) candidate = r.meta.slug + '-' + n;
       createPage({ title: r.meta.title, slug: candidate, blocks: [] });
       try {
         savePageSource(candidate, r.source, { publish: false });

@@ -11,7 +11,9 @@ const BLOCK_TYPES = [
   'search', 'newsletter', 'pager', 'consent', 'related', 'comments', 'slot', 'auth',
   'code', 'tags', 'html',
   // the store (v2.53)
-  'shop', 'buy', 'cart', 'checkout', 'order'
+  'shop', 'buy', 'cart', 'checkout', 'order',
+  // category tiles (v2.69)
+  'shelves'
 ];
 
 function createBlock(type, data = {}) {

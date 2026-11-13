@@ -153,7 +153,9 @@ function blockToModuleInner(block) {
       return createModule('article-list', baseOpts(block, pickProps(data, ['tag', 'limit', 'columns'])));
 
     case 'image':
-      return createModule('image', baseOpts(block, pickProps(data, ['src', 'alt', 'title', 'caption', 'width'])));
+      // link + align (v2.69): a clickable, centred picture came back from
+      // every source save and copilot edit as a plain start-aligned one
+      return createModule('image', baseOpts(block, pickProps(data, ['src', 'alt', 'title', 'caption', 'link', 'align', 'width'])));
 
     case 'gallery': {
       const children = (data.images || []).map((img) =>
@@ -438,8 +440,12 @@ function blockToModuleInner(block) {
     }
 
     // the store (v2.53)
+    // (the block's `pageSize` is the tag's `page-size`)
     case 'shop':
-      return createModule('shop', baseOpts(block, pickProps(data, ['shelf', 'columns', 'limit', 'sort', 'filter', 'title', 'exclude', 'buttons'])));
+      return createModule('shop', baseOpts(block, pickProps(data, ['shelf', 'columns', 'limit', 'sort', 'filter', 'title', 'exclude', 'buttons',
+        'empty', 'media', 'fit', 'justify', 'sorter', 'search', 'pageSize', 'tag', 'brand', 'featured', 'skus'], { pageSize: 'page-size' })));
+    case 'shelves':
+      return createModule('shelves', baseOpts(block, pickProps(data, ['parent', 'columns', 'title', 'counts', 'summaries', 'justify'])));
     case 'buy':
       return createModule('buy', baseOpts(block, pickProps(data, ['sku', 'gallery', 'description'])));
     case 'cart':
@@ -717,7 +723,7 @@ function moduleToBlockInner(node) {
       return finishBlock(node, 'article-list', pickData(props, ['tag', 'limit', 'columns']));
 
     case 'image':
-      return finishBlock(node, 'image', pickData(props, ['src', 'alt', 'title', 'caption', 'width']));
+      return finishBlock(node, 'image', pickData(props, ['src', 'alt', 'title', 'caption', 'link', 'align', 'width']));
 
     case 'gallery': {
       const data = pickData(props, ['columns']);
@@ -1021,7 +1027,10 @@ function moduleToBlockInner(node) {
 
     // the store (v2.53)
     case 'shop':
-      return finishBlock(node, 'shop', pickData(props, ['shelf', 'columns', 'limit', 'sort', 'filter', 'title', 'exclude', 'buttons']));
+      return finishBlock(node, 'shop', pickData(props, ['shelf', 'columns', 'limit', 'sort', 'filter', 'title', 'exclude', 'buttons',
+        'empty', 'media', 'fit', 'justify', 'sorter', 'search', 'page-size', 'tag', 'brand', 'featured', 'skus'], { 'page-size': 'pageSize' }));
+    case 'shelves':
+      return finishBlock(node, 'shelves', pickData(props, ['parent', 'columns', 'title', 'counts', 'summaries', 'justify']));
     case 'buy':
       return finishBlock(node, 'buy', pickData(props, ['sku', 'gallery', 'description']));
     case 'cart':

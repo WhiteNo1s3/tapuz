@@ -223,7 +223,19 @@ router.get('/admin/db/export.pzn', requireAdmin, (req, res) => {
   try {
     require('../db').snapshotTo(tmp);
     const filename = 'tapuziel-db-' + new Date().toISOString().slice(0, 10) + '.pzn';
-    res.download(tmp, filename, () => { try { fs.unlinkSync(tmp); } catch (e) { /* best effort */ } });
+    // dotfiles:'allow' — send refuses (404) any absolute path with a segment
+    // that starts with a dot, and a data root can sit under one (a deploy
+    // running from .builds/, a checkout under .claude/). The path is ours,
+    // built above from the database directory, never from the request.
+    // The callback used to ignore its error, so a refused send left the
+    // request open until the 30-second socket timeout; now it answers.
+    res.download(tmp, filename, { dotfiles: 'allow' }, (err) => {
+      try { fs.unlinkSync(tmp); } catch (e) { /* best effort */ }
+      if (err && !res.headersSent) {
+        console.error('[db] export download failed: ' + (err.message || err));
+        res.status(500).json({ ok: false, error: 'ההורדה נכשלה' });
+      }
+    });
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch (e2) { /* */ }
     res.status(500).json({ ok: false, error: e.message });
@@ -262,7 +274,14 @@ router.get('/admin/db/backup/:name', requireAdmin, (req, res) => {
   }
   const file = path.join(require('../paths').DB_DIR, 'backups', name);
   if (!fs.existsSync(file)) return res.status(404).send('not found');
-  res.download(file);
+  // the name passed the shelf's own pattern above, so allowing dot segments
+  // in the directory part is safe (see the export route for why it is needed)
+  res.download(file, name, { dotfiles: 'allow' }, (err) => {
+    if (err && !res.headersSent) {
+      console.error('[db] backup download failed: ' + (err.message || err));
+      res.status(500).json({ ok: false, error: 'ההורדה נכשלה' });
+    }
+  });
 });
 
 module.exports = router;

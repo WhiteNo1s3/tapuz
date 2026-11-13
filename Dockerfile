@@ -47,11 +47,11 @@ USER node
 VOLUME ["/data"]
 EXPOSE 3000
 
-# `/` is a 404 until the setup wizard publishes a homepage, so liveness is
-# keyed to /admin (302 to setup/login on a fresh install) — anything under 500
-# means the process is serving.
+# Liveness is the server's own health route: 200 when the process is serving
+# and its database answers, 503 when it does not. (It used to poll /admin,
+# which spent the admin's rate limit and read the accounts file every probe.)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/admin',{redirect:'manual'}).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/_tapuz/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # exec form, no npm wrapper: SIGTERM reaches node directly, so the WAL
 # checkpoint on shutdown actually runs instead of being killed with the shell.

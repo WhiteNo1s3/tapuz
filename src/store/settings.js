@@ -34,7 +34,12 @@ const PAYMENT_KINDS = {
   card: { label: 'כרטיס אשראי', details: 'התשלום מתבצע בדף המאובטח של חברת הסליקה. פרטי הכרטיס לא עוברים דרכנו.' },
   // PayPal (sandbox unless the owner arms live mode). Offered at checkout
   // only while src/store/paypal.js is ready — the keys are not in the document.
-  paypal: { label: 'PayPal', details: 'התשלום נפתח בכפתור של PayPal. במצב בדיקות זה ארגז חול — לא נגבה כסף אמיתי.' }
+  paypal: { label: 'PayPal', details: 'התשלום נפתח בכפתור של PayPal. במצב בדיקות זה ארגז חול — לא נגבה כסף אמיתי.' },
+  // A payment nobody pays (v2.69): the way a demo shop's order reaches its
+  // end without anyone's keys. Offered ONLY on a demo site or while
+  // `demoPayments` is on (src/store/demo-pay.js) — a real shop that lists it
+  // by mistake offers nothing for it, so checkout is never free by accident.
+  demo: { label: 'תשלום לדוגמה', details: 'זו חנות הדגמה: לוחצים "לשלם בכסף דמיוני" בדף ההזמנה, וכסף אמיתי לא עובר.' }
 };
 
 /** Installments a card method may offer: 1 = none, and no provider goes past 36. */
@@ -53,6 +58,13 @@ const DEFAULTS = Object.freeze({
   requireEmail: false,
   notifyEmail: '',
   customerEmails: true,
+  // hours an unpaid order in "התקבלה" keeps its stock before it is cancelled
+  // on its own (orders.housekeeping); 0 = never, which is how a shop that
+  // takes cash or a bank transfer wants it
+  holdHours: 0,
+  // the `demo` payment kind on a site that is not a demo site — off unless
+  // the owner turns it on, knowing an order can then be "paid" with nothing
+  demoPayments: false,
   thanks: 'תודה! קיבלנו את ההזמנה ונחזור אליכם בהקדם.',
   terms: '',
   shipping: [
@@ -153,7 +165,7 @@ function normalizePayments(list, errors) {
 function paymentDetails(method) {
   if (!method) return '';
   if (method.details) return method.details;
-  if (method.kind === 'card' || method.kind === 'paypal') return PAYMENT_KINDS[method.kind].details;
+  if (method.kind === 'card' || method.kind === 'paypal' || method.kind === 'demo') return PAYMENT_KINDS[method.kind].details;
   return '';
 }
 
@@ -181,6 +193,7 @@ function normalize(input, base = DEFAULTS) {
   const vatRate = Number(pick('vatRate'));
   const lowStock = parseInt(pick('lowStock'), 10);
   const orderStart = parseInt(pick('orderStart'), 10);
+  const holdHours = parseInt(pick('holdHours'), 10);
   const settings = {
     open: bool(pick('open'), false),
     name: clip(pick('name'), 80),
@@ -194,6 +207,9 @@ function normalize(input, base = DEFAULTS) {
     requireEmail: bool(pick('requireEmail'), false),
     notifyEmail: clip(pick('notifyEmail'), 200),
     customerEmails: bool(pick('customerEmails'), true),
+    // a year is the ceiling: past that "auto-cancel" is no longer a hold
+    holdHours: Number.isFinite(holdHours) && holdHours >= 0 && holdHours <= 8760 ? holdHours : 0,
+    demoPayments: bool(pick('demoPayments'), false),
     thanks: clip(pick('thanks'), 400) || DEFAULTS.thanks,
     terms: clip(pick('terms'), 120).replace(/^\/+/, '').replace(/\.html$/i, ''),
     shipping: normalizeShipping(pick('shipping'), errors),

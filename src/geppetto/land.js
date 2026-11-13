@@ -311,7 +311,10 @@ async function landNow(plan, choices, opts) {
   const slugs = {};
   for (const p of plan.living.pages) {
     let s = p.slug;
-    for (let n = 2; taken.has(s); n++) s = p.slug + '-' + n;
+    // an address the system keeps (a design page named 404, index, account…)
+    // is a taken one — createPage refuses it, and one such page used to
+    // roll the whole landing back
+    for (let n = 2; taken.has(s) || pagesLib.isReservedPath(s); n++) s = p.slug + '-' + n;
     taken.add(s);
     slugs[p.key] = s;
   }

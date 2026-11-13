@@ -55,7 +55,7 @@ function scheduleRefresh() {
 
 /**
  * Open or close the store.
- * @returns {{ open:boolean, was:boolean, pages?:object, products?:object[], menu?:object, rebuilt:boolean }}
+ * @returns {{ open:boolean, was:boolean, pages?:object, products?:object[], shelves?:object[], menu?:object, rebuilt:boolean }}
  */
 function flip(open) {
   const was = isOpen();
@@ -63,7 +63,9 @@ function flip(open) {
   const report = { open: !!open, was };
   if (open) {
     report.pages = storePages.ensureStorePages();
-    report.products = storePages.syncAllProductPages();
+    const synced = storePages.syncCatalogPages();
+    report.products = synced.products;
+    report.shelves = synced.shelves;
     report.menu = storePages.ensureMenuLink();
   }
   report.rebuilt = refreshNow();
@@ -73,6 +75,15 @@ function flip(open) {
 /** After a product was created/updated/deleted in the admin. */
 function afterProductChange(product, { deletedSlug } = {}) {
   let page = null;
+  // the category pages first: a product that moved, appeared or left can
+  // fill or empty a category, and the product's own trail links its page.
+  // On their own: a category page that cannot be synced must not cost the
+  // product its page.
+  try {
+    storePages.syncShelfPages();
+  } catch (e) {
+    console.error('[store] category page sync failed:', e.message);
+  }
   try {
     if (deletedSlug) page = storePages.retireProductPage(deletedSlug);
     else if (product && isOpen()) page = storePages.syncProductPage(product);
@@ -81,6 +92,35 @@ function afterProductChange(product, { deletedSlug } = {}) {
   }
   const rebuilt = refreshNow();
   return { page, rebuilt };
+}
+
+/**
+ * After a category was created, renamed, moved, hidden, reordered or
+ * deleted: its page follows, every product trail that names it follows, and
+ * the site is rebuilt ONCE.
+ * @returns {{ rebuilt: boolean }}
+ */
+/**
+ * A rebuild that is waiting on the 400 ms timer, done now — a shutdown asks
+ * for it so a sale's last stock number is not lost with the process.
+ * @returns {boolean} false when nothing was waiting
+ */
+function flushRefresh() {
+  if (!refreshTimer) return false;
+  clearTimeout(refreshTimer);
+  refreshTimer = null;
+  return refreshNow();
+}
+
+function afterShelfChange() {
+  try {
+    // syncAllProductPages starts with the category pages
+    if (isOpen()) storePages.syncAllProductPages();
+    else storePages.syncShelfPages();
+  } catch (e) {
+    console.error('[store] category page sync failed:', e.message);
+  }
+  return { rebuilt: refreshNow() };
 }
 
 /**
@@ -131,6 +171,8 @@ module.exports = {
   refreshNow,
   scheduleRefresh,
   afterProductChange,
+  afterShelfChange,
+  flushRefresh,
   afterRestore,
   summary
 };

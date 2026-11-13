@@ -13,13 +13,19 @@
 
 const express = require('express');
 const { loadConfig } = require('../config');
+const { requestOrigin } = require('../http-util');
 
 const router = express.Router();
 
+// The configured base URL as the owner wrote it (it may carry a path); with
+// none set, the origin the visitor is really on. That fallback used to be
+// req.protocol — always "http" behind a proxy that terminates TLS, so an
+// https site's sitemap listed http:// addresses (seen live). requestOrigin
+// reads the scheme the trusted proxy reports (v2.69, src/http-util.js).
 function siteBaseUrl(req) {
   let base = '';
   try { base = String((loadConfig().baseUrl || '')).trim().replace(/\/+$/, ''); } catch (e) {}
-  return base || `${req.protocol}://${req.headers.host}`;
+  return base || requestOrigin(req);
 }
 router.get('/sitemap.xml', (req, res) => {
   try {

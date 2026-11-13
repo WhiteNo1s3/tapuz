@@ -1,6 +1,6 @@
 # The `.pzn` page format — standard
 
-**Spec version 0.1** · generated from `tapuziel@2.55.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
+**Spec version 0.1** · generated from `tapuziel@2.68.0-alpha` · regenerate with `node scripts/gen-pzn-spec.js`
 
 `.pzn` is an open, constrained-HTML page format. A `.pzn` file **is** HTML —
 but the body may contain **only registered `bent-*` module tags**, never raw
@@ -47,7 +47,7 @@ from it directly.
    only styling escape hatch; there is no raw-style injection.
 10. Compilation is deterministic: a `.pzn` document maps to one HTML output.
 
-## Modules (103)
+## Modules (104)
 
 ### Category: content
 
@@ -75,7 +75,8 @@ from it directly.
   - `alt` · string
   - `title` · string
   - `caption` · string
-  - `align` · enum · left \| center \| right · default `center`
+  - `link` · url
+  - `align` · enum · start \| center \| end \| left \| right · default `center`
   - `width` · enum · sm \| md \| lg \| full · default `full`
 
 #### `<bent-button>` — כפתור / Button · leaf
@@ -723,6 +724,27 @@ from it directly.
   - `title` · string
   - `exclude` · string
   - `buttons` · boolean · default `true`
+  - `empty` · string
+  - `media` · enum · square \| portrait \| landscape · default `square`
+  - `fit` · enum · cover \| contain · default `cover`
+  - `justify` · enum · start \| center · default `start`
+  - `sorter` · boolean · default `false`
+  - `search` · boolean · default `false`
+  - `page-size` · integer · 0–48 · default `0`
+  - `tag` · string
+  - `brand` · string
+  - `featured` · boolean · default `false`
+  - `skus` · string
+
+#### `<bent-shelves>` — חנות — אריחי קטגוריות / Category tiles · leaf
+
+  - `animate` · enum · none \| fade \| rise \| zoom · default `none`
+  - `parent` · string
+  - `columns` · integer · 2–6 · default `3`
+  - `title` · string
+  - `counts` · boolean · default `true`
+  - `summaries` · boolean · default `false`
+  - `justify` · enum · start \| center · default `start`
 
 #### `<bent-buy>` — קנייה — מוצר בודד / Buy box · leaf
 

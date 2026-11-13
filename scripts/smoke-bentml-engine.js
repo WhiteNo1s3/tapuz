@@ -180,6 +180,7 @@ const VOCAB_DATA = {
   cart: { empty: 'העגלה ריקה' },
   checkout: {},
   order: {},
+  shelves: { parent: 'candles', columns: 4, title: 'הקטגוריות', counts: false, summaries: true, justify: 'center' },
   newsletter: { title: 'הישארו מעודכנים', text: 'קבלו עדכונים למייל.', placeholder: 'האימייל שלכם', submit: 'הרשמה', action: '/api/form' },
   pager: { items: [{ label: '1', url: '/p/1' }, { label: '2' }] },
   consent: { text: 'אתר זה משתמש בעוגיות.', accept: 'אישור', reject: 'סירוב', policy: '/privacy', policyLabel: 'מדיניות פרטיות' },

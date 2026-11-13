@@ -6,12 +6,13 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**356 routes across 46 files.**
+**372 routes across 47 files.**
 
 ## By file (what each module owns)
 
-### `src/server.js` — 6 routes
+### `src/server.js` — 7 routes
 
+- `GET /_tapuz/health`
 - `POST /_tapuz/collect`
 - `GET /tz-pixel.js`
 - `GET /pzn-schema.json`
@@ -342,11 +343,12 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /sitemap.xml`
 - `GET /robots.txt`
 
-### `src/routes/seo.js` — 3 routes
+### `src/routes/seo.js` — 4 routes
 
 - `GET /admin/seo`
 - `GET /admin/api/seo`
 - `POST /admin/api/seo`
+- `POST /admin/seo/base-url-here`
 
 ### `src/routes/settings.js` — 4 routes
 
@@ -381,7 +383,7 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/db/upload-restore`
 - `GET /admin/db/backup/:name`
 
-### `src/routes/store-admin.js` — 17 routes
+### `src/routes/store-admin.js` — 18 routes
 
 - `GET /admin/store`
 - `POST /admin/api/store/flip`
@@ -396,17 +398,21 @@ shows where, so editing is navigation, not a grep hunt.
 - `GET /admin/api/store/export.bent`
 - `POST /admin/api/store/preview`
 - `POST /admin/api/store/apply`
+- `POST /admin/api/store/import-csv`
 - `POST /admin/api/store/undo`
 - `GET /admin/api/store/backups`
 - `GET /admin/api/store/backups/:id.bent`
 - `POST /admin/api/store/backups/:id/restore`
 
-### `src/routes/store-gateway-admin.js` — 8 routes
+### `src/routes/store-gateway-admin.js` — 11 routes
 
 - `GET /admin/store/gateway`
 - `GET /admin/api/store/gateway`
 - `POST /admin/api/store/gateway`
 - `POST /admin/api/store/gateway/test`
+- `GET /admin/api/store/paypal`
+- `POST /admin/api/store/paypal`
+- `POST /admin/api/store/paypal/test`
 - `POST /admin/api/store/orders/:number/refund`
 - `POST /admin/api/store/orders/:number/payments/:id/refund-done`
 - `POST /admin/api/store/orders/:number/payments/:id/refund-release`
@@ -434,25 +440,38 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /api/store/paypal/capture`
 - `POST /api/store/paypal/cancel`
 
-### `src/routes/store-products.js` — 10 routes
+### `src/routes/store-products.js` — 14 routes
 
 - `GET /admin/store/products`
+- `GET /admin/store/products.csv`
 - `GET /admin/store/products/new`
+- `GET /admin/store/products/:id/preview`
 - `GET /admin/store/products/:id`
 - `GET /admin/api/store/products`
 - `POST /admin/api/store/products`
+- `POST /admin/api/store/products/bulk`
+- `POST /admin/api/store/products/reorder`
 - `POST /admin/api/store/products/:id`
 - `POST /admin/api/store/products/:id/delete`
 - `POST /admin/api/store/products/:id/duplicate`
 - `POST /admin/api/store/products/:id/stock`
 - `POST /admin/api/store/shelves`
 
-### `src/routes/store-public.js` — 4 routes
+### `src/routes/store-public.js` — 5 routes
 
 - `GET /api/store/catalog`
 - `POST /api/store/quote`
 - `POST /api/store/checkout`
 - `GET /api/store/order/:token`
+- `POST /api/store/demo-pay`
+
+### `src/routes/store-shelves.js` — 5 routes
+
+- `GET /admin/store/shelves`
+- `GET /admin/api/store/shelves`
+- `POST /admin/api/store/shelves/reorder`
+- `POST /admin/api/store/shelves/:slug`
+- `POST /admin/api/store/shelves/:slug/delete`
 
 ### `src/routes/symbols.js` — 3 routes
 
@@ -509,6 +528,7 @@ shows where, so editing is navigation, not a grep hunt.
 | Route | Method | File |
 |---|---|---|
 | `/_tapuz/collect` | POST | `src/server.js` |
+| `/_tapuz/health` | GET | `src/server.js` |
 | `/account` | GET | `src/routes/portal.js` |
 | `/account/login` | GET | `src/routes/portal.js` |
 | `/account/login` | POST | `src/routes/portal.js` |
@@ -618,6 +638,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/store/gateway` | GET | `src/routes/store-gateway-admin.js` |
 | `/admin/api/store/gateway` | POST | `src/routes/store-gateway-admin.js` |
 | `/admin/api/store/gateway/test` | POST | `src/routes/store-gateway-admin.js` |
+| `/admin/api/store/import-csv` | POST | `src/routes/store-admin.js` |
 | `/admin/api/store/orders/:number/note` | POST | `src/routes/store-orders.js` |
 | `/admin/api/store/orders/:number/paid` | POST | `src/routes/store-orders.js` |
 | `/admin/api/store/orders/:number/payments/:id/refund-done` | POST | `src/routes/store-gateway-admin.js` |
@@ -626,6 +647,9 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/store/orders/:number/refund` | POST | `src/routes/store-gateway-admin.js` |
 | `/admin/api/store/orders/:number/status` | POST | `src/routes/store-orders.js` |
 | `/admin/api/store/orders/:number/tracking` | POST | `src/routes/store-orders.js` |
+| `/admin/api/store/paypal` | GET | `src/routes/store-gateway-admin.js` |
+| `/admin/api/store/paypal` | POST | `src/routes/store-gateway-admin.js` |
+| `/admin/api/store/paypal/test` | POST | `src/routes/store-gateway-admin.js` |
 | `/admin/api/store/preview` | POST | `src/routes/store-admin.js` |
 | `/admin/api/store/products` | GET | `src/routes/store-products.js` |
 | `/admin/api/store/products` | POST | `src/routes/store-products.js` |
@@ -633,8 +657,14 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/store/products/:id/delete` | POST | `src/routes/store-products.js` |
 | `/admin/api/store/products/:id/duplicate` | POST | `src/routes/store-products.js` |
 | `/admin/api/store/products/:id/stock` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/products/bulk` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/products/reorder` | POST | `src/routes/store-products.js` |
 | `/admin/api/store/settings` | POST | `src/routes/store-admin.js` |
+| `/admin/api/store/shelves` | GET | `src/routes/store-shelves.js` |
 | `/admin/api/store/shelves` | POST | `src/routes/store-products.js` |
+| `/admin/api/store/shelves/:slug` | POST | `src/routes/store-shelves.js` |
+| `/admin/api/store/shelves/:slug/delete` | POST | `src/routes/store-shelves.js` |
+| `/admin/api/store/shelves/reorder` | POST | `src/routes/store-shelves.js` |
 | `/admin/api/store/summary` | GET | `src/routes/store-admin.js` |
 | `/admin/api/store/undo` | POST | `src/routes/store-admin.js` |
 | `/admin/api/symbols` | GET | `src/routes/symbols.js` |
@@ -797,6 +827,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/publish` | POST | `src/routes/pages-builder.js` |
 | `/admin/save` | POST | `src/routes/pages-builder.js` |
 | `/admin/seo` | GET | `src/routes/seo.js` |
+| `/admin/seo/base-url-here` | POST | `src/routes/seo.js` |
 | `/admin/settings` | GET | `src/routes/settings.js` |
 | `/admin/setup` | GET | `src/routes/setup-wizard.js` |
 | `/admin/setup` | POST | `src/routes/setup-wizard.js` |
@@ -811,9 +842,12 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/store/orders.csv` | GET | `src/routes/store-orders.js` |
 | `/admin/store/orders/:number` | GET | `src/routes/store-orders.js` |
 | `/admin/store/products` | GET | `src/routes/store-products.js` |
+| `/admin/store/products.csv` | GET | `src/routes/store-products.js` |
 | `/admin/store/products/:id` | GET | `src/routes/store-products.js` |
+| `/admin/store/products/:id/preview` | GET | `src/routes/store-products.js` |
 | `/admin/store/products/new` | GET | `src/routes/store-products.js` |
 | `/admin/store/settings` | GET | `src/routes/store-admin.js` |
+| `/admin/store/shelves` | GET | `src/routes/store-shelves.js` |
 | `/admin/team` | GET | `src/routes/team.js` |
 | `/admin/theme` | GET | `src/routes/theme.js` |
 | `/admin/theme/preview/:id` | GET | `src/routes/theme.js` |
@@ -841,6 +875,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/api/form` | POST | `src/routes/form-capture.js` |
 | `/api/store/catalog` | GET | `src/routes/store-public.js` |
 | `/api/store/checkout` | POST | `src/routes/store-public.js` |
+| `/api/store/demo-pay` | POST | `src/routes/store-public.js` |
 | `/api/store/gateway/:provider/hook` | GET | `src/routes/store-gateway.js` |
 | `/api/store/gateway/:provider/hook` | POST | `src/routes/store-gateway.js` |
 | `/api/store/order/:token` | GET | `src/routes/store-public.js` |

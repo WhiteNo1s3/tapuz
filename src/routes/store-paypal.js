@@ -53,7 +53,9 @@ function send(res, result) {
   res.status(result.http || (result.ok ? 200 : 400)).json(body);
 }
 
-router.post('/api/store/paypal/create', gate, jsonOnly, smallJson, async (req, res) => {
+// jsonOnly stands before the rate limit on all three: a request that will
+// never be read must not spend the budget of the shopper who is paying
+router.post('/api/store/paypal/create', jsonOnly, gate, smallJson, async (req, res) => {
   try {
     send(res, await paypal().createForOrder(req.body && req.body.token));
   } catch (e) {
@@ -62,7 +64,7 @@ router.post('/api/store/paypal/create', gate, jsonOnly, smallJson, async (req, r
   }
 });
 
-router.post('/api/store/paypal/capture', gate, jsonOnly, smallJson, async (req, res) => {
+router.post('/api/store/paypal/capture', jsonOnly, gate, smallJson, async (req, res) => {
   try {
     const body = req.body || {};
     send(res, await paypal().captureForOrder(body.token, body.orderId));
@@ -72,7 +74,7 @@ router.post('/api/store/paypal/capture', gate, jsonOnly, smallJson, async (req, 
   }
 });
 
-router.post('/api/store/paypal/cancel', gate, jsonOnly, smallJson, (req, res) => {
+router.post('/api/store/paypal/cancel', jsonOnly, gate, smallJson, (req, res) => {
   try {
     send(res, paypal().cancelForOrder(req.body && req.body.token));
   } catch (e) {

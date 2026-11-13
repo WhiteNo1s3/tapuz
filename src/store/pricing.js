@@ -21,7 +21,10 @@ const settingsMod = require('./settings');
 
 const MAX_LINES = 50;
 
-const BLOCKING = new Set(['EMPTY', 'MIN_ORDER', 'SHIPPING_REQUIRED', 'PAYMENT_REQUIRED', 'CLOSED']);
+// NO_PAYMENT is not PAYMENT_REQUIRED: the second means "methods exist, none
+// chosen"; the first means the shop offers nothing to choose from, which no
+// shopper can fix. TOO_LARGE is a total past what the money type holds.
+const BLOCKING = new Set(['EMPTY', 'TOO_LARGE', 'NO_PAYMENT', 'MIN_ORDER', 'SHIPPING_REQUIRED', 'PAYMENT_REQUIRED', 'CLOSED']);
 // what placing an order refuses on top of BLOCKING — the cart changed under
 // the shopper, and they must see the new cart before they are charged for it
 const CHANGED = new Set(['GONE', 'SOLD_OUT', 'STOCK_LIMIT', 'QTY_LIMIT', 'VARIANT_REQUIRED', 'VARIANT_GONE']);
@@ -82,6 +85,11 @@ function quote(input = {}, opts = {}) {
     resolved.set(key, { p, variant, qty: Math.min((prev ? prev.qty : 0) + item.qty, catalog.MAX_QTY) });
   }
 
+  // "max per order" is the PRODUCT's: its options share one allowance, or a
+  // shirt limited to two could be ordered two in every size. `taken` is what
+  // the lines before this one already hold of each product.
+  const taken = new Map();
+  const limits = new Map();
   for (const item of resolved.values()) {
     const { p, variant } = item;
     const stock = variant ? variant.stock : p.stock;
@@ -95,9 +103,16 @@ function quote(input = {}, opts = {}) {
       issues.push({ sku: p.slug, variant: variant ? variant.code : '', code: 'STOCK_LIMIT', message: `נשארו ${stock} יחידות של "${name}" — הכמות עודכנה` });
       qty = stock;
     }
-    if (p.maxPerOrder && qty > p.maxPerOrder) {
-      issues.push({ sku: p.slug, variant: variant ? variant.code : '', code: 'QTY_LIMIT', message: `אפשר להזמין עד ${p.maxPerOrder} יחידות של "${p.title}" בהזמנה` });
-      qty = p.maxPerOrder;
+    if (p.maxPerOrder) {
+      const left = Math.max(0, p.maxPerOrder - (taken.get(p.id) || 0));
+      if (qty > left) {
+        const limit = `אפשר להזמין עד ${p.maxPerOrder} יחידות של "${p.title}" בהזמנה` + (variant ? ', בכל האפשרויות יחד' : '');
+        issues.push({ sku: p.slug, variant: variant ? variant.code : '', code: 'QTY_LIMIT', message: left ? limit + ' — הכמות עודכנה' : limit + ` — "${name}" הוסר מהעגלה` });
+        qty = left;
+      }
+      if (!qty) continue;
+      taken.set(p.id, (taken.get(p.id) || 0) + qty);
+      limits.set(p.id, p.maxPerOrder);
     }
     const unit = variant && variant.price !== null && variant.price !== undefined ? variant.price : p.price;
     const maxQty = Math.min(p.maxPerOrder || catalog.MAX_QTY, stock === null || stock === undefined ? catalog.MAX_QTY : stock);
@@ -117,6 +132,12 @@ function quote(input = {}, opts = {}) {
       totalText: fmt(unit * qty),
       delivery: p.delivery
     });
+  }
+  // …and how far a line's stepper may go is what its product's other lines leave it
+  for (const l of lines) {
+    if (!limits.has(l.productId)) continue;
+    const others = taken.get(l.productId) - l.qty;
+    if (others > 0) l.maxQty = Math.min(l.maxQty, limits.get(l.productId) - others);
   }
 
   const subtotal = lines.reduce((a, l) => a + l.total, 0);
@@ -167,7 +188,8 @@ function quote(input = {}, opts = {}) {
   // money (a provider connected, its keys present, this currency, https in
   // live mode) — so placeOrder, which picks from this same list, refuses it too
   // paypal.js drops a paypal method while PayPal is not connected, the same
-  // way the gateway drops a card method. placeOrder reads this list.
+  // way the gateway drops a card method — and a demo method anywhere but a
+  // demo shop. placeOrder reads this list.
   const paypalMod = require('./paypal');
   const paypalStatus = paypalMod.status(s);
   const payments = paypalMod.offeredPayments(s).map((p) => ({
@@ -183,18 +205,32 @@ function quote(input = {}, opts = {}) {
   // is down must be refused, not quietly turned into a bank transfer)
   else if (!wantPay && payments.length === 1) payment = payments[0].id;
 
+  // zero offered methods is a state of the SHOP, not a choice the shopper
+  // forgot: it is said as such (and first — nothing else on the page fixes it)
+  const noPayment = lines.length > 0 && payments.length === 0;
+  // one order, one sum the money type can hold; past it the cart is told so
+  // here and never becomes an order (a provider would report a sum we could
+  // not even compare)
+  const tooLarge = lines.length > 0 && total > money.MAX_MINOR;
+
   const blocking = [];
   if (!lines.length) blocking.push('EMPTY');
+  if (tooLarge) {
+    blocking.push('TOO_LARGE');
+    issues.push({ sku: '', variant: '', code: 'TOO_LARGE', message: 'סכום ההזמנה גדול מדי להזמנה אחת' });
+  }
+  if (noPayment) blocking.push('NO_PAYMENT');
   if (lines.length && s.minOrder && subtotal < s.minOrder) {
     blocking.push('MIN_ORDER');
     issues.push({ sku: '', variant: '', code: 'MIN_ORDER', message: 'הזמנת מינימום: ' + fmt(s.minOrder) });
   }
   if (lines.length && needsShipping && !shippingMethod) blocking.push('SHIPPING_REQUIRED');
-  if (lines.length && !payment) blocking.push('PAYMENT_REQUIRED');
+  if (lines.length && !payment && !noPayment) blocking.push('PAYMENT_REQUIRED');
   if (!s.open) blocking.push('CLOSED');
 
   return {
     ok: blocking.length === 0,
+    noPayment,
     open: !!s.open,
     currency: cur,
     lines,

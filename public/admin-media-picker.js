@@ -19,6 +19,14 @@
   var overlay = null;
   var currentCb = null;
   var folder = '';
+  // v2.69: this is a PICTURE picker (every tile is drawn as an <img>), so it
+  // asks the library for pictures only — a video or a PDF in the folder used
+  // to show up as a broken tile. `multiple` is the product gallery's way of
+  // taking several pictures in one visit.
+  var accept = 'image';
+  var multiple = false;
+  var chosen = [];
+  var onChosen = null;
 
   function el(tag, css, html) {
     var e = document.createElement(tag);
@@ -30,17 +38,30 @@
   function close() {
     if (overlay) { overlay.remove(); overlay = null; }
     currentCb = null;
+    chosen = [];
+    onChosen = null;
   }
 
+  // one picture answers with its address; `multiple` answers with a list
   function pick(url) {
     var cb = currentCb;
+    var many = multiple;
+    var list = many ? chosen.concat(url && chosen.indexOf(url) === -1 ? [url] : []) : null;
     close();
-    if (cb) cb(url);
+    if (cb) cb(many ? list : url);
+  }
+
+  function toggle(url, tile) {
+    var at = chosen.indexOf(url);
+    if (at === -1) chosen.push(url); else chosen.splice(at, 1);
+    tile.style.outline = at === -1 ? '3px solid #f97316' : '';
+    tile.setAttribute('aria-pressed', at === -1 ? 'true' : 'false');
+    if (onChosen) onChosen();
   }
 
   function load(listEl, crumbEl) {
     listEl.innerHTML = '<div style="grid-column:1/-1;color:#64748b;padding:18px;text-align:center">טוען…</div>';
-    fetch('/admin/media?folder=' + encodeURIComponent(folder))
+    fetch('/admin/media?folder=' + encodeURIComponent(folder) + '&accept=' + encodeURIComponent(accept))
       .then(function (r) { return r.json(); })
       .then(function (d) {
         crumbEl.textContent = '📁 /' + (d.folder || '');
@@ -63,7 +84,15 @@
           b.title = f.name;
           b.innerHTML = '<img src="' + esc(f.url) + '" alt="" style="width:100%;height:76px;object-fit:cover;display:block">' +
             '<div style="font-size:.7rem;padding:4px 6px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(f.name) + '</div>';
-          b.onclick = function () { pick(f.url); };
+          if (multiple) {
+            // a tile chosen in another folder is still chosen when you come back to it
+            var on = chosen.indexOf(f.url) !== -1;
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            if (on) b.style.outline = '3px solid #f97316';
+            b.onclick = function () { toggle(f.url, b); };
+          } else {
+            b.onclick = function () { pick(f.url); };
+          }
           listEl.appendChild(b);
         });
         if (!(d.folders || []).length && !(d.files || []).length && !folder) {
@@ -99,15 +128,21 @@
     reader.readAsDataURL(file);
   }
 
-  function open(cb) {
+  /**
+   * @param {function} cb  hears the chosen address — or, with `multiple`, a list of them
+   * @param {{ accept?: 'image'|'all', multiple?: boolean }} [opts]
+   */
+  function open(cb, opts) {
     close();
     currentCb = cb;
+    accept = opts && opts.accept === 'all' ? 'all' : 'image';
+    multiple = !!(opts && opts.multiple);
     overlay = el('div', 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px');
     var modal = el('div', 'background:#f8fafc;border-radius:14px;max-width:640px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.35)');
     modal.setAttribute('dir', 'rtl');
 
     var head = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0');
-    head.appendChild(el('div', 'font-weight:700', 'בחירת תמונה מהספרייה'));
+    head.appendChild(el('div', 'font-weight:700', multiple ? 'בחירת תמונות מהספרייה' : 'בחירת תמונה מהספרייה'));
     var x = el('button', 'border:none;background:none;font-size:1.2rem;cursor:pointer;color:#64748b', '✕');
     x.type = 'button';
     x.onclick = close;
@@ -124,6 +159,19 @@
     foot.appendChild(status);
     foot.appendChild(fileIn);
     fileIn.addEventListener('change', function () { upload(fileIn.files && fileIn.files[0], list, crumb, status); });
+    if (multiple) {
+      // several pictures: click to mark, then one button takes them all
+      var done = el('button', 'border:none;border-radius:8px;background:#f97316;color:#fff;font:inherit;font-weight:700;padding:8px 14px;cursor:pointer;white-space:nowrap');
+      done.type = 'button';
+      onChosen = function () {
+        done.textContent = chosen.length ? 'הוספת ' + chosen.length + ' תמונות' : 'בחרו תמונות';
+        done.disabled = !chosen.length;
+        done.style.opacity = chosen.length ? '1' : '.5';
+      };
+      onChosen();
+      done.onclick = function () { if (chosen.length) pick(''); };
+      foot.appendChild(done);
+    }
 
     modal.appendChild(head);
     modal.appendChild(crumb);

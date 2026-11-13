@@ -159,7 +159,9 @@ function estimateMenuFit(items, overrides, config) {
   });
   const gapPx = (GAP_REM[k.gap] || GAP_REM.md) * rootPx;
   const maxWidthPx = parseFloat((o.layout || {}).maxWidth) || 900;
-  const headerPx = (k.width === 'content' ? maxWidthPx : k.width === 'wide' ? Math.max(maxWidthPx, 1140) : 1280) - 2 * 1.25 * rootPx;
+  const themeMod = require('./theme');
+  const follows = typeof themeMod.headerFollowsColumn === 'function' ? themeMod.headerFollowsColumn(o.layout) : k.width === 'content';
+  const headerPx = (follows ? maxWidthPx : k.width === 'wide' ? Math.max(maxWidthPx, 1140) : 1280) - 2 * 1.25 * rootPx;
   const logo = cfg.logo || {};
   const header = cfg.header || {};
   let logoPx = logo.type === 'image'
@@ -331,7 +333,7 @@ function saveMenus(menus) {
         return item;
       });
     });
-    fs.writeFileSync(MENUS_PATH, JSON.stringify(fileShape, null, 2), 'utf8');
+    require('./json-file').writeAtomic(MENUS_PATH, JSON.stringify(fileShape, null, 2));
   } catch (e) {}
 
   return loadMenus();

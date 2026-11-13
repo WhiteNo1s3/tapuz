@@ -94,7 +94,8 @@ function setCookie(req, res, token) {
     'SameSite=Lax',
     'Max-Age=' + MAX_AGE_DAYS * 24 * 60 * 60
   ];
-  const https = req && (req.secure || (req.headers && req.headers['x-forwarded-proto'] === 'https'));
+  // one reading of "is this https" for every cookie (v2.69): the nearest proxy's word, as auth.isHttps reads it
+  const https = !!req && require('../auth').isHttps(req);
   if (https) parts.push('Secure');
   res.append('Set-Cookie', parts.join('; '));
 }

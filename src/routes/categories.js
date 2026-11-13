@@ -8,6 +8,14 @@
  * screen), membership rides on each page's portable tags. Client-side
  * fetches its own data (GET /admin/api/categories) rather than being
  * server-rendered inline, so no escapeAdmin dependency here.
+ *
+ * Not requireAdmin, on purpose (looked at again in v2.69): these are PAGE
+ * categories — content. The editor role is "content/media/pages — the
+ * day-to-day site work" (src/auth.js), an editor tags pages with these in the
+ * builder, and the routes beside this one that an editor works with (pages,
+ * menus, SEO, theme) are open to that role too. requireAdmin guards secrets,
+ * money and people: the store's categories (/admin/store/shelves) sit behind
+ * it; these do not hold any of the three.
  */
 
 const express = require('express');
@@ -42,6 +50,9 @@ router.get('/admin/categories', (req, res) => {
       .cat-row .cat-del { border:1px solid #fecaca;background:var(--ws-panel);color:#b91c1c;border-radius:7px;padding:6px 0;cursor:pointer;transition:background var(--dur),border-color var(--dur) }
       .cat-row .cat-del:hover { background:#fef2f2;border-color:#fca5a5 }
       .cat-desc { grid-column: 1 / -1; }
+      .cat-img { display:flex;gap:6px;align-items:stretch;min-width:0 }
+      .cat-img input[type=text] { flex:1;min-width:0 }
+      .cat-img .btn { margin:0;flex:none }
       .cat-head { display:grid;grid-template-columns:110px 1fr 52px 1fr 34px;gap:8px;font-size:0.72rem;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--accent-ink);padding:0 10px 6px;margin-bottom:8px;border-bottom:1px solid var(--accent-line) }
     </style>
     ${adminNav('categories', 'קטגוריות')}
@@ -73,7 +84,8 @@ router.get('/admin/categories', (req, res) => {
               '<input type="text" data-k="slug" dir="ltr" value="' + esc(c.slug) + '" placeholder="news">' +
               '<input type="text" data-k="name" value="' + esc(c.name) + '" placeholder="חדשות">' +
               '<input type="color" data-k="color" value="' + (isHex(c.color) ? esc(c.color) : '#0a66c2') + '">' +
-              '<input type="text" data-k="image" dir="ltr" value="' + esc(c.image) + '" placeholder="/assets/... (לא חובה)">' +
+              '<span class="cat-img"><input type="text" data-k="image" id="cat-img-' + i + '" dir="ltr" value="' + esc(c.image) + '" placeholder="/assets/... (לא חובה)">' +
+              '<button type="button" class="btn xs secondary" data-media-pick="cat-img-' + i + '" title="בחירת תמונה מספריית המדיה" aria-label="בחירת תמונה מספריית המדיה">🖼</button></span>' +
               '<button type="button" class="cat-del" title="הסר">×</button>' +
               '<input type="text" data-k="description" class="cat-desc" value="' + esc(c.description) + '" placeholder="תיאור קצר (לא חובה)">' +
               '</div>';
@@ -112,6 +124,7 @@ router.get('/admin/categories', (req, res) => {
         }).catch(function () { render(); });
       })();
     </script>
+    <script src="/admin-media-picker.js"></script>
   `;
   res.send(layout(html, 'קטגוריות', accentFor('categories')));
 });

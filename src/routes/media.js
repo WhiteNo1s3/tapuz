@@ -90,7 +90,9 @@ router.post('/admin/upload', (req, res) => {
     const saved = mediaLib.saveBase64({ filename, data, folder: folder || '' });
     return res.json({ ok: true, url: saved.url, name: saved.name, id: saved.id });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e.message });
+    // a refused upload (wrong type, too large, the read-only demo folder) is
+    // the sender's to fix — it used to answer 500, which reads as "the site broke"
+    return res.status(400).json({ ok: false, error: e.message });
   }
 });
 

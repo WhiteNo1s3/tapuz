@@ -108,6 +108,7 @@ router.get('/admin', (req, res) => {
   const html = `
     ${adminNav('pages', 'דפים', '<a href="/admin/new" class="btn">+ דף חדש</a>')}
     <div class="container page-body">
+      ${require('./dashboard').siteNotices(req)}
       ${msg}
       ${homeSetMsg}
       ${noHomeWarning}

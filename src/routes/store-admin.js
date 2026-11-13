@@ -2,9 +2,10 @@
 
 /**
  * The store's admin (v2.53): the flip, shipping & payment, coupons and the
- * BenTML door. Products live in store-products.js, orders in
- * store-orders.js. Every route is requireAdmin — prices, payment details and
- * (next door) customers' orders are the owner's business.
+ * BenTML door. Products live in store-products.js, categories in
+ * store-shelves.js, orders in store-orders.js. Every route is requireAdmin —
+ * prices, payment details and (next door) customers' orders are the owner's
+ * business.
  *
  * Every screen works while the store is CLOSED: an owner builds the catalog,
  * the shipping and the payment methods first, and flips it open when ready.
@@ -23,6 +24,130 @@ function sendError(res, e, status = 400) {
   res.status(status).json({ ok: false, error: e && e.message ? e.message : String(e), errors: (e && e.errors) || undefined });
 }
 
+const EVERYTHING = 100000;
+
+/**
+ * What the checkout really offers, and what it holds back. A method the
+ * owner configured is not a method a shopper can pick: a card waits for a
+ * clearing company and PayPal for its keys. The hub used to say "✓" for a
+ * PayPal-only shop without keys — a shop where nobody can order.
+ */
+function paymentState(st, s) {
+  const offered = st.paypal.offeredPayments(s);
+  const ids = new Set(offered.map((p) => p.id));
+  const paypal = st.paypal.status(s);
+  const why = (m) => {
+    if (m.kind === 'card') return 'מחכה לחיבור חברת סליקה';
+    if (m.kind === 'paypal') return paypal.reasons.length ? paypal.reasons.join(' · ') : 'PayPal לא מחובר';
+    if (m.kind === 'demo') return 'מוצע רק בחנות הדגמה';
+    return 'לא זמין כרגע';
+  };
+  const held = s.payments.filter((p) => !ids.has(p.id)).map((p) => ({ label: p.label, kind: p.kind, why: why(p) }));
+  return { offered, held, paypal, hasPaypal: s.payments.some((p) => p.kind === 'paypal') };
+}
+
+/** After a settings save: one line for each configured method the checkout will not show. */
+function paymentNotes(st, s) {
+  // the wiring module knows each method's state first-hand (PayPal's keys,
+  // the clearing company, the demo method) and has one sentence for each
+  try {
+    if (typeof st.paypal.readinessNotes === 'function') return st.paypal.readinessNotes(s).map(String);
+  } catch (e) { /* fall back to the hub's own reading below */ }
+  return paymentState(st, s).held.map((h) => `"${h.label}" לא יופיע בקופה: ${h.why}`);
+}
+
+/**
+ * The catalog's loose ends, each with the products behind it. The first
+ * three look at ACTIVE products — what a shopper meets; drafts are their own
+ * line. Out/low use the catalog's own stock filters, so a number here and
+ * the filtered product list never disagree.
+ */
+function catalogHealth(st) {
+  const cat = st.catalog;
+  const all = cat.listProducts({ status: 'all', sort: 'manual', limit: EVERYTHING });
+  const active = all.filter((p) => p.status === 'active');
+  const shelves = new Set(cat.listShelves().map((x) => x.slug));
+  const free = (p) => (p.variants.length
+    ? p.variants.some((v) => (v.price === null || v.price === undefined ? p.price : v.price) === 0)
+    : p.price === 0);
+  return [
+    { key: 'no-image', label: 'בלי תמונה', items: active.filter((p) => !p.images.length), href: '/admin/store/products?status=active&check=noimage' },
+    { key: 'free', label: 'מחיר 0', items: active.filter(free), href: '/admin/store/products?status=active&check=price0' },
+    { key: 'no-shelf', label: 'בלי קטגוריה', items: active.filter((p) => !p.shelf || !shelves.has(p.shelf)), href: '/admin/store/products?status=active&shelf=none' },
+    { key: 'draft', label: 'טיוטות', items: all.filter((p) => p.status === 'draft'), href: '/admin/store/products?status=draft' },
+    { key: 'out', label: 'אזלו מהמלאי', items: cat.listProducts({ status: 'active', stock: 'out', limit: EVERYTHING }), href: '/admin/store/products?status=active&stock=out' },
+    { key: 'low', label: 'מלאי נמוך', items: cat.listProducts({ status: 'active', stock: 'low', limit: EVERYTHING }), href: '/admin/store/products?status=active&stock=low' }
+  ];
+}
+
+const PAID_PAGE = 1000;
+const PAID_MOST = 50000;
+
+/**
+ * Of the orders the two money tiles sum — created today / this month, not
+ * cancelled — the part that was paid: the line under a tile says "מתוכן",
+ * so it is a part of THAT tile's orders. (What was received in a period,
+ * whenever its order was placed, is another number — an order from last
+ * month that is paid today is not "of today's orders".) Counted from the paid
+ * orders, newest first, until the month runs out; days are the local
+ * calendar days stats() uses. A shop too busy to count this way gets no
+ * figure rather than a wrong one.
+ */
+function paidTotals(st, now) {
+  const day = (x) => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+  const today = day(now instanceof Date ? now : new Date());
+  const monthStart = today.slice(0, 8) + '01';
+  // the database writes UTC ("2026-11-13 09:30:00"); a calendar day is the shop's own
+  const dayOf = (stamp) => {
+    const text = String(stamp || '');
+    const d = new Date(/[zZ]$|[+-]\d\d:?\d\d$/.test(text) ? text : text.replace(' ', 'T') + 'Z');
+    return Number.isNaN(d.getTime()) ? '' : day(d);
+  };
+  let sumToday = 0;
+  let sumMonth = 0;
+  // a page is as long as the orders module makes it: the walk moves by what came back and ends on an empty one
+  for (let seen = 0; seen < PAID_MOST;) {
+    const rows = st.orders.listOrders({ paid: 'yes', limit: PAID_PAGE, offset: seen });
+    if (!rows.length) return { today: sumToday, month: sumMonth };
+    for (const o of rows) {
+      const made = dayOf(o.created_at);
+      if (made && made < monthStart) return { today: sumToday, month: sumMonth };
+      if (!made || o.status === 'cancelled') continue;
+      sumMonth += o.total;
+      if (made >= today) sumToday += o.total;
+    }
+    seen += rows.length;
+  }
+  return { today: null, month: null };
+}
+
+// every product behind a number is named (the list scrolls inside its line); past this many, the rest are counted
+const HEALTH_SHOWN = 200;
+
+function healthCard(st, productCount) {
+  const lines = catalogHealth(st);
+  let inner;
+  if (!productCount) inner = '<p class="faint st-health-calm">עוד אין מוצרים — אין מה לבדוק.</p>';
+  else if (lines.every((h) => !h.items.length)) inner = '<p class="st-ok st-health-calm">הקטלוג נקי ✓</p>';
+  else {
+    inner = '<ul class="st-health">' + lines.map((h) => {
+      const n = h.items.length;
+      if (!n) return `<li class="st-health-item is-ok" data-health="${h.key}"><span class="st-health-line"><span>${h.label}</span><span class="st-health-n">✓</span></span></li>`;
+      const shown = h.items.slice(0, HEALTH_SHOWN).map((p) => `<li><a href="/admin/store/products/${p.id}">${esc(p.title)}</a></li>`).join('');
+      const more = n > HEALTH_SHOWN ? `<li class="faint">ועוד ${n - HEALTH_SHOWN}</li>` : '';
+      const allLink = h.href ? `<li><a class="st-health-all" href="${h.href}">לרשימה המסוננת ←</a></li>` : '';
+      return `<li class="st-health-item" data-health="${h.key}"><details><summary class="st-health-line"><span>${h.label}</span><span class="st-health-n">${n}</span></summary><ul class="st-health-list">${shown}${more}${allLink}</ul></details></li>`;
+    }).join('') + '</ul>';
+  }
+  return `
+    <section class="card" id="st-health">
+      <div class="row between st-hub-head"><h3 class="sub-head">🩺 בריאות הקטלוג</h3>
+        <span class="row"><a class="btn sm secondary" href="/admin/store/products">🏷️ מוצרים</a><a class="btn sm secondary" href="/admin/store/shelves">🗂️ קטגוריות</a></span></div>
+      ${productCount ? '<p class="faint st-health-lead">מה שקונים פוגשים: המוצרים הפעילים. לחיצה על שורה מראה את המוצרים שמאחוריה.</p>' : ''}
+      ${inner}
+    </section>`;
+}
+
 // ── the dashboard + the flip ───────────────────────────────────────────
 
 router.get('/admin/store', requireAdmin, (req, res) => {
@@ -37,13 +162,39 @@ router.get('/admin/store', requireAdmin, (req, res) => {
     const p = pages.getPageByFullPath(s.pages[k]);
     return { kind: k, path: s.pages[k], page: p, live: !!(p && p.status === 'published') };
   });
+  // a page that is not there yet has no editor to open: its name is text, not a link to a 404
+  const pageBit = (x) => (x.page
+    ? `<a href="/admin/edit/${encodeURIComponent(x.path)}">${esc(x.path)}</a>${x.live ? '' : ' (טיוטה)'}`
+    : `${esc(x.path)} (חסר)`);
+  const pay = paymentState(st, s);
+  const offeredText = pay.offered.map((p) => esc(p.label)).join(', ');
+  const heldText = pay.held.map((h) => `${esc(h.label)} (${esc(h.why)})`).join(' · ');
+  let payCheck;
+  if (pay.offered.length && !pay.held.length) {
+    payCheck = [true, `אמצעי תשלום בקופה: ${offeredText}`, '', '', false, 'payments'];
+  } else if (pay.offered.length) {
+    payCheck = [false, `אמצעי תשלום בקופה: ${offeredText}. לא מוצעים כרגע: ${heldText}`, '/admin/store/settings#payments', 'להגדרה', false, 'payments'];
+  } else {
+    const none = s.open
+      ? 'אין כרגע אף אמצעי תשלום זמין בקופה — אי אפשר להזמין'
+      : 'אין כרגע אף אמצעי תשלום זמין בקופה — כשהחנות תיפתח אי אפשר יהיה להזמין';
+    payCheck = [false, none + (heldText ? `. הוגדרו: ${heldText}` : ''), '/admin/store/settings#payments', 'להגדרה', s.open, 'payments'];
+  }
   const checks = [
     [sum.products.active > 0, `מוצרים פעילים: ${sum.products.active}`, '/admin/store/products', 'להוספת מוצרים'],
-    [s.payments.length > 0, `אמצעי תשלום: ${s.payments.map((p) => p.label).join(', ') || 'אין'}`, '/admin/store/settings#payments', 'להגדרה'],
-    [s.shipping.length > 0, `שיטות משלוח: ${s.shipping.map((m) => m.label).join(', ') || 'אין'}`, '/admin/store/settings#shipping', 'להגדרה'],
+    payCheck,
+    [s.shipping.length > 0, `שיטות משלוח: ${s.shipping.map((m) => esc(m.label)).join(', ') || 'אין'}`, '/admin/store/settings#shipping', 'להגדרה'],
     [smtpReady, smtpReady ? 'מייל: התראות על הזמנות ואישורים ללקוחות יישלחו' : 'מייל: לא מוגדר — הזמנות יישמרו, אבל לא תקבלו עליהן מייל', '/admin/integrations', 'להגדרת SMTP'],
-    [storePages.every((x) => x.live), 'דפי החנות: ' + storePages.map((x) => `<a href="/admin/edit/${encodeURIComponent(x.path)}">${esc(x.path)}</a>${x.live ? '' : ' (חסר)'}`).join(' · '), '', s.open ? '' : 'ייווצרו בפתיחה']
+    [storePages.every((x) => x.live), 'דפי החנות: ' + storePages.map(pageBit).join(' · '), '', s.open ? '' : 'ייווצרו בפתיחה']
   ];
+  // PayPal: a line whenever a PayPal method exists. Sandbox is said out loud
+  // (a payment there moves no real money); not connected is RED on an open store
+  if (pay.hasPaypal) {
+    const pp = pay.paypal;
+    if (pp.ready && pp.live) checks.push([true, 'PayPal: מחובר (חי)', '', '', false, 'paypal']);
+    else if (pp.ready) checks.push([false, 'PayPal: מחובר (ארגז חול) — תשלום בו הוא בדיקה, כסף אמיתי לא עובר', '/admin/store/gateway', 'להגדרות PayPal', false, 'paypal']);
+    else checks.push([false, `PayPal: לא מחובר — ${esc(pp.reasons.join(' · ') || 'חסרים מפתחות PayPal')}`, '/admin/store/gateway', 'לחיבור', s.open, 'paypal']);
+  }
   // the card gateway (src/store/gateway): a line whenever a card method exists
   // or a provider was chosen; RED when the open store cannot take a card, and
   // RED when the open store runs on test money
@@ -58,7 +209,13 @@ router.get('/admin/store', requireAdmin, (req, res) => {
     }
   }
   const recent = st.orders.listOrders({ limit: 6 });
-  const cur = s.currency;
+  // The money tiles count every order that was not cancelled, paid or not —
+  // so they are named "orders", and the paid part is printed under each.
+  // (A day with no orders has nothing to split: the line would only be noise.)
+  const paid = paidTotals(st);
+  const paidLine = (v, count) => (v === null || !count ? '' : `<div class="st-stat-sub">מתוכן שולמו: ${kit.fmt(v, s.currency)}</div>`);
+  // a total of millions is a long word: the tile is told how many characters it holds and sizes them to fit (admin.css)
+  const numLen = (text) => ` style="--n:${Math.max(1, Array.from(String(text)).length)}"`;
   const recentRows = recent.length ? recent.map((o) =>
     `<tr><td><a href="/admin/store/orders/${encodeURIComponent(o.number)}">#${esc(o.number)}</a></td>` +
     `<td>${esc(o.customer_name)}</td><td>${kit.fmt(o.total, o.currency)}</td>` +
@@ -79,9 +236,9 @@ router.get('/admin/store', requireAdmin, (req, res) => {
       <div id="st-flip-out" class="st-flip-out" aria-live="polite"></div>
     </section>
 
-    <div class="stat-grid" style="margin:18px 0">
-      <div class="stat"><div class="stat-num">${esc(sum.today.totalText)}</div><div class="stat-label">היום · ${sum.today.count} הזמנות</div></div>
-      <div class="stat"><div class="stat-num">${esc(sum.month.totalText)}</div><div class="stat-label">החודש · ${sum.month.count} הזמנות</div></div>
+    <div class="stat-grid st-hub-tiles" style="margin:18px 0">
+      <div class="stat"><div class="stat-num"${numLen(sum.today.totalText)}>${esc(sum.today.totalText)}</div><div class="stat-label">הזמנות היום · ${sum.today.count}</div>${paidLine(paid.today, sum.today.count)}</div>
+      <div class="stat"><div class="stat-num"${numLen(sum.month.totalText)}>${esc(sum.month.totalText)}</div><div class="stat-label">הזמנות החודש · ${sum.month.count}</div>${paidLine(paid.month, sum.month.count)}</div>
       <a href="/admin/store/orders?status=new" style="text-decoration:none"><div class="stat" style="--c:#2563eb"><div class="stat-num">${sum.orders.new}</div><div class="stat-label">חדשות, מחכות לטיפול</div></div></a>
       <a href="/admin/store/orders?paid=no" style="text-decoration:none"><div class="stat" style="--c:#d97706"><div class="stat-num">${sum.orders.unpaid}</div><div class="stat-label">לא שולמו</div></div></a>
       <a href="/admin/store/products" style="text-decoration:none"><div class="stat" style="--c:#059669"><div class="stat-num">${sum.products.active}</div><div class="stat-label">מוצרים פעילים</div></div></a>
@@ -89,21 +246,26 @@ router.get('/admin/store', requireAdmin, (req, res) => {
 
     <section class="card">
       <h3 class="sub-head">✅ מוכנות</h3>
-      <ul class="st-checks">${checks.map(([ok, text, href, cta, bad]) =>
-        `<li class="${ok ? 'is-ok' : bad ? 'is-bad' : 'is-todo'}"><span class="st-check-mark">${ok ? '✓' : bad ? '!' : '•'}</span><span>${text}</span>${!ok && href ? ` <a class="btn xs secondary" href="${href}">${cta}</a>` : (!ok && cta ? ` <span class="faint">${cta}</span>` : '')}</li>`).join('')}</ul>
+      <ul class="st-checks st-hub-checks">${checks.map(([ok, text, href, cta, bad, key]) =>
+        // a button that leads to a place INSIDE a screen (#payments) leaves the shell, so the browser lands on that place
+        `<li class="${ok ? 'is-ok' : bad ? 'is-bad' : 'is-todo'}"${key ? ` data-check="${key}"` : ''}><span class="st-check-mark">${ok ? '✓' : bad ? '!' : '•'}</span><span>${text}</span>${!ok && href ? ` <a class="btn xs secondary" href="${href}"${href.includes('#') ? ' data-nav-full' : ''}>${cta}</a>` : (!ok && cta ? ` <span class="faint">${cta}</span>` : '')}</li>`).join('')}</ul>
       ${s.open ? `<p class="faint" style="margin:8px 0 0">בחנות: <a href="${esc(urls.shop)}" target="_blank" rel="noopener">${esc(urls.shop)}</a> · העגלה: <a href="${esc(urls.cart)}" target="_blank" rel="noopener">${esc(urls.cart)}</a></p>` : ''}
     </section>
+${healthCard(st, sum.products.total)}
 
     <section class="card">
       <div class="row between"><h3 class="sub-head">📦 הזמנות אחרונות</h3><a class="btn sm secondary" href="/admin/store/orders">לכל ההזמנות</a></div>
-      <table class="tbl"><thead><tr><th>מספר</th><th>לקוח/ה</th><th>סה״כ</th><th>סטטוס</th><th>מתי</th></tr></thead><tbody>${recentRows}</tbody></table>
+      <div class="st-hub-scroll"><table class="tbl"><thead><tr><th>מספר</th><th>לקוח/ה</th><th>סה״כ</th><th>סטטוס</th><th>מתי</th></tr></thead><tbody>${recentRows}</tbody></table></div>
     </section>
 
     <section class="card">
       <h3 class="sub-head">🧬 החנות כולה היא מסמך BenTML</h3>
-      <p class="lead">הקטלוג, המדפים, המשלוח, התשלום והקופונים — מסמך <code>&lt;bent-store&gt;</code> אחד: לייצא, לערוך, לתת ל-AI לכתוב, ולהחיל עם תצוגה מקדימה וגיבוי. גיבוי האתר (<a href="/admin/storage">אחסון → ייצוא ‎.pzn</a>) נושא את כל החנות, כולל ההזמנות.</p>
-      <a class="btn sm secondary" href="/admin/store/bentml">לדלת ה-BenTML</a>
-      <a class="btn sm secondary" href="/admin/api/store/export.bent" download>⬇ store.bent</a>
+      <p class="lead">הקטלוג, הקטגוריות, המשלוח, התשלום והקופונים — מסמך <code>&lt;bent-store&gt;</code> אחד: לייצא, לערוך, לתת ל-AI לכתוב, ולהחיל עם תצוגה מקדימה וגיבוי. גיבוי האתר (<a href="/admin/storage">אחסון → ייצוא ‎.pzn</a>) נושא את כל החנות, כולל ההזמנות.</p>
+      <div class="row st-hub-links">
+        <a class="btn sm secondary" href="/admin/store/bentml">לדלת ה-BenTML</a>
+        <a class="btn sm secondary" href="/admin/api/store/export.bent" download>⬇ store.bent</a>
+        <a class="btn sm secondary" href="/admin/store/bentml#csv" data-nav-full>📄 ייבוא וייצוא CSV</a>
+      </div>
     </section>
 
     <script>
@@ -161,7 +323,10 @@ router.get('/admin/api/store/catalog', requireAdmin, (req, res) => {
   } catch (e) { sendError(res, e, 500); }
 });
 
-// ── shipping, payment, rules, shelves ──────────────────────────────────
+// ── shipping, payment, rules ───────────────────────────────────────────
+// (Categories lived here until v2.69, saved with this form: a row missing
+// from the post was a deleted category. They have their own screen now —
+// store-shelves.js — and this form neither shows nor sends them.)
 
 router.get('/admin/store/settings', requireAdmin, (req, res) => {
   const st = store();
@@ -190,11 +355,11 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
       <textarea class="input" data-k="details" rows="2" placeholder="הוראות תשלום (פרטי חשבון, מה לכתוב בהעברה…)">${esc(m.details)}</textarea>
       <input type="hidden" data-k="id" value="${esc(m.id)}">
       <button type="button" class="btn xs secondary" data-remove title="הסרה">✕</button></div>`;
-  const shelfRow = (sh) => `<div class="st-rowed" data-shelf>
-      <input class="input" data-k="label" placeholder="שם המדף" value="${esc(sh.label)}">
-      <input class="input" data-k="slug" placeholder="מזהה" dir="ltr" value="${esc(sh.slug)}">
-      <span class="faint">${sh.count || 0} מוצרים</span>
-      <button type="button" class="btn xs secondary" data-remove title="מחיקת המדף">✕</button></div>`;
+  // two settings the store's wiring may add; each field shows only on a store that has the setting
+  const holdField = s.holdHours === undefined ? '' :
+    `<label>ביטול אוטומטי של הזמנות שלא שולמו אחרי (שעות) <input class="input" name="holdHours" inputmode="numeric" dir="ltr" value="${esc(String(s.holdHours))}" placeholder="0 = אף פעם"></label>`;
+  const demoField = s.demoPayments === undefined ? '' :
+    `<label class="st-inline"><input type="checkbox" name="demoPayments"${s.demoPayments ? ' checked' : ''}> להציע "תשלום לדוגמה" בקופה — לחנות הדגמה בלבד, כסף אמיתי לא עובר</label>`;
   const curOpts = Object.entries(money.CURRENCIES).map(([k, v]) => `<option value="${k}"${k === s.currency ? ' selected' : ''}>${v.symbol} ${esc(v.label)} (${k})</option>`).join('');
 
   const body = `
@@ -208,6 +373,7 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
         <label>הזמנת מינימום (₪) <input class="input" name="minOrder" inputmode="decimal" dir="ltr" value="${esc(s.minOrder ? money.fromMinor(s.minOrder) : '')}" placeholder="ללא"></label>
         <label>"נותרו במלאי" מתחת ל- <input class="input" name="lowStock" inputmode="numeric" dir="ltr" value="${s.lowStock}"></label>
         <label>מספר ההזמנה הראשון <input class="input" name="orderStart" inputmode="numeric" dir="ltr" value="${s.orderStart}"></label>
+        ${holdField}
       </div>
       <label class="st-inline"><input type="checkbox" name="pricesIncludeVat"${s.pricesIncludeVat ? ' checked' : ''}> המחירים באתר כוללים מע״מ</label>
       <label class="st-inline"><input type="checkbox" name="vatExempt"${s.vatExempt ? ' checked' : ''}> עוסק פטור (בלי שורת מע״מ)</label>
@@ -229,16 +395,13 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
 
     <section class="card" id="payments">
       <h3 class="sub-head">💳 אמצעי תשלום</h3>
-      <p class="faint">החנות לא מחזיקה כרטיסי אשראי: הקונה רואה את ההוראות שכתבתם, ו"קישור לתשלום" שולח אותו לדף התשלום שלכם (בכל ספק) עם <code>{total}</code> ו-<code>{order}</code> בכתובת. אחרי שהכסף נכנס — מסמנים "שולם" בהזמנה. אמצעי מסוג <b>כרטיס אשראי</b> הוא סליקה של ממש: הוא מופיע בקופה רק כשחברת סליקה (Grow / Cardcom) מחוברת ב<a href="/admin/store/gateway">סליקת אשראי</a>, וההזמנה מסומנת כשולמה אוטומטית אחרי שהשרת אימת את התשלום. המפתחות של החברה לא נשמרים כאן.</p>
+      <p class="faint">החנות לא מחזיקה כרטיסי אשראי: הקונה רואה את ההוראות שכתבתם, ו"קישור לתשלום" שולח אותו לדף התשלום שלכם (בכל ספק) עם <code>{total}</code> ו-<code>{order}</code> בכתובת. אחרי שהכסף נכנס — מסמנים "שולם" בהזמנה. אמצעי מסוג <b>כרטיס אשראי</b> הוא סליקה של ממש: הוא מופיע בקופה רק כשחברת סליקה (Grow / Cardcom) מחוברת ב<a href="/admin/store/gateway">סליקת אשראי</a>, וההזמנה מסומנת כשולמה אוטומטית אחרי שהשרת אימת את התשלום. המפתחות של החברה לא נשמרים כאן. PayPal מופיע בקופה רק אחרי שמפתחות ה-API שלו הוגדרו (ראו "<a href="/admin/store/gateway">סליקת אשראי</a>").</p>
       <div id="st-pays">${s.payments.map(payRow).join('')}</div>
       <button type="button" class="btn sm secondary" id="st-add-pay">+ אמצעי תשלום</button>
+      ${demoField}
     </section>
 
-    <section class="card" id="shelves">
-      <h3 class="sub-head">🗂️ מדפים (קטגוריות)</h3>
-      <div id="st-shelves">${st.catalog.listShelves().map(shelfRow).join('')}</div>
-      <button type="button" class="btn sm secondary" id="st-add-shelf">+ מדף</button>
-    </section>
+    <p class="notice slim neutral st-moved" id="shelves"><a href="/admin/store/shelves">🗂️ קטגוריות המוצרים עברו למסך משלהן ←</a></p>
 
     <section class="card">
       <h3 class="sub-head">📄 דפי החנות</h3>
@@ -251,7 +414,6 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
 
     <template id="st-ship-tpl">${shipRow({ id: '', label: '', price: 0, freeOver: null, address: true, note: '' })}</template>
     <template id="st-pay-tpl">${payRow({ id: '', kind: 'bank', label: '', details: '', phone: '', url: '' })}</template>
-    <template id="st-shelf-tpl">${shelfRow({ slug: '', label: '', count: 0 })}</template>
     <script>
     (function () {
       var form = document.getElementById('st-settings');
@@ -262,7 +424,6 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
       }
       document.getElementById('st-add-ship').addEventListener('click', function () { add('st-ships', 'st-ship-tpl'); });
       document.getElementById('st-add-pay').addEventListener('click', function () { add('st-pays', 'st-pay-tpl'); });
-      document.getElementById('st-add-shelf').addEventListener('click', function () { add('st-shelves', 'st-shelf-tpl'); });
       form.addEventListener('click', function (ev) {
         var b = ev.target.closest && ev.target.closest('[data-remove]');
         if (b) { var row = b.closest('.st-rowed'); if (row) row.remove(); }
@@ -294,16 +455,20 @@ router.get('/admin/store/settings', requireAdmin, (req, res) => {
           notifyEmail: val('notifyEmail'), terms: val('terms'), thanks: val('thanks'),
           shipping: rows('[data-ship]').filter(function (r) { return r.label.trim(); }),
           payments: rows('[data-pay]').filter(function (r) { return r.label.trim() || r.kind; }),
-          pages: { shop: val('page_shop'), cart: val('page_cart'), checkout: val('page_checkout'), order: val('page_order') },
-          shelves: rows('[data-shelf]').filter(function (r) { return r.label.trim(); })
+          pages: { shop: val('page_shop'), cart: val('page_cart'), checkout: val('page_checkout'), order: val('page_order') }
         };
+        // only a store that has these two settings prints their fields
+        if (val('holdHours') !== undefined) body.holdHours = val('holdHours');
+        if (val('demoPayments') !== undefined) body.demoPayments = val('demoPayments');
         out.textContent = 'שומרים…'; out.className = '';
         fetch('/admin/api/store/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           .then(function (r) { return r.json(); })
           .then(function (d) {
             if (!d.ok) { out.textContent = d.error || 'שגיאה'; out.className = 'st-bad'; return; }
-            out.textContent = 'נשמר ✓' + (d.errors && d.errors.length ? ' · ' + d.errors.join(' · ') : '');
-            out.className = d.errors && d.errors.length ? 'st-warn' : 'st-ok';
+            // what could not be saved as typed, then what was saved and will not reach the checkout
+            var said = (d.errors || []).concat(d.notes || []);
+            out.textContent = 'נשמר ✓' + (said.length ? ' · ' + said.join(' · ') : '');
+            out.className = said.length ? 'st-warn' : 'st-ok';
           })
           .catch(function () { out.textContent = 'שגיאת רשת'; out.className = 'st-bad'; });
       });
@@ -318,7 +483,7 @@ router.post('/admin/api/store/settings', requireAdmin, (req, res) => {
     const b = req.body || {};
     const patch = {};
     for (const k of ['name', 'currency', 'vatRate', 'minOrder', 'lowStock', 'orderStart', 'pricesIncludeVat', 'vatExempt',
-      'requireEmail', 'customerEmails', 'notifyEmail', 'terms', 'thanks', 'shipping', 'payments', 'pages']) {
+      'requireEmail', 'customerEmails', 'notifyEmail', 'terms', 'thanks', 'shipping', 'payments', 'pages', 'holdHours', 'demoPayments']) {
       if (b[k] !== undefined) patch[k] = b[k];
     }
     // money fields from the form are what a person typed (major units)
@@ -326,16 +491,22 @@ router.post('/admin/api/store/settings', requireAdmin, (req, res) => {
     if (Array.isArray(patch.shipping)) {
       patch.shipping = patch.shipping.map((m) => ({ ...m, price: String(m.price || '0'), freeOver: m.freeOver === '' || m.freeOver == null ? null : String(m.freeOver) }));
     }
+    // A `shelves` key is NOT read. This route used to take the posted list
+    // as the whole truth and delete every category missing from it — a
+    // settings tab left open since before the upgrade must not be able to
+    // wipe the categories with one click on "שמירה".
     const saved = st.settings.saveSettings(patch);
-    if (Array.isArray(b.shelves)) {
-      const keep = new Set();
-      for (const sh of b.shelves) {
-        try { keep.add(st.catalog.saveShelf({ slug: sh.slug, label: sh.label }).slug); } catch (e) { saved.errors.push(e.message); }
-      }
-      for (const sh of st.catalog.listShelves()) if (!keep.has(sh.slug)) st.catalog.deleteShelf(sh.slug);
+    // The store's name and the shop page's address are written INTO every
+    // product and category page (the trail), so those pages are brought in
+    // step before the rebuild — a rebuild alone printed the old name for
+    // ever. A sync that fails is logged and never fails the save.
+    try {
+      if (st.isOpen()) st.pages.syncCatalogPages();
+    } catch (e) {
+      console.error('[store] page sync after a settings save failed:', e.message);
     }
     const rebuilt = st.refreshNow();
-    res.json({ ok: true, settings: saved.settings, errors: saved.errors, rebuilt });
+    res.json({ ok: true, settings: saved.settings, errors: saved.errors, notes: paymentNotes(st, saved.settings), rebuilt });
   } catch (e) { sendError(res, e); }
 });
 
@@ -433,6 +604,7 @@ router.post('/admin/api/store/coupons/:code/delete', requireAdmin, (req, res) =>
 
 router.get('/admin/store/bentml', requireAdmin, (req, res) => {
   const st = store();
+  const csvIo = require('../store/csv-io');
   const doc = st.document.exportDocument();
   const backups = st.document.listBackups();
   const backupRows = backups.length ? backups.map((b) =>
@@ -460,6 +632,21 @@ router.get('/admin/store/bentml', requireAdmin, (req, res) => {
       </div>
       <div id="sb-preview-out" class="st-preview" aria-live="polite"></div>
     </section>
+    <section class="card" id="csv">
+      <h3 class="sub-head">📄 ייבוא וייצוא CSV</h3>
+      <p class="lead">הקטלוג כגיליון: מייצאים, עורכים ב-Excel או ב-Google Sheets, ומייבאים חזרה. ייבוא עובר באותה דלת כמו המסמך שלמעלה — תצוגה מקדימה, גיבוי, החלה, ואפשר לבטל.</p>
+      <p class="st-csv-help">העמודות שנקראות: <code dir="ltr">${esc(csvIo.HEAD.join(', '))}</code>. גם שמות העמודות של Shopify ושל WooCommerce מובנים. כל שורה מותאמת למוצר לפי <code dir="ltr">sku</code>; מוצר שהקובץ לא מזכיר נשאר כמו שהוא, ועמודה שחסרה בקובץ לא נוגעת בשדה שלה.</p>
+      <div class="st-csv-bar">
+        <span class="row"><a class="btn sm secondary" href="/admin/store/products.csv" data-nav-full>⬇ ייצוא CSV</a>
+        <button type="button" class="btn sm secondary" id="csv-pick">⬆ בחירת קובץ CSV</button>
+        <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
+        <span class="faint" id="csv-name"></span></span>
+        <span class="row"><span id="csv-out" aria-live="polite"></span>
+        <button type="button" class="btn sm secondary" id="csv-preview" disabled>👁 תצוגה מקדימה</button>
+        <button type="button" class="btn sm" id="csv-apply" disabled>✅ החלה על החנות</button></span>
+      </div>
+      <div id="csv-preview-out" class="st-preview" aria-live="polite"></div>
+    </section>
     <section class="card" id="store-ai-card"></section>
     <section class="card">
       <div class="row between"><h3 class="sub-head">🗄️ גיבויים</h3><button type="button" class="btn sm secondary" id="sb-undo"${backups.length ? '' : ' disabled'}>↩ ביטול החלה אחרונה</button></div>
@@ -478,14 +665,18 @@ router.get('/admin/store/bentml', requireAdmin, (req, res) => {
         if (!items || !items.length) return '';
         return '<div class="st-pv-sec"><b>' + esc(title) + ' (' + items.length + ')</b><ul>' + items.map(function (x) { return '<li>' + fmt(x) + '</li>'; }).join('') + '</ul></div>';
       }
-      function render(d) {
+      // one renderer for both doors on this screen: the pasted document and the CSV file
+      function render(d, target) {
         var p = d.preview || {};
         var html = '';
         if (d.errors && d.errors.length) html += '<div class="st-pv-bad">' + d.errors.map(function (e) { return esc(e.message); }).join('<br>') + '</div>';
         html += list('יתווספו', p.added, function (x) { return esc(x.title) + ' · ' + esc(x.priceText); });
         html += list('ישתנו', p.changed, function (x) { return esc(x.title) + ' — ' + esc((x.fields || []).join(' · ')); });
         html += list('יוסתרו (לא מופיעים במסמך)', p.hidden, function (x) { return esc(x.title); });
-        if (p.unchanged) html += '<p class="faint">' + p.unchanged + ' מוצרים בלי שינוי.</p>';
+        if (p.unchanged) html += '<p class="faint">' + (p.unchanged === 1 ? 'מוצר אחד' : p.unchanged + ' מוצרים') + ' בלי שינוי.</p>';
+        html += list('קטגוריות חדשות', p.shelvesAdded, esc) + list('קטגוריות שמשתנות', p.shelvesChanged, esc);
+        // a sheet's costs are written beside the document (the CSV door only) — so a backup does not hold them, and the owner is told
+        if (d.costs) html += '<div class="st-pv-sec"><b>מחירי עלות שיתעדכנו (' + Number(d.costs) + ')</b><div class="faint">מחיר העלות נשמר ליד המסמך, לא בתוכו — ו"ביטול החלה אחרונה" מחזיר גם אותו.</div></div>';
         html += list('הגדרות', p.settings, esc);
         if (p.coupons) {
           html += list('קופונים חדשים', p.coupons.added, esc) + list('קופונים שמשתנים', p.coupons.changed, esc) + list('קופונים שיכובו', p.coupons.off, esc);
@@ -493,7 +684,7 @@ router.get('/admin/store/bentml', requireAdmin, (req, res) => {
         var warns = (d.warnings || []);
         if (warns.length) html += '<div class="st-pv-sec"><b>הערות</b><ul>' + warns.map(function (w) {
           return '<li class="' + (w.hard ? 'st-bad' : 'faint') + '">' + (w.hard ? '⚠ ' : '') + esc(w.message) + '</li>'; }).join('') + '</ul></div>';
-        box.innerHTML = html || '<p class="faint">אין שינויים.</p>';
+        (target || box).innerHTML = html || '<p class="faint">אין שינויים.</p>';
       }
       var file = document.getElementById('sb-file');
       file.addEventListener('change', function () {
@@ -543,6 +734,60 @@ router.get('/admin/store/bentml', requireAdmin, (req, res) => {
             .then(function (d) { if (d.ok) location.reload(); else out.textContent = d.message || 'שגיאה'; });
         });
       });
+
+      // the CSV door: the file is read here as text and sent as JSON; the server turns it into a merge document
+      var csvPick = document.getElementById('csv-pick');
+      var csvFile = document.getElementById('csv-file');
+      var csvName = document.getElementById('csv-name');
+      var csvOut = document.getElementById('csv-out');
+      var csvBox = document.getElementById('csv-preview-out');
+      var csvPreview = document.getElementById('csv-preview');
+      var csvApply = document.getElementById('csv-apply');
+      var CSV_MAX = ${Number(csvIo.MAX_BYTES) || 0};
+      var csvText = null;
+      var csvHard = false;
+      function csvSay(text, cls) { csvOut.textContent = text || ''; csvOut.className = cls || ''; }
+      function csvSend(body) {
+        return fetch('/admin/api/store/import-csv', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(function (r) { return r.json(); })
+          .catch(function () { return { ok: false, network: true, errors: [{ message: 'שגיאת רשת — לא נשמר דבר' }] }; });
+      }
+      function csvLook() {
+        if (csvText === null) return;
+        csvApply.disabled = true;
+        csvSay('בודקים…', '');
+        csvSend({ csv: csvText }).then(function (d) {
+          render(d, csvBox);
+          csvHard = !!d.hard;
+          csvApply.disabled = !d.ok;
+          if (!d.ok) csvSay('לא ניתן לייבא', 'st-bad');
+          else csvSay((d.count === 1 ? 'שורת מוצר אחת' : d.count + ' שורות מוצר') + (d.hard ? ' · יש אזהרות — ההחלה תבקש אישור' : ' · מוכן להחלה'), d.hard ? 'st-warn' : 'st-ok');
+        });
+      }
+      csvPick.addEventListener('click', function () { csvFile.click(); });
+      csvFile.addEventListener('change', function () {
+        var f = csvFile.files && csvFile.files[0];
+        csvText = null; csvPreview.disabled = true; csvApply.disabled = true; csvBox.textContent = ''; csvSay('', '');
+        csvName.textContent = f ? f.name : '';
+        if (!f) return;
+        if (CSV_MAX && f.size > CSV_MAX) { csvSay('הקובץ גדול מ-2MB — פצלו אותו לכמה קבצים', 'st-bad'); return; }
+        var r = new FileReader();
+        r.onload = function () { csvText = String(r.result || ''); csvPreview.disabled = false; csvLook(); };
+        r.onerror = function () { csvSay('לא הצלחנו לקרוא את הקובץ', 'st-bad'); };
+        r.readAsText(f);
+      });
+      csvPreview.addEventListener('click', csvLook);
+      csvApply.addEventListener('click', function () {
+        if (csvText === null) return;
+        if (csvHard && !confirm('יש אזהרות (מסומנות ⚠). לייבא בכל זאת? גיבוי של החנות נשמר קודם.')) return;
+        csvApply.disabled = true;
+        csvSay('מייבאים…', '');
+        csvSend({ csv: csvText, apply: true, force: csvHard }).then(function (d) {
+          if (!d.ok) { render(d, csvBox); csvSay(d.message || 'לא יובא', 'st-bad'); return; }
+          csvSay('יובא ✓ (גיבוי #' + d.backupId + ')' + (d.costs ? ' · עודכנו ' + d.costs + ' מחירי עלות' : ''), 'st-ok');
+          setTimeout(function () { location.reload(); }, 900);
+        });
+      });
     })();
     </script>
     <!-- the owner's own model, reached through their browser (Bridge V2) -->
@@ -585,6 +830,63 @@ router.post('/admin/api/store/apply', requireAdmin, (req, res) => {
     const r = store().document.applyDocument(String(b.text || ''), { force: b.force === true, reason: 'admin' });
     const { plan, ...pub } = r;
     res.status(r.ok ? 200 : 400).json(pub);
+  } catch (e) { sendError(res, e); }
+});
+
+/**
+ * The CSV door. A sheet is not written from here: csv-io turns it into a
+ * MERGE <bent-store> document and that goes through the door every paste
+ * goes through — plan, backup, apply, undo. `{ csv }` previews;
+ * `{ csv, apply: true, force }` applies. A product's cost cannot ride in the
+ * document (it is the owner's number), so it is written beside it once the
+ * apply has landed — for the products that apply WROTE, and no other: a row
+ * the document refused (a price nobody can read) used to leave its product's
+ * fields alone and still overwrite its cost.
+ */
+router.post('/admin/api/store/import-csv', requireAdmin, (req, res) => {
+  try {
+    const st = store();
+    const csvIo = require('../store/csv-io');
+    const b = req.body || {};
+    const sheet = csvIo.csvToDocument(typeof b.csv === 'string' ? b.csv : '');
+    // a sheet's problems are said where the owner will look: by its line
+    const byLine = (x) => ({ line: x.line, message: (x.line ? 'שורה ' + x.line + ': ' : '') + x.message });
+    const sheetErrors = sheet.errors.map(byLine);
+    const sheetNotes = sheet.warnings.map((x) => ({ ...byLine(x), hard: false }));
+    if (!sheet.ok) {
+      return res.status(400).json({ ok: false, count: 0, errors: sheetErrors, warnings: sheetNotes, preview: null, hard: true,
+        message: sheetErrors.map((e) => e.message).join(' · ') });
+    }
+    if (b.apply !== true) {
+      const { plan, ...planned } = st.document.planDocument(sheet.source, { trusted: true });
+      // costs travel beside the document, so its preview cannot show them:
+      // a sheet that only changes costs would otherwise preview as "no changes"
+      // (only the rows the plan will write — a refused row's cost goes nowhere)
+      const writes = new Set(plan ? plan.products.map((p) => p.slug) : []);
+      let costs = 0;
+      for (const [slug, v] of Object.entries(sheet.costs)) {
+        if (!writes.has(slug)) continue;
+        const had = st.catalog.getProductBySlug(slug);
+        if (had ? had.cost !== v : v !== null) costs++;
+      }
+      return res.status(planned.ok ? 200 : 400).json({
+        ...planned,
+        count: sheet.count,
+        costs,
+        errors: sheetErrors.concat(planned.errors),
+        warnings: sheetNotes.concat(planned.warnings),
+        // a skipped row is worth a yes before the rest is written
+        hard: planned.hard || sheetErrors.length > 0,
+        source: sheet.source
+      });
+    }
+    const { plan, ...applied } = st.document.applyDocument(sheet.source, { trusted: true, reason: 'csv', force: b.force === true });
+    if (!applied.ok) {
+      return res.status(400).json({ ...applied, count: sheet.count, errors: sheetErrors.concat(applied.errors || []), warnings: sheetNotes.concat(applied.warnings || []) });
+    }
+    const wrote = new Set((applied.changed && applied.changed.slugs) || []);
+    const costs = st.catalog.setCosts(Object.fromEntries(Object.entries(sheet.costs).filter(([slug]) => wrote.has(slug))));
+    res.json({ ...applied, count: sheet.count, costs: costs.changed, errors: sheetErrors, warnings: sheetNotes.concat(applied.warnings || []) });
   } catch (e) { sendError(res, e); }
 });
 

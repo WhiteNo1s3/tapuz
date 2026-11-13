@@ -111,6 +111,24 @@ check('no isRtl() branch remains in handle placement',
 check('the drag math no longer inverts on document RTL',
   !/if \(rtl\) dx = -dx/.test(builder));
 
+// v2.69 — the row runs the way the PAGE reads. The physical placement above is
+// the LTR-page branch; a Hebrew page gets the mirror of it, and the key is the
+// PAGE's direction (pageDirection), never the document's: the admin is always
+// rtl, which is exactly the v2.13 regression. The canvas used to pin every row
+// to ltr, so column 1 sat on the left of a page that publishes it on the right.
+check('the handle has an RTL-page branch keyed on pageDirection (the pane\'s left edge)',
+  /if \(pageDirection === 'rtl'\) \{\s*handle\.style\.right = '100%';\s*handle\.style\.left = 'auto';\s*handle\.style\.marginRight = '-5px';/.test(builder));
+check('the LTR branch is the else of that same test',
+  /\} else \{\s*handle\.style\.left = '100%';\s*handle\.style\.right = 'auto';\s*handle\.style\.marginLeft = '-5px';/.test(builder));
+check('the drag sign comes from pageDirection too',
+  /var towardsNext = pageDirection === 'rtl' \? -1 : 1;/.test(builder) &&
+  /var dUnits = \(towardsNext \* dx \/ rowW\) \* total;/.test(builder));
+check('the canvas row takes its direction from the page',
+  /row\.dir = pageDirection;/.test(builder));
+check('admin.css no longer pins the row to ltr (nor the panes to rtl)',
+  !/\.columns-preview \{[^}]*direction:/.test(css.replace(/\n/g, ' ')) &&
+  !/\.column-pane, \.column-drop \{[^}]*direction:/.test(css.replace(/\n/g, ' ')));
+
 // ---- 7. splitting inside a column EXTENDS the row (Camilyo), never nests ---
 
 check('doSplitMove extends the parent row when target lives in a column',
@@ -118,8 +136,13 @@ check('doSplitMove extends the parent row when target lives in a column',
   /rowCols\.splice\(insertAt, 0, \{ blocks: \[incoming\] \}\)/.test(builder));
 check('ratios are read BEFORE the new column is inserted (no extra share)',
   /var rowRatios = parseColumnRatios\(rowBlock\);\s*\n\s*var insertAt/.test(builder));
-check('the row caps at 4 — at the cap the module lands beside, never nests',
-  /rowCols\.length < 4/.test(builder) && /השורה מלאה/.test(builder));
+// (v2.69: the cap is ONE constant, 6 — the registry's range; it was a literal 4)
+check('the row caps at MAX_ROW_COLUMNS — at the cap the module lands beside, never nests',
+  /rowCols\.length < MAX_ROW_COLUMNS/.test(builder) && /var MAX_ROW_COLUMNS = 6;/.test(builder) &&
+  /השורה מלאה/.test(builder));
+check('the split side reaches the column order through the page\'s direction',
+  /var landsBefore = splitSideIsBefore\(hint\.side, pageDirection\);/.test(builder) &&
+  /var insertAt = targetNode\.colIndex \+ \(landsBefore \? 0 : 1\);/.test(builder));
 check('a deterministic drop hook exists for tests (_testDrop)',
   /_testDrop: function \(state, hint\)/.test(builder));
 

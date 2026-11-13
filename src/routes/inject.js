@@ -11,7 +11,10 @@
  *   • run NEVER applies (0.9). It answers with the reply text and a preview;
  *     apply is a second POST that re-parses the same text the owner saw.
  *   • apply / run / undo cost money or change the site → requireAdmin.
- *     prompt / paste are read-only and free — an editor may look.
+ *     prompt / paste are read-only and free — an editor may look. A pack
+ *     that says `adminOnly: true` is the exception: what it shows is the
+ *     manager's (the catalog writer's prompt is the whole store), so its
+ *     prompt and its paste answer 403 to an editor and the list leaves it out.
  *   • one repair round at most: when the door refuses, or a warning the
  *     pack calls repairable comes back, the model gets the first exchange
  *     as history plus a "תיקונים נדרשים" turn — and the reply with fewer
@@ -23,7 +26,8 @@
  * BROWSER_RELAY, PACK_TOO_BIG (+ suggestSize:'lite'), REPLY_TOO_LONG (a
  * reply over 60K chars — a whole chat transcript pasted, not the document —
  * is refused here before ANY pack's door sees it); 502 PROVIDER_ERROR /
- * EMPTY_REPLY / NETWORK; 504 TIMEOUT; 409 HARD_WARNINGS; 404 unknown pack.
+ * EMPTY_REPLY / NETWORK; 504 TIMEOUT; 409 HARD_WARNINGS; 404 unknown pack;
+ * 403 ADMIN_ONLY (an editor at a manager's pack).
  */
 
 const express = require('express');
@@ -82,6 +86,17 @@ function packOr404(req, res) {
   return pack;
 }
 
+function isAdmin(req) {
+  return !!(req.adminUser && req.adminUser.role === 'admin');
+}
+
+/** A pack marked `adminOnly`, asked for by an editor: answer 403 and say so (true = answered). */
+function closedToEditor(pack, req, res) {
+  if (!pack.adminOnly || isAdmin(req)) return false;
+  res.status(403).json({ ok: false, error: 'החבילה "' + pack.title + '" פתוחה למנהלים בלבד — הרשאת מנהל נדרשת', code: 'ADMIN_ONLY' });
+  return true;
+}
+
 function notReady(pack) {
   const e = new Error('החבילה "' + pack.title + '" עדיין לא זמינה להרצה בשרת הזה');
   e.code = 'NOT_READY';
@@ -108,13 +123,15 @@ function textsOf(parsed) {
 
 // ── GET /admin/api/inject — the packs ───────────────────────────────────
 router.get('/admin/api/inject', (req, res) => {
-  res.json({ ok: true, packs: registry.list().filter((p) => !p.ui.hidden) });
+  const offered = (p) => isAdmin(req) || !(registry.get(p.id) || {}).adminOnly;
+  res.json({ ok: true, packs: registry.list().filter((p) => !p.ui.hidden && offered(p)) });
 });
 
 // ── GET /admin/api/inject/:id/prompt — the pack text, for the clipboard ──
 router.get('/admin/api/inject/:id/prompt', (req, res) => {
   const pack = packOr404(req, res);
   if (!pack) return;
+  if (closedToEditor(pack, req, res)) return;
   if (pack.buildPrompt === null || !registry.isReady(pack)) return refuse(res, notReady(pack));
   try {
     const built = pack.buildPrompt({
@@ -136,6 +153,7 @@ router.get('/admin/api/inject/:id/prompt', (req, res) => {
 router.post('/admin/api/inject/:id/paste', (req, res) => {
   const pack = packOr404(req, res);
   if (!pack) return;
+  if (closedToEditor(pack, req, res)) return;
   const b = req.body || {};
   const reply = String(b.reply || '');
   const brief = briefFor(b.brief);

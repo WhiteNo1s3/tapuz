@@ -41,7 +41,7 @@ function load() {
 
 function save(data) {
   if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf8');
+  require('./json-file').writeAtomic(STORE_PATH, JSON.stringify(data, null, 2), { mode: 0o600 });
   try { fs.chmodSync(STORE_PATH, 0o600); } catch (e) { /* POSIX only */ }
 }
 

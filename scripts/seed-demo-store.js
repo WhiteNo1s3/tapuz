@@ -12,6 +12,13 @@
  * seed/manifest.json. Without TAPUZ_ROOT the script exits before it reads
  * a pin. Without --apply it exits before it writes. A root that already
  * has site files is refused BEFORE the database is opened.
+ *
+ * The script seeds and nothing else: a demo that is already there is
+ * upgraded by a boot with the flag, never from here. Since v2.69 the root
+ * it leaves carries the demo's markers in config/seeded.json, exactly like
+ * a boot-seeded one (before, only the boot wrote a marker — a script-seeded
+ * demo was a site nothing called a demo, so it was never offered the demo
+ * payment).
  */
 
 if (!process.env.TAPUZ_ROOT) {
@@ -57,5 +64,5 @@ if (!result.ok) {
   console.error('REFUSED: ' + (result.message || result.code));
   process.exit(2);
 }
-console.log('DEMO_APPLIED products=' + result.products + ' homepage=' + result.homepage);
+console.log('DEMO_APPLIED version=' + result.version + ' products=' + result.products + ' homepage=' + result.homepage);
 process.exit(0);

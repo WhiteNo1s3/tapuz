@@ -205,8 +205,15 @@ register({
     alt: { type: 'string', default: '', optional: true, label: { he: 'טקסט חלופי', en: 'Alt' } },
     title: { type: 'string', default: '', optional: true, label: { he: 'כותרת תמונה (SEO)', en: 'Image title' } },
     caption: { type: 'string', default: '', optional: true, label: { he: 'כיתוב', en: 'Caption' } },
+    // v2.69 — a clickable picture. The page builder and the live renderer
+    // already carry `link`; this dialect had no word for it, so every source
+    // save and every copilot edit quietly took the link off the picture.
+    link: { type: 'url', default: '', optional: true, label: { he: 'קישור בלחיצה', en: 'Link' } },
+    // start | center | end, like every other module (they follow the page's
+    // direction). left / right are still READ — documents written before
+    // v2.69 carry them — and are never written by the builder or the bridge.
     align: {
-      type: 'enum', values: ['left', 'center', 'right'], default: 'center', optional: true,
+      type: 'enum', values: ['start', 'center', 'end', 'left', 'right'], default: 'center', optional: true,
       label: { he: 'יישור', en: 'Align' }
     },
     width: {
@@ -218,13 +225,20 @@ register({
   },
   defaults: { src: '', alt: '', caption: '', align: 'center' },
   compile(node, ctx) {
-    const { src = '', alt = '', caption = '', align = 'center' } = node.props;
+    const { src = '', alt = '', caption = '', align = 'center', link = '' } = node.props;
     const { id, cls } = attrsExtra(node);
     const imgTitle = node.props.title ? ` title="${escapeAttr(node.props.title)}"` : '';
     let inner = `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"${imgTitle} loading="lazy">`;
+    // the link wraps the IMG only — the caption stays plain text, exactly as
+    // the live renderer does it; safeHref turns javascript: and friends to #
+    if (link) inner = `<a href="${escapeAttr(safeHref(link))}">${inner}</a>`;
     if (caption) inner += `<figcaption>${escapeHtml(caption)}</figcaption>`;
     const widthCls = node.props.width && node.props.width !== 'full' ? ` width-${escapeAttr(node.props.width)}` : '';
-    return `<figure${id} class="bent-image align-${escapeAttr(align)}${widthCls}${cls}"${dirAttr(ctx)}>${inner}</figure>`;
+    // one vocabulary on the way out: an older document's physical left / right
+    // becomes the side it means on a page that reads this way
+    const rtl = ctx.dir !== 'ltr';
+    const side = align === 'left' ? (rtl ? 'end' : 'start') : align === 'right' ? (rtl ? 'start' : 'end') : align;
+    return `<figure${id} class="bent-image align-${escapeAttr(side)}${widthCls}${cls}"${dirAttr(ctx)}>${inner}</figure>`;
   }
 });
 
@@ -2449,6 +2463,18 @@ register({
     title: { type: 'string', default: '', optional: true, label: { he: 'כותרת', en: 'Title' } },
     exclude: { type: 'string', default: '', optional: true, label: { he: 'להשמיט מוצר', en: 'Exclude SKU' } },
     buttons: { type: 'boolean', default: true, optional: true, label: { he: 'כפתורי הוספה לעגלה', en: 'Add-to-cart buttons' } },
+    // v2.69 — the look of a card, the shopper's toolbar, and who is on the grid
+    empty: { type: 'string', default: '', optional: true, label: { he: 'טקסט כשאין מוצרים', en: 'Empty-grid text' } },
+    media: { type: 'enum', values: ['square', 'portrait', 'landscape'], default: 'square', optional: true, label: { he: 'צורת התמונה', en: 'Picture shape' } },
+    fit: { type: 'enum', values: ['cover', 'contain'], default: 'cover', optional: true, label: { he: 'התאמת התמונה', en: 'Picture fit' } },
+    justify: { type: 'enum', values: ['start', 'center'], default: 'start', optional: true, label: { he: 'יישור שורה חלקית', en: 'Last-row alignment' } },
+    sorter: { type: 'boolean', default: false, optional: true, label: { he: 'בורר מיון לקונה', en: 'Sort control' } },
+    search: { type: 'boolean', default: false, optional: true, label: { he: 'שדה חיפוש', en: 'Search box' } },
+    'page-size': { type: 'integer', min: 0, max: 48, default: 0, optional: true, label: { he: 'מוצרים בכל טעינה (0 = כולם)', en: 'Products per batch (0 = all)' } },
+    tag: { type: 'string', default: '', optional: true, label: { he: 'תגית', en: 'Tag' } },
+    brand: { type: 'string', default: '', optional: true, label: { he: 'מותג', en: 'Brand' } },
+    featured: { type: 'boolean', default: false, optional: true, label: { he: 'רק מוצרים מומלצים', en: 'Featured only' } },
+    skus: { type: 'string', default: '', optional: true, label: { he: 'מוצרים נבחרים (מזהים, בפסיקים)', en: 'Chosen SKUs (comma-separated)' } },
     id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
     class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
   },
@@ -2456,6 +2482,30 @@ register({
   compile(node, ctx) {
     const { id, cls } = attrsExtra(node);
     return storeRender().renderShop(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
+  }
+});
+
+register({
+  name: 'shelves',
+  tag: 'bent-shelves',
+  category: 'store',
+  label: { he: 'חנות — אריחי קטגוריות', en: 'Category tiles' },
+  icon: 'grid',
+  container: false,
+  props: {
+    parent: { type: 'string', default: '', optional: true, label: { he: 'קטגוריית אב', en: 'Parent category' } },
+    columns: { type: 'integer', min: 2, max: 6, default: 3, optional: true, label: { he: 'עמודות', en: 'Columns' } },
+    title: { type: 'string', default: '', optional: true, label: { he: 'כותרת', en: 'Title' } },
+    counts: { type: 'boolean', default: true, optional: true, label: { he: 'מספר המוצרים', en: 'Product counts' } },
+    summaries: { type: 'boolean', default: false, optional: true, label: { he: 'תיאור הקטגוריה', en: 'Summaries' } },
+    justify: { type: 'enum', values: ['start', 'center'], default: 'start', optional: true, label: { he: 'יישור שורה חלקית', en: 'Last-row alignment' } },
+    id: { type: 'string', optional: true, label: { he: 'מזהה', en: 'ID' } },
+    class: { type: 'string', optional: true, label: { he: 'מחלקה', en: 'Class' } }
+  },
+  defaults: {},
+  compile(node, ctx) {
+    const { id, cls } = attrsExtra(node);
+    return storeRender().renderShelves(node.props || {}, { idAttr: id, cls, dir: dirAttr(ctx) });
   }
 });
 
