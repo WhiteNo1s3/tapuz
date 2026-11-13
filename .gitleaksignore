@@ -5,3 +5,9 @@
 # with helpers so the file itself no longer trips the rule.
 4c1866d0fe060ee031bede4f36245af71314be95:scripts/smoke-mlx-survey.js:generic-api-key:44
 4c1866d0fe060ee031bede4f36245af71314be95:scripts/smoke-mlx-survey.js:generic-api-key:46
+
+# 7bbebf5 — scripts/smoke-platform.js: the generic-api-key rule read a made-up sign-in in a test fixture (the stranger
+# who tries to create the first account of an unclaimed site, and is refused) as a real one. It opens nothing: the
+# smoke runs against a throwaway root. The fixture now names it once as a constant, so the file no longer trips the rule.
+7bbebf54e6e975adc49e95047a69028706539156:scripts/smoke-platform.js:generic-api-key:1241
+7bbebf54e6e975adc49e95047a69028706539156:scripts/smoke-platform.js:generic-api-key:1397
