@@ -172,9 +172,33 @@
     primary: 'ראשי', secondary: 'משני', outline: 'מתאר',
     line: 'קו', dots: 'נקודות', thick: 'עבה',
     none: 'ללא', never: 'אף פעם',
-    top: 'למעלה', bottom: 'למטה', stretch: 'מתיחה (גובה אחיד)'
+    top: 'למעלה', bottom: 'למטה', stretch: 'מתיחה (גובה אחיד)',
+    // row / section width, the shop's order and picture shape, a form field's
+    // kind — the values the selects used to show as raw English words
+    content: 'רוחב התוכן', wide: 'רחב',
+    manual: 'הסדר שבקטלוג', 'new': 'חדשים קודם', 'price-asc': 'מחיר: מהנמוך לגבוה',
+    'price-desc': 'מחיר: מהגבוה לנמוך', name: 'לפי שם', featured: 'מומלצים קודם',
+    square: 'ריבוע', portrait: 'לאורך (4:5)', landscape: 'לרוחב (4:3)',
+    cover: 'מילוי (חיתוך)', contain: 'התמונה שלמה',
+    text: 'טקסט', email: 'אימייל', tel: 'טלפון', textarea: 'טקסט ארוך',
+    select: 'רשימת בחירה', checkbox: 'תיבת סימון',
+    // entrance animation, speed, tone, link target, header layout, text effect
+    fade: 'הופעה הדרגתית', rise: 'עולה בגלילה', zoom: 'מתקרב',
+    slow: 'איטי', fast: 'מהיר',
+    dark: 'כהה', light: 'בהיר', brand: 'צבע המותג', warn: 'אזהרה',
+    _self: 'באותו חלון', _blank: 'בחלון חדש',
+    row: 'בשורה אחת', stack: 'זה מתחת לזה',
+    marquee: 'נע לרוחב', slide: 'החלקה', typewriter: 'הקלדה'
   };
   function enumLabel(v) { return ENUM_LABELS[v] || String(v); }
+
+  /** Modules whose align survives a source / copilot round trip although the
+   *  block registry declares no align param for them. */
+  var ALIGN_KEPT = { image: 1 };
+
+  /** A stored boolean in any of the shapes a page may carry it (the source
+   *  dialect round-trips "true" as a string). */
+  function isOn(v) { return v === true || v === 'true' || v === 1 || v === '1'; }
 
   var SPACER_HEIGHTS = { sm: '0.75rem', md: '1.5rem', lg: '2.5rem', xl: '4rem' };
 
@@ -646,7 +670,6 @@
       '.tapuz-toast.err{background:#b91c1c}' +
       '.preview-embed{position:relative;display:inline-block}' +
       '.embed-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:2rem;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.6);pointer-events:none}' +
-      '.check-line{display:flex;gap:6px;align-items:center;font-size:0.9rem;color:inherit}' +
       '.media-explorer{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}' +
       '.media-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;padding-bottom:8px}' +
       '.media-crumbs{font-size:0.9rem;color:#334155}' +
@@ -815,24 +838,49 @@
 
   /** Cached article fetch for the article-list canvas preview. */
   var articlesPreviewCache = {}; // key -> { at, articles }
-  /** The store's catalog for the storefront previews (v2.53), cached 15s. */
+
+  /** Hand a CACHED answer to a preview on a later tick, never on the spot.
+   *  The canvas asks while it is still building a block — before that block
+   *  is in the document — and every preview first checks "is my element still
+   *  on the page?". An answer given on the spot failed that check, so for 15
+   *  seconds after any fetch a redrawn shop preview stayed on "טוען מהקטלוג…"
+   *  and a redrawn article list on its placeholder cubes (v2.69). */
+  function answerLater(cb, value) {
+    setTimeout(function () { cb(value); }, 0);
+  }
+
+  /** The store's catalog for the storefront previews (v2.53), cached 15s.
+   *  One request serves everyone who asks while it is in flight (a page with
+   *  a grid, a buy box and a picker asked three times). */
   var storeCatalogCache = null;
+  var storeCatalogWaiting = null;
   function fetchStoreCatalog(cb) {
-    if (storeCatalogCache && Date.now() - storeCatalogCache.at < 15000) { cb(storeCatalogCache.data); return; }
+    if (storeCatalogCache && Date.now() - storeCatalogCache.at < 15000) { answerLater(cb, storeCatalogCache.data); return; }
+    if (storeCatalogWaiting) { storeCatalogWaiting.push(cb); return; }
+    storeCatalogWaiting = [cb];
+    var answer = function (cat) {
+      var waiting = storeCatalogWaiting || [];
+      storeCatalogWaiting = null;
+      // one preview that throws must not leave the others waiting; its error
+      // still reaches the console
+      waiting.forEach(function (fn) {
+        try { fn(cat); } catch (e) { setTimeout(function () { throw e; }, 0); }
+      });
+    };
     fetch('/admin/api/store/catalog', { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         var cat = data && data.ok ? data : { products: [] };
         storeCatalogCache = { at: Date.now(), data: cat };
-        cb(cat);
+        answer(cat);
       })
-      .catch(function () { cb(storeCatalogCache ? storeCatalogCache.data : { products: [] }); });
+      .catch(function () { answer(storeCatalogCache ? storeCatalogCache.data : { products: [] }); });
   }
 
   function fetchArticlesPreview(tag, limit, cb) {
     var key = tag + '|' + limit;
     var hit = articlesPreviewCache[key];
-    if (hit && Date.now() - hit.at < 15000) { cb(hit.articles); return; }
+    if (hit && Date.now() - hit.at < 15000) { answerLater(cb, hit.articles); return; }
     fetch('/admin/api/articles?tag=' + encodeURIComponent(tag) + '&limit=' + encodeURIComponent(limit))
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -897,15 +945,80 @@
       .catch(function () { cb(categoriesCache ? categoriesCache.cats : []); });
   }
 
-  /** Normalized src of a media list entry ('' when the slot is empty). */
-  function mediaSrcOf(im) {
-    var src = typeof im === 'string' ? im : ((im && im.src) || '');
+  // ── Lists and their pictures (v2.69) ───────────────────────────────────
+  // These six stay small and pure on purpose: scripts/smoke-builder-lists.js
+  // lifts them out of this file and runs them against the real registry.
+  // The bug they close: the list editor asked "does any item field hold a
+  // picture?" and then read only `item.src` — but products, cards, carousel,
+  // timeline and related call their picture `image`. Every real item counted
+  // as an empty slot, and "נקה משבצות ריקות" removed them all.
+
+  /** The name of a list's picture field (the item field typed `media`), or ''
+   *  when its items carry no picture: `src` for gallery and logos, `image` for
+   *  the card-like lists. */
+  function mediaFieldOf(itemFields) {
+    var list = Array.isArray(itemFields) ? itemFields : [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].type === 'media') return list[i].name;
+    }
+    return '';
+  }
+
+  /** A list is edited as a wall of thumbnails only when its items ARE
+   *  pictures — a picture plus nothing beyond alt / caption / url (gallery,
+   *  logos). A list whose items also carry a title, a price or a tag gets the
+   *  field editor, or those words could never be typed. */
+  function listUsesThumbs(itemFields) {
+    var list = Array.isArray(itemFields) ? itemFields : [];
+    if (!mediaFieldOf(list)) return false;
+    return list.every(function (f) {
+      return f.type === 'media' || f.name === 'alt' || f.name === 'caption' || f.name === 'url';
+    });
+  }
+
+  /** Which control an item field gets — by its registry TYPE, so a boolean is
+   *  a checkbox and an enum is a select instead of a free-text box. */
+  function itemFieldKind(f) {
+    var t = f && f.type;
+    if (t === 'boolean') return 'checkbox';
+    if (t === 'enum' && f.enum && f.enum.length) return 'select';
+    if (t === 'integer' || t === 'number') return 'number';
+    if (t === 'media') return 'media';
+    if (t === 'textarea') return 'textarea';
+    if (t === 'url') return 'url';
+    return 'text';
+  }
+
+  /** Normalized picture address of a media list entry ('' when the slot is
+   *  empty). `fieldName` is the list's own picture field; `src` when absent. */
+  function mediaSrcOf(im, fieldName) {
+    var src = typeof im === 'string' ? im : ((im && im[fieldName || 'src']) || '');
     return String(src).trim();
   }
 
   /** Drop empty entries from a media list (imports leave blank slots). */
-  function filledMedia(list) {
-    return (Array.isArray(list) ? list : []).filter(function (im) { return mediaSrcOf(im); });
+  function filledMedia(list, fieldName) {
+    return (Array.isArray(list) ? list : []).filter(function (im) { return mediaSrcOf(im, fieldName); });
+  }
+
+  /** Library picks ({src, alt}) as items of THIS list: the picture lands under
+   *  the list's own field name, and alt only where the item has an alt. */
+  function pickedToItems(picked, itemFields) {
+    var list = Array.isArray(itemFields) ? itemFields : [];
+    var mediaField = mediaFieldOf(list) || 'src';
+    var hasAlt = list.some(function (f) { return f.name === 'alt'; });
+    return (Array.isArray(picked) ? picked : []).map(function (pk) {
+      var item = {};
+      item[mediaField] = typeof pk === 'string' ? pk : ((pk && pk.src) || '');
+      if (hasAlt && pk && pk.alt) item.alt = pk.alt;
+      return item;
+    });
+  }
+
+  /** The picture field of one module's list param, from the registry. */
+  function listMediaField(type, key) {
+    var pd = paramDefFor(type, key);
+    return mediaFieldOf(pd && pd.itemFields) || 'src';
   }
 
   function youtubeId(url) {
@@ -1366,6 +1479,9 @@
     var keepScroll = scroller.scrollTop;
     canvas.innerHTML = '';
     canvas.classList.add('block-stack');
+    // the sheet reads the way the PAGE reads: an English page is laid out
+    // left to right here too, not right to left like the Hebrew admin around it
+    canvas.dir = pageDirection;
 
     // Click on the canvas background (not a block) = deselect → page properties
     if (!canvas._deselectBound) {
@@ -1910,6 +2026,189 @@
     });
   }
 
+  // ── Canvas previews that hold the level line (v2.69) ────────────────────
+  // The canvas is a schematic, never the theme — but a schematic that leaves
+  // out the rows that misalign (badge, brand, a wrapping title, the stock
+  // note, the button) cannot show the owner whether a grid lines up. These
+  // previews draw every row a card has, in the card's own order, with the
+  // action pinned to the bottom the way the storefront pins it.
+
+  /** A picture as a CSS background on a preview box. The address is quoted,
+   *  and a quote, backslash or line break in it is percent-encoded, so it can
+   *  never close the url() or the attribute. */
+  function bgStyle(url) {
+    var u = String(url || '').replace(/["\\\n\r]/g, function (ch) { return encodeURIComponent(ch); });
+    return u ? ' style="background-image:url(&quot;' + escAttr(u) + '&quot;)"' : '';
+  }
+
+  /** A whole number inside a param's own range (the registry's min / max). */
+  function paramInt(type, name, value, fallbackMin, fallbackMax, fallback) {
+    var pd = paramDefFor(type, name) || {};
+    var min = pd.min != null ? pd.min : fallbackMin;
+    var max = pd.max != null ? pd.max : fallbackMax;
+    var n = parseInt(value, 10);
+    if (isNaN(n)) n = pd.default != null ? pd.default : fallback;
+    return Math.min(Math.max(n, min), max);
+  }
+
+  /** Which catalog products a SHOP module shows, and in which order — the
+   *  canvas's reading of the params the storefront reads: a hand-picked
+   *  `skus` list (exactly those, in that order), else shelf (with its
+   *  children), tag, brand, featured, sort; then exclude and limit. Pure, so
+   *  the smoke runs it against a catalog payload. */
+  function shopPreviewList(cat, d) {
+    d = d || {};
+    var all = ((cat && cat.products) || []).filter(function (p) { return p.status === 'active'; });
+    var low = function (v) { return String(v == null ? '' : v).trim().toLowerCase(); };
+    var list;
+    var skus = String(d.skus || '').split(',').map(low).filter(Boolean);
+    if (skus.length) {
+      var bySku = {};
+      all.forEach(function (p) { bySku[p.sku] = p; });
+      list = skus.map(function (s) { return bySku[s]; }).filter(Boolean);
+    } else {
+      list = all.slice();
+      if (d.shelf) {
+        list = list.filter(function (p) {
+          return Array.isArray(p.shelves) ? p.shelves.indexOf(d.shelf) !== -1 : p.shelf === d.shelf;
+        });
+      }
+      if (d.tag) {
+        list = list.filter(function (p) {
+          return (p.tags || []).some(function (t) { return low(t) === low(d.tag); });
+        });
+      }
+      if (d.brand) list = list.filter(function (p) { return low(p.brand) === low(d.brand); });
+      if (d.featured === true || d.featured === 'true') list = list.filter(function (p) { return !!p.featured; });
+      // "new" needs a date the catalog payload does not carry — the catalog
+      // order stands in for it here; the storefront sorts it for real
+      if (d.sort === 'price-asc') list.sort(function (a, b) { return a.price - b.price; });
+      else if (d.sort === 'price-desc') list.sort(function (a, b) { return b.price - a.price; });
+      else if (d.sort === 'name') list.sort(function (a, b) { return String(a.title).localeCompare(String(b.title), 'he'); });
+      else if (d.sort === 'featured') list.sort(function (a, b) { return (b.featured ? 1 : 0) - (a.featured ? 1 : 0); });
+    }
+    if (d.exclude) list = list.filter(function (p) { return p.sku !== low(d.exclude); });
+    var lim = parseInt(d.limit, 10) || 0;
+    return lim > 0 ? list.slice(0, lim) : list;
+  }
+
+  /** The SHOP module on the canvas: the storefront card's rows, one level
+   *  across the row. Honours columns, media, fit, justify, limit, the
+   *  category chips and — as a faint toolbar — search and sort. */
+  function shopPreviewHtml(cat, d) {
+    var list = shopPreviewList(cat, d);
+    if (!list.length) {
+      return '<div class="preview-store-note">🛍 רשת המוצרים — עוד אין מוצרים פעילים' +
+        (d.shelf ? ' במדף "' + esc(d.shelf) + '"' : '') + '. <a href="/admin/store/products/new" target="_blank" rel="noopener">הוספת מוצר</a></div>';
+    }
+    var cols = paramInt('shop', 'columns', d.columns, 2, 4, 3);
+    var pageSize = parseInt(d.pageSize != null ? d.pageSize : d['page-size'], 10) || 0;
+    var cap = Math.min(pageSize > 0 ? pageSize : 12, 12);
+    var shown = list.slice(0, cap);
+    var media = d.media === 'portrait' || d.media === 'landscape' ? d.media : 'square';
+    var withButtons = d.buttons !== false && d.buttons !== 'false';
+    // a brand or a summary row is kept for every card only when some card in
+    // the grid has one — the storefront collapses the row the same way
+    var anyBrand = shown.some(function (p) { return !!p.brand; });
+    var anySummary = shown.some(function (p) { return !!p.summary; });
+
+    var chips = '';
+    if ((d.filter === true || d.filter === 'true') && !d.shelf) {
+      var tops = ((cat && cat.shelves) || []).filter(function (s) {
+        return !s.parent && !s.hidden && (s.total != null ? s.total : s.count) > 0;
+      });
+      if (tops.length > 1) {
+        chips = '<span class="pv-chip is-on">הכול</span>' +
+          tops.map(function (s) { return '<span class="pv-chip">' + esc(s.label || s.slug) + '</span>'; }).join('');
+      }
+    }
+    var tools = ((d.search === true || d.search === 'true') ? '<span class="pv-tool pv-tool-wide">🔎 חיפוש</span>' : '') +
+      ((d.sorter === true || d.sorter === 'true') ? '<span class="pv-tool">מיון ▾</span>' : '');
+
+    var cards = shown.map(function (p) {
+      var out = p.available === false;
+      var badges = (p.badge ? '<span class="pv-badge">' + esc(p.badge) + '</span>' : '') +
+        (p.salePercent ? '<span class="pv-badge pv-badge-sale" dir="ltr">-' + Number(p.salePercent) + '%</span>' : '');
+      var stockNote = !out && p.stockState === 'low' && p.stockLeft
+        ? (Number(p.stockLeft) === 1 ? 'נותרה יחידה אחרונה' : 'נותרו ' + Number(p.stockLeft) + ' במלאי')
+        : '';
+      return '<div class="pv-shop-card' + (out ? ' is-out' : '') + '">' +
+        '<div class="pv-shop-media pv-media-' + media + (d.fit === 'contain' ? ' pv-fit-contain' : '') + '"' + bgStyle(p.image) + '>' +
+        (p.image ? '' : '🛍️') +
+        (badges ? '<span class="pv-badges">' + badges + '</span>' : '') +
+        '</div>' +
+        '<div class="pv-shop-body">' +
+        (anyBrand ? '<div class="pv-shop-brand">' + esc(p.brand || '') + '</div>' : '') +
+        '<div class="pv-shop-name">' + esc(p.title) + '</div>' +
+        (anySummary ? '<div class="pv-shop-summary">' + esc(p.summary || '') + '</div>' : '') +
+        '<div class="pv-shop-price">' + esc(p.priceText) + (p.compareText ? ' <s>' + esc(p.compareText) + '</s>' : '') + '</div>' +
+        '<div class="pv-shop-note">' + esc(stockNote) + '</div>' +
+        (withButtons
+          ? '<div class="pv-shop-btn' + (out ? ' is-out' : '') + '">' + (out ? 'אזל מהמלאי' : p.hasVariants ? 'לבחירת אפשרות' : 'הוספה לעגלה') + '</div>'
+          : '') +
+        '</div></div>';
+    }).join('');
+
+    var rest = list.length - shown.length;
+    return '<div class="pv-shop" style="--pv-cols:' + cols + '">' +
+      (d.title ? '<div class="pv-shop-title">' + esc(d.title) + '</div>' : '') +
+      (cat && cat.open === false && withButtons ? '<div class="pv-shop-closed">החנות סגורה כרגע — באתר כפתורי ההוספה יופיעו כשתיפתח</div>' : '') +
+      (chips || tools ? '<div class="pv-shop-toolbar"><span class="pv-chips">' + chips + '</span><span class="pv-tools">' + tools + '</span></div>' : '') +
+      '<div class="pv-shop-grid' + (d.justify === 'center' ? ' is-center' : '') + '">' + cards + '</div>' +
+      (rest > 0
+        ? '<div class="pv-shop-more">' + (pageSize > 0 ? 'מציג ' + shown.length + ' מתוך ' + list.length + ' · <span class="pv-tool">הצגת עוד</span>' : '+ עוד ' + rest + ' מוצרים באתר') + '</div>'
+        : '') +
+      '</div>';
+  }
+
+  /** The category tiles a SHELVES module shows: the top level, or one
+   *  category's children — visible ones that hold active products. Pure. */
+  function shelvesPreviewList(cat, d) {
+    d = d || {};
+    var parent = String(d.parent || '');
+    return ((cat && cat.shelves) || []).filter(function (s) {
+      var n = s.total != null ? s.total : s.count;
+      return !s.hidden && n > 0 && String(s.parent || '') === parent;
+    });
+  }
+
+  /** The SHELVES module on the canvas: equal picture boxes, names on one
+   *  line, the product count under each. A category without its own picture
+   *  borrows the first product picture in it, as the storefront does. */
+  function shelvesPreviewHtml(cat, d) {
+    var tiles = shelvesPreviewList(cat, d);
+    if (!tiles.length) {
+      return '<div class="preview-store-note">🗂 אריחי קטגוריות — ' +
+        (d.parent ? 'לקטגוריה "' + esc(d.parent) + '" אין תת-קטגוריות עם מוצרים פעילים' : 'עוד אין קטגוריות עם מוצרים פעילים') +
+        '. <a href="/admin/store" target="_blank" rel="noopener">לחנות</a></div>';
+    }
+    var cols = paramInt('shelves', 'columns', d.columns, 2, 6, 3);
+    var counts = d.counts !== false && d.counts !== 'false';
+    var summaries = d.summaries === true || d.summaries === 'true';
+    var products = ((cat && cat.products) || []).filter(function (p) { return p.status === 'active'; });
+    return '<div class="pv-shop" style="--pv-cols:' + cols + '">' +
+      (d.title ? '<div class="pv-shop-title">' + esc(d.title) + '</div>' : '') +
+      '<div class="pv-shop-grid' + (d.justify === 'center' ? ' is-center' : '') + '">' +
+      tiles.map(function (s) {
+        var pic = s.image || '';
+        if (!pic) {
+          var first = products.filter(function (p) {
+            return p.image && (Array.isArray(p.shelves) ? p.shelves.indexOf(s.slug) !== -1 : p.shelf === s.slug);
+          })[0];
+          pic = first ? first.image : '';
+        }
+        var n = s.total != null ? s.total : s.count;
+        return '<div class="pv-shop-card pv-shelf-tile">' +
+          '<div class="pv-shop-media pv-media-landscape"' + bgStyle(pic) + '>' + (pic ? '' : '🗂') + '</div>' +
+          '<div class="pv-shop-body">' +
+          '<div class="pv-shop-name pv-one-line">' + esc(s.label || s.slug) + '</div>' +
+          (counts ? '<div class="pv-shop-note">' + n + ' מוצרים</div>' : '') +
+          (summaries ? '<div class="pv-shop-summary">' + esc(s.summary || '') + '</div>' : '') +
+          '</div></div>';
+      }).join('') +
+      '</div></div>';
+  }
+
   function renderBlockBody(block) {
     var d = block.data || {};
     var wrap = document.createElement('div');
@@ -2108,7 +2407,7 @@
           // article right here (template creates it tagged, editor opens)
           grid.innerHTML =
             '<div class="preview-cubes-note">עוד אין מאמרים מפורסמים עם התגית "' + esc(alTag) + '".<br>' +
-            '<button type="button" class="btn" style="margin-top:8px" data-new-article="1">✍ צרו את המאמר הראשון</button>' +
+            '<button type="button" class="btn" data-new-article="1">✍ צרו את המאמר הראשון</button>' +
             '<div style="font-size:.78rem;margin-top:6px;color:#64748b">או סמנו דף קיים כ"דף מאמר" במאפייני הדף ופרסמו אותו</div></div>';
           var mk = grid.querySelector('[data-new-article]');
           if (mk) mk.addEventListener('click', function (e) { e.stopPropagation(); createArticleAndGo(); });
@@ -2359,17 +2658,20 @@
     if (block.type === 'pricing') {
       var pItems = d.items || [];
       var plans = pItems.length ? pItems : [
-        { title: 'בסיסי', price: '49', period: '/חודש', features: 'תכונה אחת\nתכונה שנייה' },
-        { title: 'מקצועי', price: '99', period: '/חודש', features: 'הכל בבסיסי\nעוד תכונה', highlighted: true }
+        { title: 'בסיסי', price: '49', period: '/חודש', features: 'תכונה אחת\nתכונה שנייה', ctaLabel: 'התחילו' },
+        { title: 'מקצועי', price: '99', period: '/חודש', features: 'הכל בבסיסי\nעוד תכונה', ctaLabel: 'התחילו', highlighted: true }
       ];
       wrap.innerHTML =
         '<div class="preview-pricing">' +
         plans.map(function (it) {
           var feats = String(it.features || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-          return '<div class="preview-plan' + (it.highlighted ? ' preview-plan-highlighted' : '') + '">' +
+          // the plan is a column: the features take the slack and the button
+          // sits on the bottom line of every plan, however many lines each has
+          return '<div class="preview-plan' + (isOn(it.highlighted) ? ' preview-plan-highlighted' : '') + '">' +
             '<div class="preview-plan-title">' + esc(it.title || 'תוכנית') + '</div>' +
             (it.price ? '<div class="preview-plan-price">' + esc(it.price) + (it.period ? '<small>' + esc(it.period) + '</small>' : '') + '</div>' : '') +
-            (feats.length ? '<ul class="preview-plan-features">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
+            '<ul class="preview-plan-features">' + feats.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' +
+            (it.ctaLabel ? '<span class="preview-plan-cta">' + esc(it.ctaLabel) + '</span>' : '') +
             '</div>';
         }).join('') +
         '</div>';
@@ -2429,6 +2731,7 @@
               : '<span class="preview-member-photo">👤</span>') +
             '<div class="preview-member-name">' + esc(it.name || 'שם') + '</div>' +
             (it.role ? '<div class="preview-member-role">' + esc(it.role) + '</div>' : '') +
+            (it.bio ? '<div class="preview-member-bio">' + esc(it.bio) + '</div>' : '') +
             '</div>';
         }).join('') +
         '</div>';
@@ -2806,34 +3109,23 @@
     // the store (v2.53) — the grid and the buy box preview REAL catalog
     // products (the admin's own endpoint); cart / checkout / order are filled
     // in the shopper's browser, so the canvas names them instead
-    if (block.type === 'shop' || block.type === 'buy') {
+    if (block.type === 'shop' || block.type === 'shelves') {
+      var stHost = document.createElement('div');
+      stHost.innerHTML = '<div class="preview-store-note">טוען מהקטלוג…</div>';
+      wrap.appendChild(stHost);
+      fetchStoreCatalog(function (cat) {
+        if (!document.body.contains(stHost)) return;
+        stHost.innerHTML = block.type === 'shop' ? shopPreviewHtml(cat, d) : shelvesPreviewHtml(cat, d);
+      });
+      return wrap;
+    }
+    if (block.type === 'buy') {
       var stGrid = document.createElement('div');
-      stGrid.className = block.type === 'shop' ? 'preview-shop' : '';
       stGrid.innerHTML = '<div class="preview-store-note">טוען מהקטלוג…</div>';
       wrap.appendChild(stGrid);
       fetchStoreCatalog(function (cat) {
         if (!document.body.contains(stGrid)) return;
         var items = (cat.products || []).filter(function (p) { return p.status === 'active'; });
-        if (block.type === 'shop') {
-          if (d.shelf) items = items.filter(function (p) { return p.shelf === d.shelf; });
-          if (d.exclude) items = items.filter(function (p) { return p.sku !== d.exclude; });
-          var lim = parseInt(d.limit, 10) || 0;
-          if (lim) items = items.slice(0, lim);
-          var cols = Math.min(Math.max(parseInt(d.columns, 10) || 3, 2), 4);
-          stGrid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
-          if (!items.length) {
-            stGrid.innerHTML = '<div class="preview-store-note" style="grid-column:1/-1">🛍 רשת המוצרים — עוד אין מוצרים פעילים' +
-              (d.shelf ? ' במדף "' + esc(d.shelf) + '"' : '') + '. <a href="/admin/store/products/new" target="_blank" rel="noopener">הוספת מוצר</a></div>';
-            return;
-          }
-          stGrid.innerHTML = (d.title ? '<div style="grid-column:1/-1;font-weight:800">' + esc(d.title) + '</div>' : '') +
-            items.slice(0, 12).map(function (p) {
-              return '<div class="preview-shop-card"><div class="preview-shop-img"' +
-                (p.image ? ' style="background-image:url(' + escAttr(p.image) + ')">' : '>🛍️') + '</div>' +
-                '<div class="preview-shop-body"><div>' + esc(p.title) + '</div><div class="preview-shop-price">' + esc(p.priceText) + '</div></div></div>';
-            }).join('');
-          return;
-        }
         var one = items.filter(function (p) { return p.sku === String(d.sku || '').toLowerCase(); })[0];
         if (!one) {
           stGrid.innerHTML = '<div class="preview-store-note">🏷 קנייה — ' + (d.sku ? 'המוצר "' + esc(d.sku) + '" לא נמצא או לא פעיל' : 'בחרו מוצר בשדה "מוצר (מזהה)"') +
@@ -2858,15 +3150,16 @@
     if (block.type === 'products') {
       var prItems = d.items || [];
       var prReal = prItems.length > 0;
+      // the grid follows the module's own `columns` (it was drawn in three
+      // whatever the setting said); the price sits on one line across the row
+      var prCols = paramInt('products', 'columns', d.columns, 2, 4, 3);
       wrap.innerHTML =
-        '<div class="preview-products" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">' +
+        '<div class="preview-products" style="--pv-cols:' + prCols + '">' +
         (prReal ? prItems : [{ title: 'מוצר 1', price: '₪99' }, { title: 'מוצר 2', price: '₪149' }, { title: 'מוצר 3', price: '₪79' }]).map(function (it, i) {
-          return '<div class="preview-card">' +
-            (it.image
-              ? '<div class="preview-card-media" style="background-image:url(' + esc(it.image) + ');background-size:cover;background-position:center"></div>'
-              : '<div class="preview-card-media"></div>') +
+          return '<div class="preview-card preview-product">' +
+            '<div class="preview-card-media pv-media-square"' + bgStyle(it.image) + '></div>' +
             '<div class="preview-card-title"' + (prReal ? ' data-inline-key="items.' + i + '.title"' : '') + '>' + esc(it.title || 'מוצר') + '</div>' +
-            (it.price ? '<div style="font-weight:700;color:#ea580c"' + (prReal ? ' data-inline-key="items.' + i + '.price"' : '') + '>' + esc(it.price) + '</div>' : '') +
+            '<div class="preview-product-price"' + (prReal ? ' data-inline-key="items.' + i + '.price"' : '') + '>' + esc(it.price || '') + '</div>' +
             '</div>';
         }).join('') +
         '</div>';
@@ -2879,11 +3172,16 @@
       // placeholders (no real items yet) stay untagged — there is no items.N
       // to edit until the side panel creates one
       var cReal = cItems.length > 0;
+      // the picture box shows the card's picture (it was always an empty grey
+      // box). When no card has a picture the row is text cards, as on the
+      // site; when only some have one, the others keep the box so the titles
+      // stay on one line.
+      var cAnyPic = !cReal || cItems.some(function (it) { return it && it.image; });
       wrap.innerHTML =
         '<div class="preview-cards">' +
         (cReal ? cItems : [{ title: 'כרטיס 1' }, { title: 'כרטיס 2' }, { title: 'כרטיס 3' }]).map(function (it, i) {
           return '<div class="preview-card">' +
-            '<div class="preview-card-media"></div>' +
+            (cAnyPic ? '<div class="preview-card-media"' + bgStyle(it.image) + '></div>' : '') +
             (it.tag ? '<span class="preview-card-tag"' + (cReal ? ' data-inline-key="items.' + i + '.tag"' : '') + '>' + esc(it.tag) + '</span>' : '') +
             '<div class="preview-card-title"' + (cReal ? ' data-inline-key="items.' + i + '.title"' : '') + '>' + esc(it.title || 'כותרת') + '</div>' +
             (it.excerpt ? '<div class="preview-card-excerpt"' + (cReal ? ' data-inline-key="items.' + i + '.excerpt"' : '') + '>' + esc(it.excerpt) + '</div>' : '') +
@@ -2901,9 +3199,7 @@
         '<div class="preview-carousel">' +
         (slReal ? slItems : [{ title: 'שקופית 1' }, { title: 'שקופית 2' }, { title: 'שקופית 3' }]).map(function (it, i) {
           return '<div class="preview-card preview-slide">' +
-            (it.image
-              ? '<div class="preview-card-media" style="background-image:url(' + esc(it.image) + ');background-size:cover;background-position:center"></div>'
-              : '<div class="preview-card-media"></div>') +
+            '<div class="preview-card-media"' + bgStyle(it.image) + '></div>' +
             (it.tag ? '<span class="preview-card-tag"' + (slReal ? ' data-inline-key="items.' + i + '.tag"' : '') + '>' + esc(it.tag) + '</span>' : '') +
             '<div class="preview-card-title"' + (slReal ? ' data-inline-key="items.' + i + '.title"' : '') + '>' + esc(it.title || 'שקופית') + '</div>' +
             (it.excerpt ? '<div class="preview-card-excerpt"' + (slReal ? ' data-inline-key="items.' + i + '.excerpt"' : '') + '>' + esc(it.excerpt) + '</div>' : '') +
@@ -3018,14 +3314,121 @@
     block.data.ratio = pcts.join(':');
   }
 
+  // A row holds two to six columns — the registry's own range, and the site
+  // stylesheet answers all of it (cols-n-5, cols-n-6). The canvas button, the
+  // split drop, the inspector button and its handler each carried their own
+  // "4"; this is the one number now.
+  var MAX_ROW_COLUMNS = 6;
+  var MIN_ROW_COLUMNS = 2;
+  /** From this many columns the canvas calls the row dense (narrow panes). */
+  var DENSE_ROW_COLUMNS = 4;
+  /** The ROW settings the registry declares beside the ratio — the inspector
+   *  draws each through renderParamControl, the canvas mirrors gap + valign. */
+  var ROW_PARAMS = ['gap', 'collapse', 'valign', 'width'];
+
+  /** Does a drop on this PHYSICAL side of a block land BEFORE it in its row?
+   *  A row runs the way the PAGE reads: on a Hebrew page the first column is
+   *  the right one, so "to the left of X" means AFTER X. Kept pure — the
+   *  smoke runs it. */
+  function splitSideIsBefore(side, dir) {
+    return dir === 'ltr' ? side === 'left' : side === 'right';
+  }
+
+  /** True when the row carries its own width ratio. A row without one is an
+   *  equal split and must stay that way: writing "50:50" into it turns the
+   *  published flex row into a ratio grid, with a different gap. */
+  function rowHasRatio(block) {
+    var r = block && block.data ? block.data.ratio : null;
+    return Array.isArray(r) ? r.length > 0 : (typeof r === 'string' && r.indexOf(':') !== -1);
+  }
+
+  /** Take one column out of a row WITHOUT losing a module: its blocks move
+   *  into the neighbour (the column before it; the next one when it is the
+   *  first), in reading order, and its share of the width goes with them.
+   *  Returns the new columns and ratios; pure, so the smoke can prove that
+   *  nothing is dropped. */
+  function removeColumnAt(cols, ratios, index) {
+    var list = (Array.isArray(cols) ? cols : []).map(function (c) {
+      return { blocks: (c && Array.isArray(c.blocks)) ? c.blocks.slice() : [] };
+    });
+    var shares = (Array.isArray(ratios) ? ratios : []).slice();
+    if (list.length <= 1 || index < 0 || index >= list.length) return { cols: list, ratios: shares, into: -1 };
+    var into = index > 0 ? index - 1 : 1;
+    var moved = list[index].blocks;
+    list[into].blocks = into < index ? list[into].blocks.concat(moved) : moved.concat(list[into].blocks);
+    if (shares.length === list.length) {
+      shares[into] = (Number(shares[into]) || 1) + (Number(shares[index]) || 1);
+      shares.splice(index, 1);
+    }
+    list.splice(index, 1);
+    return { cols: list, ratios: shares, into: into > index ? into - 1 : into };
+  }
+
+  /** The canvas gap that stands for each ROW gap value — a schematic of the
+   *  site's none / .75rem / 1.75rem / 2.75rem, scaled to the 920px sheet. */
+  var ROW_GAP_PX = { none: 0, sm: 6, md: 14, lg: 26 };
+
+  function rowTracks(ratios) {
+    return ratios.map(function (r) { return 'minmax(0, ' + r + 'fr)'; }).join(' ');
+  }
+
+  /** One more column for a row: the one mover behind the canvas "+" and the
+   *  inspector button. A row with its own ratio gives the newcomer an even
+   *  share; an equal row stays ratio-less. */
+  function addColumnToRow(block) {
+    if (ensureColumns(block).length >= MAX_ROW_COLUMNS) return false;
+    pushHistory();
+    var ratios = parseColumnRatios(block);
+    var hadRatio = rowHasRatio(block);
+    ensureColumns(block).push({ blocks: [] });
+    var avg = ratios.reduce(function (a, b) { return a + b; }, 0) / ratios.length;
+    if (hadRatio) setColumnRatios(block, ratios.concat(avg));
+    markDirty();
+    renderCanvas();
+    if (selectedId === block.id) renderProperties();
+    return true;
+  }
+
+  /** "הסרת טור": the column goes, its modules stay (removeColumnAt). A row
+   *  keeps at least two columns — "פרק עמודות" is the way back to one stack. */
+  function removeColumnFromRow(block, index) {
+    var cols = ensureColumns(block);
+    if (cols.length <= MIN_ROW_COLUMNS || index < 0 || index >= cols.length) return false;
+    pushHistory();
+    var hadRatio = rowHasRatio(block);
+    var kept = cols[index].blocks.length;
+    var next = removeColumnAt(cols, parseColumnRatios(block), index);
+    block.data.columns = next.cols;
+    if (hadRatio) setColumnRatios(block, next.ratios);
+    markDirty();
+    renderCanvas();
+    if (selectedId === block.id) renderProperties();
+    flashCanvasHint(kept
+      ? 'הטור הוסר — ' + kept + ' המודולים שלו עברו לטור ' + (next.into + 1)
+      : 'הטור הריק הוסר');
+    return true;
+  }
+
   function renderColumnsBody(block) {
     var cols = ensureColumns(block);
     var ratios = parseColumnRatios(block);
+    var d = block.data || {};
     var row = document.createElement('div');
-    row.className = 'columns-preview is-container';
+    // the registry's valign rides the same class name the site uses, so the
+    // canvas shows where the modules will sit in a tall row
+    // (is-dense: from four columns up the name bars drop their "מיכל" badge so
+    // the column's number and its remove control still fit)
+    row.className = 'columns-preview is-container' +
+      (d.valign === 'center' || d.valign === 'bottom' || d.valign === 'stretch' ? ' valign-' + d.valign : '') +
+      (cols.length >= DENSE_ROW_COLUMNS ? ' is-dense' : '');
+    // The row runs the way the PAGE reads (v2.69). It used to be pinned to
+    // ltr "for physical split sides", which put column 1 on the left of every
+    // Hebrew page while the site put it on the right.
+    row.dir = pageDirection;
     row.style.display = 'grid';
-    row.style.gridTemplateColumns = ratios.map(function (r) { return r + 'fr'; }).join(' ');
-    row.style.gap = '0';
+    row.style.gridTemplateColumns = rowTracks(ratios);
+    var gapPx = ROW_GAP_PX[d.gap] != null ? ROW_GAP_PX[d.gap] : ROW_GAP_PX.md;
+    row.style.gap = gapPx + 'px';
     row.dataset.columnsId = block.id;
 
     cols.forEach(function (col, colIndex) {
@@ -3044,6 +3447,21 @@
         ' <span class="col-ratio-label">' +
         pct +
         '%</span>';
+      // "הסרת טור" on the column itself — the modules move next door, the
+      // column goes; never offered when it would leave a one-column row
+      if (cols.length > MIN_ROW_COLUMNS) {
+        var dropCol = document.createElement('button');
+        dropCol.type = 'button';
+        dropCol.className = 'column-remove';
+        dropCol.textContent = '×';
+        dropCol.title = 'הסרת טור ' + (colIndex + 1) + ' — המודולים שבו עוברים לטור השכן';
+        dropCol.setAttribute('aria-label', dropCol.title);
+        dropCol.addEventListener('click', function (e) {
+          e.stopPropagation();
+          removeColumnFromRow(block, colIndex);
+        });
+        head.appendChild(dropCol);
+      }
       colEl.appendChild(head);
 
       var listWrap = document.createElement('div');
@@ -3079,41 +3497,44 @@
         handle.setAttribute('role', 'separator');
         handle.setAttribute('aria-orientation', 'vertical');
         bindColumnResize(handle, block, colIndex, row);
-        // The row is direction:ltr BY DESIGN (physical sides for split/drag),
-        // so the boundary with the NEXT pane is always this pane's physical
-        // RIGHT edge. The old isRtl() branch read the DOCUMENT direction
-        // (Hebrew admin → rtl) and pinned the handle to the pane's LEFT edge —
-        // the cut appeared beside the module instead of between the halves.
+        // The cut sits on the boundary with the NEXT pane, and the row runs
+        // the way the PAGE reads: on an LTR page that boundary is this pane's
+        // physical RIGHT edge, on a Hebrew page its LEFT edge. The key is
+        // pageDirection — the old isRtl() branch read the DOCUMENT direction
+        // (the Hebrew admin is always rtl) and put the cut beside the module
+        // on every site. Half the gap pushes it to the middle of the gutter.
         colEl.style.position = 'relative';
         handle.style.position = 'absolute';
         handle.style.top = '0';
         handle.style.bottom = '0';
-        handle.style.left = '100%';
-        handle.style.right = 'auto';
-        handle.style.marginLeft = '-5px';
+        if (pageDirection === 'rtl') {
+          handle.style.right = '100%';
+          handle.style.left = 'auto';
+          handle.style.marginRight = '-5px';
+          handle.style.transform = gapPx ? 'translateX(-' + (gapPx / 2) + 'px)' : '';
+        } else {
+          handle.style.left = '100%';
+          handle.style.right = 'auto';
+          handle.style.marginLeft = '-5px';
+          handle.style.transform = gapPx ? 'translateX(' + (gapPx / 2) + 'px)' : '';
+        }
         colEl.appendChild(handle);
       }
     });
 
     // "+ טור" (v1.70, Ben: "we add another column on a press of a button").
-    // Two columns are the split minimum; this grows the row up to four —
-    // the new column joins with an equal share and the drag handles rebalance.
-    if (cols.length < 4) {
+    // Two columns are the split minimum; this grows the row up to
+    // MAX_ROW_COLUMNS — the new column joins with an equal share and the drag
+    // handles rebalance.
+    if (cols.length < MAX_ROW_COLUMNS) {
       var addCol = document.createElement('button');
       addCol.type = 'button';
       addCol.className = 'row-add-column';
       addCol.textContent = '+';
-      addCol.title = 'הוסף טור (עד 4) — גררו את הקו שביניהם לשינוי הרוחב';
+      addCol.title = 'הוסף טור (עד ' + MAX_ROW_COLUMNS + ') — גררו את הקו שביניהם לשינוי הרוחב';
       addCol.addEventListener('click', function (e) {
         e.stopPropagation();
-        pushHistory();
-        var ratios = parseColumnRatios(block);
-        ensureColumns(block).push({ blocks: [] });
-        var avg = ratios.reduce(function (a, b) { return a + b; }, 0) / ratios.length;
-        setColumnRatios(block, ratios.concat(avg));
-        markDirty();
-        renderCanvas();
-        if (selectedId === block.id) renderProperties();
+        addColumnToRow(block);
       });
       row.style.position = 'relative';
       row.appendChild(addCol);
@@ -3164,15 +3585,24 @@
       var startRatios = parseColumnRatios(block).slice();
       var total = startRatios.reduce(function (a, b) { return a + b; }, 0);
       var rowRect = rowEl.getBoundingClientRect();
-      var rowW = Math.max(rowRect.width, 1);
+      // the ratio is shared between the PANES — the gutters and the row's own
+      // padding are not part of it, or the cut would drift from the pointer
+      var panesW = 0;
+      Array.prototype.forEach.call(rowEl.children, function (ch) {
+        if (ch.classList.contains('column-pane')) panesW += ch.getBoundingClientRect().width;
+      });
+      var rowW = Math.max(panesW || rowRect.width, 1);
+
+      // The row runs the way the PAGE reads, so "towards the next column" is
+      // rightwards on an LTR page and leftwards on a Hebrew one. The sign
+      // comes from pageDirection: the old flip read the DOCUMENT (the Hebrew
+      // admin, always rtl) and inverted the drag on every site.
+      var towardsNext = pageDirection === 'rtl' ? -1 : 1;
 
       function onMove(ev) {
-        // The row is direction:ltr by design — physical dx maps directly:
-        // dragging right grows the left pane. The old isRtl() flip read the
-        // DOCUMENT (Hebrew admin) and inverted the drag on every RTL site.
         var dx = ev.clientX - startX;
         // convert pixel drag to fraction of total ratio units
-        var dUnits = (dx / rowW) * total;
+        var dUnits = (towardsNext * dx / rowW) * total;
         var left = startRatios[leftIndex];
         var right = startRatios[leftIndex + 1];
         var pair = left + right;
@@ -3181,7 +3611,7 @@
         var next = startRatios.slice();
         next[leftIndex] = newLeft;
         next[leftIndex + 1] = newRight;
-        rowEl.style.gridTemplateColumns = next.map(function (r) { return r + 'fr'; }).join(' ');
+        rowEl.style.gridTemplateColumns = rowTracks(next);
         // live % labels
         var sum = next.reduce(function (a, b) { return a + b; }, 0);
         rowEl.querySelectorAll('.col-ratio-label').forEach(function (lab, i) {
@@ -3413,52 +3843,47 @@
       return { ok: false, mutated: true, reason: 'split-columns-container' };
     }
 
+    // The drop side is PHYSICAL (the strip the pointer was on); the column
+    // order is the page's reading order. splitSideIsBefore joins the two
+    // through pageDirection, so "to the left of X" on the canvas is to the
+    // left of X on the published page — on a Hebrew page that is AFTER X.
+    var landsBefore = splitSideIsBefore(hint.side, pageDirection);
+
     // Splitting a block that already lives in a column EXTENDS the row —
     // the Camilyo/Mobeeart move: keep pushing modules into the same line,
-    // 2 → 3 → 4 columns — instead of nesting a whole new columns block
+    // 2 → 3 → 4 … columns — instead of nesting a whole new columns block
     // inside the pane (which is what this used to do, and read as "you can
-    // only split once"). At the 4-column cap the incoming module lands
+    // only split once"). At the column cap the incoming module lands
     // beside the target inside its column; it never nests silently.
     if (targetNode.parent && isColumnsContainer(targetNode.parent.type) &&
         typeof targetNode.colIndex === 'number') {
       var rowBlock = targetNode.parent;
       var rowCols = ensureColumns(rowBlock);
-      if (rowCols.length < 4) {
-        // side is physical (the preview row is direction:ltr by design).
+      if (rowCols.length < MAX_ROW_COLUMNS) {
         // Read the ratios BEFORE inserting the column — parseColumnRatios
         // pads to the CURRENT column count, so reading after the splice
         // would hand back one share too many.
         var rowRatios = parseColumnRatios(rowBlock);
-        var insertAt = targetNode.colIndex + (hint.side === 'left' ? 0 : 1);
+        var insertAt = targetNode.colIndex + (landsBefore ? 0 : 1);
+        var rowHadRatio = rowHasRatio(rowBlock);
         rowCols.splice(insertAt, 0, { blocks: [incoming] });
         var evenShare = rowRatios.reduce(function (a, b) { return a + b; }, 0) / rowRatios.length;
         rowRatios.splice(insertAt, 0, evenShare);
-        setColumnRatios(rowBlock, rowRatios);
+        // an equal row stays equal: only a row that already carries a ratio
+        // gets one written back
+        if (rowHadRatio) setColumnRatios(rowBlock, rowRatios);
         return { ok: true, selectedId: incoming.id };
       }
-      var sideOffset = hint.side === 'left' ? 0 : 1;
-      targetNode.list.splice(targetNode.index + sideOffset, 0, incoming);
-      flashCanvasHint('השורה מלאה (4 טורים) — המודול נחת ליד היעד');
+      targetNode.list.splice(targetNode.index + (landsBefore ? 0 : 1), 0, incoming);
+      flashCanvasHint('השורה מלאה (' + MAX_ROW_COLUMNS + ' טורים) — המודול נחת ליד היעד');
       return { ok: true, selectedId: incoming.id };
     }
 
     var target = targetNode.list.splice(targetNode.index, 1)[0];
-    var leftBlock;
-    var rightBlock;
-    // physical left/right; columns preview uses direction:ltr
-    if (hint.side === 'left') {
-      leftBlock = incoming;
-      rightBlock = target;
-    } else {
-      leftBlock = target;
-      rightBlock = incoming;
-    }
-
     var colsBlock = makeBlock('columns');
-    colsBlock.data.columns = [
-      { blocks: [leftBlock] },
-      { blocks: [rightBlock] }
-    ];
+    colsBlock.data.columns = landsBefore
+      ? [{ blocks: [incoming] }, { blocks: [target] }]
+      : [{ blocks: [target] }, { blocks: [incoming] }];
     targetNode.list.splice(targetNode.index, 0, colsBlock);
     return { ok: true, selectedId: incoming.id };
   }
@@ -4176,8 +4601,221 @@
     if (hasBar && opts.pop === 'link') openLinkPop();
   }
 
-  function field(label, inputHtml) {
-    return '<div class="prop-group"><label>' + label + '</label>' + inputHtml + '</div>';
+  /** One labelled control. A hint belongs to ITS field, so it is written
+   *  inside the group: emitted after it, it sat 20px under its own field and
+   *  flush against the next label. `hint` is HTML — escape before passing. */
+  function field(label, inputHtml, hint) {
+    return '<div class="prop-group"><label>' + label + '</label>' + inputHtml +
+      (hint ? '<div class="prop-hint">' + hint + '</div>' : '') + '</div>';
+  }
+
+  /** A line that explains a whole section rather than one field. */
+  function note(html) {
+    return '<div class="prop-hint prop-note">' + html + '</div>';
+  }
+
+  /** Inspector buttons stand in one kind of row, spaced by ONE rule in
+   *  admin.css (.prop-actions) — forty buttons used to carry their own inline
+   *  margin, in six different values. */
+  function actions(html, mod) {
+    return '<div class="prop-actions' + (mod ? ' ' + mod : '') + '">' + html + '</div>';
+  }
+
+  /** A checkbox with its words beside it — one row, one height. */
+  function checkLine(attrs, checked, labelHtml, hint) {
+    return '<div class="prop-group"><label class="check-line"><input type="checkbox" ' + attrs +
+      (checked ? ' checked' : '') + '><span>' + labelHtml + '</span></label>' +
+      (hint ? '<div class="prop-hint">' + hint + '</div>' : '') + '</div>';
+  }
+
+  /** A colour swatch that can say "not set": the browser's colour input always
+   *  holds SOME colour, so the state is written beside it and a clear control
+   *  takes the choice back (only the background had one). */
+  function colorField(label, attrs, value, fallback) {
+    var isSet = !!value;
+    return field(label,
+      '<div class="prop-color' + (isSet ? '' : ' is-unset') + '">' +
+      '<input type="color" ' + attrs + ' data-fallback="' + escAttr(fallback) + '" value="' + escAttr(value || fallback) + '">' +
+      '<span class="prop-color-state" dir="ltr">' + (isSet ? esc(value) : '') + '</span>' +
+      '<span class="prop-color-none">לא נקבע</span>' +
+      '<button type="button" class="prop-color-clear" data-color-clear="1" title="ניקוי — חזרה לצבע של האתר" aria-label="ניקוי ' + escAttr(label) + '">✕</button>' +
+      '</div>');
+  }
+
+  /** The state line and the clear control of every colorField under `root`.
+   *  `onClear(input)` removes the stored value; the swatch goes back to its
+   *  resting colour so choosing the same colour again is a change again. */
+  function wireColorFields(root, onClear) {
+    root.querySelectorAll('.prop-color').forEach(function (wrap) {
+      var input = wrap.querySelector('input[type="color"]');
+      var state = wrap.querySelector('.prop-color-state');
+      var clear = wrap.querySelector('[data-color-clear]');
+      if (!input) return;
+      input.addEventListener('input', function () {
+        wrap.classList.remove('is-unset');
+        if (state) state.textContent = input.value;
+      });
+      if (clear) {
+        clear.addEventListener('click', function () {
+          wrap.classList.add('is-unset');
+          if (state) state.textContent = '';
+          input.value = input.getAttribute('data-fallback') || '#ffffff';
+          onClear(input);
+        });
+      }
+    });
+  }
+
+  // Store params the owner should PICK rather than type. The registry keeps
+  // them plain strings (no dialect change); the builder knows which list of
+  // the catalog it already fetched answers each one.
+  var CATALOG_PICKERS = {
+    'shop.shelf': 'shelf',
+    'shop.exclude': 'sku',
+    'shop.skus': 'skus',
+    'buy.sku': 'sku-required',
+    'shelves.parent': 'parent'
+  };
+
+  /** The options one catalog picker offers — pure, so the smoke can read them.
+   *  kind: shelf (every category, as a tree) · parent (categories that have
+   *  children) · sku / sku-required / skus (products by title + id). A value
+   *  the catalog does not know stays in the list, named as missing, so the
+   *  control never hides what the page really says. */
+  function catalogOptions(kind, cat, current) {
+    var out = [];
+    var shelves = (cat && Array.isArray(cat.shelves)) ? cat.shelves : [];
+    var products = (cat && Array.isArray(cat.products)) ? cat.products : [];
+    var cur = String(current == null ? '' : current);
+    if (kind === 'shelf' || kind === 'parent') {
+      var hasKids = {};
+      shelves.forEach(function (s) { if (s.parent) hasKids[s.parent] = true; });
+      out.push({ value: '', label: kind === 'parent' ? 'הקטגוריות הראשיות' : 'כל המוצרים' });
+      shelves.forEach(function (s) {
+        if (kind === 'parent' && (s.parent || !hasKids[s.slug])) return;
+        var n = s.total != null ? s.total : s.count;
+        out.push({
+          value: s.slug,
+          label: (s.parent && kind === 'shelf' ? '— ' : '') + (s.label || s.slug) +
+            (n != null ? ' (' + n + ')' : '') + (s.hidden ? ' · מוסתרת' : '')
+        });
+      });
+    } else {
+      if (kind !== 'skus') out.push({ value: '', label: kind === 'sku-required' ? 'בחרו מוצר…' : 'ללא' });
+      products.forEach(function (p) {
+        out.push({
+          value: p.sku,
+          label: (p.title || p.sku) + ' — ' + p.sku + (p.status && p.status !== 'active' ? ' · לא פעיל' : '')
+        });
+      });
+    }
+    var real = out.filter(function (o) { return o.value !== ''; });
+    if (kind !== 'skus' && cur && !real.some(function (o) { return o.value === cur; })) {
+      out.push({ value: cur, label: cur + ' · לא נמצא בקטלוג', missing: true });
+    }
+    return { options: out, usable: real.length > 0 };
+  }
+
+  /** Turn each catalog-backed text box into a picker once the catalog is here.
+   *  The text box stays in the form, hidden, as the ONE control the binder
+   *  saves from: the picker writes into it and fires its events. When the
+   *  catalog cannot be read or has nothing to pick from, the box simply stays
+   *  as it was. */
+  function upgradeCatalogPickers(panel) {
+    var slots = panel.querySelectorAll('[data-catalog-pick]');
+    if (!slots.length) return;
+    fetchStoreCatalog(function (cat) {
+      Array.prototype.forEach.call(slots, function (slot) {
+        if (!panel.contains(slot)) return; // the panel was drawn again meanwhile
+        var input = slot.parentNode.querySelector('input[data-key]');
+        if (!input) return;
+        var kind = slot.getAttribute('data-catalog-pick');
+        var labelEl = slot.parentNode.querySelector('label');
+        var labelText = labelEl ? labelEl.textContent : '';
+        var push = function (value) {
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        var addOption = function (sel, value, label, selected) {
+          var opt = document.createElement('option');
+          opt.value = value;
+          opt.textContent = label;
+          if (selected) opt.selected = true;
+          sel.appendChild(opt);
+        };
+        var res = catalogOptions(kind, cat, input.value);
+        if (!res.usable) return;
+
+        if (kind !== 'skus') {
+          var sel = document.createElement('select');
+          sel.setAttribute('aria-label', labelText);
+          res.options.forEach(function (o) { addOption(sel, o.value, o.label, o.value === input.value); });
+          sel.addEventListener('change', function () { push(sel.value); });
+          slot.textContent = '';
+          slot.appendChild(sel);
+        } else {
+          // a hand-picked strip: the chosen products in the order they will
+          // show, each removable or movable up, and a select that adds one
+          var titles = {};
+          res.options.forEach(function (o) { titles[o.value] = o.label; });
+          var chosen = String(input.value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+          var paint = function () {
+            slot.textContent = '';
+            var list = document.createElement('div');
+            list.className = 'sku-list';
+            chosen.forEach(function (sku, i) {
+              var row = document.createElement('div');
+              row.className = 'sku-row';
+              var name = document.createElement('span');
+              name.className = 'sku-name';
+              name.textContent = (i + 1) + '. ' + (titles[sku] || sku + ' · לא נמצא בקטלוג');
+              var up = document.createElement('button');
+              up.type = 'button';
+              up.className = 'lp-tool';
+              up.textContent = '↑';
+              up.title = 'הזזה למעלה';
+              up.disabled = i === 0;
+              up.addEventListener('click', function () {
+                chosen.splice(i - 1, 0, chosen.splice(i, 1)[0]);
+                push(chosen.join(','));
+                paint();
+              });
+              var rm = document.createElement('button');
+              rm.type = 'button';
+              rm.className = 'lp-tool';
+              rm.textContent = 'הסרה';
+              rm.addEventListener('click', function () {
+                chosen.splice(i, 1);
+                push(chosen.join(','));
+                paint();
+              });
+              row.appendChild(name);
+              row.appendChild(up);
+              row.appendChild(rm);
+              list.appendChild(row);
+            });
+            slot.appendChild(list);
+            var add = document.createElement('select');
+            add.setAttribute('aria-label', labelText);
+            addOption(add, '', chosen.length ? 'הוספת מוצר לרשימה…' : 'בחירת מוצרים ביד (ריק = לפי ההגדרות שלמעלה)…', true);
+            res.options.forEach(function (o) {
+              if (chosen.indexOf(o.value) === -1) addOption(add, o.value, o.label, false);
+            });
+            add.addEventListener('change', function () {
+              if (!add.value) return;
+              chosen.push(add.value);
+              push(chosen.join(','));
+              paint();
+            });
+            slot.appendChild(add);
+          };
+          paint();
+        }
+        slot.hidden = false;
+        input.hidden = true;
+      });
+    });
   }
 
   function buildReplaceChips(currentType) {
@@ -4275,76 +4913,133 @@
     var d = block.data || {};
     var cur = d[p.name] !== undefined ? d[p.name] : p.default;
     var label = esc(p.labelHe || p.name) + (p.required ? ' *' : '');
-    var hint = p.hint ? '<div class="prop-hint">' + esc(p.hint) + '</div>' : '';
+    var hint = p.hint ? esc(p.hint) : '';
     var t = p.type;
+    var key = escAttr(p.name);
+
+    // a store param with a list behind it: the text box stays (it is the one
+    // the binder saves from, and the fallback when the catalog cannot be
+    // read); the picker is filled in once the catalog arrives
+    var pick = CATALOG_PICKERS[block.type + '.' + p.name];
+    if (pick && t !== 'list') {
+      return field(label,
+        '<div class="catalog-pick" data-catalog-pick="' + pick + '" hidden></div>' +
+        '<input data-key="' + key + '" dir="ltr" value="' + escAttr(cur || '') + '">', hint);
+    }
 
     if (t === 'enum') {
       var opts = (p.enum || []).map(function (v) {
         return '<option value="' + escAttr(v) + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + esc(enumLabel(v)) + '</option>';
       }).join('');
-      return field(label, '<select data-key="' + escAttr(p.name) + '">' + opts + '</select>') + hint;
+      return field(label, '<select data-key="' + key + '">' + opts + '</select>', hint);
     }
     if (t === 'boolean') {
-      return '<div class="prop-group"><label class="check-line"><input type="checkbox" data-key="' + escAttr(p.name) + '"' +
-        (cur ? ' checked' : '') + '> ' + esc(p.labelHe || p.name) + '</label></div>' + hint;
+      return checkLine('data-key="' + key + '"', isOn(cur), esc(p.labelHe || p.name), hint);
     }
     if (t === 'integer') {
       return field(label,
-        '<input type="number" data-key="' + escAttr(p.name) + '"' +
+        '<input type="number" data-key="' + key + '"' +
         (p.min != null ? ' min="' + p.min + '"' : '') +
         (p.max != null ? ' max="' + p.max + '"' : '') +
-        ' value="' + escAttr(cur != null ? cur : '') + '">') + hint;
+        ' value="' + escAttr(cur != null ? cur : '') + '">', hint);
     }
     if (t === 'media') {
-      return field(label, '<input data-key="' + escAttr(p.name) + '" dir="ltr" value="' + escAttr(cur || '') + '" placeholder="/uploads/...">') +
-        '<button type="button" class="btn" style="margin:2px 0 10px" data-media-param="' + escAttr(p.name) + '">בחר מהספרייה</button>' + hint;
+      return field(label,
+        '<div class="prop-inline">' +
+        '<input data-key="' + key + '" dir="ltr" value="' + escAttr(cur || '') + '" placeholder="/uploads/...">' +
+        '<button type="button" class="btn secondary" data-media-param="' + key + '" title="בחירה מספריית המדיה">🖼 בחירה</button>' +
+        '</div>', hint);
     }
     if (t === 'url') {
-      return field(label, '<input data-key="' + escAttr(p.name) + '" dir="ltr" list="tz-page-list" value="' + escAttr(cur || '') + '" placeholder="/דף-באתר או https://…">') + hint;
+      return field(label, '<input data-key="' + key + '" dir="ltr" list="tz-page-list" value="' + escAttr(cur || '') + '" placeholder="/דף-באתר או https://…">', hint);
     }
     if (t === 'textarea') {
-      return field(label, '<textarea data-key="' + escAttr(p.name) + '">' + esc(cur || '') + '</textarea>') + hint;
+      return field(label, '<textarea data-key="' + key + '">' + esc(cur || '') + '</textarea>', hint);
     }
     if (t === 'ratio') {
-      return field(label, '<input data-key="' + escAttr(p.name) + '" dir="ltr" value="' + escAttr(cur || '') + '" placeholder="2:1">') + hint;
+      return field(label, '<input data-key="' + key + '" dir="ltr" value="' + escAttr(cur || '') + '" placeholder="2:1">', hint);
     }
     if (t === 'list') {
-      return renderListParam(p, block) + hint;
+      return renderListParam(p, block) + (hint ? note(hint) : '');
     }
     // default: string
-    return field(label, '<input data-key="' + escAttr(p.name) + '" value="' + escAttr(cur || '') + '">') + hint;
+    return field(label, '<input data-key="' + key + '" value="' + escAttr(cur || '') + '">', hint);
+  }
+
+  /** One item field of the list editor, drawn by its registry type. */
+  function renderItemField(p, f, it, i, first) {
+    var raw = (it && typeof it === 'object') ? it[f.name] : (first ? it : '');
+    var v = raw == null ? '' : raw;
+    var at = 'data-lp="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '"';
+    var flabel = esc(f.labelHe || f.name);
+    var kind = itemFieldKind(f);
+    if (kind === 'checkbox') {
+      return checkLine(at, isOn(v), flabel);
+    }
+    if (kind === 'select') {
+      // a value the registry does not list (an older page, an import) stays
+      // selectable — a select that silently snapped it to the first option
+      // would rewrite the item on the next save
+      var known = f.enum.some(function (o) { return String(o) === String(v); });
+      return field(flabel, '<select ' + at + '>' +
+        (!known && v !== '' ? '<option value="' + escAttr(v) + '" selected>' + esc(v) + '</option>' : '') +
+        (!known && v === '' && !f.required ? '<option value="" selected>—</option>' : '') +
+        f.enum.map(function (o) {
+          return '<option value="' + escAttr(o) + '"' + (String(o) === String(v) ? ' selected' : '') + '>' + esc(enumLabel(o)) + '</option>';
+        }).join('') + '</select>');
+    }
+    if (kind === 'number') {
+      return field(flabel, '<input type="number" ' + at +
+        (f.min != null ? ' min="' + f.min + '"' : '') + (f.max != null ? ' max="' + f.max + '"' : '') +
+        ' value="' + escAttr(v) + '">');
+    }
+    if (kind === 'media') {
+      return field(flabel,
+        '<div class="prop-inline">' +
+        '<input ' + at + ' dir="ltr" value="' + escAttr(v) + '" placeholder="/uploads/...">' +
+        '<button type="button" class="btn secondary" data-lp-pick="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '" title="בחירה מספריית המדיה">🖼 בחירה</button>' +
+        '</div>');
+    }
+    if (kind === 'textarea') {
+      return field(flabel, '<textarea ' + at + '>' + esc(v) + '</textarea>');
+    }
+    // url item fields get the page picker too — same datalist everywhere
+    return field(flabel, '<input ' + at + (kind === 'url' ? ' dir="ltr" list="tz-page-list"' : '') + ' value="' + escAttr(v) + '">');
   }
 
   function renderListParam(p, block) {
     var d = block.data || {};
     var items = Array.isArray(d[p.name]) ? d[p.name] : [];
     var fields = p.itemFields || [{ name: 'text', labelHe: 'טקסט', type: 'string' }];
-    var hasMedia = fields.some(function (f) { return f.type === 'media'; });
+    var mediaField = mediaFieldOf(fields);
+    var pname = escAttr(p.name);
     var html = '<div class="prop-section-label">' + esc(p.labelHe || p.name) + '</div>';
 
-    if (hasMedia) {
-      // gallery-style thumbs + multi picker; empty slots hidden + cleanable
+    if (listUsesThumbs(fields)) {
+      // gallery-style thumbs + multi picker; empty slots hidden + cleanable.
+      // ONLY for lists whose items are pictures (gallery, logos): a slot is
+      // empty when the list's OWN picture field is empty.
       var emptyCount = 0;
       var thumbs = '';
       items.forEach(function (im, i) {
-        var src = mediaSrcOf(im);
+        var src = mediaSrcOf(im, mediaField);
         if (!src) { emptyCount++; return; }
-        thumbs += '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-lp-del="' + i + '" data-lp="' + escAttr(p.name) + '" title="הסר">×</button></div>';
+        thumbs += '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-lp-del="' + i + '" data-lp="' + pname + '" title="הסר">×</button></div>';
       });
       html += '<div class="gallery-edit">' + thumbs + '</div>';
-      html += '<button type="button" class="btn" style="margin:6px 0" data-lp-media-add="' + escAttr(p.name) + '">+ הוסף תמונות מהספרייה</button>';
+      html += actions('<button type="button" class="btn" data-lp-media-add="' + pname + '">+ הוסף תמונות מהספרייה</button>');
       // Add-by-URL (v2.13, MODULE_AUDIT #1): the library multi-pick is easy to
       // fail — and when it does the gallery/logos strip publishes empty in
       // silence. A plain URL box is ALWAYS available beside it; paste one or
       // several links (comma / newline separated) and add.
-      html += '<div class="lp-url-add" style="display:flex;gap:6px;margin:2px 0 6px">' +
-        '<input data-lp-url="' + escAttr(p.name) + '" dir="ltr" placeholder="או הדביקו כתובת: /demo/tile-1.svg" style="flex:1">' +
-        '<button type="button" class="btn secondary" data-lp-url-add="' + escAttr(p.name) + '">הוסף</button>' +
-        '</div>';
+      html += '<div class="prop-group"><div class="prop-inline lp-url-add">' +
+        '<input data-lp-url="' + pname + '" dir="ltr" placeholder="או הדביקו כתובת: /demo/tile-1.svg">' +
+        '<button type="button" class="btn secondary" data-lp-url-add="' + pname + '">הוסף</button>' +
+        '</div></div>';
       if (emptyCount) {
-        html += '<button type="button" class="btn secondary" style="margin:0 0 6px" data-lp-clean="' + escAttr(p.name) + '">🧹 נקה ' + emptyCount + ' משבצות ריקות</button>';
+        html += actions('<button type="button" class="btn secondary" data-lp-clean="' + pname + '">🧹 נקה ' + emptyCount + ' משבצות ריקות</button>');
       }
-      html += '<div class="prop-hint">' + (items.length - emptyCount) + ' פריטים · מהספרייה או בהדבקת כתובת</div>';
+      html += note((items.length - emptyCount) + ' פריטים · מהספרייה או בהדבקת כתובת');
       return html;
     }
 
@@ -4354,25 +5049,39 @@
       var lines = items.map(function (it) {
         return typeof it === 'string' ? it : ((it && it[fname]) || '');
       });
-      html += field('שורה לכל פריט', '<textarea data-lp-lines="' + escAttr(p.name) + '" data-lp-field="' + escAttr(fname) + '">' + esc(lines.join('\n')) + '</textarea>');
+      html += field('שורה לכל פריט', '<textarea data-lp-lines="' + pname + '" data-lp-field="' + escAttr(fname) + '">' + esc(lines.join('\n')) + '</textarea>');
       return html;
     }
 
+    // The field editor: every item is a small card — its name, its place in
+    // the list (↑ ↓), a copy, a remove — and under it each field drawn by its
+    // type. A picture field is one of them (address + picker), never the
+    // reason to hide the rest.
     items.forEach(function (it, i) {
-      fields.forEach(function (f) {
-        var v = (it && typeof it === 'object') ? (it[f.name] || '') : (f.name === fields[0].name ? (it || '') : '');
-        var flabel = 'פריט ' + (i + 1) + ' — ' + esc(f.labelHe || f.name);
-        if (f.type === 'textarea') {
-          html += field(flabel, '<textarea data-lp="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '">' + esc(v) + '</textarea>');
-        } else {
-          // url item fields get the page picker too — same datalist everywhere
-          var urlAttrs = f.type === 'url' ? ' dir="ltr" list="tz-page-list"' : '';
-          html += field(flabel, '<input data-lp="' + escAttr(p.name) + '" data-lp-i="' + i + '" data-lp-f="' + escAttr(f.name) + '"' + urlAttrs + ' value="' + escAttr(v) + '">');
-        }
-      });
-      html += '<button type="button" class="btn secondary" style="margin:0 0 12px;font-size:0.8rem;padding:4px 10px" data-lp-del="' + i + '" data-lp="' + escAttr(p.name) + '">− הסר פריט ' + (i + 1) + '</button>';
+      var titleKey = fields.filter(function (f) { return f.type !== 'media' && f.type !== 'boolean'; })[0];
+      var name = (it && typeof it === 'object' && titleKey) ? String(it[titleKey.name] || '') : (typeof it === 'string' ? it : '');
+      if (name.length > 22) name = name.slice(0, 21) + '…';
+      var tool = function (attr, glyph, title, off) {
+        return '<button type="button" class="lp-tool" ' + attr + '="' + i + '" data-lp="' + pname + '" title="' + title + '" aria-label="' + title + ' — פריט ' + (i + 1) + '"' +
+          (off ? ' disabled' : '') + '>' + glyph + '</button>';
+      };
+      html += '<div class="lp-item" data-lp-item="' + i + '">' +
+        '<div class="lp-item-head">' +
+        '<span class="lp-item-name"><b>' + (i + 1) + '</b>' + (name ? ' ' + esc(name) : '') + '</span>' +
+        '<span class="lp-item-tools">' +
+        tool('data-lp-up', '↑', 'הזזה למעלה', i === 0) +
+        tool('data-lp-down', '↓', 'הזזה למטה', i === items.length - 1) +
+        tool('data-lp-dup', '⎘', 'שכפול', false) +
+        tool('data-lp-del', '×', 'הסרה', false) +
+        '</span></div>';
+      fields.forEach(function (f, fi) { html += renderItemField(p, f, it, i, fi === 0); });
+      html += '</div>';
     });
-    html += '<button type="button" class="btn secondary" style="margin:6px 0" data-lp-add="' + escAttr(p.name) + '">+ פריט</button>';
+    html += actions(
+      '<button type="button" class="btn secondary" data-lp-add="' + pname + '">+ פריט</button>' +
+      (mediaField
+        ? '<button type="button" class="btn secondary" data-lp-media-add="' + pname + '" title="פריט חדש לכל תמונה שתיבחר">+ פריטים מתמונות</button>'
+        : ''));
     return html;
   }
 
@@ -4446,35 +5155,42 @@
         '<div class="prop-type-sub">כל-ב-אחד · SEO · מאמרים · בלי תוספים</div></div></div>' +
         '<div class="prop-section-label">תוכן / מבנה</div>' +
         field('כתובת הדף (slug)',
-          '<input data-page-slug dir="ltr" value="' + escAttr(currentSlug) + '" placeholder="נוצרת מהכותרת">') +
-        '<div class="prop-hint" style="margin:-6px 0 12px">משתנה אוטומטית לפי הכותרת. עריכה ידנית קובעת כתובת קבועה (מחיקה = חזרה לאוטומטי).</div>' +
-        '<div class="prop-group">' +
-        '<label class="check-line"><input type="checkbox" data-page-article="1"' + (isArticle ? ' checked' : '') + '> דף מאמר (יופיע בקוביות מאמרים)</label>' +
-        '</div>' +
+          '<input data-page-slug dir="ltr" value="' + escAttr(currentSlug) + '" placeholder="נוצרת מהכותרת">',
+          'משתנה אוטומטית לפי הכותרת. עריכה ידנית קובעת כתובת קבועה (מחיקה = חזרה לאוטומטי).') +
+        checkLine('data-page-article="1"', isArticle, 'דף מאמר (יופיע בקוביות מאמרים)') +
         // v0.64: assign this page to categories — each is just a portable tag
-        '<div class="prop-group" id="page-cats-box" style="display:none">' +
-        '<div style="font-size:0.82rem;font-weight:600;margin-bottom:4px">קטגוריות (הדף יופיע בבלוק הקטגוריה)</div>' +
-        '<div id="page-cats"></div></div>';
+        '<div class="prop-group" id="page-cats-box" hidden>' +
+        '<label>קטגוריות (הדף יופיע בבלוק הקטגוריה)</label>' +
+        '<div id="page-cats" class="check-stack"></div></div>';
       if (isArticle) {
         pageHtml += field('תקציר לקובייה', '<textarea data-page-meta="teaser" placeholder="ריק = נלקח אוטומטית מהטקסט הראשון">' + esc(pageMeta.teaser || '') + '</textarea>');
-        pageHtml += field('תמונת קובייה (URL)', '<input data-page-meta="cardImage" dir="ltr" value="' + escAttr(pageMeta.cardImage || '') + '" placeholder="ריק = התמונה הראשונה בדף">');
-        pageHtml += '<button type="button" class="btn" style="margin:6px 0 12px" data-page-card-media="1">בחר תמונה מהספרייה</button>';
+        pageHtml += field('תמונת קובייה (URL)',
+          '<div class="prop-inline">' +
+          '<input data-page-meta="cardImage" dir="ltr" value="' + escAttr(pageMeta.cardImage || '') + '" placeholder="ריק = התמונה הראשונה בדף">' +
+          '<button type="button" class="btn secondary" data-page-card-media="1" title="בחירה מספריית המדיה">🖼 בחירה</button>' +
+          '</div>');
       }
       var pbg = (pageMeta.background && typeof pageMeta.background === 'object') ? pageMeta.background : {};
       pageHtml +=
         '<div class="prop-section-label">רקע הדף · splash</div>' +
-        field('תמונת רקע לכל הדף', '<input data-page-bg="image" dir="ltr" value="' + escAttr(pbg.image || '') + '" placeholder="/uploads/… או ריק">') +
-        '<button type="button" class="btn" style="margin:2px 0 10px" data-page-bg-media="1">בחר תמונת רקע מהספרייה</button>' +
+        field('תמונת רקע לכל הדף',
+          '<div class="prop-inline">' +
+          '<input data-page-bg="image" dir="ltr" value="' + escAttr(pbg.image || '') + '" placeholder="/uploads/… או ריק">' +
+          '<button type="button" class="btn secondary" data-page-bg-media="1" title="בחירה מספריית המדיה">🖼 בחירה</button>' +
+          '</div>',
+          'התמונה מופיעה מאחורי הדף.') +
         field('כהות שכבה כהה · ' + (parseInt(pbg.overlay, 10) || 0) + '%', '<input type="range" min="0" max="85" step="5" data-page-bg="overlay" value="' + (parseInt(pbg.overlay, 10) || 0) + '">') +
-        '<label class="check-line" style="margin:2px 0 8px"><input type="checkbox" data-page-bg="parallax"' + (pbg.parallax ? ' checked' : '') + '> תמונה נעה בגלילה (parallax כמו onepage)</label>' +
-        field('צבע רקע (אם אין תמונה)', '<input type="color" data-page-bg="color" value="' + escAttr(pbg.color || '#ffffff') + '">') +
-        '<div class="prop-hint" style="margin-bottom:12px">התמונה מופיעה מאחורי הדף. הפעילו parallax ל"תמונת שער נעה" בזמן גלילה.</div>';
+        checkLine('data-page-bg="parallax"', !!pbg.parallax, 'תמונה נעה בגלילה (parallax כמו onepage)', 'ל"תמונת שער נעה" בזמן גלילה.') +
+        colorField('צבע רקע (אם אין תמונה)', 'data-page-bg="color"', pbg.color || '', '#ffffff');
       pageHtml +=
         '<div class="prop-section-label">SEO (נקודת פתיחה ברמה של CMS גדול)</div>' +
         field('כותרת SEO / Title', '<input data-page-meta="seoTitle" value="' + escAttr(pageMeta.seoTitle || '') + '" placeholder="ריק = כותרת הדף">') +
         field('תיאור (meta description)', '<textarea data-page-meta="description" placeholder="תיאור לגוגל — עד ~160 תווים">' + esc(pageMeta.description || '') + '</textarea>') +
-        field('תמונת שיתוף (og:image)', '<input data-page-meta="ogImage" dir="ltr" value="' + escAttr(pageMeta.ogImage || pageMeta.ogimage || '') + '" placeholder="/uploads/...">') +
-        '<button type="button" class="btn" style="margin:2px 0 12px" data-page-og-media="1">בחר תמונת שיתוף מהספרייה</button>' +
+        field('תמונת שיתוף (og:image)',
+          '<div class="prop-inline">' +
+          '<input data-page-meta="ogImage" dir="ltr" value="' + escAttr(pageMeta.ogImage || pageMeta.ogimage || '') + '" placeholder="/uploads/...">' +
+          '<button type="button" class="btn secondary" data-page-og-media="1" title="בחירה מספריית המדיה">🖼 בחירה</button>' +
+          '</div>') +
         field(
           'אינדוקס',
           '<select data-page-meta="robots">' +
@@ -4482,11 +5198,11 @@
             '<option value="noindex"' + (pageMeta.robots === 'noindex' ? ' selected' : '') + '>noindex</option>' +
             '<option value="nofollow"' + (pageMeta.robots === 'nofollow' ? ' selected' : '') + '>nofollow</option>' +
             '<option value="noindex,nofollow"' + (pageMeta.robots === 'noindex,nofollow' ? ' selected' : '') + '>noindex, nofollow</option>' +
-          '</select>'
-        ) +
-        '<div class="prop-hint">SEO מובנה בחבילה — לא תוסף. סוכנים כותבים description ב־META BenTML.</div>';
+          '</select>',
+          'SEO מובנה בחבילה — לא תוסף. סוכנים כותבים description ב־META BenTML.'
+        );
       pageHtml +=
-        '<hr style="margin:14px 0;opacity:.25">' +
+        '<hr class="prop-rule">' +
         '<div class="props-empty">' +
         '<div class="props-empty-title">אין מודול נבחר</div>' +
         '<div class="props-empty-line"><strong>הוספה</strong> — לחץ או גרור מהסרגל</div>' +
@@ -4512,11 +5228,11 @@
         var box = document.getElementById('page-cats-box');
         var host = document.getElementById('page-cats');
         if (!box || !host || !cats.length) return;
-        box.style.display = '';
+        box.hidden = false;
         host.innerHTML = cats.map(function (c) {
           var on = pageTags.indexOf(c.slug) !== -1;
-          return '<label class="check-line"><input type="checkbox" data-page-cat="' + escAttr(c.slug) + '"' + (on ? ' checked' : '') + '> ' +
-            esc(c.name || c.slug) + '</label>';
+          return '<label class="check-line"><input type="checkbox" data-page-cat="' + escAttr(c.slug) + '"' + (on ? ' checked' : '') + '><span>' +
+            esc(c.name || c.slug) + '</span></label>';
         }).join('');
         host.querySelectorAll('[data-page-cat]').forEach(function (cb) {
           cb.addEventListener('change', function () {
@@ -4531,6 +5247,8 @@
       panel.querySelectorAll('[data-page-meta]').forEach(function (input) {
         var applyMeta = function () {
           var v = input.value.trim();
+          // leaving a field untouched is not an edit — no dirty mark for it
+          if (v === String(pageMeta[input.dataset.pageMeta] || '')) return;
           if (v) pageMeta[input.dataset.pageMeta] = v;
           else delete pageMeta[input.dataset.pageMeta];
           markDirty();
@@ -4593,6 +5311,11 @@
         };
         input.addEventListener('input', apply);
         input.addEventListener('change', apply);
+      });
+      wireColorFields(panel, function (input) {
+        delete ensureBg()[input.getAttribute('data-page-bg')];
+        markDirty();
+        applyCanvasPageBg();
       });
       var bgMedia = panel.querySelector('[data-page-bg-media]');
       if (bgMedia) {
@@ -4662,26 +5385,25 @@
       // affordance — drag modules in, or add one here.
       if (regDef) html += renderSchemaForm(regDef, block);
       var innerCount = (block.data && Array.isArray(block.data.blocks)) ? block.data.blocks.length : 0;
-      html +=
-        '<div class="prop-hint">' + esc(typeLabel(block.type)) +
+      html += note(esc(typeLabel(block.type)) +
         ' = מיכל. גררו מודולים פנימה מהסרגל (או הוסיפו למטה). ' +
-        innerCount + ' מודולים בפנים.</div>';
-      html += '<button type="button" class="btn" data-container-add-text="1">+ טקסט במיכל</button>';
+        innerCount + ' מודולים בפנים.');
+      html += actions('<button type="button" class="btn" data-container-add-text="1">+ טקסט במיכל</button>');
     } else if (regDef && !HAND_WRITTEN[block.type]) {
       html += renderSchemaForm(regDef, block);
       if (block.type === 'article-list') {
         // settings with teeth: the module manages its content, not just its columns
         html += '<div class="prop-section-label">פעולות</div>' +
-          '<button type="button" class="btn" style="margin:0 0 8px" data-new-article="1">✍ מאמר חדש — נפתח בבונה</button>' +
-          '<div class="prop-hint">הקוביות מציגות דפים מפורסמים הנושאים את התגית שלמעלה. כל דף הופך למאמר בסימון "דף מאמר" במאפייני הדף.</div>';
+          actions('<button type="button" class="btn" data-new-article="1">✍ מאמר חדש — נפתח בבונה</button>') +
+          note('הקוביות מציגות דפים מפורסמים הנושאים את התגית שלמעלה. כל דף הופך למאמר בסימון "דף מאמר" במאפייני הדף.');
       }
       if (block.type === 'spacer') {
         var exactPx = /^\d+px$/.test(String(d.height || '')) ? parseInt(d.height, 10) : '';
         html += field(
           'גובה מדויק (פיקסלים)',
-          '<input type="number" min="0" max="800" step="2" data-spacer-px="1" value="' + exactPx + '" placeholder="למשל 120">'
+          '<input type="number" min="0" max="800" step="2" data-spacer-px="1" value="' + exactPx + '" placeholder="למשל 120">',
+          'ריק = לפי הגודל למעלה · ערך = בדיוק הרווח שרוצים'
         );
-        html += '<div class="prop-hint">ריק = לפי הגודל למעלה · ערך = בדיוק הרווח שרוצים</div>';
       }
     } else if (block.type === 'hero') {
       html += field('כותרת', '<input data-key="title" value="' + escAttr(d.title || '') + '">');
@@ -4689,7 +5411,7 @@
       html += field('טקסט כפתור', '<input data-key="buttonText" value="' + escAttr(d.buttonText || '') + '">');
       html += field('קישור כפתור', '<input data-key="buttonUrl" value="' + escAttr(d.buttonUrl || '') + '">');
       html += field('תמונת רקע', '<input data-key="image" value="' + escAttr(d.image || '') + '" dir="ltr" placeholder="/uploads/...">');
-      html += '<button type="button" class="btn" style="margin:6px 0 12px" data-media-hero="' + escAttr(block.id) + '">בחר רקע ממדיה</button>';
+      html += actions('<button type="button" class="btn" data-media-hero="' + escAttr(block.id) + '">בחר רקע ממדיה</button>');
       html += field(
         'גובה',
         '<select data-key="height">' +
@@ -4716,10 +5438,9 @@
         'תוכן',
         '<textarea data-key="content" class="text-body-field" rows="8">' +
           esc(d.content || '') +
-          '</textarea>'
+          '</textarea>',
+        '@B · @I · @U · @S · @LINK · @COLOR · @HIGHLIGHT · @FONT · @SIZE — הסימונים מקננים · שורה ריקה = פסקה · לחיצה כפולה על הטקסט בקנבס = חלון העריכה'
       );
-      html +=
-        '<div class="prop-hint">@B · @I · @U · @S · @LINK · @COLOR · @HIGHLIGHT · @FONT · @SIZE — הסימונים מקננים · שורה ריקה = פסקה · לחיצה כפולה על הטקסט בקנבס = חלון העריכה</div>';
       html += field(
         'גודל',
         '<select data-key="size">' +
@@ -4737,14 +5458,8 @@
           '<option value="sm"' + (d.maxWidth === 'sm' ? ' selected' : '') + '>צר (קריא)</option>' +
         '</select>'
       );
-      html +=
-        '<div class="prop-group"><label class="check-line"><input type="checkbox" data-bool="lead"' +
-        (d.lead ? ' checked' : '') +
-        '> פסקת פתיח (lead)</label></div>';
-      html +=
-        '<div class="prop-group"><label class="check-line"><input type="checkbox" data-bool="dropcap"' +
-        (d.dropcap ? ' checked' : '') +
-        '> אות פתיחה גדולה</label></div>';
+      html += checkLine('data-bool="lead"', !!d.lead, 'פסקת פתיח (lead)');
+      html += checkLine('data-bool="dropcap"', !!d.dropcap, 'אות פתיחה גדולה');
     } else if (block.type === 'button') {
       html += field('טקסט', '<input data-key="text" value="' + escAttr(d.text || '') + '">');
       html += field('קישור', '<input data-key="url" value="' + escAttr(d.url || '') + '">');
@@ -4758,7 +5473,7 @@
       );
     } else if (block.type === 'image') {
       html += field('כתובת תמונה (URL)', '<input data-key="src" value="' + escAttr(d.src || '') + '">');
-      html += '<button type="button" class="btn" style="margin:6px 0 12px" data-media="' + escAttr(block.id) + '">בחר מספריית מדיה</button>';
+      html += actions('<button type="button" class="btn" data-media="' + escAttr(block.id) + '">בחר מספריית מדיה</button>');
       html += field('Alt (SEO)', '<input data-key="alt" value="' + escAttr(d.alt || '') + '">');
       html += field('כיתוב', '<input data-key="caption" value="' + escAttr(d.caption || '') + '">');
       html += field(
@@ -4877,16 +5592,16 @@
           '<textarea data-feat="' + i + '" data-fkey="description">' + esc(it.description || '') + '</textarea>'
         );
       });
-      html += '<button type="button" class="btn secondary" style="margin:6px 0" data-add-feat="1">+ פריט</button>';
+      html += actions('<button type="button" class="btn secondary" data-add-feat="1">+ פריט</button>');
     } else if (block.type === 'list') {
       var liTexts = (d.items || []).map(function (it) {
         return typeof it === 'string' ? it : (it.text || '');
       });
       html += field('פריטים (שורה לכל פריט)', '<textarea data-list-items="1">' + esc(liTexts.join('\n')) + '</textarea>');
-      html += field('סוג רשימה', '<label class="check-line"><input type="checkbox" data-list-ordered="1"' + (d.ordered ? ' checked' : '') + '> ממוספרת (1, 2, 3…)</label>');
+      html += checkLine('data-list-ordered="1"', !!d.ordered, 'ממוספרת (1, 2, 3…)');
     } else if (block.type === 'embed') {
-      html += field('קישור (YouTube או כל URL)', '<input data-key="url" dir="ltr" value="' + escAttr(d.url || '') + '" placeholder="https://www.youtube.com/watch?v=...">');
-      html += '<div class="prop-hint">קישור YouTube הופך לנגן מוטמע באתר המפורסם</div>';
+      html += field('קישור (YouTube או כל URL)', '<input data-key="url" dir="ltr" value="' + escAttr(d.url || '') + '" placeholder="https://www.youtube.com/watch?v=...">',
+        'קישור YouTube הופך לנגן מוטמע באתר המפורסם');
     } else if (block.type === 'gallery') {
       // Only REAL photos are shown — empty slots (e.g. from imports) are
       // invisible dead weight; surface them once with a one-click cleanup.
@@ -4899,58 +5614,98 @@
         galThumbs += '<div class="gallery-thumb"><img src="' + escAttr(src) + '" alt=""><button type="button" data-gal-del="' + i + '" title="הסר">×</button></div>';
       });
       html += '<div class="gallery-edit">' + galThumbs + '</div>';
-      html += '<button type="button" class="btn" style="margin:6px 0" data-gal-add="1">+ הוסף תמונות מהספרייה</button>';
-      if (galEmptyCount) {
-        html += '<button type="button" class="btn secondary" style="margin:0 0 6px" data-gal-clean="1">🧹 נקה ' + galEmptyCount + ' משבצות ריקות</button>';
-      }
-      html += '<div class="prop-hint">' + (galImgs.length - galEmptyCount) + ' תמונות בגלריה · לחיצה ימנית בספרייה = אפשרויות</div>';
+      html += actions('<button type="button" class="btn" data-gal-add="1">+ הוסף תמונות מהספרייה</button>' +
+        (galEmptyCount
+          ? '<button type="button" class="btn secondary" data-gal-clean="1">🧹 נקה ' + galEmptyCount + ' משבצות ריקות</button>'
+          : ''));
+      html += note((galImgs.length - galEmptyCount) + ' תמונות בגלריה · לחיצה ימנית בספרייה = אפשרויות');
     } else if (block.type === 'article-list') {
       html += field('תגית (אילו דפים להציג)', '<input data-key="tag" value="' + escAttr(d.tag || 'article') + '" placeholder="article">');
       html += field('כמות מקסימלית', '<input type="number" min="1" max="48" data-key="limit" value="' + (parseInt(d.limit, 10) || 6) + '">');
       html += field('עמודות (1-4)', '<input type="number" min="1" max="4" data-key="columns" value="' + (parseInt(d.columns, 10) || 3) + '">');
-      html += '<div class="prop-hint">מציג דפים מפורסמים עם התגית, מהחדש לישן. תמונה ותקציר לכל קובייה נלקחים ממאפייני הדף של המאמר — או אוטומטית מהתמונה והטקסט הראשונים שלו.</div>';
+      html += note('מציג דפים מפורסמים עם התגית, מהחדש לישן. תמונה ותקציר לכל קובייה נלקחים ממאפייני הדף של המאמר — או אוטומטית מהתמונה והטקסט הראשונים שלו.');
     } else if (block.type === 'columns') {
       var ratiosNow = parseColumnRatios(block);
-      html +=
-        '<div class="prop-hint" style="margin-bottom:8px">' +
-        'מכולת טורים · גררו מודולים פנימה · <strong>גררו את הידית בין הטורים</strong> לשינוי רוחב (חצאים וכו׳)' +
-        '</div>';
+      var rowColsNow = ensureColumns(block);
+      html += note('שורת טורים · גררו מודולים פנימה · <strong>גררו את הידית בין הטורים</strong> לשינוי רוחב (חצאים וכו׳)');
       html += field(
         'יחס רוחב (לסוכן: ratio)',
         '<input data-key="ratio" dir="ltr" value="' +
           escAttr(d.ratio || ratiosNow.join(':')) +
-          '" placeholder="1:1 או 2:1">'
+          '" placeholder="1:1 או 2:1">',
+        'דוגמאות: 1:1 · 2:1 · 1:2:1 — גם BenTML: ROW(ratio: "2:1")'
       );
-      html += '<div class="prop-hint">דוגמאות: 1:1 · 2:1 · 1:2:1 — גם BenTML: ROW(ratio: "2:1")</div>';
-      html += '<button type="button" class="btn" style="margin:4px" data-col="0">+ הוסף לטור 1</button>';
-      html += '<button type="button" class="btn" style="margin:4px" data-col="1">+ הוסף לטור 2</button>';
-      if (ensureColumns(block).length < 4) {
-        html += '<button type="button" class="btn secondary" style="margin:4px" data-add-col="1">+ טור נוסף</button>';
-      }
-      html += '<button type="button" class="btn secondary" style="margin:4px;width:100%" data-unwrap="1">פרק עמודות (השטח הכל)</button>';
+      // The row's own settings — gap, collapse, valign, width — come from the
+      // REGISTRY, the way every generated form does. The renderer, the site
+      // stylesheet and the theme studio all answered them; this panel, being
+      // hand-written, showed only the ratio.
+      ((regDef && regDef.params) || []).forEach(function (p) {
+        if (ROW_PARAMS.indexOf(p.name) !== -1) html += renderParamControl(p, block);
+      });
+      html += '<div class="prop-section-label">הטורים</div>';
+      html += '<div class="row-cols">' + rowColsNow.map(function (col, i) {
+        var kids = (col.blocks || []).length;
+        return '<div class="row-col-line">' +
+          '<span class="row-col-name">טור ' + (i + 1) + ' <small>· ' + (kids ? kids + ' מודולים' : 'ריק') + '</small></span>' +
+          '<button type="button" class="btn secondary" data-col="' + i + '">+ הוסף לטור ' + (i + 1) + '</button>' +
+          (rowColsNow.length > MIN_ROW_COLUMNS
+            ? '<button type="button" class="btn secondary" data-remove-col="' + i + '" title="המודולים שבטור עוברים לטור השכן — שום דבר לא נמחק">הסרת טור</button>'
+            : '') +
+          '</div>';
+      }).join('') + '</div>';
+      html += actions(
+        (rowColsNow.length < MAX_ROW_COLUMNS
+          ? '<button type="button" class="btn secondary" data-add-col="1">+ טור נוסף</button>'
+          : '') +
+        '<button type="button" class="btn secondary" data-unwrap="1">פרק עמודות (השטח הכל)</button>');
+      html += note(
+        (rowColsNow.length >= MAX_ROW_COLUMNS ? 'השורה מלאה — ' : '') + 'עד ' + MAX_ROW_COLUMNS + ' טורים בשורה. ' +
+        (rowColsNow.length > MIN_ROW_COLUMNS
+          ? '"הסרת טור" מעבירה את המודולים שבו לטור השכן.'
+          : 'לחזרה לטור אחד — "פרק עמודות".'));
     }
 
     // ── Replace type (advanced, folded — a misclick can't nuke content) ──
     html +=
       '<details class="style-advanced replace-advanced">' +
       '<summary>החלף סוג מודול <span class="adv-badge">מתקדם</span></summary>' +
-      '<div class="prop-hint" style="margin-bottom:8px">ממיר את המודול לסוג אחר — טקסט ותמונות עוברים איתו כשאפשר.</div>' +
+      note('ממיר את המודול לסוג אחר — טקסט ותמונות עוברים איתו כשאפשר.') +
       buildReplaceChips(block.type) +
       '</details>';
+
+    // Alignment is a param only SOME modules declare (heading, text, button,
+    // cta, whatsapp, nav, banner). The panel offered it on every block, and
+    // on the rest the source/copilot round trip silently dropped the choice.
+    // It shows where the registry declares it — and on a block that already
+    // carries one, so an old choice can still be seen and taken back. The
+    // picture is the one module that keeps an align without the block registry
+    // listing it: the source dialect has always had the word, and since v2.69
+    // the bridge carries it both ways (ALIGN_KEPT).
+    var alignDeclared = !!paramDefFor(block.type, 'align') || !!ALIGN_KEPT[block.type];
+    var alignField = '';
+    if (alignDeclared || d.align) {
+      // a value outside the three (an older document's left / right) stays in
+      // the list as it is written — the select never shows a choice the page
+      // does not hold
+      var alignOdd = d.align && d.align !== 'start' && d.align !== 'center' && d.align !== 'end';
+      alignField = field(
+        'יישור',
+        '<select data-key="align">' +
+          (alignOdd ? '<option value="' + escAttr(d.align) + '" selected>' + esc(enumLabel(d.align)) + '</option>' : '') +
+          '<option value="start"' + (!d.align || d.align === 'start' ? ' selected' : '') + '>התחלה</option>' +
+          '<option value="center"' + (d.align === 'center' ? ' selected' : '') + '>מרכז</option>' +
+          '<option value="end"' + (d.align === 'end' ? ' selected' : '') + '>סוף</option>' +
+        '</select>',
+        alignDeclared ? '' : 'המודול הזה לא שומר יישור בעריכת קוד — אפשר להחזיר ל"התחלה".'
+      );
+    }
 
     // ── Style (first advanced module surface) ──
     html +=
       '<details class="style-advanced" open>' +
       '<summary>עיצוב מודול <span class="adv-badge">מתקדם</span></summary>' +
-      '<div class="prop-hint" style="margin-bottom:8px">בלי HTML — בחר ערכים. המפתח לא צריך לחשוב על CSS.</div>' +
-      field(
-        'יישור',
-        '<select data-key="align">' +
-          '<option value="start"' + (!d.align || d.align === 'start' ? ' selected' : '') + '>התחלה</option>' +
-          '<option value="center"' + (d.align === 'center' ? ' selected' : '') + '>מרכז</option>' +
-          '<option value="end"' + (d.align === 'end' ? ' selected' : '') + '>סוף</option>' +
-        '</select>'
-      ) +
+      note('בלי HTML — בחר ערכים. המפתח לא צריך לחשוב על CSS.') +
+      alignField +
       field(
         'גודל טקסט',
         '<select data-style="fontSize">' +
@@ -4968,9 +5723,8 @@
           '<option value="bold"' + (st.fontWeight === 'bold' ? ' selected' : '') + '>מודגש</option>' +
         '</select>'
       ) +
-      field('צבע טקסט', '<input type="color" data-style="color" value="' + escAttr(st.color || '#334155') + '">') +
-      field('רקע', '<input type="color" data-style="background" value="' + escAttr(st.background || '#ffffff') + '">') +
-      '<button type="button" class="btn secondary" data-clear-bg="1" style="margin-bottom:8px;width:100%">נקה רקע</button>' +
+      colorField('צבע טקסט', 'data-style="color"', st.color || '', '#334155') +
+      colorField('רקע', 'data-style="background"', st.background || '', '#ffffff') +
       field(
         'מרווח חיצוני (מעל ומתחת)',
         '<select data-style="margin">' +
@@ -4989,7 +5743,7 @@
           '<option value="lg"' + (st.border === 'lg' ? ' selected' : '') + '>עבה</option>' +
         '</select>'
       ) +
-      field('צבע מסגרת', '<input type="color" data-style="borderColor" value="' + escAttr(st.borderColor || '#e2e8f0') + '">') +
+      colorField('צבע מסגרת', 'data-style="borderColor"', st.borderColor || '', '#e2e8f0') +
       field(
         'צל',
         '<select data-style="shadow">' +
@@ -5037,11 +5791,11 @@
       '<details class="agent-snip-details">' +
       '<summary>לסוכנים · BenTML</summary>' +
       '<pre class="bentml-mini-snip">' + esc(snip) + '</pre>' +
-      '<div class="prop-hint">השפה לסוכנים — לא חובה למעצבים. טאב ״שפה לסוכן״ לגיליון המלא.</div>' +
+      note('השפה לסוכנים — לא חובה למעצבים. טאב ״שפה לסוכן״ לגיליון המלא.') +
       '</details>';
 
     if (node.parent) {
-      html += '<button type="button" class="btn secondary" style="margin-top:8px;width:100%" data-unnest="1">הוצא משורת עמודות</button>';
+      html += actions('<button type="button" class="btn secondary" data-unnest="1">הוצא משורת עמודות</button>', 'is-end');
     }
 
     panel.innerHTML = html;
@@ -5053,7 +5807,20 @@
     });
 
     panel.querySelectorAll('[data-key]').forEach(function (input) {
+      // Write only on a REAL change. This used to run on every blur: clicking
+      // through the panel marked the page dirty, and on a ROW it wrote the
+      // ratio the field merely displayed ("1:1") into the data — which alone
+      // turns the published flex row into a ratio grid. `shown` is what the
+      // control was drawn with; nothing is written until it differs.
+      var shown = input.type === 'checkbox' ? input.checked : input.value;
+      var unpainted = false;
       var apply = function (reRender) {
+        var now = input.type === 'checkbox' ? input.checked : input.value;
+        if (now === shown) {
+          if (reRender && unpainted) { unpainted = false; renderCanvas(); }
+          return;
+        }
+        shown = now;
         if (!input._histPushed) { pushHistory(); input._histPushed = true; }
         var val;
         if (input.type === 'checkbox') {
@@ -5088,14 +5855,13 @@
         if (k === 'text' || k === 'content' || k === 'title' || k === 'subtitle' || k === 'quote' || k === 'author') {
           liveUpdatePreview(block.id, k === 'text' ? 'text' : k, String(val));
         }
-        if (k === 'ratio' && block.type === 'columns') {
-          if (reRender) renderCanvas();
-        } else if (k === 'align' || k === 'className') {
-          applyPreviewStyle(block.id);
-          if (reRender) renderCanvas();
-        } else if (reRender && k !== 'text' && k !== 'content' && k !== 'title' && k !== 'subtitle' && k !== 'quote' && k !== 'author') {
-          renderCanvas();
-        }
+        if (k === 'align' || k === 'className') applyPreviewStyle(block.id);
+        // the text fields mirror live (above) and never rebuild the canvas;
+        // everything else repaints once, when the edit is committed
+        var mirrored = k === 'text' || k === 'content' || k === 'title' || k === 'subtitle' || k === 'quote' || k === 'author';
+        if (mirrored) return;
+        if (reRender) renderCanvas();
+        else unpainted = true;
       };
       input.addEventListener('input', function () { apply(false); });
       input.addEventListener('change', function () { apply(true); });
@@ -5124,19 +5890,18 @@
       input.addEventListener('change', applyStyle);
     });
 
-    var clearBg = panel.querySelector('[data-clear-bg]');
-    if (clearBg) {
-      clearBg.addEventListener('click', function () {
-        pushHistory();
-        if (block.data && block.data.style) {
-          delete block.data.style.background;
-          if (!Object.keys(block.data.style).length) delete block.data.style;
-        }
-        markDirty();
-        renderProperties();
-        applyPreviewStyle(block.id);
-      });
-    }
+    // every colour can be taken back, not only the background
+    wireColorFields(panel, function (input) {
+      var key = input.dataset.style;
+      if (!key || !block.data || !block.data.style || block.data.style[key] === undefined) return;
+      pushHistory();
+      delete block.data.style[key];
+      if (!Object.keys(block.data.style).length) delete block.data.style;
+      markDirty();
+      applyPreviewStyle(block.id);
+    });
+
+    upgradeCatalogPickers(panel);
 
     // TEXT format chips → the same marks the editor window writes (v2.66);
     // the link prompt and the full bar live in the window, so those chips open it
@@ -5394,7 +6159,17 @@
 
     // list param, compact editor (single itemField): one line per item
     panel.querySelectorAll('[data-lp-lines]').forEach(function (ta) {
+      var linesShown = ta.value;
+      var linesUnpainted = false;
       var applyLines = function (reRender) {
+        // untouched = not an edit (a blur used to rewrite the list and mark
+        // the page dirty)
+        if (ta.value === linesShown) {
+          if (reRender && linesUnpainted) { linesUnpainted = false; renderCanvas(); }
+          return;
+        }
+        linesShown = ta.value;
+        linesUnpainted = !reRender;
         if (!ta._histPushed) { pushHistory(); ta._histPushed = true; }
         var key = ta.dataset.lpLines;
         var fname = ta.dataset.lpField || 'text';
@@ -5411,9 +6186,27 @@
       ta.addEventListener('blur', function () { applyLines(true); });
     });
 
-    // list param, per-item field inputs
-    panel.querySelectorAll('[data-lp][data-lp-i]').forEach(function (input) {
+    // list param, per-item field controls (text, number, select, checkbox)
+    panel.querySelectorAll('input[data-lp][data-lp-i], textarea[data-lp][data-lp-i], select[data-lp][data-lp-i]').forEach(function (input) {
+      var read = function () {
+        if (input.type === 'checkbox') return input.checked;
+        if (input.type === 'number') {
+          var n = parseInt(input.value, 10);
+          return isNaN(n) ? '' : n;
+        }
+        return input.value;
+      };
+      var itemShown = read();
+      var itemUnpainted = false;
       var applyItem = function (reRender) {
+        var now = read();
+        // untouched = not an edit: no history entry, no dirty mark
+        if (now === itemShown) {
+          if (reRender && itemUnpainted) { itemUnpainted = false; renderCanvas(); }
+          return;
+        }
+        itemShown = now;
+        itemUnpainted = !reRender;
         if (!input._histPushed) { pushHistory(); input._histPushed = true; }
         var key = input.dataset.lp;
         var i = parseInt(input.dataset.lpI, 10);
@@ -5424,13 +6217,74 @@
         if (typeof block.data[key][i] !== 'object' || block.data[key][i] == null) {
           block.data[key][i] = {};
         }
-        block.data[key][i][f] = input.value;
+        block.data[key][i][f] = now;
         markDirty();
         if (reRender) renderCanvas();
       };
       input.addEventListener('input', function () { applyItem(false); });
       input.addEventListener('change', function () { applyItem(true); });
       input.addEventListener('blur', function () { applyItem(true); });
+    });
+
+    // list param: one item's picture, picked from the library into the
+    // item's own picture field
+    panel.querySelectorAll('[data-lp-pick]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.lpPick;
+        var i = parseInt(btn.dataset.lpI, 10);
+        var f = btn.dataset.lpF;
+        openMediaSingle(function (url) {
+          var src = typeof url === 'string' ? url : ((url && url.src) || '');
+          if (!src) return;
+          pushHistory();
+          if (!block.data) block.data = {};
+          if (!Array.isArray(block.data[key])) block.data[key] = [];
+          while (block.data[key].length <= i) block.data[key].push({});
+          if (typeof block.data[key][i] !== 'object' || block.data[key][i] == null) block.data[key][i] = {};
+          block.data[key][i][f] = src;
+          markDirty();
+          renderCanvas();
+          renderProperties();
+        });
+      });
+    });
+
+    // list param: an item moves up / down, is copied, or is removed — array
+    // splices, then the panel and the canvas are drawn again from the data
+    var editList = function (btn, change) {
+      var key = btn.dataset.lp;
+      if (!block.data || !Array.isArray(block.data[key])) return;
+      pushHistory();
+      change(block.data[key]);
+      markDirty();
+      renderCanvas();
+      renderProperties();
+    };
+    panel.querySelectorAll('button[data-lp-up]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = parseInt(btn.dataset.lpUp, 10);
+        if (i < 1) return;
+        editList(btn, function (list) { list.splice(i - 1, 0, list.splice(i, 1)[0]); });
+      });
+    });
+    panel.querySelectorAll('button[data-lp-down]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = parseInt(btn.dataset.lpDown, 10);
+        editList(btn, function (list) {
+          if (i < list.length - 1) list.splice(i + 1, 0, list.splice(i, 1)[0]);
+        });
+      });
+    });
+    panel.querySelectorAll('button[data-lp-dup]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = parseInt(btn.dataset.lpDup, 10);
+        editList(btn, function (list) {
+          var copy = JSON.parse(JSON.stringify(list[i] === undefined ? {} : list[i]));
+          // an item's id is its identity on the page — a copy needs its own
+          if (copy && typeof copy === 'object' && typeof copy.id === 'string') copy.id = uid('item');
+          list.splice(i + 1, 0, copy);
+        });
+      });
     });
 
     // list param: remove item
@@ -5467,7 +6321,9 @@
       btn.addEventListener('click', function () {
         var key = btn.dataset.lpClean;
         pushHistory();
-        if (block.data) block.data[key] = filledMedia(block.data[key]);
+        // "empty" is judged by the list's OWN picture field — never by `src`
+        // on a list that calls its picture `image`
+        if (block.data) block.data[key] = filledMedia(block.data[key], listMediaField(block.type, key));
         markDirty();
         renderCanvas();
         renderProperties();
@@ -5475,15 +6331,19 @@
       });
     });
 
-    // list param with media items (e.g. gallery): multi-pick from the library
+    // list param with media items (e.g. gallery): multi-pick from the library.
+    // Each pick becomes an item of THIS list (pickedToItems): the picker
+    // hands back {src, alt}, and pushed as-is into products or cards — whose
+    // picture field is `image` — it published blank cards.
     panel.querySelectorAll('[data-lp-media-add]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var key = btn.dataset.lpMediaAdd;
+        var listDef = paramDefFor(block.type, key);
         openMediaGallery(function (picked) {
           pushHistory();
           if (!block.data) block.data = {};
           if (!Array.isArray(block.data[key])) block.data[key] = [];
-          block.data[key] = block.data[key].concat(picked);
+          block.data[key] = block.data[key].concat(pickedToItems(picked, listDef && listDef.itemFields));
           markDirty();
           renderCanvas();
           renderProperties();
@@ -5537,15 +6397,15 @@
 
     var addCol = panel.querySelector('[data-add-col]');
     if (addCol) {
-      addCol.addEventListener('click', function () {
-        var cols = ensureColumns(block);
-        if (cols.length >= 4) return;
-        pushHistory();
-        cols.push({ blocks: [] });
-        renderCanvas();
-        renderProperties();
-      });
+      addCol.addEventListener('click', function () { addColumnToRow(block); });
     }
+
+    // "הסרת טור": the column goes, its modules move next door
+    panel.querySelectorAll('[data-remove-col]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        removeColumnFromRow(block, parseInt(btn.dataset.removeCol, 10));
+      });
+    });
 
     var unwrap = panel.querySelector('[data-unwrap]');
     if (unwrap) {
@@ -5823,7 +6683,8 @@
     var empty = makeBlock('text');
     empty.data = { content: 'טור חדש...' };
     var colsBlock = makeBlock('columns');
-    // empty on the left (physical), original on the right
+    // the empty column comes FIRST in reading order (the right one on a
+    // Hebrew page), the original second — on the canvas and on the site
     colsBlock.data.columns = [
       { blocks: [empty] },
       { blocks: [target] }
@@ -6626,8 +7487,8 @@
       '<h3 style="margin:0;font-size:1.15rem">🤖 ייבא מ‑AI</h3>' +
       '<button type="button" id="imp-close" style="border:none;background:#f1f5f9;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1rem">✕</button></div>' +
       '<p style="color:#64748b;font-size:.86rem;margin:0 0 14px;line-height:1.5">ה‑AI שלכם, על המנוי שלכם. פעם אחת — תנו ל‑AI את מילון BenTML, ואז שוחחו איתו והדביקו את התשובה כאן.</p>' +
-      '<button type="button" id="imp-primer" class="btn secondary" style="width:100%;margin-bottom:14px">📋 העתק מילון BenTML ל‑AI (פעם אחת)</button>' +
-      '<label style="display:block;font-size:.82rem;color:#475569;margin-bottom:4px">הדביקו כאן את תשובת ה‑AI (אפשר עם טקסט מסביב — נחלץ את הקוד)</label>' +
+      '<button type="button" id="imp-primer" class="btn secondary" style="width:100%">📋 העתק מילון BenTML ל‑AI (פעם אחת)</button>' +
+      '<label style="display:block;font-size:.82rem;color:#475569;margin:14px 0 4px">הדביקו כאן את תשובת ה‑AI (אפשר עם טקסט מסביב — נחלץ את הקוד)</label>' +
       '<textarea id="imp-src" dir="ltr" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:150px;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:.82rem" placeholder="<!DOCTYPE html> …   /   BENTML 0.2 …"></textarea>' +
       '<div style="display:flex;gap:16px;margin:12px 0">' +
       '<label style="font-size:.88rem"><input type="radio" name="imp-mode" value="replace" checked> החלף את הדף</label>' +

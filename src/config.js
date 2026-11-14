@@ -1,6 +1,7 @@
 // Simple site config for Tapuz
 const path = require('path');
 const fs = require('fs');
+const jsonFile = require('./json-file');
 
 const CONFIG_PATH = path.join(require('./paths').CONFIG_DIR, 'site.json');
 
@@ -152,10 +153,49 @@ const DEFAULT_CONFIG = {
   }
 };
 
+// A MISSING site.json is a first run and reads as the defaults, as it always
+// did. A site.json that EXISTS and cannot be read (v2.69) also serves the
+// defaults — in memory only — and saveConfig refuses to write over it: before,
+// one damaged read turned the site's name, homepage and every setting into the
+// defaults and the next save anywhere made that permanent. The damaged file
+// stays where it is, with one copy beside it (site.json.corrupt-<stamp>).
+const CONFIG_DAMAGED_MESSAGE = 'קובץ הגדרות האתר (config/site.json) פגום ולא ניתן לקריאה. האתר מוגש בינתיים מברירות המחדל ושום דבר לא נשמר עליו — שחזרו את הקובץ מגיבוי או תקנו אותו, ואז שמרו שוב.';
+let damageSeen = '';
+
+function readConfigFile() {
+  const r = jsonFile.readJson(CONFIG_PATH);
+  if (r.state === 'ok' && (!r.data || typeof r.data !== 'object' || Array.isArray(r.data))) {
+    return { state: 'corrupt', data: null, error: 'site.json does not hold an object' };
+  }
+  return r;
+}
+
+// loadConfig runs many times per request: the copy and the log lines happen
+// once per damaged file (its size and time), not once per read.
+function noteDamaged(error) {
+  let seen = 'unreadable';
+  try { const st = fs.statSync(CONFIG_PATH); seen = st.size + ':' + st.mtimeMs; } catch (e) { /* keep */ }
+  if (seen === damageSeen) return;
+  damageSeen = seen;
+  const copy = jsonFile.keepCorruptCopy(CONFIG_PATH);
+  console.error('[config] config/site.json exists but cannot be read (' + error + ').');
+  console.error('[config] The site is served from the defaults in memory and NOTHING is saved over the file until it is restored' +
+    (copy ? '; a copy of the damaged file is at ' + copy + '.' : '.'));
+}
+
+/** { state: 'missing' | 'ok' | 'corrupt', error } — for the admin's warning. */
+function configState() {
+  const r = readConfigFile();
+  return { state: r.state, error: r.error };
+}
+
 function loadConfig() {
   try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      const data = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    const file = readConfigFile();
+    if (file.state === 'corrupt') noteDamaged(file.error);
+    if (file.state === 'ok') {
+      damageSeen = '';
+      const data = file.data;
       const merged = { ...clone(DEFAULT_CONFIG), ...data };
       // Deep-merge integrations so older site.json files (or partial writes)
       // still expose the full default shape.
@@ -245,17 +285,49 @@ function loadConfig() {
 }
 
 function saveConfig(config) {
+  // never over a damaged file: `config` here was built from the defaults.
+  // The code lets the terminal error handler (server.js) show the sentence
+  // where a route did not catch the refusal itself.
+  if (readConfigFile().state === 'corrupt') {
+    const err = new Error(CONFIG_DAMAGED_MESSAGE);
+    err.code = 'E_STORE_DAMAGED';
+    throw err;
+  }
   const dir = path.dirname(CONFIG_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+  // whole file or none of it (src/json-file.js)
+  jsonFile.writeAtomic(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
 function clone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+/**
+ * The one door for the site's base URL (v2.69). Two screens saved it by two
+ * rules — SEO validated and normalised, site settings stored whatever was
+ * typed — so a stray space or a missing scheme from the second screen put a
+ * broken canonical on every page. Forgiving: a bare domain gets https://, a
+ * trailing slash goes; anything that is not an http(s) address is refused —
+ * a broken base corrupts canonicals, og:url and the sitemap sitewide.
+ * @returns {{ ok: boolean, value: string, error?: string }}
+ */
+function normalizeBaseUrl(raw) {
+  const text = String(raw == null ? '' : raw).trim();
+  if (!text) return { ok: true, value: '' };
+  let u;
+  try { u = new URL(text.includes('://') ? text : 'https://' + text); } catch (e) { u = null; }
+  if (!u || !/^https?:$/.test(u.protocol) || !u.hostname) {
+    return { ok: false, value: '', error: 'כתובת האתר אינה תקינה — צורה תקינה: https://www.example.co.il' };
+  }
+  return { ok: true, value: (u.origin + u.pathname).replace(/\/+$/, '') };
+}
+
 module.exports = {
   loadConfig,
   saveConfig,
+  configState,
+  normalizeBaseUrl,
+  CONFIG_DAMAGED_MESSAGE,
   DEFAULT_CONFIG
 };

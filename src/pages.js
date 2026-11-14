@@ -18,6 +18,64 @@ function generateFullPath(pathPrefix, slug) {
 }
 
 /**
+ * Addresses a page may not take (v2.69). The exported page is a file in
+ * public/, and the static mount answers before the admin gate and most
+ * routes — so a page saved as "admin" became public/admin.html and took over
+ * /admin itself (the pages list was then unreachable), and "index" collided
+ * with the home's index.html. The other names belong to routes mounted ahead
+ * of the static files, which would shadow the page the other way round, or
+ * are namespaces the server answers itself. Checked when a page is CREATED
+ * or RENAMED only: a page that already lives at one of these keeps working.
+ * The store's own addresses (shop, cart, checkout, order…) are not here — the
+ * store already steps aside for an owner's page.
+ */
+const RESERVED_PATHS = new Set([
+  'admin', 'agent', 'api', 'account', 'assets', 'css', 'crm', 'index', 'form-sent',
+  'sitemap', 'robots', 'search-index', 'pzn-schema', '_tapuz', '404'
+]);
+
+function isReservedPath(fullPath) {
+  const name = String(fullPath || '').toLowerCase();
+  if (RESERVED_PATHS.has(name)) return true;
+  // a custom admin address (TAPUZ_ADMIN_PATH / config.admin.path) is the
+  // admin too: its first segment must stay free
+  try {
+    const base = String(require('./auth').getAdminBase() || '').split('/').filter(Boolean)[0];
+    if (base && base.toLowerCase() === name) return true;
+  } catch (e) { /* no auth module state yet — the fixed list still applies */ }
+  return false;
+}
+
+// The admin's own address (the default or a custom one) — the one reserved
+// name no caller may be let past, see createPage's `allowReserved`.
+function isAdminAddress(fullPath) {
+  const name = String(fullPath || '').toLowerCase();
+  if (name === 'admin') return true;
+  try {
+    const base = String(require('./auth').getAdminBase() || '').split('/').filter(Boolean)[0];
+    return !!base && base.toLowerCase() === name;
+  } catch (e) { return false; }
+}
+
+// no leading slash inside the quotes: in a right-to-left sentence "/api"
+// is drawn with its slash on the wrong side ("api/")
+function reservedPathMessage(fullPath) {
+  return 'הכתובת "' + fullPath + '" שמורה למערכת ואי אפשר לתת אותה לדף — בחרו שם אחר.';
+}
+
+function assertPathAllowed(fullPath) {
+  if (isReservedPath(fullPath)) {
+    const err = new Error(reservedPathMessage(fullPath));
+    err.code = 'E_RESERVED_PATH';
+    // a refusal, not a crash: the terminal error handler (server.js) answers
+    // 400 with this sentence where a route did not catch it itself
+    err.status = 400;
+    err.reservedPath = String(fullPath);
+    throw err;
+  }
+}
+
+/**
  * v0.41 storage flip: the .pzn file is the canonical source of a page's
  * CONTENT. When pages/drafts|published/<full_path>.pzn exists it overrides
  * the DB's JSON columns (which remain as index/fallback for legacy sites).
@@ -95,9 +153,17 @@ function createPage({
   blocks = [],
   tags = [],
   meta = {},
-  status = 'draft'
+  status = 'draft',
+  allowReserved = false
 }) {
   const full_path = generateFullPath(path_prefix, slug);
+  // `allowReserved` is internal and has ONE caller: the site-package import
+  // (src/site-package.js). A page that lived at "sitemap" or "account" on a
+  // site built before the list above existed keeps working there, and must
+  // not be lost when that site is moved by package. The admin's own address
+  // is not negotiable even so — a package is a file people pass around, and
+  // a page there takes /admin over.
+  if (!allowReserved || isAdminAddress(full_path)) assertPathAllowed(full_path);
   // v2.58 — a page that does not say which way it reads is born the SITE's
   // way (an English site makes ltr pages); 'rtl' used to be hard-wired here
   if (direction !== 'ltr' && direction !== 'rtl') direction = require('./site-language').siteDirection();
@@ -176,10 +242,26 @@ function updatePage(full_path, updates = {}) {
   };
 
   // Regenerate full_path if prefix or slug changed
+  let renameRefused = '';
   if (updates.path_prefix !== undefined || updates.slug !== undefined) {
     const prefix = updates.path_prefix !== undefined ? updates.path_prefix : existing.path_prefix;
     const slug = updates.slug !== undefined ? updates.slug : existing.slug;
     newData.full_path = generateFullPath(prefix, slug);
+    // A rename INTO a reserved address does not happen — and does not throw
+    // either. In the builder the address follows the page's title on every
+    // save, autosave included, so a page retitled "API" or "Account" would
+    // have every one of its saves refused; a taken address already never
+    // blocks a content save (routes/pages-builder.js), and a reserved one is
+    // the same case. The page keeps the address it has, everything else is
+    // saved, and the result carries `renameRefused` — the Hebrew sentence —
+    // for a caller that wants to say so. Saving a page that already sits on
+    // a reserved address (from before v2.69) is untouched.
+    if (newData.full_path !== full_path && isReservedPath(newData.full_path)) {
+      renameRefused = reservedPathMessage(newData.full_path);
+      newData.path_prefix = existing.path_prefix;
+      newData.slug = existing.slug;
+      newData.full_path = full_path;
+    }
   }
 
   // Blocks in API mean draft content when saving from builder
@@ -281,6 +363,7 @@ function updatePage(full_path, updates = {}) {
     pzn: store.pageToPzn(pageLike, draftBlocks || [])
   });
 
+  if (renameRefused) saved.renameRefused = renameRefused;
   return saved;
 }
 
@@ -699,6 +782,9 @@ module.exports = {
   listRevisions,
   getRevision,
   generateFullPath,
+  // v2.69 — addresses a page may not take
+  RESERVED_PATHS,
+  isReservedPath,
   // v0.42 — canonical editing path (.pzn source + AST ops)
   getPageSource,
   savePageSource,

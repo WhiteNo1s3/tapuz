@@ -2028,7 +2028,7 @@ router.get('/admin/crm/whatsapp', requireAdmin, requireCrm('crm-wa', 'WhatsApp')
   const sum = ledger.summary();
   const cfg = require('../config').loadConfig();
   const waOn = !!(cfg.crm && cfg.crm.whatsapp && cfg.crm.whatsapp.enabled);
-  const hookUrl = req.protocol + '://' + req.get('host') + '/crm/wa/webhook';
+  const hookUrl = require('../http-util').requestOrigin(req) + '/crm/wa/webhook';
   const spend = ledger.spendEstimate();
   const usd = (v) => '$' + (Math.round(v * 100) / 100).toFixed(2);
 
@@ -2653,7 +2653,7 @@ router.post('/admin/crm/campaigns/:id/send', requireAdmin, (req, res) => {
   // where a relative path means nothing.
   const cfg = require('../config').loadConfig();
   const baseUrl = String(cfg.baseUrl || '').replace(/\/+$/, '') ||
-    (req.protocol + '://' + req.get('host'));
+    require('../http-util').requestOrigin(req);
   campaigns.startSend(req.params.id, { baseUrl });
   res.redirect('/admin/crm/campaigns/' + encodeURIComponent(req.params.id));
 });

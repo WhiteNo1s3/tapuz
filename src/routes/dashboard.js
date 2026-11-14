@@ -14,8 +14,81 @@ const { listPages } = require('../pages');
 const { needsSetup } = require('../setup');
 const { exportAll } = require('../export');
 const { layout, adminNav, accentFor, escapeAdmin, ADMIN_NAV_GROUPS } = require('../admin-ui');
+const auth = require('../auth');
+const { loadConfig, configState, CONFIG_DAMAGED_MESSAGE } = require('../config');
+const { requestOrigin, isLoopbackRequest } = require('../http-util');
 
 const router = express.Router();
+
+/** The https address the owner is browsing from, or '' when it is not https. */
+function httpsOriginHere(req) {
+  const origin = requestOrigin(req);
+  if (origin.startsWith('https://')) return origin;
+  // the proxy's own word when it is not a counted, trusted hop — good enough
+  // to decide whether to OFFER a button (the save re-checks the real origin)
+  if (auth.isHttps(req) && req.headers.host) return 'https://' + req.headers.host;
+  return '';
+}
+
+/**
+ * What the owner should hear before anything else on the admin's landing
+ * screens (v2.69): a damaged site.json, and a site address that was never
+ * set. Nothing ever asked for the base URL, yet the canonical link, og:url,
+ * absolute share images, the sitemap's scheme and the card gateway all hang
+ * on it — so the line comes with a button that saves the address the owner
+ * is already on (https only) and rebuilds. Used by the dashboard and by the
+ * pages list (the screen a login lands on).
+ */
+function siteNotices(req) {
+  const out = [];
+  const state = configState();
+  if (state.state === 'corrupt') {
+    out.push(`<div class="notice danger">
+        <span class="notice-ico">⚠️</span>
+        <div class="notice-body">
+          <strong>קובץ הגדרות האתר פגום</strong>
+          <p>${escapeAdmin(CONFIG_DAMAGED_MESSAGE)}</p>
+          <p>עותק של הקובץ הפגום נשמר לידו בשם <span dir="ltr" style="white-space:nowrap">site.json.corrupt-…</span></p>
+        </div>
+      </div>`);
+    return out.join('');
+  }
+  const flash = {
+    saved: ['ok', '✓', 'כתובת האתר נשמרה והאתר נבנה מחדש.'],
+    kept: ['info', 'ℹ️', 'כתובת האתר כבר מוגדרת — לא שונה דבר.'],
+    norebuild: ['warn', '⚠️', 'כתובת האתר נשמרה, אבל האתר לא נבנה מחדש. לחצו "בנה את האתר" למטה.'],
+    http: ['warn', '⚠️', 'אתם גולשים כרגע בלי https, ולכן הכתובת לא נשמרה. קבעו אותה ידנית במסך ה-SEO.'],
+    failed: ['danger', '⚠️', 'שמירת כתובת האתר נכשלה. נסו שוב ממסך ה-SEO.']
+  }[String(req.query.base || '')];
+  if (flash) {
+    out.push(`<div class="notice slim ${flash[0]}"><span class="notice-ico">${flash[1]}</span><div class="notice-body"><p>${flash[2]}</p></div></div>`);
+  }
+  // not on the server's own machine: http://localhost has no public address
+  // to set, and a warning that can never be answered is noise
+  if (!String(loadConfig().baseUrl || '').trim() && !isLoopbackRequest(req)) {
+    const here = httpsOriginHere(req);
+    const action = here
+      ? `<form method="POST" action="/admin/seo/base-url-here" style="margin:0">
+             <button type="submit" class="btn sm">קבע את <span dir="ltr">${escapeAdmin(here)}</span> ככתובת האתר</button>
+           </form>`
+      : '<a href="/admin/seo" class="btn secondary sm">הגדרה במסך ה-SEO</a>';
+    // With no address saved the sitemap takes its scheme from the request,
+    // and behind a TLS proxy nobody declared (TAPUZ_TRUST_PROXY unset) that
+    // scheme is http — on an https site. Said only where it is true: the
+    // owner is on https by the proxy's word and the origin still reads http.
+    const sitemapHttp = here && !requestOrigin(req).startsWith('https://')
+      ? ' עד שהכתובת נשמרת, גם מפת האתר (<span dir="ltr">sitemap.xml</span>) מדפיסה כתובות <span dir="ltr">http://</span>.'
+      : '';
+    out.push(`<div class="notice warn">
+        <span class="notice-ico">🌐</span>
+        <div class="notice-body">
+          <p>כתובת האתר עוד לא הוגדרה: בלי זה אין קישור קנוני, ותמונות שיתוף לא יוצגו.${sitemapHttp}</p>
+          <div class="row">${action}</div>
+        </div>
+      </div>`);
+  }
+  return out.join('');
+}
 
 router.get('/admin/dashboard', (req, res) => {
   if (needsSetup()) return res.redirect('/admin/setup');
@@ -61,6 +134,7 @@ router.get('/admin/dashboard', (req, res) => {
   const html = `
     ${adminNav('dashboard', 'דשבורד', '<a href="/admin/new" class="btn">+ דף חדש</a>')}
     <div class="container page-body" style="max-width:1080px">
+      ${siteNotices(req)}
       <div class="stat-grid" style="margin-bottom:26px">
         ${statCard(pages.length, 'דפים', '#2563eb')}
         ${statCard(published, 'פורסמו', '#059669')}
@@ -103,3 +177,5 @@ router.post('/admin/build-redirect', (req, res) => {
 });
 
 module.exports = router;
+// the pages list (routes/admin-home.js) prints the same notices
+module.exports.siteNotices = siteNotices;

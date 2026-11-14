@@ -35,7 +35,7 @@ Other modules stay sharp and simple. **TEXT** carries paragraphs + inline marks:
 - Marks only inside TEXT, HEADING, QUOTE, TESTIMONIAL, ITEM bodies
 - No Markdown ** or [x](url)
 
-## Modules (71)
+## Modules (72)
 
 ### תוכן
 
@@ -715,10 +715,41 @@ Shape: `SHOP(params)`
 | `title` | `title` | string |  | "" |
 | `exclude` | `exclude` | string |  | "" |
 | `buttons` | `buttons` | boolean |  | true |
+| `empty` | `empty` | string |  | "" |
+| `media` | `media` | enum square\|portrait\|landscape |  | "square" |
+| `fit` | `fit` | enum cover\|contain |  | "cover" |
+| `justify` | `justify` | enum start\|center |  | "start" |
+| `sorter` | `sorter` | boolean |  | false |
+| `search` | `search` | boolean |  | false |
+| `pageSize` | `page-size` | integer |  | 0 |
+| `tag` | `tag` | string |  | "" |
+| `brand` | `brand` | string |  | "" |
+| `featured` | `featured` | boolean |  | false |
+| `skus` | `skus` | string |  | "" |
 | `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
 
 ```bentml
 SHOP
+```
+
+#### `SHELVES` → `shelves`
+
+🗂 **חנות — אריחי קטגוריות** — הקטגוריות של החנות כאריחים: תמונה, שם ומספר המוצרים
+
+Shape: `SHELVES(params)`
+
+| Param (JSON) | BenTML | Type | Required | Default |
+|---|---|---|---|---|
+| `parent` | `parent` | string |  | "" |
+| `columns` | `columns` | integer |  | 3 |
+| `title` | `title` | string |  | "" |
+| `counts` | `counts` | boolean |  | true |
+| `summaries` | `summaries` | boolean |  | false |
+| `justify` | `justify` | enum start\|center |  | "start" |
+| `animate` | `animate` | enum none\|fade\|rise\|zoom |  | "none" |
+
+```bentml
+SHELVES
 ```
 
 #### `BUY` → `buy`

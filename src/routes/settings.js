@@ -11,9 +11,8 @@
 
 const express = require('express');
 const { requireAdmin } = require('../admin-guard');
-const { loadConfig, saveConfig } = require('../config');
+const { loadConfig, saveConfig, normalizeBaseUrl } = require('../config');
 const { listPages, getPageByFullPath } = require('../pages');
-const { exportAll } = require('../export');
 const { layout, adminNav, accentFor, escapeAdmin } = require('../admin-ui');
 
 const router = express.Router();
@@ -112,8 +111,11 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
             language: document.getElementById('st-lang').value
           })
         }).then(function (r) { return r.json(); }).then(function (d) {
-          document.getElementById('st-status').textContent = d.ok ? 'נשמר ✓' : (d.error || 'שגיאה');
-        });
+          var st = document.getElementById('st-status');
+          if (!d.ok) { st.textContent = d.error || 'שגיאה'; return; }
+          if (typeof d.baseUrl === 'string') document.getElementById('st-baseurl').value = d.baseUrl;
+          st.textContent = d.rebuildError ? ('נשמר, אבל האתר לא נבנה מחדש: ' + d.rebuildError) : 'נשמר ✓ האתר עודכן';
+        }).catch(function () { document.getElementById('st-status').textContent = 'שגיאת רשת'; });
       });
     </script>
   `;
@@ -126,7 +128,13 @@ router.post('/admin/api/settings', requireAdmin, (req, res) => {
     const b = req.body || {};
     if (b.title !== undefined) config.title = String(b.title || '').trim() || config.title;
     if (b.description !== undefined) config.description = String(b.description || '');
-    if (b.baseUrl !== undefined) config.baseUrl = String(b.baseUrl || '').trim();
+    // the same validated door the SEO screen uses (config.normalizeBaseUrl) —
+    // this one used to store whatever was typed, broken addresses included
+    if (b.baseUrl !== undefined) {
+      const base = normalizeBaseUrl(b.baseUrl);
+      if (!base.ok) return res.status(400).json({ ok: false, error: base.error });
+      config.baseUrl = base.value;
+    }
     let langChanged = false;
     if (b.language !== undefined) {
       const want = b.language === 'en' ? 'en' : 'he';
@@ -150,8 +158,23 @@ router.post('/admin/api/settings', requireAdmin, (req, res) => {
       const sl = require('../site-language');
       flipped = require('../pages').flipSiteDirection(sl.directionFor(config.language === 'en' ? 'he' : 'en'), sl.directionFor(config.language));
     }
-    if (homeChanged || langChanged) exportAll();
-    res.json({ ok: true, flipped });
+    // v2.69 — a store without a name of its own wears the site's, and the
+    // trail on every product and category page starts at the home page: both
+    // are written INTO those pages, so they follow before the rebuild. A sync
+    // that fails is logged and never fails the save.
+    try {
+      const st = require('../store');
+      if (st.isOpen()) st.pages.syncCatalogPages();
+    } catch (e) {
+      console.error('[store] page sync after a settings save failed:', e.message);
+    }
+    // v2.69 — every field on this screen is printed into the exported pages
+    // (the site's name in each <title> and footer, the description, the base
+    // URL in canonical and og:url), so every save rebuilds, not only a new
+    // homepage or language. A rebuild that fails is SAID (rebuildError), the
+    // way the menus screen says it — the settings themselves are saved.
+    const rebuildError = require('../rebuild').rebuildSite('a settings save');
+    res.json({ ok: true, flipped, baseUrl: config.baseUrl || '', rebuildError });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }

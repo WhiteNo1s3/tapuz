@@ -34,6 +34,11 @@ function adminGate(req, res, next) {
   // S4: general per-IP flood cap on the whole admin surface.
   if (!adminLimiter.allow('admin:' + ip)) {
     res.setHeader('Retry-After', String(adminLimiter.retryAfter('admin:' + ip)));
+    // a screen's fetch().json() threw on the plain-text answer and showed
+    // nothing; a JSON caller gets JSON it can print (v2.69)
+    if (wantsJson(req)) {
+      return res.status(429).json({ ok: false, error: 'יותר מדי בקשות. נסה שוב בעוד רגע.', message: 'יותר מדי בקשות. נסה שוב בעוד רגע.' });
+    }
     return res.status(429).send('יותר מדי בקשות. נסה שוב בעוד רגע.');
   }
 

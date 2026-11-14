@@ -420,7 +420,8 @@ async function startSession({ order } = {}) {
   if (order.paid_at) return refuse('PAID', 'ההזמנה כבר שולמה');
   if (db.prepare("SELECT 1 FROM store_payments WHERE order_id = ? AND status = 'paid' LIMIT 1").get(order.id)) return refuse('PAID', 'התשלום להזמנה הזו כבר אושר');
   const s = settingsMod.loadSettings();
-  const method = s.payments.find((p) => p.id === order.payment_method) || null;
+  // by id, else by the kind the order kept: renaming the method must not strand its open orders
+  const method = orders().methodOf(order, s);
   if (!method || method.kind !== 'card') return refuse('NOT_CARD', 'ההזמנה הזו לא נקבעה לתשלום בכרטיס אשראי');
   const st = status(s);
   if (!st.ready) return refuse('NOT_READY', 'תשלום בכרטיס אינו זמין כרגע — צרו איתנו קשר להשלמת התשלום', { admin: st.reasons.join(' · ') });
@@ -615,6 +616,11 @@ async function verifyPayment(payment, { source = 'page' } = {}) {
   const row = getPayment(payment && payment.id);
   if (!row) return { ok: false, status: 'missing', changed: false };
   if (!UNPAID.has(row.status)) return { ok: true, status: row.status, changed: false };
+  // PayPal is not a card driver, but its rows live in this table: its own
+  // inquiry answers for them, behind its own throttle, in this same shape
+  if (row.provider === 'paypal') {
+    try { return await require('../paypal').verifyRow(row, { source }); } catch (e) { return { ok: false, status: row.status, changed: false, error: 'paypal inquiry failed' }; }
+  }
   const driver = driverOf(row.provider);
   if (!driver) return { ok: false, status: row.status, changed: false, error: 'unknown provider' };
   if (!row.session_id) return { ok: true, status: row.status, changed: false, exhausted: true };
@@ -1024,6 +1030,8 @@ function saveAdminSettings(patch = {}) {
 }
 
 const STATUS_LABELS = { pending: 'ממתין לתשלום', paid: 'שולם', failed: 'לא הושלם', mismatch: 'אי-התאמה', refunded: 'הוחזר' };
+// payment rows written by something that is not a card driver, as the order screen names them
+const PROVIDER_LABELS = { paypal: 'PayPal', demo: 'הדגמה' };
 
 /** Admin: the rows of an order, with what the screen shows — never a session id or a token. */
 function describePayments(order) {
@@ -1033,9 +1041,16 @@ function describePayments(order) {
     const unavailable = d && typeof d.refundUnavailable === 'function' ? d.refundUnavailable(creds) : '';
     const expired = r.status === 'pending' && ageMs(r.created_at) > SESSION_FRESH_MS;
     const left = r.amount - r.refunded;
+    // rows of a provider that is not a card driver: PayPal can be asked
+    // about a pending row (paypal.verifyRow); a demo payment has nobody to ask
+    const paypalRow = r.provider === 'paypal';
+    // a PayPal capture that was tried and has no answer is not an expired
+    // session: money may have moved, and the row says so until PayPal does
+    const inDoubt = paypalRow && r.status === 'pending' && !!r.capture_tried_at;
     return {
-      id: r.id, provider: r.provider, providerLabel: d ? d.label : r.provider, mode: r.mode, status: r.status,
-      statusLabel: r.mode === 'test' && r.status === 'paid' ? 'אושר (בדיקה — לא התקבל כסף)' : expired ? 'פג תוקף' : (STATUS_LABELS[r.status] || r.status),
+      id: r.id, provider: r.provider, providerLabel: d ? d.label : (PROVIDER_LABELS[r.provider] || r.provider), mode: r.mode, status: r.status,
+      statusLabel: r.mode === 'test' && r.status === 'paid' ? 'אושר (בדיקה — לא התקבל כסף)' : inDoubt ? 'תוצאת החיוב לא ידועה' : expired ? 'פג תוקף' : (STATUS_LABELS[r.status] || r.status),
+      inDoubt,
       amount: r.amount, amountText: money.formatMoney(r.amount, r.currency), currency: r.currency,
       transactionId: r.transaction_id, approval: r.approval, last4: r.card_last4, brand: r.card_brand,
       installments: r.installments, refunded: r.refunded, refundedText: r.refunded ? money.formatMoney(r.refunded, r.currency) : '',
@@ -1045,7 +1060,12 @@ function describePayments(order) {
       refundInFlight: r.refund_unknown > 0 && refundInFlight(r),
       refundable: r.status === 'paid' && left > 0 && r.refund_unknown === 0 && !!(d && typeof d.refund === 'function') && !unavailable,
       refundNote: r.status === 'paid' && left > 0 && r.refund_unknown === 0 ? unavailable : '', partialRefund: !!(d && d.partialRefund),
-      canVerify: UNPAID.has(r.status) && !!r.session_id && r.verify_count < HOOK_MAX,
+      // the inquiry button talks to a card driver, or to PayPal for a row
+      // still pending there. Any other provider has nothing to ask.
+      canVerify: (!!d && UNPAID.has(r.status) && !!r.session_id && r.verify_count < HOOK_MAX) ||
+        (paypalRow && r.status === 'pending' && !!r.session_id && r.verify_count < HOOK_MAX),
+      // whom that button asks, for its label
+      verifyWith: d ? 'חברת הסליקה' : paypalRow ? 'PayPal' : '',
       error: r.error, verifyCount: r.verify_count, createdAt: r.created_at, updatedAt: r.updated_at
     };
   });
@@ -1057,16 +1077,18 @@ async function adminVerify(order, paymentId) {
   if (!row || !order || row.order_id !== order.id) return { ok: false, message: 'התשלום לא נמצא בהזמנה הזו' };
   const r = await verifyPayment(row, { source: 'admin' });
   const after = getPayment(row.id) || row;
+  // whom we asked, by name — a PayPal row was never at a card company
+  const who = row.provider === 'paypal' ? 'PayPal' : 'חברת הסליקה';
   let message;
   if (r.changed && r.status === 'paid') message = after.mode === 'test' ? 'תשלום בדיקה אושר ונרשם — לא התקבל כסף' : 'התשלום אושר ונרשם';
-  else if (r.changed && r.status === 'mismatch') message = 'חברת הסליקה מדווחת על סכום אחר — ראו את ההיסטוריה';
+  else if (r.changed && r.status === 'mismatch') message = (row.provider === 'paypal' ? 'PayPal מדווח' : 'חברת הסליקה מדווחת') + ' על סכום אחר — ראו את ההיסטוריה';
   else if (r.duplicateTransaction) message = r.error;
   else if (r.exhausted) message = 'הגענו למגבלת הבדיקות לשורה הזו (או שאין לה מזהה אצל החברה)';
   else if (r.error) message = 'הבירור נכשל: ' + r.error;
   else if (after.status === 'paid' || after.status === 'refunded') message = 'התשלום הזה כבר אושר';
-  else if (after.status === 'failed') message = 'התשלום לא הושלם אצל חברת הסליקה';
+  else if (after.status === 'failed') message = 'התשלום לא הושלם אצל ' + who;
   else if (after.status === 'mismatch') message = 'אי-התאמה בסכום — ראו את ההיסטוריה';
-  else message = 'עדיין לא אושר אצל חברת הסליקה' + (r.message ? ' (' + r.message + ')' : '');
+  else message = 'עדיין לא אושר אצל ' + who + (r.message ? ' (' + r.message + ')' : '');
   return { ok: !!r.ok, status: after.status, changed: !!r.changed, message };
 }
 

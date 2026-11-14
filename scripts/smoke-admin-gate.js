@@ -100,6 +100,14 @@ function waitUp(tries = 40) {
     const apiUnauth = await req('GET', '/admin/api/pages');
     check('unauthenticated API request → 401 JSON, not a redirect', apiUnauth.status === 401 && apiUnauth.json && apiUnauth.json.ok === false);
 
+    // ── v2.69: the admin's 12 MB JSON allowance belongs to a signed-in admin.
+    //    It used to run for every caller, ahead of this gate — an anonymous
+    //    POST had megabytes buffered and parsed before the 401 above. ──
+    const oversized = await req('POST', '/admin/api/pages', { body: { pad: 'a'.repeat(1024 * 1024) }, accept: 'application/json' });
+    check('an oversized anonymous POST gets "not signed in" (401), never "payload too large" — smoke-platform pins that it is still refused unread', oversized.status === 401 && oversized.json && oversized.json.ok === false && oversized.json.error === 'לא מחובר');
+    const modest = await req('POST', '/admin/api/pages', { body: { pad: 'a'.repeat(64 * 1024) }, accept: 'application/json' });
+    check('a modest anonymous POST still reaches the gate (401)', modest.status === 401);
+
     // ── the auth screens themselves are reachable with no session ──
     const loginScreen = await req('GET', '/admin/login');
     check('/admin/login is reachable unauthenticated', loginScreen.status === 200);
@@ -138,6 +146,8 @@ function waitUp(tries = 40) {
     const authed = await req('GET', '/admin/dashboard', { cookie });
     check('an authenticated request to the same page now succeeds (200)', authed.status === 200);
     check('security headers still present once authenticated', authed.headers['x-content-type-options'] === 'nosniff');
+    const authedBig = await req('POST', '/admin/api/seo', { cookie, body: { description: 'admin-gate smoke', pad: 'a'.repeat(1024 * 1024) } });
+    check('the same megabyte from a signed-in admin is accepted (uploads keep working)', authedBig.status === 200 && authedBig.json && authedBig.json.ok === true);
 
     // ── role resolution: admin vs editor reach the gate differently downstream ──
     const editorLogin = await req('POST', '/admin/login', { form: { username: 'dana', password: 'dana-pass-1' } });
@@ -157,6 +167,9 @@ function waitUp(tries = 40) {
       if (r.status === 429) sawRateLimited = true;
     }
     check('the per-IP admin flood cap eventually trips (429) — even on the login screen itself', sawRateLimited);
+    // v2.69: a screen's fetch().json() threw on the plain-text 429
+    const limitedJson = await req('GET', '/admin/api/pages', { cookie, accept: 'application/json' });
+    check('a JSON caller is told so in JSON', limitedJson.status === 429 && limitedJson.json && limitedJson.json.ok === false && !!limitedJson.json.error);
   } finally {
     child.kill();
   }

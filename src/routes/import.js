@@ -24,12 +24,15 @@ router.post('/admin/api/import', (req, res) => {
     } catch (e) {
       return res.status(400).json({ ok: false, error: e.message });
     }
-    const { createPage, getPageByFullPath, savePageSource } = require('../pages');
+    const { createPage, getPageByFullPath, isReservedPath, savePageSource } = require('../pages');
     const created = [];
     for (const page of result.pages) {
-      // never clobber — suffix until the slug is free (same rule as decompile)
+      // never clobber — suffix until the slug is free (same rule as decompile).
+      // An address the system keeps (a WordPress page named Sitemap, API,
+      // Account…) is a taken one: createPage refuses it since v2.69, and the
+      // refusal used to end the whole import half-way with "import failed".
       let candidate = page.slug;
-      for (let n = 2; getPageByFullPath(candidate); n++) candidate = page.slug + '-' + n;
+      for (let n = 2; getPageByFullPath(candidate) || isReservedPath(candidate); n++) candidate = page.slug + '-' + n;
       createPage({ title: page.title, slug: candidate, blocks: [] });
       try {
         savePageSource(candidate, page.source, { publish: !!publish });

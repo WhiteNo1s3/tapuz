@@ -37,8 +37,11 @@ function scrubAiSource(source) {
   try {
     doc = pzn.parse(src);
   } catch (e) {
-    // an unparseable document is refused further down the door anyway; the
-    // repair pass re-enters here with the repaired source
+    // an unparseable document is either refused further down the door or
+    // REPAIRED there — and the repair quarantines raw HTML it finds beside
+    // the modules into provisional <bent-html> blocks this pass never saw.
+    // Every door that repairs must call scrubAiSource again on the repaired
+    // source (the create-from-source routes do; smoke-ai-html-guard pins it).
     return { source: src, scrubbed: 0 };
   }
   let scrubbed = 0;

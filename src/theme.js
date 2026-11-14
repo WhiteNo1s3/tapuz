@@ -348,6 +348,14 @@ const SHADOW_SCALE = {
 // every "button" surface the theme draws — the button-style knob restyles
 // them together (the .btn-primary rule, form submits, pricing CTAs)
 const BUTTON_SELECTORS = '.btn-primary, .bent-form-submit, .bent-plan-cta, .bent-flipbox-button';
+// …and the ones that list never reached (v2.69): the store's buttons and the
+// page-surface ones (search, newsletter, cookie consent, sign-up). With
+// buttons = outline | soft | glow they stayed filled beside a restyled
+// .btn-primary. A SECOND list, emitted after the first: a smoke pins the
+// first one's exact text. The two :not() keep a ghost button a ghost and a
+// sold-out pill a pill — neither is a primary surface.
+const SURFACE_BUTTON_SELECTORS = '.bent-btn:not(.bent-btn-ghost), .bent-shop-add:not(.is-out), .bent-buy-add, .bent-checkout-submit, ' +
+  '.bent-search-submit, .bent-newsletter-form button, .bent-consent-accept, .bent-auth-register';
 
 // every "menu link" surface the chrome dresses (v2.28b): the links AND the
 // fold's <summary class="nav-more-sum"> ("עוד"), which is not an <a> but
@@ -505,6 +513,58 @@ function rawCss(v) {
   return String(v == null ? '' : v).replace(/<\/style/gi, '<\\/style').trim();
 }
 
+/**
+ * The colour of the WORDS on the accent surface (v2.69) — `--accent-fg`.
+ * Every button, badge and brand strip wrote a fixed white, so a light
+ * primary (a yellow, a gold, a cyan) made white-on-light buttons. White
+ * stays on every dark or saturated primary — the tangerine default
+ * included — and a LIGHT primary gets dark words. "Light" is a relative
+ * luminance above 0.35 (white on it would contrast under 2.6:1). A colour
+ * that is not a plain hex (a name, an rgb(), a var()) cannot be measured
+ * here and keeps white, as before.
+ */
+const ACCENT_FG_DARK = '#111827';
+const ACCENT_FG_LIGHT = '#fff';
+function accentForeground(primary) {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(primary == null ? '' : primary).trim());
+  if (!m) return ACCENT_FG_LIGHT;
+  const hex = m[1].length === 3 ? m[1].split('').map((c) => c + c).join('') : m[1];
+  const lin = [0, 2, 4].map((i) => {
+    const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  const luminance = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  return luminance > 0.35 ? ACCENT_FG_DARK : ACCENT_FG_LIGHT;
+}
+
+/**
+ * The header's width as the css reads it (`--header-max-width`).
+ *
+ * 'wide' is a deliberate step past a NARROW column: a ten-item Hebrew menu
+ * needs about 1130px and the default column is 900px. Beside a column that
+ * is itself 1000px or more, the same fixed 1140px is a near miss — measured
+ * on an 1100px column: the header and the footer stuck out 20px on each
+ * side of everything between them. So 'wide' follows the column from
+ * 1000px up (from 1140px up it always did — the css takes the larger of
+ * the two). 'content' and 'full' can only be an owner's choice and are
+ * never touched; 'wide' is also the value every theme rests on (saving
+ * merges the defaults in), so there is no telling a chosen 'wide' from an
+ * untouched one — an owner who wants a header wider than a wide column
+ * picks 'full'.
+ */
+function headerFollowsColumn(layout) {
+  const l = layout || {};
+  if (l.headerWidth === 'content') return true;
+  if (l.headerWidth === 'full') return false;
+  const px = /^\s*(\d+(?:\.\d+)?)px\s*$/.exec(String(l.maxWidth == null ? '' : l.maxWidth));
+  return !!px && parseFloat(px[1]) >= 1000;
+}
+function headerMaxWidth(layout) {
+  const l = layout || {};
+  if (headerFollowsColumn(l)) return HEADER_WIDTH.content;
+  return HEADER_WIDTH[l.headerWidth] || HEADER_WIDTH.wide;
+}
+
 function loadOverrides() {
   try {
     if (fs.existsSync(OVERRIDES_PATH)) {
@@ -519,7 +579,7 @@ function saveOverrides(overrides) {
   const dir = path.dirname(OVERRIDES_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const merged = mergeDeep(DEFAULT_OVERRIDES, overrides || {});
-  fs.writeFileSync(OVERRIDES_PATH, JSON.stringify(merged, null, 2), 'utf8');
+  require('./json-file').writeAtomic(OVERRIDES_PATH, JSON.stringify(merged, null, 2));
   return merged;
 }
 
@@ -600,6 +660,7 @@ function overridesToCss(overrides) {
   const accentBg = o.style.accent === 'gradient'
     ? `linear-gradient(135deg, ${primary}, ${secondary})`
     : primary;
+  const accentFg = accentForeground(primary);
   const lines = [
     `--font-family: ${cssValue(o.fonts.family)};`,
     `--font-heading: ${cssValue(o.fonts.headingFamily) || cssValue(o.fonts.family)};`,
@@ -623,8 +684,17 @@ function overridesToCss(overrides) {
     `--shadow-1: ${shadow.s1};`,
     `--shadow-2: ${shadow.s2};`,
     `--accent-bg: ${accentBg};`,
+    // v2.69 — the words on the accent surface, and four names the theme css
+    // has always read and nothing ever set (measured on a purple palette:
+    // product prices tangerine, the team's photo box stone). --color-bg-alt
+    // stays unset on purpose: the css keeps a light fallback of its own.
+    `--accent-fg: ${accentFg};`,
+    `--accent: ${primary};`,
+    `--border: ${cssValue(o.colors.border)};`,
+    `--muted: ${cssValue(o.colors.muted)};`,
+    `--color-bg-soft: ${cssValue(o.colors.lightBg)};`,
     // the menu's geometry (v2.28) — read by themes/default/css/main.css
-    `--header-max-width: ${HEADER_WIDTH[(o.layout || {}).headerWidth] || HEADER_WIDTH.wide};`,
+    `--header-max-width: ${headerMaxWidth(o.layout)};`,
     `--menu-gap: ${MENU_GAP[(o.chrome || {}).menuGap] || MENU_GAP.md};`,
     `--menu-size: ${MENU_SIZE[(o.chrome || {}).menuSize] || MENU_SIZE.md};`,
     `--menu-align: ${MENU_ALIGN[(o.chrome || {}).menuAlign] || MENU_ALIGN.start};`
@@ -716,16 +786,21 @@ function overridesToCss(overrides) {
 
   // Button style (v2.24) — 'filled' is what the theme already draws, so it
   // emits nothing; the others restyle every button surface together.
+  // v2.69 — the same rules for the second list (the store's and the
+  // page-surface buttons), and the hover's words follow --accent-fg.
   const buttons = String((o.style && o.style.buttons) || 'filled');
-  if (buttons === 'outline') {
-    css += `${BUTTON_SELECTORS} { background: transparent; color: ${primary}; border: 2px solid ${primary}; box-shadow: none; }\n` +
-      `${BUTTON_SELECTORS.split(', ').map((s) => s + ':hover').join(', ')} { background: ${primary}; color: #fff; filter: none; }\n`;
-  } else if (buttons === 'soft') {
-    css += `${BUTTON_SELECTORS} { background: color-mix(in srgb, ${primary} 14%, transparent); color: ${primary}; border-color: transparent; }\n` +
-      `${BUTTON_SELECTORS.split(', ').map((s) => s + ':hover').join(', ')} { background: ${primary}; color: #fff; filter: none; }\n`;
-  } else if (buttons === 'glow') {
-    css += `${BUTTON_SELECTORS} { box-shadow: 0 8px 24px color-mix(in srgb, ${primary} 45%, transparent); }\n` +
-      `${BUTTON_SELECTORS.split(', ').map((s) => s + ':hover').join(', ')} { transform: translateY(-1px); box-shadow: 0 12px 30px color-mix(in srgb, ${primary} 55%, transparent); }\n`;
+  for (const list of [BUTTON_SELECTORS, SURFACE_BUTTON_SELECTORS]) {
+    const hovered = list.split(', ').map((s) => s + ':hover').join(', ');
+    if (buttons === 'outline') {
+      css += `${list} { background: transparent; color: ${primary}; border: 2px solid ${primary}; box-shadow: none; }\n` +
+        `${hovered} { background: ${primary}; color: ${accentFg}; filter: none; }\n`;
+    } else if (buttons === 'soft') {
+      css += `${list} { background: color-mix(in srgb, ${primary} 14%, transparent); color: ${primary}; border-color: transparent; }\n` +
+        `${hovered} { background: ${primary}; color: ${accentFg}; filter: none; }\n`;
+    } else if (buttons === 'glow') {
+      css += `${list} { box-shadow: 0 8px 24px color-mix(in srgb, ${primary} 45%, transparent); }\n` +
+        `${hovered} { transform: translateY(-1px); box-shadow: 0 12px 30px color-mix(in srgb, ${primary} 55%, transparent); }\n`;
+    }
   }
 
   // Theme skin (v2.24) — free-form author CSS against the documented
@@ -1525,6 +1600,10 @@ module.exports = {
   menuBodyClasses,
   sanitizeMenuKnobs,
   menuFitFor,
+  // v2.69 — the words on the accent surface; whether the header keeps to
+  // the content column (the capacity estimate should ask the same question)
+  accentForeground,
+  headerFollowsColumn,
   // hygiene at the door (v2.27)
   cleanAuthorCss,
   normalizeColor,

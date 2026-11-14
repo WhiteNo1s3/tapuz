@@ -9,6 +9,35 @@
   --color-border: #e5e7eb;
   --color-bg: #ffffff;
   --color-light-bg: #f8fafc;
+  /* One rhythm (v2.69) — Ben: "refine the look and page maker so it aligns
+     good in the eye for perfectionists". Every grid of cards used to carry
+     its own gap, margin, padding and breakpoints (twelve breakpoints, seven
+     block margins), so two grids stacked on one page were 2–3px out of line
+     at their inner edges. These are the shared numbers; the modules below
+     read them, and a skin may set any of them once for the whole site. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.25rem;
+  --grid-gap: 1.25rem;              /* between the cards of a grid */
+  --block-gap: 1.5rem;              /* above and below a block */
+  --card-pad: 1rem 1.1rem 1.15rem;  /* inside a card, around its words */
+  --media-bg: var(--color-light-bg, #f1f5f9); /* behind every picture box */
+  /* the page's own edge: the content, the header, the footer and every
+     full-bleed row read the same pair, so their edges meet on a phone too */
+  --page-pad: 1.25rem;
+  --page-pad-block: 2.25rem;
+  /* Five names the modules have always read and nothing ever defined, so
+     prices, pills and photo boxes kept a tangerine and a stone of their own
+     on every palette. The theme sets them from the owner's colours
+     (src/theme.js); these are the stand-ins for a page without one. */
+  --accent: var(--color-primary);
+  --accent-fg: #fff;                /* the words on the accent surface */
+  --border: var(--color-border);
+  --muted: var(--color-muted);
+  --color-bg-soft: var(--color-light-bg);
 }
 
 html {
@@ -40,7 +69,7 @@ body {
 .header-inner {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 0 1.25rem;
+  padding: 0 var(--page-pad);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -300,8 +329,18 @@ body.menu-drawer .main-nav .nav-more-sum { display: block; padding: 0.55rem 0.4r
 .main-content {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: 2.25rem 1.25rem;
+  padding: var(--page-pad-block) var(--page-pad);
 }
+
+/* A short page keeps its footer at the foot of the window (v2.69). The cart,
+   an order page, an empty category: the footer used to sit in the middle of
+   the screen with page background under it. The side-menu layout has its own
+   full-height grid (further down) and is left alone. The column keeps the
+   width it had as a block: a flex item centred by auto margins is sized by
+   its content, so its width is spelled out — the window less the page
+   padding, never more than --max-width. */
+body:not(.menu-side) { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+body:not(.menu-side) > .main-content { flex: 1 0 auto; width: calc(100% - 2 * var(--page-pad)); }
 
 /* ===== Typography ===== */
 h1 { font-size: 2.35rem; line-height: 1.25; margin-top: 0.1rem; margin-bottom: 0.6rem; }
@@ -328,9 +367,19 @@ p { margin-bottom: 1.1rem; }
   color: var(--color-muted);
   margin-bottom: 1.75rem;
   max-width: 520px;
-  margin-left: auto;
-  margin-right: auto;
+  margin-inline: auto;
 }
+
+/* A hero that carries its authored children (v2.38) renders each one with
+   its own dir attribute, and `[dir] { text-align }` above then beats the
+   hero's own centring — measured: the h1 and the subtitle of such a hero
+   computed `right` while the flat hero beside it was centred. The children
+   follow the hero unless they were given an align of their own (an inline
+   style, which still wins); and inside a hero the hero's width is the
+   reading width, so its paragraphs carry no cap of their own. */
+.hero > :is(h1, h2, h3, h4, h5, h6),
+.hero > .bent-text { text-align: inherit; }
+.hero .bent-text p { max-width: none; }
 
 /* ===== Buttons ===== */
 .btn {
@@ -340,15 +389,31 @@ p { margin-bottom: 1.1rem; }
   font-weight: 600;
   text-decoration: none;
   font-size: 0.95rem;
-  margin: 0.25rem 0.25rem 0.25rem 0;
+  /* measured 56px tall: a button inherited the page's 1.7 reading line */
+  line-height: 1.25;
+  /* no side margin of its own: the old physical `0.25rem` on the right was
+     the START side on a Hebrew page (a 4.5px indent) and pushed a lone
+     centred button 2px off its heading. Two buttons in a row keep their gap. */
+  margin: 0.25rem 0;
   transition: all 0.15s ease;
   border: 2px solid transparent;
 }
+.btn + .btn { margin-inline-start: 0.5rem; }
+/* `align` on a button (center | end) used to do nothing: the renderer writes
+   text-align on the link itself, and text-align does not move an
+   inline-block. The button becomes a block as wide as its words and the
+   free space goes to its sides. */
+.btn[style*="text-align:center"] { display: block; width: fit-content; margin-inline: auto; }
+.btn[style*="text-align:end"] { display: block; width: fit-content; margin-inline: auto 0; }
 
 .btn-primary {
   /* --accent-bg is solid OR a primary→secondary gradient (theme builder) */
   background: var(--accent-bg, var(--color-primary));
-  color: white;
+  /* the surface starts at the button's outer edge: laid from the padding
+     box, a gradient began again under the 2px transparent border and drew a
+     hairline of its far colour around the button */
+  background-origin: border-box;
+  color: var(--accent-fg, #fff);
   border-color: transparent;
 }
 
@@ -376,19 +441,36 @@ p { margin-bottom: 1.1rem; }
 }
 
 /* ===== Cards ===== */
+/* The CARD container: a box that stacks whatever is put in it. The renderer
+   writes class="card bent-card", so for years it also wore the MEDIA card's
+   rules by accident — a column flex box with its overflow clipped, in which
+   a button stretched edge to edge (measured 916px wide in a full-width
+   card). The stack stays, now on purpose (it is what every live card's
+   spacing was built on); the button keeps its own width, and what a card
+   holds — a focus ring, a shadow — is no longer cut at its border. */
 .card {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg, 12px);
-  padding: 1.5rem;
-  margin: 1.5rem 0;
+  padding: var(--card-pad);
+  margin: var(--block-gap) 0;
   background: var(--color-surface, #fff);
 }
+.card.bent-card { display: flex; flex-direction: column; overflow: visible; }
+.card.bent-card > .btn { align-self: flex-start; }
+/* two buttons in a card stand one under the other, on one edge: the gap that
+   keeps two buttons of a ROW apart would indent the second */
+.card.bent-card > .btn + .btn { margin-inline-start: 0; }
 
 /* ===== Columns / Services ===== */
+/* One gap for a row, whichever way its columns are laid out (measured: a
+   plain row 31.5px, the same row after one drag of a column handle 20.7px,
+   both saying gap=md). Each row sets --col-gap on ITSELF, so a row nested
+   in a wide-gapped row keeps its own. */
 .columns {
+  --col-gap: 1.75rem;
   display: flex;
-  gap: 1.75rem;
-  margin: 1.5rem 0;
+  gap: var(--col-gap);
+  margin: var(--block-gap) 0;
 }
 
 .columns .col { flex: 1; min-width: 0; }
@@ -398,7 +480,6 @@ p { margin-bottom: 1.1rem; }
 .columns.cols-ratio {
   display: grid;
   grid-template-columns: var(--cols, 1fr 1fr);
-  gap: var(--col-gap, 1.15rem);
 }
 .columns.cols-ratio > .col { min-width: 0; }
 
@@ -406,36 +487,51 @@ p { margin-bottom: 1.1rem; }
    params (block-registry.js 'columns'), emitted as classes by the renderer.
    width=wide/full breaks the row out of the content column, the classic
    "stretch section": centered, never wider than the viewport. */
-.columns.gap-none { gap: 0; }
-.columns.gap-sm { gap: 0.75rem; --col-gap: 0.75rem; }
-.columns.gap-lg { gap: 2.75rem; --col-gap: 2.75rem; }
+.columns.gap-none { --col-gap: 0px; }
+.columns.gap-sm { --col-gap: 0.75rem; }
+.columns.gap-lg { --col-gap: 2.75rem; }
 .columns.valign-center { align-items: center; }
 .columns.valign-bottom { align-items: flex-end; }
 .columns.valign-stretch { align-items: stretch; }
-.columns.valign-stretch > .col > .card,
-.columns.valign-stretch > .col > .bent-card { height: 100%; box-sizing: border-box; }
+/* a stretched card fills its column MINUS its own two margins: at a flat
+   100% it overran the column by one of them and touched whatever came after
+   the row (measured: the row's cards ended at y 3895, exactly where the next
+   block began). A media card standing in a column has no margins of its own
+   and keeps the full height. */
+.columns.valign-stretch > .col > .card { height: calc(100% - 2 * var(--block-gap)); box-sizing: border-box; }
+.columns.valign-stretch > .col > .bent-card:not(.card) { height: 100%; box-sizing: border-box; }
+/* …and in such a row the card's closing button sits on the card's floor, so
+   three cards with one, four and two lines of text end on one level */
+.columns.valign-stretch > .col > .card > .btn:last-child { margin-top: auto; }
 .columns.cols-wide {
-  width: min(1400px, calc(100vw - 2rem));
-  margin-inline: calc(50% - min(700px, 50vw - 1rem));
+  width: min(1400px, calc(100vw - 2 * var(--page-pad)));
+  margin-inline: calc(50% - min(700px, 50vw - var(--page-pad)));
 }
 .columns.cols-full {
   width: 100vw;
   margin-inline: calc(50% - 50vw);
-  padding-inline: 1rem;
+  padding-inline: var(--page-pad);
   box-sizing: border-box;
 }
 
 /* ── Responsive rows (v2.26) — a row behaves like a site, not a cramped
    strip of cards: five or six cells WRAP to a 3-up grid on a tablet, four
    cells to 2-up, and every row stacks at its collapse point
-   (collapse=sm 640px · md 768px, the default · lg 1024px · never). */
+   (collapse=sm 640px · md 768px, the default · lg 1024px · never).
+   v2.69 — a ratio row wraps the same way (four ratio'd cells used to stay
+   four on a tablet); its fractions return to equal cells while it is
+   wrapped. Ahead of the collapse-lg lines on purpose: a row that stacks at
+   1024px must still stack. */
 @media (max-width: 1024px) {
   .columns.cols-n-5:not(.cols-ratio),
   .columns.cols-n-6:not(.cols-ratio) { flex-wrap: wrap; }
   .columns.cols-n-5:not(.cols-ratio) > .col,
-  .columns.cols-n-6:not(.cols-ratio) > .col { flex: 1 1 calc(33.333% - 1.75rem); }
+  .columns.cols-n-6:not(.cols-ratio) > .col { flex: 1 1 calc(33.333% - var(--col-gap)); }
   .columns.cols-n-4:not(.cols-ratio) { flex-wrap: wrap; }
-  .columns.cols-n-4:not(.cols-ratio) > .col { flex: 1 1 calc(50% - 1.75rem); }
+  .columns.cols-n-4:not(.cols-ratio) > .col { flex: 1 1 calc(50% - var(--col-gap)); }
+  .columns.cols-n-5.cols-ratio,
+  .columns.cols-n-6.cols-ratio { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .columns.cols-n-4.cols-ratio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .columns.collapse-lg { flex-direction: column; gap: 1.25rem; }
   .columns.collapse-lg > .col { flex: 1 1 auto; }
   .columns.collapse-lg.cols-ratio { grid-template-columns: 1fr; }
@@ -452,11 +548,13 @@ p { margin-bottom: 1.1rem; }
 }
 
 /* ===== Features ===== */
+/* (the column counts and the breakpoints of every N-column grid live in ONE
+   place — "One grid, one ladder", further down) */
 .features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.25rem;
-  margin: 1.5rem 0;
+  gap: var(--grid-gap);
+  margin: var(--block-gap) 0;
 }
 
 .feature {
@@ -483,24 +581,9 @@ a.feature-link h3 { color: inherit; }
 /* ===== Article cubes (article-list module) ===== */
 .article-cubes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-  margin: 1.5rem 0;
-}
-
-.article-cubes.cols-1 { grid-template-columns: 1fr; }
-.article-cubes.cols-2 { grid-template-columns: repeat(2, 1fr); }
-.article-cubes.cols-4 { grid-template-columns: repeat(4, 1fr); }
-
-@media (max-width: 900px) {
-  .article-cubes,
-  .article-cubes.cols-4 { grid-template-columns: repeat(2, 1fr); }
-}
-
-@media (max-width: 560px) {
-  .article-cubes,
-  .article-cubes.cols-2,
-  .article-cubes.cols-4 { grid-template-columns: 1fr; }
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--grid-gap);
+  margin: var(--block-gap) 0;
 }
 
 .article-cube {
@@ -521,7 +604,7 @@ a.feature-link h3 { color: inherit; }
 }
 
 .article-cube .cube-media {
-  background: var(--color-light-bg);
+  background: var(--media-bg);
   aspect-ratio: 16 / 9;
 }
 
@@ -533,7 +616,7 @@ a.feature-link h3 { color: inherit; }
 }
 
 .article-cube .cube-body {
-  padding: 1rem 1.1rem 1.2rem;
+  padding: var(--card-pad);
 }
 
 .article-cube .cube-body h3 {
@@ -567,27 +650,39 @@ figcaption {
 }
 
 /* ===== Gallery ===== */
+/* Every picture takes the same 4:3 box, whatever shape it was shot in. A
+   second, later `.gallery img { height: 120px }` used to win over the 220px
+   meant here (measured: 361×120 letterbox strips), and the cols-N grids kept
+   four columns on a phone with an 8px gap of their own. Each picture is a
+   <figure>; its caption, when it has one, sits under it. */
 .gallery {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.75rem;
-  margin: 1.5rem 0;
+  gap: var(--grid-gap);
+  margin: var(--block-gap) 0;
 }
+.gallery > figure { margin: 0; min-width: 0; }
 
 .gallery img {
   width: 100%;
-  height: 220px;
+  height: auto;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
+  background: var(--media-bg);
   border-radius: var(--radius-md, 8px);
 }
 
 /* ===== Testimonial ===== */
+/* the accent bar is on the START side in both directions (measured on an
+   English page: the bar sat on the end side, and one corner followed the
+   theme's radius while its twin was a fixed 8px) */
 .testimonial {
-  border-right: 5px solid var(--color-primary);
+  border-inline-start: 5px solid var(--color-primary);
   padding: 1.25rem 1.5rem;
   background: var(--color-light-bg);
   margin: 1.75rem 0;
-  border-radius: var(--radius-md, 8px) 0 0 8px;
+  border-start-end-radius: var(--radius-md, 8px);
+  border-end-end-radius: var(--radius-md, 8px);
 }
 
 .testimonial p {
@@ -616,7 +711,7 @@ figcaption {
      narrower footer reads as a mistake */
   max-width: max(var(--max-width), var(--header-max-width, 1140px));
   margin: 0 auto;
-  padding: 0 1.25rem;
+  padding: 0 var(--page-pad);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -696,7 +791,7 @@ hr {
 }
 
 @media (max-width: 768px) {
-  .main-content { padding: 1.5rem 1rem; }
+  :root { --page-pad: 1rem; --page-pad-block: 1.5rem; }
   h1 { font-size: 2rem; }
   .hero h1 { font-size: 2.4rem; }
 }
@@ -714,14 +809,17 @@ html { scroll-behavior: smooth; }
    properties ::selection is specified to honour, and a browser that drops the
    shorthand while keeping `color:#fff` would render selected text white on a
    white page — invisible, which is the failure this rule exists to fix. */
+/* v2.69 — the words follow --accent-fg: white on every dark or saturated
+   primary (as before), dark on a light one, where white on a yellow
+   highlight was the same invisible text again. */
 ::selection {
   background-color: var(--color-primary);
-  color: #fff;
-  -webkit-text-fill-color: #fff;
+  color: var(--accent-fg, #fff);
+  -webkit-text-fill-color: var(--accent-fg, #fff);
 }
 ::-moz-selection {
   background-color: var(--color-primary);
-  color: #fff;
+  color: var(--accent-fg, #fff);
 }
 
 .skip-link {
@@ -729,7 +827,7 @@ html { scroll-behavior: smooth; }
   top: -48px;
   inset-inline-start: 12px;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--accent-fg, #fff);
   padding: 8px 16px;
   border-radius: 0 0 8px 8px;
   text-decoration: none;
@@ -843,6 +941,19 @@ button:focus-visible,
 .bent-text.text-max-sm { max-width: 28rem; }
 .bent-text.text-max-md { max-width: 36rem; }
 .bent-text.text-max-lg { max-width: 48rem; }
+/* TEXT align=center really centres (v2.69). The renderer writes text-align
+   on the wrapper, but every <p> inside carries its own dir, and
+   `[dir] { text-align }` beat what the wrapper said; the 70ch reading cap
+   then left the paragraph's box at the start edge. Measured on the demo's
+   intro: wrapper `center`, paragraph `right`, its box at x 470–1263 in a
+   163–1263 column, under a centred h1. The paragraph follows its wrapper,
+   and a centred or end-aligned block puts its free space where it belongs —
+   a narrowed wrapper (max-width sm | md | lg) included. */
+.bent-text > p { text-align: inherit; }
+.bent-text[style*="text-align:center"],
+.bent-text[style*="text-align:center"] > p { margin-inline: auto; }
+.bent-text[style*="text-align:end"],
+.bent-text[style*="text-align:end"] > p { margin-inline-start: auto; }
 .bent-image.img-w-sm { max-width: 240px; }
 .bent-image.img-w-md { max-width: 420px; }
 .bent-image.img-w-lg { max-width: 640px; }
@@ -855,40 +966,40 @@ button:focus-visible,
 .map-embed iframe { width: 100%; border: 0; display: block; min-height: 220px; }
 .map-embed.map-h-sm iframe { min-height: 180px; }
 .map-embed.map-h-lg iframe { min-height: 420px; }
-.gallery.cols-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.gallery.cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.gallery.cols-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.gallery img { width: 100%; height: 120px; object-fit: cover; border-radius: var(--radius-md, 8px); }
-.card, .bent-card {
-  border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: var(--radius-lg, 12px);
-  padding: 1rem 1.15rem;
-  background: var(--color-surface, #f8fafc);
-}
 
 /* Enterprise modules */
 .cta-strip {
-  border-radius: 14px;
+  border-radius: var(--radius-lg, 14px);
   padding: 2rem 1.5rem;
-  margin: 1.5rem 0;
+  margin: var(--block-gap) 0;
   text-align: center;
 }
-.cta-strip.tone-brand { background: var(--accent-bg, linear-gradient(135deg, #0a66c2, #0369a1)); color: #fff; }
+.cta-strip.tone-brand { background: var(--accent-bg, linear-gradient(135deg, #0a66c2, #0369a1)); color: var(--accent-fg, #fff); }
 .cta-strip.tone-dark { background: #0f172a; color: #f8fafc; }
 .cta-strip.tone-light { background: #f1f5f9; color: var(--color-text, #0f172a); border: 1px solid var(--color-border, #e2e8f0); }
 .cta-strip h2 { margin: 0 0 0.5rem; font-size: 1.6rem; }
 .cta-strip p { margin: 0 0 1rem; opacity: 0.92; }
 .cta-strip .btn { margin-top: 0.25rem; }
+/* A primary button ON the brand surface (v2.69). The strip and its button
+   read the same --accent-bg, so the default call-to-action — tone brand,
+   variant primary — drew a button with no shape: tangerine on tangerine, and
+   with the theme's outline style nothing at all (seen: an empty strip under
+   its paragraph). There the button turns inside out — the words' colour is
+   its surface, the brand colour its words — whatever the button style. */
+:is(.cta-strip, .site-banner, .bent-header, .bent-footer).tone-brand .btn-primary {
+  background: var(--accent-fg, #fff);
+  color: var(--color-primary);
+  border-color: transparent;
+  box-shadow: none;
+}
+:is(.cta-strip, .site-banner, .bent-header, .bent-footer).tone-brand .btn-primary:hover { filter: brightness(0.94); }
 
 .stats-row {
   display: grid;
-  gap: 1rem;
-  margin: 1.5rem 0;
+  gap: var(--grid-gap);
+  margin: var(--block-gap) 0;
   text-align: center;
 }
-.stats-row.cols-2 { grid-template-columns: repeat(2, 1fr); }
-.stats-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
-.stats-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
 .stat-value { font-size: 2rem; font-weight: 800; color: var(--color-primary, #0a66c2); line-height: 1.1; }
 .stat-label { color: var(--color-muted, #6b7280); font-size: 0.95rem; margin-top: 0.35rem; }
 
@@ -940,22 +1051,12 @@ button:focus-visible,
 .site-banner p { margin: 0; font-weight: 600; }
 /* "brand" tone follows the THEME's brand (accent surface + white), not a
    hardcoded palette — a citrus site was getting a blue announcement strip */
-.site-banner.tone-brand { background: var(--accent-bg, #1d4ed8); color: #fff; }
+.site-banner.tone-brand { background: var(--accent-bg, #1d4ed8); color: var(--accent-fg, #fff); }
 .site-banner.tone-dark { background: #0f172a; color: #f8fafc; }
 .site-banner.tone-light { background: #f1f5f9; color: #334155; }
 .site-banner.tone-warn { background: #fef3c7; color: #92400e; }
 
-.features.cols-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-.features.cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.features.cols-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
 .feature-icon { font-size: 1.4rem; display: block; margin-bottom: 0.35rem; }
-
-@media (max-width: 700px) {
-  .stats-row.cols-2, .stats-row.cols-3, .stats-row.cols-4,
-  .features.cols-2, .features.cols-3, .features.cols-4 {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* WhatsApp click-to-chat floating button (site integration) */
 .whatsapp-float {
@@ -1015,7 +1116,7 @@ button:focus-visible,
 .tapuz-search-panel.open { display: flex; }
 .tapuz-search-box {
   background: var(--color-surface, #fff);
-  border-radius: 14px;
+  border-radius: var(--radius-lg, 14px);
   width: min(560px, 92vw);
   max-height: 70vh;
   overflow: auto;
@@ -1026,12 +1127,12 @@ button:focus-visible,
   width: 100%;
   padding: 0.75rem 1rem;
   border: 1.5px solid #cbd5e1;
-  border-radius: 10px;
+  border-radius: var(--radius-md, 10px);
   font-size: 1rem;
   box-sizing: border-box;
 }
 .tapuz-search-results { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
-.tapuz-search-result { display: block; padding: 0.6rem 0.75rem; border-radius: 8px; text-decoration: none; color: inherit; }
+.tapuz-search-result { display: block; padding: 0.6rem 0.75rem; border-radius: var(--radius-md, 8px); text-decoration: none; color: inherit; }
 .tapuz-search-result:hover { background: #f1f5f9; }
 .tapuz-search-result .t { font-weight: 700; }
 .tapuz-search-result .e { font-size: 0.85rem; color: #64748b; margin-top: 0.15rem; }
@@ -1064,17 +1165,25 @@ button:focus-visible,
 }
 .tapuz-lang-switch a.active {
   background: var(--color-primary, #ea580c);
-  color: #fff;
+  color: var(--accent-fg, #fff);
 }
 
-/* ── Pricing table (v1.05) — module-hunt gap, zero-JS ── */
+/* ── Pricing table (v1.05) — module-hunt gap, zero-JS ──
+   v2.69 — the plans of a row are compared side by side, so they stand on one
+   level. Measured with 1 / 4 / 2 / 1 feature lines: four buttons on three
+   different heights, and the recommended plan (scale 1.03) starting 6px
+   above its neighbours. A plan is a column now: the feature list takes the
+   slack and the button sits on the floor; the recommended plan is marked by
+   its ring and its shadow, not by being a different size. */
 .bent-pricing {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1.25rem;
-  margin: 1rem 0;
+  gap: var(--grid-gap);
+  margin: var(--block-gap) 0;
 }
 .bent-plan {
+  display: flex;
+  flex-direction: column;
   background: var(--color-surface, #fff);
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: var(--radius-lg, 12px);
@@ -1085,26 +1194,24 @@ button:focus-visible,
 .bent-plan-highlighted {
   border-color: var(--color-primary, #ea580c);
   box-shadow: 0 0 0 2px var(--color-primary, #ea580c), var(--shadow-2, 0 10px 30px rgba(2, 8, 23, 0.12));
-  transform: scale(1.03);
 }
 .bent-plan-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 0.5rem; }
 .bent-plan-price { margin-bottom: 1rem; }
 .bent-plan-amount { font-size: 2rem; font-weight: 800; color: var(--color-primary, #ea580c); }
 .bent-plan-period { font-size: 0.85rem; color: var(--color-muted, #78716c); margin-inline-start: 0.25rem; }
-.bent-plan-features { list-style: none; padding: 0; margin: 0 0 1.25rem; display: grid; gap: 0.5rem; text-align: start; }
+.bent-plan-features { flex: 1 1 auto; align-content: start; list-style: none; padding: 0; margin: 0 0 1.25rem; display: grid; gap: 0.5rem; text-align: start; }
 .bent-plan-features li { padding-inline-start: 1.25rem; position: relative; }
 .bent-plan-features li::before { content: "✓"; position: absolute; inset-inline-start: 0; color: var(--color-primary, #ea580c); font-weight: 700; }
 .bent-plan-cta {
   display: inline-block;
+  margin-top: auto;
+  align-self: center;
   background: var(--accent-bg, var(--color-primary, #ea580c));
-  color: #fff;
+  color: var(--accent-fg, #fff);
   padding: 0.6rem 1.5rem;
   border-radius: var(--radius-md, 8px);
   text-decoration: none;
   font-weight: 600;
-}
-@media (max-width: 640px) {
-  .bent-plan-highlighted { transform: none; }
 }
 
 /* ── Breadcrumbs — CSS separators, RTL logical, last crumb is the page ── */
@@ -1170,15 +1277,18 @@ button:focus-visible,
   min-width: 0;
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--border, #e7e5e4);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   font: inherit;
 }
 .bent-search-submit {
   padding: 0.55rem 1rem;
   border: 0;
-  border-radius: 8px;
-  background: var(--accent, #ea580c);
-  color: #fff;
+  border-radius: var(--radius-md, 8px);
+  /* the page-surface buttons (search, newsletter, consent, sign-up) wear the
+     same accent SURFACE as .btn-primary — on a gradient theme they were the
+     only flat buttons on the page */
+  background: var(--accent-bg, var(--accent, #ea580c));
+  color: var(--accent-fg, #fff);
   font: inherit;
   cursor: pointer;
 }
@@ -1186,7 +1296,7 @@ button:focus-visible,
   margin: 1.25rem 0;
   padding: 1.25rem;
   border: 1px solid var(--border, #e7e5e4);
-  border-radius: 12px;
+  border-radius: var(--radius-lg, 12px);
   background: #fff7ed;
 }
 .bent-newsletter-title { margin: 0 0 0.4rem; font-size: 1.15rem; }
@@ -1197,15 +1307,15 @@ button:focus-visible,
   min-width: 12rem;
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--border, #e7e5e4);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   font: inherit;
 }
 .bent-newsletter-form button {
   padding: 0.55rem 1rem;
   border: 0;
-  border-radius: 8px;
-  background: var(--accent, #ea580c);
-  color: #fff;
+  border-radius: var(--radius-md, 8px);
+  background: var(--accent-bg, var(--accent, #ea580c));
+  color: var(--accent-fg, #fff);
   font: inherit;
   cursor: pointer;
 }
@@ -1223,7 +1333,7 @@ button:focus-visible,
   min-width: 2rem;
   justify-content: center;
   padding: 0.35rem 0.65rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   text-decoration: none;
   color: inherit;
   border: 1px solid var(--border, #e7e5e4);
@@ -1236,7 +1346,7 @@ button:focus-visible,
   margin: 1rem 0;
   padding: 1rem 1.1rem;
   border: 1px solid var(--border, #e7e5e4);
-  border-radius: 12px;
+  border-radius: var(--radius-lg, 12px);
   background: #1c1917;
   color: #fafaf9;
 }
@@ -1245,11 +1355,13 @@ button:focus-visible,
 .bent-consent-accept, .bent-consent-reject {
   display: inline-flex;
   padding: 0.4rem 0.9rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   cursor: pointer;
   font: inherit;
 }
-.bent-consent-accept { background: var(--accent, #ea580c); color: #fff; }
+/* the same 1px frame as its neighbour, unseen: the two stood side by side
+   2px apart in height (measured 45px beside 47px) */
+.bent-consent-accept { background: var(--accent-bg, var(--accent, #ea580c)); background-origin: border-box; border: 1px solid transparent; color: var(--accent-fg, #fff); }
 .bent-consent-reject { background: transparent; color: inherit; border: 1px solid #44403c; }
 .bent-consent-policy { color: #fdba74; }
 .bent-related { margin: 1.5rem 0; }
@@ -1257,7 +1369,7 @@ button:focus-visible,
 .bent-related-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
+  gap: var(--grid-gap);
 }
 .bent-related-item {
   display: flex;
@@ -1265,11 +1377,13 @@ button:focus-visible,
   text-decoration: none;
   color: inherit;
   border: 1px solid var(--border, #e7e5e4);
-  border-radius: 12px;
+  border-radius: var(--radius-lg, 12px);
   overflow: hidden;
 }
-.bent-related-image { width: 100%; height: auto; display: block; }
-.bent-related-body { padding: 0.75rem; }
+/* one 16:9 box for every picture of the row: pictures of three shapes used
+   to put the three titles on three levels */
+.bent-related-image { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: var(--media-bg); border-radius: 0; display: block; }
+.bent-related-body { padding: var(--card-pad); }
 .bent-related-tag { font-size: 0.75rem; color: var(--accent, #ea580c); }
 .bent-related-item-title { margin: 0.2rem 0 0.35rem; font-size: 1rem; }
 .bent-related-excerpt { margin: 0; color: #57534e; font-size: 0.9rem; }
@@ -1286,7 +1400,7 @@ button:focus-visible,
   margin: 1rem 0;
   padding: 0.75rem;
   border: 1px dashed #d6d3d1;
-  border-radius: 10px;
+  border-radius: var(--radius-md, 10px);
   background: #fafaf9;
   text-align: center;
 }
@@ -1304,21 +1418,69 @@ button:focus-visible,
 .bent-auth-login, .bent-auth-register { text-decoration: none; color: inherit; }
 .bent-auth-register {
   padding: 0.35rem 0.8rem;
-  border-radius: 8px;
-  background: var(--accent, #ea580c);
-  color: #fff;
+  border-radius: var(--radius-md, 8px);
+  background: var(--accent-bg, var(--accent, #ea580c));
+  color: var(--accent-fg, #fff);
 }
 
-/* ── Steps (how-it-works) — CSS counters, stacks on a narrow viewport ── */
-.bent-steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1.25rem;
-  margin: 1.25rem 0;
+/* ── Centred rows: steps and the team (v2.69) ──
+   Both are centred designs, and an auto-fit grid anchored their short last
+   row to the start edge (measured: seven team members = five and two at the
+   edge). They wrap as flex rows now, centred, and nothing else about them
+   changes: as many per row as the grid gave (a step is at least 160px, a
+   member 180px), all of one width, and fewer of them than a full row holds
+   still share the row between them.
+   A row is `per-row` wide: the smaller of how many FIT (--fit, which the
+   container queries below read off the row's own width, so a team inside a
+   column of a ROW counts by that column) and how many there ARE (--count).
+   Where the row's width cannot be asked — a parent that takes its width
+   from its content, a browser without container queries — the items grow
+   from their minimum instead: the old counts, with the last row sharing its
+   line. */
+.bent-steps, .bent-team {
+  --count: 7;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--grid-gap);
+  margin: var(--block-gap) 0;
   padding: 0;
-  list-style: none;
-  counter-reset: bent-step;
 }
+/* the numbering starts on the first STEP, not on the row: a row that is a
+   query container keeps its counters to its own inside, and with the reset
+   on the row every step read "1" */
+.bent-steps { list-style: none; }
+.bent-steps > :first-child { counter-reset: bent-step; }
+:is(.bent-steps, .bent-team):not(:has(> :nth-child(7))) { --count: 6; }
+:is(.bent-steps, .bent-team):not(:has(> :nth-child(6))) { --count: 5; }
+:is(.bent-steps, .bent-team):not(:has(> :nth-child(5))) { --count: 4; }
+:is(.bent-steps, .bent-team):not(:has(> :nth-child(4))) { --count: 3; }
+:is(.bent-steps, .bent-team):not(:has(> :nth-child(3))) { --count: 2; }
+:is(.bent-steps, .bent-team):not(:has(> :nth-child(2))) { --count: 1; }
+.bent-step { flex: 1 1 160px; min-width: 0; box-sizing: border-box; }
+.bent-member { flex: 1 1 180px; min-width: 0; box-sizing: border-box; }
+:is(.container, .col, .bent-section, .sec-inner, .card) > :is(.bent-steps, .bent-team) { container: tz-row / inline-size; }
+@container tz-row (min-width: 0) {
+  .bent-step, .bent-member {
+    --per-row: min(var(--fit, 1), var(--count));
+    flex: 0 1 calc((100% - (var(--per-row) - 1) * var(--grid-gap)) / var(--per-row));
+  }
+}
+/* n of them fit from n × the minimum + (n − 1) gaps */
+@container tz-row (min-width: 342px) { .bent-step { --fit: 2; } }
+@container tz-row (min-width: 524px) { .bent-step { --fit: 3; } }
+@container tz-row (min-width: 706px) { .bent-step { --fit: 4; } }
+@container tz-row (min-width: 888px) { .bent-step { --fit: 5; } }
+@container tz-row (min-width: 1070px) { .bent-step { --fit: 6; } }
+@container tz-row (min-width: 1252px) { .bent-step { --fit: 7; } }
+@container tz-row (min-width: 382px) { .bent-member { --fit: 2; } }
+@container tz-row (min-width: 584px) { .bent-member { --fit: 3; } }
+@container tz-row (min-width: 786px) { .bent-member { --fit: 4; } }
+@container tz-row (min-width: 988px) { .bent-member { --fit: 5; } }
+@container tz-row (min-width: 1190px) { .bent-member { --fit: 6; } }
+@container tz-row (min-width: 1392px) { .bent-member { --fit: 7; } }
+
+/* ── Steps (how-it-works) — CSS counters, stacks on a narrow viewport ── */
 .bent-step {
   position: relative;
   text-align: center;
@@ -1336,7 +1498,7 @@ button:focus-visible,
   margin-block-end: 0.6rem;
   border-radius: 999px;
   background: var(--color-primary, #ea580c);
-  color: #fff;
+  color: var(--accent-fg, #fff);
   font-weight: 800;
   font-size: 1rem;
 }
@@ -1389,22 +1551,23 @@ button:focus-visible,
 }
 .bent-event-title { margin: 0.15rem 0 0.35rem; font-size: 1.05rem; }
 .bent-event-body { margin: 0; color: var(--color-muted, #57534e); }
+/* every picture on the rail takes the same 16:9 box, so the rail keeps one
+   rhythm whatever was uploaded (a panorama and a portrait used to be 900×300
+   and 300×400 side by side) */
 .bent-event-image {
   display: block;
-  max-width: 100%;
+  width: 100%;
+  max-width: 28rem;
   height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--media-bg);
   margin-top: 0.6rem;
   border-radius: var(--radius-md, 8px);
 }
 
-/* ── Team — photo, name, role, bio grid (gap-audit wave 3) ── */
-.bent-team {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1.5rem;
-  margin: 1.5rem 0;
-  padding: 0;
-}
+/* ── Team — photo, name, role, bio (gap-audit wave 3); the row itself is
+   the centred row above, shared with the steps ── */
 .bent-member { text-align: center; margin: 0; }
 .bent-member-photo {
   display: flex;
@@ -1646,7 +1809,7 @@ img.bent-author-photo { display: block; }
   border-radius: var(--radius-md, 8px);
   backface-visibility: hidden;
 }
-.bent-flipbox-front { background: var(--color-primary, #ea580c); color: #fff; }
+.bent-flipbox-front { background: var(--color-primary, #ea580c); color: var(--accent-fg, #fff); }
 .bent-flipbox-back { background: var(--color-bg-soft, #f5f5f4); transform: rotateY(180deg); }
 .bent-flipbox-icon { font-size: 2rem; }
 img.bent-flipbox-icon { width: 2.5rem; height: 2.5rem; object-fit: contain; }
@@ -1657,7 +1820,7 @@ img.bent-flipbox-icon { width: 2.5rem; height: 2.5rem; object-fit: contain; }
   padding: 0.45rem 1rem;
   border-radius: 999px;
   background: var(--color-primary, #ea580c);
-  color: #fff;
+  color: var(--accent-fg, #fff);
   font-weight: 600;
   text-decoration: none;
 }
@@ -1685,7 +1848,7 @@ img.bent-flipbox-icon { width: 2.5rem; height: 2.5rem; object-fit: contain; }
 .bent-header.tone-brand,
 .bent-footer.tone-brand {
   background: var(--accent-bg, linear-gradient(135deg, #0a66c2, #0369a1));
-  color: #fff;
+  color: var(--accent-fg, #fff);
 }
 .bent-header.tone-none,
 .bent-footer.tone-none { padding-inline: 0; }
@@ -1729,7 +1892,9 @@ img.bent-flipbox-icon { width: 2.5rem; height: 2.5rem; object-fit: contain; }
   align-items: center;
   gap: 0.75rem;
   margin: 0.75rem 0;
-  padding: 0.7rem 1.25rem 0.7rem 1rem;
+  /* the tighter side is the icon's side — the START side in both directions */
+  padding-block: 0.7rem;
+  padding-inline: 1rem 1.25rem;
   border-radius: 999px;
   background: #25d366;
   color: #fff;
@@ -1749,14 +1914,27 @@ img.bent-flipbox-icon { width: 2.5rem; height: 2.5rem; object-fit: contain; }
 .bent-wa-body { display: flex; flex-direction: column; align-items: flex-start; }
 .bent-wa-note { font-size: 0.78rem; font-weight: 400; opacity: 0.9; }
 
-article.feature h3 {
+/* a feature card's title — the same on a card that is a link (item.url makes
+   it an <a>, which the old `article.feature h3` never matched: one grid
+   showed two title sizes, 19.8px beside 24.3px) */
+.feature h3 {
   margin: 0 0 0.35rem;
   font-size: 1.1rem;
 }
 
 blockquote.testimonial { margin-inline: 0; }
 
-p, li { max-width: 70ch; }
+/* The reading-width cap (70ch) is for PROSE. It used to sit on every p and
+   li of the site, and a capped paragraph keeps its box at the start edge —
+   so every centred strip was off-centre: measured 108px on the demo's
+   announcement banner and 127px on a call-to-action's paragraph, and the
+   same on a countdown's label and a footer band's credit line. Now it is
+   named where running text lives; a strip, a caption or a label is as wide
+   as its box. :where() keeps it as weak as the old element rule, so any
+   module — and any skin — still overrides it with a plain class. */
+:where(.bent-text, .bent-quote, .testimonial, .feature, .bent-html) :where(p, li),
+:where(.main-content) :where(li[dir]),
+:where(.bent-event-body, .bent-priceitem-desc, .bent-author-bio, .bent-comment-text, .bent-category-desc, .bent-consent-text) { max-width: 70ch; }
 
 @media (max-width: 640px) {
   /* the header no longer stacks here — the drawer (v2.28, ≤720px) owns narrow screens */
@@ -1874,9 +2052,18 @@ p, li { max-width: 70ch; }
 }
 .bent-form-submit {
   align-self: flex-start; padding: 0.7rem 1.4rem; border: none; border-radius: var(--radius-md, 8px);
-  background: var(--color-accent, #0a66c2); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--accent-bg, var(--color-accent, #0a66c2)); color: var(--accent-fg, #fff); font: inherit; font-weight: 600; cursor: pointer;
 }
 .bent-form-submit:hover { filter: brightness(1.06); }
+/* Everything a visitor presses reads on the same line as .btn (v2.69):
+   without this each of them was as tall as a paragraph line (measured
+   45–56px). It stands HERE, after the last of their own rules, because most
+   of them say `font: inherit`, and that shorthand puts the page's 1.7 line
+   back on whatever was written before it. */
+.bent-plan-cta, .bent-form-submit, .bent-flipbox-button, .bent-search-submit,
+.bent-newsletter-form button, .bent-consent-accept, .bent-consent-reject,
+.bent-auth-register, .bent-pager-link, .bent-pager-current, .bent-tag,
+.bent-social-link { line-height: 1.25; }
 /* honeypot — visually gone, still in the DOM for bots to trip on */
 .bent-form .bent-hp {
   position: absolute !important; inline-size: 1px; block-size: 1px;
@@ -1886,18 +2073,26 @@ p, li { max-width: 70ch; }
 /* card grid (v0.59) — the walla lesson: a content site is a wall of media
    cards. Responsive auto-fit grid, zero JS. */
 .bent-cards {
-  display: grid; gap: 1.25rem; margin: 1.5rem 0;
+  display: grid; gap: var(--grid-gap); margin: var(--block-gap) 0;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
 }
+/* The look of a card — one class, so a skin restyles it with `.bent-card`.
+   Its SHAPE as a picture card is said for every card that is NOT the CARD
+   container (which wears .bent-card too, as `card bent-card`): a second
+   padding rule shared with it used to inset every picture 20px from its own
+   card's edges (measured: media box 308px in a 352px card). By what it is
+   not, rather than by where it lives: a media card may also stand alone or
+   in a column of a row, and there it is the same card. */
 .bent-card {
-  display: flex; flex-direction: column; text-decoration: none; color: inherit;
+  text-decoration: none; color: inherit;
   background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: var(--radius-lg, 12px); overflow: hidden; transition: box-shadow .2s, transform .2s;
+  border-radius: var(--radius-lg, 12px); transition: box-shadow .2s, transform .2s;
 }
+.bent-card:not(.card) { display: flex; flex-direction: column; overflow: hidden; }
 a.bent-card:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12)); transform: translateY(-2px); }
-.bent-card-media { margin: 0; aspect-ratio: 16 / 9; background: var(--color-border, #eef2f7); overflow: hidden; }
-.bent-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bent-card-body { padding: 0.9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.bent-card-media { margin: 0; aspect-ratio: 16 / 9; background: var(--media-bg); overflow: hidden; }
+.bent-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; }
+.bent-card-body { padding: var(--card-pad); display: flex; flex-direction: column; gap: 0.4rem; }
 .bent-card-tag {
   align-self: flex-start; font-size: 0.72rem; font-weight: 700; letter-spacing: .02em;
   text-transform: uppercase; color: var(--color-accent, #0a66c2);
@@ -1908,21 +2103,8 @@ a.bent-card:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12)); tr
 /* product / teaser grid — KSP-class shops, zero JS, no cart */
 .bent-products {
   display: grid;
-  gap: 1.25rem;
-  margin: 1.5rem 0;
-}
-.bent-products-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.bent-products-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.bent-products-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-@media (max-width: 720px) {
-  .bent-products-cols-2,
-  .bent-products-cols-3,
-  .bent-products-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 480px) {
-  .bent-products-cols-2,
-  .bent-products-cols-3,
-  .bent-products-cols-4 { grid-template-columns: 1fr; }
+  gap: var(--grid-gap);
+  margin: var(--block-gap) 0;
 }
 .bent-product {
   display: flex;
@@ -1935,11 +2117,44 @@ a.bent-card:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12)); tr
   overflow: hidden;
 }
 a.bent-product:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12)); }
-.bent-product-media { margin: 0; aspect-ratio: 1 / 1; background: var(--color-border, #eef2f7); overflow: hidden; }
-.bent-product-image { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bent-product-body { padding: 0.85rem 1rem 1.05rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.bent-product-media { margin: 0; aspect-ratio: 1 / 1; background: var(--media-bg); overflow: hidden; }
+.bent-product-image { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; }
+.bent-product-body { padding: var(--card-pad); display: flex; flex-direction: column; gap: 0.35rem; }
 .bent-product-title { margin: 0; font-size: 1.05rem; line-height: 1.3; }
 .bent-product-price { margin: 0; font-weight: 700; color: var(--accent, #ea580c); }
+
+/* ===== One grid, one ladder (v2.69) =====
+   Every grid with a chosen number of columns — features, article cubes, the
+   gallery, stats, the product teasers — is laid out here and nowhere else:
+   equal tracks (minmax(0, 1fr): a long word cannot widen its column), the
+   shared --grid-gap, and ONE ladder: N columns → 2 at 860px → 1 at 480px.
+   Before this they folded at 460, 480, 560, 700, 720, 860 and 900px — the
+   gallery never did — and the features grid dropped to a 1rem gap the
+   moment it was given a column count, so a features grid and a shop grid
+   stacked on one page missed each other by 2–3px at every inner edge.
+   `1` really is one column (features and the gallery used to fall back to
+   "as many as fit"). The store's own grid lives in the store block. */
+.features.cols-1, .article-cubes.cols-1, .gallery.cols-1 { grid-template-columns: minmax(0, 1fr); }
+.features.cols-2, .article-cubes.cols-2, .gallery.cols-2, .stats-row.cols-2,
+.bent-products-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.features.cols-3, .gallery.cols-3, .stats-row.cols-3,
+.bent-products-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.features.cols-4, .article-cubes.cols-4, .gallery.cols-4, .stats-row.cols-4,
+.bent-products-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 860px) {
+  .features.cols-3, .features.cols-4,
+  .article-cubes, .article-cubes.cols-4,
+  .gallery.cols-3, .gallery.cols-4,
+  .stats-row.cols-3, .stats-row.cols-4,
+  .bent-products-cols-3, .bent-products-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .features.cols-2, .features.cols-3, .features.cols-4,
+  .article-cubes, .article-cubes.cols-2, .article-cubes.cols-4,
+  .gallery.cols-2, .gallery.cols-3, .gallery.cols-4,
+  .stats-row.cols-2, .stats-row.cols-3, .stats-row.cols-4,
+  .bent-products-cols-2, .bent-products-cols-3, .bent-products-cols-4 { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* blog article: code fence, byline, tag chips — zero JS */
 .bent-code { margin: 1.5rem 0; }
@@ -1949,7 +2164,12 @@ a.bent-product:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12));
 }
 .bent-code pre {
   margin: 0; padding: 0.9rem 1rem; overflow-x: auto;
-  background: var(--color-bg-alt, #0f172a); color: #e2e8f0;
+  /* its own name: a code fence is dark under light text on every palette,
+     and --color-bg-alt (a LIGHT panel everywhere else) must never reach it */
+  background: var(--code-bg, #0f172a); color: #e2e8f0;
+  /* code is written left to right on every page: on a Hebrew page a line
+     read `;"…" = const x`, its semicolon first */
+  direction: ltr; text-align: start;
   border-radius: var(--radius-md, 10px); font-size: 0.85rem; line-height: 1.5;
 }
 .bent-code code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
@@ -1994,9 +2214,9 @@ a.bent-tag:hover { border-color: var(--accent, #ea580c); color: var(--accent, #e
    CSS scroll-snap, touch-native, RTL-aware via logical properties (the strip
    starts at inline-start — the right on RTL pages). `peek` keeps the next
    slide's edge visible so scrollability is self-evident. */
-.bent-carousel { margin: 1.5rem 0; }
+.bent-carousel { margin: var(--block-gap) 0; }
 .bent-carousel-track {
-  display: flex; gap: 1rem;
+  display: flex; gap: var(--grid-gap);
   overflow-x: auto; overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
   padding-block-end: 0.5rem; /* room for the scrollbar, no clipped shadows */
@@ -2099,7 +2319,7 @@ a.bent-tag:hover { border-color: var(--accent, #ea580c); color: var(--accent, #e
 }
 .bent-newspop-head {
   padding: 0.6rem 1rem; font-weight: 700; font-size: 0.95rem;
-  background: var(--color-accent, #0a66c2); color: #fff;
+  background: var(--color-accent, #0a66c2); color: var(--accent-fg, #fff);
 }
 .bent-newspop-list { list-style: none; margin: 0; padding: 0; }
 .bent-newspop-item {
@@ -2226,8 +2446,11 @@ a.bent-newspop-text:hover { text-decoration: underline; }
    to edge while its content keeps the site's column (.sec-inner, the
    backdrop's inner, the hero's children). Same breakout as
    .columns.cols-full. The page clips the few pixels a classic scrollbar
-   adds to 100vw, only when such a band is on it. */
-body:has(.sec-w-full, .sec-w-wide, .px-w-full, .px-w-wide, .hero-w-full, .hero-w-wide) { overflow-x: clip; }
+   adds to 100vw, only when such a band is on it.
+   v2.69 — a full or wide ROW is such a band too and was missing from the
+   list: measured, a cols-full row ran from x −7 to 1433 in a 1425px page
+   and the whole page scrolled sideways. */
+body:has(.sec-w-full, .sec-w-wide, .px-w-full, .px-w-wide, .hero-w-full, .hero-w-wide, .cols-full, .cols-wide) { overflow-x: clip; }
 .bent-section.sec-w-full,
 .parallax-section.px-w-full,
 .hero.hero-w-full {
@@ -2241,14 +2464,14 @@ body:has(.sec-w-full, .sec-w-wide, .px-w-full, .px-w-wide, .hero-w-full, .hero-w
 .bent-section.sec-w-wide,
 .parallax-section.px-w-wide,
 .hero.hero-w-wide {
-  width: min(1400px, calc(100vw - 2rem));
+  width: min(1400px, calc(100vw - 2 * var(--page-pad)));
   max-width: none;
-  margin-inline: calc(50% - min(700px, 50vw - 1rem));
+  margin-inline: calc(50% - min(700px, 50vw - var(--page-pad)));
   margin-block: 0;
   box-sizing: border-box;
 }
 .bent-section.sec-w-full,
-.bent-section.sec-w-wide { padding: clamp(2.5rem, 6vw, 5.5rem) 1.25rem; }
+.bent-section.sec-w-wide { padding: clamp(2.5rem, 6vw, 5.5rem) var(--page-pad); }
 .bent-section > .sec-inner { max-width: var(--max-width); margin-inline: auto; }
 .bent-section > .sec-inner > :first-child { margin-top: 0; }
 .bent-section > .sec-inner > :last-child { margin-bottom: 0; }
@@ -2258,9 +2481,11 @@ body:has(.sec-w-full, .sec-w-wide, .px-w-full, .px-w-wide, .hero-w-full, .hero-w
 .hero.hero-w-wide > * { max-width: 760px; margin-inline: auto; }
 .hero.hero-w-full,
 .hero.hero-w-wide { padding-block: clamp(3rem, 8vw, 7rem); }
-/* bands butt against the header and the footer, like the design */
-.main-content > .container > :is(.sec-w-full, .px-w-full, .hero-w-full):first-child { margin-top: -2.25rem; }
-.main-content > .container > :is(.sec-w-full, .px-w-full, .hero-w-full):last-child { margin-bottom: -2.25rem; }
+/* bands butt against the header and the footer, like the design — by exactly
+   the page's own padding (a fixed 2.25rem pulled a phone's band 0.75rem
+   under the header, where the page pads 1.5rem) */
+.main-content > .container > :is(.sec-w-full, .px-w-full, .hero-w-full):first-child { margin-top: calc(-1 * var(--page-pad-block)); }
+.main-content > .container > :is(.sec-w-full, .px-w-full, .hero-w-full):last-child { margin-bottom: calc(-1 * var(--page-pad-block)); }
 
 /* A menu with no items draws no burger (v2.56 — an imported one-page design
    has no menu, and a button that opens nothing is a broken promise) */
@@ -2273,6 +2498,8 @@ body:has(.sec-w-full, .sec-w-wide, .px-w-full, .px-w-wide, .hero-w-full, .hero-w
 .bent-image.gp-circle img { border-radius: 50%; aspect-ratio: 1 / 1; object-fit: cover; }
 .bent-cards.gp-round-media .bent-card-media { background: none; padding: 1rem 1rem 0; aspect-ratio: auto; overflow: visible; }
 .bent-cards.gp-round-media .bent-card-media img { border-radius: 50%; aspect-ratio: 1 / 1; object-fit: cover; width: min(78%, 220px); height: auto; margin-inline: auto; display: block; }
+/* a card without a portrait keeps the portrait's room, so the names of a row stay level (v2.69) */
+.bent-cards.gp-round-media .bent-card-media-empty::before { content: ""; display: block; width: min(78%, 220px); aspect-ratio: 1 / 1; margin-inline: auto; }
 .bent-cards.gp-round-media .bent-card-body { text-align: center; }
 
 /* ── HTML גולמי (the raw-HTML escape hatch) — v1.49 ──
@@ -2429,11 +2656,22 @@ body.menu-side .main-nav a:hover {
    <bent-order> and the header's cart. Every colour, radius and shadow is the
    theme's own variable, so a store wears whatever the site wears. The cart,
    the checkout and the order page are filled by /tz-store.js; the grid and
-   the buy box are plain server-rendered HTML. ===== */
-.bent-shop-card[hidden], .bent-checkout-box[hidden], .bent-checkout-address[hidden], .bent-price-was[hidden] { display: none !important; }
-/* the theme caps prose at 70ch (p, li); the store's rows are layout, not prose */
-.bent-totals-row, .bent-totals-note, .bent-issues li, .bent-field, .bent-coupon, .bent-checkout-error,
-.bent-cart-empty p, .bent-store-closed, .bent-store-wait, .bent-order-pay p { max-width: none; }
+   the buy box are plain server-rendered HTML.
+   v2.69 — the grid lines up (one geometry for every card), categories have
+   tiles and pages, the shopper sorts and searches, phones keep two columns.
+   Reserved rows are sized in em with an explicit line-height: the root font
+   size and the root line-height (1.7) are the theme's, never a px here. ===== */
+.bent-shop-card[hidden], .bent-checkout-box[hidden], .bent-checkout-address[hidden], .bent-price-was[hidden],
+.bent-shop-none[hidden], .bent-shop-more[hidden], .bent-shop-active[hidden], .bent-shop-count[hidden] { display: none !important; }
+/* the theme caps prose at 70ch (p, li) and anchors it to the start edge; the
+   store's rows are layout, not prose — every <p> in store markup is listed here */
+.bent-totals-row, .bent-totals-note, .bent-issues li, .bent-checkout .bent-field, .bent-coupon, .bent-checkout-error,
+.bent-cart-empty p, .bent-store-closed, .bent-store-wait, .bent-order-pay p, .bent-order-head p, .bent-test-banner,
+.bent-shop-brand, .bent-shop-summary, .bent-shop-price, .bent-shop-note, .bent-shop-empty, .bent-shop-count, .bent-shop-none p,
+.bent-buy-brand, .bent-buy-shelf, .bent-buy-summary, .bent-buy-price, .bent-buy-vat, .bent-buy-fact, .bent-buy-tags, .bent-stock,
+.bent-pay-none, .bent-checkout-why, .bent-store-sr { max-width: none; }
+/* for a screen reader only (the search box's name, the "7 found" announcement) */
+.bent-store-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 /* the header's cart button */
 .tz-cart-link {
@@ -2447,7 +2685,18 @@ body.menu-side .main-nav a:hover {
 .tz-cart-count {
   position: absolute; top: -0.35rem; inset-inline-end: -0.35rem; min-width: 1.25rem; height: 1.25rem;
   padding: 0 0.3rem; border-radius: 999px; background: var(--accent-bg, var(--color-primary, #0a66c2));
-  color: #fff; font-size: 0.72rem; font-weight: 700; line-height: 1.25rem; text-align: center;
+  color: var(--accent-fg, #fff); font-size: 0.72rem; font-weight: 700; line-height: 1.25rem; text-align: center;
+}
+/* On a phone the cart used to drop to a row of its own under the brand and
+   the burger. With a cart in the header: the brand may shrink (and wrap), the
+   menu stays as wide as its burger, the cart gives up its start margin — one
+   row. Not for a site whose menu never folds (no burger: the menu keeps its
+   own flow) nor for the centred header (a column, not a row). */
+@media (max-width: 560px) {
+  body:not(.header-centered):is(:not(.nav-collapse-never), .menu-drawer) .header-inner:has(> .tz-cart-link) { column-gap: 0.6rem; }
+  body:not(.header-centered):is(:not(.nav-collapse-never), .menu-drawer) .header-inner:has(> .tz-cart-link) > .header-brand { flex: 1 1 0; min-width: 0; }
+  body:not(.header-centered):is(:not(.nav-collapse-never), .menu-drawer) .header-inner:has(> .tz-cart-link) > .main-nav { flex: 0 1 auto; }
+  .header-inner > .tz-cart-link { margin-inline-start: 0; }
 }
 
 /* shared */
@@ -2462,61 +2711,238 @@ body.menu-side .main-nav a:hover {
 .bent-stock-low { color: #b45309; }
 .bent-stock-out { color: #b91c1c; }
 .bent-shop-badge {
-  display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700;
-  background: var(--accent-bg, var(--color-primary, #0a66c2)); color: #fff;
+  display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; line-height: 1.4;
+  background: var(--accent-bg, var(--color-primary, #0a66c2)); color: var(--accent-fg, #fff);
 }
+/* the cut ("-35%") is its own colour, so it never reads as the owner's badge */
+.bent-shop-badge.is-sale { background: #b91c1c; color: #fff; }
+/* buttons and chips say their own line-height: inherited, it is the page's
+   1.7 and a button came out 58px tall */
 .bent-btn, .bent-shop-add, .bent-buy-add, .bent-checkout-submit {
-  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; box-sizing: border-box;
   padding: 0.65rem 1.2rem; border: 2px solid transparent; border-radius: var(--radius-md, 8px);
-  background: var(--accent-bg, var(--color-primary, #0a66c2)); color: #fff; font: inherit; font-weight: 700;
-  text-decoration: none; cursor: pointer; transition: filter .15s ease, transform .15s ease;
+  background: var(--accent-bg, var(--color-primary, #0a66c2)); color: var(--accent-fg, #fff); font: inherit; font-weight: 700; line-height: 1.25;
+  /* a gradient accent is painted across the border too: from the padding box
+     it wrapped, and each end of the button wore a sliver of the other colour */
+  background-origin: border-box;
+  text-align: center; text-decoration: none; cursor: pointer; transition: filter .15s ease, transform .15s ease;
 }
 .bent-btn:hover, .bent-shop-add:hover, .bent-buy-add:hover, .bent-checkout-submit:hover { filter: brightness(0.92); }
 .bent-btn:focus-visible, .bent-shop-add:focus-visible, .bent-buy-add:focus-visible, .bent-checkout-submit:focus-visible,
-.bent-qty-btn:focus-visible, .bent-shop-chip:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-primary, #0a66c2) 45%, transparent); outline-offset: 2px; }
+.bent-qty-btn:focus-visible, .bent-shop-chip:focus-visible, .bent-shop-link:focus-visible, .bent-shelf-tile:focus-visible,
+.bent-buy-thumb:focus-visible, .bent-cart-remove:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-primary, #0a66c2) 45%, transparent); outline-offset: 2px; }
 .bent-btn-ghost { background: transparent; color: var(--color-text, #111827); border-color: var(--color-border, #e5e7eb); }
 .bent-shop-add.is-added, .bent-buy-add.is-added { transform: scale(1.04); }
-.bent-shop-add.is-out { background: var(--color-light-bg, #f1f5f9); color: var(--color-muted, #6b7280); cursor: default; }
-.bent-checkout-submit[disabled] { opacity: .6; cursor: progress; }
+.bent-shop-add.is-out, .bent-shop-add[disabled] { background: var(--color-light-bg, #f1f5f9); color: var(--color-muted, #6b7280); cursor: default; filter: none; }
+/* a card whose action cannot be offered keeps the row, empty, so it stays on the level */
+.bent-shop-add.is-none { visibility: hidden; }
+.bent-checkout-submit[disabled] { opacity: .6; cursor: not-allowed; }
 
-/* <bent-shop> */
-.bent-shop { margin: 1.5rem 0; }
+/* <bent-shop> — the toolbar: chips at the start, search and sort at the end,
+   every control one height, so they sit on one line */
+.bent-shop { --tz-cols: 3; --tz-gap: 1.25rem; margin: 1.5rem 0; }
+.bent-shop-cols-2 { --tz-cols: 2; }
+.bent-shop-cols-4 { --tz-cols: 4; }
 .bent-shop-title { margin: 0 0 1rem; }
-.bent-shop-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1.1rem; }
+.bent-shop-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1rem; margin: 0 0 1.1rem; }
+.bent-shop-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-width: 0; }
+.bent-shop-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-inline-start: auto; min-width: 0; max-width: 100%; }
 .bent-shop-chip {
-  padding: 0.35rem 0.95rem; border-radius: 999px; border: 1px solid var(--color-border, #e5e7eb);
-  background: var(--color-surface, #fff); color: var(--color-text, #111827); font: inherit; font-size: 0.9rem; cursor: pointer;
+  display: inline-flex; align-items: center; box-sizing: border-box; min-height: 2.25rem; flex: none;
+  padding: 0.3rem 0.95rem; border-radius: 999px; border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-surface, #fff); color: var(--color-text, #111827); font: inherit; font-size: 0.9rem; line-height: 1.25;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
 }
-.bent-shop-chip.is-on { background: var(--accent-bg, var(--color-primary, #0a66c2)); border-color: transparent; color: #fff; }
-.bent-shop-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.bent-shop-cols-2 .bent-shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.bent-shop-cols-4 .bent-shop-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.bent-shop-chip:hover { border-color: var(--color-primary, #0a66c2); }
+.bent-shop-chip.is-on { background: var(--accent-bg, var(--color-primary, #0a66c2)); border-color: transparent; color: var(--accent-fg, #fff); }
+.bent-shop-chip.is-active { background: var(--color-light-bg, #f1f5f9); }
+.bent-shop-active { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
+.bent-shop-search, .bent-shop-sort { display: inline-flex; align-items: center; gap: 0.4rem; min-width: 0; }
+/* the search box gives way first; the sort list is never squeezed past its words */
+.bent-shop-search { flex: 0 1 11rem; }
+.bent-shop-sort { flex: none; max-width: 100%; }
+.bent-shop-sort-label { font-size: 0.9rem; line-height: 1.25; color: var(--color-muted, #6b7280); white-space: nowrap; }
+.bent-shop-input, .bent-shop-select {
+  box-sizing: border-box; height: 2.25rem; min-width: 0; max-width: 100%; padding: 0 0.85rem; border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-pill, 999px); background-color: var(--color-surface, #fff); color: var(--color-text, #111827);
+  font: inherit; font-size: 0.9rem; line-height: 1.25;
+}
+.bent-shop-input { width: 100%; }
+.bent-shop-input:focus, .bent-shop-select:focus {
+  outline: none; border-color: var(--color-primary, #0a66c2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #0a66c2) 20%, transparent);
+}
+.bent-shop-count { margin: 0 0 0.8rem; font-size: 0.88rem; line-height: 1.4; color: var(--color-muted, #6b7280); }
+.bent-shop-none { display: flex; flex-direction: column; align-items: center; gap: 0.8rem; padding: 2rem 1rem; text-align: center; color: var(--color-muted, #6b7280); }
+.bent-shop-none p { margin: 0; text-align: center; }
+.bent-shop-more { display: flex; justify-content: center; margin-top: 1.4rem; }
+.bent-shop-empty { padding: 2rem 1rem; text-align: center; color: var(--color-muted, #6b7280); }
+
+/* the grid. ONE geometry for every card: the same six rows under the
+   picture — brand, name, summary, price, stock note, action — whatever the
+   product has to say. This is the fallback every browser understands: the
+   name and the summary are clamped to two lines and reserve them, the price
+   row is pushed to the bottom, the note row is reserved, the action is last.
+   (The old sheet pinned the button with margin-top:auto and then overrode it
+   on every card with a more specific rule, so the button rode 35px lower
+   under a stock line and a long name moved everything beneath it.) */
+.bent-shop-grid { display: grid; gap: var(--tz-gap); grid-template-columns: repeat(var(--tz-cols), minmax(0, 1fr)); }
 .bent-shop-card {
-  position: relative; display: flex; flex-direction: column; overflow: hidden;
+  position: relative; display: flex; flex-direction: column; overflow: hidden; min-width: 0; box-sizing: border-box;
   background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: var(--radius-lg, 12px); transition: box-shadow .15s ease, transform .15s ease;
+  border-radius: var(--radius-lg, 12px); transition: box-shadow .15s ease;
 }
 .bent-shop-card:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(2, 8, 23, 0.12)); }
 .bent-shop-card.is-out .bent-shop-img { filter: grayscale(0.6); opacity: .75; }
-.bent-shop-media { display: block; aspect-ratio: 1 / 1; background: var(--color-light-bg, #f1f5f9); overflow: hidden; }
-.bent-shop-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s ease; }
+/* every picture box of the store wears the site's ONE picture background (--media-bg) */
+.bent-shop-media { display: block; aspect-ratio: var(--tz-media-ratio, 1 / 1); background: var(--media-bg); overflow: hidden; }
+.bent-shop-media-portrait { --tz-media-ratio: 4 / 5; }
+.bent-shop-media-landscape { --tz-media-ratio: 4 / 3; }
+/* border-radius 0: the theme rounds every img, and the box colour showed at the picture's corners */
+.bent-shop-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; transition: transform .3s ease; }
+.bent-shop-fit-contain .bent-shop-img { object-fit: contain; box-sizing: border-box; padding: 8%; }
 .bent-shop-card:hover .bent-shop-img { transform: scale(1.03); }
 .bent-shop-noimg, .bent-buy-noimg { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 2.6rem; opacity: .55; }
-.bent-shop-card > .bent-shop-badge { position: absolute; top: 0.7rem; inset-inline-start: 0.7rem; }
-.bent-shop-body { flex: 1; display: flex; flex-direction: column; gap: 0.3rem; padding: 0.9rem 1rem 1.05rem; }
-.bent-shop-name { margin: 0; font-size: 1.05rem; line-height: 1.35; }
+/* the owner's badge and the cut, stacked — out of the flow, so they are never a row of the card */
+.bent-shop-badges { position: absolute; top: 0.7rem; inset-inline-start: 0.7rem; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; pointer-events: none; }
+.bent-shop-body { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 0.9rem 1rem 1.05rem; }
+.bent-shop-brand {
+  margin: 0 0 0.15rem; min-height: 1.4em; font-size: 0.78rem; line-height: 1.4; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--color-muted, #6b7280); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bent-shop-name {
+  margin: 0; font-size: 1.05rem; line-height: 1.35; min-height: calc(2 * 1.35em);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
 .bent-shop-link { color: inherit; text-decoration: none; }
 .bent-shop-link:hover { color: var(--color-primary, #0a66c2); }
-.bent-shop-summary { margin: 0; font-size: 0.88rem; line-height: 1.45; color: var(--color-muted, #6b7280); }
-.bent-shop-price { margin: 0.2rem 0 0; font-size: 1.05rem; }
-.bent-shop-body .bent-shop-add { margin-top: auto; align-self: stretch; }
-.bent-shop-body .bent-stock + .bent-shop-add, .bent-shop-body .bent-shop-price + .bent-shop-add { margin-top: 0.6rem; }
-.bent-shop-empty { padding: 2rem 1rem; text-align: center; color: var(--color-muted, #6b7280); }
-@media (max-width: 860px) {
-  .bent-shop-grid, .bent-shop-cols-4 .bent-shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* the title link is the card's one tab stop, and its ring fell outside the
+   name's two-line clamp (overflow: hidden) — a sliver of it was all a
+   keyboard saw. The ring is drawn on the card, whose own outline nothing
+   clips; the name is underlined too, and that underline (inside the clamp)
+   is what a browser without :has() still shows, with the link's own ring */
+.bent-shop-link:focus-visible { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.15em; }
+@supports selector(:has(a)) {
+  .bent-shop-link:focus-visible { outline: none; }
+  .bent-shop-card:has(.bent-shop-link:focus-visible) { outline: 3px solid color-mix(in srgb, var(--color-primary, #0a66c2) 45%, transparent); outline-offset: 2px; }
 }
-@media (max-width: 460px) {
-  .bent-shop-grid, .bent-shop-cols-2 .bent-shop-grid, .bent-shop-cols-4 .bent-shop-grid { grid-template-columns: 1fr; }
+.bent-shop-summary {
+  margin: 0.3rem 0 0; font-size: 0.88rem; line-height: 1.45; min-height: calc(2 * 1.45em); color: var(--color-muted, #6b7280);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.bent-shop-body .bent-shop-price {
+  margin: auto 0 0; padding-top: 0.6rem; box-sizing: border-box; min-height: calc(1.5em + 0.6rem); font-size: 1.05rem; line-height: 1.5;
+  display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.45rem;
+}
+/* One line is the row's FLOOR, never its ceiling. It used to be a fixed
+   height with the overflow hidden: on a phone's two-column card a long
+   price ("החל מ-₪333,333") broke after its first word, and the number — the
+   second line — was cut off; the card said "החל" and nothing else. A price
+   that needs two lines now takes them. With subgrid the whole row of cards
+   grows with it and stays level; without it the buttons still share one
+   line, because the price is pushed down from above (margin: auto). */
+.bent-shop-price .bent-price-was { margin-inline-start: 0; font-size: 0.9em; }
+.bent-shop-note { margin: 0.15rem 0 0; min-height: 1.5em; font-size: 0.85rem; line-height: 1.5; font-weight: 600; }
+.bent-shop-note.is-low { color: #b45309; }
+.bent-shop-note.is-out { color: #b91c1c; }
+.bent-shop-body .bent-shop-add { margin-top: 0.6rem; align-self: stretch; }
+/* a row nobody on the grid fills is not reserved at all */
+.bent-shop-nobrand .bent-shop-brand, .bent-shop-nosummary .bent-shop-summary { display: none; }
+
+/* justify="center": a last row with fewer cards sits in the middle instead
+   of hugging the start edge. A wrapping flex row — each card takes exactly
+   one column's share; the reserved rows above keep it level. */
+.bent-shop-center .bent-shop-grid { display: flex; flex-wrap: wrap; justify-content: center; }
+.bent-shop-center .bent-shop-card { flex: 0 0 calc((100% - (var(--tz-cols) - 1) * var(--tz-gap)) / var(--tz-cols)); }
+
+/* Where the browser has subgrid, a card's seven rows ARE the grid's rows:
+   each row of cards sizes to its own tallest name, summary and note, and a
+   row nobody fills takes no space — no reserved blank lines. The space
+   between two rows of cards is the card's own bottom margin (a row gap would
+   also open between the seven rows inside a card). */
+@supports (grid-template-rows: subgrid) {
+  .bent-shop:not(.bent-shop-center) .bent-shop-grid { row-gap: 0; margin-block-end: calc(-1 * var(--tz-gap)); }
+  .bent-shop:not(.bent-shop-center) .bent-shop-card { display: grid; grid-template-rows: subgrid; grid-row: span 7; row-gap: 0; margin-block-end: var(--tz-gap); }
+  .bent-shop:not(.bent-shop-center) .bent-shop-media { grid-row: 1; }
+  .bent-shop:not(.bent-shop-center) .bent-shop-body { display: grid; grid-template-rows: subgrid; grid-row: 2 / span 6; row-gap: 0; }
+  .bent-shop:not(.bent-shop-center) .bent-shop-brand { grid-row: 1; min-height: 0; }
+  .bent-shop:not(.bent-shop-center) .bent-shop-name { grid-row: 2; min-height: 0; }
+  .bent-shop:not(.bent-shop-center) .bent-shop-summary { grid-row: 3; min-height: 0; }
+  .bent-shop:not(.bent-shop-center) .bent-shop-body .bent-shop-price { grid-row: 4; margin-top: 0; }
+  .bent-shop:not(.bent-shop-center) .bent-shop-note { grid-row: 5; min-height: 0; }
+  .bent-shop:not(.bent-shop-center) .bent-shop-body .bent-shop-add { grid-row: 6; }
+  .bent-shop:not(.bent-shop-center) .bent-shop-brand:empty,
+  .bent-shop:not(.bent-shop-center) .bent-shop-summary:empty,
+  .bent-shop:not(.bent-shop-center) .bent-shop-note:empty { margin: 0; }
+}
+
+/* tablets: two columns. Phones KEEP two (one product used to fill a whole
+   phone screen) — tighter cards, a smaller button, no summary under 400px —
+   and fold to one column only below 340px. */
+@media (max-width: 860px) {
+  .bent-shop, .bent-shop-cols-4 { --tz-cols: 2; }
+}
+@media (max-width: 640px) {
+  /* the chips scroll sideways in one line rather than piling up */
+  .bent-shop-filter { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-block: 3px; }
+  .bent-shop-filter::-webkit-scrollbar { display: none; }
+  /* search and sort share the next line; on the narrowest phones each takes its own */
+  .bent-shop-tools { flex: 1 1 100%; margin-inline-start: 0; }
+  .bent-shop-search { flex: 1 1 7rem; }
+  .bent-shop-sort { flex: 1 0 auto; }
+  .bent-shop-select { flex: 1 1 auto; }
+  .bent-shop-sort-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+@media (max-width: 560px) {
+  .bent-shop { --tz-gap: 0.75rem; }
+  .bent-shop-body { padding: 0.7rem 0.7rem 0.8rem; }
+  .bent-shop-name { font-size: 0.98rem; }
+  .bent-shop-body .bent-shop-price { font-size: 1rem; }
+  .bent-shop-body .bent-shop-add { padding: 0.5rem 0.5rem; font-size: 0.9rem; }
+  .bent-shop-badges { top: 0.5rem; inset-inline-start: 0.5rem; }
+}
+@media (max-width: 400px) {
+  .bent-shop .bent-shop-summary { display: none; }
+}
+@media (max-width: 339px) {
+  .bent-shop, .bent-shop-cols-2, .bent-shop-cols-4 { --tz-cols: 1; }
+}
+
+/* <bent-shelves> — category tiles: equal picture boxes, one-line names, so a
+   row of tiles is level the way a row of cards is */
+.bent-shelves { --tz-cols: 3; --tz-gap: 1.25rem; margin: 1.5rem 0; }
+.bent-shelves-cols-2 { --tz-cols: 2; }
+.bent-shelves-cols-4 { --tz-cols: 4; }
+.bent-shelves-cols-5 { --tz-cols: 5; }
+.bent-shelves-cols-6 { --tz-cols: 6; }
+.bent-shelves-title { margin: 0 0 1rem; }
+.bent-shelves-grid { display: grid; gap: var(--tz-gap); grid-template-columns: repeat(var(--tz-cols), minmax(0, 1fr)); }
+.bent-shelves-center .bent-shelves-grid { display: flex; flex-wrap: wrap; justify-content: center; }
+.bent-shelves-center .bent-shelf-tile { flex: 0 0 calc((100% - (var(--tz-cols) - 1) * var(--tz-gap)) / var(--tz-cols)); }
+.bent-shelf-tile {
+  display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; overflow: hidden;
+  background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5e7eb); border-radius: var(--radius-lg, 12px);
+  color: var(--color-text, #111827); text-decoration: none; transition: box-shadow .15s ease;
+}
+.bent-shelf-tile:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(2, 8, 23, 0.12)); }
+.bent-shelf-media { display: block; aspect-ratio: 4 / 3; background: var(--media-bg); overflow: hidden; }
+.bent-shelf-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; transition: transform .3s ease; }
+.bent-shelf-tile:hover .bent-shelf-img { transform: scale(1.03); }
+.bent-shelf-noimg { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 2.2rem; opacity: .55; }
+.bent-shelf-body { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.75rem 1rem 0.9rem; min-width: 0; }
+.bent-shelf-name { font-size: 1.05rem; font-weight: 700; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bent-shelf-tile:hover .bent-shelf-name { color: var(--color-primary, #0a66c2); }
+.bent-shelf-count { font-size: 0.85rem; line-height: 1.4; color: var(--color-muted, #6b7280); }
+.bent-shelf-summary {
+  margin-top: 0.2rem; font-size: 0.88rem; line-height: 1.45; min-height: calc(2 * 1.45em); color: var(--color-muted, #6b7280);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+@media (max-width: 860px) {
+  .bent-shelves-cols-4, .bent-shelves-cols-5, .bent-shelves-cols-6 { --tz-cols: 3; }
+}
+@media (max-width: 560px) {
+  .bent-shelves, .bent-shelves-cols-4, .bent-shelves-cols-5, .bent-shelves-cols-6 { --tz-cols: 2; --tz-gap: 0.75rem; }
+  .bent-shelf-body { padding: 0.6rem 0.7rem 0.7rem; }
 }
 
 /* <bent-buy> */
@@ -2525,111 +2951,170 @@ body.menu-side .main-nav a:hover {
 .bent-buy-gallery { display: flex; flex-direction: column; gap: 0.7rem; }
 .bent-buy-main, .bent-buy-gallery > .bent-buy-noimg {
   width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: var(--radius-lg, 12px);
-  background: var(--color-light-bg, #f1f5f9); border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--media-bg); border: 1px solid var(--color-border, #e5e7eb);
 }
 .bent-buy-thumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.bent-buy-thumb { padding: 0; width: 4.2rem; height: 4.2rem; border-radius: var(--radius-md, 8px); overflow: hidden; border: 2px solid transparent; background: none; cursor: pointer; }
-.bent-buy-thumb.is-on { border-color: var(--color-primary, #0a66c2); }
-.bent-buy-thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bent-buy-info { display: flex; flex-direction: column; gap: 0.55rem; }
-.bent-buy-info > .bent-shop-badge { align-self: flex-start; }
-.bent-buy-title { margin: 0; font-size: clamp(1.5rem, 3.2vw, 2.1rem); line-height: 1.2; }
-.bent-buy-shelf { margin: 0; font-size: 0.85rem; color: var(--color-muted, #6b7280); }
-.bent-buy-summary { margin: 0; font-size: 1.05rem; color: var(--color-muted, #6b7280); }
-.bent-buy-price { margin: 0.3rem 0; font-size: 1.6rem; }
-.bent-buy-label { font-size: 0.85rem; font-weight: 700; color: var(--color-muted, #6b7280); }
-.bent-buy-variant, .bent-buy-qty {
-  font: inherit; padding: 0.55rem 0.7rem; border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: var(--radius-md, 8px); background: var(--color-surface, #fff); color: var(--color-text, #111827);
+.bent-buy-thumb {
+  padding: 0; width: 4.2rem; height: 4.2rem; border-radius: var(--radius-md, 8px); overflow: hidden; border: 2px solid transparent;
+  background: var(--media-bg); cursor: pointer;
 }
-.bent-buy-variant { width: 100%; max-width: 22rem; }
-.bent-buy-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.3rem; }
-.bent-buy-qty { width: 5rem; text-align: center; }
-.bent-buy-add { flex: 1; min-width: 12rem; padding-block: 0.85rem; font-size: 1.05rem; }
+.bent-buy-thumb.is-on { border-color: var(--color-primary, #0a66c2); }
+.bent-buy-thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; }
+.bent-buy-info { display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; }
+.bent-buy-info > .bent-shop-badge { align-self: flex-start; }
+.bent-buy-brand { margin: 0; font-size: 0.85rem; line-height: 1.4; font-weight: 700; letter-spacing: 0.02em; color: var(--color-muted, #6b7280); }
+.bent-buy-title { margin: 0; font-size: clamp(1.5rem, 3.2vw, 2.1rem); line-height: 1.2; }
+.bent-buy-shelf { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.85rem; line-height: 1.4; color: var(--color-muted, #6b7280); }
+.bent-buy-shelf-link { color: inherit; text-decoration: underline; text-underline-offset: 0.15em; }
+.bent-buy-shelf-link:hover { color: var(--color-primary, #0a66c2); }
+.bent-buy-summary { margin: 0; font-size: 1.05rem; color: var(--color-muted, #6b7280); }
+.bent-buy-price { margin: 0.3rem 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.6rem; font-size: 1.6rem; line-height: 1.3; }
+.bent-buy-price .bent-price-was { margin-inline-start: 0; font-size: 1.1rem; }
+.bent-buy-label { font-size: 0.85rem; font-weight: 700; color: var(--color-muted, #6b7280); }
+.bent-buy-variant {
+  font: inherit; line-height: 1.25; box-sizing: border-box; height: 3rem; padding: 0 0.7rem; border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px); background-color: var(--color-surface, #fff); color: var(--color-text, #111827);
+  width: 100%; max-width: 26rem;
+}
+/* the quantity stepper and the button: ONE height, side by side — also on a
+   phone (a number field beside half an empty row, and a button under it, before) */
+.bent-buy-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: stretch; gap: 0.6rem; margin-top: 0.3rem; max-width: 26rem; }
+.bent-buy-row .bent-qty { height: 3rem; box-sizing: border-box; }
+.bent-buy-row .bent-qty-btn { width: 2.6rem; height: 100%; }
+.bent-buy-row .bent-qty-input { width: 3rem; height: 100%; }
+.bent-buy-add { height: 3rem; padding-block: 0; font-size: 1.05rem; }
 .bent-buy-vat { margin: 0; font-size: 0.8rem; color: var(--color-muted, #6b7280); }
+.bent-buy-facts { display: flex; flex-wrap: wrap; gap: 0.1rem 1.2rem; }
+.bent-buy-fact { margin: 0; font-size: 0.82rem; line-height: 1.5; color: var(--color-muted, #6b7280); }
+.bent-buy-tags { margin: 0.15rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.bent-buy-tag {
+  display: inline-flex; align-items: center; padding: 0.15rem 0.7rem; border-radius: 999px; border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-light-bg, #f8fafc); color: var(--color-text, #111827); font-size: 0.8rem; line-height: 1.4; text-decoration: none;
+}
+.bent-buy-tag:hover { border-color: var(--color-primary, #0a66c2); color: var(--color-primary, #0a66c2); }
 .bent-buy-desc { margin-top: 0.8rem; padding-top: 1rem; border-top: 1px solid var(--color-border, #e5e7eb); line-height: 1.75; }
 .bent-buy-desc p { margin: 0 0 0.8rem; }
 @media (max-width: 760px) {
-  .bent-buy { grid-template-columns: 1fr; gap: 1.2rem; }
+  .bent-buy { grid-template-columns: minmax(0, 1fr); gap: 1.2rem; }
+  .bent-buy-row, .bent-buy-variant { max-width: none; }
 }
 
 /* the cart, the checkout summary, the order page — shared lines + totals */
 .bent-cart, .bent-order { margin: 1.5rem 0; }
-.bent-cart-lines { display: flex; flex-direction: column; border-top: 1px solid var(--color-border, #e5e7eb); }
+/* the cart on a wide screen: the lines, and a summary card beside them */
+.bent-cart-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem); gap: 1.75rem; align-items: start; }
+.bent-cart-summary {
+  position: sticky; top: 5.5rem; padding: 1.1rem 1.2rem; border-radius: var(--radius-lg, 12px);
+  background: var(--color-light-bg, #f8fafc); border: 1px solid var(--color-border, #e5e7eb);
+}
+.bent-cart-summary .bent-totals { margin: 0; }
+/* The LIST is the grid and each line borrows its columns, so the stepper,
+   the sum and the ✕ of every line share an x — a line that was its own grid
+   moved its stepper with the width of its own sum. */
+.bent-cart-lines { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto auto auto; column-gap: 0.9rem; border-top: 1px solid var(--color-border, #e5e7eb); }
 .bent-cart-line {
-  display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto auto auto; gap: 0.9rem; align-items: center;
+  display: grid; grid-column: 1 / -1; grid-template-columns: 4.5rem minmax(0, 1fr) auto auto auto; column-gap: 0.9rem; align-items: center;
   padding: 0.9rem 0; border-bottom: 1px solid var(--color-border, #e5e7eb);
 }
-.bent-cart-lines.is-compact .bent-cart-line { grid-template-columns: 3.2rem minmax(0, 1fr) auto; gap: 0.7rem; padding: 0.6rem 0; }
-.bent-cart-media { width: 100%; aspect-ratio: 1 / 1; border-radius: var(--radius-md, 8px); overflow: hidden; background: var(--color-light-bg, #f1f5f9); }
-.bent-cart-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bent-cart-lines.is-compact { grid-template-columns: 3.2rem minmax(0, 1fr) auto; column-gap: 0.7rem; }
+.bent-cart-lines.is-compact .bent-cart-line { grid-template-columns: 3.2rem minmax(0, 1fr) auto; column-gap: 0.7rem; padding: 0.6rem 0; }
+.bent-cart-total { font-weight: 800; white-space: nowrap; text-align: end; font-variant-numeric: tabular-nums; }
+/* without subgrid the columns cannot be shared: a floor under the sum keeps them close */
+.bent-cart-lines:not(.is-compact) .bent-cart-total { min-width: 6.5rem; }
+@supports (grid-template-columns: subgrid) {
+  .bent-cart-line, .bent-cart-lines.is-compact .bent-cart-line { grid-template-columns: subgrid; }
+  .bent-cart-lines:not(.is-compact) .bent-cart-total { min-width: 0; }
+}
+.bent-cart-media { width: 100%; aspect-ratio: 1 / 1; border-radius: var(--radius-md, 8px); overflow: hidden; background: var(--media-bg); }
+.bent-cart-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 0; }
 .bent-cart-name { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .bent-cart-link { font-weight: 700; color: inherit; text-decoration: none; }
 a.bent-cart-link:hover { color: var(--color-primary, #0a66c2); }
 .bent-cart-variant, .bent-cart-unit { font-size: 0.85rem; color: var(--color-muted, #6b7280); }
-.bent-cart-total { font-weight: 800; white-space: nowrap; }
 .bent-cart-remove {
-  width: 2rem; height: 2rem; border-radius: 999px; border: 1px solid var(--color-border, #e5e7eb);
-  background: transparent; color: var(--color-muted, #6b7280); cursor: pointer; font: inherit;
+  width: 2rem; height: 2rem; padding: 0; border-radius: 999px; border: 1px solid var(--color-border, #e5e7eb);
+  background: transparent; color: var(--color-muted, #6b7280); cursor: pointer; font: inherit; line-height: 1;
 }
 .bent-cart-remove:hover { color: #b91c1c; border-color: #fca5a5; }
-.bent-qty { display: inline-flex; align-items: center; border: 1px solid var(--color-border, #e5e7eb); border-radius: var(--radius-md, 8px); overflow: hidden; }
-.bent-qty-btn { width: 2.1rem; height: 2.3rem; border: 0; background: var(--color-light-bg, #f8fafc); color: var(--color-text, #111827); font: inherit; font-weight: 700; cursor: pointer; }
-.bent-qty-input { width: 2.8rem; height: 2.3rem; border: 0; text-align: center; font: inherit; background: var(--color-surface, #fff); color: var(--color-text, #111827); -moz-appearance: textfield; }
+.bent-qty { display: inline-flex; align-items: stretch; border: 1px solid var(--color-border, #e5e7eb); border-radius: var(--radius-md, 8px); overflow: hidden; }
+.bent-qty-btn { width: 2.1rem; height: 2.3rem; padding: 0; border: 0; background: var(--color-light-bg, #f8fafc); color: var(--color-text, #111827); font: inherit; font-weight: 700; line-height: 1; cursor: pointer; }
+.bent-qty-input { width: 2.8rem; height: 2.3rem; padding: 0; border: 0; border-radius: 0; text-align: center; font: inherit; line-height: 1.25; background: var(--color-surface, #fff); color: var(--color-text, #111827); -moz-appearance: textfield; appearance: textfield; }
 .bent-qty-input::-webkit-outer-spin-button, .bent-qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .bent-totals { margin: 1rem 0; display: flex; flex-direction: column; gap: 0.35rem; }
-.bent-totals-row { display: flex; justify-content: space-between; gap: 1rem; margin: 0; }
+.bent-totals-row { display: flex; justify-content: space-between; gap: 1rem; margin: 0; font-variant-numeric: tabular-nums; }
 .bent-totals-row.is-discount span:last-child { color: #15803d; font-weight: 700; }
 .bent-totals-row.is-total { margin-top: 0.3rem; padding-top: 0.6rem; border-top: 2px solid var(--color-border, #e5e7eb); font-size: 1.2rem; font-weight: 800; }
 .bent-totals-note { margin: 0.2rem 0; font-size: 0.85rem; color: var(--color-muted, #6b7280); }
-.bent-cart-actions { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.7rem; margin-top: 1rem; }
+.bent-totals-note:empty { display: none; }
+.bent-cart-actions { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
 .bent-cart-empty { padding: 2.5rem 1rem; text-align: center; }
+.bent-cart-empty p { text-align: center; }
+/* while a quote is on its way the old numbers are dimmed and cannot be clicked */
+.bent-cart-body[aria-busy="true"] .bent-cart-layout, [data-tz-summary][aria-busy="true"] > .bent-cart-lines,
+[data-tz-summary][aria-busy="true"] > .bent-totals { opacity: 0.55; pointer-events: none; }
 .bent-issues {
   list-style: none; margin: 0 0 1rem; padding: 0.75rem 1rem; border-radius: var(--radius-md, 10px);
   background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 0.92rem;
 }
+@media (max-width: 820px) {
+  .bent-cart-layout { grid-template-columns: minmax(0, 1fr); }
+  .bent-cart-summary { position: static; }
+}
 @media (max-width: 560px) {
-  .bent-cart-line { grid-template-columns: 3.6rem minmax(0, 1fr) auto; grid-template-areas: 'media name remove' 'media qty total'; row-gap: 0.5rem; }
-  .bent-cart-line > .bent-cart-media { grid-area: media; }
-  .bent-cart-line > .bent-cart-name { grid-area: name; }
-  .bent-cart-line > .bent-qty { grid-area: qty; justify-self: start; }
-  .bent-cart-line > .bent-cart-total { grid-area: total; }
-  .bent-cart-line > .bent-cart-remove { grid-area: remove; }
-  .bent-cart-lines.is-compact .bent-cart-line { grid-template-areas: none; }
-  /* no areas in the compact (read-only) row, so no area names on its cells either —
-     a named area that is not in the template sends every cell to the same implicit
-     track, and the picture, the name and the total are drawn on top of each other */
-  .bent-cart-lines.is-compact .bent-cart-line > * { grid-area: auto; }
+  .bent-cart-lines { grid-template-columns: minmax(0, 1fr); }
+  .bent-cart-lines:not(.is-compact) .bent-cart-total { min-width: 0; }
+  /* a phone's cart line: the picture, the name and the ✕ on one line; under
+     them the stepper at the start and the sum at the end. The stepper and the
+     sum each SPAN two columns, so neither one sizes a column — a long sum
+     ("₪2,333,333.31") used to take the name's room (a name on three lines)
+     and then ran into the stepper beside it. Only the editable cart: the
+     compact (read-only) row keeps its three cells in a row. */
+  .bent-cart-lines:not(.is-compact) .bent-cart-line { grid-template-columns: 3.6rem minmax(0, 1fr) auto; row-gap: 0.6rem; }
+  .bent-cart-lines:not(.is-compact) .bent-cart-line > .bent-cart-media { grid-area: 1 / 1; }
+  .bent-cart-lines:not(.is-compact) .bent-cart-line > .bent-cart-name { grid-area: 1 / 2; }
+  .bent-cart-lines:not(.is-compact) .bent-cart-line > .bent-cart-remove { grid-area: 1 / 3; }
+  .bent-cart-lines:not(.is-compact) .bent-cart-line > .bent-qty { grid-area: 2 / 1 / auto / span 2; justify-self: start; }
+  .bent-cart-lines:not(.is-compact) .bent-cart-line > .bent-cart-total { grid-area: 2 / 2 / auto / span 2; justify-self: end; }
+  .bent-cart-lines.is-compact .bent-cart-line { grid-template-columns: 3.2rem minmax(0, 1fr) auto; }
 }
 
 /* <bent-checkout> */
 .bent-checkout { margin: 1.5rem 0; }
 .bent-checkout-form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.75rem; align-items: start; }
 .bent-checkout-main { display: flex; flex-direction: column; gap: 1.1rem; min-width: 0; }
+/* min-inline-size 0: a fieldset is as wide as its widest word by default, and
+   the summary's coupon row pushed a phone's page 8px sideways */
 .bent-checkout-box {
-  margin: 0; padding: 1rem 1.1rem 0.6rem; border: 1px solid var(--color-border, #e5e7eb);
+  margin: 0; padding: 1rem 1.1rem 0.6rem; min-inline-size: 0; border: 1px solid var(--color-border, #e5e7eb);
   border-radius: var(--radius-lg, 12px); background: var(--color-surface, #fff);
 }
 .bent-checkout-box legend { padding: 0 0.4rem; font-weight: 800; }
-.bent-field { margin: 0 0 0.8rem; display: flex; flex-direction: column; gap: 0.25rem; }
-.bent-field label { font-size: 0.88rem; font-weight: 700; }
-.bent-field input, .bent-field textarea, .bent-coupon input {
-  font: inherit; padding: 0.6rem 0.75rem; border: 1px solid var(--color-border, #e5e7eb);
+/* the checkout's own fields — scoped: unscoped, these rules restyled every
+   <bent-form> on the site (same class names, later in the sheet) */
+.bent-checkout .bent-field { margin: 0 0 0.8rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.bent-checkout .bent-field label { font-size: 0.88rem; font-weight: 700; }
+.bent-checkout .bent-field input, .bent-checkout .bent-field textarea, .bent-coupon input {
+  font: inherit; line-height: 1.25; box-sizing: border-box; min-inline-size: 0; padding: 0.6rem 0.75rem; border: 1px solid var(--color-border, #e5e7eb);
   border-radius: var(--radius-md, 8px); background: var(--color-surface, #fff); color: var(--color-text, #111827);
 }
-.bent-field input:focus, .bent-field textarea:focus, .bent-coupon input:focus {
+.bent-checkout .bent-field input:not([type="checkbox"]), .bent-checkout .bent-field textarea { inline-size: 100%; }
+.bent-checkout .bent-field input:focus, .bent-checkout .bent-field textarea:focus, .bent-coupon input:focus {
   outline: none; border-color: var(--color-primary, #0a66c2);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #0a66c2) 20%, transparent);
 }
-.bent-field.is-bad input, .bent-field.is-bad textarea { border-color: #dc2626; }
-.bent-field-error { min-height: 0; font-size: 0.82rem; color: #b91c1c; }
-.bent-field-check label { display: flex; align-items: center; gap: 0.5rem; font-weight: 500; }
+.bent-checkout .bent-field.is-bad input, .bent-checkout .bent-field.is-bad textarea { border-color: #dc2626; }
+.bent-checkout .bent-field-error { min-height: 0; font-size: 0.82rem; color: #b91c1c; }
+.bent-checkout .bent-field-check label { display: flex; align-items: center; gap: 0.5rem; font-weight: 500; }
 .bent-choices { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.8rem; }
 .bent-choice {
   display: grid; grid-template-columns: auto 1fr auto; gap: 0.2rem 0.6rem; align-items: center;
   padding: 0.7rem 0.85rem; border: 1px solid var(--color-border, #e5e7eb); border-radius: var(--radius-md, 10px); cursor: pointer;
 }
 .bent-choice:has(input:checked) { border-color: var(--color-primary, #0a66c2); background: color-mix(in srgb, var(--color-primary, #0a66c2) 6%, var(--color-surface, #fff)); }
+.bent-choice:focus-within { outline: 3px solid color-mix(in srgb, var(--color-primary, #0a66c2) 45%, transparent); outline-offset: 2px; }
+.bent-pay-none, .bent-checkout-why { margin: 0; font-size: 0.92rem; line-height: 1.5; color: #92400e; font-weight: 600; }
+.bent-checkout-why { margin-top: 0.5rem; text-align: center; }
+.bent-checkout-why:empty { display: none; }
 .bent-choice-label { font-weight: 700; }
 .bent-choice-price { font-weight: 700; }
 .bent-choice-note { grid-column: 2 / -1; font-size: 0.82rem; color: var(--color-muted, #6b7280); }
@@ -2641,11 +3126,11 @@ a.bent-cart-link:hover { color: var(--color-primary, #0a66c2); }
 .bent-summary-edit { display: inline-block; margin: 0.5rem 0; font-size: 0.85rem; }
 .bent-coupon { margin: 0.8rem 0; display: flex; flex-direction: column; gap: 0.3rem; }
 .bent-coupon label { font-size: 0.85rem; font-weight: 700; }
-.bent-coupon-row { display: flex; gap: 0.4rem; }
-.bent-coupon-row input { flex: 1; min-width: 0; }
+.bent-coupon-row { display: flex; gap: 0.4rem; min-width: 0; }
+.bent-coupon-row input { flex: 1; min-width: 0; inline-size: 0; }
 .bent-coupon-apply {
-  padding: 0.55rem 0.9rem; border-radius: var(--radius-md, 8px); border: 1px solid var(--color-border, #e5e7eb);
-  background: var(--color-surface, #fff); color: var(--color-text, #111827); font: inherit; font-weight: 700; cursor: pointer;
+  flex: none; padding: 0.55rem 0.9rem; border-radius: var(--radius-md, 8px); border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-surface, #fff); color: var(--color-text, #111827); font: inherit; font-weight: 700; line-height: 1.25; cursor: pointer;
 }
 .bent-coupon-msg { font-size: 0.85rem; }
 .bent-coupon-msg.is-ok { color: #15803d; }
@@ -2653,18 +3138,22 @@ a.bent-cart-link:hover { color: var(--color-primary, #0a66c2); }
 .bent-checkout-error { margin: 0.4rem 0; min-height: 1.2em; color: #b91c1c; font-weight: 600; }
 .bent-checkout-submit { width: 100%; padding-block: 0.95rem; font-size: 1.1rem; }
 /* the honeypot: off-screen, not display:none (some bots skip hidden fields) */
-.bent-hp { position: absolute !important; inset-inline-start: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.bent-checkout .bent-hp { position: absolute !important; inset-inline-start: -10000px; width: 1px; height: 1px; overflow: hidden; }
 @media (max-width: 820px) {
-  .bent-checkout-form { grid-template-columns: 1fr; }
+  /* minmax(0, …): a bare 1fr cannot be narrower than its content, and the summary's was 365px */
+  .bent-checkout-form { grid-template-columns: minmax(0, 1fr); }
   .bent-checkout-summary { position: static; }
 }
 
 /* <bent-order> */
 .bent-order-head { text-align: center; padding: 1.5rem 1rem 1rem; }
+.bent-order-head p { text-align: center; }
 .bent-order-check {
   width: 3.4rem; height: 3.4rem; margin: 0 auto 0.5rem; border-radius: 999px; display: flex; align-items: center; justify-content: center;
-  background: #dcfce7; color: #15803d; font-size: 1.7rem; font-weight: 800;
+  background: #dcfce7; color: #15803d; font-size: 1.7rem; font-weight: 800; line-height: 1;
 }
+/* a cancelled order does not wear the green tick */
+.bent-order-check.is-cancelled { background: #fee2e2; color: #b91c1c; }
 .bent-order-title { margin: 0; font-size: 1.6rem; }
 .bent-order-status { display: inline-block; margin: 0.5rem 0; padding: 0.2rem 0.8rem; border-radius: 999px; background: var(--color-light-bg, #f1f5f9); font-weight: 700; font-size: 0.9rem; }
 .bent-order-status.is-cancelled { background: #fee2e2; color: #b91c1c; }
@@ -2678,21 +3167,38 @@ a.bent-cart-link:hover { color: var(--color-primary, #0a66c2); }
 .bent-order-pay-details { margin: 0 0 0.4rem; white-space: pre-line; }
 .bent-order-pay-phone { margin: 0 0 0.6rem; font-weight: 700; }
 
-/* "added to cart" */
+/* "added to cart". The toast is in the page from boot (a live region made
+   with its first message is often not announced), so while it is off it is
+   moved by its OWN height and more — an empty one is short, and half again
+   of its height left a dark sliver at the bottom of every page */
 .bent-toast {
-  position: fixed; bottom: 1.2rem; left: 50%; transform: translate(-50%, 150%); z-index: 2147482500;
+  position: fixed; bottom: 1.2rem; left: 50%; transform: translate(-50%, calc(100% + 3rem)); z-index: 2147482500;
   display: flex; align-items: center; gap: 0.9rem; max-width: calc(100vw - 2rem);
   padding: 0.75rem 1.1rem; border-radius: var(--radius-md, 10px); background: #111827; color: #fff;
-  box-shadow: 0 12px 32px rgba(2, 8, 23, 0.3); transition: transform .25s ease; font-size: 0.95rem;
+  box-shadow: 0 12px 32px rgba(2, 8, 23, 0.3); transition: transform .25s ease, opacity .25s ease; font-size: 0.95rem;
+  /* parked: moved off AND unseen — a window that grows (a phone's toolbar
+     folding away, an overscroll, a full-page capture) must not find it.
+     Not `visibility`: the live region stays in the accessibility tree. */
+  opacity: 0; pointer-events: none;
 }
-.bent-toast.is-on { transform: translate(-50%, 0); }
+.bent-toast.is-on { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
 .bent-toast-link { color: #fff; font-weight: 800; white-space: nowrap; }
+/* a parked toast keeps its last message, and the "לעגלה ←" link in it stayed
+   a tab stop nobody could see. The LINK is hidden, not the toast: the live
+   region itself stays in the accessibility tree (see above). It goes after
+   the toast's own quarter second, so the two leave together */
+.bent-toast:not(.is-on) .bent-toast-link { visibility: hidden; transition: visibility 0s linear .25s; }
 @media (prefers-reduced-motion: reduce) {
-  .bent-toast, .bent-shop-card, .bent-shop-img { transition: none; }
+  .bent-toast, .bent-shop-card, .bent-shop-img, .bent-shelf-tile, .bent-shelf-img,
+  .bent-btn, .bent-shop-add, .bent-buy-add, .bent-checkout-submit, .tz-cart-link { transition: none; }
+  /* nothing zooms and nothing pulses */
+  .bent-shop-card:hover .bent-shop-img, .bent-shelf-tile:hover .bent-shelf-img,
+  .bent-shop-add.is-added, .bent-buy-add.is-added { transform: none; }
 }
 
 /* the card gateway: the test-mode banner on the checkout and the order page, the payment's state line */
 .bent-test-banner { margin: 0 0 1rem; padding: 0.6rem 0.9rem; border-radius: 10px; background: #fef3c7; color: #92400e; border: 1px dashed #f59e0b; font-weight: 700; text-align: center; }
+.bent-paypal-buttons { min-height: 2.75rem; margin-top: 0.75rem; }
 .bent-order-pay-state { margin: 0 0 0.6rem; font-weight: 600; }
 .bent-order-pay-state.is-failed, .bent-order-pay-state.is-mismatch { color: #b91c1c; }
 .bent-order-pay-state.is-paid { color: #166534; }

@@ -45,6 +45,59 @@ function seedArmed() {
   return !!pinnedRoot();
 }
 
+/**
+ * HOW it was armed — the pin arms a seed IMPLICITLY, and an implicit seed
+ * must only ever fill an EMPTY root. v2.67: the same pinned archive that
+ * creates a fresh site is also how an existing site is UPGRADED (the data
+ * root lives outside the tree; the pin names it), and a package with
+ * `"replace": true` would have rewritten that site's home page, menu and
+ * theme on the first boot after the upgrade — unless its marker happened
+ * to list the package id. An owner who really wants a package applied over
+ * a living site says so with TAPUZ_SEED=1.
+ * @returns {'explicit'|'pin'|false}
+ */
+function seedArmedBy() {
+  if (process.env.TAPUZ_SEED === '0') return false;
+  if (process.env.TAPUZ_SEED === '1') return 'explicit';
+  return pinnedRoot() ? 'pin' : false;
+}
+
+/**
+ * Is this root CONFIDENTLY empty? Fail closed: a pin-armed seed may run only
+ * when every sign of a site is absent AND every inventory succeeded. An
+ * inventory that cannot be taken (an unreadable database, a config dir that
+ * cannot be listed) is not emptiness — loadAuth() reads a malformed auth.json
+ * as "no users" and a broken SQLite file throws on the first query, while the
+ * menu, theme and site patches of a package are plain files that would land
+ * anyway. So the files are looked at first, and an error anywhere refuses.
+ * @returns {{ empty: boolean, confident: boolean, reason: string }}
+ */
+const SITE_SIGNS = ['auth.json', 'site.json', 'menus.json', 'theme-overrides.json', 'seeded.json'];
+function inspectRoot() {
+  const signs = [];
+  const errors = [];
+  try {
+    for (const f of SITE_SIGNS) if (fs.existsSync(path.join(CONFIG_DIR, f))) signs.push('config/' + f);
+    for (const d of ['pages', 'content']) {
+      const p = path.join(SITE_ROOT, d);
+      if (fs.existsSync(p) && fs.readdirSync(p).length) signs.push(d + '/');
+    }
+  } catch (e) { errors.push('filesystem: ' + e.message); }
+  try { if (require('./auth').hasAdmin()) signs.push('an admin account'); } catch (e) { errors.push('auth: ' + e.message); }
+  try {
+    const n = require('./pages').listPages().length;
+    if (n) signs.push(n + ' page(s) in the database');
+  } catch (e) { errors.push('pages: ' + e.message); }
+  if (errors.length) return { empty: false, confident: false, reason: 'could not establish that the root is empty (' + errors.join('; ') + ')' };
+  if (signs.length) return { empty: false, confident: true, reason: 'the root already holds a site (' + signs.join(', ') + ')' };
+  return { empty: true, confident: true, reason: 'empty root' };
+}
+
+/** Does this root already hold a site — or can that not be ruled out? */
+function rootHasSite() {
+  return !inspectRoot().empty;
+}
+
 function readJson(p, fallback) {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return fallback; }
 }
@@ -222,9 +275,12 @@ function seedCleanup(manifest) {
  * Apply the packaged seed once. Never throws — logs and returns a summary.
  * @returns {{ ran: boolean, reason?: string, results?: object }}
  */
-function maybeSeed() {
+function maybeSeed(opts = {}) {
   try {
-    if (!seedArmed()) return { ran: false, reason: 'not armed (no root pin, no TAPUZ_SEED=1)' };
+    // `opts.armedBy` exists for the hermetic smoke (a pin is a file in the
+    // package root, which a test must not write); production always derives it
+    const armedBy = opts.armedBy !== undefined ? opts.armedBy : seedArmedBy();
+    if (!armedBy) return { ran: false, reason: 'not armed (no root pin, no TAPUZ_SEED=1)' };
     const manifestPath = path.join(SEED_DIR, 'manifest.json');
     if (!fs.existsSync(manifestPath)) return { ran: false, reason: 'no seed package' };
     const manifest = readJson(manifestPath, null);
@@ -234,6 +290,13 @@ function maybeSeed() {
     }
     const marker = readJson(MARKER_PATH, {});
     if (marker[manifest.id]) return { ran: false, reason: `package "${manifest.id}" already applied` };
+    if (armedBy === 'pin') {
+      const probe = inspectRoot();
+      if (!probe.empty) {
+        console.log(`[seed] package "${manifest.id}" NOT applied: ${probe.reason}. A seed armed only by the root pin fills an EMPTY root; set TAPUZ_SEED=1 to apply it over existing content on purpose, TAPUZ_SEED=0 to switch the seed off.`);
+        return { ran: false, reason: (probe.confident ? 'root already holds a site' : 'root emptiness could not be established') + ' — a pin-armed seed only fills an empty root: ' + probe.reason };
+      }
+    }
 
     console.log(`[seed] applying content package "${manifest.id}" …`);
     const results = seedPages(manifest);
@@ -257,4 +320,4 @@ function maybeSeed() {
   }
 }
 
-module.exports = { maybeSeed, seedArmed, SEED_DIR, MARKER_PATH };
+module.exports = { maybeSeed, seedArmed, seedArmedBy, inspectRoot, rootHasSite, SEED_DIR, MARKER_PATH };

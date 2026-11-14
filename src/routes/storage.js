@@ -110,7 +110,9 @@ function dbCard(req) {
     : req.query.db === 'restored'
       ? '<div class="pill ok">✓ שוחזר — התוכן הוחלף; גיבוי בטיחות מהרגע שלפני נוסף למדף</div>'
       : req.query.db === 'restorefail'
-        ? '<div class="pill warn">השחזור נכשל — התוכן לא נגע (הכול-או-כלום)</div>' : '';
+        ? '<div class="pill warn">השחזור נכשל — התוכן לא נגע (הכול-או-כלום)</div>'
+        : req.query.db === 'backupfail'
+          ? `<div class="pill warn">הגיבוי נכשל — לא נוסף קובץ למדף. ${escapeAdmin(String(req.query.why || '').slice(0, 120))}</div>` : '';
 
   const shelf = h.backups.length
     ? h.backups.map((b) =>
@@ -176,7 +178,18 @@ function dbCard(req) {
 }
 
 router.post('/admin/db/backup', requireAdmin, (req, res) => {
-  try { require('../db').backupNow(); } catch (e) { /* absence on the shelf is the signal */ }
+  // A backup that failed must SAY so: before v2.67 any error here was
+  // swallowed and the page still showed "✓ גיבוי נוצר" — an owner about to do
+  // something risky believed a snapshot existed when the shelf had refused
+  // (seen live: two clicks, no new file, no word). The reason travels in the
+  // query (escaped on render, no paths beyond what the card already prints).
+  try {
+    require('../db').backupNow();
+  } catch (e) {
+    console.error('[db] backup failed: ' + (e && e.message));
+    const why = String((e && (e.code ? e.code + ': ' : '')) + (e && e.message || 'unknown')).slice(0, 120);
+    return res.redirect('/admin/storage?db=backupfail&why=' + encodeURIComponent(why));
+  }
   res.redirect('/admin/storage?db=backed');
 });
 
@@ -210,7 +223,19 @@ router.get('/admin/db/export.pzn', requireAdmin, (req, res) => {
   try {
     require('../db').snapshotTo(tmp);
     const filename = 'tapuziel-db-' + new Date().toISOString().slice(0, 10) + '.pzn';
-    res.download(tmp, filename, () => { try { fs.unlinkSync(tmp); } catch (e) { /* best effort */ } });
+    // dotfiles:'allow' — send refuses (404) any absolute path with a segment
+    // that starts with a dot, and a data root can sit under one (a deploy
+    // running from .builds/, a checkout under .claude/). The path is ours,
+    // built above from the database directory, never from the request.
+    // The callback used to ignore its error, so a refused send left the
+    // request open until the 30-second socket timeout; now it answers.
+    res.download(tmp, filename, { dotfiles: 'allow' }, (err) => {
+      try { fs.unlinkSync(tmp); } catch (e) { /* best effort */ }
+      if (err && !res.headersSent) {
+        console.error('[db] export download failed: ' + (err.message || err));
+        res.status(500).json({ ok: false, error: 'ההורדה נכשלה' });
+      }
+    });
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch (e2) { /* */ }
     res.status(500).json({ ok: false, error: e.message });
@@ -249,7 +274,14 @@ router.get('/admin/db/backup/:name', requireAdmin, (req, res) => {
   }
   const file = path.join(require('../paths').DB_DIR, 'backups', name);
   if (!fs.existsSync(file)) return res.status(404).send('not found');
-  res.download(file);
+  // the name passed the shelf's own pattern above, so allowing dot segments
+  // in the directory part is safe (see the export route for why it is needed)
+  res.download(file, name, { dotfiles: 'allow' }, (err) => {
+    if (err && !res.headersSent) {
+      console.error('[db] backup download failed: ' + (err.message || err));
+      res.status(500).json({ ok: false, error: 'ההורדה נכשלה' });
+    }
+  });
 });
 
 module.exports = router;

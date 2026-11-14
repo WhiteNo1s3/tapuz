@@ -19,9 +19,15 @@ const PACKAGE_ROOT = path.join(__dirname, '..');
  * still wins; the file is gitignored and injected by the deploy recipe
  * (docs/DEPLOY.md §3ב), never committed. This is what lets site data survive
  * redeploys — and even a rogue pipeline flattening the app tree. */
+// Where the pin is read from. TAPUZ_PIN_FILE exists for hermetic tests only
+// (a smoke must not write a pin into the package root); a deploy never sets
+// it — whoever controls the environment already controls TAPUZ_ROOT itself.
+const PIN_FILE = process.env.TAPUZ_PIN_FILE
+  ? path.resolve(process.env.TAPUZ_PIN_FILE)
+  : path.join(PACKAGE_ROOT, '.tapuz-root');
 function pinnedRoot() {
   try {
-    const p = fs.readFileSync(path.join(PACKAGE_ROOT, '.tapuz-root'), 'utf8').trim();
+    const p = fs.readFileSync(PIN_FILE, 'utf8').trim();
     return p || null;
   } catch (e) {
     return null;

@@ -31,7 +31,7 @@ const router = express.Router();
 // ─── /admin/agent — pair the browser bridge (agent tokens) ──────────
 // The page; its /admin/api/agent-tokens API lives in routes/agent-tokens.js.
 router.get('/admin/agent', requireAdmin, (req, res) => {
-  const origin = `${req.protocol}://${req.headers.host}`;
+  const origin = require('../http-util').requestOrigin(req);
   const html = `
     ${adminNav('agent', 'גשר סוכן')}
     <div class="container page-body" style="max-width:900px">
@@ -122,7 +122,14 @@ router.get('/admin/inject', (req, res) => {
   // stubs stay off the grid; a registry that fails to load leaves the page
   // itself standing.
   let packs = [];
-  try { packs = require('../injections').list().filter((p) => !p.ui.hidden); } catch (e) { packs = []; }
+  // an admin-only pack (the store's catalog writer reads payment details,
+  // coupon codes and drafts) is not offered to an editor: the API refuses it,
+  // and a card that can only answer "not for you" should not be on the grid
+  const isAdmin = !!(req.adminUser && req.adminUser.role === 'admin');
+  try {
+    const inj = require('../injections');
+    packs = inj.list().filter((p) => !p.ui.hidden && (isAdmin || !(inj.get(p.id) || {}).adminOnly));
+  } catch (e) { packs = []; }
   const packsGrid = packs.length ? `
     <div class="inj-packs">
       <div class="inj-card">

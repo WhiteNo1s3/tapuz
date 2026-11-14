@@ -24,6 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const { CONFIG_DIR } = require('./paths');
 const { loadConfig } = require('./config');
+const jsonFile = require('./json-file');
 
 const AUTH_PATH = path.join(CONFIG_DIR, 'auth.json');
 
@@ -34,20 +35,65 @@ const MAX_SESSION_MS = 12 * 60 * 60 * 1000; // 12h absolute cap
 // ---------------------------------------------------------------------------
 // auth.json persistence
 // ---------------------------------------------------------------------------
+//
+// A MISSING auth.json is a first run. An auth.json that EXISTS and cannot be
+// read is an accident, and it fails CLOSED (v2.69): before, a cut-off file
+// read as "no accounts", the next request wrote a fresh signing secret over
+// it, and /admin/create-account reopened to anyone who found the site. Now
+// the file is left exactly as it was found, one copy of it is kept beside it
+// (auth.json.corrupt-<stamp>), hasAdmin() keeps answering true so the
+// first-admin screen stays shut, and nothing is ever written over it — the
+// owner restores the file, and every account is back.
+const AUTH_DAMAGED_MESSAGE = 'קובץ החשבונות (config/auth.json) פגום ולא ניתן לקריאה. שום חשבון לא נמחק ושום דבר לא נכתב עליו — שחזרו את הקובץ מגיבוי.';
+let damageSeen = '';
+
+function readAuthFile() {
+  const r = jsonFile.readJson(AUTH_PATH);
+  if (r.state === 'ok' && (!r.data || typeof r.data !== 'object' || Array.isArray(r.data))) {
+    return { state: 'corrupt', data: null, error: 'auth.json does not hold an object' };
+  }
+  return r;
+}
+
+// Every request reads the accounts file, so the copy and the two log lines
+// happen once per damaged file (its size and time), not once per request.
+function noteDamaged(error) {
+  let seen = 'unreadable';
+  try { const st = fs.statSync(AUTH_PATH); seen = st.size + ':' + st.mtimeMs; } catch (e) { /* keep */ }
+  if (seen === damageSeen) return;
+  damageSeen = seen;
+  const copy = jsonFile.keepCorruptCopy(AUTH_PATH);
+  console.error('[auth] config/auth.json exists but cannot be read (' + error + ').');
+  console.error('[auth] It was NOT overwritten and no account was removed. Sign-in and first-admin creation stay closed until the file is restored' +
+    (copy ? '; a copy of the damaged file is at ' + copy + '.' : '.'));
+}
+
+/** 'missing' (first run) | 'ok' | 'corrupt' (exists, unreadable — fail closed). */
+function authState() {
+  return readAuthFile().state;
+}
+
 function loadAuth() {
-  try {
-    if (fs.existsSync(AUTH_PATH)) {
-      const data = JSON.parse(fs.readFileSync(AUTH_PATH, 'utf8'));
-      if (!Array.isArray(data.users)) data.users = [];
-      return data;
-    }
-  } catch (e) { /* fall through to fresh */ }
+  const r = readAuthFile();
+  if (r.state === 'ok') {
+    damageSeen = '';
+    if (!Array.isArray(r.data.users)) r.data.users = [];
+    return r.data;
+  }
+  if (r.state === 'corrupt') noteDamaged(r.error);
   return { users: [] };
 }
 
 function saveAuth(data) {
+  // never over a damaged file: what is in it may be every account the site has
+  if (readAuthFile().state === 'corrupt') {
+    const err = new Error(AUTH_DAMAGED_MESSAGE);
+    err.code = 'E_STORE_DAMAGED';
+    throw err;
+  }
   if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(AUTH_PATH, JSON.stringify(data, null, 2), 'utf8');
+  // whole file or none of it, and private from its first byte (0600)
+  jsonFile.writeAtomic(AUTH_PATH, JSON.stringify(data, null, 2), { mode: 0o600 });
   // Best-effort tighten permissions (POSIX only; a no-op on Windows).
   try { fs.chmodSync(AUTH_PATH, 0o600); } catch (e) {}
 }
@@ -55,9 +101,22 @@ function saveAuth(data) {
 // ---------------------------------------------------------------------------
 // Server signing secret
 // ---------------------------------------------------------------------------
+// While auth.json is damaged the real secret is unknown and must not be
+// replaced on disk, so sessions are signed with a key that lives only in this
+// process: nobody can sign in anyway, and the moment the file is restored the
+// real secret (and every session it signed) is back.
+let memorySecret = '';
+
 function getSecret() {
   if (process.env.TAPUZ_ADMIN_SECRET) return process.env.TAPUZ_ADMIN_SECRET;
-  const data = loadAuth();
+  const r = readAuthFile();
+  if (r.state === 'corrupt') {
+    noteDamaged(r.error);
+    if (!memorySecret) memorySecret = crypto.randomBytes(32).toString('hex');
+    return memorySecret;
+  }
+  const data = r.state === 'ok' ? r.data : { users: [] };
+  if (!Array.isArray(data.users)) data.users = [];
   if (!data.secret) {
     data.secret = crypto.randomBytes(32).toString('hex');
     saveAuth(data);
@@ -103,7 +162,70 @@ function roleOf(user) {
 }
 
 function hasAdmin() {
-  return loadAuth().users.length > 0;
+  // a damaged accounts file is NOT "no accounts": answering false here is
+  // what used to reopen the first-admin screen (see loadAuth above)
+  const r = readAuthFile();
+  if (r.state === 'corrupt') { noteDamaged(r.error); return true; }
+  return r.state === 'ok' && Array.isArray(r.data.users) && r.data.users.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// First-run setup code (v2.69)
+//
+// On a root with no account, whoever reaches /admin/create-account first
+// becomes the owner — and a demo boot publishes a site on exactly such a
+// root. So the first account needs a code only the person who started the
+// server can know: TAPUZ_SETUP_TOKEN when the host sets it, otherwise a code
+// made at boot and printed once in the server log. With the boot code, a
+// browser on the server's own machine (http-util.isLoopbackRequest) needs
+// none when the server was started in a terminal (interactiveRun below) —
+// local development and `npm run seed:admin` work as they always did; a
+// hosted process, and a token the host set, ask it of everyone
+// (routes/auth-screens.js says why).
+// ---------------------------------------------------------------------------
+const SETUP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I: it is read off a log and typed
+let bootSetupCode = '';
+
+function setupCode() {
+  const fromEnv = String(process.env.TAPUZ_SETUP_TOKEN || '').trim();
+  if (fromEnv) return fromEnv;
+  if (!bootSetupCode) {
+    const bytes = crypto.randomBytes(10);
+    let s = '';
+    for (let i = 0; i < 10; i++) s += SETUP_ALPHABET[bytes[i] % SETUP_ALPHABET.length];
+    bootSetupCode = s.slice(0, 5) + '-' + s.slice(5);
+  }
+  return bootSetupCode;
+}
+
+/** Where the code comes from — the boot log says which. */
+function setupCodeSource() {
+  return String(process.env.TAPUZ_SETUP_TOKEN || '').trim() ? 'env' : 'boot';
+}
+
+/**
+ * Somebody started this server in a terminal and is looking at its output —
+ * the only kind of run in which "a browser on this machine" may be taken for
+ * the owner and let past the setup code. A hosted process has no terminal
+ * (its output is a pipe or a log file), and no environment variable can say
+ * otherwise: there is nothing here for a host to switch on by accident.
+ */
+function interactiveRun() {
+  return !!(process.stdout && process.stdout.isTTY);
+}
+
+/** Constant-time; a code typed in lower case or without the dash still matches a boot code. */
+function checkSetupCode(input) {
+  const want = setupCode();
+  let got = String(input == null ? '' : input).trim();
+  if (!got) return false;
+  if (setupCodeSource() === 'boot') {
+    got = got.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (got.length === 10) got = got.slice(0, 5) + '-' + got.slice(5);
+  }
+  const a = crypto.createHash('sha256').update(got).digest();
+  const b = crypto.createHash('sha256').update(want).digest();
+  return crypto.timingSafeEqual(a, b);
 }
 
 function findUser(username) {
@@ -267,13 +389,22 @@ function parseCookies(req) {
   raw.split(';').forEach(part => {
     const i = part.indexOf('=');
     if (i < 0) return;
-    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    // a cookie that is not valid percent-encoding ('%zz' from another app on
+    // the same host) is kept as it was sent — decodeURIComponent throws on
+    // it, and one stray cookie must not turn every admin request into a 500
+    const value = part.slice(i + 1).trim();
+    let decoded = value;
+    try { decoded = decodeURIComponent(value); } catch (e) { /* keep the raw text */ }
+    out[part.slice(0, i).trim()] = decoded;
   });
   return out;
 }
 
+// The forwarded scheme is read in one place (http-util.forwardedProto: the
+// last entry, the one the nearest proxy wrote), so this answer and the origin
+// the sitemap prints can never disagree about the same header.
 function isHttps(req) {
-  return req.secure || (req.headers && req.headers['x-forwarded-proto'] === 'https');
+  return !!(req && (req.secure || require('./http-util').forwardedProto(req) === 'https'));
 }
 
 /** Read + verify the session from the request. Returns { uid, iat } or null. */
@@ -363,6 +494,15 @@ module.exports = {
   COOKIE_NAME,
   IDLE_MS,
   MAX_SESSION_MS,
+  // the accounts file itself (v2.69): missing / ok / corrupt, and what to tell the owner
+  authState,
+  AUTH_DAMAGED_MESSAGE,
+  // first-run setup code (v2.69)
+  setupCode,
+  setupCodeSource,
+  interactiveRun,
+  checkSetupCode,
+  isHttps,
   // accounts
   hasAdmin,
   createAdmin,

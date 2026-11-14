@@ -111,7 +111,9 @@ function importSitePackage(pkg, opts = {}) {
     }
     try {
       if (!exists) {
-        createPage({ title: entry.title || entry.fullPath, slug: entry.fullPath, blocks: [] });
+        // a page that lived at a now-reserved address on the source site
+        // (sitemap, account, 404…) travels with it; /admin itself never does
+        createPage({ title: entry.title || entry.fullPath, slug: entry.fullPath, blocks: [], allowReserved: true });
       }
       // publish FIRST (savePageSource's publish:true writes the same source to
       // BOTH draft and published) so a subsequent draft-only write can safely
@@ -136,7 +138,11 @@ function importSitePackage(pkg, opts = {}) {
     try {
       let source = pkg.store.source;
       if (!overwrite) source = source.replace(/<bent-store\b([^>]*)>/i, (m, attrs) => '<bent-store' + attrs.replace(/\smode="[^"]*"/i, '') + ' mode="merge">');
-      const r = require('./store').document.applyDocument(source, { force: true, reason: 'site-package' });
+      // `trusted`: a package's store document was written by the store's own
+      // serializer, so it is read without the paste door's size caps — a big
+      // shop's own export used to be refused here ("the text is too long").
+      // Every product still goes through the same validation as a paste.
+      const r = require('./store').document.applyDocument(source, { force: true, trusted: true, reason: 'site-package' });
       storeResult = r.ok ? { ok: true, products: (r.changed && r.changed.products) || 0, backupId: r.backupId } : { ok: false, error: r.message || r.code };
     } catch (e) {
       storeResult = { ok: false, error: e.message };

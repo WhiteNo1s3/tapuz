@@ -8,6 +8,9 @@
  *   GET  /admin/api/store/gateway                   the redacted settings
  *   POST /admin/api/store/gateway                   save provider / mode / keys
  *   POST /admin/api/store/gateway/test              a ₪1 session in the current mode
+ *   GET  /admin/api/store/paypal                    PayPal's redacted settings (v2.69)
+ *   POST /admin/api/store/paypal                    save PayPal's mode / keys
+ *   POST /admin/api/store/paypal/test               ask PayPal for a token with the stored keys
  *   POST /admin/api/store/orders/:number/refund     refund one payment row (typed confirmation)
  *   POST /admin/api/store/orders/:number/payments/:id/verify   the owner's own check of one row
  *   POST /admin/api/store/orders/:number/payments/:id/refund-done      "ההחזר בוצע" — an unknown outcome, resolved
@@ -20,6 +23,13 @@
  * (`confirmLive: true`, refused without it by saveAdminSettings), so a
  * stray form save cannot flip it. The ₪1 test page's address is shown in
  * test mode only — a live one is a payable link.
+ *
+ * PayPal (src/store/paypal.js) is not a card driver, but its keys are the
+ * same kind of thing and live in the same file, so they are typed on this
+ * same screen: the owner of a hosted site should not need a hosting panel
+ * for a sandbox key. Same rules — a value goes in and never comes back, a
+ * key the server's environment supplies is shown read-only, and "חי" stays
+ * refused until the server itself is armed (TAPUZ_PAYPAL_LIVE=1).
  */
 
 const express = require('express');
@@ -31,6 +41,135 @@ const { esc } = kit;
 
 function store() { return require('../store'); }
 function gateway() { return require('../store/gateway'); }
+function paypal() { return require('../store/paypal'); }
+
+const ENV_NOTE = 'מוגדר במשתני הסביבה של השרת';
+
+/** The PayPal section of the screen: where it stands and why, the mode, the two keys, the connection check. Never a value. */
+function paypalSection() {
+  const p = paypal().adminSettings();
+  const modeLabel = p.mode === 'live' ? 'מצב חי' : 'ארגז חול';
+  const stateLine = p.ready && p.hasMethod
+    ? `<span class="pill ok">מחובר</span> PayPal · ${modeLabel}`
+    : p.ready
+      ? '<span class="pill warn">מחובר, אבל</span> אין בקופה אמצעי תשלום מסוג PayPal'
+      : `<span class="pill">לא מחובר</span> ${esc(p.reasons.join(' · '))}`;
+  const checks = [
+    [p.configured, p.configured ? 'המפתחות שמורים (Client ID ו-Secret)' : 'חסרים מפתחות — מקבלים אותם ב-developer.paypal.com, תחת Apps &amp; Credentials'],
+    [p.hasMethod, p.hasMethod ? 'יש אמצעי תשלום מסוג "PayPal" בקופה' : 'אין עדיין אמצעי תשלום מסוג "PayPal" — <a href="/admin/store/settings#payments">להוספה במשלוח ותשלום</a>'],
+    p.liveRefused
+      ? [false, 'מצב חי התבקש אבל לא אושר בשרת: בסביבת השרת לא מוגדר <code>TAPUZ_PAYPAL_LIVE=1</code>. עד אז PayPal לא מוצע בקופה כלל', true]
+      : [true, p.live ? 'מצב חי — גבייה בפועל' : 'ארגז חול — הקונים רואים "לא יחויב כסף אמיתי", ותשלום בדיקה לא מסמן הזמנה כשולמה']
+  ];
+  const keyRow = (key, label, type, hint) => {
+    const f = p.fields[key];
+    const placeholder = f.env ? ENV_NOTE : f.set ? 'שמור · ' + (f.tail ? '‎••••' + f.tail : '••••') : 'לא הוזן';
+    return `<label class="st-gw-field">
+      <span>${label}${f.env ? ` <span class="st-pp-env">(${ENV_NOTE})</span>` : ''}</span>
+      <span class="st-gw-input">
+        <input class="input" type="${type}" autocomplete="new-password" spellcheck="false" dir="ltr"
+          data-pp-key="${key}" placeholder="${esc(placeholder)}"${f.env ? ' disabled' : ''}>
+        <button type="button" class="btn xs secondary" data-pp-clear title="מחיקת הערך השמור"${f.set && !f.env ? '' : ' hidden'}>✕</button>
+      </span>
+      <span class="faint">${hint}</span>
+    </label>`;
+  };
+  // "חי" can be chosen only on a server whose environment allows it; a file
+  // that already says live keeps the radio reachable so it can be read and undone
+  const liveLocked = p.modeFromEnv || (!p.liveArmed && p.mode !== 'live');
+  return `
+    <section class="card st-pp" id="paypal">
+      <h2 class="sub-head">PayPal</h2>
+      <p class="lead">כפתור של PayPal בדף ההזמנה: הקונה מאשר בחלון של PayPal, והשרת שלכם גובה את הסכום שבהזמנה ומוודא ש-PayPal דיווח בדיוק אותו. המפתחות נשמרים בשרת בלבד — לא בגיבוי ה-‎.pzn ולא בחבילת האתר.</p>
+      <p class="st-gw-state">${stateLine}</p>
+      <ul class="st-checks">${checks.map(([ok, text, bad]) => `<li class="${ok ? 'is-ok' : bad ? 'is-bad' : 'is-todo'}"><span class="st-check-mark">${ok ? '✓' : bad ? '!' : '•'}</span><span>${text}</span></li>`).join('')}</ul>
+      <form id="pp-form" onsubmit="return false">
+        <div class="st-pp-mode">
+          <span class="st-pp-mode-title">מצב</span>
+          <label class="st-inline"><input type="radio" name="pp-mode" value="test"${p.mode === 'live' ? '' : ' checked'}${p.modeFromEnv ? ' disabled' : ''}> ארגז חול — לא יחויב כסף אמיתי</label>
+          <label class="st-inline"><input type="radio" name="pp-mode" value="live"${p.mode === 'live' ? ' checked' : ''}${liveLocked ? ' disabled' : ''}> חי — גבייה בפועל</label>
+        </div>
+        <p class="faint">${p.modeFromEnv
+    ? 'המצב ' + ENV_NOTE + ' (<code>PAYPAL_MODE</code>) — משנים אותו שם.'
+    : p.liveArmed
+      ? 'מצב חי אושר בסביבת השרת (<code>TAPUZ_PAYPAL_LIVE=1</code>). המעבר עצמו דורש אישור מפורש.'
+      : '"חי" נשאר חסום עד שמגדירים בסביבת השרת <code>TAPUZ_PAYPAL_LIVE=1</code> — מהמסך הזה לבדו אי אפשר להתחיל לגבות כסף אמיתי.'}</p>
+        <div class="st-pp-keys">
+          ${keyRow('clientId', 'Client ID', 'text', 'המזהה הציבורי של האפליקציה ב-PayPal.')}
+          ${keyRow('clientSecret', 'Secret', 'password', 'נשמר בשרת בלבד; מוצגים רק ארבעת התווים האחרונים.')}
+        </div>
+        <p class="faint">שדה ריק בשמירה = בלי שינוי; ✕ מוחק את הערך השמור. לארגז החול משתמשים במפתחות של אפליקציית Sandbox.</p>
+        <div class="row end st-pp-actions">
+          <span id="pp-out" aria-live="polite"></span>
+          <button type="button" class="btn secondary" id="pp-test"${p.configured ? '' : ' disabled'}>🔌 בדיקת חיבור</button>
+          <button type="button" class="btn" id="pp-save">שמירה</button>
+        </div>
+      </form>
+    </section>
+    <script>
+    (function () {
+      var form = document.getElementById('pp-form');
+      if (!form) return;
+      var out = document.getElementById('pp-out');
+      var initialMode = ${JSON.stringify(p.mode)};
+      var liveConfirmed = false; // set only by the confirm() below — and sent on the wire as confirmLive
+      Array.prototype.forEach.call(form.querySelectorAll('[name="pp-mode"]'), function (r) {
+        r.addEventListener('change', function () {
+          if (r.value === 'live' && r.checked && initialMode !== 'live') {
+            liveConfirmed = confirm('לעבור למצב חי של PayPal? מכאן והלאה קונים יחויבו בכסף אמיתי. ודאו שהמפתחות הם של האפליקציה החיה ולא של ארגז החול.');
+            if (!liveConfirmed) form.querySelector('[name="pp-mode"][value="test"]').checked = true;
+          }
+        });
+      });
+      form.addEventListener('click', function (ev) {
+        var b = ev.target.closest && ev.target.closest('[data-pp-clear]');
+        if (!b) return;
+        var input = b.parentNode.querySelector('input');
+        if (!confirm('למחוק את הערך השמור של השדה?')) return;
+        input.value = '';
+        input.setAttribute('data-cleared', '1');
+        input.placeholder = 'יימחק בשמירה';
+        b.hidden = true;
+      });
+      function payload() {
+        var body = {};
+        Array.prototype.forEach.call(form.querySelectorAll('input[data-pp-key]'), function (i) {
+          if (i.disabled) return;
+          if (i.value) body[i.getAttribute('data-pp-key')] = i.value;
+          else if (i.getAttribute('data-cleared') === '1') body[i.getAttribute('data-pp-key')] = '';
+        });
+        var mode = form.querySelector('[name="pp-mode"]:checked');
+        if (mode && !mode.disabled) {
+          body.mode = mode.value;
+          body.confirmLive = mode.value === 'live' && (initialMode === 'live' || liveConfirmed);
+        }
+        return body;
+      }
+      function say(text, cls) { out.textContent = text; out.className = cls || ''; }
+      document.getElementById('pp-save').addEventListener('click', function () {
+        say('שומרים…');
+        fetch('/admin/api/store/paypal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d.ok) { say(d.error || 'שגיאה', 'st-bad'); return; }
+            var notes = d.errors && d.errors.length ? d.errors.join(' · ') : '';
+            say('נשמר ✓' + (notes ? ' · ' + notes : ''), notes ? 'st-warn' : 'st-ok');
+            setTimeout(function () { location.reload(); }, notes ? 2600 : 700);
+          })
+          .catch(function () { say('שגיאת רשת', 'st-bad'); });
+      });
+      var testBtn = document.getElementById('pp-test');
+      testBtn.addEventListener('click', function () {
+        testBtn.disabled = true;
+        say('שואלים את PayPal…');
+        fetch('/admin/api/store/paypal/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { testBtn.disabled = false; say(d.message || (d.ok ? 'תקין' : 'נכשל'), d.ok ? 'st-ok' : 'st-bad'); })
+          .catch(function () { testBtn.disabled = false; say('שגיאת רשת', 'st-bad'); });
+      });
+    })();
+    </script>`;
+}
 
 function sendError(res, e, status = 400) {
   res.status(status).json({ ok: false, error: e && e.message ? e.message : String(e) });
@@ -111,6 +250,7 @@ router.get('/admin/store/gateway', requireAdmin, (req, res) => {
       <button type="button" class="btn" id="gw-save">שמירה</button>
     </div>
     </form>
+    ${paypalSection()}
     <script>
     (function () {
       var form = document.getElementById('gw-form');
@@ -219,6 +359,32 @@ router.post('/admin/api/store/gateway/test', requireAdmin, async (req, res) => {
     const r = await gateway().testConnection({ req });
     res.json({ ok: !!r.ok, message: r.message, url: r.url || '' });
   } catch (e) { sendError(res, e, 500); }
+});
+
+// ── PayPal's keys ────────────────────────────────────────────────────────
+
+router.get('/admin/api/store/paypal', requireAdmin, (req, res) => {
+  try { res.json({ ok: true, settings: paypal().adminSettings() }); } catch (e) { sendError(res, e, 500); }
+});
+
+router.post('/admin/api/store/paypal', requireAdmin, (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = paypal().saveAdminSettings({ mode: b.mode, confirmLive: b.confirmLive === true, clientId: b.clientId, clientSecret: b.clientSecret });
+    // the checkout page says whether PayPal is offered and whether it is the sandbox — rebuild so the live site agrees
+    const rebuilt = store().refreshNow();
+    res.json({ ok: true, settings: r.settings, errors: r.errors, rebuilt });
+  } catch (e) { sendError(res, e); }
+});
+
+router.post('/admin/api/store/paypal/test', requireAdmin, async (req, res) => {
+  try {
+    const r = await paypal().testConnection();
+    res.json({ ok: !!r.ok, message: r.message });
+  } catch (e) {
+    // never the error's own text: a transport failure could carry what was sent
+    res.status(500).json({ ok: false, message: 'בדיקת החיבור נכשלה — נסו שוב.' });
+  }
 });
 
 /**

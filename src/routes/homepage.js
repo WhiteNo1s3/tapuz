@@ -24,6 +24,15 @@ function setHomepage(fullPath) {
   const config = loadConfig();
   config.homepage = fullPath;
   saveConfig(config);
+  // v2.69 — a shop that became (or stopped being) the home page changes the
+  // trail written into every product and category page; they follow before
+  // the rebuild. A sync that fails is logged and never fails the crowning.
+  try {
+    const st = require('../store');
+    if (st.isOpen()) st.pages.syncCatalogPages();
+  } catch (e) {
+    console.error('[store] page sync after a homepage change failed:', e.message);
+  }
   // '/' is a static index.html — rebuild now so the crowning is live
   // immediately (same "publish MEANS live" contract as v0.69).
   exportAll();

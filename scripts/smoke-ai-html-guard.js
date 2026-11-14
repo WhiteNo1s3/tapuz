@@ -97,8 +97,27 @@ function req(method, urlPath, { form, json, cookie, token } = {}) {
     r.end();
   });
 }
-async function waitUp() {
+// ── the server under test must be OURS (v2.67) ──
+// The port is fixed, so a server left behind by an earlier run (or anything
+// else on 3958) would answer this smoke's requests and its verdict would be
+// about a stranger — seen once as a red run against an orphan with another
+// site's admin. Three guards, none of which touches the stranger:
+//   1. the port must be free BEFORE the child is spawned — else refuse;
+//   2. the admin password is random per run, so a stale server of this very
+//      smoke cannot be logged into (and the token is minted fresh already);
+//   3. an answer counts only while the child is alive — a child that lost
+//      the port dies on EADDRINUSE, and whoever answers then is not it.
+// And the child dies with this process, exit or signal.
+function portIsFree(port) {
+  return new Promise((resolve) => {
+    const s = require('net').connect({ host: '127.0.0.1', port });
+    s.once('connect', () => { s.destroy(); resolve(false); });
+    s.once('error', () => resolve(true));
+  });
+}
+async function waitUp(child) {
   for (let i = 0; i < 80; i++) {
+    if (child.exitCode !== null) throw new Error(`the test server exited early (code ${child.exitCode}) — port ${PORT} taken, or a boot failure`);
     try { await req('GET', '/admin/login'); return; } catch (e) { await new Promise((r) => setTimeout(r, 150)); }
   }
   throw new Error('server did not start');
@@ -106,18 +125,34 @@ async function waitUp() {
 const draftOf = async (cookie, slug) => (await req('GET', '/admin/api/pzn/source?fullPath=' + encodeURIComponent(slug), { cookie })).json;
 
 (async () => {
+  if (!(await portIsFree(PORT))) {
+    check(`port ${PORT} is free before the test server starts — something else is listening there (a stale server from an earlier run?); refusing to test against it`, false);
+    try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+    console.log('\nSMOKE AI-HTML-GUARD: FAIL');
+    process.exit(1);
+  }
   require('../src/db');
   require('../src/setup').runSetup({
     title: 'אתר', description: 'ai html guard', colors: { primary: '#0a66c2', bg: '#fff', lightBg: '#f0f9ff', text: '#0f172a' },
     menuPlacement: 'top', pages: ['home'], menuPages: ['home'], external: []
   });
-  require('../src/auth').createAdmin('owner', 'owner-pass-1');
+  const ADMIN_PASS = 'run-' + require('crypto').randomBytes(12).toString('hex');
+  require('../src/auth').createAdmin('owner', ADMIN_PASS);
   const writeTok = require('../src/agent-tokens').mintToken({ name: 'companion', scopes: ['read', 'write'] }).token;
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'server.js')], { env: { ...process.env, TAPUZ_ROOT: ROOT, PORT: String(PORT) }, stdio: 'ignore' });
+  const teardown = () => {
+    try { if (child.exitCode === null) child.kill('SIGKILL'); } catch (e) { /* already gone */ }
+    try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+  };
+  process.on('exit', teardown);
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { teardown(); process.exit(1); });
   try {
-    await waitUp();
-    const login = await req('POST', '/admin/login', { form: { username: 'owner', password: 'owner-pass-1' } });
+    await waitUp(child);
+    const login = await req('POST', '/admin/login', { form: { username: 'owner', password: ADMIN_PASS } });
     const cookie = String(login.headers['set-cookie'] || '').split(';')[0];
+    check('the server answering is this run\'s own: the child is alive and the per-run admin password logged in',
+      child.exitCode === null && login.status === 302 && cookie.length > 0);
+    if (!cookie) throw new Error('login failed — the listener on the port is not this run\'s server');
 
     // ── 2a. the copilot: the proposal the owner approves is already clean ──
     await req('POST', '/admin/api/ai/settings', { cookie, json: { provider: 'browser' } });
@@ -138,6 +173,35 @@ const draftOf = async (cookie, slug) => (await req('GET', '/admin/api/pzn/source
       c.status === 200 && c.json.scrubbed === 1 && /הוסרו קטעי קוד/.test(c.json.notice || '') && cDraft.ok && !dirty(cDraft.source) &&
       // the live file has the site's own scripts — look for the PAYLOAD's fingerprints
       !/admin\/api\/ai\/settings|onerror=|javascript:alert|evil\.example/.test(fs.existsSync(path.join(ROOT, 'public', 'paste-new.html')) ? fs.readFileSync(path.join(ROOT, 'public', 'paste-new.html'), 'utf8') : 'MISSING admin/api/ai/settings'));
+
+    // ── 2b′. raw HTML written IN THE OPEN, beside the modules (not inside a
+    // bent-html) — the document does not parse, so the first scrub skips it
+    // and the repair quarantines the run into a provisional bent-html: the
+    // door must scrub AGAIN after the repair (BREAKAGE-2.45 §1) ──
+    const RAW_BESIDE = '<script>fetch("/admin/api/ai/settings")</script><img src=x onerror="alert(1)"><a href="javascript:alert(2)">א</a>';
+    const openDoc = (slug, raw) =>
+      '<!DOCTYPE html>\n<html lang="he" dir="rtl" bent-version="0.1">\n<head><meta charset="utf-8"/><title>בדיקה</title><meta name="bent-slug" content="' + slug + '"/></head>\n<body>\n' +
+      '<bent-heading id="h" level="1">שלום</bent-heading>\n' + raw + '\n<bent-text id="t">פסקה</bent-text>\n</body></html>';
+    // the repair turns the raw <a href> into a @LINK mark; inside a bent-html
+    // that mark is literal text (the renderer expands marks in text leaves
+    // only, never in raw HTML), so what must be gone is anything EXECUTABLE:
+    // the script, the handler, and a javascript: href on a real element
+    const armed = (s) => /<script|onerror|href="javascript:|href='javascript:/i.test(s);
+    const cr = await req('POST', '/admin/api/pzn/create-from-source', { cookie, json: { source: openDoc('raw-beside', RAW_BESIDE), publish: true } });
+    const crDraft = await draftOf(cookie, 'raw-beside');
+    const crPreview = await req('GET', '/admin/preview/raw-beside', { cookie });
+    check('admin create-from-source, script in the open beside modules: repaired AND scrubbed (≥1), a notice, draft only, nothing executable in the draft',
+      cr.status === 200 && cr.json.repaired === true && cr.json.scrubbed >= 1 && /הוסרו קטעי קוד/.test(cr.json.notice || '') &&
+      cr.json.published === false && crDraft.ok && !armed(crDraft.source) && /שלום/.test(crDraft.source));
+    check('…and the rendered draft preview carries none of the payload (no fetch script, no onerror, no javascript: href)',
+      crPreview.status === 200 && !/admin\/api\/ai\/settings|onerror=|href="javascript:/.test(crPreview.text));
+    const ar = await req('POST', '/agent/v1/create-from-source', { token: writeTok, json: { source: openDoc('raw-beside-agent', RAW_BESIDE) } });
+    check('agent create-from-source, script in the open beside modules: repaired AND scrubbed, nothing executable in the draft',
+      ar.status === 200 && ar.json.repaired === true && ar.json.scrubbed >= 1 && !armed((await draftOf(cookie, 'raw-beside-agent')).source));
+    const harmless = await req('POST', '/admin/api/pzn/create-from-source', { cookie, json: { source: openDoc('raw-harmless', '<p>פסקה <b>מודגשת</b></p>') } });
+    const harmlessHtml = htmlOf((await draftOf(cookie, 'raw-harmless')).source).join('');
+    check('…harmless raw HTML beside modules is still only repaired: scrubbed=0, no notice, the words and the <p> stay (the <b> became @B{})',
+      harmless.status === 200 && harmless.json.repaired === true && harmless.json.scrubbed === 0 && !harmless.json.notice && /@B\{מודגשת\}/.test(harmlessHtml) && /<p>/.test(harmlessHtml));
 
     // ── 2c. the paste flow's update of an existing page (from:'ai') ──
     const u = await req('POST', '/admin/api/pzn/source', { cookie, json: { fullPath: 'paste-new', source: doc('paste-new', EVIL), from: 'ai' } });
@@ -161,8 +225,7 @@ const draftOf = async (cookie, slug) => (await req('GET', '/admin/api/pzn/source
   } catch (e) {
     check('harness: ' + e.message, false);
   } finally {
-    child.kill();
-    try { fs.rmSync(ROOT, { recursive: true, force: true }); } catch (e) { /* best effort */ }
+    teardown();
   }
   console.log('');
   console.log(fail ? 'SMOKE AI-HTML-GUARD: FAIL' : 'SMOKE AI-HTML-GUARD: PASS');

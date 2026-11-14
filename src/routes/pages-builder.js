@@ -143,7 +143,7 @@ router.post('/admin/create', (req, res) => {
   const slug = deriveSlug((req.body.slug || '').trim() || title);
   // Never clobber an existing page — suffix until the full_path is free.
   let candidate = slug;
-  for (let n = 2; getPageByFullPath(generateFullPath('', candidate)); n++) {
+  for (let n = 2; getPageByFullPath(generateFullPath('', candidate)) || require('../pages').isReservedPath(candidate); n++) {
     candidate = slug + '-' + n;
   }
   const result = createPage({
@@ -490,7 +490,7 @@ router.post('/admin/save', (req, res) => {
       const existing = getPageByFullPath(full_path);
       const desired = existing ? generateFullPath(existing.path_prefix || '', clean) : null;
       if (desired && desired !== full_path) {
-        if (getPageByFullPath(desired)) slugRejected = true;
+        if (getPageByFullPath(desired) || require('../pages').isReservedPath(desired)) slugRejected = true;
         else updates.slug = clean;
       }
     }

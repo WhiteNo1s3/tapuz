@@ -21,6 +21,10 @@ function sendError(res, e, status = 400) {
   res.status(status).json({ ok: false, error: e && e.message ? e.message : String(e) });
 }
 
+// the list shows this many orders a page; the pager below it reaches the rest
+// (it used to stop at 200 with nothing to say there were more)
+const PAGE_SIZE = 50;
+
 router.get('/admin/store/orders', requireAdmin, (req, res) => {
   const st = store();
   const O = st.orders;
@@ -28,7 +32,22 @@ router.get('/admin/store/orders', requireAdmin, (req, res) => {
   const paid = ['yes', 'no'].includes(req.query.paid) ? req.query.paid : '';
   const q = String(req.query.q || '').slice(0, 80);
   const counts = O.countByStatus();
-  const list = O.listOrders({ status, paid, q, limit: 200 });
+  const total = O.countOrders({ status, paid, q });
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(Math.max(parseInt(req.query.page, 10) || 1, 1), pages);
+  const list = O.listOrders({ status, paid, q, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+  // the same filter on every page link, so a search or a tab is never lost by turning the page
+  const pageHref = (n) => {
+    const qs = new URLSearchParams({ ...(status ? { status } : {}), ...(paid ? { paid } : {}), ...(q ? { q } : {}), ...(n > 1 ? { page: String(n) } : {}) }).toString();
+    return '/admin/store/orders' + (qs ? '?' + qs : '');
+  };
+  const turn = (n, label, rel) => (n >= 1 && n <= pages && n !== page
+    ? `<a class="btn sm secondary" href="${esc(pageHref(n))}" rel="${rel}">${label}</a>`
+    : `<span class="btn sm secondary" aria-disabled="true">${label}</span>`);
+  const pager = total ? `<nav class="st-pager" aria-label="עמודי ההזמנות">
+      <span class="st-pager-info">${pages > 1 ? `עמוד ${page} מתוך ${pages} · ` : ''}${total} הזמנות</span>
+      ${pages > 1 ? `<span class="st-pager-nav">${turn(page - 1, 'הקודם', 'prev')}${turn(page + 1, 'הבא', 'next')}</span>` : ''}
+    </nav>` : '';
   const tab = (href, label, n, on) => `<a href="${href}"${on ? ' class="is-on"' : ''}>${label} <span class="st-count">${n}</span></a>`;
   const tabs = '<nav class="st-subtabs">' +
     tab('/admin/store/orders', 'הכול', counts.all, !status && !paid) +
@@ -51,12 +70,14 @@ router.get('/admin/store/orders', requireAdmin, (req, res) => {
     ${tabs}
     <form class="row st-filters" method="GET" action="/admin/store/orders">
       ${status ? `<input type="hidden" name="status" value="${esc(status)}">` : ''}
+      ${paid ? `<input type="hidden" name="paid" value="${esc(paid)}">` : ''}
       <input class="input compact" name="q" value="${esc(q)}" placeholder="מספר, שם, טלפון או מייל…">
       <button class="btn sm secondary" type="submit">חיפוש</button>
     </form>
     <section class="card">
-      <table class="tbl"><thead><tr><th>מספר</th><th>מתי</th><th>לקוח/ה</th><th>פריטים</th><th>סה״כ</th><th>משלוח</th><th>סטטוס</th></tr></thead>
-      <tbody>${rows}</tbody></table>
+      <div class="st-orders-scroll"><table class="tbl"><thead><tr><th>מספר</th><th>מתי</th><th>לקוח/ה</th><th>פריטים</th><th>סה״כ</th><th>משלוח</th><th>סטטוס</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+      ${pager}
     </section>`;
   res.send(kit.screen({
     key: 'store-orders', title: 'הזמנות', body,
@@ -64,17 +85,36 @@ router.get('/admin/store/orders', requireAdmin, (req, res) => {
   }));
 });
 
-router.get('/admin/store/orders.csv', requireAdmin, (req, res) => {
+/**
+ * Every order the filter matches, written a batch at a time (orders.js
+ * ordersCsvChunks) — the file is never built whole in memory, and a slow
+ * download is waited for, not buffered.
+ */
+router.get('/admin/store/orders.csv', requireAdmin, async (req, res) => {
   try {
     const O = store().orders;
-    const csv = O.ordersCsv({
+    const chunks = O.ordersCsvChunks({
       status: O.STATUSES.includes(req.query.status) ? req.query.status : '',
       paid: ['yes', 'no'].includes(req.query.paid) ? req.query.paid : '',
       q: String(req.query.q || '').slice(0, 80)
     });
     res.setHeader('Content-Disposition', 'attachment; filename="orders-' + new Date().toISOString().slice(0, 10) + '.csv"');
-    res.type('text/csv; charset=utf-8').send(csv);
-  } catch (e) { sendError(res, e, 500); }
+    res.type('text/csv; charset=utf-8');
+    for (const chunk of chunks) {
+      if (res.destroyed) return;
+      if (!res.write(chunk)) {
+        await new Promise((resolve) => {
+          const done = () => { res.off('drain', done); res.off('close', done); resolve(); };
+          res.once('drain', done);
+          res.once('close', done);
+        });
+      }
+    }
+    res.end();
+  } catch (e) {
+    if (!res.headersSent) { res.removeHeader('Content-Disposition'); sendError(res, e, 500); }
+    else res.end();
+  }
 });
 
 function slip(order, items, st) {
@@ -123,12 +163,23 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
   const a = O.parseAddress(order);
   const f = (n) => kit.fmt(n, order.currency);
   const s = st.settings.loadSettings();
-  const pay = s.payments.find((p) => p.id === order.payment_method);
+  // by id, else by the kind the order kept — the screen must still say how a renamed method's order is paid
+  const pay = O.methodOf(order, s);
   const page = require('../pages').publicUrlFor(s.pages.order) + '?o=' + encodeURIComponent(order.token);
-  // the card gateway: this order's payment rows (never a session id or a token), and whether real money came through it
+  // this order's payment rows, whoever wrote them — a card company, PayPal, a demo
+  // shop's pretend payment (never a session id or a token) — and whether real money came through one
   const gateway = require('../store/gateway');
   const payments = gateway.describePayments(order);
   const gatewayPaid = gateway.isGatewayPaid(order.id);
+  // real money that came through PayPal alone: there is no refund form on this screen to point at
+  const livePaid = payments.filter((p) => p.mode === 'live' && p.status === 'paid');
+  const paypalPaid = gatewayPaid && livePaid.length > 0 && livePaid.every((p) => p.provider === 'paypal');
+  // The mark is locked only while it is ON over real money: that is what
+  // cannot be waved away with a checkbox. Real money on an order that is NOT
+  // marked — a payment that landed on a cancelled order, since restored —
+  // must stay markable, or the books say "unpaid" over money in the account.
+  const paidLocked = gatewayPaid && !!order.paid_at;
+  const KIND_NOTES = { link: 'קישור לתשלום', card: 'כרטיס אשראי · חברת סליקה', paypal: 'PayPal · משלמים בדף ההזמנה', demo: 'הדגמה · כסף אמיתי לא עובר' };
   // one action row per payment: a refund form for a row that holds money (it names its row on the wire),
   // "בדיקה מול חברת הסליקה" for a row the provider has not settled yet
   const actionRow = (p) => {
@@ -157,7 +208,7 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
     if (p.refundNote) return `<tr class="st-pay-actions"><td colspan="9" class="faint">${esc(p.refundNote)}</td></tr>`;
     if (p.canVerify) {
       return `<tr class="st-pay-actions"><td colspan="9"><div class="st-refund" data-verify="${p.id}">
-        <button type="button" class="btn sm secondary" data-verify-btn>🔎 בדיקה מול חברת הסליקה</button>
+        <button type="button" class="btn sm secondary" data-verify-btn>🔎 בדיקה מול ${esc(p.verifyWith || 'חברת הסליקה')}</button>
         <span data-verify-out aria-live="polite"></span>
       </div></td></tr>`;
     }
@@ -174,11 +225,14 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
       <td dir="ltr" class="faint">${esc(p.transactionId || '—')}</td>
       <td>${p.refundedText || '—'}</td>
     </tr>${p.error ? `<tr><td colspan="9" class="st-pay-err">${esc(p.error)}</td></tr>` : ''}${actionRow(p)}`).join('');
-  const paymentsCard = payments.length || (pay && pay.kind === 'card') ? `
-    <section class="card" id="od-payments">
-      <h3 class="sub-head">💳 תשלום בכרטיס אשראי</h3>
-      ${payments.length ? `<table class="tbl"><thead><tr><th>מתי</th><th>חברה</th><th>מצב</th><th>סכום</th><th>אישור</th><th>כרטיס</th><th>תשלומים</th><th>מזהה עסקה</th><th>הוחזר</th></tr></thead><tbody>${paymentRows}</tbody></table>`
-    : '<p class="faint">עוד לא נפתח דף תשלום להזמנה הזו.</p>'}
+  // one card for every way money (or a pretend payment) reaches an order
+  // through this system; each row names who took it
+  const paysHere = !!pay && ['card', 'paypal', 'demo'].includes(pay.kind);
+  const paymentsCard = payments.length || paysHere ? `
+    <section class="card st-payments" id="od-payments">
+      <h3 class="sub-head">💳 תשלומים</h3>
+      ${payments.length ? `<div class="st-payments-scroll"><table class="tbl"><thead><tr><th>מתי</th><th>ספק</th><th>מצב</th><th>סכום</th><th>אישור</th><th>כרטיס</th><th>תשלומים</th><th>מזהה עסקה</th><th>הוחזר</th></tr></thead><tbody>${paymentRows}</tbody></table></div>`
+    : '<p class="faint">עוד לא נרשם ניסיון תשלום להזמנה הזו.</p>'}
     </section>` : '';
   const body = `
     <section class="card">
@@ -201,7 +255,7 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
       <section class="card">
         <h3 class="sub-head">🚚 משלוח ותשלום</h3>
         <p><b>${esc(order.shipping_label || 'בלי משלוח')}</b>${a.street || a.city ? '<br>' + esc([a.street, a.city, a.zip].filter(Boolean).join(', ')) : ''}${a.notes ? '<br><span class="faint">' + esc(a.notes) + '</span>' : ''}</p>
-        <p>תשלום: <b>${esc(order.payment_label || '—')}</b>${pay && pay.kind === 'link' ? ' <span class="faint">(קישור לתשלום)</span>' : ''}${pay && pay.kind === 'card' ? ' <span class="faint">(כרטיס אשראי · חברת סליקה)</span>' : ''}</p>
+        <p>תשלום: <b>${esc(order.payment_label || '—')}</b>${pay && KIND_NOTES[pay.kind] ? ' <span class="faint">(' + KIND_NOTES[pay.kind] + ')</span>' : ''}</p>
       </section>
     </div>
     ${paymentsCard}
@@ -223,10 +277,14 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
         <label>סטטוס <select class="input" id="od-status">${O.STATUSES.map((x) => `<option value="${x}"${x === order.status ? ' selected' : ''}>${O.STATUS_LABELS[x]}</option>`).join('')}</select></label>
         <label>מספר מעקב <input class="input" id="od-tracking" dir="ltr" value="${esc(order.tracking)}" placeholder="—"></label>
       </div>
-      <label class="st-inline"><input type="checkbox" id="od-paid"${order.paid_at ? ' checked' : ''}${order.status === 'cancelled' || gatewayPaid ? ' disabled' : ''}> התשלום התקבל</label>
-      ${gatewayPaid ? '<span class="faint">שולם דרך חברת הסליקה — הסימון לא ניתן לביטול; להחזרת הכסף יש להשתמש בהחזר הכספי למעלה.</span>' : ''}
+      <label class="st-inline"><input type="checkbox" id="od-paid"${order.paid_at ? ' checked' : ''}${order.status === 'cancelled' || paidLocked ? ' disabled' : ''}> התשלום התקבל</label>
+      ${paidLocked ? (paypalPaid
+    ? '<span class="faint">שולם ב-PayPal — הסימון לא ניתן לביטול כאן; את הכסף מחזירים מחשבון ה-PayPal שלכם.</span>'
+    : '<span class="faint">שולם דרך חברת הסליקה — הסימון לא ניתן לביטול; להחזרת הכסף יש להשתמש בהחזר הכספי למעלה.</span>') : ''}
       <label style="display:block;margin-top:10px">הערה פנימית (רק לכם) <textarea class="input" id="od-note" rows="2">${esc(order.admin_note)}</textarea></label>
-      <p class="faint">"נשלחה" ו"בוטלה" שולחות ללקוח/ה מייל (כשהמייל מוגדר). ביטול מחזיר את הפריטים למלאי${gatewayPaid ? ' — אבל <b>לא</b> מחזיר את הכסף: החזר בכרטיס נעשה בנפרד, בהחזר הכספי למעלה' : ''}.</p>
+      <p class="faint">"נשלחה" ו"בוטלה" שולחות ללקוח/ה מייל (כשהמייל מוגדר), וההיסטוריה למטה אומרת אם המייל יצא. ביטול מחזיר את הפריטים למלאי${gatewayPaid ? (paypalPaid
+    ? ' — אבל <b>לא</b> מחזיר את הכסף: החזר ב-PayPal נעשה מחשבון ה-PayPal שלכם'
+    : ' — אבל <b>לא</b> מחזיר את הכסף: החזר בכרטיס נעשה בנפרד, בהחזר הכספי למעלה') : ''}.</p>
       <div class="row end"><span id="od-out" aria-live="polite"></span><button type="button" class="btn" id="od-save">שמירה</button></div>
     </section>
     <section class="card">
@@ -243,7 +301,7 @@ router.get('/admin/store/orders/:number', requireAdmin, (req, res) => {
       function post(path, body) {
         return fetch('/admin/api/store/orders/' + encodeURIComponent(number) + '/' + path, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-        }).then(function (r) { return r.json(); }).then(function (d) { if (!d.ok) throw new Error(d.error || 'שגיאה'); return d; });
+        }).then(function (r) { return r.json(); }).then(function (d) { if (!d.ok) throw new Error(d.error || d.message || 'שגיאה'); return d; });
       }
       save.addEventListener('click', function () {
         var status = document.getElementById('od-status').value;

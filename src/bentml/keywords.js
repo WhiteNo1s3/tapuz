@@ -786,7 +786,32 @@ const KEYWORDS = {
       filter: { type: 'boolean', default: false },
       title: { type: 'string', default: '' },
       exclude: { type: 'string', default: '' },
-      buttons: { type: 'boolean', default: true }
+      buttons: { type: 'boolean', default: true },
+      // v2.69 — the look of a card, the shopper's toolbar, and who is on the grid
+      empty: { type: 'string', default: '' },
+      media: { type: 'enum', values: ['square', 'portrait', 'landscape'], default: 'square' },
+      fit: { type: 'enum', values: ['cover', 'contain'], default: 'cover' },
+      justify: { type: 'enum', values: ['start', 'center'], default: 'start' },
+      sorter: { type: 'boolean', default: false },
+      search: { type: 'boolean', default: false },
+      'page-size': { type: 'integer', default: 0 },
+      tag: { type: 'string', default: '' },
+      brand: { type: 'string', default: '' },
+      featured: { type: 'boolean', default: false },
+      skus: { type: 'string', default: '' }
+    }
+  },
+  // category tiles (v2.69) — one tile per category the shopper is shown
+  SHELVES: {
+    body: 'NO-BODY',
+    jsonType: 'shelves',
+    params: {
+      parent: { type: 'string', default: '' },
+      columns: { type: 'integer', default: 3 },
+      title: { type: 'string', default: '' },
+      counts: { type: 'boolean', default: true },
+      summaries: { type: 'boolean', default: false },
+      justify: { type: 'enum', values: ['start', 'center'], default: 'start' }
     }
   },
   BUY: {

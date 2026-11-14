@@ -3,6 +3,12 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const fs = require('fs');
 
+// Was there a site here before this process opened it? Asked FIRST, because
+// requiring ./pages below opens (and so creates) db/tapuz.db. A mistyped
+// TAPUZ_ROOT silently starts an empty site, and the boot log is the one place
+// that can say so (v2.69 — printed beside the "no admin yet" line).
+const ROOT_WAS_NEW = !fs.existsSync(path.join(require('./paths').DB_DIR, 'tapuz.db'));
+
 const {
   createPage, updatePage, publishPage, listPages, getPageByFullPath, deletePage,
   generateFullPath
@@ -16,6 +22,8 @@ const { loadConfig, saveConfig } = require('./config');
 const blockRegistry = require('./block-registry');
 
 const app = express();
+// which framework answers is nobody's business, and it was on every response
+app.disable('x-powered-by');
 const PORT = process.env.PORT || 3000;
 
 const { PUBLIC_DIR, ASSETS_DIR } = require('./paths');
@@ -46,7 +54,47 @@ const collectLimiter = new FixedWindowLimiter({
 // the docs/ARCHITECTURE.md extraction plan) so route modules can require them
 // without reaching back into this file. See that module for the X-Forwarded-For
 // trust rationale (red-team finding, 2026).
-const { clientIp, wantsJson, isStateChanging } = require('./http-util');
+const { clientIp, wantsJson, isStateChanging, requestOrigin, noteForwarded, logError } = require('./http-util');
+
+// --- v2.69: the headers EVERY response carries ----------------------------
+// The CSP middleware further down sits below the public doors (form capture,
+// the store's API, PayPal, the customer portal, email tracking), so their
+// answers carried none of its headers — the portal's login form could be
+// framed by any site. First in the chain, nothing can answer before it. The
+// admin gate still sets its own stricter pair (DENY, same-origin) on top,
+// and a preview route that must be framed keeps overriding as it did.
+// HSTS only when the visitor is on https — a plain-http install must not be
+// told to refuse itself.
+app.use((req, res, next) => {
+  noteForwarded(req);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  if (requestOrigin(req).startsWith('https://')) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  }
+  next();
+});
+
+// --- v2.69: liveness ------------------------------------------------------
+// "Is the process serving, and can it read its database?" — for the host's
+// probe and the Dockerfile's HEALTHCHECK, which used to poll /admin: that
+// spent the admin's rate limit and read the accounts file every 30 seconds.
+// Above the admin-base rewrite and every limiter; nothing here is secret
+// (the version and build id are already in each page's generator meta).
+app.get('/_tapuz/health', (req, res) => {
+  let dbOk = false;
+  try { dbOk = require('./db').db.prepare('SELECT 1 AS up').get().up === 1; } catch (e) { dbOk = false; }
+  let build = '';
+  try { build = require('./build-info').buildId(); } catch (e) { build = ''; }
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(dbOk ? 200 : 503).json({
+    ok: dbOk,
+    version: require('../package.json').version,
+    build,
+    db: dbOk ? 'ok' : 'error'
+  });
+});
 
 // --- S2: configurable admin base path ------------------------------------
 // Internally EVERY admin route is '/admin/...'. This top-of-stack rewrite maps
@@ -145,6 +193,11 @@ app.use(require('./routes/form-capture'));
 // brings its own 32 KB JSON parser, ahead of the admin's 12 MB one below.
 app.use(require('./routes/store-public'));
 
+// PayPal sandbox (v2.68) — create / capture / cancel. JSON only, its own
+// 32 KB parser, same slot as the other shopper doors. No webhook: capture
+// is the shopper's button calling us, and the amount is recomputed here.
+app.use(require('./routes/store-paypal'));
+
 // Customer portal (v2.10) — /account/* when crm.portal.enabled (off by default).
 // Mounted before admin so it is never gated by requireAdmin.
 app.use(require('./routes/portal'));
@@ -159,7 +212,39 @@ app.use(require('./routes/crm-track'));
 // Agent bridge payloads (intent / .pzn source) are small — cap them tight,
 // BEFORE the 12mb global parser (which then skips an already-parsed body).
 app.use('/agent', bodyParser.json({ limit: '512kb' }));
-app.use(bodyParser.json({ limit: '12mb' })); // 12mb: base64 media uploads. Admin-only, behind auth + rate limit.
+// 12mb is for base64 media uploads, and only a signed-in admin sends those.
+// Until v2.69 this one parser ran for EVERY path, ahead of the admin gate —
+// so any anonymous POST to any address had up to 12 MB buffered and parsed
+// before it was refused. Now the size is chosen per request: the admin's
+// allowance only under /admin with a valid session cookie, 256 KB for
+// everyone else (the public doors above bring their own, smaller parsers).
+// verifySession only reads the cookie and checks its signature — it never
+// extends or rewrites a session; the gate below still does the real check.
+const adminJsonParser = bodyParser.json({ limit: '12mb' });
+const smallJsonParser = bodyParser.json({ limit: '256kb' });
+app.use((req, res, next) => {
+  const p = req.path;
+  let signedIn = false;
+  const adminArea = p === '/admin' || p.startsWith('/admin/');
+  if (adminArea) {
+    try { signedIn = !!auth.verifySession(req); } catch (e) { signedIn = false; }
+  }
+  if (signedIn) return adminJsonParser(req, res, next);
+  // An admin whose session ran out while the builder sat open, saving a big
+  // page or a photo: the small parser refused the body before the gate could
+  // speak, and the builder toasted "payload too large" — so the owner shrank
+  // the picture when the real answer was "sign in again". Under /admin, a
+  // body the small parser turns away for its SIZE gets the gate's own answer
+  // to a signed-out JSON caller instead. It is still refused unread, exactly
+  // as before; only the sentence is the true one.
+  return smallJsonParser(req, res, (err) => {
+    if (err && adminArea && (err.type === 'entity.too.large' || err.status === 413) && !res.headersSent) {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(401).json({ ok: false, error: 'לא מחובר' });
+    }
+    next(err);
+  });
+});
 
 // CSP + security headers for the PUBLIC site — authored content renders here,
 // so this is defense-in-depth over the source-level escaping. Admin/agent keep
@@ -193,6 +278,23 @@ app.use((req, res, next) => {
         fontFile = ['https://fonts.gstatic.com'];
       }
     } catch (e) { /* no fonts → no widening */ }
+    // PayPal's button (v2.68) loads PayPal's own script, opens its frame and
+    // calls its API — and this policy blocked all three, so the button could
+    // not appear in any real browser. The store says exactly which origins it
+    // needs (store/paypal.cspSources) and says NOTHING unless PayPal is ready
+    // and a paypal method exists: a site without PayPal keeps the original
+    // policy, character for character, like pixels and fonts above.
+    let pp = { script: [], img: [], connect: [], frame: [] };
+    try {
+      const paypal = require('./store/paypal');
+      if (typeof paypal.cspSources === 'function') {
+        const s = paypal.cspSources() || {};
+        // an origin and nothing else (https://host or https://*.host): a
+        // value with a space or a ';' in it would write its own directive
+        const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && /^https:\/\/(?:\*\.)?[A-Za-z0-9.-]+(?::\d+)?$/.test(x)) : []);
+        pp = { script: list(s.script), img: list(s.img), connect: list(s.connect), frame: list(s.frame) };
+      }
+    } catch (e) { /* a CSP must never fail open on a store error */ }
     const src = (base, extra) => (extra.length ? base + ' ' + [...new Set(extra)].join(' ') : base);
     res.setHeader('Content-Security-Policy', [
       "default-src 'self'",
@@ -200,12 +302,12 @@ app.use((req, res, next) => {
       // gtag init are inline and must survive static export. Authored content
       // cannot inject <script> (raw HTML in body is forbidden; values escaped),
       // so residual risk is low; hashing these is a tracked follow-up.
-      src("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com", px.script),
+      src("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com", px.script.concat(pp.script)),
       src("style-src 'self' 'unsafe-inline'", fontStyle),
-      src("img-src 'self' data: https:", px.img),
+      src("img-src 'self' data: https:", px.img.concat(pp.img)),
       src("font-src 'self' data:", fontFile),
-      src("frame-src 'self' https://www.youtube.com https://www.google.com", px.frame),
-      src("connect-src 'self'", px.connect),
+      src("frame-src 'self' https://www.youtube.com https://www.google.com", px.frame.concat(pp.frame)),
+      src("connect-src 'self'", px.connect.concat(pp.connect)),
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -234,6 +336,17 @@ function staticSecurityHeaders(res, filePath) {
   // next click. The site's public assets keep their caching.
   if (/[\\/]admin-[^\\/]*\.js$|[\\/]admin\.css$/i.test(filePath)) {
     res.setHeader('Cache-Control', 'no-cache');
+  }
+  // An upload is saved under a name that carries the millisecond it arrived
+  // (media.js: <name>-<timestamp>.<ext>), so that address never changes its
+  // bytes — yet it was served max-age=0 and every image on every page was
+  // re-asked on each visit. A week, for exactly those files (v2.69); a file
+  // with a fixed name under assets/ (seeded art, a hand-placed logo) keeps
+  // revalidating, because the next release may rewrite it. Set here and not
+  // on the /assets mount below: assets/ sits inside PUBLIC_DIR, so the first
+  // static mount is the one that actually sends these files.
+  if (filePath.startsWith(ASSETS_DIR + path.sep) && /-\d{13}(?:-\d+)?\.[A-Za-z0-9]+$/.test(filePath)) {
+    res.setHeader('Cache-Control', 'public, max-age=604800');
   }
   if (/\.svg$/i.test(filePath)) {
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
@@ -550,38 +663,290 @@ app.use(require('./routes/crm'));
 // /admin route, and requireAdmin inside: prices and customers' orders.
 app.use(require('./routes/store-admin'));
 app.use(require('./routes/store-products'));
+app.use(require('./routes/store-shelves'));
 app.use(require('./routes/store-orders'));
 // the card gateway's admin (סליקת אשראי): provider, mode, keys (readiness +
 // last-4 only), the ₪1 connection test, and the explicit refund action
 app.use(require('./routes/store-gateway-admin'));
 
+// =========================================================================
+// 404 (v2.69) — nothing above answered. Until now that was Express's own
+// English "Cannot GET /x" on a white page, and visitors do reach it: a hidden
+// product's old address, a renamed page, a menu item whose page was
+// unpublished. Each kind of caller gets an answer it can use:
+//   a program (/api, /agent, /admin/api, or anything asking for JSON) → JSON
+//   an admin screen → the admin itself, with a way back
+//   a missing file (an image, a script) → one short line, not a web page
+//   a visitor → the site: its header, its footer, its language, a sentence,
+//               and links home and (while the store is open) to the shop
+// =========================================================================
+const ASSET_EXT = new Set(['.js', '.mjs', '.css', '.map', '.json', '.xml', '.txt', '.png', '.jpg', '.jpeg', '.gif',
+  '.webp', '.avif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.otf', '.eot', '.mp4', '.webm', '.mp3', '.pdf', '.zip']);
+
+// The visitor's 404 is a page of this site, rendered by the site's own
+// renderer from a page object that exists nowhere on disk ('404' is a
+// reserved slug — pages.js). It is the same page for every dead address, so
+// it is rendered once per site build: the export's stamp file is rewritten on
+// every rebuild (a menu, theme, settings or store change), which is exactly
+// when this page would read differently. A minute is the backstop.
+let notFoundCache = { key: '', at: 0, html: '' };
+
+function renderNotFoundPage() {
+  const siteLanguage = require('./site-language');
+  const direction = siteLanguage.siteDirection();
+  const en = siteLanguage.languageFor(direction) === 'en';
+  const { escapeHtml, escapeAttr, safeHref } = require('./pzn/language/escape');
+  const title = en ? 'Page not found' : 'הדף לא נמצא';
+  let shopLink = '';
+  try {
+    const store = require('./store');
+    if (store.isOpen()) {
+      const s = store.settings.loadSettings();
+      const shopPath = s.pages && s.pages.shop;
+      const shopPage = shopPath ? getPageByFullPath(shopPath) : null;
+      // a shop that IS the home page (chosen, or crowned automatically) is
+      // already the first button
+      if (shopPage && shopPage.status === 'published' && shopPath !== require('./export').crownedHomePath()) {
+        shopLink = `<a class="btn btn-outline" style="margin:0" href="${escapeAttr(safeHref(store.pages.urls(s).shop))}">${en ? 'To the shop' : 'לחנות'}</a>`;
+      }
+    }
+  } catch (e) { /* no store, no second button */ }
+  // The theme's own hero, written out: a small "404", the sentence, and the
+  // way out — centred by the hero's rule. (Built from heading/text blocks it
+  // came out lopsided: the theme pins every element that carries a dir
+  // attribute to its start edge, and a text block's paragraph carries one.)
+  const body =
+    `<section class="hero" dir="${direction}">` +
+    '<p class="subtitle" style="margin-bottom:0.35rem;font-weight:700;letter-spacing:0.12em">404</p>' +
+    `<h1>${escapeHtml(title)}</h1>` +
+    `<p class="subtitle">${en
+      ? 'There is no page at this address. It may have moved, been renamed, or left the site.'
+      : 'אין דף בכתובת הזאת. ייתכן שהוא הועבר, ששמו השתנה או שהוא כבר לא באתר.'}</p>` +
+    // the buttons sit in a row of their own with an even gap: the theme's
+    // .btn carries a one-sided margin, which leaves a lone button two pixels
+    // off the centre line everything above it stands on
+    '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.6rem;margin-top:0.25rem">' +
+    `<a class="btn btn-primary" style="margin:0" href="/">${en ? 'Back to the home page' : 'חזרה לדף הבית'}</a>` +
+    shopLink +
+    '</div>' +
+    '</section>';
+  const page = {
+    title,
+    full_path: '404',
+    path_prefix: '',
+    slug: '404',
+    direction,
+    theme: 'default',
+    tags: [],
+    meta: { robots: 'noindex, follow' },
+    blocks: [{ type: 'html', data: { content: body } }]
+  };
+  let html = require('./renderer').renderPage(page, {});
+  // a dead address has no canonical, no og:url and no structured data
+  html = html
+    .replace(/\n? *<link rel="canonical"[^>]*>/g, '')
+    .replace(/\n? *<meta property="og:url"[^>]*>/g, '')
+    .replace(/\n? *<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '');
+  // the stylesheet the exported pages already link (when one was exported):
+  // the visitor has it cached, and the answer is 6 KB instead of 120
+  const cssVersion = require('./export').currentThemeCssVersion();
+  if (cssVersion) {
+    html = html
+      .replace(/<style[\s\S]*?<\/style>/g, '')
+      .replace('</head>', `  <link rel="stylesheet" href="/css/main.css?v=${cssVersion}">\n</head>`);
+  }
+  return html;
+}
+
+function notFoundHtml() {
+  let key = 'none';
+  try { key = String(fs.statSync(path.join(PUBLIC_DIR, require('./export').BUILT_BY)).mtimeMs); } catch (e) { /* never built */ }
+  const now = Date.now();
+  if (notFoundCache.html && notFoundCache.key === key && now - notFoundCache.at < 60 * 1000) return notFoundCache.html;
+  const html = renderNotFoundPage();
+  notFoundCache = { key, at: now, html };
+  return html;
+}
+
+app.use((req, res, next) => {
+  const p = req.path;
+  if (p.startsWith('/api/') || p.startsWith('/agent/') || p.startsWith('/admin/api/') || wantsJson(req)) {
+    return res.status(404).json({ ok: false, error: 'not found' });
+  }
+  if (p === '/admin' || p.startsWith('/admin/')) {
+    // only a signed-in admin gets this far (the gate turned everyone else away)
+    try {
+      const { layout, adminNav } = require('./admin-ui');
+      return res.status(404).send(layout(`
+    ${adminNav('', 'לא נמצא')}
+    <div class="container page-body" style="max-width:620px">
+      <div class="notice info">
+        <span class="notice-ico">🧭</span>
+        <div class="notice-body">
+          <strong>אין מסך כזה בממשק הניהול</strong>
+          <p>הכתובת שהגעתם אליה לא מובילה לשום מסך. ייתכן שהקישור ישן, או שהדף שערכתם שינה את שמו.</p>
+          <div class="row"><a href="/admin/dashboard" class="btn">חזרה לדשבורד</a><a href="/admin" class="btn secondary">רשימת הדפים</a></div>
+        </div>
+      </div>
+    </div>`, 'לא נמצא'));
+    } catch (e) {
+      return res.status(404).type('text/plain').send('Not found');
+    }
+  }
+  if (p.startsWith('/_tapuz') || ASSET_EXT.has(path.extname(p).toLowerCase())) {
+    return res.status(404).type('text/plain').send('Not found');
+  }
+  let html = '';
+  try {
+    html = notFoundHtml();
+  } catch (e) {
+    logError(req, e);
+    return res.status(404).type('text/plain').send('Not found');
+  }
+  res.status(404);
+  res.setHeader('X-Robots-Tag', 'noindex');
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('html').send(html);
+});
+
 // Terminal error handler — NEVER leak a stack trace to a client. Without this,
 // a body-parser error (e.g. an oversized/malformed body on the public /agent
 // surface) is handled by Express's default finalhandler, which in a non-prod
 // env writes err.stack (absolute paths + framework internals) into the body.
+// The stack goes to the server log instead (v2.69): before, a 500 left no
+// trace anywhere — the client got "server error" and so did the owner.
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   const status = err.status || err.statusCode || 500;
+  if (status >= 500) {
+    console.error('[http] ' + req.method + ' ' + String(req.originalUrl || req.url || '').split('?')[0] +
+      ' -> ' + status + ': ' + ((err && (err.stack || err.message)) || String(err)));
+  }
   const msg = status === 413 ? 'payload too large'
     : status === 400 ? 'bad request'
       : status === 403 ? 'forbidden'
         : status === 404 ? 'not found'
           : 'server error';
   res.status(status);
-  if (wantsJson(req)) res.json({ ok: false, error: msg });
-  else res.type('text/plain').send(msg);
+  // Two kinds of error are a sentence meant for the owner, not a failure to
+  // hide: a new page asked for an address the system keeps (pages.js,
+  // E_RESERVED_PATH), and a save was refused because the file it would have
+  // written over is damaged (config.js / auth.js, E_STORE_DAMAGED). Routes
+  // that post a plain form have no catch of their own — the "new page" form
+  // is one — so without this the owner who titled a page "API" got a white
+  // page reading "bad request". Matched by code, never by status: a
+  // body-parser 400 carries a message too, and that one stays hidden.
+  const reserved = !!err && err.code === 'E_RESERVED_PATH';
+  const damaged = !!err && err.code === 'E_STORE_DAMAGED';
+  const sentence = (reserved || damaged) ? String(err.message || '') : '';
+  if (wantsJson(req)) return res.json({ ok: false, error: sentence || msg });
+  if (sentence && (req.path === '/admin' || req.path.startsWith('/admin/'))) {
+    try {
+      const { layout, adminNav, escapeAdmin } = require('./admin-ui');
+      const fromNewPage = req.path === '/admin/create';
+      const notice = reserved
+        ? `<div class="notice warn">
+        <span class="notice-ico">🚧</span>
+        <div class="notice-body">
+          <strong>הכתובת הזאת שמורה</strong>
+          <p>הכתובת <span dir="ltr">/${escapeAdmin(err.reservedPath || '')}</span> שמורה למערכת, ואי אפשר לתת אותה לדף.</p>
+          <p>הדף לא נוצר. כתובת הדף נגזרת מהכותרת — אפשר להשאיר את הכותרת ולהקליד כתובת אחרת בשדה "כתובת הדף".</p>
+          <div class="row"><a href="${fromNewPage ? '/admin/new' : '/admin'}" class="btn">${fromNewPage ? 'חזרה לדף חדש' : 'חזרה לרשימת הדפים'}</a></div>
+        </div>
+      </div>`
+        : `<div class="notice danger">
+        <span class="notice-ico">⚠️</span>
+        <div class="notice-body">
+          <strong>השינוי לא נשמר</strong>
+          <p>${escapeAdmin(sentence)}</p>
+          <div class="row"><a href="/admin/dashboard" class="btn">חזרה לדשבורד</a></div>
+        </div>
+      </div>`;
+      return res.send(layout(`
+    ${adminNav(reserved ? 'pages' : '', reserved ? 'דפים' : 'לא נשמר')}
+    <div class="container page-body" style="max-width:620px">
+      ${notice}
+    </div>`, reserved ? 'כתובת שמורה' : 'לא נשמר'));
+    } catch (e) { /* the plain line below */ }
+  }
+  res.type('text/plain').send(sentence || msg);
 });
+
+// The store's own housekeeping (v2.69): long-unpaid orders are cancelled when
+// the store's setting says so, and the demo shop tidies after itself. Both
+// modules belong to the store; each call is guarded and alone in its
+// try/catch, so one of them failing (or not existing yet) costs nothing.
+function storeHousekeeping() {
+  try {
+    const orders = require('./store/orders');
+    if (typeof orders.housekeeping === 'function') orders.housekeeping();
+  } catch (e) { console.error('[store] order housekeeping failed: ' + e.message); }
+  try {
+    const d = require('./store/demo-seed');
+    if (typeof d.housekeeping === 'function') d.housekeeping();
+  } catch (e) { console.error('[demo-store] housekeeping failed: ' + e.message); }
+}
 
 const server = app.listen(PORT, () => {
   const base = auth.getAdminBase();
   console.log(`✅ Tapuziel Visual Builder: http://localhost:${PORT}${base}`);
   if (!auth.hasAdmin()) {
     console.log(`   ↳ אין עדיין חשבון מנהל — היכנס ל־${base} כדי ליצור אותו.`);
+    // v2.69 — the first account belongs to whoever can read this log. Where
+    // the data lives is printed with it: a root that was just created is
+    // either a first run or a mistyped TAPUZ_ROOT, and only the owner knows.
+    const { SITE_ROOT } = require('./paths');
+    console.log(`   ↳ תיקיית הנתונים: ${SITE_ROOT}${ROOT_WAS_NEW ? ' (נוצרה עכשיו — אתר חדש וריק)' : ' (אתר קיים)'}`);
+    if (auth.setupCodeSource() === 'env') {
+      console.log('   ↳ קוד הקמה: הערך של משתנה הסביבה TAPUZ_SETUP_TOKEN. מי שיוצר את החשבון הראשון יתבקש להקליד אותו.');
+    } else {
+      // on a terminal run a browser on this machine is let in without it; a hosted process always asks
+      console.log(`   ↳ קוד הקמה: ${auth.setupCode()}  (${typeof auth.interactiveRun === 'function' && auth.interactiveRun() ? 'נדרש ליצירת החשבון הראשון מדפדפן שאינו על המכונה הזאת' : 'נדרש ליצירת החשבון הראשון'}; מתחלף בכל הפעלה)`);
+    }
   }
+  // Did a new build arrive? Asked HERE, before anything in this boot writes
+  // the export again: the demo step below re-exports the whole site when it
+  // changes one word of it, and the export it leaves carries this build's
+  // stamp. Asked after it, the answer was "no" — and the store's generated
+  // pages never followed the build (seen on the live demo shop, whose only
+  // upgraded part was the footer line).
+  let newBuild = false;
+  try {
+    const exp = require('./export');
+    newBuild = typeof exp.exportIsStale === 'function' && exp.exportIsStale();
+  } catch (e) { newBuild = false; }
+  // Demo shop (v2.68): opt-in with TAPUZ_DEMO_STORE=1. A .tapuz-root pin
+  // only names the data root; it does not arm this. Empty root, once.
+  // BEFORE the content seed (v2.69): a pin arms that one, and a root it had
+  // filled first is a root the demo then refuses for ever.
+  try { require('./store/demo-seed').maybeDemoStore(); } catch (e) { console.error('[demo-store] failed: ' + e.message); }
   // Content seed (v2.13): a deploy archive may carry a one-time content
   // package (seed/). Applied through the product's own page APIs, once per
   // package id, and never allowed to block or break boot.
   try { require('./seed-content').maybeSeed(); } catch (e) { console.error('[seed] failed: ' + e.message); }
+  // A deploy must reach the store's own pages too (v2.69). Product pages and
+  // category pages are GENERATED by the code, so a new build writes them
+  // again — only the ones it wrote and nobody edited — before the export
+  // below. A 2.68 shop upgraded in place used to keep its old product pages
+  // and have no category pages until the owner happened to save something.
+  try {
+    if (newBuild) {
+      const st = require('./store');
+      if (st.isOpen()) {
+        const synced = st.pages.syncCatalogPages();
+        const n = (list) => (list || []).filter((x) => x && x.action && x.action !== 'kept' && x.action !== 'none' && x.action !== 'foreign').length;
+        const moved = n(synced.products) + n(synced.shelves);
+        if (moved) {
+          console.log('[store] ' + moved + ' generated page(s) follow the new build');
+          // the rebuild below runs only while the export is still the old
+          // build's; when a step above has already rebuilt it, these pages
+          // would wait for the owner's next save to reach a visitor
+          const exp = require('./export');
+          if (!exp.exportIsStale()) exp.exportAll();
+        }
+      }
+    }
+  } catch (e) { console.error('[store] page sync after deploy failed: ' + e.message); }
   // a deploy must reach the visitors: the export on disk is rebuilt when it
   // was produced by a different build than the one now running (v2.26)
   try {
@@ -596,13 +961,89 @@ const server = app.listen(PORT, () => {
     crm.runRetention();
     // v1.90 premium db: a daily snapshot on a keep-7 shelf. Stale-checked so
     // dev restarts don't churn the shelf; VACUUM INTO is WAL-consistent.
-    try { require('./db').backupIfStale(); } catch (e) { /* a backup must never block startup */ }
+    try { require('./db').backupIfStale(); } catch (e) { console.error('[db] boot backup failed: ' + e.message); /* a backup must never block startup */ }
     const daily = setInterval(() => {
       crm.runRetention();
-      try { require('./db').backupIfStale(); } catch (e) { /* keep the timer alive */ }
+      try { require('./db').backupIfStale(); } catch (e) { console.error('[db] daily backup failed: ' + e.message); /* keep the timer alive */ }
+      storeHousekeeping();
     }, 24 * 60 * 60 * 1000);
     if (daily.unref) daily.unref();
   } catch (e) { /* housekeeping must never block startup */ }
+  // The store's housekeeping (above) runs shortly after boot — not IN the
+  // boot, so a slow first pass never delays the first request — and then
+  // every hour: an unpaid order should not wait a day to release its stock.
+  // unref'd like the daily timer, for the same reason.
+  const firstPass = setTimeout(storeHousekeeping, 5000);
+  if (firstPass.unref) firstPass.unref();
+  const hourly = setInterval(storeHousekeeping, 60 * 60 * 1000);
+  if (hourly.unref) hourly.unref();
+});
+
+// =========================================================================
+// Shutdown (v2.69). A host stops a process with SIGTERM and kills it a few
+// seconds later; without a handler Node (as PID 1 in a container) ignored the
+// signal, sat out the grace period and was killed with the WAL unmerged. Now:
+// stop accepting, let the requests in flight finish, fold the WAL back into
+// the database file, close it, exit 0. Eight seconds is the hard limit — a
+// stuck keep-alive socket must not outlast the host's patience.
+// =========================================================================
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log('[shutdown] ' + signal + ' — closing');
+  const closeDatabase = () => {
+    try {
+      const { db } = require('./db');
+      db.pragma('wal_checkpoint(TRUNCATE)');
+      db.close();
+    } catch (e) { console.error('[shutdown] database close failed: ' + e.message); }
+  };
+  // the database is closed cleanly on the hard path too: the driver is
+  // synchronous, so no write is ever half-way through between two ticks
+  const hard = setTimeout(() => {
+    console.error('[shutdown] still open after 8s — exiting anyway');
+    closeDatabase();
+    process.exit(1);
+  }, 8000);
+  if (hard.unref) hard.unref();
+  const finish = () => {
+    closeDatabase();
+    process.exit(0);
+  };
+  server.close(() => {
+    // A site rebuild the store queued — an order just changed a stock line —
+    // must not be lost with its timer: nothing rebuilds on the next boot of
+    // the same build, so the page would keep saying "3 left" until the next
+    // sale. The store is asked for its pending rebuild (store.flushRefresh);
+    // should that ever be missing, its queue is a 400 ms timer
+    // (store/index.js scheduleRefresh), and waiting that long lets it fire.
+    let asked = false;
+    try {
+      const store = require('./store');
+      if (typeof store.flushRefresh === 'function') { store.flushRefresh(); asked = true; }
+    } catch (e) { console.error('[shutdown] store refresh failed: ' + e.message); }
+    if (asked) return finish();
+    setTimeout(finish, 450);
+  });
+  // close() waits for every open connection; idle keep-alive sockets would
+  // hold it for their whole 15s window
+  if (typeof server.closeIdleConnections === 'function') server.closeIdleConnections();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// A promise nobody caught, or an exception nobody caught, used to end the
+// process with Node's default trace — or, for a rejection inside a timer,
+// pass without a word. Either way the state is unknown: say what happened,
+// and exit non-zero so the host restarts a clean process.
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal] unhandled promise rejection: ' + ((reason && (reason.stack || reason.message)) || String(reason)));
+  process.exit(1);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] uncaught exception: ' + ((err && (err.stack || err.message)) || String(err)));
+  process.exit(1);
 });
 
 // S4: slow-loris / slow-request mitigation. Cap how long a client may take to

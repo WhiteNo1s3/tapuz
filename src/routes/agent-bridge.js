@@ -228,8 +228,10 @@ router.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) =>
     // accept BOTH dialects (a "BENTML 0.2" reply is compiled to .pzn here)
     const ex = require('../pzn-source').toPznSource(source);
     // v2.39: an agent's document is model-authored — raw HTML loses its script
-    const guard = require('../ai-html-guard').scrubAiSource(ex.source);
+    const { scrubAiSource } = require('../ai-html-guard');
+    const guard = scrubAiSource(ex.source);
     source = guard.source;
+    let scrubbed = guard.scrubbed;
     const pznApi = require('../pzn/index');
     let doc;
     let repaired = false;
@@ -247,7 +249,12 @@ router.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) =>
       if (!r.ok || r.remaining.length) {
         return res.status(400).json({ ok: false, error: r.error || 'could not build a valid page from the reply', issues: r.remaining || parseErr.issues });
       }
-      source = r.source;
+      // the repair quarantines raw HTML found beside the modules into
+      // provisional <bent-html> blocks the first scrub never saw (an
+      // unparseable document skips it) — scrub the repaired document too
+      const again = scrubAiSource(r.source);
+      source = again.source;
+      scrubbed += again.scrubbed;
       doc = pznApi.parse(source);
       repaired = true;
       changes = r.changes;
@@ -272,7 +279,7 @@ router.post('/agent/v1/create-from-source', requireAgent('write'), (req, res) =>
     const doPublish = !!publish && !repaired; // never auto-publish a repaired page
     const result = savePageSource(slug, source, { publish: doPublish, meta: ex.page && ex.page.meta });
     if (doPublish) exportAll();
-    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings, repaired, changes, published: doPublish, dialect: ex.dialect, extracted: ex.extracted, scrubbed: guard.scrubbed });
+    res.json({ ok: true, fullPath: slug, created: !existed, blocks: result.blocks, warnings: result.warnings, repaired, changes, published: doPublish, dialect: ex.dialect, extracted: ex.extracted, scrubbed });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message, code: e.code || 'E_PZN', line: e.line, fix: e.fix, issues: e.issues });
   }

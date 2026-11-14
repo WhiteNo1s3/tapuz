@@ -109,7 +109,9 @@ check('resize grip is visible without hover (opacity > 0 at rest)',
   /col-resize-handle::after[^}]*opacity:\s*\.3/.test(css.replace(/\n/g, ' ')));
 check('grip dot affordance exists (::before)', /col-resize-handle::before/.test(css));
 check('"+ טור" button grows the row', /row-add-column/.test(builderSrc) && /הוסף טור/.test(builderSrc));
-check('add-column caps at 4', /cols\.length < 4/.test(builderSrc));
+// (v2.69: one constant — 6, the registry's range — instead of a literal 4)
+check('add-column caps at MAX_ROW_COLUMNS', /cols\.length < MAX_ROW_COLUMNS/.test(builderSrc) &&
+  /ensureColumns\(block\)\.length >= MAX_ROW_COLUMNS\) return false/.test(builderSrc));
 check('new column joins with an equal share + history push',
   /ensureColumns\(block\)\.push\(\{ blocks: \[\] \}\)/.test(builderSrc) &&
   /setColumnRatios\(block, ratios\.concat\(avg\)\)/.test(builderSrc) &&

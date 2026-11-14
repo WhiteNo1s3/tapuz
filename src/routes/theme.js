@@ -88,6 +88,16 @@ router.post('/admin/api/theme', (req, res) => {
     // same key, same place in the response
     warnings.push(...(settings.warnings || []));
     delete settings.warnings;
+    // v2.69 — this screen saves the site's name too, and a store without a
+    // name of its own wears it in the trail of every product and category
+    // page: they follow before the rebuild. A sync that fails is logged and
+    // never fails the save.
+    try {
+      const st = require('../store');
+      if (b.siteTitle !== undefined && st.isOpen()) st.pages.syncCatalogPages();
+    } catch (e) {
+      console.error('[store] page sync after a theme save failed:', e.message);
+    }
     const rebuildError = rebuildSite('theme save');
     res.json({ ok: true, rebuildError, warnings, ...settings });
   } catch (e) {

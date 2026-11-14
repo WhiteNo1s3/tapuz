@@ -38,7 +38,7 @@ router.get('/admin/site-chrome', (req, res) => {
   const html = `
     ${adminNav('site-chrome', 'כותרת ותחתית')}
     <div class="container page-body" style="max-width:720px">
-      <p class="lead">הכותרת והתחתית שייכות לכל האתר — כל דף שנבנה בבונה מופיע בתוכן. השינויים חלים באתר הציבורי אחרי "בנה אתר".</p>
+      <p class="lead">הכותרת והתחתית שייכות לכל האתר — כל דף שנבנה בבונה מופיע בתוכן. שמירה מעדכנת את האתר הציבורי מיד.</p>
 
       <section class="card">
         <h3 class="sub-head">🔝 כותרת עליונה (Header)</h3>
@@ -93,7 +93,6 @@ router.get('/admin/site-chrome', (req, res) => {
         <span id="chrome-status" style="color:#166534;font-size:0.9rem"></span>
         <button type="button" class="btn" id="chrome-save">שמור כותרת ותחתית</button>
       </div>
-      <div style="font-size:0.8rem;color:#94a3b8;margin-top:10px;text-align:end">אחרי השמירה לחצו "בנה אתר" (דשבורד) כדי לפרסם לאתר החי.</div>
     </div>
 
     <script type="application/json" id="chrome-data">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>
@@ -200,7 +199,8 @@ router.get('/admin/site-chrome', (req, res) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(collect())
           }).then(function (r) { return r.json(); }).then(function (d) {
-            if (d.ok) { status.style.color = '#166534'; status.textContent = 'נשמר ✓'; }
+            if (d.ok && d.rebuildError) { status.style.color = '#b45309'; status.textContent = 'נשמר, אבל האתר לא נבנה מחדש: ' + d.rebuildError; }
+            else if (d.ok) { status.style.color = '#166534'; status.textContent = 'נשמר ✓ האתר עודכן'; }
             else { status.style.color = '#b91c1c'; status.textContent = d.error || 'שגיאה'; }
           }).catch(function () { status.style.color = '#b91c1c'; status.textContent = 'שגיאת רשת'; });
         });
@@ -264,7 +264,10 @@ router.post('/admin/api/site-chrome', (req, res) => {
     }
 
     saveConfig(config);
-    res.json({ ok: true, header: config.header, footer: config.footer });
+    // the header and footer are printed into every exported page: without a
+    // rebuild the save changed site.json and nothing a visitor sees (v2.69)
+    const rebuildError = require('../rebuild').rebuildSite('a header/footer save');
+    res.json({ ok: true, header: config.header, footer: config.footer, rebuildError });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }

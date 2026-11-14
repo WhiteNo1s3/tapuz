@@ -63,7 +63,7 @@ function load() {
 
 function save(data) {
   if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2));
+  require('./json-file').writeAtomic(STORE_PATH, JSON.stringify(data, null, 2));
 }
 
 function clampPort(p) {

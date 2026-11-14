@@ -1118,7 +1118,54 @@ const BLOCK_REGISTRY = [
       { name: 'filter', bentmlParam: 'filter', labelHe: 'סינון לפי מדפים', type: 'boolean', default: false, omitDefault: true },
       { name: 'title', bentmlParam: 'title', labelHe: 'כותרת מעל הרשת', type: 'string', default: '', omitDefault: true },
       { name: 'exclude', bentmlParam: 'exclude', labelHe: 'להשמיט מוצר (מזהה)', type: 'string', default: '', omitDefault: true },
-      { name: 'buttons', bentmlParam: 'buttons', labelHe: 'כפתורי הוספה לעגלה', type: 'boolean', default: true, omitDefault: true }
+      { name: 'buttons', bentmlParam: 'buttons', labelHe: 'כפתורי הוספה לעגלה', type: 'boolean', default: true, omitDefault: true },
+      // v2.69 — the look of a card, the shopper's toolbar, and who is on the grid
+      { name: 'empty', bentmlParam: 'empty', labelHe: 'טקסט כשאין מוצרים', type: 'string', default: '', omitDefault: true },
+      {
+        name: 'media', bentmlParam: 'media', labelHe: 'צורת התמונה', type: 'enum',
+        enum: ['square', 'portrait', 'landscape'], default: 'square', omitDefault: true, hint: 'ריבוע, לאורך (4:5) או לרוחב (4:3)'
+      },
+      {
+        name: 'fit', bentmlParam: 'fit', labelHe: 'התאמת התמונה', type: 'enum',
+        enum: ['cover', 'contain'], default: 'cover', omitDefault: true, hint: 'contain — איור על רקע שקוף נכנס כולו, עם שוליים'
+      },
+      {
+        name: 'justify', bentmlParam: 'justify', labelHe: 'יישור שורה חלקית', type: 'enum',
+        enum: ['start', 'center'], default: 'start', omitDefault: true, hint: 'center — שורה אחרונה חסרה מתיישרת לאמצע'
+      },
+      { name: 'sorter', bentmlParam: 'sorter', labelHe: 'בורר מיון לקונה', type: 'boolean', default: false, omitDefault: true },
+      { name: 'search', bentmlParam: 'search', labelHe: 'שדה חיפוש', type: 'boolean', default: false, omitDefault: true },
+      {
+        name: 'pageSize', bentmlParam: 'page-size', labelHe: 'מוצרים בכל טעינה', type: 'integer',
+        min: 0, max: 48, default: 0, omitDefault: true, hint: '0 = כולם; אחרת 4–48, עם כפתור "הצגת עוד"'
+      },
+      { name: 'tag', bentmlParam: 'tag', labelHe: 'תגית', type: 'string', default: '', omitDefault: true, hint: 'רק מוצרים עם התגית הזו' },
+      { name: 'brand', bentmlParam: 'brand', labelHe: 'מותג', type: 'string', default: '', omitDefault: true, hint: 'רק מוצרים של המותג הזה' },
+      { name: 'featured', bentmlParam: 'featured', labelHe: 'רק מוצרים מומלצים', type: 'boolean', default: false, omitDefault: true },
+      { name: 'skus', bentmlParam: 'skus', labelHe: 'מוצרים נבחרים', type: 'string', default: '', omitDefault: true, hint: 'מזהים מופרדים בפסיקים — יוצגו בדיוק בסדר הזה' }
+    ],
+    textField: null,
+    seed: {}
+  },
+  {
+    type: 'shelves',
+    keyword: 'SHELVES',
+    labelHe: 'חנות — אריחי קטגוריות',
+    icon: '🗂',
+    category: 'חנות',
+    bodyClass: 'none',
+    childrenOf: null,
+    hintHe: 'הקטגוריות של החנות כאריחים: תמונה, שם ומספר המוצרים',
+    params: [
+      { name: 'parent', bentmlParam: 'parent', labelHe: 'קטגוריית אב', type: 'string', default: '', omitDefault: true, hint: 'ריק = הקטגוריות הראשיות; מזהה = תת-הקטגוריות שלה' },
+      { name: 'columns', bentmlParam: 'columns', labelHe: 'עמודות', type: 'integer', min: 2, max: 6, default: 3, omitDefault: true },
+      { name: 'title', bentmlParam: 'title', labelHe: 'כותרת מעל האריחים', type: 'string', default: '', omitDefault: true },
+      { name: 'counts', bentmlParam: 'counts', labelHe: 'מספר המוצרים', type: 'boolean', default: true, omitDefault: true },
+      { name: 'summaries', bentmlParam: 'summaries', labelHe: 'תיאור הקטגוריה', type: 'boolean', default: false, omitDefault: true },
+      {
+        name: 'justify', bentmlParam: 'justify', labelHe: 'יישור שורה חלקית', type: 'enum',
+        enum: ['start', 'center'], default: 'start', omitDefault: true
+      }
     ],
     textField: null,
     seed: {}
@@ -1385,9 +1432,10 @@ const BLOCK_REGISTRY = [
         itemFields: [
           { name: 'name', labelHe: 'שם', type: 'string', required: true },
           { name: 'role', labelHe: 'תפקיד', type: 'string' },
-          // NOT type media — one media field flips the whole list editor into
-          // gallery-thumbs mode and the name/role fields would vanish
-          { name: 'image', labelHe: 'תמונה (נתיב)', type: 'url' },
+          // type media since v2.69: the list editor keeps the name/role
+          // fields beside the picture picker (it used to flip the whole list
+          // into gallery-thumbs mode, so this was typed `url` as a workaround)
+          { name: 'image', labelHe: 'תמונה', type: 'media' },
           { name: 'bio', labelHe: 'כמה מילים', type: 'textarea' },
           { name: 'url', labelHe: 'קישור', type: 'url' }
         ],

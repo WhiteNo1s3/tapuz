@@ -11,6 +11,7 @@ const money = require('./money');
 const TABS = [
   ['store', '/admin/store', '🛍️ החנות'],
   ['store-products', '/admin/store/products', '🏷️ מוצרים'],
+  ['store-shelves', '/admin/store/shelves', '🗂️ קטגוריות'],
   ['store-orders', '/admin/store/orders', '📦 הזמנות'],
   ['store-coupons', '/admin/store/coupons', '🎟️ קופונים'],
   ['store-settings', '/admin/store/settings', '🚚 משלוח ותשלום'],
@@ -23,16 +24,25 @@ function tabs(active) {
     `<a href="${href}"${key === active ? ' class="is-on" aria-current="page"' : ''}>${label}</a>`).join('') + '</nav>';
 }
 
-/** One store screen: the admin shell, the store tabs, the body. */
+/**
+ * One store screen: the admin shell, the store tabs, the body.
+ *
+ * `title` is TEXT — a product's name, an order's number — and it is escaped
+ * here, once, for both places it lands (the top bar and the tab's <title>).
+ * It used to go out raw: a product named `</title><script>…` ran in the
+ * owner's session, and a product name also arrives from a pasted or
+ * AI-written <bent-store> document. `body` and `actions` stay markup.
+ */
 function screen({ key, title, body, actions = '', width = 1040 }) {
   const navKey = key === 'store-bentml' ? 'store' : key === 'store-gateway' ? 'store-settings' : key;
+  const safeTitle = escapeAdmin(title);
   const html = `
-    ${adminNav(navKey, title, actions)}
+    ${adminNav(navKey, safeTitle, actions)}
     <div class="container page-body st-page" style="max-width:${width}px">
       ${tabs(key)}
       ${body}
     </div>`;
-  return layout(html, title, accentFor('store'));
+  return layout(html, safeTitle, accentFor('store'));
 }
 
 const ORDER_TONES = { new: 'info', processing: 'warn', shipped: 'accent', completed: 'ok', cancelled: 'danger' };

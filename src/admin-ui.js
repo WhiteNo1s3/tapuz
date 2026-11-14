@@ -91,6 +91,9 @@ const ADMIN_NAV_GROUPS = [
     items: [
       { key: 'store', href: '/admin/store', label: 'החנות', icon: '🛍️' },
       { key: 'store-products', href: '/admin/store/products', label: 'מוצרים', icon: '🏷️' },
+      // "קטגוריות מוצרים", not "קטגוריות": the content family above already
+      // has a "קטגוריות" (page tags), and two rail items with one name is a trap
+      { key: 'store-shelves', href: '/admin/store/shelves', label: 'קטגוריות מוצרים', icon: '🗂️' },
       { key: 'store-orders', href: '/admin/store/orders', label: 'הזמנות', icon: '📦' },
       { key: 'store-coupons', href: '/admin/store/coupons', label: 'קופונים', icon: '🎟️' },
       { key: 'store-settings', href: '/admin/store/settings', label: 'משלוח ותשלום', icon: '🚚' }
@@ -226,6 +229,7 @@ function paletteBootJson() {
     integrations: 'integrations ga4 webhooks', chat: 'ai chat copilot key', agent: 'agent token extension bridge',
     settings: 'settings config site',
     store: 'store shop ecommerce open close flip חנות', 'store-products': 'products catalog sku inventory stock מוצרים מלאי',
+    'store-shelves': 'categories shelves collections departments store קטגוריות מדפים תת-קטגוריה חנות',
     'store-orders': 'orders sales customers הזמנות', 'store-coupons': 'coupons discount קופון הנחה',
     'store-settings': 'shipping payment vat delivery משלוח תשלום מעמ'
   };
@@ -245,6 +249,8 @@ function paletteBootJson() {
     { label: 'ייצוא אנליטיקס (CSV)', icon: '⬇', href: '/admin/analytics.csv?what=daily', hint: 'פעולה', keywords: 'export analytics csv excel' },
     { label: 'חבילת AI להדבקה', icon: '🎮', href: '/admin/inject', hint: 'פעולה', keywords: 'inject roleplay game pack dictionary' },
     { label: 'מוצר חדש', icon: '🏷️', href: '/admin/store/products/new', hint: 'פעולה', keywords: 'new product add sku מוצר' },
+    { label: 'קטגוריית מוצרים חדשה', icon: '🗂️', href: '/admin/store/shelves?new=1', hint: 'פעולה', keywords: 'new category shelf add store קטגוריה מדף חנות' },
+    { label: 'ייבוא וייצוא מוצרים (CSV)', icon: '📄', href: '/admin/store/bentml#csv', hint: 'פעולה', keywords: 'import export products csv excel sheets shopify woocommerce ייבוא ייצוא אקסל' },
     { label: 'החנות ב-BenTML', icon: '🧬', href: '/admin/store/bentml', hint: 'פעולה', keywords: 'store bentml catalog import export bent-store' },
     { label: 'ייצוא הזמנות (CSV)', icon: '⬇', href: '/admin/store/orders.csv', hint: 'פעולה', keywords: 'export orders csv excel' },
     { label: 'סליקת אשראי', icon: '💳', href: '/admin/store/gateway', hint: 'פעולה', keywords: 'card gateway payments cardcom grow credit סליקה אשראי תשלום' }
