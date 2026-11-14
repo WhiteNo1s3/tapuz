@@ -243,17 +243,26 @@ const stepDown = (rules, sel) => rules.filter((r) => r.selectors.includes(sel)).
 for (const sel of ['.features.cols-4', '.features.cols-3', '.article-cubes', '.gallery.cols-4', '.gallery.cols-3', '.stats-row.cols-4', '.bent-products-cols-3', '.bent-products-cols-4']) {
   ok(/repeat\(2, minmax\(0, 1fr\)\)/.test(stepDown(at860, sel)), 'ladder: ' + sel + ' → 2 columns at 860px');
 }
-for (const sel of ['.features.cols-2', '.features.cols-4', '.article-cubes', '.article-cubes.cols-2', '.gallery.cols-2', '.gallery.cols-4', '.stats-row.cols-2', '.stats-row.cols-4', '.bent-products-cols-2', '.bent-products-cols-4']) {
+for (const sel of ['.features.cols-2', '.features.cols-4', '.article-cubes', '.article-cubes.cols-2', '.stats-row.cols-2', '.stats-row.cols-4', '.bent-products-cols-2', '.bent-products-cols-4']) {
   ok(/grid-template-columns: minmax\(0, 1fr\)/.test(stepDown(at480, sel)), 'ladder: ' + sel + ' → 1 column at 480px');
+}
+// the gallery stops at two: one picture to a row made a gallery of twenty pictures twenty screens of scrolling
+// (the English showcase's gallery page: 3,700px → 7,900px on a phone). It folds where the shop's grid does.
+const at339 = rulesOf(inside('@media (max-width: 339px)'));
+for (const sel of ['.gallery.cols-2', '.gallery.cols-3', '.gallery.cols-4']) {
+  ok(stepDown(at480, sel) === '', 'ladder: ' + sel + ' is NOT folded at 480px — a phone keeps two pictures to a row');
+  ok(/grid-template-columns: minmax\(0, 1fr\)/.test(stepDown(at339, sel)), 'ladder: ' + sel + ' → 1 column only below 340px, like the shop');
 }
 const strays = [];
 css.replace(/@media \((?:max|min)-width: (\d+)px\) \{/g, (m, px) => {
   if (px === '860' || px === '480') return m;
   const body = inside(m.slice(0, -2));
-  if (/\.(?:features|article-cubes|gallery|stats-row)\b|\.bent-products-cols-/.test(body)) strays.push(px);
+  // 339px is the gallery's own floor (above) — and nobody else's
+  const others = px === '339' ? /\.(?:features|article-cubes|stats-row)\b|\.bent-products-cols-/ : /\.(?:features|article-cubes|gallery|stats-row)\b|\.bent-products-cols-/;
+  if (others.test(body)) strays.push(px);
   return m;
 });
-ok(strays.length === 0, 'no N-column grid folds at any other breakpoint (found: ' + (strays.join(', ') || 'none') + ')');
+ok(strays.length === 0, 'no N-column grid folds at any other breakpoint — but for the gallery\'s floor at 339px (found: ' + (strays.join(', ') || 'none') + ')');
 
 // ── 8. orphan last rows are centred ──────────────────────────────────────
 for (const sel of ['.bent-steps', '.bent-team']) {
