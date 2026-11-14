@@ -2127,7 +2127,8 @@ a.bent-product:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12));
    Every grid with a chosen number of columns — features, article cubes, the
    gallery, stats, the product teasers — is laid out here and nowhere else:
    equal tracks (minmax(0, 1fr): a long word cannot widen its column), the
-   shared --grid-gap, and ONE ladder: N columns → 2 at 860px → 1 at 480px.
+   shared --grid-gap, and ONE ladder: N columns → 2 at 860px → 1 at 480px
+   (the gallery stops at 2 — see the end of this block).
    Before this they folded at 460, 480, 560, 700, 720, 860 and 900px — the
    gallery never did — and the features grid dropped to a 1rem gap the
    moment it was given a column count, so a features grid and a shop grid
@@ -2151,9 +2152,17 @@ a.bent-product:hover { box-shadow: var(--shadow-2, 0 10px 30px rgba(0,0,0,.12));
 @media (max-width: 480px) {
   .features.cols-2, .features.cols-3, .features.cols-4,
   .article-cubes, .article-cubes.cols-2, .article-cubes.cols-4,
-  .gallery.cols-2, .gallery.cols-3, .gallery.cols-4,
   .stats-row.cols-2, .stats-row.cols-3, .stats-row.cols-4,
   .bent-products-cols-2, .bent-products-cols-3, .bent-products-cols-4 { grid-template-columns: minmax(0, 1fr); }
+}
+/* The gallery is the one grid that does NOT take the last step at 480px: it
+   keeps two columns on a phone, the way the shop's grid does. A picture has
+   no text to squeeze, and one to a row made a gallery of twenty pictures
+   twenty screens of scrolling — on the English showcase site its gallery
+   page went from 3,700px to 7,900px the day this ladder reached it. It folds
+   to one column only where the shop does, below 340px. */
+@media (max-width: 339px) {
+  .gallery.cols-2, .gallery.cols-3, .gallery.cols-4 { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* blog article: code fence, byline, tag chips — zero JS */
