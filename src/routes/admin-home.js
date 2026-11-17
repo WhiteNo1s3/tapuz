@@ -90,15 +90,15 @@ router.get('/admin', (req, res) => {
       <div class="row-item${isHome ? ' is-home' : ''}">
         <div class="row-main">
           <div class="row-title">
-            <strong>${p.title}</strong>${badge}${homeBadge}${dirty}
+            <strong>${escapeAdmin(p.title)}</strong>${badge}${homeBadge}${dirty}
           </div>
-          <span class="mono muted">/${p.full_path}</span>${updated}
+          <span class="mono muted">/${escapeAdmin(p.full_path)}</span>${updated}
         </div>
         <div class="row-actions">
           ${setHomeBtn}
           <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn sm">ערוך</a>
           <form method="POST" action="/admin/delete" onsubmit="return confirm('למחוק?')">
-            <input type="hidden" name="full_path" value="${p.full_path}">
+            <input type="hidden" name="full_path" value="${escapeAdmin(p.full_path)}">
             <button type="submit" class="btn secondary sm">מחק</button>
           </form>
         </div>

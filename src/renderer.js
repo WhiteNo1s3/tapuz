@@ -294,6 +294,9 @@ function renderBlock(block, direction = 'rtl') {
     }
     case 'image': {
       const { src = '', alt = '', caption = '', width = 'full', link = '' } = block.data || {};
+      // no admin/preview flag reaches renderBlock — an empty source is a
+      // broken-image icon, so the public page omits the block
+      if (!String(src || '').trim()) return '';
       const wClass = width && width !== 'full' ? ` img-w-${escapeHtml(width)}` : '';
       const figClass = ` class="bent-image${wClass}${extraClass}"`;
       const figId = extraId;
@@ -580,7 +583,9 @@ function renderBlock(block, direction = 'rtl') {
       const items = block.data.items || [];
       const cells = items
         .map((it) => {
-          const img = `<img src="${escapeHtml(it.src || '')}" alt="${escapeHtml(it.alt || '')}" loading="lazy">`;
+          const src = String((it && it.src) || '').trim();
+          if (!src) return '';
+          const img = `<img src="${escapeHtml(src)}" alt="${escapeHtml((it && it.alt) || '')}" loading="lazy">`;
           return it.url
             ? `<a class="logo-cell" href="${escapeHtml(safeHref(it.url))}">${img}</a>`
             : `<div class="logo-cell">${img}</div>`;
@@ -876,7 +881,10 @@ function renderBlock(block, direction = 'rtl') {
       const widthCls = ['wide', 'full'].includes(d.width) ? ` px-w-${d.width}` : '';
       const pxStyle = [];
       if (overlayVal > 0) pxStyle.push(`--px-overlay:${(overlayVal / 100).toFixed(2)}`);
-      if (d.image) pxStyle.push(`background-image:url('${cssUrl(d.image)}')`);
+      // decompile always emits image: ''. An empty value must not become
+      // background-image:url('') — the section and its content stay.
+      const pxImage = String(d.image || '').trim();
+      if (pxImage) pxStyle.push(`background-image:url('${cssUrl(pxImage)}')`);
       const userDecls = styleDecls(d);
       if (userDecls) pxStyle.push(userDecls);
       const pxStyleAttr = pxStyle.length ? ` style="${pxStyle.join(';')}"` : '';

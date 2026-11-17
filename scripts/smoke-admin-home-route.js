@@ -92,12 +92,13 @@ async function boot() {
   }
 
   // ── phase 2: set up, but unpublish everything so there's a published-but-no-home state ──
-  const { listPages, updatePage, savePageSource, getPageByFullPath } = require('../src/pages');
+  const { listPages, updatePage, savePageSource, getPageByFullPath, createPage } = require('../src/pages');
   const { loadConfig, saveConfig } = require('../src/config');
   // publish 'home' but leave config.homepage empty AND ensure resolveHomePath
   // can still pick it — so instead, to force the "no home" warning, publish a
   // page and clear config.homepage, then rename so ranking finds nothing named home.
   savePageSource('about', '<bent-heading level="1">אודות</bent-heading>', { publish: true });
+  createPage({ title: '<b>"x"</b>', slug: 'xss-title', status: 'draft', blocks: [] });
 
   child = await boot();
   try {
@@ -108,6 +109,8 @@ async function boot() {
     const home = await req('GET', '/admin', { cookie });
     check('GET /admin → 200 pages-list landing', home.status === 200 && /דפים/.test(home.text));
     check('the seeded pages appear in the list', /about/.test(home.text) && /\/admin\/edit\//.test(home.text));
+    check('a page titled <b>"x"</b> renders escaped in the list',
+      home.text.includes('<strong>&lt;b&gt;&quot;x&quot;&lt;/b&gt;</strong>') && !home.text.includes('<b>"x"</b>'));
 
     // ── the post-build "your site is live" banner shows on ?built=1 ──
     const built = await req('GET', '/admin?built=1', { cookie });

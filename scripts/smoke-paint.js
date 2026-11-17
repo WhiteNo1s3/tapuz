@@ -45,6 +45,8 @@ const NO_MARKUP_OK = new Set(['article-list']);
 const dropped = [];
 for (const def of BLOCK_REGISTRY) {
   const data = Object.assign(defaultDataFor(def.type) || {}, { style: { color: MARK, background: '#fedcba' } });
+  // an image with no source publishes as nothing (T1), so give it one to paint
+  if (def.type === 'image' && !String(data.src || '').trim()) data.src = '/uploads/a.jpg';
   let html = '';
   try { html = String(renderBlock({ id: def.type + '_x', type: def.type, data }, 'rtl')); } catch (e) { html = ''; }
   if (!html.includes(MARK) && !NO_MARKUP_OK.has(def.type)) dropped.push(def.type);

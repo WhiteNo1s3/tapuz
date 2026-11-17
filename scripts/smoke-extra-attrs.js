@@ -123,7 +123,9 @@ const report = (label, problems) => check(label + (problems.length ? ' — ' + p
 
 // ── every block type, chrome on ──────────────────────────────────────
 for (const def of BLOCK_REGISTRY) {
-  const html = renderBlock(withChrome(def.type), 'rtl');
+  // an empty image publishes as nothing, so the chrome check needs a real src
+  const data = def.type === 'image' ? { src: '/uploads/a.jpg', alt: 'a' } : null;
+  const html = renderBlock(withChrome(def.type, data), 'rtl');
   report(`${def.type}: class tokens inside class="", id once, paint in style`, chromeProblems(html));
 }
 
