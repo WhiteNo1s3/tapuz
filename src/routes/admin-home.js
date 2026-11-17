@@ -51,6 +51,24 @@ router.get('/admin', (req, res) => {
        </div>`
     : '';
 
+  const unpublishNotice = req.query.unpublish === 'home'
+    ? `<div class="notice danger">
+         <span class="notice-ico">⚠️</span>
+         <div class="notice-body">
+           <strong>אי אפשר להסתיר את דף הבית</strong>
+           <p>קבעו דף בית אחר קודם, ואז אפשר להסתיר את הדף הזה מהאתר. התוכן לא נמחק.</p>
+         </div>
+       </div>`
+    : (req.query.unpublish === 'err'
+      ? `<div class="notice danger">
+           <span class="notice-ico">⚠️</span>
+           <div class="notice-body">
+             <strong>לא ניתן להסתיר את הדף</strong>
+             <p>הדף לא נמצא, או שהוא כבר לא מפורסם.</p>
+           </div>
+         </div>`
+      : '');
+
   const noHomeWarning = !homePath && published.length
     ? `<div class="notice danger">
          <span class="notice-ico">⚠️</span>
@@ -86,6 +104,12 @@ router.get('/admin', (req, res) => {
              <button type="submit" class="btn secondary sm" title="הדף הזה יוגש בשורש האתר (/)">🏠 קבע כדף הבית</button>
            </form>`
         : '';
+      const unpublishBtn = p.status === 'published'
+        ? `<form method="POST" action="/admin/unpublish" onsubmit="return confirm('להסתיר מהאתר? התוכן נשמר כטיוטה.')">
+             <input type="hidden" name="full_path" value="${escapeAdmin(p.full_path)}">
+             <button type="submit" class="btn secondary sm" title="הדף יורד מהאתר והתוכן נשמר כטיוטה">הסתר מהאתר</button>
+           </form>`
+        : '';
       return `
       <div class="row-item${isHome ? ' is-home' : ''}">
         <div class="row-main">
@@ -96,6 +120,7 @@ router.get('/admin', (req, res) => {
         </div>
         <div class="row-actions">
           ${setHomeBtn}
+          ${unpublishBtn}
           <a href="/admin/edit/${encodeURIComponent(p.full_path)}" class="btn sm">ערוך</a>
           <form method="POST" action="/admin/delete" onsubmit="return confirm('למחוק?')">
             <input type="hidden" name="full_path" value="${p.full_path}">
@@ -111,6 +136,7 @@ router.get('/admin', (req, res) => {
       ${require('./dashboard').siteNotices(req)}
       ${msg}
       ${homeSetMsg}
+      ${unpublishNotice}
       ${noHomeWarning}
       ${listHtml}
     </div>

@@ -3,8 +3,8 @@
 /**
  * Page builder — the twenty-fifth route-group extraction, and the marquee
  * one: the site-builder surface itself. New-page picker + create, delete,
- * server-side preview, the visual builder (/admin/edit), and the
- * save/publish/build lifecycle. The largest single cut of the session
+ * unpublish (back to draft), server-side preview, the visual builder
+ * (/admin/edit), and the save/publish/build lifecycle. The largest single cut of the session
  * (~477 lines). Dependencies are all clean module imports — the page
  * store, the BenTML engine, the block registry, the renderer, and the
  * admin-ui shell — nothing reaches back into server.js.
@@ -13,7 +13,7 @@
 const express = require('express');
 const { layout, adminNav, accentFor, escapeAdmin, jsonForScript } = require('../admin-ui');
 const { loadConfig } = require('../config');
-const { listPages, createPage, updatePage, publishPage, getPageByFullPath, deletePage, generateFullPath } = require('../pages');
+const { listPages, createPage, updatePage, publishPage, unpublishPage, getPageByFullPath, deletePage, generateFullPath } = require('../pages');
 const { deriveSlug } = require('../pzn/intent');
 const { exportAll } = require('../export');
 const bentml = require('../bentml');
@@ -163,6 +163,20 @@ router.post('/admin/create', (req, res) => {
 
 router.post('/admin/delete', (req, res) => {
   deletePage(req.body.full_path);
+  res.redirect('/admin');
+});
+
+// Return a published page to draft. Same gate as delete/publish (admin
+// session + same-origin check in adminGate). exportAll rewrites the public
+// site so the page leaves sitemap.xml's published set and the menus.
+router.post('/admin/unpublish', (req, res) => {
+  try {
+    unpublishPage(String((req.body && req.body.full_path) || ''));
+  } catch (e) {
+    const code = e && e.code === 'E_HOME_PAGE' ? 'home' : 'err';
+    return res.redirect('/admin?unpublish=' + code);
+  }
+  try { exportAll(); } catch (e) { console.error('[unpublish] export failed:', e.message); }
   res.redirect('/admin');
 });
 

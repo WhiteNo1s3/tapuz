@@ -7328,8 +7328,8 @@
         }
         var head = '<div class="rev-head">' + revs.length + ' גרסאות · כל שמירה ופרסום נרשמים אוטומטית · שחזור מעתיק לטיוטה בלבד</div>';
         list.innerHTML = head + revs.map(function (r, i) {
-          var kindCls = r.kind === 'publish' ? 'k-publish' : (r.kind === 'restore' ? 'k-restore' : 'k-draft');
-          var kindHe = r.kind === 'publish' ? 'פורסם' : (r.kind === 'restore' ? 'שוחזר' : 'טיוטה');
+          var kindCls = r.kind === 'publish' ? 'k-publish' : (r.kind === 'restore' ? 'k-restore' : (r.kind === 'unpublish' ? 'k-unpublish' : 'k-draft'));
+          var kindHe = r.kind === 'publish' ? 'פורסם' : (r.kind === 'restore' ? 'שוחזר' : (r.kind === 'unpublish' ? 'הוסתר' : 'טיוטה'));
           var t = revTimeParts(r.created_at);
           var kb = r.blocks_size ? Math.max(1, Math.round(r.blocks_size / 1024)) + 'KB' : '';
           var sub = [t.abs, esc(r.title || 'ללא כותרת'), kb].filter(Boolean).join(' · ');

@@ -92,12 +92,13 @@ async function boot() {
   }
 
   // ── phase 2: set up, but unpublish everything so there's a published-but-no-home state ──
-  const { listPages, updatePage, savePageSource, getPageByFullPath } = require('../src/pages');
+  const { listPages, updatePage, savePageSource, getPageByFullPath, createPage } = require('../src/pages');
   const { loadConfig, saveConfig } = require('../src/config');
   // publish 'home' but leave config.homepage empty AND ensure resolveHomePath
   // can still pick it — so instead, to force the "no home" warning, publish a
   // page and clear config.homepage, then rename so ranking finds nothing named home.
   savePageSource('about', '<bent-heading level="1">אודות</bent-heading>', { publish: true });
+  createPage({ title: 'טיוטה לבדיקה', slug: 'list-draft', blocks: [{ type: 'text', data: { content: 'טיוטה' } }], status: 'draft' });
 
   child = await boot();
   try {
@@ -108,6 +109,18 @@ async function boot() {
     const home = await req('GET', '/admin', { cookie });
     check('GET /admin → 200 pages-list landing', home.status === 200 && /דפים/.test(home.text));
     check('the seeded pages appear in the list', /about/.test(home.text) && /\/admin\/edit\//.test(home.text));
+
+    // ── הסתר מהאתר is offered only on published rows ──
+    const rows = home.text.split('<div class="row-item').slice(1);
+    const publishedRows = rows.filter((row) => row.includes('class="pill ok">פורסם'));
+    const draftRows = rows.filter((row) => row.includes('class="pill warn">טיוטה'));
+    check('the list has both a published row and a draft row', publishedRows.length >= 1 && draftRows.length >= 1);
+    check('הסתר מהאתר is on every published row',
+      publishedRows.every((row) => row.includes('הסתר מהאתר') && row.includes('action="/admin/unpublish"') && row.includes('name="full_path"')));
+    check('הסתר מהאתר is not on a draft row', draftRows.every((row) => !row.includes('הסתר מהאתר')));
+    const refused = await req('GET', '/admin?unpublish=home', { cookie });
+    check('the home-page refusal notice is Hebrew and says to set another home first',
+      /אי אפשר להסתיר את דף הבית/.test(refused.text) && /קבעו דף בית אחר/.test(refused.text));
 
     // ── the post-build "your site is live" banner shows on ?built=1 ──
     const built = await req('GET', '/admin?built=1', { cookie });

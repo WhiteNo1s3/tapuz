@@ -4046,6 +4046,7 @@ body.is-spacer-resizing * { cursor: ns-resize !important; }
 .rev-kind.k-publish { background: #dcfce7; color: #166534; }
 .rev-kind.k-draft   { background: #f1f5f9; color: #475569; }
 .rev-kind.k-restore { background: #fef3c7; color: #92400e; }
+.rev-kind.k-unpublish { background: #ffedd5; color: #9a3412; }
 .rev-main { flex: 1; min-width: 0; }
 .rev-when { font-weight: 700; color: var(--ws-text); font-size: 0.92rem; }
 .rev-sub {

@@ -37,6 +37,42 @@ function hasColumn(table, column) {
   return cols.some(c => c.name === column);
 }
 
+function widenRevisionKinds() {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='page_revisions'").get();
+  if (!row || String(row.sql).includes("'unpublish'")) return;
+  const fk = db.pragma('foreign_keys', { simple: true });
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.exec(`
+      BEGIN IMMEDIATE;
+      CREATE TABLE page_revisions__new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        page_id INTEGER,
+        full_path TEXT NOT NULL,
+        title TEXT,
+        status TEXT,
+        kind TEXT DEFAULT 'draft' CHECK(kind IN ('draft', 'publish', 'restore', 'unpublish')),
+        blocks TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO page_revisions__new (id, page_id, full_path, title, status, kind, blocks, created_at)
+        SELECT id, page_id, full_path, title, status,
+               CASE WHEN kind IN ('draft', 'publish', 'restore', 'unpublish') THEN kind ELSE 'draft' END,
+               blocks, created_at
+        FROM page_revisions;
+      DROP TABLE page_revisions;
+      ALTER TABLE page_revisions__new RENAME TO page_revisions;
+      CREATE INDEX IF NOT EXISTS idx_revisions_path ON page_revisions(full_path, created_at DESC);
+      COMMIT;
+    `);
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (e2) { /* the failed statement already rolled the transaction back */ }
+    throw e;
+  } finally {
+    db.pragma('foreign_keys = ' + (fk ? 'ON' : 'OFF'));
+  }
+}
+
 function initialize() {
   // Pages table
   db.exec(`
@@ -96,12 +132,16 @@ function initialize() {
       full_path TEXT NOT NULL,
       title TEXT,
       status TEXT,
-      kind TEXT DEFAULT 'draft' CHECK(kind IN ('draft', 'publish', 'restore')),
+      kind TEXT DEFAULT 'draft' CHECK(kind IN ('draft', 'publish', 'restore', 'unpublish')),
       blocks TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_revisions_path ON page_revisions(full_path, created_at DESC)');
+  // Existing files were created with the narrower CHECK. SQLite cannot alter
+  // a CHECK in place, so a database that predates 'unpublish' is rebuilt
+  // once, copying every revision across. A new database already has the kind.
+  widenRevisionKinds();
 
   // Menus entity
   db.exec(`
