@@ -9,6 +9,10 @@ const html = renderPage({
     { type: 'list', data: { items: ['אחד', 'שניים'], ordered: false } }
   ]
 });
+const ackHtml = renderPage({
+  title: 'ack',
+  blocks: [{ type: 'heading', data: { text: 'שלום', _ackSeed: true } }]
+});
 const checks = {
   'HERO-SECTION': html.includes('<section class="hero"'),
   'BLOCKQUOTE': html.includes('<blockquote class="testimonial"'),
@@ -16,7 +20,8 @@ const checks = {
   'VIDEO-FIGURE': html.includes('figure class="video-embed"'),
   'SKIP-LINK': html.includes('skip-link'),
   'NO-INLINE-FLEX': !html.includes('style="display:flex'),
-  'ARIA-NAV': html.includes('aria-label')
+  'ARIA-NAV': html.includes('aria-label'),
+  'ACK-NOT-RENDERED': !ackHtml.includes('_ackSeed') && ackHtml.includes('שלום')
 };
 let fail = false;
 Object.keys(checks).forEach(k => {

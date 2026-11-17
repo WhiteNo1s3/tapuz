@@ -135,6 +135,8 @@ check(css.includes('.canvas-block:hover:not(:has(.canvas-block:hover)) > .block-
   'a block\'s action bar lights for the block the pointer is ON, not for every block under a hovered container');
 check(!/\.canvas-block:hover \.block-toolbar/.test(css), 'the old descendant hover rule is gone');
 check(css.includes('.canvas-block.selected > .block-toolbar'), 'the selected block keeps its bar');
+check(css.includes('.canvas-block:focus-within:not(:has(.canvas-block:focus-within)) > .block-toolbar'),
+  'the action bar also shows when focus is inside the block');
 ['.te-pop', '.te-swatch', '.te-group', '.te-size', '.te-font'].some((s) => css.includes(s));
 check(css.includes('.text-editor-box .te-pop') && css.includes('.text-editor-box .te-swatch'), 'the popover row and the swatches are styled');
 

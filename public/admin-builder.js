@@ -457,7 +457,7 @@
    * data — an image with no src, a gallery with no photos, a banner/heading
    * with no text, a media player with no source — publish silently as blank
    * or broken. This walks the tree and names them (Hebrew label + count) so
-   * publishPage can ask "לפרסם בכל זאת?" before shipping a hole. Dynamic
+   * publishPage lists them before shipping a hole. Dynamic
    * modules (article-list/category) are NOT flagged: empty is a legitimate
    * "no matching pages yet" state, not a mistake.
    */
@@ -492,36 +492,40 @@
   // with the seed's own פריט/כותרת copy and still publish. Compare each
   // module's data against ITS OWN registry seed — exact equality means the
   // owner never touched it — and flag dead-link buttons while at it.
+  // data._ackSeed means the owner ticked "זה מכוון"; that block is skipped.
+  // The flag stays on the draft and is stripped before public HTML.
   function findPlaceholderModules(list, acc) {
     list = list || blocks;
     acc = acc || [];
     list.forEach(function (b) {
       var d = b.data || {};
-      var def = registryDef(b.type);
-      var seed = (def && def.seed) || {};
-      var flags = [];
-      // Only PRIMARY copy convicts: a buttonText that happens to say צרו קשר
-      // is normal Hebrew, not evidence of an untouched module.
-      var AUX_KEYS = { buttonText: 1, ctaLabel: 1, submit: 1, url: 1, buttonUrl: 1 };
-      Object.keys(seed).forEach(function (k) {
-        if (AUX_KEYS[k]) return;
-        var sv = seed[k];
-        if (typeof sv === 'string' && sv.trim() && typeof d[k] === 'string' &&
-          d[k].trim() === sv.trim()) {
-          flags.push('טקסט ברירת־מחדל');
-        } else if (Array.isArray(sv) && sv.length && Array.isArray(d[k]) &&
-          JSON.stringify(d[k]) === JSON.stringify(sv)) {
-          flags.push('פריטי ברירת־מחדל');
+      if (!d._ackSeed) {
+        var def = registryDef(b.type);
+        var seed = (def && def.seed) || {};
+        var flags = [];
+        // Only PRIMARY copy convicts: a buttonText that happens to say צרו קשר
+        // is normal Hebrew, not evidence of an untouched module.
+        var AUX_KEYS = { buttonText: 1, ctaLabel: 1, submit: 1, url: 1, buttonUrl: 1 };
+        Object.keys(seed).forEach(function (k) {
+          if (AUX_KEYS[k]) return;
+          var sv = seed[k];
+          if (typeof sv === 'string' && sv.trim() && typeof d[k] === 'string' &&
+            d[k].trim() === sv.trim()) {
+            flags.push('טקסט ברירת־מחדל');
+          } else if (Array.isArray(sv) && sv.length && Array.isArray(d[k]) &&
+            JSON.stringify(d[k]) === JSON.stringify(sv)) {
+            flags.push('פריטי ברירת־מחדל');
+          }
+        });
+        if (b.type === 'button' || b.type === 'cta') {
+          var url = String(d.url || '').trim();
+          if (!url || url === '#') flags.push('קישור ריק (#)');
         }
-      });
-      if (b.type === 'button' || b.type === 'cta') {
-        var url = String(d.url || '').trim();
-        if (!url || url === '#') flags.push('קישור ריק (#)');
-      }
-      if (flags.length) {
-        var seen = {};
-        var uniq = flags.filter(function (f) { if (seen[f]) return false; seen[f] = 1; return true; });
-        acc.push(moduleLabel(b.type) + ' — ' + uniq.join(', '));
+        if (flags.length) {
+          var seen = {};
+          var uniq = flags.filter(function (f) { if (seen[f]) return false; seen[f] = 1; return true; });
+          acc.push({ block: b, label: moduleLabel(b.type) + ' — ' + uniq.join(', ') });
+        }
       }
       if (isColumnsContainer(b.type)) ensureColumns(b).forEach(function (col) { findPlaceholderModules(col.blocks, acc); });
       if (isBlocksContainer(b.type)) findPlaceholderModules(ensureBlocks(b), acc);
@@ -1831,13 +1835,13 @@
     var toolbar = document.createElement('div');
     toolbar.className = 'block-toolbar';
     toolbar.innerHTML =
-      '<button type="button" data-act="up" title="למעלה">↑</button>' +
-      '<button type="button" data-act="down" title="למטה">↓</button>' +
-      '<button type="button" data-act="split" title="פצל לשני טורים">⧉</button>' +
-      '<button type="button" data-act="replace" title="החלף סוג מודול">⇄</button>' +
-      '<button type="button" data-act="dup" title="שכפל">⎘</button>' +
-      '<button type="button" data-act="sym" title="שמור לשימוש חוזר בכל דף">💠</button>' +
-      '<button type="button" data-act="del" title="מחק">×</button>';
+      '<button type="button" data-act="up" title="למעלה" aria-label="הזז למעלה">↑</button>' +
+      '<button type="button" data-act="down" title="למטה" aria-label="הזז למטה">↓</button>' +
+      '<button type="button" data-act="split" title="פצל לשני טורים" aria-label="פצל לשני טורים">⧉</button>' +
+      '<button type="button" data-act="replace" title="החלף סוג מודול" aria-label="החלף סוג מודול">⇄</button>' +
+      '<button type="button" data-act="dup" title="שכפל" aria-label="שכפל מודול">⎘</button>' +
+      '<button type="button" data-act="sym" title="שמור לשימוש חוזר בכל דף" aria-label="שמור לשימוש חוזר">💠</button>' +
+      '<button type="button" data-act="del" title="מחק — ⇧ משאיר מיכל ריק" aria-label="מחק מודול">×</button>';
 
     toolbar.addEventListener('click', function (e) {
       var btn = e.target.closest('button');
@@ -1859,7 +1863,7 @@
       }
       if (act === 'dup') duplicateBlock(block.id);
       if (act === 'sym') saveAsSymbol(block.id);
-      if (act === 'del') deleteBlock(block.id);
+      if (act === 'del') deleteBlock(block.id, { soft: !!e.shiftKey });
     });
 
     var label = document.createElement('div');
@@ -6458,11 +6462,12 @@
     renderProperties();
   }
 
-  /** Delete = soft erase (Ben's modularity law): the tool goes, the shape
-   *  stays. A deleted module becomes an empty מיכל (section) holding its
-   *  place; deleting the empty מיכל removes it for real. Pure-space types
-   *  (spacer/divider) and empty containers skip straight to removal. */
-  function deleteBlock(id) {
+  /** Delete removes the module. Shift+click on × keeps the old soft erase:
+   *  the module becomes an empty מיכל that holds the place. Spacers, dividers
+   *  and empty containers always go — there is no shape left to keep. The
+   *  toast's undo puts the module back either way. */
+  function deleteBlock(id, opts) {
+    opts = opts || {};
     var node = findNode(id);
     if (!node) return;
     var block = node.block;
@@ -6476,7 +6481,7 @@
     var pureSpace = block.type === 'spacer' || block.type === 'divider';
     var emptyContainer =
       (isBlocksContainer(block.type) || isColumnsContainer(block.type)) && !kidCount;
-    var soft = !pureSpace && !emptyContainer;
+    var soft = !!opts.soft && !pureSpace && !emptyContainer;
     if (soft) {
       block.type = 'section';
       block.data = { blocks: [], size: 'md' };
@@ -7366,76 +7371,197 @@
   }
 
   // ---- Publish helpers ----
+
+  // One checklist at a time. A second פרסם while it is open waits on the same
+  // dialog instead of stacking another, or leaving the first promise hanging.
+  var publishChecklist = null;
+
+  /** In-page pre-publish checklist. Empty modules are listed as-is. Seed
+   *  copy gets a "זה מכוון" checkbox that sets data._ackSeed on that block
+   *  (saved with the draft). Resolves true to publish, false to cancel. */
+  function confirmPublishChecklist(holes, stale) {
+    if (publishChecklist) return publishChecklist;
+    var resolvePromise;
+    publishChecklist = new Promise(function (resolve) { resolvePromise = resolve; });
+    var ov = document.createElement('div');
+    ov.id = 'publish-check-modal';
+    ov.className = 'modal show';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
+    ov.setAttribute('aria-labelledby', 'publish-check-title');
+
+    var box = document.createElement('div');
+    box.className = 'modal-content publish-check';
+    box.addEventListener('click', function (e) { e.stopPropagation(); });
+
+    var title = document.createElement('h3');
+    title.id = 'publish-check-title';
+    title.className = 'sub-head';
+    title.textContent = 'רגע לפני פרסום';
+    box.appendChild(title);
+
+    var lead = document.createElement('p');
+    lead.className = 'lead';
+    lead.textContent = 'כדאי להעיף מבט — לתקן קודם, או לפרסם בכל זאת?';
+    box.appendChild(lead);
+
+    var list = document.createElement('div');
+    list.className = 'publish-check-list';
+
+    function addSection(heading, rows) {
+      if (!rows.length) return;
+      var h = document.createElement('h4');
+      h.textContent = heading;
+      list.appendChild(h);
+      var ul = document.createElement('ul');
+      rows.forEach(function (row) { ul.appendChild(row); });
+      list.appendChild(ul);
+    }
+
+    var counts = {};
+    holes.forEach(function (l) { counts[l] = (counts[l] || 0) + 1; });
+    addSection('מודולים ריקים (יתפרסמו כחלל ריק או שבור)', Object.keys(counts).map(function (l) {
+      var li = document.createElement('li');
+      li.textContent = l + (counts[l] > 1 ? ' (×' + counts[l] + ')' : '');
+      return li;
+    }));
+
+    var histPushed = false;
+    addSection('תוכן ברירת־מחדל (עדיין עם הטקסט שהגיע מהארגז)', stale.map(function (item) {
+      var li = document.createElement('li');
+      var lab = document.createElement('label');
+      lab.className = 'publish-check-ack';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.setAttribute('aria-label', 'זה מכוון — ' + (item.label || ''));
+      cb.addEventListener('change', function () {
+        var b = item.block;
+        if (!b) return;
+        if (!histPushed) { pushHistory(); histPushed = true; }
+        if (!b.data || typeof b.data !== 'object') b.data = {};
+        if (cb.checked) b.data._ackSeed = true;
+        else delete b.data._ackSeed;
+        markDirty();
+      });
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode('זה מכוון'));
+      li.appendChild(lab);
+      var name = document.createElement('span');
+      name.textContent = item.label || '';
+      li.appendChild(name);
+      return li;
+    }));
+
+    box.appendChild(list);
+
+    var actions = document.createElement('div');
+    actions.className = 'publish-check-actions';
+    var cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn secondary';
+    cancel.textContent = 'ביטול';
+    var goBtn = document.createElement('button');
+    goBtn.type = 'button';
+    goBtn.className = 'btn';
+    goBtn.textContent = 'פרסם בכל זאת';
+    actions.appendChild(cancel);
+    actions.appendChild(goBtn);
+    box.appendChild(actions);
+    ov.appendChild(box);
+
+    var settled = false;
+    function finish(ok) {
+      if (settled) return;
+      settled = true;
+      publishChecklist = null;
+      document.removeEventListener('keydown', onKey, true);
+      ov.remove();
+      resolvePromise(!!ok);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        finish(false);
+        return;
+      }
+      // the builder's Delete shortcut must not eat the selected module
+      // while this dialog is what the owner is actually using
+      if (e.key === 'Delete') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+    document.addEventListener('keydown', onKey, true);
+    ov.addEventListener('click', function () { finish(false); });
+    cancel.addEventListener('click', function () { finish(false); });
+    goBtn.addEventListener('click', function () { finish(true); });
+
+    document.body.appendChild(ov);
+    var first = list.querySelector('input[type="checkbox"]') || cancel;
+    first.focus();
+    return publishChecklist;
+  }
+
   function publishPage() {
     // Empty-module guard (v2.13): before shipping, name any module that would
     // publish blank or broken and let the owner decide. Skipped for the tour /
-    // programmatic callers via publishPage.skipEmptyCheck.
-    if (!publishPage._skipEmptyCheck) {
-      // The pre-publish checklist (v2.13 empties + v2.16 placeholder honesty):
-      // one confirm, two honest sections — what will publish BROKEN, and what
-      // will publish still wearing the seed's own words.
-      var holes = findEmptyModules();
-      var stale = findPlaceholderModules();
-      if (holes.length || stale.length) {
-        var toLines = function (arr) {
-          var counts = {};
-          arr.forEach(function (l) { counts[l] = (counts[l] || 0) + 1; });
-          return Object.keys(counts).map(function (l) {
-            return '• ' + l + (counts[l] > 1 ? ' (×' + counts[l] + ')' : '');
-          }).join('\n');
-        };
-        var msg = 'רגע לפני פרסום — כדאי להעיף מבט:\n';
-        if (holes.length) msg += '\nמודולים ריקים (יתפרסמו כחלל ריק או שבור):\n' + toLines(holes) + '\n';
-        if (stale.length) msg += '\nתוכן ברירת־מחדל (עדיין עם הטקסט שהגיע מהארגז):\n' + toLines(stale) + '\n';
-        msg += '\nלתקן קודם, או לפרסם בכל זאת?';
-        if (!window.confirm(msg)) return Promise.resolve({ ok: false, cancelled: true });
-      }
+    // programmatic callers via publishPage._skipEmptyCheck.
+    function go() {
+      var titleEl = document.getElementById('page-title');
+      var title = titleEl ? titleEl.value : '';
+      return fetch('/admin/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_path: currentPageFullPath, title: title, blocks: blocks, tags: pageTags, meta: pageMeta })
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        if (data.ok) {
+          // ONE publish concept (v2.12, Ben: the פרסם/פרסם+בנה split was
+          // indistinguishable): publishing a page also rebuilds the site, so
+          // menus, article cubes and cross-page lists are never stale. The
+          // build is cheap; a failure downgrades the toast, never the publish.
+          fetch('/admin/build', { method: 'POST' }).then(function (r2) { return r2.json(); }).then(function (b) {
+            if (b && b.ok === false) showToast('הדף פורסם, אך בניית שאר האתר נכשלה' + (b.error ? ': ' + b.error : ''), 'warn');
+          }).catch(function () { /* the page itself is live either way */ });
+          showToast('פורסם ✓ — הדף חי והאתר עודכן', 'ok');
+          hasUnpublishedState = false;
+          markSaved();
+          var badge = document.getElementById('publish-badge');
+          if (badge) {
+            badge.style.background = '#dcfce7';
+            badge.style.color = '#166534';
+            badge.textContent = 'פורסם';
+          }
+          updateLiveLink(data.liveUrl || ('/' + (data.full_path || currentPageFullPath)));
+          // the site root would 404 — offer to crown this page right here
+          if (data.homePath === null) {
+            showToast('לאתר עדיין אין דף בית — הכתובת הראשית (/) ריקה', 'warn', {
+              label: '🏠 קבע דף זה כדף הבית',
+              onClick: function () {
+                fetch('/admin/api/homepage', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ full_path: currentPageFullPath })
+                }).then(function (r) { return r.json(); }).then(function (d) {
+                  showToast(d.ok ? '🏠 נקבע — האתר נפתח בדף הזה' : 'שגיאה: ' + (d.error || ''), d.ok ? 'ok' : 'err');
+                }).catch(function () { showToast('שגיאה בקביעת דף הבית', 'err'); });
+              }
+            });
+          }
+        } else {
+          showToast('שגיאה: ' + (data.error || ''), 'err');
+        }
+        return data;
+      }).catch(function () { showToast('שגיאה בפרסום', 'err'); });
     }
-    var titleEl = document.getElementById('page-title');
-    var title = titleEl ? titleEl.value : '';
-    return fetch('/admin/publish', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ full_path: currentPageFullPath, title: title, blocks: blocks, tags: pageTags, meta: pageMeta })
-    }).then(function (r) { return r.json(); }).then(function (data) {
-      if (data.ok) {
-        // ONE publish concept (v2.12, Ben: the פרסם/פרסם+בנה split was
-        // indistinguishable): publishing a page also rebuilds the site, so
-        // menus, article cubes and cross-page lists are never stale. The
-        // build is cheap; a failure downgrades the toast, never the publish.
-        fetch('/admin/build', { method: 'POST' }).then(function (r2) { return r2.json(); }).then(function (b) {
-          if (b && b.ok === false) showToast('הדף פורסם, אך בניית שאר האתר נכשלה' + (b.error ? ': ' + b.error : ''), 'warn');
-        }).catch(function () { /* the page itself is live either way */ });
-        showToast('פורסם ✓ — הדף חי והאתר עודכן', 'ok');
-        hasUnpublishedState = false;
-        markSaved();
-        var badge = document.getElementById('publish-badge');
-        if (badge) {
-          badge.style.background = '#dcfce7';
-          badge.style.color = '#166534';
-          badge.textContent = 'פורסם';
-        }
-        updateLiveLink(data.liveUrl || ('/' + (data.full_path || currentPageFullPath)));
-        // the site root would 404 — offer to crown this page right here
-        if (data.homePath === null) {
-          showToast('לאתר עדיין אין דף בית — הכתובת הראשית (/) ריקה', 'warn', {
-            label: '🏠 קבע דף זה כדף הבית',
-            onClick: function () {
-              fetch('/admin/api/homepage', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ full_path: currentPageFullPath })
-              }).then(function (r) { return r.json(); }).then(function (d) {
-                showToast(d.ok ? '🏠 נקבע — האתר נפתח בדף הזה' : 'שגיאה: ' + (d.error || ''), d.ok ? 'ok' : 'err');
-              }).catch(function () { showToast('שגיאה בקביעת דף הבית', 'err'); });
-            }
-          });
-        }
-      } else {
-        showToast('שגיאה: ' + (data.error || ''), 'err');
-      }
-      return data;
-    }).catch(function () { showToast('שגיאה בפרסום', 'err'); });
+    if (publishPage._skipEmptyCheck) return go();
+    var holes = findEmptyModules();
+    var stale = findPlaceholderModules();
+    if (!holes.length && !stale.length) return go();
+    return confirmPublishChecklist(holes, stale).then(function (ok) {
+      if (!ok) return { ok: false, cancelled: true };
+      return go();
+    });
   }
 
   /** A visible, always-clickable door to the live page — no guessing URLs. */

@@ -1234,6 +1234,28 @@ a > .stat:hover {
   z-index: 999;
 }
 .modal.show { display: flex; }
+#publish-check-modal { z-index: 10000; }
+.modal-content.publish-check { max-width: 520px; }
+.publish-check-list { max-height: min(52vh, 380px); overflow: auto; }
+.publish-check-list h4 { margin: 14px 0 6px; font-size: 0.92rem; }
+.publish-check-list ul { margin: 0; padding-inline-start: 1.15em; }
+.publish-check-list li { margin: 7px 0; line-height: 1.45; }
+.publish-check-ack {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.publish-check-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
 .modal-content {
   background: white;
   /* the builder body's chrome text color must never leak into a white
@@ -1935,6 +1957,7 @@ body.builder-screen .canvas-header {
   box-shadow: 0 3px 10px rgba(154, 52, 18, 0.12);
 }
 .canvas-block:hover:not(:has(.canvas-block:hover)) > .block-toolbar,
+.canvas-block:focus-within:not(:has(.canvas-block:focus-within)) > .block-toolbar,
 .canvas-block.selected > .block-toolbar { opacity: 1; }
 .block-toolbar button {
   background: none;

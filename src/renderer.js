@@ -214,7 +214,25 @@ function anchorId(block) {
   return String(v).indexOf(block.type + '_') === 0 ? '' : v;
 }
 
+/**
+ * Draft bookkeeping (a key that starts with `_`, such as the builder's
+ * `_ackSeed`) is not content. Drop it before any module reads `block.data`,
+ * so it can never become text or an attribute on the public page.
+ */
+function publicBlockData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data || {};
+  const keys = Object.keys(data);
+  if (!keys.some((k) => k.charAt(0) === '_')) return data;
+  const out = {};
+  for (const k of keys) if (k.charAt(0) !== '_') out[k] = data[k];
+  return out;
+}
+
 function renderBlock(block, direction = 'rtl') {
+  if (block && block.data) {
+    const clean = publicBlockData(block.data);
+    if (clean !== block.data) block = { ...block, data: clean };
+  }
   // the words a module writes on its own (a contact card's labels, a tab's
   // default name) follow the page's direction — an LTR page speaks English
   const T = siteLanguage.strings(direction === 'ltr' ? 'en' : 'he');
