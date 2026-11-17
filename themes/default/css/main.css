@@ -474,6 +474,7 @@ p { margin-bottom: 1.1rem; }
 }
 
 .columns .col { flex: 1; min-width: 0; }
+.columns > .col:empty { display: none; }
 
 /* ratio'd columns (ROW ratio="2:1"…): the renderer passes the fractions as
    --cols; the stylesheet owns display so the phone stack below still wins */

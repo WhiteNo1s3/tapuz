@@ -66,6 +66,12 @@ check('it does NOT flag dynamic article-list / category (empty = legit state)',
   !/b\.type === 'article-list'/.test(builder) && !/case 'category'/.test(builder));
 check('it recurses into both column and blocks containers',
   /findEmptyModules\(col\.blocks/.test(builder) && /findEmptyModules\(ensureBlocks\(b\)/.test(builder));
+check('an empty column is named in that same list (columns — טור ריק)',
+  /moduleLabel\('columns'\) \+ ' — טור ריק'/.test(builder) &&
+  /col\.blocks\.length === 0/.test(builder));
+const themeCss = fs.readFileSync(path.join(root, 'themes', 'default', 'css', 'main.css'), 'utf8');
+check('an empty published column collapses (.col:empty { display:none })',
+  /\.columns > \.col:empty\s*\{\s*display:\s*none/.test(themeCss));
 check('publishPage runs the scan and can be bypassed programmatically',
   /publishPage\._skipEmptyCheck/.test(builder) && /findEmptyModules\(\)/.test(builder));
 check('the warning is a confirm the owner can override, cancel aborts publish',
@@ -174,6 +180,10 @@ check('placeholder scan flags dead-link buttons (# or empty url)',
 check('the publish confirm carries BOTH honesty sections',
   /מודולים ריקים \(יתפרסמו כחלל ריק או שבור\)/.test(builder) &&
   /תוכן ברירת־מחדל \(עדיין עם הטקסט שהגיע מהארגז\)/.test(builder));
+check('the teaser field is on every page (cards + Google), card image stays article-only',
+  /תקציר — לכרטיסים ולתיאור בגוגל/.test(builder) &&
+  /data-page-meta="teaser"/.test(builder) &&
+  /if \(isArticle\) \{\s*pageHtml \+= field\('תמונת קובייה/.test(builder));
 
 check('the media library ships a virtual read-only demo folder',
   /DEMO_FOLDER_KEY = '__demo__'/.test(mediaSrc) && /listPackagedDemo/.test(mediaSrc) &&

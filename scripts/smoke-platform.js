@@ -874,12 +874,13 @@ const CSP_PLAIN = [
       // the plain "new page" form has no catch of its own
       const made = await req('POST', '/admin/create', { cookie, form: { title: 'API' } });
       // a reserved address reads as a TAKEN one: the page is made at the next
-      // free address, the way a second page with the same title always was
+      // free address, the way a second page with the same title always was —
+      // and since v2.70 (T4) the redirect says so (slugNote=reserved)
       check('"new page" titled API → made at a free address (API-2), never a refusal screen or "server error"',
-        made.status === 302 && /\/admin\/edit\/API-2$/.test(made.headers.location || ''),
+        made.status === 302 && /\/admin\/edit\/API-2\?slugNote=reserved&asked=API$/.test(made.headers.location || ''),
         made.status + ' ' + (made.headers.location || made.text.slice(0, 120)));
       const madeJson = await req('POST', '/admin/create', { cookie, form: { title: 'API' }, accept: 'application/json' });
-      check('…and a second one takes the next free address', madeJson.status === 302 && /\/admin\/edit\/API-3$/.test(madeJson.headers.location || ''), madeJson.status + ' ' + (madeJson.headers.location || ''));
+      check('…and a second one takes the next free address', madeJson.status === 302 && /\/admin\/edit\/API-3\?slugNote=reserved&asked=API$/.test(madeJson.headers.location || ''), madeJson.status + ' ' + (madeJson.headers.location || ''));
       const list = await req('GET', '/admin/api/pages', { cookie, accept: 'application/json' });
       check('…no page was created at /API', list.status === 200 && !/"full_path":"api"/i.test(list.text), list.text.slice(0, 120));
       const notes = await req('POST', '/admin/create', { cookie, form: { title: 'Notes' } });

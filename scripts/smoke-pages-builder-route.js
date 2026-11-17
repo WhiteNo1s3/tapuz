@@ -105,6 +105,19 @@ function waitUp(tries = 40) {
     check('the STORED slug matches its URL form (no spaces)', !!spacedPage && spacedPage.slug === 'my-cool-page');
     await req('POST', '/admin/delete', { cookie, form: { full_path: spacedPath } });
 
+    // ── a reserved slug is not silently renamed (crm → crm-2 with no flag) ──
+    const reservedCreate = await req('POST', '/admin/create', { cookie, form: { title: 'ניהול', slug: 'crm', template: 'basic' } });
+    const reservedLoc = reservedCreate.headers.location || '';
+    check('creating slug crm redirects with slugNote=reserved&asked=crm',
+      (reservedCreate.status === 302 || reservedCreate.status === 303) &&
+      /\/admin\/edit\//.test(reservedLoc) &&
+      /(?:\?|&)slugNote=reserved(?:&|$)/.test(reservedLoc) &&
+      /(?:\?|&)asked=crm(?:&|$)/.test(reservedLoc));
+    const reservedPages = require('../src/pages');
+    check('the reserved address itself was not taken — the page landed beside it',
+      !reservedPages.getPageByFullPath('crm') && !!reservedPages.getPageByFullPath('crm-2'));
+    await req('POST', '/admin/delete', { cookie, form: { full_path: 'crm-2' } });
+
     // ── the article TEMPLATE tags the page (v2.12) — before this, "I added
     //    an article" produced a plain page no article cube would show ──
     const art = await req('POST', '/admin/create', { cookie, form: { title: 'מאמר בדיקה', template: 'article' } });
@@ -127,6 +140,10 @@ function waitUp(tries = 40) {
 
     // ── firm settings, live doors (the builder.io bar) — client statics ──
     const builderJs = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin-builder.js'), 'utf8');
+    check('the builder toasts the reserved-slug sentence from slugNote=reserved',
+      /slugNote/.test(builderJs) && /function reservedSlugMessage\(/.test(builderJs) &&
+      /שמורה למערכת ואי אפשר לתת אותה לדף/.test(builderJs) &&
+      /slugRejectedReason === 'reserved'/.test(builderJs));
     check('url fields carry the page picker (tz-page-list datalist)',
       /list="tz-page-list"/.test(builderJs) && /ensurePageDatalist/.test(builderJs));
     check('an empty מאמרים module is a DOOR — create-first-article button',
@@ -167,6 +184,29 @@ function waitUp(tries = 40) {
     // column) — match that so the save reflects a real editor request.
     const save = await req('POST', '/admin/save', { cookie, body: { full_path: slug, title: 'עמוד חדש', blocks } });
     check('POST /admin/save persists a draft', save.status === 200 && save.json && save.json.ok);
+
+    // ── rename-on-save says WHY the address was refused ──
+    const saveReserved = await req('POST', '/admin/save', { cookie, body: { full_path: slug, title: 'עמוד חדש', blocks, slug: 'crm' } });
+    check('POST /admin/save of reserved slug crm returns slugRejectedReason reserved',
+      saveReserved.status === 200 && saveReserved.json && saveReserved.json.ok &&
+      saveReserved.json.slugRejected === true && saveReserved.json.slugRejectedReason === 'reserved' &&
+      saveReserved.json.full_path === slug);
+    const saveTaken = await req('POST', '/admin/save', { cookie, body: { full_path: slug, title: 'עמוד חדש', blocks, slug: 'home' } });
+    check('POST /admin/save of a taken slug returns slugRejectedReason taken',
+      saveTaken.status === 200 && saveTaken.json && saveTaken.json.ok &&
+      saveTaken.json.slugRejected === true && saveTaken.json.slugRejectedReason === 'taken' &&
+      saveTaken.json.full_path === slug);
+    const savedPlain = getPageByFullPath(slug);
+    check('a refused rename did not move the page', !!savedPlain && savedPlain.full_path === slug && savedPlain.slug !== 'crm');
+
+    // teaser is page meta for every page, not only articles
+    const saveTeaser = await req('POST', '/admin/save', { cookie, body: { full_path: slug, title: 'עמוד חדש', blocks, meta: { teaser: 'תקציר לדף רגיל' } } });
+    const teaserPage = getPageByFullPath(slug);
+    const teaserTags = teaserPage && Array.isArray(teaserPage.tags) ? teaserPage.tags : [];
+    check('POST /admin/save stores meta.teaser on a non-article page',
+      saveTeaser.status === 200 && saveTeaser.json && saveTeaser.json.ok &&
+      teaserPage && teaserPage.meta && teaserPage.meta.teaser === 'תקציר לדף רגיל' &&
+      teaserTags.indexOf('article') === -1);
 
     // ── a raw-HTML block must not be able to break OUT of the builder ──
     // v1.51: the builder embeds the draft as JSON inside an inline <script>.
