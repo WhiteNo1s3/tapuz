@@ -474,7 +474,13 @@
       else if (b.type === 'embed' || b.type === 'map') empty = !String(d.url || d.address || '').trim();
       else if (b.type === 'banner' || b.type === 'heading' || b.type === 'html') empty = !String(d.text || d.content || '').trim();
       if (empty) acc.push(moduleLabel(b.type));
-      if (isColumnsContainer(b.type)) ensureColumns(b).forEach(function (col) { findEmptyModules(col.blocks, acc); });
+      if (isColumnsContainer(b.type)) {
+        ensureColumns(b).forEach(function (col) {
+          // a column with nothing in it publishes as <div class="col"></div>
+          if (col.blocks.length === 0) acc.push(moduleLabel('columns') + ' — טור ריק');
+          findEmptyModules(col.blocks, acc);
+        });
+      }
       if (isBlocksContainer(b.type)) findEmptyModules(ensureBlocks(b), acc);
     });
     return acc;
@@ -1271,6 +1277,23 @@
     }, 2200);
   }
 
+  // Same sentence as src/pages.js reservedPathMessage. The create redirect
+  // only carries the asked slug (slugNote=reserved&asked=…); save sends
+  // slugRejectedReason and the builder fills the name in from currentSlug.
+  function reservedSlugMessage(slug) {
+    return 'הכתובת "' + (slug || '') + '" שמורה למערכת ואי אפשר לתת אותה לדף — בחרו שם אחר.';
+  }
+
+  function noteReservedSlugFromUrl() {
+    var params;
+    try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
+    if (params.get('slugNote') !== 'reserved') return;
+    var landed = currentPageFullPath ? ' הדף נוצר בכתובת ‎/' + currentPageFullPath + '.' : '';
+    showToast(reservedSlugMessage(params.get('asked') || '') + landed, 'warn');
+    // once is enough — a reload must not repeat the note
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+  }
+
   // ---- Init ----
 
   function init(config) {
@@ -1322,6 +1345,7 @@
     applyCanvasPageBg();
     bindToolboxDrag();
     updateHeaderExtras();
+    noteReservedSlugFromUrl();
 
     // Title → slug auto-sync (bound once). While the slug is still title-derived,
     // typing a new title rewrites the address (spaces → dashes) so newcomers
@@ -5162,8 +5186,10 @@
         '<div class="prop-group" id="page-cats-box" hidden>' +
         '<label>קטגוריות (הדף יופיע בבלוק הקטגוריה)</label>' +
         '<div id="page-cats" class="check-stack"></div></div>';
+      // teaser is the card excerpt AND the meta-description fallback for
+      // every page (renderer + listings). card image stays article-only.
+      pageHtml += field('תקציר — לכרטיסים ולתיאור בגוגל', '<textarea data-page-meta="teaser" placeholder="ריק = נלקח אוטומטית מהטקסט הראשון">' + esc(pageMeta.teaser || '') + '</textarea>');
       if (isArticle) {
-        pageHtml += field('תקציר לקובייה', '<textarea data-page-meta="teaser" placeholder="ריק = נלקח אוטומטית מהטקסט הראשון">' + esc(pageMeta.teaser || '') + '</textarea>');
         pageHtml += field('תמונת קובייה (URL)',
           '<div class="prop-inline">' +
           '<input data-page-meta="cardImage" dir="ltr" value="' + escAttr(pageMeta.cardImage || '') + '" placeholder="ריק = התמונה הראשונה בדף">' +
@@ -6748,7 +6774,9 @@
             updateHeaderExtras();
           }
           if (data.slugRejected && !opts.silent) {
-            showToast('הכתובת תפוסה — נשמר בכתובת הקודמת', 'warn');
+            showToast(data.slugRejectedReason === 'reserved'
+              ? reservedSlugMessage(currentSlug)
+              : 'הכתובת תפוסה — נשמר בכתובת הקודמת', 'warn');
           }
           markSaved();
           updatePublishBadge();

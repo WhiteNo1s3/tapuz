@@ -141,6 +141,9 @@ router.post('/admin/create', (req, res) => {
   // A hand-typed slug goes through deriveSlug too: the stored slug must always
   // match its URL form (spaces → dashes), or every slug-built link 404s.
   const slug = deriveSlug((req.body.slug || '').trim() || title);
+  // A reserved address (crm, admin, …) is not "taken": say so on the way
+  // into the editor instead of silently landing on crm-2.
+  const slugReserved = require('../pages').isReservedPath(slug);
   // Never clobber an existing page — suffix until the full_path is free.
   let candidate = slug;
   for (let n = 2; getPageByFullPath(generateFullPath('', candidate)) || require('../pages').isReservedPath(candidate); n++) {
@@ -158,7 +161,9 @@ router.post('/admin/create', (req, res) => {
     // no article cube would ever show — the checkbox hid in page props.
     tags: req.body.template === 'article' ? ['article'] : []
   });
-  res.redirect('/admin/edit/' + encodeURIComponent(result.full_path));
+  let dest = '/admin/edit/' + encodeURIComponent(result.full_path);
+  if (slugReserved) dest += '?slugNote=reserved&asked=' + encodeURIComponent(slug);
+  res.redirect(dest);
 });
 
 router.post('/admin/delete', (req, res) => {
@@ -485,13 +490,20 @@ router.post('/admin/save', (req, res) => {
     // NEVER block the content save — skip only the rename and flag it, so the
     // page's edits always persist. updatePage handles the .pzn/file rename.
     let slugRejected = false;
+    // 'reserved' | 'taken' — the builder says which, instead of one "taken" toast
+    let slugRejectedReason = null;
     if (typeof slug === 'string' && slug.trim()) {
       const clean = deriveSlug(slug); // spaces → dashes; stored slug = URL form
       const existing = getPageByFullPath(full_path);
       const desired = existing ? generateFullPath(existing.path_prefix || '', clean) : null;
       if (desired && desired !== full_path) {
-        if (getPageByFullPath(desired) || require('../pages').isReservedPath(desired)) slugRejected = true;
-        else updates.slug = clean;
+        if (require('../pages').isReservedPath(desired)) {
+          slugRejected = true;
+          slugRejectedReason = 'reserved';
+        } else if (getPageByFullPath(desired)) {
+          slugRejected = true;
+          slugRejectedReason = 'taken';
+        } else updates.slug = clean;
       }
     }
     const page = updatePage(full_path, updates);
@@ -501,7 +513,8 @@ router.post('/admin/save', (req, res) => {
       status: page.status,
       hasUnpublished,
       full_path: page.full_path,
-      slugRejected
+      slugRejected,
+      slugRejectedReason
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
