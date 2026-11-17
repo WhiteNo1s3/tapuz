@@ -68,8 +68,14 @@ check('it recurses into both column and blocks containers',
   /findEmptyModules\(col\.blocks/.test(builder) && /findEmptyModules\(ensureBlocks\(b\)/.test(builder));
 check('publishPage runs the scan and can be bypassed programmatically',
   /publishPage\._skipEmptyCheck/.test(builder) && /findEmptyModules\(\)/.test(builder));
-check('the warning is a confirm the owner can override, cancel aborts publish',
-  /לפרסם בכל זאת/.test(builder) && /cancelled: true/.test(builder));
+const publishFn = builder.slice(
+  builder.indexOf('function publishPage()'),
+  builder.indexOf('function updateLiveLink')
+);
+check('publishPage has no window.confirm; cancel still aborts',
+  !/confirm\(/.test(publishFn) && /cancelled: true/.test(publishFn));
+check('the checklist offers פרסם בכל זאת and still names both honesty sections',
+  /פרסם בכל זאת/.test(builder) && /cancelled: true/.test(builder));
 
 // ---- 4. drop-into-container affordance -------------------------------------
 
@@ -207,6 +213,59 @@ check('admin logout is type=button — Enter in a field can never log out',
   (/התנתק/.test(adminUiSrc) && /type="button"/.test(adminUiSrc.match(/<form method="POST"[^>]*logout[\s\S]{0,400}<\/form>/)[0])));
 check('portal logout got the same cure',
   /type="button" onclick="this\.form\.submit\(\)"/.test(portalSrc));
+
+// ---- 10. delete is real, publish checklist is in-page (T7 / T8) ----------
+
+check('deleteBlock hard-deletes by default; Shift+click keeps the empty מיכל',
+  /function deleteBlock\(id, opts\)/.test(builder) &&
+  /var soft = !!opts\.soft && !pureSpace && !emptyContainer/.test(builder) &&
+  /deleteBlock\(block\.id, \{ soft: !!e\.shiftKey \}\)/.test(builder));
+check('the delete toast still offers undo',
+  /המודול נמחק/.test(builder) && /onClick: undo/.test(builder));
+check('toolbar buttons name themselves in Hebrew, including מחק מודול',
+  /aria-label="מחק מודול"/.test(builder) &&
+  /aria-label="הזז למעלה"/.test(builder) &&
+  /aria-label="שכפל מודול"/.test(builder));
+check('the block toolbar is visible on :focus-within, not only hover',
+  /\.canvas-block:focus-within:not\(:has\(\.canvas-block:focus-within\)\) > \.block-toolbar/.test(css));
+check('findPlaceholderModules skips a block the owner marked intentional',
+  /if \(!d\._ackSeed\)/.test(builder) && /b\.data\._ackSeed = true/.test(builder));
+check('the publish checklist is an in-page dialog with זה מכוון and ביטול',
+  /id = 'publish-check-modal'/.test(builder) &&
+  /role', 'dialog'/.test(builder) &&
+  /זה מכוון/.test(builder) &&
+  /textContent = 'ביטול'/.test(builder) &&
+  /textContent = 'פרסם בכל זאת'/.test(builder));
+
+const rendererSrc = fs.readFileSync(path.join(root, 'src', 'renderer.js'), 'utf8');
+const compileSrc = fs.readFileSync(path.join(root, 'src', 'pzn', 'language', 'compile.js'), 'utf8');
+check('public render drops leading-underscore data keys before markup',
+  /function publicBlockData\(/.test(rendererSrc));
+check('pzn compile drops leading-underscore props before HTML',
+  /function stripPrivateProps\(/.test(compileSrc));
+
+const pzn = require('../src/pzn');
+const { renderPage } = require('../src/renderer');
+const ackPage = {
+  title: 'ack', slug: 'ack', direction: 'rtl', lang: 'he', tags: [], meta: {},
+  blocks: [
+    { type: 'heading', id: 'h-ack', data: { text: 'כותרת', _ackSeed: true } },
+    { type: 'section', id: 's-ack', data: { size: 'md', blocks: [
+      { type: 'text', id: 't-ack', data: { content: 'טקסט', _ackSeed: true } }
+    ] } }
+  ]
+};
+const ackBack = pzn.toTapuzPage(pzn.parse(pzn.serialize(pzn.fromTapuzPage(ackPage))));
+const ackHead = ackBack.blocks[0];
+const ackNested = ackBack.blocks[1] && ackBack.blocks[1].data.blocks[0];
+check('_ackSeed survives the draft round-trip, including inside a מיכל',
+  !!ackHead && ackHead.data._ackSeed === true && ackHead.data.text === 'כותרת' && ackHead.id === 'h-ack' &&
+  !!ackNested && ackNested.data._ackSeed === true && ackNested.data.content === 'טקסט');
+const ackHtml = renderPage({ title: 'ack', blocks: ackPage.blocks });
+const ackCompiled = pzn.compile(pzn.parse(pzn.serialize(pzn.fromTapuzPage(ackPage))), { skipValidate: true });
+check('_ackSeed is not rendered into public HTML or attributes',
+  !/_ackSeed/.test(ackHtml) && ackHtml.includes('כותרת') &&
+  !/_ackSeed/.test(ackCompiled) && ackCompiled.includes('טקסט'));
 
 // parse guard
 try { new Function(builder); check('admin-builder.js parses', true); }

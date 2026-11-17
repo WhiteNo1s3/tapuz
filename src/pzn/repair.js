@@ -283,6 +283,7 @@ function moduleToRawHtml(node) {
   if (!HTML_TAGS.has(node.name)) attrs.push(`data-bent-was="${escapeAttr(node.name)}"`);
   for (const [k, v] of Object.entries(node.props || {})) {
     if (v === undefined || v === null || v === '') continue;
+    if (k.charAt(0) === '_') continue; // draft bookkeeping (_ackSeed), never an attribute
     attrs.push(`${k}="${escapeAttr(String(v))}"`);
   }
   const open = `<${tag}${attrs.length ? ' ' + attrs.join(' ') : ''}>`;

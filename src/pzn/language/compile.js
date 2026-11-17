@@ -73,6 +73,18 @@ function compile(doc, context = {}) {
   return html;
 }
 
+/** Leading-underscore props are draft bookkeeping (`_ackSeed`). They ride
+ *  the .pzn file and must not become attributes on the public page. */
+function stripPrivateProps(node) {
+  const props = node && node.props;
+  if (!props) return node;
+  const keys = Object.keys(props);
+  if (!keys.some((k) => k.charAt(0) === '_')) return node;
+  const next = {};
+  for (const k of keys) if (k.charAt(0) !== '_') next[k] = props[k];
+  return Object.assign({}, node, { props: next });
+}
+
 /**
  * Compile a single module node to HTML fragment.
  * @param {object} node
@@ -83,6 +95,7 @@ function compileModule(node, ctx, compileChild) {
   if (!isModule(node)) {
     throw new BentError('E_COMPILE', 'Expected module node');
   }
+  node = stripPrivateProps(node);
   const def = getModule(node.name);
   if (!def) {
     throw new BentError('E_UNKNOWN_MODULE', `Unknown module: ${node.name}`, {

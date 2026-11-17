@@ -91,6 +91,12 @@ function baseOpts(block, props, extra = {}) {
     props.animate = block.data.animate;
   }
   styleToProps(block.data, props);
+  // "זה מכוון" (the publish checklist). The .pzn file wins over the DB on
+  // load, so the flag has to cross the bridge or a reload nags again. Public
+  // HTML never reads a leading-underscore key.
+  if (block.data && (block.data._ackSeed === true || block.data._ackSeed === 'true')) {
+    props._ackSeed = true;
+  }
   return opts;
 }
 
@@ -649,6 +655,8 @@ function finishBlock(node, type, data) {
     data.animate = anim;
   }
   propsToStyle(node.props || {}, data);
+  const ack = node.props && node.props._ackSeed;
+  if (ack === true || ack === 'true') data._ackSeed = true;
   const block = { type, data };
   if (node.id) block.id = node.id;
   return block;
