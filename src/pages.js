@@ -371,6 +371,54 @@ function publishPage(full_path) {
   return updatePage(full_path, { publish: true });
 }
 
+/** The page that owns '/' — the export's crown, and the pages-list badge. */
+function pageIsHome(fullPath) {
+  let crowned = null;
+  try { crowned = require('./export').crownedHomePath(); } catch (e) { crowned = null; }
+  if (crowned && crowned === fullPath) return true;
+  try {
+    const config = require('./config').loadConfig();
+    const published = listPages().filter((p) => p.status === 'published');
+    return require('./seo').resolveHomePath(published, config.homepage) === fullPath;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Take a published page off the site and keep it as a draft.
+ * draft_blocks becomes the published blocks, so the editor still has the
+ * content that was live. The exported HTML (and the home alias, when this
+ * page owned it) is removed. The current home page is refused — crown
+ * another page first. Sitemap and menus drop the page on the rebuild the
+ * route runs after this returns.
+ */
+function unpublishPage(full_path) {
+  const existing = getPageByFullPath(full_path);
+  if (!existing) {
+    const err = new Error('הדף לא נמצא');
+    err.status = 404;
+    throw err;
+  }
+  if (existing.status !== 'published') return existing;
+  if (pageIsHome(existing.full_path)) {
+    const err = new Error('אי אפשר להסתיר את דף הבית. קבעו דף בית אחר קודם.');
+    err.code = 'E_HOME_PAGE';
+    err.status = 400;
+    throw err;
+  }
+  const saved = updatePage(existing.full_path, {
+    status: 'draft',
+    draft_blocks: existing.blocks || [],
+    revisionKind: 'unpublish'
+  });
+  // updatePage already removes the HTML when a page leaves 'published'
+  // (named file + index.html when this page owned '/'). Call again so a
+  // swallowed export error there cannot leave the file serving.
+  try { require('./export').removePageHtml(existing.full_path); } catch (e) { /* the rebuild prunes it */ }
+  return saved;
+}
+
 function getPageByFullPath(full_path) {
   const row = db.prepare('SELECT * FROM pages WHERE full_path = ?').get(full_path);
   return parsePageRow(row);
@@ -769,6 +817,7 @@ module.exports = {
   createPage,
   updatePage,
   publishPage,
+  unpublishPage,
   getPageByFullPath,
   listPages,
   listArticles,

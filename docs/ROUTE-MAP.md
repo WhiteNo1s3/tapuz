@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**372 routes across 47 files.**
+**373 routes across 47 files.**
 
 ## By file (what each module owns)
 
@@ -301,11 +301,12 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/mission/create`
 - `POST /admin/api/mission/activate/:id`
 
-### `src/routes/pages-builder.js` — 8 routes
+### `src/routes/pages-builder.js` — 9 routes
 
 - `GET /admin/new`
 - `POST /admin/create`
 - `POST /admin/delete`
+- `POST /admin/unpublish`
 - `GET /admin/preview/:fullPath`
 - `GET /admin/edit/:fullPath`
 - `POST /admin/save`
@@ -852,6 +853,7 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/theme` | GET | `src/routes/theme.js` |
 | `/admin/theme/preview/:id` | GET | `src/routes/theme.js` |
 | `/admin/translations` | GET | `src/routes/translations.js` |
+| `/admin/unpublish` | POST | `src/routes/pages-builder.js` |
 | `/admin/upload` | POST | `src/routes/media.js` |
 | `/agent/v1/build` | POST | `src/routes/agent-bridge.js` |
 | `/agent/v1/create-from-source` | POST | `src/routes/agent-bridge.js` |

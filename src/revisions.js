@@ -11,7 +11,7 @@ function ensureSchema() {
       full_path TEXT NOT NULL,
       title TEXT,
       status TEXT,
-      kind TEXT DEFAULT 'draft' CHECK(kind IN ('draft', 'publish', 'restore')),
+      kind TEXT DEFAULT 'draft' CHECK(kind IN ('draft', 'publish', 'restore', 'unpublish')),
       blocks TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -38,7 +38,7 @@ function addRevision({ pageId, fullPath, title, status, kind, blocks, pzn }) {
     fullPath,
     title || '',
     status || 'draft',
-    kind === 'publish' || kind === 'restore' ? kind : 'draft',
+    kind === 'publish' || kind === 'restore' || kind === 'unpublish' ? kind : 'draft',
     content
   );
 

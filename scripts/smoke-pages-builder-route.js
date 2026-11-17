@@ -265,6 +265,59 @@ function waitUp(tries = 40) {
     const live = await req('GET', '/' + encodeURIComponent(slug) + '.html', {});
     check('the published page is served as static HTML with the real content', live.status === 200 && /כותרת הבדיקה/.test(live.text));
 
+    // ── unpublish: back to draft, content kept, gone from the public site ──
+    const { saveMenu, getMenu } = require('../src/menus');
+    const { listRevisions } = require('../src/revisions');
+    const { renderPage } = require('../src/renderer');
+    const { publicHtmlName } = require('../src/export');
+    saveMenu('main', getMenu('main').concat([{ label: 'העמוד', type: 'page', target: slug }]));
+    const homeBefore = renderPage(getPageByFullPath('home'), { isHome: true });
+    check('a published page is linked from the menu', homeBefore.includes('/' + slug + '.html'));
+
+    const unpub = await req('POST', '/admin/unpublish', { cookie, form: { full_path: slug } });
+    check('POST /admin/unpublish redirects back to the pages list',
+      (unpub.status === 302 || unpub.status === 303) && (unpub.headers.location || '') === '/admin');
+    const after = getPageByFullPath(slug);
+    check('unpublish sets status draft', !!after && after.status === 'draft');
+    check('unpublish keeps the content in draft_blocks',
+      !!after && JSON.stringify(after.draft_blocks || []).includes('כותרת הבדיקה'));
+    const htmlFile = path.join(ROOT, 'public', publicHtmlName(slug));
+    check('unpublish removes the public html file', !fs.existsSync(htmlFile));
+    require('../src/export').exportAll();
+    check('a later export does not recreate a draft page', !fs.existsSync(htmlFile));
+    const sm = await req('GET', '/sitemap.xml', {});
+    check('unpublished page is not in the sitemap',
+      sm.status === 200 && sm.text.indexOf('/' + slug) === -1);
+    check('unpublish writes a revision of kind unpublish',
+      listRevisions(slug).some((r) => r.kind === 'unpublish'));
+    const homeAfter = renderPage(getPageByFullPath('home'), { isHome: true });
+    check('a draft page is excluded from menus', !homeAfter.includes('/' + slug + '.html'));
+    const liveHome = await req('GET', '/', {});
+    check('the rebuilt site menu no longer links the hidden page', !liveHome.text.includes('/' + slug + '.html'));
+    const gone = await req('GET', '/' + encodeURIComponent(slug) + '.html', {});
+    check('the hidden page is no longer served', gone.status === 404);
+
+    // ── the current home page cannot be unpublished ──
+    const homeNo = await req('POST', '/admin/unpublish', { cookie, form: { full_path: 'home' } });
+    check('POST /admin/unpublish refuses the home page',
+      (homeNo.status === 302 || homeNo.status === 303) && /[?&]unpublish=home(?:&|$)/.test(homeNo.headers.location || ''));
+    const homeStill = getPageByFullPath('home');
+    check('the home page stays published', !!homeStill && homeStill.status === 'published');
+    check('the home page file is still on disk', fs.existsSync(path.join(ROOT, 'public', 'index.html')));
+    const homeMsg = await req('GET', homeNo.headers.location || '/admin?unpublish=home', { cookie });
+    check('the refusal tells the owner to set another home first',
+      /אי אפשר להסתיר את דף הבית/.test(homeMsg.text) && /קבעו דף בית אחר/.test(homeMsg.text));
+
+    // ── the pages list offers הסתר מהאתר only on published rows ──
+    const list = await req('GET', '/admin', { cookie });
+    const rows = list.text.split('<div class="row-item').slice(1);
+    check('hide button is on every published row and on no draft row',
+      rows.length >= 2 && rows.every((row) => {
+        const published = row.includes('class="pill ok">פורסם');
+        const hide = row.includes('הסתר מהאתר') && row.includes('action="/admin/unpublish"');
+        return published ? hide : !row.includes('הסתר מהאתר');
+      }));
+
     // ── build regenerates the whole static site ──
     const build = await req('POST', '/admin/build', { cookie, body: {} });
     check('POST /admin/build regenerates the site (count > 0)', build.status === 200 && build.json && build.json.ok && build.json.count > 0);

@@ -902,6 +902,40 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Drop menu links whose target is a real page that is not published.
+ * A target the CMS does not own still renders — the menu may point at an
+ * address that was never a page. Drafts stay out of the public menu the
+ * same way sitemap.xml lists only published pages; the next export rewrites
+ * every page, so an unpublish disappears from the menus without deleting
+ * the owner's item (publishing again brings the link back).
+ */
+function omitUnpublishedPageLinks(items) {
+  let hidden = null;
+  const hiddenSet = () => {
+    if (hidden) return hidden;
+    hidden = new Set();
+    try {
+      for (const p of require('./pages').listPages()) {
+        if (p.status !== 'published') hidden.add(p.full_path);
+      }
+    } catch (e) { /* a menu still renders if the page index cannot be read */ }
+    return hidden;
+  };
+  const clean = (target) => String(target || '').replace(/^\/+/, '').replace(/\.html$/i, '');
+  const walk = (list) => {
+    const out = [];
+    for (const it of list || []) {
+      if (!it) continue;
+      if (it.type === 'page' && hiddenSet().has(clean(it.target))) continue;
+      const children = Array.isArray(it.children) ? walk(it.children) : it.children;
+      out.push(children === it.children ? it : Object.assign({}, it, { children }));
+    }
+    return out;
+  };
+  return walk(items);
+}
+
 /** The item that IS this page; the crowned home matches '/' as well as its own file. */
 function isCurrentUrl(url, currentUrl) {
   return !!currentUrl && !!url && (url === currentUrl || (currentUrl === '/' && (url === '/' || url === '/index.html')));
@@ -1319,9 +1353,11 @@ function renderPage(page, options = {}) {
   // options.menus (v2.28) — the organizer's preview route renders a CANDIDATE
   // menu set with the real pages, without saving it; an array (even an empty
   // one) replaces that location, anything else keeps the site's own menu
-  const menuFor = (loc) => (options.menus && Array.isArray(options.menus[loc]))
-    ? normalizeItems(options.menus[loc])
-    : getMenuForLocation(loc);
+  const menuFor = (loc) => omitUnpublishedPageLinks(
+    (options.menus && Array.isArray(options.menus[loc]))
+      ? normalizeItems(options.menus[loc])
+      : getMenuForLocation(loc)
+  );
   const mainMenu = menuFor('main');
   const footerMenu = menuFor('footer');
 
