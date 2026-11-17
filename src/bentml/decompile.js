@@ -2,6 +2,7 @@
 
 const { isGeneratedBlockId } = require('../blocks');
 const { deriveSlug } = require('./parse');
+const { heroChildren } = require('../pzn/hero-children');
 
 /**
  * decompile(page, blocks) → canonical BenTML
@@ -242,6 +243,27 @@ function decompileBlock(block, indent) {
       if (d.parallax) params.push('parallax: true');
       if (d.width && d.width !== 'content') params.push(`width: ${d.width}`);
       uni(params, d, idParams);
+      // Authored children (v2.38) are the hero. Emit each block — its id, a
+      // spacer, a second button — or the code tab saves only the flat trio.
+      // heroChildren applies the form's title/subtitle/button edits first.
+      // A hero with no data.blocks keeps the old heading/text/button lines.
+      const authored = heroChildren(d);
+      if (authored && authored.length) {
+        let firstHeading = true;
+        const kids = authored.map((b) => {
+          let block = b;
+          // the renderer draws a level-less first heading as h1; say so here
+          // or the next compile stores the heading default (2) and it becomes h2
+          if (firstHeading && b && b.type === 'heading') {
+            firstHeading = false;
+            if (!b.data || b.data.level == null) {
+              block = Object.assign({}, b, { data: Object.assign({}, b.data, { level: 1 }) });
+            }
+          }
+          return decompileBlock(block, indent + 1);
+        }).join('\n');
+        return `${pad}HERO${paramList(params)} {\n${kids}\n${pad}}`;
+      }
       const kids = [];
       if (d.title) kids.push(`${pad}  HEADING(level: 1) { ${escBody(d.title)} }`);
       if (d.subtitle) kids.push(`${pad}  TEXT { ${escBody(d.subtitle)} }`);

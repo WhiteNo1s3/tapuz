@@ -182,20 +182,41 @@ function buildBlock(node, warnings) {
       return createBlock('card', applyChrome({ blocks }, p));
     }
     case 'HERO': {
-      // children: at most one HEADING, TEXT, BUTTON → flat hero data
+      // A plain heading + text + button stays the four flat fields the builder
+      // has always saved. Anything else (a second button, a spacer, a stats
+      // row, an image, a child with an id) is stored as data.blocks — the
+      // shape heroChildren reads — and the four fields are only the mirrors
+      // of the first heading, text and button.
+      const rawKids = node.children || [];
       let title = '';
       let subtitle = '';
       let buttonText = '';
       let buttonUrl = '';
-      for (const c of node.children || []) {
-        if (c.name === 'HEADING') title = collapseSingleParagraph(c.text);
-        else if (c.name === 'TEXT') subtitle = collapseSingleParagraph(c.text);
-        else if (c.name === 'BUTTON') {
-          buttonText = collapseSingleParagraph(c.text);
-          buttonUrl = (c.params && c.params.url) || '#';
+      let blocks;
+      if (isLegacyHeroBody(rawKids)) {
+        for (const c of rawKids) {
+          if (c.name === 'HEADING') title = collapseSingleParagraph(c.text);
+          else if (c.name === 'TEXT') subtitle = collapseSingleParagraph(c.text);
+          else if (c.name === 'BUTTON') {
+            buttonText = collapseSingleParagraph(c.text);
+            buttonUrl = (c.params && c.params.url) || '#';
+          }
+        }
+      } else {
+        blocks = rawKids.map((c) => blockToJson(c, warnings)).filter(Boolean);
+        const first = (type) => blocks.find((b) => b && b.type === type);
+        const h = first('heading');
+        const t = first('text');
+        const b = first('button');
+        if (h) title = (h.data && h.data.text) || '';
+        if (t) subtitle = (t.data && t.data.content) || '';
+        if (b) {
+          buttonText = (b.data && b.data.text) || '';
+          buttonUrl = (b.data && b.data.url) || '#';
         }
       }
       const data = { title, subtitle, buttonText, buttonUrl };
+      if (blocks && blocks.length) data.blocks = blocks;
       if (p.image) data.image = p.image;
       if (p.height) data.height = p.height;
       // spec §11.1 overlay/parallax — stored since v0.44 (the drift is closed)
@@ -1095,6 +1116,36 @@ function buildBlock(node, warnings) {
       warnings.push({ code: 'W405', message: `Skipped unknown block ${node.name}` });
       return null;
   }
+}
+
+// Defaults the flat hero already drops. A child that carries only these
+// (plus a button url) is the legacy trio, not authored children.
+const HERO_HEADING_DEFAULTS = { level: 1, align: 'start', animate: 'none' };
+const HERO_TEXT_DEFAULTS = { align: 'start', size: 'md', lead: false, dropcap: false, maxwidth: 'full', animate: 'none' };
+const HERO_BUTTON_DEFAULTS = { style: 'primary', align: 'start', animate: 'none' };
+
+function isDefaultParam(key, value, defaults) {
+  return Object.prototype.hasOwnProperty.call(defaults, key) && value === defaults[key];
+}
+
+function isPlainHeroChild(node) {
+  const p = (node && node.params) || {};
+  const keys = Object.keys(p);
+  if (node.name === 'HEADING') return keys.every((k) => isDefaultParam(k, p[k], HERO_HEADING_DEFAULTS));
+  if (node.name === 'TEXT') return keys.every((k) => isDefaultParam(k, p[k], HERO_TEXT_DEFAULTS));
+  if (node.name === 'BUTTON') return keys.every((k) => k === 'url' || isDefaultParam(k, p[k], HERO_BUTTON_DEFAULTS));
+  return false;
+}
+
+/** At most one plain HEADING, TEXT and BUTTON — the pre-v2.38 hero body. */
+function isLegacyHeroBody(children) {
+  const seen = { HEADING: 0, TEXT: 0, BUTTON: 0 };
+  for (const c of children || []) {
+    if (!c || !Object.prototype.hasOwnProperty.call(seen, c.name) || !isPlainHeroChild(c)) return false;
+    seen[c.name]++;
+    if (seen[c.name] > 1) return false;
+  }
+  return true;
 }
 
 function collapseSingleParagraph(text) {

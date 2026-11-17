@@ -6,8 +6,9 @@ const path = require('path');
 /**
  * BenTML engine for the browser.
  *
- * The compiler chain is dependency-free plain JS (blocks/errors/keywords/
- * parse/compile/decompile), so the admin can run the real language locally —
+ * The compiler chain is plain JS (blocks/errors/keywords/parse/compile/
+ * decompile, plus the hero's child merge), so the admin can run the real
+ * language locally —
  * instant decompile on every drag, compile-as-you-type — with zero server
  * roundtrips. Bundled on demand with a two-line CommonJS shim; rebuilt when
  * any source file changes (dev-friendly, no build step).
@@ -19,6 +20,8 @@ const MODULES = [
   ['keywords', path.join(__dirname, 'keywords.js')],
   ['parse', path.join(__dirname, 'parse.js')],
   ['compile', path.join(__dirname, 'compile.js')],
+  // decompile's hero case calls this; the code tab runs the bundle, not Node
+  ['pzn/hero-children', path.join(__dirname, '..', 'pzn', 'hero-children.js')],
   ['decompile', path.join(__dirname, 'decompile.js')],
   // v2.20: the extractor rides along so the builder's panel takes only the
   // BenTML out of a pasted reply BEFORE choosing an engine (no roundtrip)
