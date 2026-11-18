@@ -71,6 +71,7 @@ body {
   margin: 0 auto;
   padding: 0 var(--page-pad);
   display: flex;
+  flex-direction: row; /* brand is first, so it sits at the inline start: left in ltr, right in rtl */
   align-items: center;
   justify-content: space-between;
 }
@@ -92,6 +93,7 @@ body {
 
 .main-nav ul {
   display: flex;
+  flex-direction: row; /* DOM order along the inline axis; dir flips it, the list is not reversed */
   gap: 1.75rem;
   list-style: none;
   margin: 0;
@@ -309,6 +311,7 @@ body.menu-drawer .main-nav .nav-more-sum { display: block; padding: 0.55rem 0.4r
 /* ===== CMS-managed header chrome (S3) ===== */
 .header-brand {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.75rem;
 }
@@ -711,8 +714,9 @@ figcaption {
      narrower footer reads as a mistake */
   max-width: max(var(--max-width), var(--header-max-width, 1140px));
   margin: 0 auto;
-  padding: 0 var(--page-pad);
+  padding-inline: var(--page-pad);
   display: flex;
+  flex-direction: row; /* first child at the inline start */
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
@@ -724,7 +728,7 @@ figcaption {
 .footer-nav a {
   color: var(--color-muted);
   text-decoration: none;
-  margin: 0 0.4rem;
+  margin-inline: 0.4rem;
 }
 
 .footer-nav a:hover {
@@ -1166,6 +1170,17 @@ button:focus-visible,
 .tapuz-lang-switch a.active {
   background: var(--color-primary, #ea580c);
   color: var(--accent-fg, #fff);
+}
+/* The header switch is the same pill, in the flow at the top of the header.
+   The inner class stays `tapuz-lang-switch` so a page that links translations
+   still carries that element; only the placement changes. */
+.header-lang { display: flex; justify-content: end; padding: 0.35rem 0 0.15rem; }
+.header-lang .tapuz-lang-switch {
+  position: static;
+  inset-inline-start: auto;
+  top: auto;
+  z-index: auto;
+  box-shadow: none;
 }
 
 /* ── Pricing table (v1.05) — module-hunt gap, zero-JS ──
@@ -1858,6 +1873,7 @@ img.bent-flipbox-icon { width: 2.5rem; height: 2.5rem; object-fit: contain; }
 .bent-footer.tone-brand a { color: inherit; }
 .bent-header-inner {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
@@ -2274,9 +2290,9 @@ a.bent-tag:hover { border-color: var(--accent, #ea580c); color: var(--accent, #e
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 1.25rem;
   padding: 0.75rem 1rem; margin: 1rem 0; border-radius: var(--radius-md, 10px);
 }
-.bent-nav-start { justify-content: flex-start; }
+.bent-nav-start { justify-content: start; }
 .bent-nav-center { justify-content: center; }
-.bent-nav-end { justify-content: flex-end; }
+.bent-nav-end { justify-content: end; }
 .bent-nav-link {
   color: var(--bent-nav-color, var(--color-text, #334155)); text-decoration: none;
   font-weight: 600; padding: 0.35rem 0.55rem; border-radius: var(--radius-sm, 6px); transition: opacity .15s;
@@ -3328,5 +3344,6 @@ html body.nav-overlay .site-header:has(.nav-toggle:checked) { backdrop-filter: n
 @media (prefers-reduced-motion: no-preference) {
   html body.nav-overlay .nav-toggle:checked ~ ul { animation: nav-overlay-in 0.22s ease-out; }
 }
-@keyframes nav-overlay-in { from { transform: translateX(var(--nav-overlay-from, 100%)); } to { transform: none; } }
-[dir="rtl"] body.nav-overlay { --nav-overlay-from: -100%; }
+/* Slide in from the inline end. inset-inline-end follows the page dir, so an
+   ltr page comes from the right and an rtl page from the left. */
+@keyframes nav-overlay-in { from { inset-inline-end: -100%; } to { inset-inline-end: 0; } }

@@ -34,6 +34,15 @@ const express = require('express');
 const { requireAdmin } = require('../admin-guard');
 const registry = require('../injections');
 const { siteState } = require('../injections/site-state');
+
+/** siteState plus the menus language the page is editing, when it sent one. */
+function stateFor(req) {
+  const s = siteState();
+  const raw = (req && req.body && req.body.menuLang) || (req && req.query && req.query.menuLang) || '';
+  const lang = String(raw).trim();
+  if (lang) s.menuLang = lang;
+  return s;
+}
 const { logRun } = require('../injections/log');
 // the module object, not destructured: the smoke swaps contextBudget /
 // generateDetailed on it, and a request must see the swap
@@ -139,7 +148,7 @@ router.get('/admin/api/inject/:id/prompt', (req, res) => {
       size: sizeFor(pack, req.query.size),
       locale: localeFor(req.query.locale),
       variant: variantFor(req.query.variant),
-      ctx: siteState()
+      ctx: stateFor(req)
     });
     res.setHeader('X-Pack-Chars', String(built.chars));
     res.setHeader('X-Pack-Tokens-Est', String(ai.estimateTokens(built.chars)));
@@ -172,7 +181,7 @@ router.post('/admin/api/inject/:id/paste', (req, res) => {
   }
   let parsed;
   try {
-    parsed = pack.parse(reply, siteState(), { brief });
+    parsed = pack.parse(reply, stateFor(req), { brief });
   } catch (e) {
     log({ ok: false, code: e.code || 'BAD_REPLY' });
     return refuse(res, { message: e.message, code: e.code || 'BAD_REPLY' });
@@ -212,7 +221,7 @@ router.post('/admin/api/inject/:id/apply', requireAdmin, (req, res) => {
   }
   let r;
   try {
-    r = pack.apply(reply, siteState(), { force, brief });
+    r = pack.apply(reply, stateFor(req), { force, brief });
   } catch (e) {
     const code = e.code || 'BAD_REPLY';
     log({ ok: false, code, warningCodes: codesOf(e.warnings) });
@@ -409,7 +418,7 @@ router.post('/admin/api/inject/:id/run', requireAdmin, async (req, res) => {
   let ctx;
   let built;
   try {
-    ctx = siteState();
+    ctx = stateFor(req);
     built = pack.buildPrompt({ brief, size, locale, variant, ctx });
     promptChars = built.chars;
   } catch (e) {
@@ -596,8 +605,9 @@ async function resumeRelayRun(req, res, pack, step) {
 // site's provider happens to be set to.
 
 /** The one place a pack is composed for either courier. Throws with .code. */
-function composePack(pack, { brief, size, variant, locale }) {
+function composePack(pack, { brief, size, variant, locale, menuLang }) {
   const ctx = siteState();
+  if (menuLang) ctx.menuLang = String(menuLang).trim();
   const built = pack.buildPrompt({ brief, size, locale, variant, ctx });
   return { ctx, built };
 }
@@ -618,6 +628,7 @@ function judgeJobReply(job, replyText, usage) {
     throw e;
   }
   const ctx = siteState();
+  if (job && job.menuLang) ctx.menuLang = job.menuLang;
   const door = doorFor(pack, ctx, job.brief);
   const a = door.attempt(replyText);
 
@@ -732,7 +743,7 @@ router.post('/admin/api/inject/:id/job', requireAdmin, (req, res) => {
   if (pack.buildPrompt === null || !registry.isReady(pack)) return refuse(res, notReady(pack));
   let built;
   try {
-    ({ built } = composePack(pack, { brief, size, variant, locale }));
+    ({ built } = composePack(pack, { brief, size, variant, locale, menuLang: b.menuLang }));
   } catch (e) {
     return refuse(res, e);
   }
@@ -752,7 +763,7 @@ router.post('/admin/api/inject/:id/job', requireAdmin, (req, res) => {
   let job;
   try {
     job = jobs.createJob({
-      packId: pack.id, brief, size, variant, locale,
+      packId: pack.id, brief, size, variant, locale, menuLang: b.menuLang,
       prompt: built.text, promptChars: built.chars, maxTokens: pack.run.maxTokens, model
     });
   } catch (e) {

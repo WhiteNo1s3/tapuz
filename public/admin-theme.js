@@ -11,7 +11,7 @@
     'th-bg-kind', 'th-bg-angle', 'th-ch-hover', 'th-ch-hovercolor', 'th-ch-weight', 'th-ch-glass', 'th-ch-headerbg',
     'th-ch-headertext', 'th-ch-footerbg', 'th-ch-footertext', 'th-skin-note', 'th-skin-css',
     'th-header-width', 'th-ch-overflow', 'th-ch-align', 'th-ch-gap', 'th-ch-size',
-    'th-ch-fold', 'th-ch-collapse', 'th-ch-current', 'th-ch-header', 'th-ch-drawer'];
+    'th-ch-fold', 'th-ch-collapse', 'th-ch-current', 'th-ch-langswitch', 'th-ch-header', 'th-ch-drawer'];
 
   function $(id) { return document.getElementById(id); }
   function val(id, fallback) {
@@ -143,6 +143,7 @@
           menuFold: foldValue(),
           menuCollapse: val('th-ch-collapse', 'md') || 'md',
           menuCurrent: val('th-ch-current', 'underline') || 'underline',
+          langSwitch: val('th-ch-langswitch', 'header') === 'float' ? 'float' : 'header',
           // v2.63 — the header's shape, what the ☰ opens
           headerLayout: val('th-ch-header', 'bar') || 'bar',
           menuDrawer: val('th-ch-drawer', 'inline') || 'inline'
@@ -477,6 +478,7 @@
     setValue('th-ch-fold', ch.menuFold != null ? ch.menuFold : 0);
     setValue('th-ch-collapse', ch.menuCollapse || 'md');
     setValue('th-ch-current', ch.menuCurrent || 'underline');
+    setValue('th-ch-langswitch', ch.langSwitch === 'float' ? 'float' : 'header');
     setValue('th-ch-header', ch.headerLayout || 'bar');
     setValue('th-ch-drawer', ch.menuDrawer || 'inline');
     setValue('th-header-width', (o.layout || {}).headerWidth || 'wide');
@@ -585,7 +587,7 @@
     // the menu's geometry (v2.28) back to what the theme css does untouched
     overrides.chrome = Object.assign({}, overrides.chrome || {}, {
       menuOverflow: 'wrap', menuAlign: 'start', menuGap: 'md', menuSize: 'md',
-      menuFold: 0, menuCollapse: 'md', menuCurrent: 'underline',
+      menuFold: 0, menuCollapse: 'md', menuCurrent: 'underline', langSwitch: 'header',
       headerLayout: 'bar', menuDrawer: 'inline'
     });
     api('/admin/api/theme', { overrides: overrides }).then(function () { location.reload(); });

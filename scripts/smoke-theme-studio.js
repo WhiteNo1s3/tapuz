@@ -443,7 +443,7 @@ function waitUp(tries = 40) {
     const empty = await req('GET', '/admin/theme/preview/' + pvLive.json.id + '?canvas=1', { cookie });
     check('an empty bench renders the theme chrome around NOTHING (header + footer, no page content, noindex)',
       empty.status === 200 && /class="site-header/.test(empty.text) && /class="site-footer/.test(empty.text) && /<title>קנבס הערכה/.test(empty.text) &&
-      /noindex/.test(empty.text) && !/class="bent-cards/.test(empty.text) && /<main id="main" class="main-content">\s*<div class="container">\s*<\/div>/.test(empty.text) && /הקנבס ריק/.test(empty.text));
+      /noindex/.test(empty.text) && !/class="bent-cards/.test(empty.text) && /<main id="main" class="main-content" dir="(?:ltr|rtl)">\s*<div class="container">\s*<\/div>/.test(empty.text) && /הקנבס ריק/.test(empty.text));
     const pasted = await req('POST', '/admin/api/theme/canvas', { cookie, body: { op: 'append-source', source: 'בשמחה! הנה:\n```html\n<!DOCTYPE html><html lang="he" dir="rtl"><head><title>x</title></head><body><bent-hero id="h1"><bent-heading level="1">פתיח</bent-heading></bent-hero><bent-cards id="c1" columns="3"></bent-cards></body></html>\n```\nתהנו!' } });
     check('POST canvas append-source takes only the BenTML out of a chat reply → modules on the bench',
       pasted.status === 200 && pasted.json.ok && pasted.json.count === 2 && pasted.json.added === 2 && pasted.json.modules.map((m) => m.type).join(',') === 'hero,cards');

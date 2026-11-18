@@ -120,9 +120,11 @@ Sources: [builder.io Fusion launch](https://www.builder.io/news/fusion),
    scoped). Ships hreflang `<link>` tags automatically + a zero-JS visible
    language switcher that appears only on pages that actually have linked
    siblings. A third+ page can join an existing pair (the group grows,
-   never forks). Not done: auto-suggesting which pages might be
-   translations of each other, RTL/LTR mixed-direction menu rendering
-   polish.
+   never forks). Mixed-direction menus shipped: a page in another language
+   renders that language's menu (`main@en`, `footer@en`) with the header
+   reading the page's way, and the language switch sits in the header
+   (the floating pill stays a theme knob, hidden while the header switch is on).
+   Not done: auto-suggesting which pages might be translations of each other.
 6. **Builder.io-class builder extras** (Ben's goal, 2026-07-18) — ALL SHIPPED:
    Ctrl+K palette (v0.88), layers/outline panel (v0.89), responsive device
    preview (v0.90), symbols (v0.91), OS keyboard set (v0.92), starter

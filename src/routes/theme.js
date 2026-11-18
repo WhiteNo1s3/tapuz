@@ -836,6 +836,11 @@ router.get('/admin/theme', (req, res) => {
           </div>
           <label class="field-label" for="th-ch-fold">קיפול: כמה פריטים לפני "עוד" (0 = בלי)</label>
           <input type="number" id="th-ch-fold" min="0" max="12" step="1" value="${escAttr(String(Number.isFinite(Number(ch.menuFold)) ? Number(ch.menuFold) : 0))}" class="input mb" title="מעבר למספר הזה הפריטים מתקפלים תחת &quot;עוד&quot; — בלי JavaScript, נפתח בלחיצה">
+          <label class="field-label" for="th-ch-langswitch">מתג שפה</label>
+          <select id="th-ch-langswitch" class="input mb">
+            ${opt('header', 'בכותרת (ברירת מחדל)', ch.langSwitch !== 'float')}
+            ${opt('float', 'כפתור צף', ch.langSwitch === 'float')}
+          </select>
           <label class="field-label" for="th-ch-header">צורת הכותרת העליונה (v2.63)</label>
           <select id="th-ch-header" class="input mb" title="חל על תפריט עליון">
             ${opt('bar', 'שורה — לוגו בצד אחד, תפריט בצד השני (ברירת מחדל)', !ch.headerLayout || ch.headerLayout === 'bar')}

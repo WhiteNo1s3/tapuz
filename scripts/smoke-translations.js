@@ -103,12 +103,12 @@ saveConfig(cfg);
 const aboutPage = getPageByFullPath('about');
 const html = renderPage(aboutPage, { siteTitle: 'אתר בדיקה' });
 check(html.includes('hreflang="en"') && html.includes('example.co.il/about-en'), 'renderPage embeds the hreflang link for the sibling');
-check(html.includes('<div class="tapuz-lang-switch">'), 'renderPage embeds the visible language switcher element');
+check(/<div class="tapuz-lang-switch" dir="rtl">/.test(html), 'renderPage embeds the visible language switcher element');
 const contactHtml = renderPage(getPageByFullPath('contact'), { siteTitle: 'אתר בדיקה' });
 // note: the theme's inline <style> block (live-serve, pre-static-export)
 // always mentions the CSS class name — check for the rendered ELEMENT, not
 // the bare class-name substring, which the stylesheet itself contains.
-check(!contactHtml.includes('<div class="tapuz-lang-switch">'), 'an unlinked page renders NO switcher element at all');
+check(!/<div class="tapuz-lang-switch"/.test(contactHtml), 'an unlinked page renders NO switcher element at all');
 check(!contactHtml.includes('hreflang'), 'an unlinked page renders NO hreflang tags at all');
 
 console.log('');
