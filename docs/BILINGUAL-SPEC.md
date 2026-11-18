@@ -51,6 +51,15 @@ by matching translationGroup ids when both sites share them), and a **Preview** 
   real URL; keep the floating pill as an option (theme knob) and hide it when the header switch is on.
 - Static build (`שמור + בנה` / export) outputs the correct menu + direction per page.
 
+## Ben's decisions (Nov 18)
+These override anything above where they differ.
+- **Pages-only flag.** `importSitePackage` gets `mode: "pages"`, which skips theme, menus, config and store. Keep the import small: prefix + internal link rewrite, `lang`, asset bundle + restore, translations mapping.
+- **Dry run is the default.** A real import needs an explicit opt-in, in both the API and the UI.
+- **Snapshot + restore before any real import.** A full snapshot of pages, menus, theme, config, store and assets is taken first, with a one-click restore in the import UI. Snapshot → import → restore round-trips byte-identically (tested).
+- **Tests on a temp data dir only.** Every new smoke runs on an isolated temporary data root, never on real site data.
+- **Direction follows language, both ways.** Setting `lang` on import sets the page's direction (en → ltr, he → rtl), overriding the source page. An English page gets the whole site in LTR: `html` dir/lang, body, blocks, the logo side (left), menu order and alignment, dropdowns, the mobile menu, the header switch, the footer and the floats (WhatsApp, search, language pill), with CSS logical properties. A Hebrew page is fully RTL. No RTL leftovers in English — "it is not professional to keep it rtl when we write in english". Smoke tests in both PRs: an en page on a he site is ltr end to end, a he page on an en site is rtl end to end, including the logo side and menu order.
+- **Who builds what.** Feature 1 (pages-only import, PR F) is written with the Claude Code CLI; Feature 2 (per-language menus and whole-chrome direction, PR G) with Grok Build.
+
 ## Acceptance / smoke tests
 1. Pages-only import into a Hebrew site leaves theme, menus, config and store byte-identical.
 2. Prefix + link rewrite: imported `en/bridge` links to `en/geppetto`, not `/geppetto`.
