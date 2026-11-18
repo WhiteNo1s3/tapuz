@@ -20,7 +20,7 @@ const DEFAULT_CONFIG = {
       enabled: false,
       phone: "",
       message: "",
-      position: "start" // logical: start = right on RTL pages
+      position: "start" // inline-start: left when the page is ltr, right when it is rtl
     }
   },
   seo: {

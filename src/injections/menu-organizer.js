@@ -28,8 +28,11 @@ function ready() {
 }
 
 function ctxFor(ctx) {
-  if (ctx && typeof ctx === 'object' && ctx.fit) return ctx;
-  return mod().siteStateForMenus();
+  // a fixture already carries `fit` and is not a language edit — pass it
+  // through. A live ctx (no fit), or one that names a menu language, is
+  // rebuilt so the plan is about that language's menus.
+  if (ctx && typeof ctx === 'object' && ctx.fit && !ctx.menuLang) return ctx;
+  return mod().siteStateForMenus(ctx && ctx.menuLang);
 }
 
 function notReady() {
@@ -65,7 +68,7 @@ const descriptor = {
     const m = mod();
     const c = ctxFor(ctx);
     const parsed = m.parseMenuReply(String(reply || ''), c, { brief });
-    const r = m.applyMenuPlan(parsed.plan, { force: !!force, reason: 'inject:menu-organizer', ctx: c });
+    const r = m.applyMenuPlan(parsed.plan, { force: !!force, reason: 'inject:menu-organizer', ctx: c, lang: c.menuLang });
     return {
       landed: { type: 'menus', id: 'main', url: '/admin/menus' },
       backupId: r.backupId,

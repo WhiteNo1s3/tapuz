@@ -398,10 +398,218 @@ function setMenuLocations(map) {
   return getMenuLocations();
 }
 
-/** The menu a site-chrome slot should render — location-aware getMenu. */
-function getMenuForLocation(location) {
+/** The menu a site-chrome slot should render — location-aware getMenu.
+ *  A language (`en`) uses `assigned@en` when that row exists, otherwise the
+ *  site menu. No suffix, or the site's own language, is the site menu. */
+function getMenuForLocation(location, lang) {
   const map = getMenuLocations();
-  return getMenu(map[location] || location);
+  const assigned = map[location] || location;
+  const L = normalizeMenuLang(lang);
+  if (!L || L === siteLang()) return getMenu(assigned);
+  if (menuExists(assigned + '@' + L)) return getMenu(assigned + '@' + L);
+  if (assigned !== location && menuExists(location + '@' + L)) return getMenu(location + '@' + L);
+  return getMenu(assigned);
+}
+
+// ── per-language menus ───────────────────────────────────────────────
+// A language menu is another row in the same table: `main@en`, `footer@en`.
+// The unsuffixed name is the site language. No new column, so a site that
+// never saved a language menu is byte-for-byte the site it was, and a backup
+// of loadMenus() already carries the language rows.
+
+const MENU_LANG_RE = /^[a-z]{2}(?:-[a-z0-9]{2,8})?$/;
+
+function siteLang() {
+  try { return require('./site-language').siteLanguage(); } catch (e) { return 'he'; }
+}
+
+/** `en` / `en-us`, or '' when the value is not a language code. */
+function normalizeMenuLang(lang) {
+  const s = String(lang || '').trim().toLowerCase();
+  return MENU_LANG_RE.test(s) ? s : '';
+}
+
+/** `main@en` → { base:'main', lang:'en' }. A name with no real suffix stays whole. */
+function splitMenuName(name) {
+  const key = String(name || '').trim();
+  const at = key.lastIndexOf('@');
+  if (at <= 0) return { base: key, lang: '' };
+  const lang = normalizeMenuLang(key.slice(at + 1));
+  if (!lang) return { base: key, lang: '' };
+  return { base: key.slice(0, at), lang };
+}
+
+/** The row name for a base menu in a language. The site language has no suffix. */
+function storageName(base, lang) {
+  const sp = splitMenuName(base);
+  const name = sp.base || String(base || '').trim();
+  const L = normalizeMenuLang(lang);
+  if (!name) return '';
+  if (!L || L === siteLang()) return name;
+  return name + '@' + L;
+}
+
+/** A saved row, not the main/footer loadMenus() invents when the table is empty. */
+function menuExists(name) {
+  ensureSchema();
+  const key = String(name || '').trim();
+  if (!key) return false;
+  return !!db.prepare('SELECT 1 AS ok FROM menus WHERE name = ?').get(key);
+}
+
+function currentLangSwitch() {
+  try {
+    const theme = require('./theme');
+    return theme.langSwitchPlace(theme.loadOverrides());
+  } catch (e) { return 'header'; }
+}
+
+/** Site language first, then `en`, then every meta.lang a page actually uses. */
+function listMenuLanguages() {
+  const site = siteLang();
+  const labels = { he: 'עברית', en: 'אנגלית' };
+  const seen = new Set();
+  const out = [];
+  const add = (code) => {
+    const L = normalizeMenuLang(code);
+    if (!L || seen.has(L)) return;
+    seen.add(L);
+    const base = labels[L] || L.toUpperCase();
+    out.push({ code: L, label: base + (L === site ? ' (שפת האתר)' : '') });
+  };
+  add(site);
+  add('en');
+  try {
+    const { listPages } = require('./pages');
+    for (const p of listPages()) {
+      let meta = p.meta;
+      if (typeof meta === 'string') {
+        try { meta = JSON.parse(meta || '{}'); } catch (e) { meta = {}; }
+      }
+      if (meta && meta.lang) add(meta.lang);
+    }
+  } catch (e) { /* languages still include the site and en */ }
+  return out;
+}
+
+/**
+ * The editor's view of one language. The site language hides `@` rows.
+ * Another language shows base names: a saved `main@en` is that menu
+ * (`inherited` false); a missing one shows the site menu the visitor
+ * actually gets (`inherited` true) so a save can skip it and keep the fallback.
+ */
+function menusForLanguage(lang) {
+  const L = normalizeMenuLang(lang);
+  const site = siteLang();
+  const scoped = !!(L && L !== site);
+  const all = loadMenus();
+  const menus = {};
+  const inherited = {};
+  if (!scoped) {
+    for (const name of Object.keys(all)) {
+      if (!splitMenuName(name).lang) menus[name] = all[name];
+    }
+  } else {
+    const bases = new Set(['main', 'footer']);
+    for (const name of Object.keys(all)) {
+      const sp = splitMenuName(name);
+      if (!sp.lang) bases.add(name);
+      else if (sp.lang === L) bases.add(sp.base);
+    }
+    for (const base of bases) {
+      const stored = base + '@' + L;
+      if (menuExists(stored)) {
+        menus[base] = all[stored] || [];
+        inherited[base] = false;
+      } else {
+        menus[base] = all[base] || [];
+        inherited[base] = true;
+      }
+    }
+  }
+  return {
+    menus,
+    locations: getMenuLocations(),
+    languages: listMenuLanguages(),
+    lang: scoped ? L : site,
+    siteLang: site,
+    inherited,
+    langSwitch: currentLangSwitch()
+  };
+}
+
+/** Upsert one language's menus. A site-language save never writes `@` rows,
+ *  and a language save never moves the location map. */
+function saveMenusForLanguage(menus, lang) {
+  const L = normalizeMenuLang(lang);
+  const site = siteLang();
+  const scoped = !!(L && L !== site);
+  const data = {};
+  Object.keys(menus || {}).forEach((name) => {
+    const sp = splitMenuName(name);
+    const base = sp.base;
+    if (!base) return;
+    if (!scoped) {
+      if (sp.lang) return;
+      data[base] = menus[name];
+      return;
+    }
+    data[storageName(base, L)] = menus[name];
+  });
+  if (Object.keys(data).length) saveMenus(data);
+  return menusForLanguage(scoped ? L : '');
+}
+
+/** `.bent` export for one language: base names, `lang` set only when scoped.
+ *  An unsuffixed export drops `@` rows so the document stays a valid menu file. */
+function menusDocumentFor(lang) {
+  const view = menusForLanguage(lang);
+  const scoped = view.lang && view.lang !== view.siteLang;
+  const menus = {};
+  if (!scoped) {
+    Object.assign(menus, view.menus);
+  } else {
+    for (const name of Object.keys(view.menus)) {
+      if (!view.inherited[name]) menus[name] = view.menus[name];
+    }
+  }
+  return { menus, locations: view.locations, lang: scoped ? view.lang : '' };
+}
+
+/** Write a `.bent` menu document into one language. Locations and layout
+ *  knobs stay put — a language file is the items, not the site's chrome. */
+function importMenusBent(text, requestLang) {
+  const { parseMenusDoc } = require('./bentml/menu-dialect');
+  const parsed = parseMenusDoc(String(text || ''));
+  const names = parsed && parsed.menus ? Object.keys(parsed.menus) : [];
+  if (!names.length) {
+    const e = new Error('לא נמצא מסמך תפריטים');
+    e.code = 'NO_MENU_DOC';
+    throw e;
+  }
+  const req = normalizeMenuLang(requestLang);
+  const docLang = normalizeMenuLang(parsed.lang);
+  const site = siteLang();
+  // An explicit non-site language wins. Otherwise a lang= on the document
+  // does, so importing an English file while the editor shows the site
+  // language does not overwrite the site menu.
+  let target = '';
+  if (req && req !== site) target = req;
+  else if (docLang && docLang !== site) target = docLang;
+  const data = {};
+  for (const name of names) {
+    const entry = parsed.menus[name];
+    const items = Array.isArray(entry) ? entry : (entry && entry.items) || [];
+    const base = splitMenuName(name).base;
+    if (!base || !/^[a-z0-9_-]{1,40}$/.test(base)) continue;
+    data[base] = items;
+  }
+  if (!Object.keys(data).length) {
+    const e = new Error('לא נמצא מסמך תפריטים');
+    e.code = 'NO_MENU_DOC';
+    throw e;
+  }
+  return saveMenusForLanguage(data, target);
 }
 
 module.exports = {
@@ -425,5 +633,15 @@ module.exports = {
   backupMenus,
   listMenuBackups,
   restoreMenuBackup,
-  BACKUPS_DIR
+  BACKUPS_DIR,
+  // per-language menus
+  normalizeMenuLang,
+  splitMenuName,
+  storageName,
+  menuExists,
+  listMenuLanguages,
+  menusForLanguage,
+  saveMenusForLanguage,
+  menusDocumentFor,
+  importMenusBent
 };

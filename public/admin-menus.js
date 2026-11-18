@@ -6,7 +6,12 @@
   var state = {
     menus: window.__TAPUZ_MENUS__ || { main: [], footer: [] },
     locations: window.__TAPUZ_MENU_LOCATIONS__ || { main: 'main', footer: 'footer' },
-    active: 'main'
+    active: 'main',
+    lang: window.__TAPUZ_MENU_LANG__ || window.__TAPUZ_MENU_SITE_LANG__ || '',
+    siteLang: window.__TAPUZ_MENU_SITE_LANG__ || '',
+    languages: window.__TAPUZ_MENU_LANGUAGES__ || [],
+    inherited: window.__TAPUZ_MENU_INHERITED__ || {},
+    langSwitch: window.__TAPUZ_LANG_SWITCH__ || 'header'
   };
   var pagesCache = null;
 
@@ -23,6 +28,28 @@
     mailto: 'name@example.com',
     anchor: 'section-id'
   };
+
+  function isSiteLang() {
+    return !state.lang || state.lang === state.siteLang;
+  }
+  function langQuery() {
+    return isSiteLang() ? '' : ('?lang=' + encodeURIComponent(state.lang));
+  }
+  function storageName(name) {
+    if (isSiteLang() || String(name).indexOf('@') >= 0) return name;
+    return name + '@' + state.lang;
+  }
+  function markEdited() {
+    if (!state.inherited) state.inherited = {};
+    state.inherited[state.active] = false;
+    updateLangHint();
+  }
+  function updateLangHint() {
+    var hint = document.getElementById('menu-lang-hint');
+    if (!hint) return;
+    var show = !isSiteLang() && state.inherited && (state.inherited.main || state.inherited.footer);
+    hint.hidden = !show;
+  }
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -146,10 +173,14 @@
     var delBtn = document.getElementById('menu-delete');
     var renameBtn = document.getElementById('menu-rename');
     var isDefault = state.active === 'main' || state.active === 'footer';
+    var lockedDefault = isDefault && isSiteLang();
+    var nothingSaved = !isSiteLang() && state.inherited && state.inherited[state.active];
     if (delBtn) {
-      delBtn.disabled = isDefault;
-      delBtn.title = isDefault ? 'תפריטי ברירת המחדל קבועים' : '';
-      delBtn.style.opacity = isDefault ? '.5' : '';
+      delBtn.disabled = lockedDefault || !!nothingSaved;
+      delBtn.title = lockedDefault ? 'תפריטי ברירת המחדל קבועים'
+        : (nothingSaved ? 'אין תפריט שמור לשפה הזו'
+          : (!isSiteLang() && isDefault ? 'מוחק את התפריט של השפה — הגולשים יראו את תפריט שפת האתר' : ''));
+      delBtn.style.opacity = (lockedDefault || nothingSaved) ? '.5' : '';
     }
     if (renameBtn) {
       renameBtn.disabled = isDefault;
@@ -176,6 +207,7 @@
       var path = row.dataset.path;
       row.querySelectorAll('[data-f]').forEach(function (inp) {
         var handler = function () {
+          markEdited();
           var it = itemAt(path);
           if (!it) return;
           it[inp.dataset.f] = inp.value;
@@ -192,7 +224,7 @@
       });
       var wire = function (attr, fn) {
         var b = row.querySelector('[data-' + attr + ']');
-        if (b) b.onclick = function () { fn(); renderAll(); };
+        if (b) b.onclick = function () { markEdited(); fn(); renderAll(); };
       };
       wire('up', function () {
         var ctx = listFor(path);
@@ -234,10 +266,36 @@
     });
   }
 
+  function renderLangControls() {
+    var sel = document.getElementById('menu-lang');
+    if (sel && document.activeElement !== sel) {
+      sel.innerHTML = (state.languages || []).map(function (l) {
+        var code = l.code || l;
+        var label = l.label || code;
+        return '<option value="' + esc(code) + '"' + (code === state.lang ? ' selected' : '') + '>' + esc(label) + '</option>';
+      }).join('');
+    }
+    var sw = document.getElementById('menu-langswitch');
+    if (sw && document.activeElement !== sw) sw.value = state.langSwitch === 'float' ? 'float' : 'header';
+    var exp = document.getElementById('menu-export');
+    if (exp) exp.href = '/admin/api/menus/export.bent' + langQuery();
+    var prev = document.getElementById('menu-live-preview');
+    if (prev) prev.href = '/admin/menus/preview/live' + langQuery();
+    window.__TAPUZ_MENU_LANG__ = state.lang || '';
+    ['main', 'footer'].forEach(function (loc) {
+      var s = document.getElementById('loc-' + loc);
+      if (!s) return;
+      s.disabled = !isSiteLang();
+      s.title = isSiteLang() ? '' : 'המיקומים משותפים לאתר ונשמרים רק בשפת האתר';
+    });
+    updateLangHint();
+  }
+
   function renderAll() {
     renderMenuList();
     renderLocations();
     renderEditor();
+    renderLangControls();
   }
 
   // ── the organizer's layer (v2.28): the capacity hint, backups, a reload hook ──
@@ -246,7 +304,7 @@
   function loadFit() {
     var el = document.getElementById('menu-fit');
     if (!el) return;
-    fetch('/admin/api/menus/fit')
+    fetch('/admin/api/menus/fit' + langQuery())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d || !d.ok || !d.fit) return;
@@ -288,6 +346,7 @@
       if (!d.ok) return alert(d.error || 'שגיאה');
       state.menus = d.menus;
       if (d.locations) state.locations = d.locations;
+      state.inherited = d.inherited || {};
       pendingDeletes = [];
       if (!state.menus[state.active]) state.active = 'main';
       renderAll();
@@ -299,12 +358,17 @@
 
   // the organizer card calls this after an apply — refetch and redraw
   function reloadFromServer() {
-    return fetch('/admin/api/menus')
+    return fetch('/admin/api/menus' + langQuery())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d || !d.ok) return;
         state.menus = d.menus;
         if (d.locations) state.locations = d.locations;
+        state.inherited = d.inherited || {};
+        if (d.languages) state.languages = d.languages;
+        if (d.lang) state.lang = d.lang;
+        if (d.siteLang) state.siteLang = d.siteLang;
+        if (d.langSwitch) state.langSwitch = d.langSwitch;
         pendingDeletes = [];
         if (!state.menus[state.active]) state.active = 'main';
         renderAll();
@@ -324,6 +388,7 @@
     if (!name) return alert('שם לא תקין');
     if (state.menus[name]) return alert('כבר קיים תפריט בשם הזה');
     state.menus[name] = [];
+    state.inherited[name] = false;
     state.active = name;
     renderAll();
   };
@@ -339,12 +404,16 @@
     if (state.menus[name]) return alert('כבר קיים תפריט בשם הזה');
     state.menus[name] = state.menus[oldName];
     delete state.menus[oldName];
-    ['main', 'footer'].forEach(function (loc) {
-      if (state.locations[loc] === oldName) state.locations[loc] = name;
-    });
+    state.inherited[name] = false;
+    delete state.inherited[oldName];
+    if (isSiteLang()) {
+      ['main', 'footer'].forEach(function (loc) {
+        if (state.locations[loc] === oldName) state.locations[loc] = name;
+      });
+    }
     state.active = name;
     // the old row dies server-side on save
-    pendingDeletes.push(oldName);
+    pendingDeletes.push(storageName(oldName));
     renderAll();
   };
 
@@ -352,13 +421,24 @@
   var deleteBtn = document.getElementById('menu-delete');
   if (deleteBtn) deleteBtn.onclick = function () {
     var name = state.active;
-    if (name === 'main' || name === 'footer') return;
+    if (name === 'main' || name === 'footer') {
+      if (isSiteLang() || (state.inherited && state.inherited[name])) return;
+      if (!confirm('למחוק את תפריט השפה הזו? הגולשים יראו שוב את תפריט שפת האתר.')) return;
+      fetch('/admin/api/menus/' + encodeURIComponent(storageName(name)) + '/delete', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) return alert(d.error || 'שגיאה');
+          return reloadFromServer();
+        })
+        .catch(function () { alert('שגיאה'); });
+      return;
+    }
     if (!confirm('למחוק את התפריט "' + name + '"? הפריטים שבו יאבדו.')) return;
     delete state.menus[name];
     ['main', 'footer'].forEach(function (loc) {
       if (state.locations[loc] === name) state.locations[loc] = loc;
     });
-    pendingDeletes.push(name);
+    pendingDeletes.push(storageName(name));
     state.active = 'main';
     renderAll();
   };
@@ -366,6 +446,7 @@
   var addItemBtn = document.getElementById('menu-add-item');
   if (addItemBtn) addItemBtn.onclick = function () {
     if (!state.menus[state.active]) state.menus[state.active] = [];
+    markEdited();
     state.menus[state.active].push({ label: 'פריט חדש', type: 'page', target: '', url: '', children: [] });
     renderEditor();
     renderMenuList();
@@ -381,15 +462,22 @@
       });
     });
     chain.then(function () {
+      var payload = {};
+      Object.keys(state.menus).forEach(function (name) {
+        if (state.inherited && state.inherited[name]) return;
+        payload[name] = state.menus[name];
+      });
       return fetch('/admin/api/menus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ menus: state.menus, locations: state.locations })
+        body: JSON.stringify({ menus: payload, locations: state.locations, lang: state.lang })
       });
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (!d.ok) return alert(d.error || 'שגיאה');
       state.menus = d.menus;
       if (d.locations) state.locations = d.locations;
+      state.inherited = d.inherited || {};
+      if (d.langSwitch) state.langSwitch = d.langSwitch;
       pendingDeletes = [];
       if (!state.menus[state.active]) state.active = 'main';
       renderAll();
@@ -408,6 +496,51 @@
   if (saveBtn) saveBtn.onclick = function () { save(false); };
   var saveBuildBtn = document.getElementById('menu-save-build');
   if (saveBuildBtn) saveBuildBtn.onclick = function () { save(true); };
+
+  var langSel = document.getElementById('menu-lang');
+  if (langSel) langSel.onchange = function () {
+    state.lang = langSel.value;
+    window.__TAPUZ_MENU_LANG__ = state.lang;
+    reloadFromServer();
+  };
+  var langSwitchSel = document.getElementById('menu-langswitch');
+  if (langSwitchSel) langSwitchSel.onchange = function () {
+    var value = langSwitchSel.value === 'float' ? 'float' : 'header';
+    fetch('/admin/api/menus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ langSwitch: value })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) return alert(d.error || 'שגיאה');
+      state.langSwitch = d.langSwitch || value;
+    }).catch(function () { alert('שגיאה'); });
+  };
+  var importInput = document.getElementById('menu-import');
+  if (importInput) importInput.onchange = function () {
+    var file = importInput.files && importInput.files[0];
+    importInput.value = '';
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      fetch('/admin/api/menus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bent: String(reader.result || ''), lang: state.lang })
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.ok) return alert(d.error || 'שגיאה');
+        state.menus = d.menus;
+        if (d.locations) state.locations = d.locations;
+        state.inherited = d.inherited || {};
+        if (d.lang) state.lang = d.lang;
+        pendingDeletes = [];
+        if (!state.menus[state.active]) state.active = 'main';
+        renderAll();
+        loadFit();
+        alert('התפריט יובא ✓');
+      }).catch(function () { alert('שגיאה'); });
+    };
+    reader.readAsText(file);
+  };
 
   loadPages(renderAll);
   loadFit();

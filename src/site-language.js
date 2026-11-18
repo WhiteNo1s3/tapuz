@@ -15,11 +15,21 @@
  *
  * The rule: the SITE's language (config.language, `he` | `en`) sets the
  * default direction (he → rtl, en → ltr) and the words of the chrome. A PAGE
- * keeps its own direction when it says one (`<html dir="rtl">` on an English
- * site is an RTL page, as before), and its `lang` follows: the site's
- * language when the page reads the site's way, the other one when it does
- * not — a Hebrew page on an English site is `lang="he" dir="rtl"`.
+ * that names a language (`meta.lang`) reads THAT way, both directions, even
+ * when the stored `direction` or the site disagree: he/ar/fa/ur → rtl, en
+ * and every other language → ltr. Writing English inside an rtl frame is
+ * not the product. A page that names no language keeps its own direction
+ * when it says one, and the site's when it never said — and its `lang`
+ * follows (`languageFor`).
  */
+
+const RTL_LANGS = { he: 1, ar: 1, fa: 1, ur: 1 };
+
+/** `en` from `en-US`. Empty when the value is not a language tag. */
+function langCode(lang) {
+  const code = String(lang || '').trim().toLowerCase().split('-')[0];
+  return /^[a-z]{2,3}$/.test(code) ? code : '';
+}
 
 const STRINGS = {
   he: {
@@ -69,9 +79,20 @@ function siteLanguage() {
   return lang === 'en' ? 'en' : 'he';
 }
 
-/** The direction a language reads in. */
+/** The direction a language reads in. he/ar/fa/ur → rtl; en and every other
+ *  named language → ltr. An empty value is the site's language. */
 function directionFor(lang) {
-  return (lang || siteLanguage()) === 'en' ? 'ltr' : 'rtl';
+  const code = langCode(lang) || langCode(siteLanguage()) || 'he';
+  return RTL_LANGS[code] ? 'rtl' : 'ltr';
+}
+
+/** `en` or `he` — the chrome copy we actually have for a language.
+ *  An empty value is the site's language. RTL languages without their own
+ *  copy use Hebrew; every other language uses English. */
+function chromeLanguage(lang) {
+  const code = langCode(lang);
+  if (!code) return siteLanguage();
+  return directionFor(code) === 'ltr' ? 'en' : 'he';
 }
 
 /** `rtl` | `ltr` — the direction a new page of this site is born with. */
@@ -88,9 +109,11 @@ function languageFor(direction) {
   return dir === 'rtl' ? 'he' : 'en';
 }
 
-/** The chrome's words in a language (`he` for anything but `en`). */
+/** The chrome's words. No argument stays Hebrew (every old caller). A named
+ *  language uses `chromeLanguage` — English for ltr, Hebrew for rtl. */
 function strings(lang) {
-  return STRINGS[lang === 'en' ? 'en' : 'he'];
+  if (lang == null || String(lang).trim() === '') return STRINGS.he;
+  return STRINGS[chromeLanguage(lang)];
 }
 
-module.exports = { STRINGS, siteLanguage, siteDirection, directionFor, languageFor, strings };
+module.exports = { STRINGS, RTL_LANGS, siteLanguage, siteDirection, directionFor, languageFor, chromeLanguage, strings, langCode };

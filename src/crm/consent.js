@@ -28,7 +28,8 @@
 const CONSENT_KEY = 'tz_consent';
 const MODES = ['auto', 'always', 'off'];
 
-// v2.58 — the bar's own words follow the SITE's language; an owner's text wins either way
+// The bar's own words follow the page's language when one is passed, and the
+// site's language otherwise. An owner's text wins either way.
 const DEFAULTS_BY_LANG = {
   he: {
     text: 'האתר משתמש בכלי מדידה כדי להבין מה עוזר לכם. אפשר לאשר או לדחות — האתר עובד אותו דבר.',
@@ -54,10 +55,18 @@ function safeUrl(raw) {
   return ''; // javascript:, data:, protocol-relative, plain http → dropped
 }
 
-function getConsent(config) {
+/** Chrome copy for the bar. No language → the site's words (the proxy). */
+function chromeWords(lang) {
+  if (lang == null || String(lang).trim() === '') return DEFAULTS;
+  const code = require('../site-language').chromeLanguage(lang);
+  return DEFAULTS_BY_LANG[code === 'en' ? 'en' : 'he'];
+}
+
+function getConsent(config, lang) {
   const crm = (config && config.crm) || {};
   const c = crm.consent || {};
   const px = crm.pixels || {};
+  const words = chromeWords(lang);
   const str = (v, d, max) => {
     const s = String(v == null ? '' : v).trim();
     return (s || d).slice(0, max);
@@ -67,10 +76,10 @@ function getConsent(config) {
     // `crm.pixels.banner` was the v1.79 switch ("hide our bar, I have my own").
     // Honour it as the fallback so existing installs keep their behaviour.
     banner: c.banner !== undefined ? !!c.banner : px.banner !== false,
-    text: str(c.text, DEFAULTS.text, 400),
-    grantLabel: str(c.grantLabel, DEFAULTS.grantLabel, 40),
-    denyLabel: str(c.denyLabel, DEFAULTS.denyLabel, 40),
-    policyLabel: str(c.policyLabel, DEFAULTS.policyLabel, 60),
+    text: str(c.text, words.text, 400),
+    grantLabel: str(c.grantLabel, words.grantLabel, 40),
+    denyLabel: str(c.denyLabel, words.denyLabel, 40),
+    policyLabel: str(c.policyLabel, words.policyLabel, 60),
     policyUrl: safeUrl(c.policyUrl)
   };
 }
@@ -102,15 +111,16 @@ function consentActive(config) {
   return consentRequired(config);
 }
 
-function bannerMarkup(c) {
+function bannerMarkup(c, dir) {
   const esc = (s) => String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
   const policy = c.policyUrl
     ? ` <a href="${esc(c.policyUrl)}" style="color:#93c5fd">${esc(c.policyLabel)}</a>`
     : '';
+  const d = dir === 'ltr' ? 'ltr' : 'rtl';
   return (
-    `<div id="tz-consent" role="dialog" aria-modal="false" aria-label="${esc(c.text).slice(0, 120)}" dir="rtl" ` +
+    `<div id="tz-consent" role="dialog" aria-modal="false" aria-label="${esc(c.text).slice(0, 120)}" dir="${d}" ` +
     `style="position:fixed;inset-inline:0;bottom:0;z-index:2147483000;` +
     `display:none;background:#0f172a;color:#e2e8f0;padding:14px 18px;font:500 14px/1.5 system-ui,sans-serif;` +
     `box-shadow:0 -4px 24px rgba(0,0,0,.3)">` +
@@ -134,12 +144,24 @@ function bannerMarkup(c) {
  * loader registers itself against `window.tapuzConsent`.
  *
  * @param {object} config site config
+ * @param {object|string} [reading] `{ lang, direction }`, or `'ltr'`/`'rtl'`.
+ *   Omitted → the site's language and direction.
  * @returns {string} markup for the body-end extras
  */
-function renderConsent(config) {
+function renderConsent(config, reading) {
   if (!consentActive(config)) return '';
-  const c = getConsent(config);
-  const bar = c.banner ? bannerMarkup(c) : '';
+  let lang;
+  let direction;
+  if (reading && typeof reading === 'object') {
+    lang = reading.lang;
+    direction = reading.direction;
+  } else if (reading === 'ltr' || reading === 'rtl') {
+    direction = reading;
+  }
+  const sl = require('../site-language');
+  const dir = direction === 'ltr' || direction === 'rtl' ? direction : sl.directionFor(lang || undefined);
+  const c = getConsent(config, lang);
+  const bar = c.banner ? bannerMarkup(c, dir) : '';
 
   const script =
     `<script>(function(){` +

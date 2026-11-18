@@ -84,7 +84,9 @@ const DEFAULT_OVERRIDES = {
     // rounded glass pill that hovers over the page. Top placement only.
     headerLayout: 'bar',    // bar | centered | floating
     // v2.63 — what the ☰ opens: the list inside the header, or a panel over the page
-    menuDrawer: 'inline'    // inline | overlay
+    menuDrawer: 'inline',   // inline | overlay
+    // where the EN/HE switch sits. 'header' (default) hides the floating pill.
+    langSwitch: 'header'    // header | float
   },
   // Theme SKIN (v2.24) — free-form CSS against the theme's documented
   // skeleton (see theme-roleplay.js skeletonSelectors): what makes a theme a
@@ -405,6 +407,12 @@ function menuKnobs(overrides) {
     size: pick(c.menuSize, Object.keys(MENU_SIZE), d.chrome.menuSize),
     current: pick(c.menuCurrent, MENU_CURRENT, d.chrome.menuCurrent)
   };
+}
+
+/** 'float' keeps the old floating pill; anything else puts the switch in the header. */
+function langSwitchPlace(overrides) {
+  const c = (overrides && overrides.chrome) || {};
+  return c.langSwitch === 'float' ? 'float' : 'header';
 }
 
 /** The inverse of menuKnobs: a (partial) knob object → the override
@@ -1596,6 +1604,7 @@ module.exports = {
   MENU_CURRENT,
   MENU_FOLD,
   menuKnobs,
+  langSwitchPlace,
   knobsToOverrides,
   menuBodyClasses,
   sanitizeMenuKnobs,

@@ -65,7 +65,8 @@ const SECTIONS = {
     // v2.28b — the fold ("עוד"), the drawer breakpoint, the current-page mark
     ['menu-fold', 'menuFold'], ['menu-collapse', 'menuCollapse'], ['menu-current', 'menuCurrent'],
     // v2.63 — the header's shape and what the ☰ opens
-    ['header-layout', 'headerLayout'], ['drawer', 'menuDrawer']]
+    ['header-layout', 'headerLayout'], ['drawer', 'menuDrawer'],
+    ['lang-switch', 'langSwitch']]
 };
 
 function pairs(section) {

@@ -69,6 +69,27 @@
     return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
   }
 
+  function menuLangExtra() {
+    var lang = window.__TAPUZ_MENU_LANG__ || '';
+    var site = window.__TAPUZ_MENU_SITE_LANG__ || '';
+    if (!lang || lang === site) return '';
+    return lang;
+  }
+  function withMenuLang(body) {
+    var lang = menuLangExtra();
+    if (!lang) return body;
+    var out = {};
+    Object.keys(body || {}).forEach(function (k) { out[k] = body[k]; });
+    out.menuLang = lang;
+    return out;
+  }
+  function withPreviewLang(url) {
+    var lang = menuLangExtra();
+    var s = String(url || '');
+    if (!lang || s.indexOf('/admin/menus/preview/') !== 0 || /[?&]lang=/.test(s)) return s;
+    return s + (s.indexOf('?') >= 0 ? '&' : '?') + 'lang=' + encodeURIComponent(lang);
+  }
+
   function postJson(path, body, signal) {
     return fetch(path, {
       method: 'POST',
@@ -202,7 +223,7 @@
       // same-origin so the page's own fonts/css load; no scripts — the
       // candidate's effect JS must never run inside the admin
       frame.setAttribute('sandbox', 'allow-same-origin');
-      if (p.previewUrl) frame.src = String(p.previewUrl);
+      if (p.previewUrl) frame.src = withPreviewLang(p.previewUrl);
       else frame.srcdoc = String(p.previewHtml);
       box.appendChild(frame);
     }
@@ -382,6 +403,7 @@
     // ── the prompt ──
     function fetchPrompt() {
       var q = '?brief=' + encodeURIComponent(brief.value.trim()) + '&size=' + size();
+      if (menuLangExtra()) q += '&menuLang=' + encodeURIComponent(menuLangExtra());
       return fetch('/admin/api/inject/' + encodeURIComponent(id) + '/prompt' + q, { credentials: 'same-origin' })
         .then(function (r) {
           if (!r.ok) {
@@ -420,7 +442,7 @@
       hush();
       setStatus('בודק את התשובה…');
       busy(true);
-      return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/paste', { reply: text, brief: brief.value.trim() })
+      return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/paste', withMenuLang({ reply: text, brief: brief.value.trim() }))
         .then(function (r) {
           if (!r.json.ok) {
             state.lastPreviewed = null;
@@ -455,7 +477,7 @@
       var phase = d.stage === 'repair' ? 'סבב תיקון' : (d.stage === 'think' ? 'החבילה שוב, עם יותר מקום לתשובה (המודל חשב עד שנגמר לו התקציב),' : 'החבילה');
       setStatus('הדפדפן מריץ את ' + phase + ' על המודל שלכם…');
       return global.TapuzBridge.drive(d, function (payload) {
-        return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/run', payload,
+        return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/run', withMenuLang(payload),
           state.ctrl ? state.ctrl.signal : undefined).then(function (r) { return r.json; });
       }, d.timeoutMs, function (p) {
         // the model is visibly writing — say so, instead of a dead spinner
@@ -478,7 +500,7 @@
       startTimer();
       state.ctrl = typeof AbortController === 'function' ? new AbortController() : null;
       return postJson('/admin/api/inject/' + encodeURIComponent(id) + '/run',
-        { brief: brief.value.trim(), size: size() }, state.ctrl ? state.ctrl.signal : undefined)
+        withMenuLang({ brief: brief.value.trim(), size: size() }), state.ctrl ? state.ctrl.signal : undefined)
         .then(function (r) { return driveRelay(r.json).then(function (d) { return { status: r.status, json: d }; }); })
         .then(function (r) {
           var d = r.json;
@@ -597,7 +619,7 @@
       setStatus('שולח לעובד…');
       busy(true);
       startTimer();
-      postJson('/admin/api/inject/' + encodeURIComponent(id) + '/job', { brief: brief.value.trim(), size: size() })
+      postJson('/admin/api/inject/' + encodeURIComponent(id) + '/job', withMenuLang({ brief: brief.value.trim(), size: size() }))
         .then(function (r) {
           var d = r.json;
           if (!d.ok) {
@@ -643,7 +665,7 @@
       hush();
       setStatus('מחיל…');
       busy(true);
-      postJson('/admin/api/inject/' + encodeURIComponent(id) + '/apply', { reply: text, brief: brief.value.trim(), force: !!force })
+      postJson('/admin/api/inject/' + encodeURIComponent(id) + '/apply', withMenuLang({ reply: text, brief: brief.value.trim(), force: !!force }))
         .then(function (r) {
           var d = r.json;
           if (r.status === 409 && d.code === 'HARD_WARNINGS') {

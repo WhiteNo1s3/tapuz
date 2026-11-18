@@ -181,8 +181,10 @@ function fitFor(ctx, menus, locations, overrides) {
   return menusLib.estimateMenuFit(Array.isArray(main) ? main : (main.items || []), overrides, ctx.config);
 }
 
-/** The live site, DB-backed. */
-function siteStateForMenus() {
+/** The live site, DB-backed. `lang` projects that language's menus onto the
+ *  base names (`main@en` → `main`) and hides `@` rows from the site view, so
+ *  a plan never writes `main@en` into the site menu by echoing the name. */
+function siteStateForMenus(lang) {
   const theme = require('./theme');
   const menusLib = require('./menus');
   const { listPages } = require('./pages');
@@ -199,12 +201,32 @@ function siteStateForMenus() {
   });
   const config = loadConfig();
   const overrides = theme.loadOverrides();
-  const menus = menusLib.loadMenus();
+  const loaded = menusLib.loadMenus();
+  const L = menusLib.normalizeMenuLang(lang);
+  const site = require('./site-language').siteLanguage();
+  const scoped = !!(L && L !== site);
+  const menus = {};
+  if (!scoped) {
+    for (const name of Object.keys(loaded)) {
+      if (!menusLib.splitMenuName(name).lang) menus[name] = loaded[name];
+    }
+  } else {
+    const bases = new Set(['main', 'footer']);
+    for (const name of Object.keys(loaded)) {
+      const sp = menusLib.splitMenuName(name);
+      if (!sp.lang) bases.add(name);
+      else if (sp.lang === L) bases.add(sp.base);
+    }
+    for (const base of bases) {
+      const stored = base + '@' + L;
+      menus[base] = menusLib.menuExists(stored) ? (loaded[stored] || []) : (loaded[base] || []);
+    }
+  }
   const locations = menusLib.getMenuLocations();
   let orphans = [];
   try { orphans = require('./sitemap').buildSitemap().orphans; } catch (e) { orphans = []; }
   const homePath = resolveHome(pages, config);
-  const ctx = { pages, config, overrides, menus, locations, orphans, homePath };
+  const ctx = { pages, config, overrides, menus, locations, orphans, homePath, menuLang: scoped ? L : '' };
   ctx.fit = fitFor(ctx, menus, locations, overrides);
   return ctx;
 }
@@ -422,7 +444,7 @@ function buildMenuPrompt(opts = {}) {
   const mainItems = (ctx.menus || {})[(ctx.locations || {}).main || 'main'] || [];
   const r = (n) => Math.round(n);
 
-  const current = serializeMenus({ knobs, menus: ctx.menus, locations: ctx.locations });
+  const current = serializeMenus({ knobs, menus: ctx.menus, locations: ctx.locations, lang: ctx.menuLang || '' });
   const degraded = [];
   if (briefFull.length > BRIEF_MAX) degraded.push(`brief:${BRIEF_MAX}`);
   const trim = { rowsCap: ROWS[size] || ROWS.lite, dropDrafts: false, dropArticles: false, labelsOnly: false };
@@ -820,14 +842,16 @@ function buildMenuPreview(plan, ctx = siteStateForMenus(), resolved) {
     menus[name] = { location, tree };
     diff[name] = diffMenus((ctx.menus || {})[name] || [], items);
   }
-  const changed = KNOB_KEYS.filter((key) => res.knobsBefore[key] !== res.knobsAfter[key]).map((key) => ({ key, from: res.knobsBefore[key], to: res.knobsAfter[key] }));
+  const scoped = !!(ctx && ctx.menuLang);
+  const changed = scoped ? [] : KNOB_KEYS.filter((key) => res.knobsBefore[key] !== res.knobsAfter[key]).map((key) => ({ key, from: res.knobsBefore[key], to: res.knobsAfter[key] }));
   // the renderer's options.menus is keyed by LOCATION (main/footer), not by
   // menu name: a `<bent-menu name="primary" location="main">` must show in
   // the frame's main slot — resolved after the plan's location changes
   const loc = res.locations || {};
   const id = registerMenuPreview({
     menus: { main: res.menus[loc.main || 'main'] || [], footer: res.menus[loc.footer || 'footer'] || [] },
-    overrides: res.overrides
+    // a language preview keeps the live theme — its knobs are not applied
+    overrides: scoped ? null : res.overrides
   });
   return {
     note: (plan && plan.note) || '',
@@ -836,7 +860,7 @@ function buildMenuPreview(plan, ctx = siteStateForMenus(), resolved) {
     knobs: { changed },
     fit: { before: pickFit(res.fitBefore), after: pickFit(res.fitAfter) },
     fitLine: fitLineOf(res, ctx),
-    previewUrl: '/admin/menus/preview/' + id
+    previewUrl: '/admin/menus/preview/' + id + (scoped ? ('?lang=' + encodeURIComponent(ctx.menuLang)) : '')
   };
 }
 
@@ -882,14 +906,21 @@ function applyMenuPlan(plan, opts = {}) {
   const current = menusLib.loadMenus();
   const backup = menusLib.backupMenus(reason);
   const changed = { menus: [], locations: [], knobs: [] };
+  const lang = menusLib.normalizeMenuLang(opts.lang || (opts.ctx && opts.ctx.menuLang) || '');
+  const site = require('./site-language').siteLanguage();
+  const scoped = !!(lang && lang !== site);
 
   const toSave = {};
   for (const name of Object.keys(plan.menus || {})) {
-    toSave[name] = menusLib.withStableIds(plan.menus[name].items || [], current[name] || []);
-    changed.menus.push(name);
+    const storage = scoped ? menusLib.storageName(name, lang) : name;
+    const base = menusLib.splitMenuName(name).base || name;
+    const prior = (current[storage] && current[storage].length) ? current[storage] : (current[base] || []);
+    toSave[storage] = menusLib.withStableIds(plan.menus[name].items || [], prior);
+    changed.menus.push(storage);
   }
   if (changed.menus.length) menusLib.saveMenus(toSave);
 
+  if (!scoped) {
   const locMap = {};
   for (const name of Object.keys(plan.menus || {})) {
     const loc = plan.menus[name].location;
@@ -902,6 +933,7 @@ function applyMenuPlan(plan, opts = {}) {
     const frag = theme.knobsToOverrides(knobs).overrides;
     theme.saveOverrides(theme.mergeDeep(theme.loadOverrides(), frag));
     changed.knobs = Object.keys(knobs);
+  }
   }
 
   const rebuildError = require('./rebuild').rebuildSite(reason);

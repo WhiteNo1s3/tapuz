@@ -96,7 +96,7 @@ function publicView(job) {
  * the exact prompt the run route would have sent, so a job and a run are the
  * same request with a different courier.
  */
-function createJob({ packId, brief = '', size = 'lite', variant = 'A', locale = 'he', prompt, promptChars = 0, maxTokens = 2048, model = '' }) {
+function createJob({ packId, brief = '', size = 'lite', variant = 'A', locale = 'he', prompt, promptChars = 0, maxTokens = 2048, model = '', menuLang = '' }) {
   if (!packId) throw new Error('createJob needs a packId');
   if (!prompt) throw new Error('createJob needs the composed prompt');
   // The worker on the other end is always the owner's LOCAL model, and a
@@ -132,6 +132,7 @@ function createJob({ packId, brief = '', size = 'lite', variant = 'A', locale = 
     result: null,
     error: null
   };
+  if (menuLang) job.menuLang = String(menuLang).trim();
   data.jobs.push(job);
   save(data);
   return job;

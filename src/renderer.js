@@ -3,7 +3,7 @@ const path = require('path');
 
 const { THEMES_DIR } = require('./paths');
 const { loadConfig } = require('./config');
-const { getMenuForLocation, normalizeItems } = require('./menus');
+const { getMenuForLocation, normalizeItems, normalizeMenuLang } = require('./menus');
 const { loadOverrides, overridesToCss, menuKnobs, menuBodyClasses } = require('./theme');
 const { renderSocialFromData } = require('./pzn/social-html');
 const { heroChildren } = require('./pzn/hero-children');
@@ -95,7 +95,9 @@ const ANIMATE_VALUES = new Set(['fade', 'rise', 'zoom']);
 // does before it tests the scheme (`\x01javascript:` must not slip through).
 const { safeHref } = require('./pzn/language/escape');
 // v2.58 — the site's language decides the default direction and the words of
-// the chrome; a page keeps its own direction when it says one
+// the chrome. A page that names a language reads THAT way, both directions
+// (site-language.js): English is ltr even on a Hebrew site, Hebrew is rtl
+// even on an English site.
 const siteLanguage = require('./site-language');
 
 /**
@@ -956,7 +958,7 @@ function renderMainMenu(items, currentUrl, knobs, lang) {
   const rest = renderMenuItems(list.slice(fold), currentUrl, 1);
   const cls = rest.indexOf(' aria-current="page"') >= 0 ? 'nav-more has-current' : 'nav-more';
   return renderMenuItems(list.slice(0, fold), currentUrl) + '\n' +
-    `<li class="${cls}"><details><summary class="nav-more-sum">${lang === 'en' ? 'More' : 'עוד'}</summary><ul class="sub-menu">${rest}</ul></details></li>`;
+    `<li class="${cls}"><details><summary class="nav-more-sum">${siteLanguage.strings(lang).more}</summary><ul class="sub-menu">${rest}</ul></details></li>`;
 }
 
 /** The footer strip is flat; a nested footer menu contributes its children
@@ -977,7 +979,7 @@ function flattenMenu(items) {
  * Styling lives in the theme CSS (.whatsapp-float) so it survives static
  * export, which strips inline <style> blocks.
  */
-function renderWhatsappFloat(config) {
+function renderWhatsappFloat(config, direction) {
   const wa = config && config.integrations && config.integrations.whatsapp;
   if (!wa || !wa.enabled) return '';
   const phone = String(wa.phone || '').replace(/\D+/g, '');
@@ -985,10 +987,11 @@ function renderWhatsappFloat(config) {
   const message = String(wa.message || '').trim();
   const href = `https://wa.me/${phone}` + (message ? `?text=${encodeURIComponent(message)}` : '');
   const posClass = wa.position === 'end' ? 'pos-end' : 'pos-start';
+  const dir = direction === 'ltr' || direction === 'rtl' ? direction : siteLanguage.siteDirection();
   const icon = '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" focusable="false">' +
     '<path fill="currentColor" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>' +
     '</svg>';
-  return `<a class="whatsapp-float ${posClass}" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="WhatsApp">${icon}</a>`;
+  return `<a class="whatsapp-float ${posClass}" dir="${dir}" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="WhatsApp">${icon}</a>`;
 }
 
 /**
@@ -1005,10 +1008,11 @@ function renderSearchWidget(config, lang) {
   const s = config && config.integrations && config.integrations.search;
   if (!s || !s.enabled) return '';
   const T = siteLanguage.strings(lang);
-  return `<div class="tapuz-search-float" id="tapuz-search-btn" role="button" tabindex="0" aria-label="${escapeHtml(T.search)}" title="${escapeHtml(T.searchTitle)}">` +
+  const dir = siteLanguage.directionFor(lang);
+  return `<div class="tapuz-search-float" id="tapuz-search-btn" dir="${dir}" role="button" tabindex="0" aria-label="${escapeHtml(T.search)}" title="${escapeHtml(T.searchTitle)}">` +
     `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 5L20.49 19l-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>` +
     `</div>
-<div class="tapuz-search-panel" id="tapuz-search-panel">
+<div class="tapuz-search-panel" id="tapuz-search-panel" dir="${dir}">
   <div class="tapuz-search-box">
     <input class="tapuz-search-input" id="tapuz-search-input" type="text" placeholder="${escapeHtml(T.searchPlaceholder)}" autocomplete="off">
     <div class="tapuz-search-results" id="tapuz-search-results"></div>
@@ -1061,12 +1065,13 @@ function renderSearchWidget(config, lang) {
  * siblings (linking two pages together IS the opt-in — no separate site
  * setting to forget). Zero-JS: plain links to each sibling's real URL.
  */
-function renderLangSwitcher(entries = []) {
+function renderLangSwitcher(entries = [], direction) {
   if (!entries || entries.length < 2) return '';
   const links = entries
     .map((t) => `<a href="/${escapeHtml(t.full_path)}"${t.isCurrent ? ' class="active" aria-current="page"' : ''}>${escapeHtml(String(t.lang || '').toUpperCase())}</a>`)
     .join('');
-  return `<div class="tapuz-lang-switch">${links}</div>`;
+  const dir = direction === 'ltr' || direction === 'rtl' ? direction : siteLanguage.siteDirection();
+  return `<div class="tapuz-lang-switch" dir="${dir}">${links}</div>`;
 }
 
 /**
@@ -1281,11 +1286,25 @@ function renderPage(page, options = {}) {
       `<a href="${to}">${escapeHtml(siteLanguage.strings(rl).redirecting)}</a></p></body></html>`;
   }
 
-  // v2.58 — a page reads its own way; a page that never said which way
-  // reads the SITE's way, and its language follows (site-language.js)
-  const direction = page.direction === 'ltr' || page.direction === 'rtl' ? page.direction : siteLanguage.siteDirection();
-  const pageLang = page.meta && (page.meta.lang === 'en' || page.meta.lang === 'he') ? page.meta.lang : '';
-  const lang = pageLang || siteLanguage.languageFor(direction);
+  // The page's language owns the direction, both ways, even when the stored
+  // direction or the site disagree. he/ar/fa/ur read rtl; en and every other
+  // named language read ltr. A page that names no language keeps its stored
+  // direction (or the site's), and the menu stays the site menu — direction
+  // never picks a language menu. previewLang (the menus organizer, one
+  // language at a time) previews that language's direction and menu.
+  const previewLang = normalizeMenuLang(options.previewLang);
+  const metaLang = normalizeMenuLang(page.meta && page.meta.lang);
+  const namedLang = previewLang || metaLang;
+  let direction;
+  let lang;
+  if (namedLang) {
+    direction = siteLanguage.directionFor(namedLang);
+    lang = namedLang;
+  } else {
+    direction = page.direction === 'ltr' || page.direction === 'rtl' ? page.direction : siteLanguage.siteDirection();
+    lang = siteLanguage.languageFor(direction);
+  }
+  const menuLang = namedLang;
   const T = siteLanguage.strings(lang);
   const theme = loadTheme(page.theme || 'default');
   const useDraft = !!options.useDraft;
@@ -1321,7 +1340,7 @@ function renderPage(page, options = {}) {
   // one) replaces that location, anything else keeps the site's own menu
   const menuFor = (loc) => (options.menus && Array.isArray(options.menus[loc]))
     ? normalizeItems(options.menus[loc])
-    : getMenuForLocation(loc);
+    : getMenuForLocation(loc, menuLang);
   const mainMenu = menuFor('main');
   const footerMenu = menuFor('footer');
 
@@ -1371,6 +1390,7 @@ function renderPage(page, options = {}) {
   }
 
   const hasExtrasSlot = layout.includes('{{site_extras}}');
+  const hasHeaderLangSlot = layout.includes('{{header_lang_html}}');
 
   let pageTitle = page.meta?.seoTitle || page.title || '';
   // Site-level SEO defaults (config.seo): title pattern "{page} · {site}" + og:image fallback
@@ -1419,8 +1439,15 @@ function renderPage(page, options = {}) {
       ? [...translationSiblings, { lang: selfLang, full_path: page.full_path }]
       : translationSiblings;
     hreflangTags = seoLib.buildHreflangTags(seoBase, allLangs);
-    langSwitcherHtml = renderLangSwitcher(allLangs.map((t) => ({ ...t, isCurrent: t.full_path === page.full_path })));
+    langSwitcherHtml = renderLangSwitcher(allLangs.map((t) => ({ ...t, isCurrent: t.full_path === page.full_path })), direction);
   }
+  // The header switch is the default. 'float' is the old pill, and only one
+  // of them is emitted: the header switch hides the pill.
+  const langPlace = require('./theme').langSwitchPlace(overrides);
+  const headerLangHtml = (langPlace !== 'float' && langSwitcherHtml)
+    ? `<div class="header-lang">${langSwitcherHtml}</div>`
+    : '';
+  const extrasLang = langPlace === 'float' ? langSwitcherHtml : '';
   // Site-wide extras (WhatsApp float, search, language switcher, first-party
   // analytics beacon) — injected at body-end via {{site_extras}} so live serve
   // and static export match.
@@ -1439,8 +1466,8 @@ function renderPage(page, options = {}) {
   const storeRender = storeSettings && storeSettings.open ? require('./store/render') : null;
   const headerCart = storeRender ? storeRender.renderHeaderCart(storeSettings) : '';
   const siteExtras = (storeRender ? storeRender.renderStoreTag(storeSettings) : '') +
-    renderWhatsappFloat(config) + renderSearchWidget(config, lang) + langSwitcherHtml +
-    renderAnalyticsBeacon(config) + require('./crm/consent').renderConsent(config) +
+    renderWhatsappFloat(config, direction) + renderSearchWidget(config, lang) + extrasLang +
+    renderAnalyticsBeacon(config) + require('./crm/consent').renderConsent(config, { lang, direction }) +
     require('./crm/pixels').renderPixels(config) +
     require('./crm/cs-widget').renderTag(config) +
     // theme canvas shim (v2.24) — only when /admin/theme previews a candidate:
@@ -1491,6 +1518,7 @@ function renderPage(page, options = {}) {
     '{{meta.robots}}': escapeHtml(pageRobots),
     '{{logo_html}}': logoHtml,
     '{{menu_html}}': menuHtml,
+    '{{header_lang_html}}': headerLangHtml,
     '{{footer_menu_html}}': footerMenuHtml,
     '{{site_extras}}': siteExtras,
     // S3 site chrome slots
@@ -1518,6 +1546,11 @@ function renderPage(page, options = {}) {
   // Fallback for theme layouts without a {{site_extras}} slot
   if (siteExtras && !hasExtrasSlot) {
     layout = layout.replace('</body>', `${siteExtras}\n</body>`);
+  }
+  // A layout that never grew the header slot still gets the switch, at the
+  // top of the header, and only there (the pill is already out of site_extras).
+  if (headerLangHtml && !hasHeaderLangSlot) {
+    layout = layout.replace('</header>', `${headerLangHtml}\n</header>`);
   }
 
   return layout;

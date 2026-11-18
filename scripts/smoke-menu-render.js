@@ -71,7 +71,7 @@ check('the layout carries the zero-JS drawer toggle: a checkbox and its label, b
   /<input type="checkbox" id="nav-toggle" class="nav-toggle">\s*<label for="nav-toggle" class="nav-burger" aria-label="תפריט">/.test(html) && html.indexOf('class="nav-burger"') < html.indexOf('<ul>'));
 check('the twelve items are all there, in order', (html.match(/<li[^>]*><a href="\/page-\d+\.html"/g) || []).length === 12 && html.indexOf('פריט 1<') < html.indexOf('פריט 12<'));
 check('a nested footer menu keeps its children (flattened after the parent)',
-  /<nav class="footer-nav" aria-label="[^"]*">\s*<a href="\/terms\.html">תקנון<\/a> &nbsp;\|&nbsp; <a href="\/privacy\.html">פרטיות<\/a>/.test(html));
+  /<nav class="footer-nav" aria-label="[^"]*"(?: dir="(?:ltr|rtl)")?>\s*<a href="\/terms\.html">תקנון<\/a> &nbsp;\|&nbsp; <a href="\/privacy\.html">פרטיות<\/a>/.test(html));
 // the theme has css for the bar, a dropdown and a flyout — nothing deeper. The
 // store itself keeps one nesting level (the organizer lifts grandchildren), so
 // the renderer's cap is pinned on the function, with a raw four-level tree
@@ -103,13 +103,13 @@ theme.saveOverrides({ chrome: { menuFold: 12 } });
 check('menuFold: 12 on twelve items is no fold (nothing is past it)', !/nav-more/.test(navOf(renderPage(page('page-1'), {}))));
 theme.saveOverrides({ chrome: { menuFold: 5, menuOverflow: 'scroll' } });
 const strip = renderPage(page('page-1'), {});
-check('a scroll strip never folds (a strip clips dropdowns and scrolls to every item anyway)', !/nav-more/.test(navOf(strip)) && /<body class="menu-scroll">/.test(strip) && (navOf(strip).match(/<a href="\/page-\d+\.html"/g) || []).length === 12);
+check('a scroll strip never folds (a strip clips dropdowns and scrolls to every item anyway)', !/nav-more/.test(navOf(strip)) && /<body dir="rtl" class="menu-scroll">/.test(strip) && (navOf(strip).match(/<a href="\/page-\d+\.html"/g) || []).length === 12);
 // the side rail: every item is a rail row and the rail itself scrolls, so the renderer skips the fold there — the
 // organizer's FOLD_WITH_SIDE warning promises the owner the fold "will be ignored", and the renderer must agree
 theme.saveOverrides({ chrome: { menuFold: 4 }, layout: { menuPlacement: 'side' } });
 const railFold = renderPage(page('page-1'), {});
 check('a side rail never folds either (menuFold 4 on twelve items + menuPlacement side → no li.nav-more, all twelve items flat)',
-  /<body class="menu-side">/.test(railFold) && !/nav-more/.test(navOf(railFold)) && (navOf(railFold).match(/<li[^>]*><a href="\/page-\d+\.html"/g) || []).length === 12);
+  /<body dir="rtl" class="menu-side">/.test(railFold) && !/nav-more/.test(navOf(railFold)) && (navOf(railFold).match(/<li[^>]*><a href="\/page-\d+\.html"/g) || []).length === 12);
 theme.saveOverrides({ chrome: { menuFold: 4 }, layout: { menuPlacement: 'top' } });
 const topFold = navOf(renderPage(page('page-1'), {}));
 check('the same fold on a top bar folds: four items, then li.nav-more',
@@ -129,17 +129,17 @@ theme.saveOverrides({ layout: { menuPlacement: 'top' } });
 // ── every knob reaches the body as a class (theme.menuBodyClasses) ────
 const bodyTag = (overrides, pg) => (renderPage(pg || page('page-1'), { overrides }).match(/<body[^>]*>/) || [''])[0];
 check('an untouched top site stamps NO class attribute at all (defaults change nothing)',
-  bodyTag(theme.DEFAULT_OVERRIDES) === '<body>' && bodyTag({}) === '<body>' && bodyTag({ chrome: { menuCollapse: 'md', menuCurrent: 'underline', menuFold: 0, menuOverflow: 'wrap' }, layout: { menuPlacement: 'top' } }) === '<body>');
-check('a side site stamps exactly class="menu-side"', bodyTag({ layout: { menuPlacement: 'side' } }) === '<body class="menu-side">');
+  bodyTag(theme.DEFAULT_OVERRIDES) === '<body dir="rtl">' && bodyTag({}) === '<body dir="rtl">' && bodyTag({ chrome: { menuCollapse: 'md', menuCurrent: 'underline', menuFold: 0, menuOverflow: 'wrap' }, layout: { menuPlacement: 'top' } }) === '<body dir="rtl">');
+check('a side site stamps exactly class="menu-side"', bodyTag({ layout: { menuPlacement: 'side' } }) === '<body dir="rtl" class="menu-side">');
 check('chrome.menuCollapse sm / lg / never → nav-collapse-sm / -lg / -never',
-  bodyTag({ chrome: { menuCollapse: 'sm' } }) === '<body class="nav-collapse-sm">' && bodyTag({ chrome: { menuCollapse: 'lg' } }) === '<body class="nav-collapse-lg">' && bodyTag({ chrome: { menuCollapse: 'never' } }) === '<body class="nav-collapse-never">');
+  bodyTag({ chrome: { menuCollapse: 'sm' } }) === '<body dir="rtl" class="nav-collapse-sm">' && bodyTag({ chrome: { menuCollapse: 'lg' } }) === '<body dir="rtl" class="nav-collapse-lg">' && bodyTag({ chrome: { menuCollapse: 'never' } }) === '<body dir="rtl" class="nav-collapse-never">');
 check('chrome.menuCurrent pill / bold / none → nav-current-pill / -bold / -none',
-  bodyTag({ chrome: { menuCurrent: 'pill' } }) === '<body class="nav-current-pill">' && bodyTag({ chrome: { menuCurrent: 'bold' } }) === '<body class="nav-current-bold">' && bodyTag({ chrome: { menuCurrent: 'none' } }) === '<body class="nav-current-none">');
-check('chrome.menuOverflow scroll / drawer → menu-scroll / menu-drawer', bodyTag({ chrome: { menuOverflow: 'scroll' } }) === '<body class="menu-scroll">' && bodyTag({ chrome: { menuOverflow: 'drawer' } }) === '<body class="menu-drawer">');
+  bodyTag({ chrome: { menuCurrent: 'pill' } }) === '<body dir="rtl" class="nav-current-pill">' && bodyTag({ chrome: { menuCurrent: 'bold' } }) === '<body dir="rtl" class="nav-current-bold">' && bodyTag({ chrome: { menuCurrent: 'none' } }) === '<body dir="rtl" class="nav-current-none">');
+check('chrome.menuOverflow scroll / drawer → menu-scroll / menu-drawer', bodyTag({ chrome: { menuOverflow: 'scroll' } }) === '<body dir="rtl" class="menu-scroll">' && bodyTag({ chrome: { menuOverflow: 'drawer' } }) === '<body dir="rtl" class="menu-drawer">');
 check('the classes come in one fixed order — side, flow, collapse, current — and the page background follows them',
-  bodyTag({ layout: { menuPlacement: 'side' }, chrome: { menuOverflow: 'drawer', menuCollapse: 'lg', menuCurrent: 'bold' } }) === '<body class="menu-side menu-drawer nav-collapse-lg nav-current-bold">' &&
-  bodyTag({ chrome: { menuCurrent: 'pill' } }, page('page-1', { meta: { background: { color: '#fff8f0' } } })) === '<body class="nav-current-pill tapuz-page-bg">');
-check('an unknown knob value falls back to the default (no class, no crash)', bodyTag({ chrome: { menuCollapse: 'huge', menuCurrent: 'neon', menuOverflow: 'wat' } }) === '<body>');
+  bodyTag({ layout: { menuPlacement: 'side' }, chrome: { menuOverflow: 'drawer', menuCollapse: 'lg', menuCurrent: 'bold' } }) === '<body dir="rtl" class="menu-side menu-drawer nav-collapse-lg nav-current-bold">' &&
+  bodyTag({ chrome: { menuCurrent: 'pill' } }, page('page-1', { meta: { background: { color: '#fff8f0' } } })) === '<body dir="rtl" class="nav-current-pill tapuz-page-bg">');
+check('an unknown knob value falls back to the default (no class, no crash)', bodyTag({ chrome: { menuCollapse: 'huge', menuCurrent: 'neon', menuOverflow: 'wat' } }) === '<body dir="rtl">');
 
 // ── options.menus: a candidate menu set, the site's own menus untouched ──
 const candidate = renderPage(page('alt'), { menus: { main: [{ label: 'חלופה', type: 'page', target: 'alt' }], footer: [{ label: 'פוטר', type: 'custom', url: '/f.html' }] } });

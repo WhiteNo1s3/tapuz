@@ -204,7 +204,7 @@ check('a javascript: policy link is dropped, https and same-site pass',
 // ── the page itself ──────────────────────────────────────────────────
 check('renderPage puts consent BEFORE the pixel loader (registration order)', (() => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer.js'), 'utf8');
-  const iConsent = src.indexOf("require('./crm/consent').renderConsent(config)");
+  const iConsent = src.indexOf("require('./crm/consent').renderConsent(config,");
   const iPixels = src.indexOf("require('./crm/pixels').renderPixels(config)");
   return iConsent > 0 && iPixels > 0 && iConsent < iPixels;
 })());

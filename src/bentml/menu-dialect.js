@@ -232,6 +232,7 @@ function parseRegion(src, notes) {
   let lastEnd = 0;
   let version = 1;
   let note = '';
+  let lang = '';
 
   const closeMenu = () => {
     if (!current) return;
@@ -260,6 +261,7 @@ function parseRegion(src, notes) {
       else {
         if (tok.attrs.version !== undefined) version = parseInt(tok.attrs.version, 10) || 1;
         if (tok.attrs.note !== undefined) note = String(tok.attrs.note).trim();
+        if (tok.attrs.lang !== undefined) lang = String(tok.attrs.lang).trim().toLowerCase();
       }
       continue;
     }
@@ -304,7 +306,7 @@ function parseRegion(src, notes) {
     const items = finishItems(limitDepth(m.items, 0, notes), notes);
     out[m.name] = { location: m.location, items };
   }
-  return { version, note, menus: out };
+  return { version, note, lang, menus: out };
 }
 
 /**
@@ -436,11 +438,11 @@ function parseMenusDoc(text, opts = {}) {
       }
       const jk = {};
       for (const k of Object.keys(j.knobs || {})) if (KNOB_KEYS.includes(k)) jk[k] = String(j.knobs[k]);
-      best = { version: 1, note: String(j.note || '').trim(), menus, knobsFromJson: jk };
+      best = { version: 1, note: String(j.note || '').trim(), lang: String(j.lang || '').trim().toLowerCase(), menus, knobsFromJson: jk };
     }
   }
-  if (!best) return { version: 1, note: '', knobs, menus: {}, notes };
-  return { version: best.version || 1, note: best.note || '', knobs: Object.keys(knobs).length ? knobs : (best.knobsFromJson || {}), menus: best.menus, notes };
+  if (!best) return { version: 1, note: '', lang: '', knobs, menus: {}, notes };
+  return { version: best.version || 1, note: best.note || '', lang: best.lang || '', knobs: Object.keys(knobs).length ? knobs : (best.knobsFromJson || {}), menus: best.menus, notes };
 }
 
 // ── serializer ──────────────────────────────────────────────────────
@@ -480,10 +482,13 @@ function orderNames(names) {
 /**
  * Serialize menus (+ the layout knobs and the location map) as a `.bent`
  * document. Deterministic: same input, same bytes.
- * @param {{ knobs?: object, menus: {[name]: object[]|{items:object[], location?:string}}, locations?: object, note?: string }} doc
+ * @param {{ knobs?: object, menus: {[name]: object[]|{items:object[], location?:string}}, locations?: object, note?: string, lang?: string }} doc
+ *   `lang` is written only when set, after `note`, so a document without it
+ *   stays byte-identical.
  */
-function serializeMenus({ knobs, menus, locations, note } = {}) {
-  const lines = [`<bent-menus version="1"${note ? ` note="${escAttr(note)}"` : ''}>`];
+function serializeMenus({ knobs, menus, locations, note, lang } = {}) {
+  const langAttr = lang ? ` lang="${escAttr(lang)}"` : '';
+  const lines = [`<bent-menus version="1"${note ? ` note="${escAttr(note)}"` : ''}${langAttr}>`];
   const k = knobs || {};
   const attrs = KNOB_KEYS.filter((key) => k[key] !== undefined && k[key] !== null && String(k[key]) !== '').map((key) => `${key}="${escAttr(k[key])}"`);
   if (attrs.length) lines.push(`  <bent-menu-layout ${attrs.join(' ')} />`);

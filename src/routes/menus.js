@@ -22,9 +22,23 @@ function refuse(res, e) {
   return res.status(400).json({ ok: false, error: e.message, code: e.code || '' });
 }
 
+function menuView(lang) {
+  const view = menusLib.menusForLanguage(lang);
+  return {
+    ok: true,
+    menus: view.menus,
+    locations: view.locations,
+    languages: view.languages,
+    lang: view.lang,
+    siteLang: view.siteLang,
+    inherited: view.inherited,
+    langSwitch: view.langSwitch
+  };
+}
+
 router.get('/admin/api/menus', (req, res) => {
   try {
-    res.json({ ok: true, menus: loadMenus(), locations: menusLib.getMenuLocations() });
+    res.json(menuView(req.query.lang));
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -32,12 +46,33 @@ router.get('/admin/api/menus', (req, res) => {
 
 router.post('/admin/api/menus', (req, res) => {
   try {
-    const menus = saveMenus(req.body?.menus || req.body || {});
-    let locations = menusLib.getMenuLocations();
-    if (req.body?.locations) locations = menusLib.setMenuLocations(req.body.locations);
-    res.json({ ok: true, menus, locations });
+    const body = req.body || {};
+    if (typeof body.bent === 'string' && body.bent.trim()) {
+      menusLib.importMenusBent(body.bent, body.lang);
+      return res.json(menuView(body.lang || ''));
+    }
+    if (body.langSwitch === 'header' || body.langSwitch === 'float') {
+      const theme = require('../theme');
+      const o = theme.loadOverrides();
+      o.chrome = Object.assign({}, o.chrome || {}, { langSwitch: body.langSwitch });
+      theme.saveOverrides(o);
+    }
+    const hasMenus = body.menus && typeof body.menus === 'object' && !Array.isArray(body.menus);
+    const site = require('../site-language').siteLanguage();
+    const L = menusLib.normalizeMenuLang(body.lang);
+    const siteScope = !L || L === site;
+    if (hasMenus) {
+      menusLib.saveMenusForLanguage(body.menus, body.lang);
+      if (siteScope && body.locations) menusLib.setMenuLocations(body.locations);
+    } else if (body.locations == null && body.langSwitch == null && body.bent == null && body.lang == null) {
+      // a raw { main: [...] } body, the shape saveMenus took before the wrapper
+      saveMenus(body);
+    } else if (body.locations && siteScope) {
+      menusLib.setMenuLocations(body.locations);
+    }
+    res.json(menuView(body.lang || ''));
   } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    res.status(400).json({ ok: false, error: e.message, code: e.code || '' });
   }
 });
 
@@ -49,7 +84,7 @@ router.get('/admin/api/menus/fit', (req, res) => {
   try {
     const theme = require('../theme');
     const { loadConfig } = require('../config');
-    const fit = menusLib.estimateMenuFit(menusLib.getMenuForLocation('main'), theme.loadOverrides(), loadConfig());
+    const fit = menusLib.estimateMenuFit(menusLib.getMenuForLocation('main', req.query.lang), theme.loadOverrides(), loadConfig());
     res.json({ ok: true, fit });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -60,7 +95,8 @@ router.get('/admin/api/menus/export.bent', (req, res) => {
   try {
     const theme = require('../theme');
     const { serializeMenus } = require('../bentml/menu-dialect');
-    const text = serializeMenus({ knobs: theme.menuKnobs(theme.loadOverrides()), menus: loadMenus(), locations: menusLib.getMenuLocations() });
+    const doc = menusLib.menusDocumentFor(req.query.lang);
+    const text = serializeMenus({ knobs: theme.menuKnobs(theme.loadOverrides()), menus: doc.menus, locations: doc.locations, lang: doc.lang });
     res.type('text/plain; charset=utf-8').send(text);
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -79,9 +115,10 @@ router.post('/admin/api/menus/restore', requireAdmin, (req, res) => {
   try {
     const id = String((req.body || {}).backupId || '').trim();
     if (!id) return res.status(400).json({ ok: false, error: 'חסר backupId' });
-    const out = menusLib.restoreMenuBackup(id);
+    menusLib.restoreMenuBackup(id);
     const rebuildError = require('../rebuild').rebuildSite('menu restore');
-    res.json({ ok: true, menus: out.menus, locations: out.locations, rebuildError });
+    const view = menuView((req.body || {}).lang || '');
+    res.json(Object.assign(view, { rebuildError }));
   } catch (e) {
     res.status(e.code === 'NO_BACKUP' ? 404 : 400).json({ ok: false, error: e.message, code: e.code || '' });
   }
@@ -95,7 +132,7 @@ router.post('/admin/api/menus/restore', requireAdmin, (req, res) => {
 router.get('/admin/api/menus/state', (req, res) => {
   try {
     const org = require('../menu-organizer');
-    res.json({ ok: true, preview: org.currentMenuPreview(), backups: menusLib.listMenuBackups().slice(0, 5) });
+    res.json({ ok: true, preview: org.currentMenuPreview(org.siteStateForMenus(req.query.lang)), backups: menusLib.listMenuBackups().slice(0, 5) });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -109,7 +146,7 @@ router.post('/admin/api/menus/preview', (req, res) => {
     const reply = typeof b.reply === 'string' ? b.reply : '';
     if (!reply.trim()) return res.status(400).json({ ok: false, error: 'חסר מסמך תפריטים (reply)' });
     let r;
-    try { r = org.parseMenuReply(reply, org.siteStateForMenus(), { brief: String(b.brief || '') }); } catch (e) { return refuse(res, e); }
+    try { r = org.parseMenuReply(reply, org.siteStateForMenus(b.menuLang || b.lang || ''), { brief: String(b.brief || '') }); } catch (e) { return refuse(res, e); }
     res.json({ ok: true, preview: r.preview, warnings: r.warnings, warningTexts: r.warningTexts, notes: r.notes, hard: r.hard });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -128,13 +165,26 @@ router.get('/admin/menus/preview/:id', (req, res) => {
     const entry = org.getMenuPreview(req.params.id);
     const overrides = (entry && entry.overrides) || themeLib.loadOverrides();
     const config = loadConfig();
+    const lang = menusLib.normalizeMenuLang(req.query.lang);
     const published = listPages().filter((p) => p.status === 'published');
     const homePath = require('../seo').resolveHomePath(published.map((p) => getPageByFullPath(p.full_path) || p), config.homepage);
-    const page = (homePath && getPageByFullPath(homePath)) || (published[0] && getPageByFullPath(published[0].full_path)) || null;
+    let page = (homePath && getPageByFullPath(homePath)) || (published[0] && getPageByFullPath(published[0].full_path)) || null;
+    if (lang) {
+      const match = published.map((p) => getPageByFullPath(p.full_path)).find((p) => p && p.meta && menusLib.normalizeMenuLang(p.meta.lang) === lang);
+      if (match) page = match;
+    }
     if (!page) {
       return res.status(200).type('html').send('<!DOCTYPE html><html lang="he" dir="rtl"><body style="font-family:system-ui;padding:2rem;color:#475569">אין עדיין דף מפורסם להציג — פרסמו דף אחד והתצוגה תתמלא.</body></html>');
     }
-    const html = require('../renderer').renderPage(page, { overrides, menus: entry ? entry.menus : undefined, siteTitle: config.title, isHome: true });
+    const html = require('../renderer').renderPage(page, {
+      overrides,
+      menus: entry ? entry.menus : undefined,
+      siteTitle: config.title,
+      // no lang: the frame is the home, as before. A language preview marks
+      // the current item only when that language's page IS the home.
+      isHome: !lang || page.full_path === homePath,
+      previewLang: lang || undefined
+    });
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Content-Security-Policy', "frame-ancestors 'self'");
     res.type('html').send(html);
@@ -162,8 +212,10 @@ router.post('/admin/api/menus/:name', (req, res) => {
 });
 
 router.get('/admin/menus', (req, res) => {
-  const menus = loadMenus();
-  const locations = menusLib.getMenuLocations();
+  const view = menusLib.menusForLanguage('');
+  const menus = view.menus;
+  const locations = view.locations;
+  const langSwitch = view.langSwitch;
   const html = `
     ${adminNav('menus', 'תפריטים')}
     <style>
@@ -190,13 +242,32 @@ router.get('/admin/menus', (req, res) => {
       .editor-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
       .editor-head h3 { margin:0; flex:1; }
       .editor-head #menu-fit { flex-basis:100%; margin:0; font-size:.85rem; color:var(--ws-muted); }
+      .menu-langbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 14px; }
+      .menu-langbar label { font-weight:600; color:var(--ws-text-soft); }
+      .menu-langbar select { padding:6px 8px; border:1.5px solid var(--ws-border-strong); border-radius:7px;
+        font:inherit; background:var(--ws-panel); color:var(--ws-text); }
+      #menu-import { display:none; }
       .mini-btn { padding:5px 10px; font-size:.8rem; }
       #organizer { margin-bottom:20px; }
       #menu-restore { padding:8px 10px; border:1.5px solid var(--ws-border-strong); border-radius:7px; font:inherit;
         background:var(--ws-panel); color:var(--ws-text); max-width:320px; }
     </style>
     <div class="container page-body" style="max-width:1020px">
-      <p class="lead">תפריטים הם ישויות עם שם — צרו כמה שתרצו, קננו תתי־פריטים, ושייכו תפריט לכל מיקום באתר. כמו בוורדפרס, רק בלי הכאב.</p>
+      <p class="lead">תפריטים הם ישויות עם שם — צרו כמה שתרצו, קננו תתי־פריטים, ושייכו תפריט לכל מיקום באתר. כמו בוורדפרס, רק בלי הכאב. לכל שפה תפריט משלה; שפה בלי תפריט שמור מראה את תפריט שפת האתר.</p>
+      <div class="menu-langbar">
+        <label for="menu-lang">שפת התפריט</label>
+        <select id="menu-lang"></select>
+        <label for="menu-langswitch">מתג שפה</label>
+        <select id="menu-langswitch">
+          <option value="header"${langSwitch === 'float' ? '' : ' selected'}>בכותרת</option>
+          <option value="float"${langSwitch === 'float' ? ' selected' : ''}>כפתור צף</option>
+        </select>
+        <a class="btn secondary" id="menu-export" href="/admin/api/menus/export.bent">ייצוא .bent</a>
+        <label class="btn secondary" for="menu-import">ייבוא .bent</label>
+        <input type="file" id="menu-import" accept=".bent,.txt,.html,text/plain">
+        <a class="btn secondary" id="menu-live-preview" href="/admin/menus/preview/live" target="_blank" rel="noopener">תצוגה מקדימה</a>
+      </div>
+      <p id="menu-lang-hint" class="hint" hidden>אין תפריט שמור לשפה הזו — הגולשים רואים את תפריט שפת האתר עד השמירה.</p>
       <!-- the Menu Organizer injection card (v2.28) — mounted by /admin-inject-card.js -->
       <section class="card" id="organizer" data-inject="menu-organizer"></section>
       <div class="menus-wrap">
@@ -228,6 +299,11 @@ router.get('/admin/menus', (req, res) => {
     <script>
       window.__TAPUZ_MENUS__ = ${jsonForScript(menus)};
       window.__TAPUZ_MENU_LOCATIONS__ = ${jsonForScript(locations)};
+      window.__TAPUZ_MENU_LANGUAGES__ = ${jsonForScript(view.languages)};
+      window.__TAPUZ_MENU_LANG__ = ${jsonForScript(view.lang)};
+      window.__TAPUZ_MENU_SITE_LANG__ = ${jsonForScript(view.siteLang)};
+      window.__TAPUZ_MENU_INHERITED__ = ${jsonForScript(view.inherited)};
+      window.__TAPUZ_LANG_SWITCH__ = ${jsonForScript(view.langSwitch)};
     </script>
     <script src="/admin-menus.js"></script>
     <!-- the owner's own model, reached through their browser (Bridge V2) —
