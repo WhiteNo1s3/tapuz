@@ -63,6 +63,28 @@ function escapeRe(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Apply every image rename to the text as it stands. One pass: a match is
+ * replaced from the original text, never from the result of an earlier
+ * rename. Sequential replaces walk a reference twice when one new name is
+ * another's old name (`a.png` → `a-2.png`, and `a-2.png` → `a-2-2.png`
+ * would otherwise turn the first reference into `a-2-2.png` too).
+ * @param {string} text
+ * @param {{ from: string, to: string }[]} renamed
+ */
+function applyAssetRenames(text, renamed) {
+  const map = new Map();
+  for (const r of Array.isArray(renamed) ? renamed : []) {
+    if (!r || typeof r.from !== 'string' || !r.from || typeof r.to !== 'string') continue;
+    map.set(r.from, r.to);
+  }
+  const source = String(text == null ? '' : text);
+  if (!map.size) return source;
+  const alts = [...map.keys()].sort((a, b) => b.length - a.length).map(escapeRe);
+  const re = new RegExp('(?:' + alts.join('|') + ')(?![A-Za-z0-9._-])', 'g');
+  return source.replace(re, (m) => map.get(m));
+}
+
 /** '/assets/a/b.png' → { rel, file } under the uploads folder, or null when
  *  the path is not a plain media path inside it. */
 function safeAssetPath(urlPath) {
@@ -392,8 +414,7 @@ function planImport(pkg, opts) {
 
   const assets = planAssets(pkg, neededAssets, opts.assets !== false);
   if (assets.renamed.length) {
-    const swaps = assets.renamed.map((r) => [new RegExp(escapeRe(r.from) + '(?![A-Za-z0-9._-])', 'g'), r.to]);
-    const swap = (text) => swaps.reduce((t, [re, to]) => t.replace(re, to), String(text));
+    const swap = (text) => applyAssetRenames(text, assets.renamed);
     for (const item of items) {
       item.draftSource = swap(item.draftSource);
       if (item.publishedSource) item.publishedSource = swap(item.publishedSource);
@@ -569,6 +590,7 @@ function importSitePackage(pkg, opts = {}) {
       reason: 'site-package:' + String(pkg.name || '').slice(0, 80),
       mode: plan.mode,
       touches: { chrome: !pagesOnly, store: !!storeDoc },
+      writtenPages: plan.items.map((i) => ({ path: i.final, existed: !!i.exists })),
       assetsAdded: plan.assets.writes.map((w) => w.path),
       assetDirs: plan.assets.dirs,
       summary: { pages: plan.items.length, assets: plan.assets.writes.length, prefix: plan.prefix, lang: plan.lang }
@@ -683,5 +705,6 @@ module.exports = {
   ASSETS_TOTAL_CAP,
   directionForLang,
   exportSitePackage,
-  importSitePackage
+  importSitePackage,
+  applyAssetRenames
 };

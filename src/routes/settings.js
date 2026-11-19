@@ -106,7 +106,7 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
         </div>
 
         <h3 class="sub-head" style="margin-top:22px">↩ תמונות מצב — חזרה למצב שלפני ייבוא</h3>
-        <p class="faint">לפני כל ייבוא אמיתי נשמרת תמונת מצב: הדפים, התפריטים, ערכת הנושא, ההגדרות והחנות. "שחזר" מחזיר את הדפים למצבם אז ומסיר את התמונות שהייבוא הוסיף; אחרי ייבוא מלא חוזרים גם ערכת הנושא, התפריטים וההגדרות — וקטלוג החנות, אם החבילה כללה חנות.</p>
+        <p class="faint">לפני כל ייבוא אמיתי נשמרת תמונת מצב. "שחזר" מחזיר רק את מה שהייבוא הזה כתב: דף שהוא יצר נמחק, דף שהוא דרס חוזר למצבו, והתמונות שהוסיף מוסרות. ערכת הנושא, התפריטים, הגדרות האתר וקטלוג החנות חוזרים רק אחרי ייבוא מלא. דף שהייבוא לא נגע בו נשאר כמו שהוא, והיסטוריית הגרסאות נשמרת. לפני השחזור מוצג מה בדיוק יחזור.</p>
         <div id="sp-snapshots"></div>
       </section>
     </div>
@@ -249,22 +249,51 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
               btn.type = 'button';
               btn.className = 'btn sm secondary';
               btn.textContent = 'שחזר';
-              btn.addEventListener('click', function () { restore(s.id, when); });
+              btn.addEventListener('click', function () { restore(s); });
               row.appendChild(label);
               row.appendChild(btn);
               box.appendChild(row);
             });
           }).catch(function () { /* the list is a convenience; the import still works */ });
         }
-        function restore(id, when) {
-          if (!window.confirm('לשחזר את האתר למצב של ' + when + '? הדפים חוזרים למצבם אז, והתמונות שהייבוא הוסיף מוסרות. לפני השחזור נשמרת תמונת מצב נוספת, כך שאפשר לבטל גם אותו.')) return;
+        function rollbackWarning(s) {
+          var when = s.at ? new Date(s.at).toLocaleString('he-IL') : s.id;
+          var rb = s.rollback || {};
+          var pages = rb.pages || [];
+          var lines = [];
+          lines.push('לשחזר את המצב של ' + when + '?');
+          lines.push('יחזור רק מה שהפעולה הזו כתבה. דף שהיא לא נגעה בו נשאר כמו שהוא.');
+          if (!pages.length) {
+            lines.push('דפים: לא נרשמו דפים לשחזור — אף דף לא ישתנה.');
+          } else {
+            lines.push('דפים (' + pages.length + '):');
+            pages.forEach(function (p) {
+              lines.push('• ' + p.path + ' — ' + (p.action === 'delete' ? 'יימחק, כי לא היה קיים בתמונה הזו' : 'יחזור למצב שנשמר בתמונה הזו'));
+            });
+          }
+          var parts = [];
+          if (rb.theme) parts.push('ערכת הנושא');
+          if (rb.menus) parts.push('התפריטים');
+          if (rb.config) parts.push('הגדרות האתר');
+          if (rb.store) parts.push('קטלוג החנות');
+          if (parts.length) lines.push('גם יוחזרו: ' + parts.join(', ') + '.');
+          else lines.push('ערכת הנושא, התפריטים, הגדרות האתר וקטלוג החנות לא כלולים.');
+          if (rb.assetsRemoved) lines.push('יוסרו ' + rb.assetsRemoved + ' תמונות שהפעולה הוסיפה.');
+          if (rb.assetsRestored) lines.push('יוחזרו ' + rb.assetsRestored + ' תמונות שהוסרו.');
+          lines.push('היסטוריית הגרסאות נשמרת. לפני השחזור נשמרת תמונת מצב נוספת, כך שאפשר לבטל גם אותו.');
+          return lines.join('\\n');
+        }
+        function restore(s) {
+          if (!window.confirm(rollbackWarning(s))) return;
           say('משחזר…');
-          postJson('/admin/api/site-package/restore', { snapshotId: id }).then(function (d) {
+          postJson('/admin/api/site-package/restore', { snapshotId: s.id }).then(function (d) {
             if (!d.ok) { say(d.error || 'שגיאה', true); return; }
             $('sp-preview-out').textContent = '';
             $('sp-preview-out').style.cssText = 'margin:10px 0';
+            var removed = (d.removedPages && d.removedPages.length) || 0;
+            var restored = (d.restoredPages && d.restoredPages.length) || 0;
             if (d.rebuildError) say('שוחזר, אבל האתר לא נבנה מחדש: ' + d.rebuildError, true);
-            else say('שוחזר ✓ ' + d.pages + ' דפים באתר' + (d.removedPages.length ? ', הוסרו ' + d.removedPages.length : ''));
+            else say('שוחזר ✓ ' + d.pages + ' דפים באתר' + (removed ? ', הוסרו ' + removed : '') + (restored ? ', הוחזרו ' + restored : ''));
             loadSnapshots();
           }).catch(function () { say('שגיאת רשת', true); });
         }

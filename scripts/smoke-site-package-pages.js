@@ -518,40 +518,149 @@ async function roleHebrew() {
   const strays = [path.join(ROOT, 'evil.png'), path.join(paths.PUBLIC_DIR, 'evil.png'), path.join(path.dirname(ROOT), 'evil.png'), path.join(paths.ASSETS_DIR, 'x.html'), path.join(paths.ASSETS_DIR, 'fake.png')];
   check(strays.every((f) => !fs.existsSync(f)) && assetBytes('good.png') && assetBytes('good.png').equals(png('good')), 'nothing was written outside the uploads folder, and the honest file beside them arrived');
 
-  // ── EXTRA SAFETY 2: snapshot → import → restore, byte for byte ──
+  // ── EXTRA SAFETY 2: restore rolls back only what THAT import wrote ──
+  const { db } = require('../src/db');
+  const revisionRows = () => db.prepare('SELECT id, full_path FROM page_revisions ORDER BY id').all();
   const list = snapshots ? snapshots.listSnapshots() : [];
   check(list.length >= 1 && list.some((s) => s.id === done.snapshotId) && list.every((s) => s.id && s.at), 'every real import left a snapshot in the list', JSON.stringify(list.map((s) => s.id)));
   check(fs.existsSync(path.join(paths.CONFIG_DIR, 'site-snapshots')) && isUnder(path.join(paths.CONFIG_DIR, 'site-snapshots'), ROOT), 'snapshots live under the site\'s data root, beside the menu backups');
-  const beforeRestore = dump();
+  const doneRow = list.find((s) => s.id === done.snapshotId);
+  const overRow = list.find((s) => s.id === over.snapshotId);
+  check(doneRow && doneRow.rollback && doneRow.rollback.pages.some((p) => p.path === 'en-bridge' && p.action === 'delete') &&
+    doneRow.rollback.pages.some((p) => p.path === 'en-home' && p.action === 'delete') &&
+    !doneRow.rollback.pages.some((p) => p.path === 'en-geppetto' || p.path === 'הגשר' || p.path === 'בית'),
+    'the first import\'s snapshot lists the pages it created, and not the pages it skipped', JSON.stringify(doneRow && doneRow.rollback));
+  check(doneRow.rollback.theme === false && doneRow.rollback.menus === false && doneRow.rollback.config === false && doneRow.rollback.store === false,
+    'a pages-only snapshot says theme, menus, config and the store are not part of the rollback');
+  check(overRow && overRow.rollback.pages.some((p) => p.path === 'en-geppetto' && p.action === 'restore'),
+    'the overwrite import records the page it replaced, to be put back rather than deleted', JSON.stringify(overRow && overRow.rollback));
+
+  // a page the first import never wrote, edited afterwards, plus a page created afterwards
+  pages.updatePage('הגשר', {
+    title: 'הגשר אחרי הייבוא',
+    blocks: [{ type: 'heading', id: 'h', data: { text: 'נערך אחרי הייבוא', level: 1 } }]
+  });
+  pages.createPage({ title: 'נוצר אחרי', slug: 'אחרי-הייבוא', status: 'draft', blocks: [{ type: 'heading', id: 'h', data: { text: 'הדף החדש', level: 1 } }] });
+  pages.publishPage('אחרי-הייבוא');
+  const editedDraft = pages.getPageSource('הגשר', 'draft');
+  const editedTitle = pages.getPageByFullPath('הגשר').title;
+  const laterSource = pages.getPageSource('אחרי-הייבוא', 'published');
+  const geppettoNow = String(pages.getPageSource('en-geppetto', 'published'));
+  const revsBefore = revisionRows();
+  check(revsBefore.some((r) => r.full_path === 'הגשר') && revsBefore.some((r) => r.full_path === 'en-bridge'),
+    'the fixture has revision history on a page the import did not write and on a page it created');
+  const chromeBefore = dump();
   const restored = snapshots.restoreSnapshot(done.snapshotId);
-  const afterRestore = dump();
-  check(diff(before, afterRestore).length === 0,
-    'RESTORE puts the site back byte for byte: pages (rows + .pzn), menus, theme, config, store, asset files and the exported pages',
-    'still different: ' + diff(before, afterRestore).join(', '));
-  check(!pages.getPageByFullPath('en-bridge') && !pages.getPageByFullPath('account-2') && !assetBytes('clash-2.png') && !assetBytes('folder/tile.png') && !fs.existsSync(path.join(paths.ASSETS_DIR, 'folder')),
-    '…the imported pages, the added files and the folder made for them are gone');
-  check(pages.getTranslations('הגשר').length === 0 && String(pages.getPageSource('en-geppetto', 'published')).includes('the page that was already here'),
-    '…the Hebrew twin is unpaired again and the overwritten page has its old words back');
+  check(pages.getPageSource('הגשר', 'draft') === editedDraft && pages.getPageByFullPath('הגשר').title === editedTitle,
+    'a page edited after the import, which the import did not write, survives restore byte for byte');
+  check(pages.getPageByFullPath('אחרי-הייבוא') && pages.getPageSource('אחרי-הייבוא', 'published') === laterSource,
+    'a page created after the import survives restore');
+  check(!pages.getPageByFullPath('en-bridge') && !pages.getPageByFullPath('en-home') && !pages.getPageByFullPath('en-notes'),
+    'pages the import created are removed');
+  check(pages.getPageByFullPath('account-2') && pages.getPageByFullPath('en-turned') && pages.getPageByFullPath('linker'),
+    'pages a later import created are not rolled back by this snapshot');
+  check(String(pages.getPageSource('en-geppetto', 'published')) === geppettoNow && geppettoNow.includes('Geppetto, the English one'),
+    'a page this import skipped stays as a later import left it');
+  check(!assetBytes('hero.png') && !assetBytes('pic.png') && !assetBytes('clash-2.png') && !assetBytes('folder/tile.png') && !fs.existsSync(path.join(paths.ASSETS_DIR, 'folder')),
+    'images THIS import added are removed, and the folder made for them');
+  check(assetBytes('good.png') && assetBytes('good.png').equals(png('good')) && assetBytes('gep.png') && assetBytes('clash.png').equals(png('the-hebrew-site-own-clash')),
+    'images a later import added, and the site\'s own file, stay');
+  check(diff(chromeBefore, dump(), ['menus', 'theme', 'config', 'store']).length === 0,
+    'a pages-only restore does not move theme, menus, config or the store', 'changed: ' + diff(chromeBefore, dump(), ['menus', 'theme', 'config', 'store']).join(', '));
+  const revsAfter = revisionRows();
+  const revIdsAfter = new Set(revsAfter.map((r) => r.id));
+  check(revsBefore.every((r) => revIdsAfter.has(r.id)) && revsAfter.some((r) => r.full_path === 'en-bridge'),
+    'restore deletes no revision row — history of a removed page stays', 'before ' + revsBefore.length + ' after ' + revsAfter.length);
   check(restored && typeof restored.preRestoreId === 'string', 'a restore takes its own snapshot first');
   snapshots.restoreSnapshot(restored.preRestoreId);
-  check(diff(beforeRestore, dump(), ['pages', 'menus', 'theme', 'config', 'store', 'assets']).length === 0 && pages.getPageByFullPath('en-bridge') && assetBytes('clash-2.png'),
-    '…so the restore itself can be undone: the imported pages and their files are back', 'different: ' + diff(beforeRestore, dump()).join(', '));
+  check(pages.getPageByFullPath('en-bridge') && assetBytes('hero.png') && assetBytes('clash-2.png') && fs.existsSync(path.join(paths.ASSETS_DIR, 'folder', 'tile.png')),
+    'undoing the restore puts back the pages and images it removed');
+  check(pages.getPageSource('הגשר', 'draft') === editedDraft && pages.getPageByFullPath('אחרי-הייבוא') && pages.getPageByFullPath('account-2') && assetBytes('good.png'),
+    'the undo still does not touch pages or images that import did not write');
+  check(revsBefore.every((r) => new Set(revisionRows().map((x) => x.id)).has(r.id)), 'the undo deletes no revision either');
   snapshots.restoreSnapshot(done.snapshotId);
-  exportLib.exportAll();
-  check(diff(before, dump()).length === 0, 'and back again to the site as it was before the first import');
+  check(!pages.getPageByFullPath('en-bridge') && pages.getPageSource('הגשר', 'draft') === editedDraft && pages.getPageByFullPath('אחרי-הייבוא'),
+    'restoring the same snapshot again removes only that import\'s pages');
 
-  // ── the full import (theme + menus + config + store) round-trips too ──
+  // ── the full import rolls chrome and store back, and only its own pages ──
+  const beforeFull = dump();
   const fullDry = sitePkg.importSitePackage(pkg);
-  check(fullDry.dryRun === true && diff(before, dump()).length === 0, 'a FULL import is a dry run by default as well');
+  check(fullDry.dryRun === true && diff(beforeFull, dump()).length === 0, 'a FULL import is a dry run by default as well');
   const full = sitePkg.importSitePackage(pkg, { apply: true });
-  const afterFull = dump();
   check(loadConfig().title === 'English Twin' && menus.loadMenus().main[0].label === 'Bridge' && theme.loadOverrides().colors.primary === '#ff0000' && full.store && full.store.ok,
     'a full import (opted in) still replaces theme, menus and config and merges the store — as it always did');
-  check(diff(before, afterFull, ['menus', 'theme', 'config', 'store', 'pages']).length === 5, 'the full import changed all of them');
+  check(diff(beforeFull, dump(), ['menus', 'theme', 'config', 'store']).length === 4, 'the full import changed theme, menus, config and the store');
+  pages.updatePage('הגשר', {
+    title: 'הגשר אחרי ייבוא מלא',
+    blocks: [{ type: 'heading', id: 'h', data: { text: 'נערך אחרי ייבוא מלא', level: 1 } }]
+  });
+  const afterFullDraft = pages.getPageSource('הגשר', 'draft');
+  const afterFullTitle = pages.getPageByFullPath('הגשר').title;
+  const fullRow = snapshots.listSnapshots().find((s) => s.id === full.snapshotId);
+  check(fullRow && fullRow.rollback && fullRow.rollback.theme && fullRow.rollback.menus && fullRow.rollback.config && fullRow.rollback.store,
+    'a full import\'s snapshot says theme, menus, config and the store catalog will be restored');
+  check(fullRow.rollback.pages.some((p) => p.path === 'home' && p.action === 'delete') && !fullRow.rollback.pages.some((p) => p.path === 'הגשר' || p.path === 'אחרי-הייבוא'),
+    'the full import\'s rollback lists the pages it will write, not the pages it left alone', JSON.stringify(fullRow.rollback.pages));
+  const revsFull = revisionRows();
   snapshots.restoreSnapshot(full.snapshotId);
   exportLib.exportAll();
-  check(diff(before, dump()).length === 0, 'RESTORE after a full import: theme, menus, config and store are back byte for byte too', 'still different: ' + diff(before, dump()).join(', '));
+  check(diff(beforeFull, dump(), ['menus', 'theme', 'config', 'store']).length === 0,
+    'RESTORE after a full import puts theme, menus, config and the store back', 'still different: ' + diff(beforeFull, dump(), ['menus', 'theme', 'config', 'store']).join(', '));
+  check(loadConfig().title === 'האתר העברי' && theme.loadOverrides().colors.primary === '#123456' && menus.loadMenus().main[0].label === 'הגשר',
+    'the Hebrew name, colour and menu are back');
+  check(!pages.getPageByFullPath('home') && !pages.getPageByFullPath('bridge') && !pages.getPageByFullPath('geppetto') && !pages.getPageByFullPath('notes'),
+    'pages the full import created are gone');
+  check(pages.getPageByFullPath('הגשר').title === afterFullTitle && pages.getPageSource('הגשר', 'draft') === afterFullDraft,
+    'a page edited after the full import, which that import did not write, survives restore');
+  check(pages.getPageByFullPath('account-2') && pages.getPageByFullPath('אחרי-הייבוא'), 'pages other imports wrote stay in place');
+  check(revsFull.every((r) => new Set(revisionRows().map((x) => x.id)).has(r.id)) && revisionRows().some((r) => r.full_path === 'home'),
+    'a full restore deletes no revision, including history of the pages it removes');
   check(snapshots.listSnapshots().length <= snapshots.SNAPSHOTS_KEEP, 'old snapshots are pruned (newest ' + snapshots.SNAPSHOTS_KEEP + ' kept)');
+
+  // an import restored before anything else changes still round-trips
+  const round = dump();
+  const tinyPkg = {
+    format: 'tapuz-site', version: 1, name: 'tiny',
+    pages: [{ fullPath: 'tiny-round', title: 'Tiny', status: 'draft', draftSource: '<bent-heading level="1">Tiny round trip</bent-heading>' }]
+  };
+  const tiny = sitePkg.importSitePackage(tinyPkg, { apply: true, mode: 'pages' });
+  check(!!pages.getPageByFullPath('tiny-round'), 'round trip: the page is created');
+  snapshots.restoreSnapshot(tiny.snapshotId);
+  check(!pages.getPageByFullPath('tiny-round') && diff(round, dump()).length === 0,
+    'an import restored before anything else changes puts pages, files, theme, menus, config, store and assets back',
+    'still different: ' + diff(round, dump()).join(', '));
+
+  // ── image renames are one pass, so a chain cannot walk a reference twice ──
+  const chained = sitePkg.applyAssetRenames(
+    'src="/assets/a.png" src="/assets/a-2.png" src="/assets/a.png.bak"',
+    [{ from: '/assets/a.png', to: '/assets/a-2.png' }, { from: '/assets/a-2.png', to: '/assets/a-2-2.png' }]
+  );
+  check(chained === 'src="/assets/a-2.png" src="/assets/a-2-2.png" src="/assets/a.png.bak"',
+    'rename collision: a.png becomes a-2.png and is not walked on to a-2-2.png; a.png.bak is not a match', chained);
+  const shared = png('shared-a2');
+  writeAsset('a.png', png('disk-a'));
+  writeAsset('a-2.png', shared);
+  const chainPkg = {
+    format: 'tapuz-site', version: 1, name: 'chain',
+    pages: [{
+      fullPath: 'chain', title: 'Chain', status: 'draft',
+      draftSource: '<bent-image src="/assets/a.png" alt="first" /><bent-image src="/assets/a-2.png" alt="second" />'
+    }],
+    assets: [
+      { path: '/assets/a.png', mime: 'image/png', base64: shared.toString('base64') },
+      { path: '/assets/a-2.png', mime: 'image/png', base64: png('fresh-a2').toString('base64') }
+    ]
+  };
+  const chainDry = sitePkg.importSitePackage(chainPkg, { mode: 'pages' });
+  check((chainDry.assets.renamed || []).some((r) => r.from === '/assets/a.png' && r.to === '/assets/a-2.png') &&
+    (chainDry.assets.renamed || []).some((r) => r.from === '/assets/a-2.png' && r.to === '/assets/a-2-2.png'),
+    'the import plans both renames: a.png reuses the site\'s a-2.png, and the package\'s a-2.png lands at a-2-2.png', JSON.stringify(chainDry.assets.renamed));
+  sitePkg.importSitePackage(chainPkg, { apply: true, mode: 'pages' });
+  const chainSrc = String(pages.getPageSource('chain', 'draft'));
+  check(chainSrc.split('/assets/a-2-2.png').length - 1 === 1 && chainSrc.split('/assets/a-2.png').length - 1 === 1 && !chainSrc.includes('/assets/a.png"'),
+    'the imported page points each picture at its own file — the first reference is not renamed twice', chainSrc);
+  check(assetBytes('a.png').equals(png('disk-a')) && assetBytes('a-2.png').equals(shared) && assetBytes('a-2-2.png').equals(png('fresh-a2')),
+    'the site\'s own files stay, and the new bytes land under the new name');
 
   // ── a Hebrew page into an English site (another process) ──
   const hePkg = {
@@ -594,6 +703,10 @@ async function roleHebrew() {
       'settings screen: pages-only, prefix, language, overwrite, mapping, preview, confirm and the snapshots list are all there');
     check(/ייבוא דפים בלבד/.test(page.text) && /תצוגה מקדימה/.test(page.text) && /אני מאשר\/ת ייבוא אמיתי/.test(page.text) && /id="sp-import-apply"[^>]*\sdisabled/.test(page.text),
       'settings screen: preview is the default action — the import button waits, disabled, for the explicit confirm');
+    check(page.text.includes('function rollbackWarning') && page.text.includes('יימחק, כי לא היה קיים בתמונה הזו') &&
+      page.text.includes('יחזור למצב שנשמר בתמונה הזו') && page.text.includes('ערכת הנושא') && page.text.includes('התפריטים') &&
+      page.text.includes('הגדרות האתר') && page.text.includes('קטלוג החנות') && page.text.includes('דף שהייבוא לא נגע בו'),
+      'settings screen: before a restore, the warning lists each page and whether theme, menus, config and the store are included');
 
     const exp = await request(BASE, 'GET', '/admin/api/site-package/export?assets=1', { cookie: admin });
     check(exp.status === 200 && exp.json && Array.isArray(exp.json.assets) && exp.json.assets.some((a) => a.path === '/assets/same.png') && exp.json.assetsManifest,
@@ -613,6 +726,13 @@ async function roleHebrew() {
     const anon = await request(BASE, 'POST', '/admin/api/site-package/import', { body: { ...routeOpts, apply: true } });
     check(noOrigin.status === 403 && asEditor.status === 403 && anon.status >= 400 && !pages.getPageByFullPath('r-bridge'),
       'a real import is refused without the same-origin proof (CSRF), for an editor, and for a visitor', [noOrigin.status, asEditor.status, anon.status].join('/'));
+    const editorBig = await request(BASE, 'POST', '/admin/api/site-package/import', {
+      cookie: editor,
+      body: { ...routeOpts, apply: true, package: { ...pkg, padding: 'x'.repeat(13 * 1024 * 1024) } }
+    });
+    check(editorBig.status === 413 && !pages.getPageByFullPath('r-bridge'),
+      'a signed-in editor does not get the 64 MB parser: a body over the 12 MB admin limit is rejected (413), not parsed and then forbidden',
+      String(editorBig.status) + ' ' + String(editorBig.text || '').slice(0, 180));
 
     const real = await request(BASE, 'POST', '/admin/api/site-package/import', { cookie: admin, body: { ...routeOpts, apply: true } });
     check(real.status === 200 && real.json.ok && real.json.dryRun === false && real.json.snapshotId && pages.getPageByFullPath('r-bridge') && pages.getPageByFullPath('r-bridge').direction === 'ltr',
@@ -623,7 +743,13 @@ async function roleHebrew() {
     check(heServed.status === 200 && /<html lang="he" dir="rtl">/.test(heServed.text), 'and the Hebrew page beside it is still served rtl');
 
     const snaps = await request(BASE, 'GET', '/admin/api/site-package/snapshots', { cookie: admin });
-    check(snaps.status === 200 && snaps.json.ok && snaps.json.snapshots.some((s) => s.id === real.json.snapshotId), 'GET …/snapshots lists it');
+    const importedSnap = (snaps.json && snaps.json.snapshots || []).find((s) => s.id === real.json.snapshotId);
+    check(snaps.status === 200 && snaps.json.ok && importedSnap && importedSnap.rollback &&
+      importedSnap.rollback.pages.some((p) => p.path === 'r-bridge' && p.action === 'delete') &&
+      importedSnap.rollback.theme === false && importedSnap.rollback.menus === false &&
+      importedSnap.rollback.config === false && importedSnap.rollback.store === false,
+      'GET …/snapshots lists it and names the pages this import will roll back, without theme, menus, config or the store',
+      JSON.stringify(importedSnap && importedSnap.rollback));
     const editorSnaps = await request(BASE, 'GET', '/admin/api/site-package/snapshots', { cookie: editor });
     const editorRestore = await request(BASE, 'POST', '/admin/api/site-package/restore', { cookie: editor, body: { snapshotId: real.json.snapshotId } });
     const csrfRestore = await request(BASE, 'POST', '/admin/api/site-package/restore', { cookie: admin, body: { snapshotId: real.json.snapshotId }, noOrigin: true });
