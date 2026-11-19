@@ -572,7 +572,7 @@ const CSP_PLAIN = [
         { fullPath: 'old-plain', title: 'Plain', status: 'draft', draftSource: heading('Plain') },
         { fullPath: 'admin', title: 'Admin', status: 'draft', draftSource: heading('Not here') }
       ]
-    });
+    }, { apply: true });
     const kept = pages.getPageByFullPath('sitemap');
     check('site package: a page that lived at /sitemap on the source site arrives, published, with its words',
       moved.pagesCreated.indexOf('sitemap') >= 0 && !!kept && kept.status === 'published' && /Our map/.test(String(pages.getPageSource('sitemap', 'published'))) && /Our map, edited/.test(String(pages.getPageSource('sitemap', 'draft'))),

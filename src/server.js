@@ -222,6 +222,9 @@ app.use('/agent', bodyParser.json({ limit: '512kb' }));
 // extends or rewrites a session; the gate below still does the real check.
 const adminJsonParser = bodyParser.json({ limit: '12mb' });
 const smallJsonParser = bodyParser.json({ limit: '256kb' });
+// One door takes more: a site package that carries its uploads (base64) is
+// a whole site's pictures in one body. Same rule — a signed-in admin only.
+const packageJsonParser = bodyParser.json({ limit: '64mb' });
 app.use((req, res, next) => {
   const p = req.path;
   let signedIn = false;
@@ -229,6 +232,7 @@ app.use((req, res, next) => {
   if (adminArea) {
     try { signedIn = !!auth.verifySession(req); } catch (e) { signedIn = false; }
   }
+  if (signedIn && p === '/admin/api/site-package/import') return packageJsonParser(req, res, next);
   if (signedIn) return adminJsonParser(req, res, next);
   // An admin whose session ran out while the builder sat open, saving a big
   // page or a photo: the small parser refused the body before the gate could

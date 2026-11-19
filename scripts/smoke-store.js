@@ -312,7 +312,7 @@ const read = (f) => { try { return fs.readFileSync(path.join(PUBLIC, f), 'utf8')
       process.env.TAPUZ_ROOT = ${JSON.stringify(other)};
       require(${JSON.stringify(path.join(__dirname, '..', 'src', 'db'))});
       const sp = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'site-package'))});
-      const r = sp.importSitePackage(${JSON.stringify(pkg)}, { overwrite: false });
+      const r = sp.importSitePackage(${JSON.stringify(pkg)}, { apply: true, overwrite: false });
       const st = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'store'))});
       process.stdout.write(JSON.stringify({ store: r.store, products: st.catalog.countProducts(), open: st.isOpen() }));
     `], { env: { ...process.env, TAPUZ_ROOT: other } });

@@ -63,42 +63,213 @@ router.get('/admin/settings', requireAdmin, (req, res) => {
       <section class="card" style="margin-top:18px">
         <h3 class="sub-head">📦 ייצוא / ייבוא אתר שלם</h3>
         <p class="lead">קובץ אחד עם כל הדפים (טיוטה + מפורסם), ערכת הנושא והתפריטים — לגיבוי או להעברה בין התקנות Tapuz. ייבוא לעולם לא דורס דף קיים אלא אם מסמנים "דרוס דפים קיימים".</p>
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
           <a class="btn secondary" href="/admin/api/site-package/export" download>⬇ ייצוא האתר</a>
+          <a class="btn secondary" href="/admin/api/site-package/export?assets=1" download>⬇ ייצוא עם התמונות</a>
         </div>
         <label class="field-label">ייבוא — הדביקו את תוכן הקובץ (JSON)</label>
         <textarea id="sp-import-text" rows="4" dir="ltr" placeholder='{"format":"tapuz-site", ...}' style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
+        <label class="field-label">או בחרו את הקובץ (חבילה עם תמונות גדולה מדי להדבקה)</label>
+        <input type="file" id="sp-import-file" accept=".json,application/json" style="display:block;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:10px">
+          <input type="checkbox" id="sp-pages-only"> ייבוא דפים בלבד — ערכת הנושא, התפריטים, הגדרות האתר והחנות לא משתנים
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">
+          <div>
+            <label class="field-label">קידומת לכתובות</label>
+            <input id="sp-prefix" dir="ltr" placeholder="en" maxlength="40" class="input">
+          </div>
+          <div>
+            <label class="field-label">שפת הדפים</label>
+            <input id="sp-lang" dir="ltr" placeholder="en" maxlength="12" class="input">
+          </div>
+        </div>
+        <div class="faint" style="margin-bottom:12px">עם הקידומת en הדף bridge מגיע לכתובת en-bridge, והקישורים בין הדפים המיובאים מתעדכנים. השפה קובעת גם את כיוון הדף: en משמאל לימין, he מימין לשמאל.</div>
         <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:10px">
           <input type="checkbox" id="sp-overwrite"> דרוס דפים קיימים (ברירת מחדל: דילוג על התנגשויות)
         </label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:10px">
+          <input type="checkbox" id="sp-assets" checked> הביאו גם את התמונות שבחבילה
+        </label>
+        <label class="field-label">קישור תרגומים — שורה לכל זוג: דף מיובא = דף קיים באתר</label>
+        <textarea id="sp-translations" rows="3" dir="ltr" placeholder="en-bridge = הגשר" style="width:100%;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;margin-bottom:10px;box-sizing:border-box;font-family:monospace;font-size:0.82rem"></textarea>
         <div class="row end">
           <span id="sp-import-status" style="font-size:0.85rem"></span>
-          <button type="button" class="btn secondary" id="sp-import-apply">ייבוא</button>
+          <button type="button" class="btn" id="sp-preview">תצוגה מקדימה</button>
         </div>
+        <div id="sp-preview-out" style="margin:10px 0"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:10px">
+          <input type="checkbox" id="sp-confirm"> אני מאשר/ת ייבוא אמיתי — לפני הייבוא נשמרת תמונת מצב של האתר
+        </label>
+        <div class="row end">
+          <button type="button" class="btn secondary" id="sp-import-apply" disabled>ייבוא</button>
+        </div>
+
+        <h3 class="sub-head" style="margin-top:22px">↩ תמונות מצב — חזרה למצב שלפני ייבוא</h3>
+        <p class="faint">לפני כל ייבוא אמיתי נשמרת תמונת מצב: הדפים, התפריטים, ערכת הנושא, ההגדרות והחנות. "שחזר" מחזיר את הדפים למצבם אז ומסיר את התמונות שהייבוא הוסיף; אחרי ייבוא מלא חוזרים גם ערכת הנושא, התפריטים וההגדרות — וקטלוג החנות, אם החבילה כללה חנות.</p>
+        <div id="sp-snapshots"></div>
       </section>
     </div>
     <script>
-      document.getElementById('sp-import-apply').addEventListener('click', function () {
-        var status = document.getElementById('sp-import-status');
-        var raw = (document.getElementById('sp-import-text') || {}).value || '';
-        var pkg;
-        try { pkg = JSON.parse(raw); } catch (e) {
-          status.textContent = 'לא JSON תקין'; status.style.color = '#b91c1c'; return;
+      (function () {
+        var $ = function (id) { return document.getElementById(id); };
+        var status = $('sp-import-status');
+        var fileText = '';
+        function say(text, bad) { status.textContent = text; status.style.color = bad ? '#b91c1c' : '#166534'; }
+        function postJson(url, body) {
+          return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+            .then(function (r) {
+              if (r.status === 413) return { ok: false, error: 'החבילה גדולה מדי לייבוא בבת אחת' };
+              return r.json();
+            });
         }
-        status.textContent = 'מייבא…'; status.style.color = '#166534';
-        fetch('/admin/api/site-package/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ package: pkg, overwrite: document.getElementById('sp-overwrite').checked })
-        }).then(function (r) { return r.json(); }).then(function (d) {
-          if (d.ok) {
-            status.style.color = '#166534';
-            status.textContent = 'הושלם ✓ נוצרו ' + d.pagesCreated.length + ', עודכנו ' + d.pagesUpdated.length + ', דולגו ' + d.pagesSkipped.length;
-          } else {
-            status.style.color = '#b91c1c'; status.textContent = d.error || 'שגיאה';
-          }
-        }).catch(function () { status.style.color = '#b91c1c'; status.textContent = 'שגיאת רשת'; });
-      });
+        $('sp-import-file').addEventListener('change', function () {
+          var f = this.files && this.files[0];
+          fileText = '';
+          if (!f) return;
+          var reader = new FileReader();
+          reader.onload = function () { fileText = String(reader.result || ''); say('הקובץ נטען: ' + f.name); };
+          reader.onerror = function () { say('לא הצלחנו לקרוא את הקובץ', true); };
+          reader.readAsText(f);
+        });
+        function readOptions() {
+          var pkg;
+          try { pkg = JSON.parse(fileText || $('sp-import-text').value || ''); } catch (e) { say('לא JSON תקין', true); return null; }
+          var translations = {};
+          $('sp-translations').value.split('\\n').forEach(function (line) {
+            var i = line.indexOf('=');
+            if (i < 0) return;
+            var from = line.slice(0, i).trim();
+            var to = line.slice(i + 1).trim();
+            if (from && to) translations[from] = to;
+          });
+          return {
+            package: pkg,
+            mode: $('sp-pages-only').checked ? 'pages' : 'full',
+            prefix: $('sp-prefix').value.trim(),
+            lang: $('sp-lang').value.trim(),
+            overwrite: $('sp-overwrite').checked,
+            assets: $('sp-assets').checked,
+            translations: translations
+          };
+        }
+        // the answer of a dry run or of a real import, as lists — every word
+        // from the package goes in as text, never as markup
+        var WHY = { exists: 'כבר קיים באתר', duplicate: 'כתובת כפולה בחבילה', store: 'דף של החנות', reserved: 'כתובת שמורה למערכת', error: 'המקור אינו תקין' };
+        var WHY_PAIR = { source: 'הדף המיובא לא נמצא', target: 'דף היעד לא קיים באתר', self: 'דף לא מתקשר לעצמו', error: 'הקישור נכשל' };
+        function line(out, text, bold) {
+          var el = document.createElement('div');
+          el.style.cssText = 'margin-top:8px' + (bold ? ';font-weight:700' : '');
+          el.textContent = text;
+          out.appendChild(el);
+        }
+        function group(out, title, items) {
+          if (!items || !items.length) return;
+          line(out, title + ' (' + items.length + ')', true);
+          var ul = document.createElement('ul');
+          ul.style.cssText = 'margin:4px 0 0;padding-inline-start:20px;font-size:0.88rem';
+          items.forEach(function (text) {
+            // an English address inside a Hebrew list keeps its own order,
+            // and the bullet stays on the list's side
+            var li = document.createElement('li');
+            var words = document.createElement('bdi');
+            words.textContent = text;
+            li.appendChild(words);
+            ul.appendChild(li);
+          });
+          out.appendChild(ul);
+        }
+        function renderReport(d) {
+          var out = $('sp-preview-out');
+          out.textContent = '';
+          out.style.cssText = 'margin:10px 0;padding:12px 14px;border:1.5px solid ' + (d.dryRun ? '#cbd5e1' : '#86efac') + ';border-radius:8px;background:' + (d.dryRun ? '#f8fafc' : '#f0fdf4');
+          var dry = d.dryRun;
+          var move = function (x) { return x.from === x.path ? x.path : x.from + ' → ' + x.path; };
+          line(out, dry ? 'תצוגה מקדימה — שום דבר לא נכתב' : 'הייבוא הושלם ✓', true);
+          line(out, d.mode === 'pages'
+            ? 'דפים בלבד: ערכת הנושא, התפריטים, הגדרות האתר והחנות לא משתנים.'
+            : 'ייבוא מלא: ערכת הנושא, התפריטים והגדרות האתר ' + (dry ? 'יוחלפו' : 'הוחלפו') + ' באלה שבחבילה, והחנות שבה ' + (dry ? 'תתמזג' : 'התמזגה') + ' בחנות האתר.');
+          group(out, dry ? 'דפים שייווצרו' : 'דפים שנוצרו', d.created.map(move));
+          group(out, dry ? 'דפים שיידרסו' : 'דפים שנדרסו', d.overwritten.map(move));
+          group(out, dry ? 'דפים שידולגו' : 'דפים שדולגו', d.skipped.map(function (x) {
+            return move(x) + ' — ' + (WHY[x.reason] || x.reason) + (x.reason === 'error' && x.message ? ': ' + x.message : '');
+          }));
+          group(out, 'כתובת שמורה — הדף מקבל שם אחר', d.renamed.map(move));
+          group(out, dry ? 'תרגומים שיקושרו' : 'תרגומים שקושרו', d.translations.linked.map(function (x) { return x.path + ' ⇄ ' + x.target; }));
+          group(out, 'תרגומים שלא קושרו', d.translations.missing.map(function (x) { return x.source + ' = ' + x.target + ' — ' + (WHY_PAIR[x.reason] || x.reason); }));
+          group(out, dry ? 'תמונות שיתווספו' : 'תמונות שנוספו', d.assets.added);
+          group(out, 'תמונות שכבר באתר (אותו קובץ)', d.assets.reused);
+          group(out, 'תמונות בשם חדש (באתר יש קובץ אחר באותו שם)', d.assets.renamed.map(function (x) { return x.from + ' → ' + x.to; }));
+          group(out, 'קבצים שנדחו', d.assets.rejected.map(function (x) { return x.path + ' — ' + x.reason; }));
+          group(out, 'תמונות חסרות — לא בחבילה ולא באתר', d.assets.missing);
+          line(out, 'קישורים פנימיים ' + (dry ? 'שיעודכנו' : 'שעודכנו') + ': ' + d.linkRewrites);
+        }
+        function send(apply) {
+          var o = readOptions();
+          if (!o) return;
+          if (apply) o.apply = true;
+          say(apply ? 'מייבא…' : 'בודק…');
+          postJson('/admin/api/site-package/import', o).then(function (d) {
+            if (!d.ok) { say(d.error || 'שגיאה', true); return; }
+            renderReport(d);
+            if (d.dryRun) { say('זו תצוגה מקדימה — שום דבר לא נכתב'); return; }
+            $('sp-confirm').checked = false;
+            $('sp-import-apply').disabled = true;
+            if (d.rebuildError) say('יובא, אבל האתר לא נבנה מחדש: ' + d.rebuildError, true);
+            else say('הושלם ✓ נוצרו ' + d.created.length + ', נדרסו ' + d.overwritten.length + ', דולגו ' + d.skipped.length);
+            loadSnapshots();
+          }).catch(function () { say('שגיאת רשת', true); });
+        }
+        // preview is the default action; a real import waits for the confirm
+        $('sp-preview').addEventListener('click', function () { send(false); });
+        $('sp-confirm').addEventListener('change', function () { $('sp-import-apply').disabled = !this.checked; });
+        $('sp-import-apply').addEventListener('click', function () { if ($('sp-confirm').checked) send(true); });
+
+        function loadSnapshots() {
+          fetch('/admin/api/site-package/snapshots').then(function (r) { return r.json(); }).then(function (d) {
+            var box = $('sp-snapshots');
+            box.textContent = '';
+            var list = (d && d.snapshots) || [];
+            if (!list.length) {
+              var none = document.createElement('p');
+              none.className = 'faint';
+              none.textContent = 'אין עדיין תמונות מצב.';
+              box.appendChild(none);
+              return;
+            }
+            list.forEach(function (s) {
+              var when = s.at ? new Date(s.at).toLocaleString('he-IL') : s.id;
+              var what = String(s.reason || '').indexOf('pre-restore') === 0 ? 'לפני שחזור' : (s.mode === 'pages' ? 'לפני ייבוא דפים' : 'לפני ייבוא מלא');
+              var row = document.createElement('div');
+              row.style.cssText = 'display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;margin-bottom:6px';
+              var label = document.createElement('span');
+              label.style.fontSize = '0.88rem';
+              label.textContent = when + ' — ' + what + ' · ' + s.pages + ' דפים';
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'btn sm secondary';
+              btn.textContent = 'שחזר';
+              btn.addEventListener('click', function () { restore(s.id, when); });
+              row.appendChild(label);
+              row.appendChild(btn);
+              box.appendChild(row);
+            });
+          }).catch(function () { /* the list is a convenience; the import still works */ });
+        }
+        function restore(id, when) {
+          if (!window.confirm('לשחזר את האתר למצב של ' + when + '? הדפים חוזרים למצבם אז, והתמונות שהייבוא הוסיף מוסרות. לפני השחזור נשמרת תמונת מצב נוספת, כך שאפשר לבטל גם אותו.')) return;
+          say('משחזר…');
+          postJson('/admin/api/site-package/restore', { snapshotId: id }).then(function (d) {
+            if (!d.ok) { say(d.error || 'שגיאה', true); return; }
+            $('sp-preview-out').textContent = '';
+            $('sp-preview-out').style.cssText = 'margin:10px 0';
+            if (d.rebuildError) say('שוחזר, אבל האתר לא נבנה מחדש: ' + d.rebuildError, true);
+            else say('שוחזר ✓ ' + d.pages + ' דפים באתר' + (d.removedPages.length ? ', הוסרו ' + d.removedPages.length : ''));
+            loadSnapshots();
+          }).catch(function () { say('שגיאת רשת', true); });
+        }
+        loadSnapshots();
+      })();
       document.getElementById('st-save').addEventListener('click', function () {
         fetch('/admin/api/settings', {
           method: 'POST',
@@ -183,9 +354,11 @@ router.post('/admin/api/settings', requireAdmin, (req, res) => {
 // ─── Site packages (v1.06) — export/import a whole site as a portable
 // file, the ".pzn is our RPM" pillar one level up from theme packages
 // (v0.99). Admin-only: import creates/overwrites pages and site config. ───
+// `?assets=1` also bundles the uploads the pages reference, so the pictures
+// travel with the pages to another site.
 router.get('/admin/api/site-package/export', requireAdmin, (req, res) => {
   try {
-    const pkg = require('../site-package').exportSitePackage((loadConfig().title || '') + ' — גיבוי אתר');
+    const pkg = require('../site-package').exportSitePackage((loadConfig().title || '') + ' — גיבוי אתר', { assets: req.query.assets === '1' });
     const filename = 'tapuz-site-' + new Date().toISOString().slice(0, 10) + '.json';
     res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
     res.type('application/json').send(JSON.stringify(pkg, null, 2));
@@ -194,13 +367,50 @@ router.get('/admin/api/site-package/export', requireAdmin, (req, res) => {
   }
 });
 
+// A DRY RUN unless the body says `apply: true` (or `dryRun: false`) in so
+// many words: the answer lists what would happen and nothing is written. A
+// real import keeps a snapshot of the site first (src/site-snapshot.js) and
+// then rebuilds the export, so the imported pages are live when it answers.
 router.post('/admin/api/site-package/import', requireAdmin, (req, res) => {
   try {
     const b = req.body || {};
-    const result = require('../site-package').importSitePackage(b.package, { overwrite: !!b.overwrite });
-    res.json({ ok: true, ...result });
+    const result = require('../site-package').importSitePackage(b.package, {
+      apply: b.apply === true,
+      dryRun: b.dryRun,
+      overwrite: !!b.overwrite,
+      mode: b.mode,
+      prefix: b.prefix,
+      lang: b.lang,
+      assets: b.assets,
+      translations: b.translations
+    });
+    const rebuildError = result.dryRun ? '' : require('../rebuild').rebuildSite('a site-package import');
+    res.json({ ok: true, ...result, rebuildError });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// The way back: the snapshots every real import took, and one POST that puts
+// one back. Same gate as the import itself (requireAdmin; the admin gate's
+// same-origin check covers every POST under /admin).
+router.get('/admin/api/site-package/snapshots', requireAdmin, (req, res) => {
+  try {
+    res.json({ ok: true, snapshots: require('../site-snapshot').listSnapshots() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/admin/api/site-package/restore', requireAdmin, (req, res) => {
+  try {
+    const id = String((req.body || {}).snapshotId || '').trim();
+    if (!id) return res.status(400).json({ ok: false, error: 'חסר snapshotId' });
+    const result = require('../site-snapshot').restoreSnapshot(id);
+    const rebuildError = require('../rebuild').rebuildSite('a snapshot restore');
+    res.json({ ok: true, ...result, rebuildError });
+  } catch (e) {
+    res.status(e.code === 'NO_SNAPSHOT' ? 404 : 400).json({ ok: false, error: e.message, code: e.code || '' });
   }
 });
 

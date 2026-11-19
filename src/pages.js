@@ -785,6 +785,8 @@ module.exports = {
   // v2.69 — addresses a page may not take
   RESERVED_PATHS,
   isReservedPath,
+  isAdminAddress,
+  reservedPathMessage,
   // v0.42 — canonical editing path (.pzn source + AST ops)
   getPageSource,
   savePageSource,
