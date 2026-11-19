@@ -117,9 +117,13 @@ function waitUp(tries = 40) {
     check('GET /admin/api/site-package/export → a real tapuz-site package with the page', exp.status === 200 && exp.json.format === 'tapuz-site' && /attachment/.test(exp.headers['content-disposition'] || '') && JSON.stringify(exp.json).includes('welcome'));
 
     // ── import: default skips existing pages, overwrite updates them ──
-    const importSkip = await req('POST', '/admin/api/site-package/import', { cookie: adminCookie, body: { package: exp.json } });
+    // an import is a dry run unless the body opts in (apply:true)
+    const importDry = await req('POST', '/admin/api/site-package/import', { cookie: adminCookie, body: { package: exp.json, overwrite: true } });
+    check('an import with no opt-in is a dry run: it lists what it would do and writes nothing',
+      importDry.status === 200 && importDry.json.ok && importDry.json.dryRun === true && importDry.json.snapshotId === undefined && importDry.json.pagesUpdated.some((p) => p.includes('welcome')));
+    const importSkip = await req('POST', '/admin/api/site-package/import', { cookie: adminCookie, body: { package: exp.json, apply: true } });
     check('re-importing the same package skips existing pages by default (no clobber)', importSkip.status === 200 && importSkip.json.ok && Array.isArray(importSkip.json.pagesSkipped) && importSkip.json.pagesSkipped.some((p) => p.includes('welcome')) && importSkip.json.pagesCreated.length === 0);
-    const importOverwrite = await req('POST', '/admin/api/site-package/import', { cookie: adminCookie, body: { package: exp.json, overwrite: true } });
+    const importOverwrite = await req('POST', '/admin/api/site-package/import', { cookie: adminCookie, body: { package: exp.json, overwrite: true, apply: true } });
     check('import with overwrite:true updates the existing page instead', importOverwrite.status === 200 && importOverwrite.json.ok && importOverwrite.json.pagesUpdated.some((p) => p.includes('welcome')));
 
     // ── import validation: a wrong-format package → 400 ──

@@ -6,7 +6,7 @@ The navigational manifest for the modular HTTP surface: after the route-group
 extractions, every admin/public/agent route lives in its own module — this
 shows where, so editing is navigation, not a grep hunt.
 
-**372 routes across 47 files.**
+**374 routes across 47 files.**
 
 ## By file (what each module owns)
 
@@ -350,12 +350,14 @@ shows where, so editing is navigation, not a grep hunt.
 - `POST /admin/api/seo`
 - `POST /admin/seo/base-url-here`
 
-### `src/routes/settings.js` — 4 routes
+### `src/routes/settings.js` — 6 routes
 
 - `GET /admin/settings`
 - `POST /admin/api/settings`
 - `GET /admin/api/site-package/export`
 - `POST /admin/api/site-package/import`
+- `GET /admin/api/site-package/snapshots`
+- `POST /admin/api/site-package/restore`
 
 ### `src/routes/setup-wizard.js` — 2 routes
 
@@ -624,6 +626,8 @@ shows where, so editing is navigation, not a grep hunt.
 | `/admin/api/site-chrome` | POST | `src/routes/site-chrome.js` |
 | `/admin/api/site-package/export` | GET | `src/routes/settings.js` |
 | `/admin/api/site-package/import` | POST | `src/routes/settings.js` |
+| `/admin/api/site-package/restore` | POST | `src/routes/settings.js` |
+| `/admin/api/site-package/snapshots` | GET | `src/routes/settings.js` |
 | `/admin/api/sitemap` | GET | `src/routes/sitemap.js` |
 | `/admin/api/storage` | GET | `src/routes/storage.js` |
 | `/admin/api/store/apply` | POST | `src/routes/store-admin.js` |

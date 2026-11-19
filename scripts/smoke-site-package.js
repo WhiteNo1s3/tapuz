@@ -76,7 +76,13 @@ for (const p of ['draft-only', 'first-page', 'has-changes']) {
 saveOverrides({ colors: { primary: '#000000' } });
 saveConfig({ ...loadConfig(), title: 'משהו אחר' });
 
-const result = sitePkg.importSitePackage(pkg);
+// an import is a dry run unless the caller opts in: it lists, writes nothing
+const dryFirst = sitePkg.importSitePackage(pkg);
+check(dryFirst.dryRun === true && dryFirst.pagesCreated.length === 3 && !getPageByFullPath('first-page') && loadConfig().title === 'משהו אחר' &&
+  require('../src/theme').loadOverrides().colors.primary === '#000000',
+  'with no opt-in the import is a DRY RUN: it lists the 3 pages and writes nothing (no page, no config, no theme)');
+const result = sitePkg.importSitePackage(pkg, { apply: true });
+check(result.dryRun === false && typeof result.snapshotId === 'string' && result.snapshotId.length > 0, 'apply:true imports for real, after taking a snapshot it names');
 check(result.pagesCreated.length === 3, 'all 3 pages created on import into an empty site');
 check(result.pagesSkipped.length === 0, 'nothing skipped when nothing collides');
 check(loadConfig().title === 'האתר לבדיקה', 'config title restored');
@@ -96,20 +102,20 @@ check(restoredPublishedSrc.includes('גרסה חיה') && !restoredPublishedSrc.
   'THE KEY CHECK: restored published is STILL the old live version — draft/published were not collapsed together');
 
 // ── collision safety: import again without overwrite ──
-const secondImport = sitePkg.importSitePackage(pkg);
+const secondImport = sitePkg.importSitePackage(pkg, { apply: true });
 check(secondImport.pagesCreated.length === 0 && secondImport.pagesUpdated.length === 0,
   're-importing over an existing site creates/updates nothing by default');
 check(secondImport.pagesSkipped.length === 3, 'every page is reported as skipped (collision), not silently clobbered');
 
 // ── overwrite:true actually overwrites ──
-const thirdImport = sitePkg.importSitePackage(pkg, { overwrite: true });
+const thirdImport = sitePkg.importSitePackage(pkg, { apply: true, overwrite: true });
 check(thirdImport.pagesUpdated.length === 3, 'overwrite:true updates every colliding page instead of skipping');
 
 // ── validation: malformed/foreign packages are rejected, nothing touched ──
 const beforeBadImport = loadConfig().title;
 function rejects(label, badPkg) {
   let threw = false;
-  try { sitePkg.importSitePackage(badPkg); } catch (e) { threw = true; }
+  try { sitePkg.importSitePackage(badPkg, { apply: true }); } catch (e) { threw = true; }
   check(threw, label);
 }
 rejects('rejects null', null);
